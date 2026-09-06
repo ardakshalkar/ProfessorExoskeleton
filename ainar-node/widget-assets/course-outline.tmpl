@@ -41,7 +41,7 @@
 {% endif %}
 <p class="strip">{{ totals.weeks }} weeks · {{ totals.weeks_planned }} with a module · {{ totals.meetings }} meetings · {{ totals.assessments }} assessments · weights total {% if total_weight %}{{ total_weight }}{% else %}<span class="flag">weight not set</span>{% endif %}</p>
 
-{% if assessments %}
+{% if show_assessments %}
 <h2>Assessment</h2>
 <div class="scroll"><table><thead><tr><th>Assessment</th><th>Type</th><th class="n">Weight</th><th class="n">Due</th><th>Outcomes</th></tr></thead><tbody>
 {% for a in assessments %}
@@ -50,7 +50,7 @@
 </tbody></table></div>
 {% endif %}
 
-{% if grading_note %}
+{% if show_grading_note %}
 <div class="note"><strong class="flag">The grading policy.</strong> {{ grading_note }}</div>
 {% endif %}
 

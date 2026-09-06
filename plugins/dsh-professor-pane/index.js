@@ -1720,6 +1720,12 @@ const handler = (registry) => (req, res) => {
         if (run.course_id && run.term) {
           data = withRecordPaths(data, root, run.course_id, run.term);
         }
+        // The week view is the weeks. Assessments and the grading policy are
+        // two tabs of their own now, and rendering them here as well put a
+        // table and a policy note between the professor and what they opened
+        // this tab for. The widget keeps both by default — a chat client has no
+        // tabs to move them to — so the pane has to ask.
+        data = { ...data, sections: { assessments: false, grading: false } };
       }
       const dark = url.searchParams.get("dark") === "1";
       res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");

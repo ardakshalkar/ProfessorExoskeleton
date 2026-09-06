@@ -319,7 +319,23 @@ function model(d) {
     return { id: a.assessment_id, title: a.title, note: 'no dates' };
   }));
 
+  // Which sections this surface wants, defaulting to all of them.
+  //
+  // The standalone widget is the whole course page and must keep every section:
+  // a chat client drawing `course_outline` has no tabs to put the rest behind,
+  // so a payload that says nothing gets everything. The professor's pane does
+  // have tabs, and once Assessments and Grading policy became two of them the
+  // week view was showing their contents above the weeks — a table and a policy
+  // note between the professor and the thing they opened the tab for.
+  //
+  // `!== false` rather than a truthiness test, so a payload that omits the key
+  // and one that sets it to null both mean "all", and only an explicit `false`
+  // takes a section away.
+  const sections = d.sections || {};
+
   return {
+    show_assessments: sections.assessments !== false && (d.assessments || []).length > 0,
+    show_grading_note: sections.grading !== false && Boolean(grading.note),
     run: {
       course_id: run.course_id,
       title: run.title,
