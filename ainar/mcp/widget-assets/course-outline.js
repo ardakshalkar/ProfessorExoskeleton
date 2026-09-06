@@ -75,6 +75,24 @@ function model(d) {
   const ASSESS_WORD = { assignment: 'homework', oral_defense: 'defense' };
 
   /**
+   * The directory a run's assessments live in, as a fallback.
+   *
+   * The host resolves the actual file and puts it on `source_file`, by looking
+   * the identifier up rather than guessing a filename. This is what to say when
+   * it could not — a chat client with no filesystem behind it, or an id that
+   * appears in no file the loader reads. The directory is true under every
+   * layout the loader accepts; the filename inside it is not, which is why this
+   * says "grep for the id" instead of naming one.
+   *
+   * Both parts come from the payload, so a different course or a different term
+   * gets its own path and nothing here is pinned to CSS-4007.
+   */
+  function where(r) {
+    return 'courses/' + (r.course_id || '<course>') + '/versions/'
+      + (r.term || '<term>') + '/assessments/';
+  }
+
+  /**
    * Everything a week offers, split into what a professor is looking for and
    * what is merely also true.
    *
@@ -163,12 +181,11 @@ function model(d) {
           + ' ("' + a.title + '")? Skip the usual opening validate and inbox '
           + 'sweep, and do not read any file first: these two dates exist only '
           + 'in my head, so nothing on disk can answer this. Once I have '
-          + 'answered, set opens_at and due_at on that record — it is the '
-          + a.assessment_id + ' entry in '
-          + 'courses/' + (run.course_id || '') + '/versions/'
-          + (run.term || '') + '/assessments/generated.yaml — and then just '
-          + 'confirm what you wrote. Do not work out which week the dates fall '
-          + 'in; the Course pane places them itself and will show it.',
+          + 'answered, set opens_at and due_at on the ' + a.assessment_id
+          + ' entry in ' + (a.source_file || where(run) + ' (grep for the id: '
+            + 'the filename is not fixed)')
+          + ', and then just confirm what you wrote. Do not work out which week '
+          + 'the dates fall in; the Course pane places them itself and shows it.',
         formats: [],
       });
     }

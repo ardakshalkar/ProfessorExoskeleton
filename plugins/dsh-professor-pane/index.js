@@ -232,6 +232,76 @@ const draftedPayload = (workspace, root, tool, runId, on) => {
 };
 
 /**
+ * Where each dateless assessment actually lives, found rather than assumed.
+ *
+ * The button that asks the professor for a missing deadline tells the model
+ * which record to edit, and the first version of that prompt guessed the file:
+ * `versions/<term>/assessments/generated.yaml`, because that is where
+ * `approve` writes. It is a guess. `RECORD_GLOBS.assessments` accepts
+ * `versions/*​/assessments.yaml` as well as `versions/*​/assessments/*.yaml`,
+ * so a hand-authored assessment, or one an older import placed, sits somewhere
+ * else — and a prompt naming the wrong file is worse than one naming none,
+ * because the model will helpfully edit or create it.
+ *
+ * So the identifier is looked up. Every YAML the loader would read for this run
+ * is scanned for the id as a `assessment_id:` value, and the first file holding
+ * it wins. Nothing found means the field stays absent and the widget falls back
+ * to naming the directory, which is true whatever the filename.
+ *
+ * The scan is bounded by the run's own assessment files — a handful, read once
+ * per outline request — and it only runs when there is a dateless assessment to
+ * ask about, which is nearly never.
+ */
+const withRecordPaths = (data, root, courseId, term) => {
+  if (data === null || typeof data !== "object") return data;
+  const wanted = new Set();
+  for (const week of data.weeks ?? []) {
+    for (const entry of week.undated ?? []) {
+      if (entry?.assessment_id) wanted.add(entry.assessment_id);
+    }
+  }
+  if (!wanted.size) return data;
+
+  const base = join(root, "courses", courseId, "versions", term);
+  const candidates = [join(base, "assessments.yaml")];
+  try {
+    for (const name of readdirSync(join(base, "assessments"))) {
+      if (/\.ya?ml$/i.test(name)) candidates.push(join(base, "assessments", name));
+    }
+  } catch {
+    // No assessments/ directory: the single-file layout, already in the list.
+  }
+
+  const found = new Map();
+  for (const path of candidates) {
+    let text;
+    try {
+      text = readFileSync(path, "utf-8");
+    } catch {
+      continue;
+    }
+    for (const id of wanted) {
+      if (found.has(id)) continue;
+      // As a value of the key, not merely somewhere in the file: an id can
+      // appear in a description or a rubric criterion without the record
+      // living here.
+      if (new RegExp(`^\\s*-?\\s*assessment_id:\\s*${id}\\s*$`, "m").test(text)) {
+        found.set(id, relative(root, path).split(sep).join("/"));
+      }
+    }
+  }
+  if (!found.size) return data;
+
+  for (const week of data.weeks ?? []) {
+    for (const entry of week.undated ?? []) {
+      const path = found.get(entry?.assessment_id);
+      if (path) entry.source_file = path;
+    }
+  }
+  return data;
+};
+
+/**
  * A fingerprint of the course model on disk, for the pane to poll.
  *
  * The pane used to redraw only when the professor changed something through it
@@ -1411,6 +1481,10 @@ const handler = (registry) => (req, res) => {
           url.searchParams.get("session") ?? "",
           workspace,
         );
+        const run = data?.run ?? {};
+        if (run.course_id && run.term) {
+          data = withRecordPaths(data, root, run.course_id, run.term);
+        }
       }
       const dark = url.searchParams.get("dark") === "1";
       res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
