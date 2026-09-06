@@ -182,9 +182,15 @@ window.__ModuleLoader__.load({
      * awaiting judgement outranks a thing merely drafted.
      */
     const SUBVIEWS = {
+      // Week by week is first, and therefore the default: the term as it runs
+      // is what the tab is for. The four beside it answer "what have I got",
+      // which used to be answerable only by scrolling sixteen weeks.
       outline: [
         { id: "outline", label: "Week by week" },
         { id: "grading", label: "Grading policy" },
+        { id: "assessments", label: "Assessments" },
+        { id: "slides", label: "Slides" },
+        { id: "exams", label: "Exams" },
       ],
       progress: [
         { id: "progress", label: "Concepts" },

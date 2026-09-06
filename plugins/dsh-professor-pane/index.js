@@ -745,6 +745,213 @@ const gradingDocument = (workspace, root, runId, dark, withDrafts, on) => {
 };
 
 /**
+ * The three list views of the Course outline tab.
+ *
+ * Week by week answers "what happens when"; these answer "what have I got",
+ * which is a different question and was previously only answerable by scrolling
+ * sixteen weeks and holding the answer in your head.
+ *
+ * All three read the SAME `course_outline` payload the week view does, and none
+ * of them computes a figure. A weight shown here and a weight shown there are
+ * one number from one command — the first version of `gradingDocument` did its
+ * own arithmetic and reported a correct scheme as broken, and that is the
+ * mistake this whole pane is shaped to avoid.
+ */
+
+/** `2026-09-18T09:00:00+05:00` as `2026-09-18 09:00`, in the run's own offset. */
+const stamp = (value) => {
+  const text = String(value ?? "");
+  const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(text);
+  if (!match) return text.slice(0, 10);
+  // Sliced, not parsed: `new Date(...)` would re-render this in the machine's
+  // timezone, and a deadline is a claim in the course's.
+  return `${match[1]} ${match[2]}`;
+};
+
+const outlinePayloadFor = (workspace, root, runId, withDrafts, on) =>
+  withDrafts
+    ? draftedPayload(workspace, root, "course_outline", runId, on).payload
+    : payload(workspace, "course_outline", { course_version_id: runId });
+
+const rows = (entries) =>
+  entries
+    .map(
+      ([key, value]) =>
+        '<div class="row"><span class="k">' + key + '</span><span class="v">' + value + "</span></div>",
+    )
+    .join("");
+
+/**
+ * Every piece of graded work, in the order it falls due.
+ *
+ * Undated work sorts last rather than first, which is what `""` would do: a
+ * deadline nobody has set is not a deadline in January.
+ */
+const assessmentsDocument = (workspace, root, runId, dark, withDrafts, on) => {
+  const data = outlinePayloadFor(workspace, root, runId, withDrafts, on);
+  const all = Array.isArray(data.assessments) ? [...data.assessments] : [];
+  all.sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999"));
+
+  const asPercent = (fraction) =>
+    typeof fraction === "number" ? Math.round(fraction * 1000) / 10 + "%" : null;
+
+  const body =
+    all.length === 0
+      ? '<p class="empty">No assessment belongs to this run yet. Drafting one is ' +
+        "<code>/design-assessment</code>.</p>"
+      : all
+          .map((row) => {
+            const weight = asPercent(row.weight);
+            const detail = [
+              row.type ? escapeText(row.type) : null,
+              row.criteria ? escapeText(String(row.criteria)) + " criteria" : null,
+              row.outcomes ? escapeText(row.outcomes) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ");
+            return (
+              '<div class="row"><span class="k">' +
+              escapeText(row.title ?? row.assessment_id ?? "untitled") +
+              (detail ? '<br><span class="dim">' + detail + "</span>" : "") +
+              '</span><span class="v">' +
+              (weight === null ? '<span class="todo">no weight</span>' : weight) +
+              "<br>" +
+              (row.due_on
+                ? '<span class="dim">due ' + escapeText(row.due_on) + "</span>"
+                : '<span class="todo">no date</span>') +
+              "</span></div>"
+            );
+          })
+          .join("");
+
+  return documentPage(
+    "<section><h2>Assessments</h2>" + body + "</section>",
+    dark,
+  );
+};
+
+/**
+ * Every deck in the term, with the formats each exists in.
+ *
+ * A `Resource` carries no week of its own — the only join is the activity that
+ * uses it — so these are gathered by walking the weeks rather than by reading a
+ * resource list, and a deck attached to no meeting does not appear here at all.
+ * That is the model's shape, not an omission: an unattached deck is not yet
+ * part of any class.
+ */
+const slidesDocument = (workspace, root, runId, dark, withDrafts, on, origin, sessionId) => {
+  let data = outlinePayloadFor(workspace, root, runId, withDrafts, on);
+  data = withMaterialLinks(data, origin, sessionId, workspace);
+
+  const found = [];
+  for (const week of data.weeks ?? []) {
+    for (const meeting of week.meetings ?? []) {
+      for (const resource of meeting.resources ?? []) {
+        if (resource.kind !== "slides") continue;
+        found.push({ week: week.week, title: resource.title, resource });
+      }
+    }
+  }
+
+  const link = (href, label) =>
+    '<a href="' + escapeText(href) + '" style="color:inherit;text-decoration:none;' +
+    "border:1px solid var(--line);border-radius:3px;padding:0 5px;margin-left:4px;" +
+    'font-size:11px;letter-spacing:.04em">' + escapeText(label) + "</a>";
+
+  const body =
+    found.length === 0
+      ? '<p class="empty">No meeting in this run carries a deck. A deck reaches this list ' +
+        "by being a <code>slides</code> resource on a learning activity.</p>"
+      : found
+          .map((entry) => {
+            const formats = (entry.resource.formats ?? [])
+              .filter((format) => format.url)
+              .map((format) => link(format.url, format.label))
+              .join("");
+            return (
+              '<div class="row"><span class="k">' +
+              '<span class="dim">week ' + escapeText(String(entry.week)) + "</span> " +
+              escapeText(entry.title ?? "untitled") +
+              '</span><span class="v">' +
+              (formats || (entry.resource.url ? link(entry.resource.url, "open") : '<span class="todo">no file</span>')) +
+              "</span></div>"
+            );
+          })
+          .join("");
+
+  return documentPage("<section><h2>Slides</h2>" + body + "</section>", dark);
+};
+
+/**
+ * The sit-down assessments, with what a professor checks before setting one.
+ *
+ * `exam` only. A quiz is graded work and belongs on the Assessments list; an
+ * exam is the one a room has to be booked for, and the questions asked of it —
+ * is it written, is it weighted, does a rubric exist — are asked weeks earlier
+ * than for anything else. Filtering by the model's own `type` rather than by a
+ * title convention means renaming "Midterm Exam 1" does not move it.
+ */
+const examsDocument = (workspace, root, runId, dark, withDrafts, on) => {
+  const data = outlinePayloadFor(workspace, root, runId, withDrafts, on);
+  const bundle = withDrafts
+    ? null
+    : workspace.findRun(runId);
+  const exams = (Array.isArray(data.assessments) ? data.assessments : []).filter(
+    (row) => row.type === "exam",
+  );
+
+  // Item counts come from the bundle, because the outline payload carries a
+  // criteria count and not an item count. Absent when the drafted view is on
+  // rather than wrong: a merged bundle is not what `findRun` returns.
+  const itemsById = new Map();
+  if (bundle) {
+    for (const item of bundle.items ?? []) {
+      const key = item.assessment_id;
+      if (key) itemsById.set(key, (itemsById.get(key) ?? 0) + 1);
+    }
+  }
+
+  const asPercent = (fraction) =>
+    typeof fraction === "number" ? Math.round(fraction * 1000) / 10 + "%" : null;
+
+  const body =
+    exams.length === 0
+      ? '<p class="empty">No assessment in this run has <code>type: exam</code>. ' +
+        "Quizzes and assignments are on the Assessments list.</p>"
+      : exams
+          .map((row) => {
+            const weight = asPercent(row.weight);
+            const count = itemsById.get(row.assessment_id);
+            return (
+              "<section><h2>" +
+              escapeText(row.title ?? row.assessment_id ?? "untitled") +
+              "</h2>" +
+              rows([
+                ["When", row.due_on ? escapeText(row.due_on) : '<span class="todo">no date</span>'],
+                ["Weight", weight === null ? '<span class="todo">no weight</span>' : weight],
+                [
+                  "Questions",
+                  count === undefined
+                    ? '<span class="dim">—</span>'
+                    : count === 0
+                      ? '<span class="todo">none written</span>'
+                      : String(count),
+                ],
+                [
+                  "Rubric criteria",
+                  row.criteria ? escapeText(String(row.criteria)) : '<span class="dim">—</span>',
+                ],
+                ["Outcomes", row.outcomes ? escapeText(row.outcomes) : '<span class="dim">—</span>'],
+              ]) +
+              "</section>"
+            );
+          })
+          .join("");
+
+  return documentPage(body, dark);
+};
+
+/**
  * A backup, not a proposal.
  *
  * The scaffolds write `modules-draft.yaml.bak-20260903-171431`, so the stamp is
@@ -1415,6 +1622,34 @@ const handler = (registry) => (req, res) => {
     // The two views with no widget behind them. Checked before the widget
     // lookup because `BY_TOOL` has nothing to give them: their content is
     // assembled here, from the run record and from the work directory.
+    if (view === "assessments" || view === "slides" || view === "exams") {
+      if (!runId) return sendErrorPage(res, "No run chosen.");
+      const dark = url.searchParams.get("dark") === "1";
+      const withDrafts = url.searchParams.get("drafts") === "1";
+      const on = url.searchParams.get("date");
+      const host = req.headers.host;
+      const session = url.searchParams.get("session") ?? "";
+      return send(
+        res,
+        200,
+        "text/html; charset=utf-8",
+        view === "assessments"
+          ? assessmentsDocument(workspace, root, runId, dark, withDrafts, on)
+          : view === "slides"
+            ? slidesDocument(
+                workspace,
+                root,
+                runId,
+                dark,
+                withDrafts,
+                on,
+                host ? `http://${host}` : "",
+                session,
+              )
+            : examsDocument(workspace, root, runId, dark, withDrafts, on),
+      );
+    }
+
     if (view === "grading" || view === "ready") {
       if (!runId) return sendErrorPage(res, "No run chosen.");
       const dark = url.searchParams.get("dark") === "1";
