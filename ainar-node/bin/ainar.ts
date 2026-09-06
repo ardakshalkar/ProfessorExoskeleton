@@ -21,7 +21,7 @@
  * The remaining write verbs are absent, and absent loudly — see `REFUSED`.
  */
 
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { courseContext, enrollmentsOf, runById } from "../src/bundle.ts";
 import { blueprintPayload } from "../src/blueprint.ts";
@@ -47,6 +47,7 @@ import {
 import { dump } from "../src/yaml-out.ts";
 import { SCHEMA_NAMES, jsonSchemaFor, shapeText } from "../src/schema.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
+import { LAYOUT, measureDeck } from "../src/deck.ts";
 import {
   ID_FIELDS,
   approveDrafts,
@@ -151,6 +152,7 @@ const HELP = `ainar (Node) — the read half of the workspace
   schema [ENTITY] [--json] [--out DIR]     what a record must look like
   new course COURSE_ID [--title T] [--credits N] [--department D]
   new run COURSE_ID TERM --start YYYY-MM-DD --end YYYY-MM-DD
+  deck fit FILE.md [--verbose]            will each slide fit on the page
 
   Enrollments hold pseudonyms only. Names, numbers and emails go to
   --roster-dir (default ~/.ainar/roster, or AINAR_ROSTER_DIR), which must
@@ -750,6 +752,73 @@ try {
 
       console.error("usage: new course COURSE_ID  |  new run COURSE_ID TERM --start … --end …");
       process.exit(1);
+    }
+
+    /**
+     * Will it fit, answered by the code that lays it out.
+     *
+     * The alternative was watched happening: an agent redesigning a deck said
+     * "let me read the exact textHeight formula so I can compute what actually
+     * fits" and opened `deck.ts`. Arithmetic carried out in a model's head is
+     * expensive, unverifiable, and stale the moment a font size moves. This
+     * runs the renderer's own measuring — literally the same `blockHeight` —
+     * without writing a file or starting PowerPoint.
+     */
+    case "deck": {
+      if (rest[0] !== "fit") {
+        console.error("usage: deck fit FILE.md [--verbose]");
+        process.exit(1);
+      }
+      const file = rest[1];
+      if (!file) throw new Error("usage: deck fit FILE.md [--verbose]");
+      const measured = measureDeck(readFileSync(resolve(file), "utf-8"));
+      const verbose = args.includes("--verbose");
+
+      out(`${measured.length} slide(s), ${LAYOUT.floor}" of usable page\n`);
+      for (const slide of measured) {
+        // An image is measured at the most it can take — the renderer shrinks
+        // it to whatever space is left — so a slide holding one is an UPPER
+        // bound: the real picture may be shorter, and the overflow smaller or
+        // absent. Say "may" there rather than reporting a bound as a fact.
+        const state = slide.fits
+          ? `fits, ${(LAYOUT.floor - slide.bottom).toFixed(2)}" to spare`
+          : slide.approximate
+            ? `may overflow, by up to ${slide.overflow.toFixed(2)}"`
+            : `OVERFLOWS by ${slide.overflow.toFixed(2)}"`;
+        out(
+          `  ${String(slide.slide).padStart(2)}  ${slide.approximate ? "≤" : " "}` +
+            `${slide.bottom.toFixed(2).padStart(5)}"  ${state}  ${slide.title}`,
+        );
+        if (verbose) {
+          for (const block of slide.blocks) {
+            out(
+              `        ${block.kind.padEnd(10)} at ${block.at.toFixed(2).padStart(5)}" ` +
+                `+${block.height.toFixed(2).padStart(5)}"  ${block.text.replace(/\s+/g, " ").slice(0, 46)}`,
+            );
+          }
+        }
+      }
+
+      const certain = measured.filter((slide) => !slide.fits && !slide.approximate);
+      const maybe = measured.filter((slide) => !slide.fits && slide.approximate);
+      out("");
+      if (certain.length) {
+        out(
+          `${certain.length} slide(s) run past the page: ` +
+            `${certain.map((entry) => entry.slide).join(", ")}. Shorten or split them.`,
+        );
+      }
+      if (maybe.length) {
+        out(
+          `${maybe.length} slide(s) may run past it — ${maybe.map((entry) => entry.slide).join(", ")} — ` +
+            "each holds an image, and an image's real height is only known once it is " +
+            "placed. Render to be sure: the renderer warns using these same numbers.",
+        );
+      }
+      if (!certain.length && !maybe.length) out("Every slide fits.");
+      // An estimate, so a failure here is a warning and not an exit code: the
+      // fonts are rendered by PowerPoint, not by this.
+      break;
     }
 
     default:

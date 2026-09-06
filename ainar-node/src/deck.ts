@@ -280,3 +280,144 @@ export function columnWidths(rows: string[][], total: number): number[] {
   }
   return widths;
 }
+
+/**
+ * The slide, in inches, and how far down a block pushes the next one.
+ *
+ * These were constants inside `bin/render-deck.ts`, which meant the only way to
+ * answer "will this fit" was to read the renderer and do its arithmetic by
+ * hand. An agent did exactly that on 2026-09-06 — "let me read the exact
+ * textHeight formula so I can compute what actually fits" — and arithmetic done
+ * in a model's head is expensive, unverifiable, and wrong the moment a font
+ * size changes here.
+ *
+ * So the measuring is a function, the renderer calls it for its own heights,
+ * and `ainar deck fit` calls the same one. They cannot disagree: there is one
+ * copy of the numbers and both sides read it.
+ *
+ * It is still an ESTIMATE. PowerPoint renders the fonts, not this, and
+ * `textHeight` says as much. Erring tall is the safe direction.
+ */
+export const LAYOUT = {
+  slideWidth: 13.33,
+  slideHeight: 7.5,
+  margin: 0.7,
+  /** The bottom margin, enforced rather than hoped for. */
+  floor: 7.5 - 0.5,
+  /** Where the first block of an ordinary slide starts. */
+  start: 1.6,
+  /** Where the first block of the title slide starts. */
+  titleStart: 1.9,
+  /** Between one block and the next, unless the block says otherwise. */
+  gap: 0.3,
+  tableRowHeight: 0.62,
+} as const;
+
+export const CONTENT_WIDTH = LAYOUT.slideWidth - LAYOUT.margin * 2;
+
+/**
+ * How tall one block is, and how much space follows it.
+ *
+ * `heading` at level 2 or more is the section rule: the renderer draws it at a
+ * fixed y and resets the cursor, so it consumes no flow height and instead
+ * *restarts* the column. That is why the return carries `resets` rather than a
+ * height — a measurer that treated it as height would report every sectioned
+ * slide as overflowing.
+ *
+ * An image is the one kind whose height depends on the file, which this cannot
+ * read. It is reported as `unknown`, and the renderer's own rule — shrink to
+ * the space left — means such a slide never overflows on the image's account.
+ */
+export function blockHeight(
+  block: Block,
+  options: { title?: boolean; cursor?: number } = {},
+): { height: number; gap: number; resets?: number; unknown?: boolean } {
+  const cursor = options.cursor ?? LAYOUT.start;
+  if (options.title) {
+    if (block.kind === "heading") return { height: textHeight(block.text, 46, 9.0, 1.15), gap: LAYOUT.gap };
+    if (block.kind === "paragraph") return { height: textHeight(block.text, 16, 10.0), gap: LAYOUT.gap };
+  }
+  switch (block.kind) {
+    case "heading":
+      // Drawn at a fixed y; the column starts again beneath it.
+      return { height: 0, gap: 0, resets: LAYOUT.start };
+    case "paragraph":
+      return { height: textHeight(block.text, 17, CONTENT_WIDTH), gap: LAYOUT.gap };
+    case "quote":
+      return { height: textHeight(block.text, 15, CONTENT_WIDTH - 0.6) + 0.4, gap: LAYOUT.gap };
+    case "code":
+      return { height: textHeight(block.text, 18, 5.4, 1.4) + 0.4, gap: LAYOUT.gap };
+    case "list":
+      return {
+        height:
+          block.items.reduce((total, item) => total + textHeight(item, 17, CONTENT_WIDTH - 0.6), 0) +
+          block.items.length * 0.16,
+        gap: LAYOUT.gap,
+      };
+    case "table":
+      return { height: block.rows.length * LAYOUT.tableRowHeight, gap: 0.35 };
+    case "image":
+      // Shrunk to what is left, so it fills the rest and never overruns.
+      return { height: Math.max(0, LAYOUT.floor - cursor), gap: LAYOUT.gap, unknown: true };
+    default:
+      return { height: 0, gap: 0 };
+  }
+}
+
+export type Measured = {
+  /** 1-based, as a person counts slides. */
+  slide: number;
+  title: string;
+  bottom: number;
+  floor: number;
+  overflow: number;
+  fits: boolean;
+  /** True when an image made the answer a guess rather than an estimate. */
+  approximate: boolean;
+  blocks: { kind: string; at: number; height: number; text: string }[];
+};
+
+/** Flow one slide's blocks down the page and say where the last one ends. */
+export function measureSlide(blocks: Block[], index = 0): Measured {
+  const isTitle = index === 0 && blocks[0]?.kind === "heading" && blocks[0].level === 1;
+  let cursor: number = isTitle ? LAYOUT.titleStart : LAYOUT.start;
+  let bottom = cursor;
+  let approximate = false;
+  const rows: Measured["blocks"] = [];
+
+  for (const block of blocks) {
+    const measure = blockHeight(block, { title: isTitle, cursor });
+    if (measure.resets !== undefined) {
+      cursor = measure.resets;
+      bottom = cursor;
+      rows.push({ kind: block.kind, at: 0.45, height: 0.8, text: slideTitle([block]) });
+      continue;
+    }
+    if (measure.unknown) approximate = true;
+    rows.push({
+      kind: block.kind,
+      at: Number(cursor.toFixed(2)),
+      height: Number(measure.height.toFixed(2)),
+      text: (block as any).text ?? (block as any).alt ?? `${(block as any).items?.length ?? (block as any).rows?.length ?? 0} rows`,
+    });
+    bottom = cursor + measure.height;
+    cursor = bottom + measure.gap;
+  }
+
+  const over = bottom - LAYOUT.floor;
+  return {
+    slide: index + 1,
+    title: slideTitle(blocks),
+    bottom: Number(bottom.toFixed(2)),
+    floor: LAYOUT.floor,
+    overflow: Number(Math.max(0, over).toFixed(2)),
+    fits: over <= 0,
+    approximate,
+    blocks: rows,
+  };
+}
+
+/** Every slide in a markdown deck, measured. */
+export function measureDeck(markdown: string): Measured[] {
+  return splitSlides(markdown).map((slide, index) => measureSlide(parseBlocks(slide), index));
+}

@@ -13,14 +13,19 @@
  */
 
 import { strict as assert } from "node:assert";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
+  CONTENT_WIDTH,
+  LAYOUT,
   checkContract,
   columnWidths,
   creditFor,
+  measureDeck,
   parseBlocks,
   slideTitle,
   splitSlides,
+  textHeight,
   type Plan,
 } from "../src/deck.ts";
 
@@ -192,4 +197,55 @@ test("columns are proportional to their content but never vanish", () => {
   assert.ok(Math.abs(widths.reduce((a, b) => a + b, 0) - 12) < 0.001);
   assert.ok(widths[1]! > widths[2]!, "the widest column should get the most room");
   assert.ok(widths[2]! > 12 / (3 * 2.5) - 0.001, "no column below its floor");
+});
+
+// --------------------------------------------------------------------------
+// Measuring — the half `ainar deck fit` and the renderer now share
+// --------------------------------------------------------------------------
+
+test("a slide's bottom is where its last block ends, not where the next would start", () => {
+  // One paragraph on an ordinary slide: bottom is start + that paragraph, with
+  // no trailing gap. The gap belongs between blocks, and counting it would
+  // report every full slide as overflowing by exactly one gap.
+  const [slide] = measureDeck("## Section\n\nA short line.");
+  const paragraph = textHeight("A short line.", 17, CONTENT_WIDTH);
+  assert.equal(slide!.bottom, Number((LAYOUT.start + paragraph).toFixed(2)));
+  assert.equal(slide!.fits, true);
+  assert.equal(slide!.approximate, false);
+});
+
+test("a section heading restarts the column rather than consuming height", () => {
+  // The renderer draws an h2 at a fixed y and resets the cursor. A measurer
+  // treating it as flow height would report every sectioned slide as taller
+  // than it is, and long decks are nothing but sectioned slides.
+  const withHeading = measureDeck("## A heading\n\nSame line.")[0]!;
+  const without = measureDeck("Same line.")[0]!;
+  assert.equal(withHeading.bottom, without.bottom);
+});
+
+test("an overflowing slide says by how much", () => {
+  const long = Array.from({ length: 40 }, (_, i) => `- item number ${i} with enough words to wrap`).join("\n");
+  const slide = measureDeck(`## Long\n\n${long}`)[0]!;
+  assert.equal(slide.fits, false);
+  assert.ok(slide.overflow > 0, "an overflow should be positive");
+  assert.equal(slide.bottom - LAYOUT.floor > 0, true);
+});
+
+test("a slide holding an image is a bound, not a measurement", () => {
+  // The renderer shrinks a picture to the space left, so its height is only
+  // known once the file is read. Reporting that as a fact is how a fit check
+  // starts lying.
+  const slide = measureDeck("## With a picture\n\n![alt](chart.png)")[0]!;
+  assert.equal(slide.approximate, true);
+});
+
+test("the fit check and the renderer measure with one set of numbers", () => {
+  // The whole point of the extraction. If a block's height is ever computed in
+  // `bin/render-deck.ts` again, `blockHeight` stops being the single answer and
+  // `deck fit` becomes a second opinion — which is what it was written to
+  // replace.
+  const source = readFileSync(new URL("../bin/render-deck.ts", import.meta.url), "utf-8");
+  assert.ok(!/const height = textHeight\(/.test(source), "render-deck computes a height itself");
+  assert.ok(!/const SLIDE_W = 13\.33/.test(source), "render-deck carries its own page width");
+  assert.ok(source.includes("blockHeight"), "render-deck should call the shared measurement");
 });

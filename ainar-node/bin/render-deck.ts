@@ -48,7 +48,8 @@ import {
   parseBlocks,
   plain,
   splitSlides,
-  textHeight,
+  LAYOUT,
+  blockHeight,
   type Block,
   type Plan,
 } from "../src/deck.ts";
@@ -88,11 +89,14 @@ const HEAD_FONT = "Cambria";
 const BODY_FONT = "Calibri";
 const MONO_FONT = "Courier New";
 
-const SLIDE_W = 13.33;
-const SLIDE_H = 7.5;
-const MARGIN = 0.7;
+// The page geometry lives in `deck.ts`, so `ainar deck fit` measures against
+// the same numbers this draws with. Changing one here would make the fit check
+// quietly wrong, which is the failure it exists to prevent.
+const SLIDE_W = LAYOUT.slideWidth;
+const SLIDE_H = LAYOUT.slideHeight;
+const MARGIN = LAYOUT.margin;
 const CONTENT_W = SLIDE_W - MARGIN * 2;
-const FLOOR = SLIDE_H - 0.5; // the 0.5" bottom margin, enforced rather than hoped for
+const FLOOR = LAYOUT.floor; // the 0.5" bottom margin, enforced rather than hoped for
 
 /** `**bold**` and `` `code` `` into pptxgenjs runs; everything else is plain. */
 function runs(text: string, base: Record<string, unknown>): unknown[] {
@@ -153,7 +157,7 @@ async function render(
       cursor = 1.9;
       for (const block of blocks) {
         if (block.kind === "heading") {
-          const height = textHeight(block.text, 46, 9.0, 1.15);
+          const height = blockHeight(block, { title: true }).height;
           slide.addText(block.text, {
             x: MARGIN, y: cursor, w: 9.6, h: height,
             fontFace: HEAD_FONT, fontSize: 46, bold: true, color: PAPER,
@@ -161,7 +165,7 @@ async function render(
           });
           advance(height, 0.5);
         } else if (block.kind === "paragraph") {
-          const height = textHeight(block.text, 16, 10.0);
+          const height = blockHeight(block, { title: true }).height;
           slide.addText(runs(block.text, { color: LIGHT }), {
             x: MARGIN, y: cursor, w: 10.0, h: height,
             fontFace: BODY_FONT, fontSize: 16, margin: 0,
@@ -191,7 +195,7 @@ async function render(
         }
 
         case "paragraph": {
-          const height = textHeight(block.text, 17, CONTENT_W);
+          const height = blockHeight(block).height;
           slide.addText(runs(block.text, { color: INK }), {
             x: MARGIN, y: cursor, w: CONTENT_W, h: height,
             fontFace: BODY_FONT, fontSize: 17, lineSpacingMultiple: 1.15, margin: 0,
@@ -201,7 +205,7 @@ async function render(
         }
 
         case "quote": {
-          const height = textHeight(block.text, 15, CONTENT_W - 0.6) + 0.4;
+          const height = blockHeight(block).height;
           slide.addShape(pres.ShapeType.roundRect, {
             x: MARGIN, y: cursor, w: CONTENT_W, h: height,
             fill: { color: LIGHT }, line: { color: LIGHT }, rectRadius: 0.06,
@@ -215,7 +219,7 @@ async function render(
         }
 
         case "code": {
-          const height = textHeight(block.text, 18, 5.4, 1.4) + 0.4;
+          const height = blockHeight(block).height;
           slide.addShape(pres.ShapeType.roundRect, {
             x: MARGIN, y: cursor, w: 6.0, h: height,
             fill: { color: CODE_BG }, line: { color: CODE_LINE }, rectRadius: 0.06,
@@ -239,9 +243,7 @@ async function render(
               breakLine: position < block.items.length - 1,
             },
           }));
-          const height =
-            block.items.reduce((total, item) => total + textHeight(item, 17, CONTENT_W - 0.6), 0) +
-            block.items.length * 0.16;
+          const height = blockHeight(block).height;
           slide.addText(body, {
             x: MARGIN + 0.15, y: cursor, w: CONTENT_W - 0.3, h: height,
             fontFace: BODY_FONT, fontSize: 17, margin: 0,
@@ -264,7 +266,7 @@ async function render(
               row.map((cell) => ({ text: plain(cell), options: { color: INK, fontSize: 15 } })),
             ),
           ];
-          const rowHeight = 0.62;
+          const rowHeight = LAYOUT.tableRowHeight;
           slide.addTable(rows, {
             x: MARGIN, y: cursor, w: width,
             colW: columnWidths(block.rows, width),
