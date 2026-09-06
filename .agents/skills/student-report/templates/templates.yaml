@@ -1,0 +1,16 @@
+# The menu /student-report reads out. Which one you use is not a matter of
+# taste: a report *about* a student, for a professor, and a report *for* the
+# student are different documents with different registers, and the skill says
+# to ask which before writing. See references/templates.md.
+surface: student-report
+public: false
+default: for-the-professor
+templates:
+  - id: for-the-professor
+    file: for-the-professor.md
+    name: For the professor
+    suits: what the record shows, in the model's own terms, with the evidence ids
+  - id: for-the-student
+    file: for-the-student.md
+    name: For the student
+    suits: handed to the student — same evidence, no verdict, and a next step

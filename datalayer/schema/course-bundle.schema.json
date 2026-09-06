@@ -1,0 +1,3975 @@
+{
+  "$defs": {
+    "ActionItem": {
+      "additionalProperties": false,
+      "description": "One entry in the professor's action inbox.\n\nEverything the exoskeleton wants from the professor arrives here, with the\nevent that produced it, so nothing is asked without a traceable reason.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "action_id": {
+          "pattern": "^ACTION-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Action Id",
+          "type": "string"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "assigned_to": {
+          "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Assigned To",
+          "type": "string"
+        },
+        "type": {
+          "description": "e.g. review_grades, prepare_lesson, approve_intervention.",
+          "title": "Type",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "priority": {
+          "$ref": "#/$defs/Priority",
+          "default": "medium"
+        },
+        "source_event_id": {
+          "anyOf": [
+            {
+              "pattern": "^EVENT-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Event Id"
+        },
+        "source_refs": {
+          "description": "Signals, submissions or evaluations behind this item.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Source Refs",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/ActionStatus",
+          "default": "pending"
+        },
+        "due_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Due At"
+        },
+        "available_actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Available Actions",
+          "type": "array"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "action_id",
+        "course_version_id",
+        "assigned_to",
+        "type",
+        "title"
+      ],
+      "title": "ActionItem",
+      "type": "object"
+    },
+    "ActionStatus": {
+      "enum": [
+        "pending",
+        "in_progress",
+        "done",
+        "dismissed"
+      ],
+      "title": "ActionStatus",
+      "type": "string"
+    },
+    "ActivityType": {
+      "enum": [
+        "lecture",
+        "lab",
+        "seminar",
+        "discussion",
+        "reading",
+        "exercise",
+        "project_work",
+        "field_work",
+        "review",
+        "other"
+      ],
+      "title": "ActivityType",
+      "type": "string"
+    },
+    "AiSuggestion": {
+      "additionalProperties": false,
+      "description": "What an agent proposed. Never treated as a grade.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "score"
+      ],
+      "title": "AiSuggestion",
+      "type": "object"
+    },
+    "Assessment": {
+      "additionalProperties": false,
+      "description": "A graded task: assignment, quiz, exam, project, presentation, defense.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "assessment_id": {
+          "pattern": "^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Assessment Id",
+          "type": "string"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/AssessmentType"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "module_id": {
+          "anyOf": [
+            {
+              "pattern": "^MODULE-(?:DRAFT-)?[0-9]{2,3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Module Id"
+        },
+        "maximum_score": {
+          "default": 100,
+          "exclusiveMinimum": 0,
+          "title": "Maximum Score",
+          "type": "number"
+        },
+        "weight": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of the final grade; run weights should sum to 1.0.",
+          "title": "Weight"
+        },
+        "opens_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opens At"
+        },
+        "due_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Due At"
+        },
+        "outcomes": {
+          "items": {
+            "pattern": "^LO-[0-9]{2,3}$",
+            "type": "string"
+          },
+          "title": "Outcomes",
+          "type": "array"
+        },
+        "rubric_id": {
+          "anyOf": [
+            {
+              "pattern": "^RUBRIC-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rubric Id"
+        },
+        "rubric": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rubric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Inline rubric; preferred when the rubric is not reused."
+        },
+        "submission_type": {
+          "items": {
+            "$ref": "#/$defs/SubmissionFormat"
+          },
+          "title": "Submission Type",
+          "type": "array"
+        },
+        "delivery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DeliveryChannel"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Where the work arrives — a Canvas upload, a pushed repository, a paper booklet, an oral defence. Decides which import path exists; see DeliveryChannel."
+        },
+        "instructions_document_id": {
+          "anyOf": [
+            {
+              "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Instructions Document Id"
+        },
+        "settings": {
+          "additionalProperties": true,
+          "description": "Type-specific configuration that does not belong in the common core, e.g. anonymous_grading, allow_late_submission, ai_review.",
+          "title": "Settings",
+          "type": "object"
+        },
+        "design": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AssessmentDesign"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Multidimensional blueprint agreed before item generation."
+        }
+      },
+      "required": [
+        "assessment_id",
+        "course_version_id",
+        "title",
+        "type"
+      ],
+      "title": "Assessment",
+      "type": "object"
+    },
+    "AssessmentBlueprintCell": {
+      "additionalProperties": false,
+      "description": "One allocation in an assessment design matrix.\n\nThe cell makes the intended balance reviewable before questions are\nwritten: outcome x cognitive level x difficulty x item type.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "outcome_id": {
+          "pattern": "^LO-[0-9]{2,3}$",
+          "title": "Outcome Id",
+          "type": "string"
+        },
+        "cognitive_level": {
+          "$ref": "#/$defs/CognitiveLevel"
+        },
+        "difficulty": {
+          "$ref": "#/$defs/ItemDifficulty"
+        },
+        "item_type": {
+          "$ref": "#/$defs/ItemType"
+        },
+        "item_count": {
+          "minimum": 1,
+          "title": "Item Count",
+          "type": "integer"
+        },
+        "marks": {
+          "exclusiveMinimum": 0,
+          "title": "Marks",
+          "type": "number"
+        }
+      },
+      "required": [
+        "outcome_id",
+        "cognitive_level",
+        "difficulty",
+        "item_type",
+        "item_count",
+        "marks"
+      ],
+      "title": "AssessmentBlueprintCell",
+      "type": "object"
+    },
+    "AssessmentDesign": {
+      "additionalProperties": false,
+      "description": "The professor-approved shape of an assessment, before item writing.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "purpose": {
+          "description": "e.g. diagnostic, formative, midterm, final.",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Minutes"
+        },
+        "target_item_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Item Count"
+        },
+        "cells": {
+          "items": {
+            "$ref": "#/$defs/AssessmentBlueprintCell"
+          },
+          "title": "Cells",
+          "type": "array"
+        },
+        "constraints": {
+          "additionalProperties": true,
+          "description": "Professor constraints such as allowed aids or item-type limits.",
+          "title": "Constraints",
+          "type": "object"
+        }
+      },
+      "required": [
+        "purpose"
+      ],
+      "title": "AssessmentDesign",
+      "type": "object"
+    },
+    "AssessmentItem": {
+      "additionalProperties": false,
+      "description": "One question or task inside an assessment.\n\nA quiz scored only as a total tells you a student got 60%. The same quiz\nwith concept-tagged items tells you which concept cost them the other 40,\nwhich is what concept states and gap detection actually need.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "item_id": {
+          "pattern": "^ITEM-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "assessment_id": {
+          "pattern": "^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Assessment Id",
+          "type": "string"
+        },
+        "item_model_id": {
+          "anyOf": [
+            {
+              "pattern": "^ITEM-MODEL-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reusable item model this generated question instantiates.",
+          "title": "Item Model Id"
+        },
+        "type": {
+          "$ref": "#/$defs/ItemType"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "number": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Position within the assessment.",
+          "title": "Number"
+        },
+        "maximum_score": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Maximum Score",
+          "type": "number"
+        },
+        "role": {
+          "$ref": "#/$defs/ItemRole",
+          "default": "main",
+          "description": "Where this sits relative to its task. A preparation item is asked before the work and is skipped by extract-evidence; see ItemRole."
+        },
+        "difficulty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ItemDifficulty"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How hard this is meant to be. Declared by the professor, as against the success rate `ainar score-items` observes."
+        },
+        "outcome_id": {
+          "anyOf": [
+            {
+              "pattern": "^LO-[0-9]{2,3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome Id"
+        },
+        "criterion_id": {
+          "anyOf": [
+            {
+              "pattern": "^CRIT-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Rubric criterion this item contributes to, when there is one.",
+          "title": "Criterion Id"
+        },
+        "concepts": {
+          "description": "Concepts the item exercises. Without these it cannot inform diagnosis.",
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/ItemOption"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "answer_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected answer for non-choice items.",
+          "title": "Answer Key"
+        },
+        "marking_guidance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Marking Guidance"
+        }
+      },
+      "required": [
+        "item_id",
+        "assessment_id",
+        "type",
+        "prompt"
+      ],
+      "title": "AssessmentItem",
+      "type": "object"
+    },
+    "AssessmentType": {
+      "enum": [
+        "assignment",
+        "quiz",
+        "exam",
+        "project",
+        "presentation",
+        "oral_defense",
+        "participation",
+        "other"
+      ],
+      "title": "AssessmentType",
+      "type": "string"
+    },
+    "Capability": {
+      "additionalProperties": false,
+      "description": "Something a student can do, accumulated across courses.\n\nCapabilities are the basis of a capability map rather than a transcript, so\nthey are usually shared across the faculty, not owned by one course.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "capability_id": {
+          "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/CapabilityLevel"
+          },
+          "title": "Levels",
+          "type": "array"
+        },
+        "domain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. 'computer-science'.",
+          "title": "Domain"
+        }
+      },
+      "required": [
+        "capability_id",
+        "title"
+      ],
+      "title": "Capability",
+      "type": "object"
+    },
+    "CapabilityLevel": {
+      "additionalProperties": false,
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "level": {
+          "minimum": 1,
+          "title": "Level",
+          "type": "integer"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "description"
+      ],
+      "title": "CapabilityLevel",
+      "type": "object"
+    },
+    "CognitiveLevel": {
+      "description": "Bloom-style cognitive level of a learning outcome.",
+      "enum": [
+        "remember",
+        "understand",
+        "apply",
+        "analyze",
+        "evaluate",
+        "create"
+      ],
+      "title": "CognitiveLevel",
+      "type": "string"
+    },
+    "Concept": {
+      "additionalProperties": false,
+      "description": "A unit of knowledge structure.\n\nConcepts are what make gap detection explainable: AINAR can say students\nstruggle with overfitting *because* train-test separation is not yet\ndemonstrated, rather than emitting an unexplained label.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "concept_id": {
+          "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Concept Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "course_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Omit for shared concepts defined in shared/concepts.yaml.",
+          "title": "Course Id"
+        },
+        "prerequisites": {
+          "description": "Concepts that should be understood first.",
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Prerequisites",
+          "type": "array"
+        },
+        "related": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Related",
+          "type": "array"
+        },
+        "aliases": {
+          "description": "Alternative names, used for retrieval and tagging.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        }
+      },
+      "required": [
+        "concept_id",
+        "title"
+      ],
+      "title": "Concept",
+      "type": "object"
+    },
+    "ConceptEdge": {
+      "additionalProperties": false,
+      "description": "Explicit typed edge of the concept graph.\n\nPrerequisite edges are normally expressed inline on the concept. This entity\nexists for other relationship types and for edges between shared concepts.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "source_concept_id": {
+          "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Source Concept Id",
+          "type": "string"
+        },
+        "target_concept_id": {
+          "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Target Concept Id",
+          "type": "string"
+        },
+        "relationship_type": {
+          "$ref": "#/$defs/ConceptRelationship"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "source_concept_id",
+        "target_concept_id",
+        "relationship_type"
+      ],
+      "title": "ConceptEdge",
+      "type": "object"
+    },
+    "ConceptRelationship": {
+      "enum": [
+        "prerequisite_of",
+        "related_to",
+        "part_of",
+        "refines"
+      ],
+      "title": "ConceptRelationship",
+      "type": "string"
+    },
+    "ConceptState": {
+      "enum": [
+        "not_observed",
+        "introduced",
+        "developing",
+        "demonstrated",
+        "consistently_demonstrated",
+        "needs_review"
+      ],
+      "title": "ConceptState",
+      "type": "string"
+    },
+    "Course": {
+      "additionalProperties": false,
+      "description": "Stable academic identity of a course, independent of any delivery.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "course_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+          "title": "Course Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "credits": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credits"
+        },
+        "department": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Department"
+        },
+        "language": {
+          "description": "ISO 639-1 codes of instruction languages.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Language",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/CourseStatus",
+          "default": "active"
+        },
+        "owner": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Accountable course owner.",
+          "title": "Owner"
+        }
+      },
+      "required": [
+        "course_id",
+        "title"
+      ],
+      "title": "Course",
+      "type": "object"
+    },
+    "CourseEvent": {
+      "additionalProperties": false,
+      "description": "Something that happened in a course run, which workflows may react to.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "event_id": {
+          "pattern": "^EVENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "description": "e.g. course_run_created, syllabus_uploaded, lesson_completed, assessment_published, submission_received, grading_completed, quiz_average_dropped, student_signal_created, rubric_changed, university_policy_updated.",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "entity_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity Type"
+        },
+        "entity_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity Id"
+        },
+        "occurred_at": {
+          "format": "date-time",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        }
+      },
+      "required": [
+        "event_id",
+        "event_type",
+        "course_version_id",
+        "occurred_at"
+      ],
+      "title": "CourseEvent",
+      "type": "object"
+    },
+    "CourseStatus": {
+      "enum": [
+        "draft",
+        "active",
+        "retired"
+      ],
+      "title": "CourseStatus",
+      "type": "string"
+    },
+    "CourseVersion": {
+      "additionalProperties": false,
+      "description": "One offering of a course in one term — and the version approved for it.\n\nMerged from two records. `CourseVersion` held the approved definition and\n`CourseRun` held the semester, but the definition never varied and has since\nmoved to the `Course`. What is left is the semester plus the approval record,\nwhich is the part of versioning that was ever worth keeping.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "course_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+          "title": "Course Id",
+          "type": "string"
+        },
+        "term": {
+          "pattern": "^[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Term",
+          "type": "string"
+        },
+        "start_date": {
+          "format": "date",
+          "title": "Start Date",
+          "type": "string"
+        },
+        "end_date": {
+          "format": "date",
+          "title": "End Date",
+          "type": "string"
+        },
+        "instructors": {
+          "items": {
+            "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Instructors",
+          "type": "array"
+        },
+        "assistants": {
+          "items": {
+            "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Assistants",
+          "type": "array"
+        },
+        "timezone": {
+          "default": "Asia/Almaty",
+          "description": "IANA timezone of the schedule.",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/RunStatus",
+          "default": "planned"
+        },
+        "lms_course_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Identifier in Canvas, Platonus or another LMS.",
+          "title": "Lms Course Id"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "expected_enrollment": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Enrollment"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Who signed this offering off, e.g. 'academic-council'.",
+          "title": "Approved By"
+        },
+        "syllabus_document_id": {
+          "anyOf": [
+            {
+              "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Syllabus Document Id"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What changed relative to the previous offering.",
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "course_version_id",
+        "course_id",
+        "term",
+        "start_date",
+        "end_date"
+      ],
+      "title": "CourseVersion",
+      "type": "object"
+    },
+    "CriterionLevel": {
+      "additionalProperties": false,
+      "description": "One performance band of a rubric criterion.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "score": {
+          "minimum": 0,
+          "title": "Score",
+          "type": "number"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "score",
+        "description"
+      ],
+      "title": "CriterionLevel",
+      "type": "object"
+    },
+    "DeliveryChannel": {
+      "description": "Where the work arrives, which is not the same as what shape it is in.\n\n``SubmissionFormat`` answers \"what is handed in\" — a PDF, a notebook, a\nrepository. This answers \"how does it reach me\", and the two are independent:\na notebook can arrive as a Canvas upload or as a pushed commit, and the tools\nthat can act on it differ completely.\n\nIt is a core field rather than an extension because it decides which import\npath exists at all. ``lms push`` needs a Canvas assignment id;\n``import-graded-exam`` needs the paper question map; an oral defence produces\nno artefact for either to attach to, and that is a legitimate state rather\nthan missing work. The validator checks each channel against the\nconfiguration it implies, which is the whole reason for writing it down.",
+      "enum": [
+        "canvas_upload",
+        "github_repo",
+        "paper_exam",
+        "oral_defense",
+        "presentation",
+        "instructor_collected",
+        "other"
+      ],
+      "title": "DeliveryChannel",
+      "type": "string"
+    },
+    "Document": {
+      "additionalProperties": false,
+      "description": "Metadata and a storage pointer. Never the bytes themselves.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "document_id": {
+          "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Document Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "storage_key": {
+          "description": "Repository-relative path here; object-storage key in the application.",
+          "title": "Storage Key",
+          "type": "string"
+        },
+        "mime_type": {
+          "description": "e.g. text/markdown, application/pdf.",
+          "title": "Mime Type",
+          "type": "string"
+        },
+        "original_filename": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original Filename"
+        },
+        "size_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size Bytes"
+        },
+        "checksum": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. 'sha256:...'. Filled in on approval when the file exists.",
+          "title": "Checksum"
+        },
+        "uploaded_by": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uploaded By"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "course_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Course Version Id"
+        },
+        "course_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Course Id"
+        },
+        "module_id": {
+          "anyOf": [
+            {
+              "pattern": "^MODULE-(?:DRAFT-)?[0-9]{2,3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Module Id"
+        },
+        "concepts": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "version": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The document this replaces, e.g. last year's slides.",
+          "title": "Supersedes"
+        },
+        "generated_by": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set when an agent produced this file, so a reader can tell."
+        },
+        "presentation_plan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresentationPlan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Planning metadata for a slide deck; rendering remains a later step."
+        }
+      },
+      "required": [
+        "document_id",
+        "title",
+        "storage_key",
+        "mime_type"
+      ],
+      "title": "Document",
+      "type": "object"
+    },
+    "Enrollment": {
+      "additionalProperties": false,
+      "description": "Membership of a person in a course run.\n\nOfficial student records stay in the SIS; this only records membership.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "enrollment_id": {
+          "pattern": "^ENR-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Enrollment Id",
+          "type": "string"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "student_id": {
+          "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Student Id",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/EnrollmentRole",
+          "default": "student"
+        },
+        "status": {
+          "$ref": "#/$defs/EnrollmentStatus",
+          "default": "active"
+        },
+        "group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lab or seminar group label.",
+          "title": "Group"
+        }
+      },
+      "required": [
+        "enrollment_id",
+        "course_version_id",
+        "student_id"
+      ],
+      "title": "Enrollment",
+      "type": "object"
+    },
+    "EnrollmentRole": {
+      "enum": [
+        "student",
+        "auditor",
+        "instructor",
+        "teaching_assistant",
+        "observer"
+      ],
+      "title": "EnrollmentRole",
+      "type": "string"
+    },
+    "EnrollmentStatus": {
+      "enum": [
+        "active",
+        "dropped",
+        "completed",
+        "pending"
+      ],
+      "title": "EnrollmentStatus",
+      "type": "string"
+    },
+    "Evaluation": {
+      "additionalProperties": false,
+      "description": "Criterion-level evaluation of one submission.\n\nBoth sides are preserved: overwriting the suggestion when the professor\nchanges the score would destroy the audit trail and make it impossible to\nmeasure how well the grading agent performs.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "evaluation_id": {
+          "pattern": "^EVAL-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Evaluation Id",
+          "type": "string"
+        },
+        "submission_id": {
+          "pattern": "^SUB-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Submission Id",
+          "type": "string"
+        },
+        "criterion_id": {
+          "pattern": "^CRIT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Criterion Id",
+          "type": "string"
+        },
+        "ai_suggestion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AiSuggestion"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "professor_decision": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProfessorDecision"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "status": {
+          "$ref": "#/$defs/EvaluationStatus",
+          "default": "suggested"
+        }
+      },
+      "required": [
+        "evaluation_id",
+        "submission_id",
+        "criterion_id"
+      ],
+      "title": "Evaluation",
+      "type": "object"
+    },
+    "EvaluationStatus": {
+      "enum": [
+        "suggested",
+        "in_review",
+        "approved",
+        "overridden"
+      ],
+      "title": "EvaluationStatus",
+      "type": "string"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "A pointer into source material supporting a claim.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "document_id": {
+          "anyOf": [
+            {
+              "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Document Id"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. 'page 4, paragraph 2' or 'cell 12'.",
+          "title": "Location"
+        },
+        "text_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Short verbatim excerpt that supports the claim.",
+          "title": "Text Reference"
+        },
+        "source_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Identifier of a non-document source (activity, quiz item).",
+          "title": "Source Ref"
+        }
+      },
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "Intervention": {
+      "additionalProperties": false,
+      "description": "What the professor decided to do about a signal.\n\nRecording the intervention is what later allows AINAR to measure whether\nit worked: new evidence after the intervention is compared with the state\nthat triggered it.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "intervention_id": {
+          "pattern": "^INT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Intervention Id",
+          "type": "string"
+        },
+        "signal_id": {
+          "anyOf": [
+            {
+              "pattern": "^SIGNAL-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signal Id"
+        },
+        "student_id": {
+          "anyOf": [
+            {
+              "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Student Id"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "type": {
+          "description": "e.g. 'targeted_practice', 'office_hours', 'reteach'.",
+          "title": "Type",
+          "type": "string"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "proposed_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Agent name or user id.",
+          "title": "Proposed By"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approved By"
+        },
+        "status": {
+          "$ref": "#/$defs/InterventionStatus",
+          "default": "proposed"
+        },
+        "scheduled_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scheduled At"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "effectiveness_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effectiveness Note"
+        }
+      },
+      "required": [
+        "intervention_id",
+        "course_version_id",
+        "type",
+        "description"
+      ],
+      "title": "Intervention",
+      "type": "object"
+    },
+    "InterventionStatus": {
+      "enum": [
+        "proposed",
+        "approved",
+        "scheduled",
+        "completed",
+        "cancelled"
+      ],
+      "title": "InterventionStatus",
+      "type": "string"
+    },
+    "ItemDifficulty": {
+      "description": "How hard the professor *intended* an item to be.\n\nDistinct from observed difficulty, which ``ainar score-items`` computes from\nwhat the class actually did. Both are worth having precisely because they\ndisagree: an item declared ``easy`` that a third of the class fails is either\na badly worded question or a topic that did not land, and neither is visible\nfrom the success rate alone.",
+      "enum": [
+        "easy",
+        "medium",
+        "complex"
+      ],
+      "title": "ItemDifficulty",
+      "type": "string"
+    },
+    "ItemModel": {
+      "additionalProperties": false,
+      "description": "A reusable pedagogical model from which question instances are made.\n\nThe LLM supplies the surface wording. This record fixes what is measured,\nwhat evidence is expected, and which controlled variables may change.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "item_model_id": {
+          "pattern": "^ITEM-MODEL-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Item Model Id",
+          "type": "string"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "outcome_id": {
+          "anyOf": [
+            {
+              "pattern": "^LO-[0-9]{2,3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome Id"
+        },
+        "capability_id": {
+          "anyOf": [
+            {
+              "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capability Id"
+        },
+        "concepts": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "cognitive_level": {
+          "$ref": "#/$defs/CognitiveLevel"
+        },
+        "evidence_requirements": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Evidence Requirements",
+          "type": "array"
+        },
+        "task_structure": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Task Structure",
+          "type": "array"
+        },
+        "scenario_variables": {
+          "additionalProperties": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "title": "Scenario Variables",
+          "type": "object"
+        },
+        "difficulty_features": {
+          "additionalProperties": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "title": "Difficulty Features",
+          "type": "object"
+        },
+        "misconceptions": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Misconceptions",
+          "type": "array"
+        },
+        "answer_requirements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Answer Requirements",
+          "type": "array"
+        },
+        "allowed_item_types": {
+          "items": {
+            "$ref": "#/$defs/ItemType"
+          },
+          "title": "Allowed Item Types",
+          "type": "array"
+        }
+      },
+      "required": [
+        "item_model_id",
+        "course_version_id",
+        "title",
+        "cognitive_level",
+        "evidence_requirements",
+        "task_structure"
+      ],
+      "title": "ItemModel",
+      "type": "object"
+    },
+    "ItemOption": {
+      "additionalProperties": false,
+      "description": "One answer option of a choice item.\n\nA wrong option is more useful when it says *why* it is wrong. Mapping a\ndistractor to the concept it misreads turns \"12 students chose (c)\" into\n\"12 students are treating the validation split as unseen data\", which is a\ndiagnosis rather than a score.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "label": {
+          "description": "Short label shown to the student, e.g. 'a'.",
+          "title": "Label",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "correct": {
+          "default": false,
+          "title": "Correct",
+          "type": "boolean"
+        },
+        "indicates_misconception_of": {
+          "anyOf": [
+            {
+              "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The concept a student choosing this option has misread.",
+          "title": "Indicates Misconception Of"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the choice reveals, for the professor.",
+          "title": "Note"
+        }
+      },
+      "required": [
+        "label",
+        "text"
+      ],
+      "title": "ItemOption",
+      "type": "object"
+    },
+    "ItemResponse": {
+      "additionalProperties": false,
+      "description": "A student's answer to one item. Produced by the application.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "response_id": {
+          "pattern": "^RESP-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Response Id",
+          "type": "string"
+        },
+        "submission_id": {
+          "pattern": "^SUB-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Submission Id",
+          "type": "string"
+        },
+        "item_id": {
+          "pattern": "^ITEM-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "student_id": {
+          "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Student Id",
+          "type": "string"
+        },
+        "chosen_options": {
+          "description": "Option labels the student selected.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Chosen Options",
+          "type": "array"
+        },
+        "raw_response": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Response"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Score"
+        },
+        "correct": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correct"
+        },
+        "scored_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "'auto', a user id, or an agent name.",
+          "title": "Scored By"
+        },
+        "responded_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Responded At"
+        }
+      },
+      "required": [
+        "response_id",
+        "submission_id",
+        "item_id",
+        "student_id"
+      ],
+      "title": "ItemResponse",
+      "type": "object"
+    },
+    "ItemRole": {
+      "description": "Where an item sits relative to the task it belongs to.\n\n``preparation`` is the one that carries behaviour rather than description. It\nis asked *before* the work, to find out whether a student is ready, so a wrong\nanswer is an expected and useful outcome — ``ainar extract-evidence`` skips\nthese, because recording \"did not demonstrate the concept\" against a question\ndesigned to be attempted cold would misread the whole point of asking it.",
+      "enum": [
+        "preparation",
+        "main",
+        "followup"
+      ],
+      "title": "ItemRole",
+      "type": "string"
+    },
+    "ItemType": {
+      "description": "Shape of a single question or task inside an assessment.",
+      "enum": [
+        "multiple_choice",
+        "multiple_select",
+        "true_false",
+        "short_answer",
+        "numeric",
+        "essay",
+        "code",
+        "practical",
+        "other"
+      ],
+      "title": "ItemType",
+      "type": "string"
+    },
+    "LearningActivity": {
+      "additionalProperties": false,
+      "description": "A scheduled teaching event: lecture, lab, seminar, reading, exercise.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "activity_id": {
+          "pattern": "^ACT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Activity Id",
+          "type": "string"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "module_id": {
+          "anyOf": [
+            {
+              "pattern": "^MODULE-(?:DRAFT-)?[0-9]{2,3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Module Id"
+        },
+        "type": {
+          "$ref": "#/$defs/ActivityType"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "scheduled_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scheduled At"
+        },
+        "duration_minutes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Minutes"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "outcomes": {
+          "items": {
+            "pattern": "^LO-[0-9]{2,3}$",
+            "type": "string"
+          },
+          "title": "Outcomes",
+          "type": "array"
+        },
+        "concepts": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "resources": {
+          "items": {
+            "pattern": "^RES-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Resources",
+          "type": "array"
+        },
+        "preparation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What students should do before the activity.",
+          "title": "Preparation"
+        }
+      },
+      "required": [
+        "activity_id",
+        "course_version_id",
+        "type",
+        "title"
+      ],
+      "title": "LearningActivity",
+      "type": "object"
+    },
+    "LearningEvidence": {
+      "additionalProperties": false,
+      "description": "What a student actually demonstrated, and where it can be seen.\n\nA grade is not the same thing as evidence. Evidence names the outcome or\ncapability, the level demonstrated, and the source it came from.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "evidence_id": {
+          "pattern": "^EVID-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Evidence Id",
+          "type": "string"
+        },
+        "student_id": {
+          "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Student Id",
+          "type": "string"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "source_type": {
+          "description": "e.g. 'assessment', 'activity', 'oral_defense'.",
+          "title": "Source Type",
+          "type": "string"
+        },
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "outcome_id": {
+          "anyOf": [
+            {
+              "pattern": "^LO-[0-9]{2,3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome Id"
+        },
+        "capability_id": {
+          "anyOf": [
+            {
+              "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capability Id"
+        },
+        "concept_id": {
+          "anyOf": [
+            {
+              "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Concept Id"
+        },
+        "demonstrated_level": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Demonstrated Level"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "verified_by": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set once a professor confirms the inference.",
+          "title": "Verified By"
+        },
+        "recorded_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Recorded At"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "evidence_id",
+        "student_id",
+        "course_version_id",
+        "source_type",
+        "source_id"
+      ],
+      "title": "LearningEvidence",
+      "type": "object"
+    },
+    "LearningOutcome": {
+      "additionalProperties": false,
+      "description": "What a student should be able to demonstrate.\n\nThe outcome is the anchor of the central chain:\noutcome -> concept/capability -> activity -> criterion -> evidence.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "outcome_id": {
+          "pattern": "^LO-[0-9]{2,3}$",
+          "title": "Outcome Id",
+          "type": "string"
+        },
+        "course_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+          "title": "Course Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "level": {
+          "description": "Bloom-style levels. YAML may write 'apply-analyze' as shorthand.",
+          "items": {
+            "$ref": "#/$defs/CognitiveLevel"
+          },
+          "title": "Level",
+          "type": "array"
+        },
+        "weight": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of the course outcome set; weights should sum to 1.0.",
+          "title": "Weight"
+        },
+        "capabilities": {
+          "description": "Capabilities this outcome contributes to.",
+          "items": {
+            "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "concepts": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "outcome_id",
+        "course_id",
+        "title"
+      ],
+      "title": "LearningOutcome",
+      "type": "object"
+    },
+    "Module": {
+      "additionalProperties": false,
+      "description": "A teaching unit — typically one week of the course.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "module_id": {
+          "pattern": "^MODULE-(?:DRAFT-)?[0-9]{2,3}$",
+          "title": "Module Id",
+          "type": "string"
+        },
+        "course_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+          "title": "Course Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "week": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Week"
+        },
+        "order": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Order"
+        },
+        "outcomes": {
+          "items": {
+            "pattern": "^LO-[0-9]{2,3}$",
+            "type": "string"
+          },
+          "title": "Outcomes",
+          "type": "array"
+        },
+        "concepts": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "estimated_hours": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimated Hours"
+        }
+      },
+      "required": [
+        "module_id",
+        "course_id",
+        "title"
+      ],
+      "title": "Module",
+      "type": "object"
+    },
+    "PresentationPlan": {
+      "additionalProperties": false,
+      "description": "A reviewable deck plan stored with the generated document metadata.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "audience": {
+          "title": "Audience",
+          "type": "string"
+        },
+        "style": {
+          "description": "Reusable profile name such as lecture or workshop.",
+          "title": "Style",
+          "type": "string"
+        },
+        "duration_minutes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration Minutes"
+        },
+        "max_slides": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Slides"
+        },
+        "outcomes": {
+          "items": {
+            "pattern": "^LO-[0-9]{2,3}$",
+            "type": "string"
+          },
+          "title": "Outcomes",
+          "type": "array"
+        },
+        "concepts": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "slides": {
+          "items": {
+            "$ref": "#/$defs/SlideSpecification"
+          },
+          "minItems": 1,
+          "title": "Slides",
+          "type": "array"
+        }
+      },
+      "required": [
+        "audience",
+        "style",
+        "slides"
+      ],
+      "title": "PresentationPlan",
+      "type": "object"
+    },
+    "Priority": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "title": "Priority",
+      "type": "string"
+    },
+    "ProfessorDecision": {
+      "additionalProperties": false,
+      "description": "The official, human-owned outcome.\n\n``decided_by`` and ``decided_at`` are the audit stamp, and they are what\n``ainar approve`` applies. They are optional on the model so a professor can\nwrite an override into a draft without forging a timestamp — but the\nvalidator requires them the moment the evaluation is `approved` or\n`overridden`, so no stamped-as-decided record can exist without them.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        },
+        "decided_by": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided By"
+        },
+        "decided_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided At"
+        }
+      },
+      "required": [
+        "score"
+      ],
+      "title": "ProfessorDecision",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Where an AI-produced statement came from.\n\nEvery AI conclusion must be reconstructable: which data, which model,\nwhich workflow version, what evidence, who approved it.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "produced_by": {
+          "description": "Agent or workflow that produced this output.",
+          "title": "Produced By",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "workflow_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Version"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "input_refs": {
+          "description": "Identifiers of the records and documents used as input.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Refs",
+          "type": "array"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        }
+      },
+      "required": [
+        "produced_by"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "Resource": {
+      "additionalProperties": false,
+      "description": "Teaching material attached to a run, module or activity.\n\nThe file itself lives in object storage; this record holds the metadata\nand, when applicable, the document reference.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "resource_id": {
+          "pattern": "^RES-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Resource Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ResourceKind",
+          "default": "other"
+        },
+        "course_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Course Version Id"
+        },
+        "course_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Course Id"
+        },
+        "document_id": {
+          "anyOf": [
+            {
+              "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Document Id"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "concepts": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "resource_id",
+        "title"
+      ],
+      "title": "Resource",
+      "type": "object"
+    },
+    "ResourceKind": {
+      "enum": [
+        "slides",
+        "reading",
+        "dataset",
+        "notebook",
+        "video",
+        "link",
+        "textbook_chapter",
+        "tool",
+        "other"
+      ],
+      "title": "ResourceKind",
+      "type": "string"
+    },
+    "Rubric": {
+      "additionalProperties": false,
+      "description": "A set of criteria used to evaluate submissions of an assessment.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "rubric_id": {
+          "pattern": "^RUBRIC-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Rubric Id",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "criteria": {
+          "items": {
+            "$ref": "#/$defs/RubricCriterion"
+          },
+          "title": "Criteria",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rubric_id"
+      ],
+      "title": "Rubric",
+      "type": "object"
+    },
+    "RubricCriterion": {
+      "additionalProperties": false,
+      "description": "One line of a rubric.\n\nThe link from criterion to outcome and capability is what turns grading\ninto evidence. Without it AINAR can compute marks but cannot build a\ncapability map.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "criterion_id": {
+          "pattern": "^CRIT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Criterion Id",
+          "type": "string"
+        },
+        "rubric_id": {
+          "pattern": "^RUBRIC-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Rubric Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "maximum_score": {
+          "exclusiveMinimum": 0,
+          "title": "Maximum Score",
+          "type": "number"
+        },
+        "weight": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weight"
+        },
+        "outcome_id": {
+          "anyOf": [
+            {
+              "pattern": "^LO-[0-9]{2,3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome Id"
+        },
+        "capability_id": {
+          "anyOf": [
+            {
+              "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capability Id"
+        },
+        "concepts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/CriterionLevel"
+          },
+          "title": "Levels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "criterion_id",
+        "rubric_id",
+        "title",
+        "maximum_score"
+      ],
+      "title": "RubricCriterion",
+      "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "planned",
+        "scheduled",
+        "running",
+        "completed",
+        "cancelled"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    },
+    "Severity": {
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "SignalStatus": {
+      "enum": [
+        "open",
+        "acknowledged",
+        "resolved",
+        "dismissed"
+      ],
+      "title": "SignalStatus",
+      "type": "string"
+    },
+    "SlideSpecification": {
+      "additionalProperties": false,
+      "description": "One planned slide, independent of the rendering technology.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "number": {
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        },
+        "type": {
+          "description": "e.g. hook, concept, example, exercise, recap.",
+          "title": "Type",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "minutes": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minutes"
+        },
+        "purpose": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Purpose"
+        },
+        "outcomes": {
+          "items": {
+            "pattern": "^LO-[0-9]{2,3}$",
+            "type": "string"
+          },
+          "title": "Outcomes",
+          "type": "array"
+        },
+        "concepts": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "required_visual": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Visual"
+        }
+      },
+      "required": [
+        "number",
+        "type",
+        "title"
+      ],
+      "title": "SlideSpecification",
+      "type": "object"
+    },
+    "StudentCapabilityState": {
+      "additionalProperties": false,
+      "description": "What a student can do, accumulated across courses.\n\nUnlike a concept state, this is not scoped to one delivery — a capability\nis the thing a transcript cannot express, and evidence for it arrives from\nseveral courses over several years. ``course_version_id`` is set only when the\nestimate is deliberately scoped to one run.\n\nThere is no confidence field filled in here on purpose. ``source_count``\nis the honest signal: a level demonstrated once is not the same claim as a\nlevel demonstrated in four independent places, and inventing a number to\nsay so would be worse than reporting the count.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "student_id": {
+          "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Student Id",
+          "type": "string"
+        },
+        "capability_id": {
+          "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "course_version_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Course Version Id"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level"
+        },
+        "source_count": {
+          "default": 0,
+          "description": "Distinct sources of evidence.",
+          "minimum": 0,
+          "title": "Source Count",
+          "type": "integer"
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^EVID-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "verified_by": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verified By"
+        },
+        "last_updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Updated At"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "student_id",
+        "capability_id"
+      ],
+      "title": "StudentCapabilityState",
+      "type": "object"
+    },
+    "StudentConceptState": {
+      "additionalProperties": false,
+      "description": "A derived estimate of understanding. An estimate, not a permanent fact.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "student_id": {
+          "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Student Id",
+          "type": "string"
+        },
+        "concept_id": {
+          "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Concept Id",
+          "type": "string"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/ConceptState",
+          "default": "not_observed"
+        },
+        "mastery_estimate": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mastery Estimate"
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^EVID-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "last_updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Updated At"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "student_id",
+        "concept_id",
+        "course_version_id"
+      ],
+      "title": "StudentConceptState",
+      "type": "object"
+    },
+    "StudentSignal": {
+      "additionalProperties": false,
+      "description": "Something that may deserve the professor's attention.\n\nA signal without evidence is a label. AINAR does not emit labels such as\n\"weak student\"; every signal carries the evidence that produced it.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "signal_id": {
+          "pattern": "^SIGNAL-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Signal Id",
+          "type": "string"
+        },
+        "student_id": {
+          "anyOf": [
+            {
+              "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Omit for class-level signals.",
+          "title": "Student Id"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "title": "Course Version Id",
+          "type": "string"
+        },
+        "type": {
+          "description": "e.g. 'repeated_concept_difficulty', 'missing_submissions'.",
+          "title": "Type",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity",
+          "default": "medium"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        },
+        "evidence_ids": {
+          "items": {
+            "pattern": "^EVID-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "concepts": {
+          "items": {
+            "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/SignalStatus",
+          "default": "open"
+        },
+        "detected_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detected At"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "signal_id",
+        "course_version_id",
+        "type",
+        "description"
+      ],
+      "title": "StudentSignal",
+      "type": "object"
+    },
+    "Submission": {
+      "additionalProperties": false,
+      "description": "Student work handed in for an assessment. Produced by the application.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "submission_id": {
+          "pattern": "^SUB-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Submission Id",
+          "type": "string"
+        },
+        "assessment_id": {
+          "pattern": "^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Assessment Id",
+          "type": "string"
+        },
+        "student_id": {
+          "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Student Id",
+          "type": "string"
+        },
+        "submitted_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Submitted At"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/SubmissionFile"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/SubmissionStatus",
+          "default": "submitted"
+        },
+        "attempt": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "submission_id",
+        "assessment_id",
+        "student_id"
+      ],
+      "title": "Submission",
+      "type": "object"
+    },
+    "SubmissionFile": {
+      "additionalProperties": false,
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "document_id": {
+          "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Document Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/SubmissionFormat"
+        }
+      },
+      "required": [
+        "document_id",
+        "type"
+      ],
+      "title": "SubmissionFile",
+      "type": "object"
+    },
+    "SubmissionFormat": {
+      "enum": [
+        "pdf",
+        "docx",
+        "pptx",
+        "notebook",
+        "code_repo",
+        "audio",
+        "video",
+        "image",
+        "url",
+        "text",
+        "oral_defense"
+      ],
+      "title": "SubmissionFormat",
+      "type": "string"
+    },
+    "SubmissionStatus": {
+      "enum": [
+        "missing",
+        "draft",
+        "submitted",
+        "late",
+        "resubmitted",
+        "withdrawn"
+      ],
+      "title": "SubmissionStatus",
+      "type": "string"
+    },
+    "User": {
+      "additionalProperties": false,
+      "description": "A professor, assistant or other staff identity.\n\nStudents are referenced by their SIS identifier and are not duplicated\nhere; see ``Enrollment.student_id``.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "user_id": {
+          "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+          "title": "User Id",
+          "type": "string"
+        },
+        "display_name": {
+          "title": "Display Name",
+          "type": "string"
+        },
+        "email": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Email"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. 'professor', 'assistant'.",
+          "title": "Role"
+        },
+        "external_ids": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Identity in official systems, e.g. {'platonus': '...', 'canvas': '...'}.",
+          "title": "External Ids",
+          "type": "object"
+        }
+      },
+      "required": [
+        "user_id",
+        "display_name"
+      ],
+      "title": "User",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "All canonical records belonging to one course.\n\nDesign-time collections (course, versions, outcomes, concepts,\ncapabilities, modules, versions, activities, assessments, resources) are\nauthored by hand. Runtime collections (submissions, evaluations, evidence,\nsignals, interventions, events, action items) are normally produced by the\napplication and are empty here unless you are building fixtures.",
+  "properties": {
+    "course": {
+      "$ref": "#/$defs/Course"
+    },
+    "versions": {
+      "items": {
+        "$ref": "#/$defs/CourseVersion"
+      },
+      "title": "Versions",
+      "type": "array"
+    },
+    "outcomes": {
+      "items": {
+        "$ref": "#/$defs/LearningOutcome"
+      },
+      "title": "Outcomes",
+      "type": "array"
+    },
+    "concepts": {
+      "items": {
+        "$ref": "#/$defs/Concept"
+      },
+      "title": "Concepts",
+      "type": "array"
+    },
+    "concept_edges": {
+      "items": {
+        "$ref": "#/$defs/ConceptEdge"
+      },
+      "title": "Concept Edges",
+      "type": "array"
+    },
+    "capabilities": {
+      "items": {
+        "$ref": "#/$defs/Capability"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "modules": {
+      "items": {
+        "$ref": "#/$defs/Module"
+      },
+      "title": "Modules",
+      "type": "array"
+    },
+    "users": {
+      "items": {
+        "$ref": "#/$defs/User"
+      },
+      "title": "Users",
+      "type": "array"
+    },
+    "enrollments": {
+      "items": {
+        "$ref": "#/$defs/Enrollment"
+      },
+      "title": "Enrollments",
+      "type": "array"
+    },
+    "activities": {
+      "items": {
+        "$ref": "#/$defs/LearningActivity"
+      },
+      "title": "Activities",
+      "type": "array"
+    },
+    "documents": {
+      "items": {
+        "$ref": "#/$defs/Document"
+      },
+      "title": "Documents",
+      "type": "array"
+    },
+    "resources": {
+      "items": {
+        "$ref": "#/$defs/Resource"
+      },
+      "title": "Resources",
+      "type": "array"
+    },
+    "assessments": {
+      "items": {
+        "$ref": "#/$defs/Assessment"
+      },
+      "title": "Assessments",
+      "type": "array"
+    },
+    "rubrics": {
+      "items": {
+        "$ref": "#/$defs/Rubric"
+      },
+      "title": "Rubrics",
+      "type": "array"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/AssessmentItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "item_models": {
+      "items": {
+        "$ref": "#/$defs/ItemModel"
+      },
+      "title": "Item Models",
+      "type": "array"
+    },
+    "submissions": {
+      "items": {
+        "$ref": "#/$defs/Submission"
+      },
+      "title": "Submissions",
+      "type": "array"
+    },
+    "item_responses": {
+      "items": {
+        "$ref": "#/$defs/ItemResponse"
+      },
+      "title": "Item Responses",
+      "type": "array"
+    },
+    "evaluations": {
+      "items": {
+        "$ref": "#/$defs/Evaluation"
+      },
+      "title": "Evaluations",
+      "type": "array"
+    },
+    "evidence": {
+      "items": {
+        "$ref": "#/$defs/LearningEvidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "concept_states": {
+      "items": {
+        "$ref": "#/$defs/StudentConceptState"
+      },
+      "title": "Concept States",
+      "type": "array"
+    },
+    "capability_states": {
+      "items": {
+        "$ref": "#/$defs/StudentCapabilityState"
+      },
+      "title": "Capability States",
+      "type": "array"
+    },
+    "signals": {
+      "items": {
+        "$ref": "#/$defs/StudentSignal"
+      },
+      "title": "Signals",
+      "type": "array"
+    },
+    "interventions": {
+      "items": {
+        "$ref": "#/$defs/Intervention"
+      },
+      "title": "Interventions",
+      "type": "array"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/CourseEvent"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "action_items": {
+      "items": {
+        "$ref": "#/$defs/ActionItem"
+      },
+      "title": "Action Items",
+      "type": "array"
+    }
+  },
+  "required": [
+    "course"
+  ],
+  "title": "CourseBundle",
+  "type": "object"
+}

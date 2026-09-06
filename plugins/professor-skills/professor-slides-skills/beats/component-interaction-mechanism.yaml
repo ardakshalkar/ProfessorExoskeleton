@@ -1,0 +1,42 @@
+beat: component-interaction-mechanism
+name: Components, interaction, mechanism
+family: explain_mechanism
+purpose: >-
+  Explain how something works by naming its parts, then how they act on each
+  other, then what that produces.
+best_for:
+  - biology, engineering, model architectures, organisations
+avoid_when:
+  - the thing has one part, or the parts do not interact
+slides: 4
+sequence:
+  - step: the parts, named
+    intent: explain_mechanism
+    archetype: annotated_object
+    density: sparse
+    note: labels sit on the parts they name, not in a legend below
+  - step: what acts on what
+    intent: explain_mechanism
+    archetype: system_diagram
+    density: moderate
+  - step: the process, in order
+    intent: explain_mechanism
+    archetype: process
+    density: sparse
+  - step: what comes out
+    intent: integrate
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  reuse_visual_anchor: true
+  maintain_geometry: true
+  direct_labels: true
+  separate_bullet_explanation: minimize
+  note: >-
+    the diagram is the explanation, not an illustration of one. A complex
+    diagram followed by "Box A means…, Box B means…" is a diagram whose labels
+    were put in the wrong place
+exit_condition: >-
+  The student can explain the mechanism without the diagram in front of them.
+transition: >-
+  "Does that always work?" opens an evidence or misconception beat.

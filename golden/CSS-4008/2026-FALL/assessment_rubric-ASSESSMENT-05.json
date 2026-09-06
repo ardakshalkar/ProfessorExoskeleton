@@ -1,0 +1,216 @@
+{
+  "assessment": {
+    "course_version_id": "CSS-4008-2026-FALL",
+    "description": "Choose a problem, design an AI solution, evaluate it honestly and defend it orally.",
+    "due_at": "2026-12-15T23:59:00+05:00",
+    "id": "ASSESSMENT-05",
+    "maximum_score": 100.0,
+    "settings": {
+      "ai_review": {
+        "enabled": true,
+        "require_professor_approval": true
+      },
+      "allow_late_submission": false,
+      "anonymous_grading": false,
+      "team_size_max": 3
+    },
+    "submission_type": [
+      "pdf",
+      "code_repo",
+      "oral_defense"
+    ],
+    "title": "Final AI Project",
+    "type": "project",
+    "weight": 0.5
+  },
+  "criteria": [
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-AI-PROBLEM-TYPES",
+          "title": "AI problem types"
+        }
+      ],
+      "contributes_to_capability": null,
+      "criterion_id": "CRIT-05-01",
+      "description": null,
+      "levels": [
+        {
+          "description": "Problem is stated precisely and the AI framing is justified.",
+          "label": null,
+          "score": 20.0
+        },
+        {
+          "description": "Problem stated, framing assumed rather than argued.",
+          "label": null,
+          "score": 10.0
+        },
+        {
+          "description": "Problem statement is vague.",
+          "label": null,
+          "score": 3.0
+        }
+      ],
+      "maximum_score": 20.0,
+      "measures_outcome": {
+        "id": "LO-01",
+        "title": "Explain core AI problem types and methods"
+      },
+      "title": "Problem formulation"
+    },
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-DATA-PREPARATION",
+          "title": "Data preparation"
+        },
+        {
+          "id": "CONCEPT-TRAIN-TEST-SPLIT",
+          "title": "Train-test separation"
+        }
+      ],
+      "contributes_to_capability": {
+        "id": "CAP-DATA-REASONING",
+        "title": "Reason about data"
+      },
+      "criterion_id": "CRIT-05-02",
+      "description": null,
+      "levels": [
+        {
+          "description": "Data provenance, limits and splits are all addressed.",
+          "label": null,
+          "score": 20.0
+        },
+        {
+          "description": "Data prepared correctly, limits not discussed.",
+          "label": null,
+          "score": 10.0
+        },
+        {
+          "description": "Data handling is undocumented.",
+          "label": null,
+          "score": 3.0
+        }
+      ],
+      "maximum_score": 20.0,
+      "measures_outcome": {
+        "id": "LO-03",
+        "title": "Prepare and reason about data for learning"
+      },
+      "title": "Data handling"
+    },
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-SUPERVISED-LEARNING",
+          "title": "Supervised learning"
+        },
+        {
+          "id": "CONCEPT-MODEL-EVALUATION",
+          "title": "Model evaluation"
+        }
+      ],
+      "contributes_to_capability": null,
+      "criterion_id": "CRIT-05-03",
+      "description": null,
+      "levels": [
+        {
+          "description": "Working solution with a baseline and an honest comparison.",
+          "label": null,
+          "score": 35.0
+        },
+        {
+          "description": "Working solution, comparison weak or missing a baseline.",
+          "label": null,
+          "score": 20.0
+        },
+        {
+          "description": "Solution does not run or is not evaluated.",
+          "label": null,
+          "score": 5.0
+        }
+      ],
+      "maximum_score": 35.0,
+      "measures_outcome": {
+        "id": "LO-02",
+        "title": "Implement and evaluate a machine learning model"
+      },
+      "title": "Implementation and evaluation"
+    },
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-EXPERIMENT-DESIGN",
+          "title": "AI experiment design"
+        }
+      ],
+      "contributes_to_capability": {
+        "id": "CAP-AI-EXPERIMENT",
+        "title": "Design an AI experiment"
+      },
+      "criterion_id": "CRIT-05-04",
+      "description": null,
+      "levels": [
+        {
+          "description": "Choices defended under questioning, limits acknowledged.",
+          "label": null,
+          "score": 25.0
+        },
+        {
+          "description": "Choices explained, defence uneven under questioning.",
+          "label": null,
+          "score": 15.0
+        },
+        {
+          "description": "Cannot account for the design decisions made.",
+          "label": null,
+          "score": 5.0
+        }
+      ],
+      "maximum_score": 25.0,
+      "measures_outcome": {
+        "id": "LO-04",
+        "title": "Design and evaluate an AI solution"
+      },
+      "title": "Design justification and oral defence"
+    }
+  ],
+  "items": [],
+  "outcomes": [
+    {
+      "description": "The student can classify a problem as search, optimisation, supervised learning or unsupervised learning, and can explain which family of methods applies.",
+      "id": "LO-01",
+      "level": [
+        "understand"
+      ],
+      "title": "Explain core AI problem types and methods"
+    },
+    {
+      "description": "The student can implement a supervised model, measure its performance honestly, and interpret the result.",
+      "id": "LO-02",
+      "level": [
+        "apply"
+      ],
+      "title": "Implement and evaluate a machine learning model"
+    },
+    {
+      "description": "The student can inspect, clean and split a dataset, and can explain how preparation choices affect what a model can learn.",
+      "id": "LO-03",
+      "level": [
+        "apply",
+        "analyze"
+      ],
+      "title": "Prepare and reason about data for learning"
+    },
+    {
+      "description": "The student can select, implement and evaluate an appropriate AI approach for a stated problem, and can justify the choice.",
+      "id": "LO-04",
+      "level": [
+        "apply",
+        "analyze"
+      ],
+      "title": "Design and evaluate an AI solution"
+    }
+  ],
+  "rubric_id": "RUBRIC-05"
+}

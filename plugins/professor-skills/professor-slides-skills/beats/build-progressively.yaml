@@ -1,0 +1,43 @@
+beat: build-progressively
+name: Build the concept progressively
+family: introduce_concept
+purpose: >-
+  Assemble a complex idea one component at a time, on one picture.
+best_for:
+  - architectures, models, systems with several interacting parts
+avoid_when:
+  - the parts are independent and the order does not matter
+slides: 5
+sequence:
+  - step: the simplest version that works
+    intent: build_intuition
+    archetype: system_diagram
+    density: sparse
+  - step: add one component
+    intent: build_intuition
+    archetype: system_diagram
+    density: sparse
+  - step: add the next
+    intent: build_intuition
+    archetype: system_diagram
+    density: moderate
+  - step: the whole thing
+    intent: integrate
+    archetype: system_diagram
+    density: moderate
+  - step: what each part is for
+    intent: integrate
+    archetype: synthesis
+    density: moderate
+visual_rules:
+  reuse_visual_anchor: true
+  maintain_geometry: true
+  progressive_highlighting: true
+  note: >-
+    the same diagram, growing. Five unrelated diagrams look varied and teach
+    worse: the student spends each slide re-learning the layout instead of the
+    addition
+exit_condition: >-
+  The student can draw the whole structure and say what each part contributes.
+transition: >-
+  "What happens when we run something through it?" opens follow-one-object.

@@ -1,0 +1,111 @@
+{
+  "additionalProperties": false,
+  "description": "A student's answer to one item. Produced by the application.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "response_id": {
+      "pattern": "^RESP-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Response Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "pattern": "^SUB-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "item_id": {
+      "pattern": "^ITEM-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "student_id": {
+      "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Student Id",
+      "type": "string"
+    },
+    "chosen_options": {
+      "description": "Option labels the student selected.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Chosen Options",
+      "type": "array"
+    },
+    "raw_response": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Raw Response"
+    },
+    "score": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Score"
+    },
+    "correct": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Correct"
+    },
+    "scored_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "'auto', a user id, or an agent name.",
+      "title": "Scored By"
+    },
+    "responded_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Responded At"
+    }
+  },
+  "required": [
+    "response_id",
+    "submission_id",
+    "item_id",
+    "student_id"
+  ],
+  "title": "ItemResponse",
+  "type": "object"
+}

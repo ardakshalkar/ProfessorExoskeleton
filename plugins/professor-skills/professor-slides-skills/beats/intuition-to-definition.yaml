@@ -1,0 +1,46 @@
+beat: intuition-to-definition
+name: Intuition, then definition
+family: introduce_concept
+purpose: >-
+  Give the student something to attach the definition to before giving them the
+  definition.
+best_for:
+  - the default for introducing a concept to an introductory cohort
+avoid_when:
+  - the cohort is advanced and the formal object is the interesting part
+slides: 5
+sequence:
+  - step: a familiar case
+    intent: build_intuition
+    archetype: single_visual
+    density: sparse
+  - step: a simple visual model of it
+    intent: build_intuition
+    archetype: annotated_object
+    density: sparse
+  - step: the concept, named
+    intent: introduce_concept
+    archetype: big_idea
+    density: sparse
+  - step: the formal definition
+    intent: formalize
+    archetype: definition
+    density: moderate
+    note: after the intuition, never before it
+  - step: a second example, less familiar
+    intent: apply
+    archetype: worked_example
+    density: moderate
+visual_rules:
+  reuse_visual_anchor: true
+  progressive_complexity: true
+  avoid_dense_text_initially: true
+ask_the_professor:
+  - condition: the depth is not settled
+    question: >-
+      Should students leave able to explain this concept, or to use it? The two
+      select different beats after this one.
+exit_condition: >-
+  The student can recognise the concept in a case they have not seen.
+transition: >-
+  "Where does that break down?" or "how is it actually computed?"

@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "privacy.identifier",
+      "level": "warning",
+      "location": "ENR-55291",
+      "message": "'STUDENT-REALNAME' does not look pseudonymous — student identifiers should come from `ainar roster import`, which keeps names outside this repository"
+    }
+  ],
+  "mutation": "a-student-identifier-that-is-not-a-pseudonym",
+  "patch": {
+    "enrollments.0.student_id": "STUDENT-REALNAME"
+  }
+}

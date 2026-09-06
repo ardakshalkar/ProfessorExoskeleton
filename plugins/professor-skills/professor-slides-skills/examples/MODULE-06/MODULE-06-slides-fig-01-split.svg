@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 380" width="880" height="380"
+     role="img" aria-labelledby="figure-title figure-description">
+  <title id="figure-title">Train, validation and test split</title>
+  <desc id="figure-description">A dataset divided into three bands. The training
+  band is fitted to. The validation band is used to choose between models, and
+  is therefore also something the process optimises against. The test band is
+  held back and touched once.</desc>
+
+  <!--
+    Hand-authored. The three bands are told apart by their fill, their hatching
+    and their label, so the distinction survives a projector that cannot show
+    the greys apart. Colour is never the only channel.
+  -->
+
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="#8C9AA8" stroke-width="2"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#52616B"/>
+    </marker>
+  </defs>
+
+  <style>
+    .band-label { font: 600 19px Cambria, Georgia, serif; fill: #1F2933; }
+    .band-note  { font: 15px Calibri, "Segoe UI", sans-serif; fill: #52616B; }
+    .caption    { font: 15px Calibri, "Segoe UI", sans-serif; fill: #52616B; }
+    .rule       { font: italic 15px Calibri, "Segoe UI", sans-serif; fill: #1F2933; }
+  </style>
+
+  <!-- the whole dataset -->
+  <text class="caption" x="20" y="30">One dataset, divided once, before anything is fitted</text>
+  <rect x="20" y="44" width="840" height="6" fill="#DBE4F0"/>
+
+  <!-- training -->
+  <rect x="20" y="70" width="470" height="86" fill="#DBE4F0" stroke="#4A5F7A" stroke-width="1.5" rx="4"/>
+  <text class="band-label" x="40" y="103">Training</text>
+  <text class="band-note"  x="40" y="128">the rows the model is fitted to</text>
+  <text class="band-note"  x="40" y="147">a score here measures memorisation</text>
+
+  <!-- validation: hatched, because it is also optimised against -->
+  <rect x="500" y="70" width="200" height="86" fill="url(#hatch)" stroke="#4A5F7A" stroke-width="1.5" rx="4"/>
+  <rect x="500" y="70" width="200" height="86" fill="#FFFFFF" fill-opacity="0.55" rx="4"/>
+  <text class="band-label" x="518" y="103">Validation</text>
+  <text class="band-note"  x="518" y="128">used to choose between</text>
+  <text class="band-note"  x="518" y="147">models — so, optimised against</text>
+
+  <!-- test: dashed border, because it is held back -->
+  <rect x="710" y="70" width="150" height="86" fill="#FFFFFF" stroke="#1F2933"
+        stroke-width="2" stroke-dasharray="7 5" rx="4"/>
+  <text class="band-label" x="728" y="103">Test</text>
+  <text class="band-note"  x="728" y="128">held back;</text>
+  <text class="band-note"  x="728" y="147">touched once</text>
+
+  <!-- what the process does to each band -->
+  <line x1="255" y1="176" x2="255" y2="222" stroke="#52616B" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text class="band-note" x="255" y="244" text-anchor="middle">fit the parameters</text>
+
+  <line x1="600" y1="176" x2="600" y2="222" stroke="#52616B" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text class="band-note" x="600" y="244" text-anchor="middle">choose the model</text>
+
+  <line x1="785" y1="176" x2="785" y2="222" stroke="#52616B" stroke-width="1.5"
+        stroke-dasharray="5 4" marker-end="url(#arrow)"/>
+  <text class="band-note" x="785" y="244" text-anchor="middle">report, once</text>
+
+  <!-- the rule the figure exists to make concrete -->
+  <line x1="20" y1="286" x2="860" y2="286" stroke="#C6CED6" stroke-width="1"/>
+  <text class="rule" x="20" y="316">Anything you selected on is something you optimised against.</text>
+  <text class="caption" x="20" y="342">Only the dashed band answers "will this work on data nobody has seen" — and only</text>
+  <text class="caption" x="20" y="362">for as long as it stays untouched. Look at it twice and it has become a validation set.</text>
+</svg>

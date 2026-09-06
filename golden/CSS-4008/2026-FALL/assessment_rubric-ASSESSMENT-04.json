@@ -1,0 +1,198 @@
+{
+  "assessment": {
+    "course_version_id": "CSS-4008-2026-FALL",
+    "description": "Train two models on the teaching dataset, diagnose whether either overfits, and defend the evaluation procedure used.",
+    "due_at": "2026-10-15T23:59:00+05:00",
+    "id": "ASSESSMENT-04",
+    "maximum_score": 100.0,
+    "settings": {
+      "ai_review": {
+        "enabled": true,
+        "require_professor_approval": true
+      },
+      "allow_late_submission": false,
+      "anonymous_grading": true
+    },
+    "submission_type": [
+      "pdf",
+      "notebook",
+      "oral_defense"
+    ],
+    "title": "Model Evaluation Assignment",
+    "type": "assignment",
+    "weight": 0.2
+  },
+  "criteria": [
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-EXPERIMENT-DESIGN",
+          "title": "AI experiment design"
+        }
+      ],
+      "contributes_to_capability": {
+        "id": "CAP-AI-EXPERIMENT",
+        "title": "Design an AI experiment"
+      },
+      "criterion_id": "CRIT-04-01",
+      "description": null,
+      "levels": [
+        {
+          "description": "Method is appropriate and clearly justified.",
+          "label": "strong",
+          "score": 25.0
+        },
+        {
+          "description": "Method is appropriate but justification is incomplete.",
+          "label": "adequate",
+          "score": 15.0
+        },
+        {
+          "description": "Method is selected without sufficient reasoning.",
+          "label": "weak",
+          "score": 5.0
+        }
+      ],
+      "maximum_score": 25.0,
+      "measures_outcome": {
+        "id": "LO-04",
+        "title": "Design and evaluate an AI solution"
+      },
+      "title": "Method selection"
+    },
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-MODEL-EVALUATION",
+          "title": "Model evaluation"
+        },
+        {
+          "id": "CONCEPT-TRAIN-TEST-SPLIT",
+          "title": "Train-test separation"
+        }
+      ],
+      "contributes_to_capability": {
+        "id": "CAP-AI-EXPERIMENT",
+        "title": "Design an AI experiment"
+      },
+      "criterion_id": "CRIT-04-02",
+      "description": "Is the measurement procedure capable of answering the question?",
+      "levels": [
+        {
+          "description": "Held-out data used correctly, metric fits the task.",
+          "label": "strong",
+          "score": 25.0
+        },
+        {
+          "description": "Evaluation is sound but the metric choice is unexamined.",
+          "label": "adequate",
+          "score": 15.0
+        },
+        {
+          "description": "Performance measured on data the model has seen.",
+          "label": "weak",
+          "score": 5.0
+        }
+      ],
+      "maximum_score": 25.0,
+      "measures_outcome": {
+        "id": "LO-02",
+        "title": "Implement and evaluate a machine learning model"
+      },
+      "title": "Evaluation design"
+    },
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-OVERFITTING",
+          "title": "Overfitting"
+        },
+        {
+          "id": "CONCEPT-REGULARIZATION",
+          "title": "Regularization"
+        }
+      ],
+      "contributes_to_capability": null,
+      "criterion_id": "CRIT-04-03",
+      "description": null,
+      "levels": [
+        {
+          "description": "Overfitting identified with evidence and a remedy proposed.",
+          "label": "strong",
+          "score": 25.0
+        },
+        {
+          "description": "Gap between train and test noted but not explained.",
+          "label": "adequate",
+          "score": 15.0
+        },
+        {
+          "description": "Overfitting not considered.",
+          "label": "weak",
+          "score": 5.0
+        }
+      ],
+      "maximum_score": 25.0,
+      "measures_outcome": {
+        "id": "LO-02",
+        "title": "Implement and evaluate a machine learning model"
+      },
+      "title": "Diagnosis of overfitting"
+    },
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-EXPERIMENT-DESIGN",
+          "title": "AI experiment design"
+        }
+      ],
+      "contributes_to_capability": null,
+      "criterion_id": "CRIT-04-04",
+      "description": null,
+      "levels": [
+        {
+          "description": "Another student could reproduce the result from the report.",
+          "label": "strong",
+          "score": 25.0
+        },
+        {
+          "description": "Report is clear but omits some settings.",
+          "label": "adequate",
+          "score": 15.0
+        },
+        {
+          "description": "Results reported without procedure.",
+          "label": "weak",
+          "score": 5.0
+        }
+      ],
+      "maximum_score": 25.0,
+      "measures_outcome": {
+        "id": "LO-04",
+        "title": "Design and evaluate an AI solution"
+      },
+      "title": "Reporting and reproducibility"
+    }
+  ],
+  "items": [],
+  "outcomes": [
+    {
+      "description": "The student can implement a supervised model, measure its performance honestly, and interpret the result.",
+      "id": "LO-02",
+      "level": [
+        "apply"
+      ],
+      "title": "Implement and evaluate a machine learning model"
+    },
+    {
+      "description": "The student can select, implement and evaluate an appropriate AI approach for a stated problem, and can justify the choice.",
+      "id": "LO-04",
+      "level": [
+        "apply",
+        "analyze"
+      ],
+      "title": "Design and evaluate an AI solution"
+    }
+  ],
+  "rubric_id": "RUBRIC-04"
+}

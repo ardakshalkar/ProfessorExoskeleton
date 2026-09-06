@@ -1,0 +1,152 @@
+{
+  "issues": [
+    {
+      "code": "id.duplicate",
+      "level": "error",
+      "location": "LO-01",
+      "message": "outcomes: identifier defined more than once"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "ACT-0401",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "ACT-0501",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "ACT-0601",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "ACT-0701",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "ACT-0801",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "ASSESSMENT-04",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "ASSESSMENT-05",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "CRIT-04-02",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "CRIT-04-03",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "CRIT-05-03",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "DOC-4410",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "DOC-4410",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "DOC-4410",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "DOC-4410",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "DOC-4410",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "MODULE-04",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "MODULE-05",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "MODULE-06",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "MODULE-07",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "MODULE-08",
+      "message": "unknown outcome LO-02"
+    },
+    {
+      "code": "ref.outcome",
+      "level": "error",
+      "location": "MODULE-11",
+      "message": "unknown outcome LO-02"
+    }
+  ],
+  "mutation": "duplicate-outcome-id",
+  "patch": {
+    "outcomes.1.outcome_id": "LO-01"
+  }
+}

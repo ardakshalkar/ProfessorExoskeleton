@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "score.out_of_range",
+      "level": "error",
+      "location": "RESP-9060-0101",
+      "message": "score 999.0 exceeds item maximum 20.0"
+    }
+  ],
+  "mutation": "response-scoring-above-the-item-maximum",
+  "patch": {
+    "item_responses.0.score": 999
+  }
+}

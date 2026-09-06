@@ -1,0 +1,230 @@
+{
+  "$defs": {
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Where an AI-produced statement came from.\n\nEvery AI conclusion must be reconstructable: which data, which model,\nwhich workflow version, what evidence, who approved it.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "produced_by": {
+          "description": "Agent or workflow that produced this output.",
+          "title": "Produced By",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "workflow_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Version"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "input_refs": {
+          "description": "Identifiers of the records and documents used as input.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Refs",
+          "type": "array"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        }
+      },
+      "required": [
+        "produced_by"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What a student actually demonstrated, and where it can be seen.\n\nA grade is not the same thing as evidence. Evidence names the outcome or\ncapability, the level demonstrated, and the source it came from.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "evidence_id": {
+      "pattern": "^EVID-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "student_id": {
+      "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Student Id",
+      "type": "string"
+    },
+    "course_version_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Course Version Id",
+      "type": "string"
+    },
+    "source_type": {
+      "description": "e.g. 'assessment', 'activity', 'oral_defense'.",
+      "title": "Source Type",
+      "type": "string"
+    },
+    "source_id": {
+      "title": "Source Id",
+      "type": "string"
+    },
+    "outcome_id": {
+      "anyOf": [
+        {
+          "pattern": "^LO-[0-9]{2,3}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outcome Id"
+    },
+    "capability_id": {
+      "anyOf": [
+        {
+          "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Capability Id"
+    },
+    "concept_id": {
+      "anyOf": [
+        {
+          "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Concept Id"
+    },
+    "demonstrated_level": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Demonstrated Level"
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Confidence"
+    },
+    "verified_by": {
+      "anyOf": [
+        {
+          "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Set once a professor confirms the inference.",
+      "title": "Verified By"
+    },
+    "recorded_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Recorded At"
+    },
+    "provenance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Provenance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "evidence_id",
+    "student_id",
+    "course_version_id",
+    "source_type",
+    "source_id"
+  ],
+  "title": "LearningEvidence",
+  "type": "object"
+}

@@ -1,0 +1,86 @@
+<!doctype html>
+<!--
+  One page about one person. Fill every {{ slot }}.
+
+  Two things about this file are not style choices. The header says where the
+  file lives and that it is outside the repository, because a page about a
+  student that ends up inside `courses/` or `work/` is the mistake this skill
+  exists to prevent. And the footer says what a blank means, because this page
+  gets screenshotted and shown, and a blank read as a zero is an injustice done
+  to someone by a picture.
+
+  The identifier goes on the page. A name only if the professor asked for one,
+  and then the file is doubly outside the repository — never in the filename.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ STUDENT-XXXXXX }} — {{ COURSE_ID }}</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1a1a1a; --muted: #6b6b6b; --line: #e0e0e0;
+  --have: #a8d5a2;   /* demonstrated */
+  --weak: #f8ddb8;   /* assessed, and low */
+  --none: #f6f6f6;   /* never assessed — not a band, deliberately */
+  --none-fg: #9a9a9a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c; --fg: #e8e8e8; --muted: #9a9a9a; --line: #2e3239;
+    --have: #2f6b3c; --weak: #6d5730; --none: #1e2126; --none-fg: #6b6b6b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 2rem 1.25rem; background: var(--bg); color: var(--fg);
+       font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 60rem; margin: 0 auto; }
+h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.05rem; margin: 2.25rem 0 .5rem; }
+.sub { color: var(--muted); margin: 0 0 1.5rem; font-size: .9rem; }
+.source { font-size: .78rem; color: var(--muted); margin: .35rem 0 .6rem;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.rung { display: flex; align-items: center; gap: .6rem; margin: .2rem 0;
+        font-size: .85rem; }
+.rung .box { width: 1.1rem; height: 1.1rem; border: 1px solid var(--line);
+             border-radius: 3px; flex: 0 0 auto; }
+.rung.at .box { background: var(--have); }
+.rung.at { font-weight: 600; }
+.row { display: flex; align-items: center; gap: .6rem; margin: .25rem 0;
+       font-size: .88rem; }
+.bar { flex: 0 0 12rem; height: .85rem; border: 1px solid var(--line);
+       border-radius: 3px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--have); }
+.bar.weak i { background: var(--weak); }
+.bar.none { background: var(--none); }
+.state { flex: 0 0 10rem; font-size: .8rem; color: var(--muted); }
+.chain { margin: .2rem 0 .8rem 1.2rem; font-size: .85rem; color: var(--muted); }
+.chain li { margin: .15rem 0; }
+.note { color: var(--muted); font-size: .85rem; margin-top: 1rem; }
+.warn { border-left: 3px solid var(--weak); padding: .5rem .75rem; margin-top: 1rem;
+        background: var(--none); font-size: .85rem; }
+</style>
+<style>
+/* {{ the chosen template's CSS, pasted verbatim }} */
+</style>
+</head>
+<body>
+<main>
+
+<h1>{{ STUDENT-XXXXXX }} — {{ COURSE_ID }} {{ course title }}</h1>
+<p class="sub">{{ COURSE_VERSION_ID }} · generated {{ YYYY-MM-DD }} ·
+  saved to {{ the path outside this repository }}</p>
+
+{{ the three sections, from blocks.html, in the order they appear there }}
+
+<p class="note">Every figure here is copied from the command named above it.
+  Nothing was computed by hand. This is a snapshot taken on {{ YYYY-MM-DD }}.</p>
+
+<!-- Do not delete. This is the sentence that stops a picture being read wrong. -->
+<div class="warn"><strong>A blank is not a zero.</strong> {{ n }} concept(s) on
+  this page have never been assessed for this student. That is a fact about what
+  the course has measured so far, not about what they can do.</div>
+
+</main>
+</body>
+</html>

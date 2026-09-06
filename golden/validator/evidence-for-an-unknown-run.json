@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "ref.course_run",
+      "level": "error",
+      "location": "EVID-2801",
+      "message": "unknown course_version_id CSS-4008-2099-FALL"
+    }
+  ],
+  "mutation": "evidence-for-an-unknown-run",
+  "patch": {
+    "evidence.0.course_version_id": "CSS-4008-2099-FALL"
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "issues": [
+    {
+      "code": "coverage.unassessed_outcome",
+      "level": "warning",
+      "location": "LO-02",
+      "message": "no assessment or rubric criterion measures this outcome"
+    },
+    {
+      "code": "coverage.unassessed_outcome",
+      "level": "warning",
+      "location": "LO-03",
+      "message": "no assessment or rubric criterion measures this outcome"
+    },
+    {
+      "code": "coverage.unassessed_outcome",
+      "level": "warning",
+      "location": "LO-04",
+      "message": "no assessment or rubric criterion measures this outcome"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "ITEM-01-01",
+      "message": "unknown assessment ASSESSMENT-01"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "ITEM-01-02",
+      "message": "unknown assessment ASSESSMENT-01"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "ITEM-01-03",
+      "message": "unknown assessment ASSESSMENT-01"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "ITEM-01-04",
+      "message": "unknown assessment ASSESSMENT-01"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "SUB-9060",
+      "message": "unknown assessment ASSESSMENT-01"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "SUB-9061",
+      "message": "unknown assessment ASSESSMENT-01"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "SUB-9062",
+      "message": "unknown assessment ASSESSMENT-01"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "SUB-9070",
+      "message": "unknown assessment ASSESSMENT-02"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "SUB-9081",
+      "message": "unknown assessment ASSESSMENT-04"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "SUB-9082",
+      "message": "unknown assessment ASSESSMENT-04"
+    },
+    {
+      "code": "ref.criterion",
+      "level": "error",
+      "location": "EVAL-6001",
+      "message": "unknown criterion CRIT-04-01"
+    },
+    {
+      "code": "ref.criterion",
+      "level": "error",
+      "location": "EVAL-6002",
+      "message": "unknown criterion CRIT-04-03"
+    },
+    {
+      "code": "run.no_assessments",
+      "level": "warning",
+      "location": "CSS-4008-2026-FALL",
+      "message": "course run has no assessments"
+    }
+  ],
+  "mutation": "offering-with-no-assessments",
+  "patch": {
+    "assessments": []
+  }
+}

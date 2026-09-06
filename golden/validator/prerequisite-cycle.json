@@ -1,0 +1,31 @@
+{
+  "issues": [
+    {
+      "code": "graph.cycle",
+      "level": "error",
+      "location": "CONCEPT-AI-PROBLEM-TYPES",
+      "message": "prerequisite cycle: CONCEPT-AI-PROBLEM-TYPES -> CONCEPT-SEARCH -> CONCEPT-AI-PROBLEM-TYPES"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    }
+  ],
+  "mutation": "prerequisite-cycle",
+  "patch": {
+    "concepts.0.prerequisites": [
+      "CONCEPT-SEARCH"
+    ],
+    "concepts.1.prerequisites": [
+      "CONCEPT-AI-PROBLEM-TYPES"
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/preflight.mjs\" 2>/dev/null || echo 'professor-slides-skills is enabled but no Node is on PATH, so every pres command will fail. The plugin needs Node 22.6 or later; 22.18 and later need no flag at all.'"
+          }
+        ]
+      }
+    ]
+  }
+}

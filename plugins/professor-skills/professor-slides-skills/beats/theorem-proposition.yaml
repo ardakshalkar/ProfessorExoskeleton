@@ -1,0 +1,43 @@
+beat: theorem-proposition
+name: Proposition and proof
+family: formalize
+purpose: >-
+  Establish a result formally without collapsing statement, proof and meaning
+  into one slide.
+best_for:
+  - mathematics, theoretical computer science, economic theory
+avoid_when:
+  - the course does not need the proof, only the result
+slides: 6
+sequence:
+  - step: the question the proposition answers
+    intent: create_need
+    archetype: question
+    density: sparse
+  - step: the statement
+    intent: formalize
+    archetype: big_idea
+    density: moderate
+    note: on its own slide. A theorem sharing a slide with its proof gets read as one object
+  - step: why it might be true
+    intent: build_intuition
+    archetype: annotated_object
+    density: moderate
+  - step: the proof
+    intent: derive
+    archetype: derivation
+    density: dense
+  - step: what follows from it
+    intent: integrate
+    archetype: big_idea
+    density: sparse
+  - step: a case where it applies
+    intent: apply
+    archetype: worked_example
+    density: moderate
+visual_rules:
+  progressive_reveal: true
+exit_condition: >-
+  The student can state the proposition and say what it rules out.
+transition: >-
+  The consequence opens the next section.

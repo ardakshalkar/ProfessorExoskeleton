@@ -1,0 +1,58 @@
+{
+  "capabilities": [],
+  "concepts": [
+    {
+      "concept_id": "CONCEPT-MODEL-EVALUATION",
+      "evidence_count": 1,
+      "evidence_ids": [
+        "EVID-9062-0102-2"
+      ],
+      "highest_level": null,
+      "mean_proportion": 1.0,
+      "sources": [
+        "RESP-9062-0102"
+      ],
+      "state": null,
+      "title": "Model evaluation"
+    },
+    {
+      "concept_id": "CONCEPT-TRAIN-TEST-SPLIT",
+      "evidence_count": 1,
+      "evidence_ids": [
+        "EVID-9062-0102-1"
+      ],
+      "highest_level": null,
+      "mean_proportion": 1.0,
+      "sources": [
+        "RESP-9062-0102"
+      ],
+      "state": null,
+      "title": "Train-test separation"
+    }
+  ],
+  "course_run": {
+    "id": "CSS-4008-2026-FALL",
+    "term": "2026-FALL",
+    "title": "Artificial Intelligence"
+  },
+  "gaps": [],
+  "note": "Derived from recorded evidence only. Absence of evidence is not evidence of absence — a concept with no evidence was never assessed.",
+  "outcomes": [
+    {
+      "evidence_count": 2,
+      "evidence_ids": [
+        "EVID-9062-0102-1",
+        "EVID-9062-0102-2"
+      ],
+      "highest_level": null,
+      "mean_proportion": 1.0,
+      "outcome_id": "LO-01",
+      "sources": [
+        "RESP-9062-0102"
+      ],
+      "title": "Explain core AI problem types and methods"
+    }
+  ],
+  "signals": [],
+  "student_id": "STUDENT-R7TB5D"
+}

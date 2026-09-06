@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "ref.document",
+      "level": "warning",
+      "location": "RES-101",
+      "message": "DOC-NOT-REGISTERED is not registered — add it to documents.yaml, or leave it if the application owns the file"
+    }
+  ],
+  "mutation": "resource-pointing-at-an-unregistered-document",
+  "patch": {
+    "resources.0.document_id": "DOC-NOT-REGISTERED"
+  }
+}

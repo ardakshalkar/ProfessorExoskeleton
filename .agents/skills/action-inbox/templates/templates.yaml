@@ -1,0 +1,20 @@
+# The menu /action-inbox reads out. The choice is not cosmetic: a running course
+# and a course that has not started yet produce different documents, because on a
+# course with no student work the readiness ladder is most of the answer.
+# See references/templates.md.
+surface: action-inbox
+public: false
+default: running
+templates:
+  - id: running
+    file: running.md
+    name: Running course
+    suits: a term underway — grades to approve, submissions missing, signals open
+  - id: pre-term
+    file: pre-term.md
+    name: Before the term
+    suits: a course still being built — where it stands, and the one next step
+
+parts:
+  - file: action-items-draft.yaml
+    purpose: the ActionItem records behind the report, as drafts to approve

@@ -1,0 +1,49 @@
+beat: naive-then-improved
+name: Naive algorithm, then better
+family: algorithm
+purpose: >-
+  Motivate an algorithm by the deficiency of the obvious one.
+best_for:
+  - algorithms courses, optimisation, systems design
+avoid_when:
+  - there is no naive version anybody would actually write
+slides: 7
+sequence:
+  - step: the task
+    intent: create_need
+    archetype: question
+    density: sparse
+  - step: the obvious solution
+    intent: demonstrate
+    archetype: algorithm
+    density: dense
+  - step: it running on a small input
+    intent: demonstrate
+    archetype: worked_example
+    density: moderate
+  - step: what it costs
+    intent: provide_evidence
+    archetype: data_evidence
+    density: sparse
+  - step: the idea that fixes it
+    intent: build_intuition
+    archetype: big_idea
+    density: sparse
+  - step: the better algorithm
+    intent: formalize
+    archetype: algorithm
+    density: dense
+  - step: the two, compared
+    intent: compare
+    archetype: structured_comparison
+    density: moderate
+visual_rules:
+  parallel_composition: true
+  note: >-
+    pseudocode carries the structure better than prose. Do not write "Initialize
+    weights / Pick input / Check prediction" as bullets when the algorithm block
+    says it more precisely and in less space
+exit_condition: >-
+  The student can say why the second algorithm is better and what it costs to get there.
+transition: >-
+  "Does that hold for every input?" opens an evidence or edge-case beat.

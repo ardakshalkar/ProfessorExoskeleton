@@ -1,0 +1,31 @@
+{
+  "name": "@pres/professor-slides-skills",
+  "version": "0.2.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "description": "Course source resolution, outline checking and deck rendering for the professor-slides-skills plugin. Ported from ProfessorHarness node/ and ProfessorExoskeletonDHS exo/.",
+  "bin": {
+    "pres": "bin/pres.mjs"
+  },
+  "scripts": {
+    "pres": "node bin/pres.mjs",
+    "test": "node --experimental-strip-types --test \"test/*.test.ts\""
+  },
+  "dependencies": {
+    "yaml": "^2.6.0"
+  },
+  "//optionalDependencies": "Reading a course must not require a native image library or a Postgres driver. `pg` is only needed for the Supabase route, `pptxgenjs` and `sharp` only for `pres render`; a machine where any of them fails to install still resolves a YAML course and still runs `npm test`.",
+  "optionalDependencies": {
+    "pg": "^8.13.0",
+    "pptxgenjs": "^4.0.1",
+    "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  }
+}

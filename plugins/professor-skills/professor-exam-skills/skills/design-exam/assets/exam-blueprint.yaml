@@ -1,0 +1,56 @@
+blueprint_version: 1
+exam:
+  id: EXAM-ID
+  title: Exam title
+  purpose: summative
+  status: draft
+  duration_minutes: 60
+  total_marks: 100
+  delivery: paper
+  permitted_resources: []
+  ai_policy: prohibited
+
+assumptions: []
+
+outcomes:
+  - id: LO-01
+    evidence: observable student performance
+    weight_marks: 20
+    performance_levels: [D, C]
+
+question_families:
+  - id: FAMILY-01
+    role: apply_and_interpret
+    outcome: LO-01
+    marks: 10
+    expected_minutes: 8
+    performance_levels: [D, C]
+    evidence: method selection, execution, and interpretation
+    invariants: []
+    variable_slots: []
+    acceptable_methods: []
+    common_errors: []
+    follow_through:
+      enabled: false
+      rule: null
+    equivalence_checks: []
+
+integrity:
+  relevant_threats: []
+  controls: []
+
+coverage:
+  deliberate_omissions: []
+
+checks:
+  totals_verified: false
+  timing_verified: false
+  alignment_verified: false
+  performance_range_verified: false
+  variant_plan_verified: false
+
+approval:
+  required: false
+  decisions_needed: []
+  approved_by: null
+  approved_at: null

@@ -1,0 +1,41 @@
+beat: worked-example
+name: Worked example
+family: apply
+purpose: >-
+  Carry one problem all the way through, including the step people trip on.
+best_for:
+  - any quantitative or procedural material
+avoid_when:
+  - the students have not yet met the concept it applies
+slides: 5
+sequence:
+  - step: the problem, and what is given
+    intent: orient
+    archetype: worked_example
+    density: moderate
+  - step: the first step, and why
+    intent: demonstrate
+    archetype: worked_example
+    density: moderate
+  - step: the step people get wrong
+    intent: demonstrate
+    archetype: annotated_object
+    density: moderate
+    note: >-
+      this is the slide the beat exists for. If you do not know which step that
+      is, the example has not been taught before and it is worth finding out
+  - step: the answer
+    intent: demonstrate
+    archetype: worked_example
+    density: sparse
+  - step: why that worked
+    intent: integrate
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  progressive_reveal: true
+  note: this is a worked example, not an exercise — the students watch, then they do
+exit_condition: >-
+  The student can attempt a similar problem.
+transition: >-
+  Into an activity beat where they do one.

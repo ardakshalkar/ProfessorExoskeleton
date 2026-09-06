@@ -1,0 +1,40 @@
+beat: concept-to-case
+name: Concept, then unfamiliar case
+family: apply
+purpose: >-
+  Test a framework the students already hold against something it does not
+  obviously fit.
+best_for:
+  - advanced cohorts
+  - the second half of a session that began with case-to-concept
+avoid_when:
+  - the framework has just been introduced and needs consolidating first
+slides: 5
+sequence:
+  - step: the principle, restated
+    intent: orient
+    archetype: big_idea
+    density: sparse
+  - step: a new situation
+    intent: apply
+    archetype: primary_source
+    density: dense
+  - step: apply it — what does it say?
+    intent: apply
+    archetype: question
+    density: sparse
+  - step: the decision it implies
+    intent: integrate
+    archetype: worked_example
+    density: moderate
+  - step: where it is uncertain
+    intent: integrate
+    archetype: big_idea
+    density: moderate
+    note: an applied framework that always gives a clean answer is being taught dishonestly
+visual_rules:
+  source_required: true
+exit_condition: >-
+  The student can apply the framework and say where its answer is weak.
+transition: >-
+  The uncertainty opens the next concept, or the session's closing synthesis.

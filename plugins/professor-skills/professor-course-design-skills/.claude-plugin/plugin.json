@@ -1,0 +1,6 @@
+{
+  "name": "professor-course-design-skills",
+  "version": "0.1.0",
+  "description": "Design and review aligned courses at selectable depth using the Professor DataLayer course structure.",
+  "author": { "name": "Ardak Shalkarbayuly" }
+}

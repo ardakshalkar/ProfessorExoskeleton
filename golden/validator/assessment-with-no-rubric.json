@@ -1,0 +1,38 @@
+{
+  "issues": [
+    {
+      "code": "ref.criterion",
+      "level": "error",
+      "location": "ITEM-01-01",
+      "message": "unknown criterion CRIT-01-01"
+    },
+    {
+      "code": "ref.criterion",
+      "level": "error",
+      "location": "ITEM-01-02",
+      "message": "unknown criterion CRIT-01-01"
+    },
+    {
+      "code": "ref.criterion",
+      "level": "error",
+      "location": "ITEM-01-03",
+      "message": "unknown criterion CRIT-01-02"
+    },
+    {
+      "code": "ref.criterion",
+      "level": "error",
+      "location": "ITEM-01-04",
+      "message": "unknown criterion CRIT-01-02"
+    },
+    {
+      "code": "ref.rubric",
+      "level": "error",
+      "location": "ASSESSMENT-01",
+      "message": "unknown rubric RUBRIC-01"
+    }
+  ],
+  "mutation": "assessment-with-no-rubric",
+  "patch": {
+    "assessments.0.rubric": null
+  }
+}

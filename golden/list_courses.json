@@ -1,0 +1,25 @@
+{
+  "courses": [
+    {
+      "assessments": [
+        "ASSESSMENT-01",
+        "ASSESSMENT-02",
+        "ASSESSMENT-04",
+        "ASSESSMENT-05"
+      ],
+      "course_id": "CSS-4008",
+      "errors": 0,
+      "runs": [
+        {
+          "course_version_id": "CSS-4008-2026-FALL",
+          "end_date": "2026-12-20",
+          "start_date": "2026-09-01",
+          "term": "2026-FALL"
+        }
+      ],
+      "title": "Artificial Intelligence",
+      "warnings": 2
+    }
+  ],
+  "workspace": "<workspace>"
+}

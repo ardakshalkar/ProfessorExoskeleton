@@ -1,0 +1,32 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 20 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-04-01",
+      "message": "items feeding this criterion sum to 20 but its maximum_score is 25, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "ref.rubric",
+      "level": "error",
+      "location": "ITEM-01-01",
+      "message": "criterion CRIT-04-01 does not belong to the rubric of ASSESSMENT-01"
+    }
+  ],
+  "mutation": "item-criterion-from-another-rubric",
+  "patch": {
+    "items.0.criterion_id": "CRIT-04-01"
+  }
+}

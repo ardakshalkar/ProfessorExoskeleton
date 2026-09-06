@@ -1,0 +1,341 @@
+{
+  "$defs": {
+    "AiSuggestion": {
+      "additionalProperties": false,
+      "description": "What an agent proposed. Never treated as a grade.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "score"
+      ],
+      "title": "AiSuggestion",
+      "type": "object"
+    },
+    "EvaluationStatus": {
+      "enum": [
+        "suggested",
+        "in_review",
+        "approved",
+        "overridden"
+      ],
+      "title": "EvaluationStatus",
+      "type": "string"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "description": "A pointer into source material supporting a claim.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "document_id": {
+          "anyOf": [
+            {
+              "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Document Id"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. 'page 4, paragraph 2' or 'cell 12'.",
+          "title": "Location"
+        },
+        "text_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Short verbatim excerpt that supports the claim.",
+          "title": "Text Reference"
+        },
+        "source_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Identifier of a non-document source (activity, quiz item).",
+          "title": "Source Ref"
+        }
+      },
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "ProfessorDecision": {
+      "additionalProperties": false,
+      "description": "The official, human-owned outcome.\n\n``decided_by`` and ``decided_at`` are the audit stamp, and they are what\n``ainar approve`` applies. They are optional on the model so a professor can\nwrite an override into a draft without forging a timestamp — but the\nvalidator requires them the moment the evaluation is `approved` or\n`overridden`, so no stamped-as-decided record can exist without them.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "comment": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comment"
+        },
+        "decided_by": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided By"
+        },
+        "decided_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided At"
+        }
+      },
+      "required": [
+        "score"
+      ],
+      "title": "ProfessorDecision",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Where an AI-produced statement came from.\n\nEvery AI conclusion must be reconstructable: which data, which model,\nwhich workflow version, what evidence, who approved it.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "produced_by": {
+          "description": "Agent or workflow that produced this output.",
+          "title": "Produced By",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "workflow_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Version"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "input_refs": {
+          "description": "Identifiers of the records and documents used as input.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Refs",
+          "type": "array"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        }
+      },
+      "required": [
+        "produced_by"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Criterion-level evaluation of one submission.\n\nBoth sides are preserved: overwriting the suggestion when the professor\nchanges the score would destroy the audit trail and make it impossible to\nmeasure how well the grading agent performs.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "evaluation_id": {
+      "pattern": "^EVAL-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Evaluation Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "pattern": "^SUB-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "criterion_id": {
+      "pattern": "^CRIT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Criterion Id",
+      "type": "string"
+    },
+    "ai_suggestion": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AiSuggestion"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "professor_decision": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProfessorDecision"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "status": {
+      "$ref": "#/$defs/EvaluationStatus",
+      "default": "suggested"
+    }
+  },
+  "required": [
+    "evaluation_id",
+    "submission_id",
+    "criterion_id"
+  ],
+  "title": "Evaluation",
+  "type": "object"
+}

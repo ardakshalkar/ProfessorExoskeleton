@@ -1,0 +1,7 @@
+{
+  "name": "professor-exam-skills",
+  "description": "Create aligned exams, questions, marking guides, rubrics, and equivalent variants at the depth the request needs.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": { "name": "Ardak Shalkarbayuly" }
+}

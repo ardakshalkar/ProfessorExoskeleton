@@ -1,0 +1,35 @@
+{
+  "issues": [
+    {
+      "code": "coverage.untaught_concept",
+      "level": "warning",
+      "location": "CONCEPT-LOSS-FUNCTIONS",
+      "message": "no module or activity teaches this concept"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    }
+  ],
+  "mutation": "concept-nothing-teaches",
+  "patch": {
+    "modules.0.concepts": [],
+    "modules.1.concepts": [],
+    "modules.2.concepts": [],
+    "modules.3.concepts": [],
+    "modules.4.concepts": [],
+    "modules.5.concepts": [],
+    "modules.6.concepts": [],
+    "modules.7.concepts": [],
+    "modules.8.concepts": [],
+    "modules.9.concepts": []
+  }
+}

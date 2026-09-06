@@ -1,0 +1,37 @@
+{
+  "name": "dsh-professor-pane",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "The right pane of the DeepSeek Harness as the professor's visualization pane: course outline, class progress, the inbox, and the resolved preferences, switched by a button bar.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "comments": {
+    "client": "`lib/client.js` is HAND-WRITTEN in the module-loader's registration form (`window.__ModuleLoader__.load({id, factory})`) rather than produced by tsdown, and there is deliberately no build step. Every shipped client half in node_modules/@deepseek-ai is that same shape, so the format is a contract rather than a private artefact, and one file of plain ES2020 with React.createElement is cheaper to keep true than a bundler config this project would otherwise not have. If this grows past a few hundred lines, add the bundler then.",
+    "inject": "`dsh.client.inject` names PACKAGES whose client halves must be live first, not services. ui-layout because the `details` seat is declared inside its AppFrame children table and does not exist until that entry mounts; ui-conversation because the header-action seat this pane's opener sits in is declared by its session header; client-runtime for `slots` and `sessions`. The service names this plugin injects are the `inject` export in index.js and lib/client.js.",
+    "dependency": "This reads the course model through `dsh-ainar-course-model/server/**`, which is a dependency of the PROJECT rather than of this package, for the reason its own package.json gives: pnpm cannot resolve a file: spec whose absolute path contains a space, and this checkout lives under a home directory that has one. Node resolution finds it from the dsh installation's node_modules either way."
+  }
+}

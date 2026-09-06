@@ -1,0 +1,30 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "lms.unsupported_target",
+      "level": "warning",
+      "location": "CSS-4008-2026-FALL",
+      "message": "'notion' is recorded as this run's target, and nothing here can push grades to it. Supported: canvas-csv, canvas-api, sheet-csv, sheets-api. Export a file and upload it by hand until an adapter exists. `ainar notion push` publishes course content to Notion, not grades."
+    }
+  ],
+  "mutation": "an-unsupported-gradebook-target",
+  "patch": {
+    "versions.0.extensions": {
+      "lms": {
+        "target": "notion"
+      }
+    }
+  }
+}

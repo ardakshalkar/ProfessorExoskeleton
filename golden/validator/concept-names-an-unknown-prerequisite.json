@@ -1,0 +1,28 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "ref.concept",
+      "level": "error",
+      "location": "CONCEPT-SEARCH",
+      "message": "unknown prerequisite CONCEPT-DOES-NOT-EXIST"
+    }
+  ],
+  "mutation": "concept-names-an-unknown-prerequisite",
+  "patch": {
+    "concepts.1.prerequisites": [
+      "CONCEPT-DOES-NOT-EXIST"
+    ]
+  }
+}

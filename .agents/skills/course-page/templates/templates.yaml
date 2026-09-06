@@ -1,0 +1,43 @@
+# The menu /course-page reads out. Style sheets only: `ainar page` renders the
+# page from the outline payload, and what appears on it is not a template's
+# business. See references/templates.md.
+surface: course-page
+public: true
+default: plain
+templates:
+  - id: plain
+    file: plain.css
+    name: Plain
+    suits: reading on a phone, which is how most students will meet it
+  - id: print
+    file: print.css
+    name: Printed handout
+    suits: one sheet to hand out in week one, or to pin to a board
+  - id: projector
+    file: projector.css
+    name: Projector
+    suits: showing the term plan on a screen in the first class
+
+# The other half of appearance: which sections the page has, and in what order.
+# `ainar page --structure <id>` renders one. Still the same view and the same
+# payload — the markup is a file rather than a function — so a structure cannot
+# introduce a figure. `ainar/templates.py` refuses one carrying a script or
+# anything that fetches. The default is the template the command ships with,
+# `ainar/mcp/widget-assets/course-outline.tmpl`, which is also where the section
+# order lives if you want to read it.
+#
+# No `default_structure`, and that is not an omission: with none named, the
+# command uses the template it ships with. Listing a copy of it here would be a
+# second copy of the same markup, and the two would disagree within a term.
+structures:
+  - id: compact
+    file: compact.tmpl
+    name: One page
+    suits: assessment first, then dates and topics; drops the chips and resources
+
+# Files here that are not a choice. `fallback.html` is the frame for the site the
+# skill writes itself when `ainar page` cannot run — a real second path, and used
+# only on that condition.
+parts:
+  - file: fallback.html
+    purpose: the frame for the site you write yourself when `ainar page` cannot run

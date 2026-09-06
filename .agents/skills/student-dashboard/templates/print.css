@@ -1,0 +1,42 @@
+/* Printed — the sheet you put on the table between you and the student.
+
+   Black on white, bars outlined rather than filled with colour, and the empty
+   bar hatched so a photocopy still shows the difference between "assessed and
+   low" and "never assessed". That distinction is the whole page; if the print
+   loses it, the print is wrong. */
+
+:root {
+  --bg: #ffffff; --fg: #000000; --muted: #333333; --line: #000000;
+  --have: #cccccc; --weak: #ffffff; --none: #ffffff; --none-fg: #000000;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #ffffff; --fg: #000000; --muted: #333333; --line: #000000;
+    --have: #cccccc; --weak: #ffffff; --none: #ffffff; --none-fg: #000000;
+  }
+}
+
+body {
+  background: #ffffff; color: #000000;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 11pt; line-height: 1.35;
+}
+
+main { max-width: none; }
+
+.bar { border: 1pt solid #000000; }
+.bar i { background: #bbbbbb; }
+.bar.weak i { background: #ffffff; border-right: 1pt solid #000000; }
+.bar.none { background: repeating-linear-gradient(
+    45deg, #000000, #000000 .5pt, #ffffff .5pt, #ffffff 4pt); }
+
+.rung .box { border: 1pt solid #000000; }
+.rung.at .box { background: #000000; }
+
+.warn { border-left: 3pt solid #000000; background: #ffffff; }
+
+/* A capability ladder or a gap chain split across a page break is unreadable. */
+h3, .rung, .row, .chain { break-inside: avoid; page-break-inside: avoid; }
+
+@page { margin: 18mm; }

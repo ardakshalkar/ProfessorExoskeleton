@@ -1,0 +1,177 @@
+{
+  "$defs": {
+    "ConceptState": {
+      "enum": [
+        "not_observed",
+        "introduced",
+        "developing",
+        "demonstrated",
+        "consistently_demonstrated",
+        "needs_review"
+      ],
+      "title": "ConceptState",
+      "type": "string"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Where an AI-produced statement came from.\n\nEvery AI conclusion must be reconstructable: which data, which model,\nwhich workflow version, what evidence, who approved it.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "produced_by": {
+          "description": "Agent or workflow that produced this output.",
+          "title": "Produced By",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "workflow_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Version"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "input_refs": {
+          "description": "Identifiers of the records and documents used as input.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Refs",
+          "type": "array"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        }
+      },
+      "required": [
+        "produced_by"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A derived estimate of understanding. An estimate, not a permanent fact.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "student_id": {
+      "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Student Id",
+      "type": "string"
+    },
+    "concept_id": {
+      "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Concept Id",
+      "type": "string"
+    },
+    "course_version_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Course Version Id",
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/ConceptState",
+      "default": "not_observed"
+    },
+    "mastery_estimate": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mastery Estimate"
+    },
+    "evidence_ids": {
+      "items": {
+        "pattern": "^EVID-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Evidence Ids",
+      "type": "array"
+    },
+    "last_updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Last Updated At"
+    },
+    "provenance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Provenance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "student_id",
+    "concept_id",
+    "course_version_id"
+  ],
+  "title": "StudentConceptState",
+  "type": "object"
+}

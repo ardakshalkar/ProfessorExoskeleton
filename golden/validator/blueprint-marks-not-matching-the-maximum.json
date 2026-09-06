@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "assessment.design_marks",
+      "level": "warning",
+      "location": "ASSESSMENT-01",
+      "message": "blueprint cells allocate 65 marks but maximum_score is 100"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    }
+  ],
+  "mutation": "blueprint-marks-not-matching-the-maximum",
+  "patch": {
+    "assessments.0.design.cells.0.marks": 5
+  }
+}

@@ -1,0 +1,368 @@
+{
+  "capabilities": [
+    {
+      "capability_id": "CAP-AI-EXPERIMENT",
+      "cells": [
+        {
+          "level": 3,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "level": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "level": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "max_level": 4,
+      "title": "Design an AI experiment"
+    }
+  ],
+  "concepts": [
+    {
+      "cells": [
+        {
+          "evidence": 2,
+          "proportion": 0.83,
+          "state": null,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": 0.83,
+      "concept_id": "CONCEPT-AI-PROBLEM-TYPES",
+      "coverage": "1/3",
+      "prerequisites": [],
+      "title": "AI problem types"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 1,
+          "proportion": 0.67,
+          "state": null,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": 0.67,
+      "concept_id": "CONCEPT-SEARCH",
+      "coverage": "1/3",
+      "prerequisites": [
+        "CONCEPT-AI-PROBLEM-TYPES"
+      ],
+      "title": "State-space search"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": null,
+      "concept_id": "CONCEPT-DATA-PREPARATION",
+      "coverage": "0/3",
+      "prerequisites": [],
+      "title": "Data preparation"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": null,
+      "concept_id": "CONCEPT-SUPERVISED-LEARNING",
+      "coverage": "0/3",
+      "prerequisites": [
+        "CONCEPT-AI-PROBLEM-TYPES",
+        "CONCEPT-DATA-PREPARATION"
+      ],
+      "title": "Supervised learning"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 2,
+          "proportion": 0.0,
+          "state": "needs_review",
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 1,
+          "proportion": 0.0,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 1,
+          "proportion": 1.0,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": 0.33,
+      "concept_id": "CONCEPT-TRAIN-TEST-SPLIT",
+      "coverage": "3/3",
+      "prerequisites": [
+        "CONCEPT-DATA-PREPARATION"
+      ],
+      "title": "Train-test separation"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 1,
+          "proportion": 0.0,
+          "state": null,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 1,
+          "proportion": 0.0,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 1,
+          "proportion": 1.0,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": 0.33,
+      "concept_id": "CONCEPT-MODEL-EVALUATION",
+      "coverage": "3/3",
+      "prerequisites": [
+        "CONCEPT-TRAIN-TEST-SPLIT",
+        "CONCEPT-SUPERVISED-LEARNING"
+      ],
+      "title": "Model evaluation"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": "developing",
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": null,
+      "concept_id": "CONCEPT-OVERFITTING",
+      "coverage": "0/3",
+      "prerequisites": [
+        "CONCEPT-MODEL-EVALUATION",
+        "CONCEPT-TRAIN-TEST-SPLIT"
+      ],
+      "title": "Overfitting"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": null,
+      "concept_id": "CONCEPT-REGULARIZATION",
+      "coverage": "0/3",
+      "prerequisites": [
+        "CONCEPT-OVERFITTING"
+      ],
+      "title": "Regularization"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": null,
+      "concept_id": "CONCEPT-NEURAL-NETWORKS",
+      "coverage": "0/3",
+      "prerequisites": [
+        "CONCEPT-SUPERVISED-LEARNING"
+      ],
+      "title": "Neural networks"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": null,
+      "concept_id": "CONCEPT-EXPERIMENT-DESIGN",
+      "coverage": "0/3",
+      "prerequisites": [
+        "CONCEPT-MODEL-EVALUATION"
+      ],
+      "title": "AI experiment design"
+    },
+    {
+      "cells": [
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-JNG7SN"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-K4QM2X"
+        },
+        {
+          "evidence": 0,
+          "proportion": null,
+          "state": null,
+          "student_id": "STUDENT-R7TB5D"
+        }
+      ],
+      "class_mean": null,
+      "concept_id": "CONCEPT-LOSS-FUNCTIONS",
+      "coverage": "0/3",
+      "prerequisites": [
+        "CONCEPT-SUPERVISED-LEARNING"
+      ],
+      "title": "Loss functions"
+    }
+  ],
+  "run": {
+    "course_id": "CSS-4008",
+    "id": "CSS-4008-2026-FALL",
+    "term": "2026-FALL",
+    "title": "Artificial Intelligence"
+  },
+  "students": [
+    "STUDENT-JNG7SN",
+    "STUDENT-K4QM2X",
+    "STUDENT-R7TB5D"
+  ],
+  "totals": {
+    "concepts": 11,
+    "concepts_with_no_evidence": [
+      "CONCEPT-DATA-PREPARATION",
+      "CONCEPT-SUPERVISED-LEARNING",
+      "CONCEPT-OVERFITTING",
+      "CONCEPT-REGULARIZATION",
+      "CONCEPT-NEURAL-NETWORKS",
+      "CONCEPT-EXPERIMENT-DESIGN",
+      "CONCEPT-LOSS-FUNCTIONS"
+    ],
+    "evidence": 11,
+    "students": 3
+  }
+}

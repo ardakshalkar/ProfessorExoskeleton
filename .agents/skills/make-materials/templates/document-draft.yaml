@@ -1,0 +1,68 @@
+# The records that register whatever was written, as `documents-draft.yaml` in
+# the same directory as the material. Approval is what turns these into records;
+# nothing here is one yet, which is what the -DRAFT- segment says.
+#
+# Never write `size_bytes` or `checksum` — approval computes both from the file,
+# and a hand-written sha256 is worse than an absent one. Never point
+# `storage_key` into `courses/`; approval moves the file there.
+
+documents:
+  - document_id: DOC-DRAFT-{{ nnnn }}
+    title: "{{ material title }}"
+    storage_key: work/{{ COURSE_VERSION_ID }}/materials/{{ filename }}
+    mime_type: text/markdown
+    course_run_id: "{{ COURSE_VERSION_ID }}"
+    module_id: "{{ MODULE-ID }}"
+    concepts: ["{{ CONCEPT-ID }}"]
+    generated_by:
+      produced_by: make-materials-skill
+      model_id: "{{ the model that wrote it }}"
+      workflow_version: claude-code/prototype
+      prompt_version: make-materials/v1
+      input_refs: ["{{ MODULE-ID }}", "{{ LO-ID }}"]
+      created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+    # Slides only. The plan is a contract with the renderer: slide count, order
+    # and titles must match the markdown or it stops.
+    presentation_plan:
+      audience: "{{ who is in the room }}"
+      style: "{{ lecture / seminar / lab }}"
+      duration_minutes: {{ from the scheduled activity }}
+      max_slides: {{ n }}
+      outcomes: ["{{ LO-ID }}"]
+      concepts: ["{{ CONCEPT-ID }}"]
+      slides:
+        - number: 1
+          type: "{{ hook / concept / example / check }}"
+          title: "{{ slide title, matching the markdown }}"
+          minutes: {{ n }}
+          purpose: "{{ what this slide is for }}"
+          concepts: ["{{ CONCEPT-ID }}"]
+
+  # Every figure is its own Document, with no Resource of its own. An
+  # unregistered figure is one approval never moves, and the approved deck ends
+  # up pointing at a file left behind in gitignored work/.
+  - document_id: DOC-DRAFT-{{ nnnn }}
+    title: "{{ what the figure shows }}"
+    storage_key: work/{{ COURSE_VERSION_ID }}/materials/{{ figure filename }}
+    mime_type: image/svg+xml
+    course_run_id: "{{ COURSE_VERSION_ID }}"
+    module_id: "{{ MODULE-ID }}"
+    concepts: ["{{ CONCEPT-ID }}"]
+    generated_by:
+      produced_by: make-materials-skill
+      model_id: "{{ the model that wrote it }}"
+      workflow_version: claude-code/prototype
+      prompt_version: make-materials/v1
+      input_refs: ["{{ MODULE-ID }}"]
+      created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+
+resources:
+  - resource_id: RES-DRAFT-{{ nnnn }}
+    title: "{{ material title }}"
+    kind: "{{ slides / handout / notebook }}"
+    course_run_id: "{{ COURSE_VERSION_ID }}"
+    document_id: DOC-DRAFT-{{ nnnn }}
+    concepts: ["{{ CONCEPT-ID }}"]
+    required: {{ true / false }}
+    # If this replaces an earlier version, name it rather than overwriting:
+    # supersedes: DOC-{{ nnnn }}

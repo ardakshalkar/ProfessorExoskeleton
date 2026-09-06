@@ -1,0 +1,66 @@
+spec_version: 1
+exam:
+  id: EXAM-ID
+  title: Exam title
+  purpose: summative
+  status: draft
+  duration_minutes: 60
+  total_marks: 100
+  delivery: paper
+  permitted_resources: []
+  ai_policy: prohibited
+
+assumptions: []
+
+blueprint:
+  - outcome: LO-01
+    evidence: apply the stated method and interpret the result
+    weight_marks: 20
+    performance_levels: [D, C]
+
+questions:
+  - id: Q1
+    family_id: FAMILY-01
+    instance_id: FAMILY-01-V1
+    outcome: LO-01
+    marks: 10
+    expected_minutes: 8
+    performance_levels: [D, C]
+    evidence: correct method, execution, and interpretation
+    student_prompt: |
+      Question text.
+    solution_expectations:
+      - Select the appropriate method.
+      - Execute it correctly.
+      - Interpret the result in context.
+    rubric:
+      - criterion: method selection
+        marks: 2
+      - criterion: execution
+        marks: 5
+      - criterion: interpretation
+        marks: 3
+    acceptable_methods: []
+    common_errors: []
+    follow_through:
+      enabled: false
+      rule: null
+    variant:
+      invariants: []
+      slots: {}
+
+integrity:
+  relevant_threats: []
+  controls: []
+
+checks:
+  totals_verified: false
+  timing_verified: false
+  alignment_verified: false
+  solutions_verified: false
+  variants_verified: false
+
+approval:
+  required: false
+  approved_by: null
+  approved_at: null

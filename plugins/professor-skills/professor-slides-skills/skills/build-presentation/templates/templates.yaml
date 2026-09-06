@@ -1,0 +1,38 @@
+# The menu /build-presentation reads out.
+#
+# These are deck shapes matching the outline shapes: the slide sequence the
+# corresponding outline template plans, written out as Marp markdown with every
+# slot empty. The outline's `style` picks one; the professor can override.
+#
+# A template gives the shape. It never carries a claim about what a course
+# teaches, and no slot is ever filled with a plausible-sounding outcome.
+
+surface: build-presentation
+default: lecture-slides
+
+templates:
+  - id: lecture-slides
+    file: lecture-slides.md
+    name: Lecture slides
+    suits: a taught session — Marp front matter, so it renders as a deck
+    pairs_with: lecture
+
+  - id: seminar-slides
+    file: seminar-slides.md
+    name: Seminar slides
+    suits: a reading-led session where the slides scaffold a discussion
+    pairs_with: seminar
+
+  - id: workshop-slides
+    file: workshop-slides.md
+    name: Workshop slides
+    suits: a practical where the slides punctuate task blocks
+    pairs_with: workshop
+
+parts:
+  - file: plan.yaml
+    purpose: >-
+      documentation of the render contract, which is generated. `pres plan build`
+      writes <deck>.plan.yaml from the outline and the markdown; nothing fills
+      this in by hand. Read it to know what ends up in there and why.
+    generated_by: pres plan build

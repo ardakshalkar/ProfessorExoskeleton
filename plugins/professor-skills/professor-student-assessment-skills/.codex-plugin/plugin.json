@@ -1,0 +1,22 @@
+{
+  "name": "professor-student-assessment-skills",
+  "version": "0.1.0",
+  "description": "Draft evidence-cited grading suggestions, moderate decisions, and prepare feedback without auto-approving grades.",
+  "author": { "name": "Ardak Shalkarbayuly" },
+  "license": "MIT",
+  "keywords": ["grading", "assessment", "rubric", "feedback", "moderation"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Professor Student Assessment Skills",
+    "shortDescription": "Grade with evidence, moderation, and professor control.",
+    "longDescription": "Four focused skills draft criterion-level grading suggestions, support calibrated batch grading, audit approved decisions, and write student feedback. A shared TypeScript CLI validates DataLayer-compatible evaluations and summarizes only human-approved scores; restricted records stay in memory and grades are never auto-approved or published.",
+    "developerName": "Ardak Shalkarbayuly",
+    "category": "Education",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Grade this submission against its rubric.",
+      "Moderate this batch for consistency.",
+      "Draft feedback from the approved decisions."
+    ]
+  }
+}

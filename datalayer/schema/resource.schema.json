@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "ResourceKind": {
+      "enum": [
+        "slides",
+        "reading",
+        "dataset",
+        "notebook",
+        "video",
+        "link",
+        "textbook_chapter",
+        "tool",
+        "other"
+      ],
+      "title": "ResourceKind",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Teaching material attached to a run, module or activity.\n\nThe file itself lives in object storage; this record holds the metadata\nand, when applicable, the document reference.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "resource_id": {
+      "pattern": "^RES-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Resource Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/ResourceKind",
+      "default": "other"
+    },
+    "course_version_id": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Course Version Id"
+    },
+    "course_id": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Course Id"
+    },
+    "document_id": {
+      "anyOf": [
+        {
+          "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Document Id"
+    },
+    "url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Url"
+    },
+    "concepts": {
+      "items": {
+        "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Concepts",
+      "type": "array"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "required": {
+      "default": false,
+      "title": "Required",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "resource_id",
+    "title"
+  ],
+  "title": "Resource",
+  "type": "object"
+}

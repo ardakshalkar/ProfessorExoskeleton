@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "criterion.no_outcome",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "criterion is not linked to a learning outcome, so it produces marks but no evidence"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    }
+  ],
+  "mutation": "criterion-measures-nothing",
+  "patch": {
+    "assessments.0.rubric.criteria.0.outcome_id": null
+  }
+}

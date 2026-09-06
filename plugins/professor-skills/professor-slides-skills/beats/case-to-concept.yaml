@@ -1,0 +1,38 @@
+beat: case-to-concept
+name: Case, then concept
+family: apply
+purpose: >-
+  Let a real situation generate the need for the framework.
+best_for:
+  - business, law, medicine, public policy
+  - novice learners in any applied field
+avoid_when:
+  - students already hold the framework and need practice applying it
+slides: 5
+sequence:
+  - step: the situation
+    intent: create_need
+    archetype: primary_source
+    density: dense
+  - step: what actually happened
+    intent: provide_evidence
+    archetype: data_evidence
+    density: sparse
+  - step: the feature that made the difference
+    intent: build_intuition
+    archetype: annotated_object
+    density: moderate
+  - step: the concept or framework, named
+    intent: introduce_concept
+    archetype: definition
+    density: moderate
+  - step: the case again, through it
+    intent: integrate
+    archetype: worked_example
+    density: moderate
+visual_rules:
+  source_required: true
+exit_condition: >-
+  The student can apply the framework to the case without prompting.
+transition: >-
+  A second, less obvious case opens concept-to-case.

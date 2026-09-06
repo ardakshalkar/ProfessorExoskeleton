@@ -1,0 +1,22 @@
+# The configuration layer this bundle contributes.
+#
+# `dsh` applies each installed bundle's patch in order, then the profile's own,
+# then $DSH_HOME/cordis.patch.yml, then anything passed as --patch. So this is
+# the weakest layer of the four on purpose: a professor who wants the tools off
+# for one profile overrides it above rather than editing anything in here.
+#
+# The row names the package rather than a relative path, which is what lets Node
+# resolution find the installed code from wherever the profile lives.
+#
+# The shape is a top-level ARRAY of patch entries, one of which carries the
+# `insert` list. An earlier revision made the mapping itself the document — the
+# bare `insert:` key at the top — which dsh refuses to load at all:
+#
+#     overlay .../cordis.patch.yml must be a top-level YAML array of loader
+#     patch entries
+#
+# That is a boot failure for the whole harness, not a bundle that mounts nothing,
+# so the two spellings are not close: one works and the other stops the host.
+- insert:
+    - id: ainar-course-model
+      name: dsh-ainar-course-model

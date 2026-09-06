@@ -1,0 +1,21 @@
+# The menu /student-dashboard reads out. This surface draws one person, so its
+# output goes outside the repository entirely — the template does not change
+# that, and nothing here is ever published. See references/templates.md.
+surface: student-dashboard
+public: false
+default: plain
+templates:
+  - id: plain
+    file: plain.css
+    name: Plain
+    suits: reading on screen, or turning the laptop round in a meeting
+  - id: print
+    file: print.css
+    name: Printed
+    suits: a sheet to put on the table between you and the student
+
+parts:
+  - file: shell.html
+    purpose: the frame the page is filled into
+  - file: blocks.html
+    purpose: the three sections, in the order that makes them an argument

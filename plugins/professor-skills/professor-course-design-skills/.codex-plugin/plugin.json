@@ -1,0 +1,23 @@
+{
+  "name": "professor-course-design-skills",
+  "version": "0.1.0",
+  "description": "Design and review aligned courses at selectable depth using the Professor DataLayer course structure.",
+  "author": {
+    "name": "Ardak Shalkarbayuly"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Professor Course Design Skills",
+    "shortDescription": "Turn outcomes into aligned concepts, weeks, assessments, and a project spine.",
+    "longDescription": "Two focused skills create and review courses at SKETCH, STANDARD, or ASSURANCE depth. The workflow starts from observable performance, decomposes it into capabilities and concepts, sequences prerequisites, maps I/R/M/A progression, and aligns assessment and project evidence. STANDARD output follows the sibling Professor DataLayer course-tree contract. No CLI, runtime dependency, database, or mandatory research pass is required.",
+    "developerName": "Ardak Shalkarbayuly",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Design a 15-week course from these outcomes at STANDARD depth.",
+      "Sketch a short course on retrieval-augmented generation.",
+      "Review this syllabus for alignment and sequencing gaps.",
+      "Build an approval-first course map with a final project spine."
+    ]
+  }
+}

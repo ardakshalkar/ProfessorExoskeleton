@@ -1,0 +1,169 @@
+{
+  "assessments": [
+    {
+      "assessment_id": "ASSESSMENT-01",
+      "awaiting_grading": [
+        {
+          "criteria_remaining": [
+            "CRIT-01-01",
+            "CRIT-01-02"
+          ],
+          "files": [],
+          "student_id": "STUDENT-JNG7SN",
+          "submission_id": "SUB-9060"
+        },
+        {
+          "criteria_remaining": [
+            "CRIT-01-01",
+            "CRIT-01-02"
+          ],
+          "files": [],
+          "student_id": "STUDENT-K4QM2X",
+          "submission_id": "SUB-9061"
+        },
+        {
+          "criteria_remaining": [
+            "CRIT-01-01",
+            "CRIT-01-02"
+          ],
+          "files": [],
+          "student_id": "STUDENT-R7TB5D",
+          "submission_id": "SUB-9062"
+        }
+      ],
+      "criteria": [
+        "CRIT-01-01",
+        "CRIT-01-02"
+      ],
+      "criteria_scored_by_items": [
+        "CRIT-01-01"
+      ],
+      "enrolled": 3,
+      "judgements_done": 0,
+      "judgements_total": 6,
+      "missing_submissions": [],
+      "rubric_id": "RUBRIC-01",
+      "submissions_received": 3,
+      "title": "Foundations Quiz",
+      "type": "quiz"
+    },
+    {
+      "assessment_id": "ASSESSMENT-02",
+      "awaiting_grading": [
+        {
+          "criteria_remaining": [
+            "CRIT-02-01",
+            "CRIT-02-02"
+          ],
+          "files": [
+            {
+              "document_id": "DOC-7701",
+              "type": "pdf"
+            }
+          ],
+          "student_id": "STUDENT-JNG7SN",
+          "submission_id": "SUB-9070"
+        }
+      ],
+      "criteria": [
+        "CRIT-02-01",
+        "CRIT-02-02"
+      ],
+      "criteria_scored_by_items": [],
+      "enrolled": 3,
+      "judgements_done": 0,
+      "judgements_total": 2,
+      "missing_submissions": [
+        "STUDENT-K4QM2X",
+        "STUDENT-R7TB5D"
+      ],
+      "rubric_id": "RUBRIC-02",
+      "submissions_received": 1,
+      "title": "Data Preparation Report",
+      "type": "assignment"
+    },
+    {
+      "assessment_id": "ASSESSMENT-04",
+      "awaiting_grading": [
+        {
+          "criteria_remaining": [
+            "CRIT-04-02",
+            "CRIT-04-04"
+          ],
+          "files": [
+            {
+              "document_id": "DOC-7741",
+              "type": "pdf"
+            },
+            {
+              "document_id": "DOC-7742",
+              "type": "notebook"
+            }
+          ],
+          "student_id": "STUDENT-JNG7SN",
+          "submission_id": "SUB-9081"
+        },
+        {
+          "criteria_remaining": [
+            "CRIT-04-01",
+            "CRIT-04-02",
+            "CRIT-04-03",
+            "CRIT-04-04"
+          ],
+          "files": [
+            {
+              "document_id": "DOC-7751",
+              "type": "pdf"
+            }
+          ],
+          "student_id": "STUDENT-K4QM2X",
+          "submission_id": "SUB-9082"
+        }
+      ],
+      "criteria": [
+        "CRIT-04-01",
+        "CRIT-04-02",
+        "CRIT-04-03",
+        "CRIT-04-04"
+      ],
+      "criteria_scored_by_items": [],
+      "enrolled": 3,
+      "judgements_done": 2,
+      "judgements_total": 8,
+      "missing_submissions": [
+        "STUDENT-R7TB5D"
+      ],
+      "rubric_id": "RUBRIC-04",
+      "submissions_received": 2,
+      "title": "Model Evaluation Assignment",
+      "type": "assignment"
+    },
+    {
+      "assessment_id": "ASSESSMENT-05",
+      "awaiting_grading": [],
+      "criteria": [
+        "CRIT-05-01",
+        "CRIT-05-02",
+        "CRIT-05-03",
+        "CRIT-05-04"
+      ],
+      "criteria_scored_by_items": [],
+      "enrolled": 3,
+      "judgements_done": 0,
+      "judgements_total": 0,
+      "missing_submissions": [
+        "STUDENT-JNG7SN",
+        "STUDENT-K4QM2X",
+        "STUDENT-R7TB5D"
+      ],
+      "rubric_id": "RUBRIC-05",
+      "submissions_received": 0,
+      "title": "Final AI Project",
+      "type": "project"
+    }
+  ],
+  "run": {
+    "id": "CSS-4008-2026-FALL",
+    "title": "Artificial Intelligence"
+  }
+}

@@ -1,13 +1,32 @@
+# What this repository does NOT hold.
+#
+# It used to exclude every vendored tree — `ainar-node/`, `ainar/`, `golden/`,
+# `.agents/skills/`, `datalayer/` and three of the four plugins — on the ground
+# that they are copies rather than source. True, and it meant a fresh clone was
+# not a working host: it needed `python -m exo setup` and a manual copy of two
+# sibling checkouts, and the harness could not start until both had run.
+#
+# So the copies are tracked now. `plugins/VENDORED.txt` still says where each
+# came from and which files this project has changed since; that record is what
+# makes a re-vendor a merge rather than a silent overwrite, and it does the job
+# whether or not the tree is in git. Excluding the trees never protected
+# anything — it only made the repository unusable on its own.
+#
+# Without their node_modules the whole set is about six megabytes.
+
 # The credential file. `.env.example` is the tracked one.
 .env
 .env.local
 
+# Installed dependencies and build output: reproducible from the manifests, and
+# 147 MB across ainar-node and professor-skills.
 node_modules/
+dist/
 
 # The harness's own state: sessions, credentials, whatever a profile installs
 # beside itself. The profile DEFINITIONS under .dsh/profiles/*/ are tracked —
-# they are the source of how this host is composed — and everything dsh writes
-# next to them is not.
+# they are the source of how this host is composed — and so are the agent
+# presets under .dsh/.agent-presets/. Everything dsh writes next to them is not.
 .dsh/sessions/
 .dsh/storages/
 .dsh/profiles/*/node_modules/
@@ -17,23 +36,12 @@ node_modules/
 # Per-machine telemetry id, written by dsh at boot.
 .dsh/.anonymous-user-id
 
-# Vendored plugins — copies, not source. See plugins/VENDORED.txt for the chain
-# that produces each one. plugins/dsh-sample IS source and stays tracked, which
-# is why these are named individually rather than ignoring plugins/ wholesale
-# the way ../ProfessorExoskeletonDHS does.
-plugins/dsh-ainar-course-model/
-plugins/dsh-professor-pane/
-plugins/professor-skills/
-datalayer/
+# Python bytecode from the vendored `ainar/` tree, which is carried for its
+# widget assets and its docstrings rather than to be run — nothing in this
+# project executes Python.
+__pycache__/
+*.py[cod]
 
-# Vendored skills: the 16 AINAR ones, unpacked by `python -m exo setup`.
-.agents/skills/
-
-# The AINAR TypeScript port, vendored from ../ProfessorHarness/node. Carries
-# the `ainar` CLI that bin/ainar runs, its src/, and its node_modules.
-ainar-node/
-
-# Test fixtures and shared assets, vendored from ../ProfessorHarness so
-# ainar-node's own suite can run here. See plugins/VENDORED.txt.
-golden/
-ainar/
+# Editor and OS litter.
+.DS_Store
+Thumbs.db

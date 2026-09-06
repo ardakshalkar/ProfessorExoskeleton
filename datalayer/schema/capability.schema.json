@@ -1,0 +1,87 @@
+{
+  "$defs": {
+    "CapabilityLevel": {
+      "additionalProperties": false,
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "level": {
+          "minimum": 1,
+          "title": "Level",
+          "type": "integer"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "description"
+      ],
+      "title": "CapabilityLevel",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Something a student can do, accumulated across courses.\n\nCapabilities are the basis of a capability map rather than a transcript, so\nthey are usually shared across the faculty, not owned by one course.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "capability_id": {
+      "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Capability Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "levels": {
+      "items": {
+        "$ref": "#/$defs/CapabilityLevel"
+      },
+      "title": "Levels",
+      "type": "array"
+    },
+    "domain": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "e.g. 'computer-science'.",
+      "title": "Domain"
+    }
+  },
+  "required": [
+    "capability_id",
+    "title"
+  ],
+  "title": "Capability",
+  "type": "object"
+}

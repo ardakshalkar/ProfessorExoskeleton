@@ -1,0 +1,30 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "lms.sheet_url",
+      "level": "warning",
+      "location": "CSS-4008-2026-FALL",
+      "message": "sheet_id holds a URL; the id alone — the part between /d/ and /edit — is what the API wants and what survives a moved document"
+    }
+  ],
+  "mutation": "a-sheet-id-that-is-a-url",
+  "patch": {
+    "versions.0.extensions": {
+      "lms": {
+        "sheet_id": "https://docs.google.com/spreadsheets/d/abc/edit"
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "professor-assignment-skills",
+  "version": "0.1.0",
+  "description": "Create aligned homework, labs, seminars, and practice sessions at selectable depth using Professor DataLayer course context.",
+  "author": {
+    "name": "Ardak Shalkarbayuly"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Professor Assignment Skills",
+    "shortDescription": "Create student-ready activities with compact professor guides.",
+    "longDescription": "Four focused skills create homework, laboratory work, seminars, and practice sessions at SKETCH, STANDARD, or ASSURANCE depth. Each starts from learning outcomes and evidence, scales scaffolding and autonomy deliberately, and produces separate student and professor artifacts. STANDARD proposals follow the sibling Professor DataLayer contract. No CLI, runtime, database, or mandatory research pass is required.",
+    "developerName": "Ardak Shalkarbayuly",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Create homework for this module at STANDARD depth.",
+      "Design a guided-inquiry lab with a professor guide.",
+      "Sketch a case seminar with discussion branches."
+    ]
+  }
+}

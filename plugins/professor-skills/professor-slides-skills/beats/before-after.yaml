@@ -1,0 +1,33 @@
+beat: before-after
+name: Before and after
+family: create_need
+purpose: >-
+  Let an intervention's effect be seen before it is described.
+best_for:
+  - architecture, medicine, engineering, business, history
+  - anything where the change is visible
+avoid_when:
+  - the difference is not visible and the images are decorative
+slides: 3
+sequence:
+  - step: before and after, side by side
+    intent: provide_evidence
+    archetype: visual_comparison
+    density: sparse
+    note: same scale, same framing, parallel labels — the layout is the argument
+  - step: what changed, annotated
+    intent: build_intuition
+    archetype: annotated_object
+    density: moderate
+  - step: the principle that explains it
+    intent: introduce_concept
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  image_dominance: high
+  parallel_composition: true
+  source_required: true
+exit_condition: >-
+  The student can name the difference before being told what caused it.
+transition: >-
+  "What produced that?" opens the mechanism beat.

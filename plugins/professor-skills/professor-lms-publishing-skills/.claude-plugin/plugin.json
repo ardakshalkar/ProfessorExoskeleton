@@ -1,0 +1,7 @@
+{
+  "name": "professor-lms-publishing-skills",
+  "description": "Preview and explicitly publish professor-approved content to Canvas, Moodle, or Telegram.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": { "name": "Ardak Shalkarbayuly" }
+}

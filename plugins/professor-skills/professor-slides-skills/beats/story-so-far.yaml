@@ -1,0 +1,31 @@
+beat: story-so-far
+name: Story so far
+family: integrate
+purpose: >-
+  Restore the learner's conceptual position before another idea is introduced.
+best_for:
+  - after a dense formalisation or a long derivation
+  - roughly every eight or nine slides of new material
+avoid_when:
+  - the last beat was itself a synthesis
+slides: 2
+sequence:
+  - step: the concepts so far, and how they connect
+    intent: integrate
+    archetype: synthesis
+    density: moderate
+    note: >-
+      a diagram of the relationships, not a bulleted list of the slide titles.
+      Three to five ideas; more than that is not a reset, it is a second lecture
+  - step: the question that opens what comes next
+    intent: transition
+    archetype: question
+    density: sparse
+visual_rules:
+  reuse_visual_anchor: true
+  note: the summary picture should be one they have already seen parts of
+exit_condition: >-
+  The student can say what has been established and what is still missing.
+transition: >-
+  This beat *is* the transition; its closing question is the next beat's entry
+  question.

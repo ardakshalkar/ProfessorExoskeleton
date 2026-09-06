@@ -1,0 +1,43 @@
+beat: diagnose-misconception
+name: Diagnose a misconception
+family: student_thinking
+purpose: >-
+  Name a wrong model students actually hold, and replace it.
+best_for:
+  - concepts with a well-known and durable misunderstanding
+avoid_when:
+  - no misconception is recorded and you would be inventing one
+slides: 5
+sequence:
+  - step: a plausible statement — true or false?
+    intent: check_understanding
+    archetype: activity
+    density: sparse
+  - step: what most people answer
+    intent: diagnose_misconception
+    archetype: data_evidence
+    density: sparse
+  - step: the counterexample
+    intent: diagnose_misconception
+    archetype: visual_comparison
+    density: sparse
+  - step: why the wrong model is appealing
+    intent: build_intuition
+    archetype: big_idea
+    density: moderate
+  - step: the model that replaces it
+    intent: integrate
+    archetype: annotated_object
+    density: moderate
+visual_rules:
+  answer_on_question_slide: forbidden
+  parallel_composition: true
+ask_the_professor:
+  - condition: no misconception is recorded for this concept
+    question: >-
+      What do students reliably get wrong here? Without a real one this beat
+      invents a strawman and teaches nothing.
+exit_condition: >-
+  The student can say why the appealing wrong answer is wrong.
+transition: >-
+  The corrected model is the entry state of the next beat.

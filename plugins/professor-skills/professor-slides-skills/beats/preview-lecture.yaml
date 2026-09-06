@@ -1,0 +1,42 @@
+beat: preview-lecture
+name: Preview, from last time
+family: orient
+purpose: >-
+  Rebuild the state the session depends on before adding to it.
+best_for:
+  - a session that builds directly on the previous one
+  - the week after a break
+avoid_when:
+  - the previous module is unrelated
+slides: 3
+sequence:
+  - step: what they can already do
+    intent: orient
+    archetype: synthesis
+    density: moderate
+    note: read off the previous module, not off what you hope they retained
+  - step: the question that is still open
+    intent: create_need
+    archetype: question
+    density: sparse
+  - step: the map of today
+    intent: orient
+    archetype: roadmap
+    density: sparse
+    required_visual: the course arc, this module marked current
+    note: >-
+      the same arc every week with the marker moved, not a new picture — which
+      is the same reason the first step reuses last week's diagram.
+visual_rules:
+  reuse_visual_anchor: true
+  note: >-
+    if last week ended on a diagram, show that diagram again rather than a new
+    summary of it — recognition is the point
+ask_the_professor:
+  - condition: the previous session's material is not in the course record
+    question: What did last week actually get through?
+exit_condition: >-
+  The student has the previous concept back in working memory and knows what is
+  missing from it.
+transition: >-
+  The open question is the entry question of the next beat.

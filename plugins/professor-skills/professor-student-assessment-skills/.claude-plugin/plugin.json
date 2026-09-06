@@ -1,0 +1,7 @@
+{
+  "name": "professor-student-assessment-skills",
+  "description": "Draft evidence-cited grading suggestions, moderate decisions, and prepare feedback without auto-approving grades.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": { "name": "Ardak Shalkarbayuly" }
+}

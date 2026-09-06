@@ -1,0 +1,205 @@
+{
+  "allow_partial": false,
+  "assessments": [
+    {
+      "assessment_id": "ASSESSMENT-01",
+      "criteria": [
+        {
+          "criterion_id": "CRIT-01-01",
+          "maximum": 60.0,
+          "outcome_id": "LO-01",
+          "title": "Correct classification of problem types"
+        },
+        {
+          "criterion_id": "CRIT-01-02",
+          "maximum": 40.0,
+          "outcome_id": "LO-01",
+          "title": "Method selection reasoning"
+        }
+      ],
+      "due_at": "2026-09-29T23:59:00+05:00",
+      "issues": [],
+      "maximum": 100.0,
+      "rows": [
+        {
+          "assessment_id": "ASSESSMENT-01",
+          "blocked": [
+            "CRIT-01-01: items sum to 40 but the criterion maximum is 60, so an item-derived score is on the wrong scale — fix one of the two rather than rescaling",
+            "1 of 2 criteria undecided: CRIT-01-02"
+          ],
+          "comment": null,
+          "criteria": [
+            {
+              "comment": null,
+              "criterion_id": "CRIT-01-01",
+              "maximum": 60.0,
+              "note": "items sum to 40 but the criterion maximum is 60, so an item-derived score is on the wrong scale — fix one of the two rather than rescaling",
+              "score": null,
+              "source": null,
+              "status": "unusable",
+              "title": "Correct classification of problem types"
+            },
+            {
+              "comment": null,
+              "criterion_id": "CRIT-01-02",
+              "maximum": 40.0,
+              "note": "1 of 2 items scored — the rest need a human",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Method selection reasoning"
+            }
+          ],
+          "exportable": false,
+          "maximum": 100.0,
+          "percent": null,
+          "score": null,
+          "status": "partially_graded",
+          "student_id": "STUDENT-JNG7SN",
+          "submission_id": "SUB-9060"
+        },
+        {
+          "assessment_id": "ASSESSMENT-01",
+          "blocked": [
+            "2 of 2 criteria undecided: CRIT-01-01, CRIT-01-02"
+          ],
+          "comment": null,
+          "criteria": [
+            {
+              "comment": null,
+              "criterion_id": "CRIT-01-01",
+              "maximum": 60.0,
+              "note": "1 of 2 items scored — the rest need a human",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Correct classification of problem types"
+            },
+            {
+              "comment": null,
+              "criterion_id": "CRIT-01-02",
+              "maximum": 40.0,
+              "note": "0 of 2 items scored — the rest need a human",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Method selection reasoning"
+            }
+          ],
+          "exportable": false,
+          "maximum": 100.0,
+          "percent": null,
+          "score": null,
+          "status": "partially_graded",
+          "student_id": "STUDENT-K4QM2X",
+          "submission_id": "SUB-9061"
+        },
+        {
+          "assessment_id": "ASSESSMENT-01",
+          "blocked": [
+            "2 of 2 criteria undecided: CRIT-01-01, CRIT-01-02"
+          ],
+          "comment": null,
+          "criteria": [
+            {
+              "comment": null,
+              "criterion_id": "CRIT-01-01",
+              "maximum": 60.0,
+              "note": "1 of 2 items scored — the rest need a human",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Correct classification of problem types"
+            },
+            {
+              "comment": null,
+              "criterion_id": "CRIT-01-02",
+              "maximum": 40.0,
+              "note": "0 of 2 items scored — the rest need a human",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Method selection reasoning"
+            }
+          ],
+          "exportable": false,
+          "maximum": 100.0,
+          "percent": null,
+          "score": null,
+          "status": "partially_graded",
+          "student_id": "STUDENT-R7TB5D",
+          "submission_id": "SUB-9062"
+        }
+      ],
+      "summary": {
+        "enrolled": 3,
+        "exportable": 0,
+        "graded": 0,
+        "maximum": null,
+        "mean": null,
+        "median": null,
+        "minimum": null,
+        "n_scored": 0,
+        "not_submitted": 0,
+        "partially_graded": 3,
+        "submitted": 3
+      },
+      "title": "Foundations Quiz",
+      "type": "quiz",
+      "weight": 0.15
+    }
+  ],
+  "generated_by": "gradebook/2026.08.1",
+  "notes": [
+    "Scores come from professor decisions only. An ai_suggestion is never counted, whatever its confidence.",
+    "A blank is not a zero: a row with no submission or an undecided criterion carries no score and is not exportable.",
+    "percent_of_graded is a share of the assessments graded so far, not a final grade. No letter grade is computed — a grading scheme is a claim and this model has no field for one.",
+    "Only ASSESSMENT-01 is in scope, so the totals cover that assessment alone — 'complete' does not mean the course is fully graded."
+  ],
+  "run": {
+    "id": "CSS-4008-2026-FALL",
+    "term": "2026-FALL",
+    "title": "Artificial Intelligence"
+  },
+  "scope": {
+    "assessment_id": "ASSESSMENT-01",
+    "assessments_counted": [
+      "ASSESSMENT-01"
+    ]
+  },
+  "totals": [
+    {
+      "assessments_counted": [],
+      "assessments_outstanding": [
+        "ASSESSMENT-01"
+      ],
+      "complete": false,
+      "earned_weighted": 0.0,
+      "percent_of_graded": null,
+      "student_id": "STUDENT-JNG7SN",
+      "weight_graded": 0.0
+    },
+    {
+      "assessments_counted": [],
+      "assessments_outstanding": [
+        "ASSESSMENT-01"
+      ],
+      "complete": false,
+      "earned_weighted": 0.0,
+      "percent_of_graded": null,
+      "student_id": "STUDENT-K4QM2X",
+      "weight_graded": 0.0
+    },
+    {
+      "assessments_counted": [],
+      "assessments_outstanding": [
+        "ASSESSMENT-01"
+      ],
+      "complete": false,
+      "earned_weighted": 0.0,
+      "percent_of_graded": null,
+      "student_id": "STUDENT-R7TB5D",
+      "weight_graded": 0.0
+    }
+  ]
+}

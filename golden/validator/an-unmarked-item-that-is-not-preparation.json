@@ -1,0 +1,38 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 20 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.score_mismatch",
+      "level": "warning",
+      "location": "ASSESSMENT-01",
+      "message": "items sum to 80 but maximum_score is 100"
+    },
+    {
+      "code": "item.unmarked",
+      "level": "warning",
+      "location": "ITEM-01-01",
+      "message": "carries no marks but its role is 'main', so it can never contribute to a score — set a maximum, or mark it as a preparation item if that is what it is"
+    },
+    {
+      "code": "score.out_of_range",
+      "level": "error",
+      "location": "RESP-9060-0101",
+      "message": "score 20.0 exceeds item maximum 0.0"
+    }
+  ],
+  "mutation": "an-unmarked-item-that-is-not-preparation",
+  "patch": {
+    "items.0.maximum_score": 0
+  }
+}

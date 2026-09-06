@@ -1,0 +1,56 @@
+{
+  "$defs": {
+    "ConceptRelationship": {
+      "enum": [
+        "prerequisite_of",
+        "related_to",
+        "part_of",
+        "refines"
+      ],
+      "title": "ConceptRelationship",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Explicit typed edge of the concept graph.\n\nPrerequisite edges are normally expressed inline on the concept. This entity\nexists for other relationship types and for edges between shared concepts.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "source_concept_id": {
+      "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Source Concept Id",
+      "type": "string"
+    },
+    "target_concept_id": {
+      "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Target Concept Id",
+      "type": "string"
+    },
+    "relationship_type": {
+      "$ref": "#/$defs/ConceptRelationship"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
+    }
+  },
+  "required": [
+    "source_concept_id",
+    "target_concept_id",
+    "relationship_type"
+  ],
+  "title": "ConceptEdge",
+  "type": "object"
+}

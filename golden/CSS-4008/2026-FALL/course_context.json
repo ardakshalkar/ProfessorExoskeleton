@@ -1,0 +1,173 @@
+{
+  "active_assessments": [
+    {
+      "due_at": "2026-12-15T23:59:00+05:00",
+      "id": "ASSESSMENT-05",
+      "outcomes": [
+        "LO-01",
+        "LO-02",
+        "LO-03",
+        "LO-04"
+      ],
+      "title": "Final AI Project",
+      "type": "project",
+      "weight": 0.5
+    }
+  ],
+  "class_state": {
+    "enrolled_students": 3,
+    "open_signals": 1,
+    "pending_professor_actions": 2,
+    "submissions_received": 6
+  },
+  "course_run": {
+    "course_id": "CSS-4008",
+    "course_version_id": "CSS-4008-2026-FALL",
+    "end_date": "2026-12-20",
+    "id": "CSS-4008-2026-FALL",
+    "instructors": [
+      "USER-ARD-A01"
+    ],
+    "start_date": "2026-09-01",
+    "term": "2026-FALL",
+    "title": "Artificial Intelligence"
+  },
+  "current_module": {
+    "concepts": [
+      "CONCEPT-NEURAL-NETWORKS"
+    ],
+    "id": "MODULE-08",
+    "outcomes": [
+      "LO-02"
+    ],
+    "title": "Neural Networks",
+    "week": 8
+  },
+  "generated_for_date": "2026-10-26",
+  "learning_model": {
+    "capabilities": [
+      {
+        "id": "CAP-AI-EXPERIMENT",
+        "title": "Design an AI experiment"
+      },
+      {
+        "id": "CAP-DATA-REASONING",
+        "title": "Reason about data"
+      }
+    ],
+    "concepts": [
+      {
+        "id": "CONCEPT-AI-PROBLEM-TYPES",
+        "prerequisites": [],
+        "title": "AI problem types"
+      },
+      {
+        "id": "CONCEPT-SEARCH",
+        "prerequisites": [
+          "CONCEPT-AI-PROBLEM-TYPES"
+        ],
+        "title": "State-space search"
+      },
+      {
+        "id": "CONCEPT-DATA-PREPARATION",
+        "prerequisites": [],
+        "title": "Data preparation"
+      },
+      {
+        "id": "CONCEPT-SUPERVISED-LEARNING",
+        "prerequisites": [
+          "CONCEPT-AI-PROBLEM-TYPES",
+          "CONCEPT-DATA-PREPARATION"
+        ],
+        "title": "Supervised learning"
+      },
+      {
+        "id": "CONCEPT-TRAIN-TEST-SPLIT",
+        "prerequisites": [
+          "CONCEPT-DATA-PREPARATION"
+        ],
+        "title": "Train-test separation"
+      },
+      {
+        "id": "CONCEPT-MODEL-EVALUATION",
+        "prerequisites": [
+          "CONCEPT-TRAIN-TEST-SPLIT",
+          "CONCEPT-SUPERVISED-LEARNING"
+        ],
+        "title": "Model evaluation"
+      },
+      {
+        "id": "CONCEPT-OVERFITTING",
+        "prerequisites": [
+          "CONCEPT-MODEL-EVALUATION",
+          "CONCEPT-TRAIN-TEST-SPLIT"
+        ],
+        "title": "Overfitting"
+      },
+      {
+        "id": "CONCEPT-REGULARIZATION",
+        "prerequisites": [
+          "CONCEPT-OVERFITTING"
+        ],
+        "title": "Regularization"
+      },
+      {
+        "id": "CONCEPT-NEURAL-NETWORKS",
+        "prerequisites": [
+          "CONCEPT-SUPERVISED-LEARNING"
+        ],
+        "title": "Neural networks"
+      },
+      {
+        "id": "CONCEPT-EXPERIMENT-DESIGN",
+        "prerequisites": [
+          "CONCEPT-MODEL-EVALUATION"
+        ],
+        "title": "AI experiment design"
+      },
+      {
+        "id": "CONCEPT-LOSS-FUNCTIONS",
+        "prerequisites": [
+          "CONCEPT-SUPERVISED-LEARNING"
+        ],
+        "title": "Loss functions"
+      }
+    ],
+    "outcomes": [
+      {
+        "id": "LO-01",
+        "level": [
+          "understand"
+        ],
+        "title": "Explain core AI problem types and methods",
+        "weight": 0.2
+      },
+      {
+        "id": "LO-02",
+        "level": [
+          "apply"
+        ],
+        "title": "Implement and evaluate a machine learning model",
+        "weight": 0.3
+      },
+      {
+        "id": "LO-03",
+        "level": [
+          "apply",
+          "analyze"
+        ],
+        "title": "Prepare and reason about data for learning",
+        "weight": 0.2
+      },
+      {
+        "id": "LO-04",
+        "level": [
+          "apply",
+          "analyze"
+        ],
+        "title": "Design and evaluate an AI solution",
+        "weight": 0.3
+      }
+    ]
+  }
+}

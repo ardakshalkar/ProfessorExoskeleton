@@ -1,0 +1,15 @@
+# The menu /course-reflection reads out. These are markdown files and nothing
+# more, so they work with no repository and no CLI — which is the point of this
+# skill. See references/templates.md.
+surface: course-reflection
+public: false
+default: standard
+templates:
+  - id: standard
+    file: standard.md
+    name: Full reflection
+    suits: the end of a term, when there is time to do it properly
+  - id: short
+    file: short.md
+    name: One page
+    suits: the last week of term, when the alternative is not writing one at all

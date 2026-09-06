@@ -1,0 +1,162 @@
+{
+  "$defs": {
+    "RunStatus": {
+      "enum": [
+        "planned",
+        "scheduled",
+        "running",
+        "completed",
+        "cancelled"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One offering of a course in one term — and the version approved for it.\n\nMerged from two records. `CourseVersion` held the approved definition and\n`CourseRun` held the semester, but the definition never varied and has since\nmoved to the `Course`. What is left is the semester plus the approval record,\nwhich is the part of versioning that was ever worth keeping.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "course_version_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Course Version Id",
+      "type": "string"
+    },
+    "course_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+      "title": "Course Id",
+      "type": "string"
+    },
+    "term": {
+      "pattern": "^[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Term",
+      "type": "string"
+    },
+    "start_date": {
+      "format": "date",
+      "title": "Start Date",
+      "type": "string"
+    },
+    "end_date": {
+      "format": "date",
+      "title": "End Date",
+      "type": "string"
+    },
+    "instructors": {
+      "items": {
+        "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Instructors",
+      "type": "array"
+    },
+    "assistants": {
+      "items": {
+        "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Assistants",
+      "type": "array"
+    },
+    "timezone": {
+      "default": "Asia/Almaty",
+      "description": "IANA timezone of the schedule.",
+      "title": "Timezone",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/RunStatus",
+      "default": "planned"
+    },
+    "lms_course_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Identifier in Canvas, Platonus or another LMS.",
+      "title": "Lms Course Id"
+    },
+    "section": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Section"
+    },
+    "expected_enrollment": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Enrollment"
+    },
+    "approved_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Who signed this offering off, e.g. 'academic-council'.",
+      "title": "Approved By"
+    },
+    "syllabus_document_id": {
+      "anyOf": [
+        {
+          "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Syllabus Document Id"
+    },
+    "notes": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What changed relative to the previous offering.",
+      "title": "Notes"
+    }
+  },
+  "required": [
+    "course_version_id",
+    "course_id",
+    "term",
+    "start_date",
+    "end_date"
+  ],
+  "title": "CourseVersion",
+  "type": "object"
+}

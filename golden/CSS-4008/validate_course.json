@@ -1,0 +1,18 @@
+{
+  "course_id": "CSS-4008",
+  "errors": [],
+  "note": "A warning usually means a real gap in the course design — an outcome nothing assesses, a concept nothing teaches — and resolving it is the professor's call, not something to silence.",
+  "scope": "courses/ only. Drafts under work/ are not visible to this server, so a clean result here says nothing about unapproved agent output — that needs `ainar validate <COURSE> --drafts work/<RUN>`.",
+  "warnings": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    }
+  ]
+}

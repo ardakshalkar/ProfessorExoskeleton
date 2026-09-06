@@ -1,0 +1,48 @@
+beat: follow-one-object
+name: Follow one object through the system
+family: explain_mechanism
+purpose: >-
+  Turn a static architecture into something the student can trace.
+best_for:
+  - pipelines, request flows, signal paths, supply chains
+  - immediately after build-progressively
+avoid_when:
+  - nothing flows through the system
+slides: 6
+sequence:
+  - step: the architecture, whole
+    intent: orient
+    archetype: system_diagram
+    density: sparse
+  - step: one concrete input
+    intent: demonstrate
+    archetype: big_idea
+    density: sparse
+    note: a real one, with real content — not "input X"
+  - step: stage one, highlighted
+    intent: explain_mechanism
+    archetype: system_diagram
+    density: sparse
+  - step: stage two, highlighted
+    intent: explain_mechanism
+    archetype: system_diagram
+    density: sparse
+  - step: stage three, highlighted
+    intent: explain_mechanism
+    archetype: system_diagram
+    density: sparse
+  - step: the result, beside the input
+    intent: integrate
+    archetype: visual_comparison
+    density: sparse
+visual_rules:
+  reuse_visual_anchor: true
+  maintain_geometry: true
+  progressive_highlighting: true
+  note: >-
+    keep the whole pipeline lightly visible while one stage is emphasised. The
+    student needs to know where they are as much as what is happening
+exit_condition: >-
+  The student can narrate a second input through the same system unaided.
+transition: >-
+  "What happens when a stage gets it wrong?" opens the failure or evidence beat.

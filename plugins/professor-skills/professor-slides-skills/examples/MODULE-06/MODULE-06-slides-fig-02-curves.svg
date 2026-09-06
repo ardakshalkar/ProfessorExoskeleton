@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 930 330" width="930" height="330"
+     role="img" aria-labelledby="figure-title figure-description">
+  <title id="figure-title">Two training runs, compared by the gap between their curves</title>
+  <desc id="figure-description">Two schematic plots of error against training
+  epochs. In run A the training curve falls to near zero while the validation
+  curve turns upward part way along, so the gap between them widens. In run B
+  both curves fall together and flatten close to one another, at a worse error
+  than run A reached. The diagnostic is the direction of the gap, not which
+  error is lower.</desc>
+
+  <!--
+    Schematic, not measured: the axes carry no numbers, deliberately, so the
+    shape cannot be read as a result. Training and validation are told apart by
+    a solid and a dashed stroke as well as by their labels, because colour is
+    never the only channel.
+  -->
+
+  <style>
+    .frame  { stroke: #C6CED6; stroke-width: 1.5; fill: none; }
+    .axis   { font: 13px Calibri, "Segoe UI", sans-serif; fill: #52616B; }
+    .panel  { font: 600 16px Cambria, Georgia, serif; fill: #1F2933; }
+    .verdict{ font: italic 14px Calibri, "Segoe UI", sans-serif; fill: #52616B; }
+    .curve  { fill: none; stroke-width: 2.5; stroke-linecap: round; }
+    .train  { stroke: #1F2933; }
+    .valid  { stroke: #4A5F7A; stroke-dasharray: 7 5; }
+    .mark   { stroke: #4A5F7A; stroke-width: 1.2; stroke-dasharray: 3 3; }
+    .note   { font: 13px Calibri, "Segoe UI", sans-serif; fill: #4A5F7A; }
+  </style>
+
+  <!-- ============ run A: the gap widens ============ -->
+  <g transform="translate(20,18)">
+    <text class="panel" x="0" y="0">Run A — the gap widens</text>
+
+    <!-- axes -->
+    <path class="frame" d="M 42 22 L 42 210 L 390 210"/>
+    <text class="axis" x="42" y="232" text-anchor="middle">0</text>
+    <text class="axis" x="216" y="232" text-anchor="middle">training epochs →</text>
+    <text class="axis" x="34" y="30" text-anchor="end">error</text>
+
+    <!-- training: falls towards zero and stays there -->
+    <path class="curve train" d="M 48 46 C 110 108, 190 168, 260 188 C 310 200, 350 204, 384 206"/>
+    <!-- validation: falls, bottoms out at the turn, then climbs away -->
+    <path class="curve valid" d="M 48 52 C 108 116, 150 152, 190 158 C 250 168, 320 130, 384 92"/>
+
+    <!-- the turning point -->
+    <line class="mark" x1="190" y1="40" x2="190" y2="210"/>
+    <text class="note" x="190" y="32" text-anchor="middle">best model is here</text>
+
+    <!-- the gap itself -->
+    <line class="mark" x1="330" y1="120" x2="330" y2="202"/>
+    <text class="note" x="340" y="150">gap</text>
+
+    <text class="axis" x="392" y="210">training</text>
+    <text class="axis" x="392" y="92">validation</text>
+    <text class="verdict" x="0" y="258">Memorising. Stop at the turn, not at the end.</text>
+  </g>
+
+  <!-- ============ run B: no gap, both poor ============ -->
+  <g transform="translate(470,18)">
+    <text class="panel" x="0" y="0">Run B — no gap, both poor</text>
+
+    <path class="frame" d="M 42 22 L 42 210 L 370 210"/>
+    <text class="axis" x="42" y="232" text-anchor="middle">0</text>
+    <text class="axis" x="206" y="232" text-anchor="middle">training epochs →</text>
+    <text class="axis" x="34" y="30" text-anchor="end">error</text>
+
+    <!-- both fall together and flatten, well above zero -->
+    <path class="curve train" d="M 48 46 C 110 96, 180 128, 250 138 C 300 144, 335 146, 364 147"/>
+    <path class="curve valid" d="M 48 54 C 110 104, 180 137, 250 148 C 300 154, 335 156, 364 157"/>
+
+    <!-- where run A's training curve reached, for comparison -->
+    <line class="mark" x1="42" y1="206" x2="364" y2="206"/>
+    <text class="note" x="46" y="200">where Run A's training error reached</text>
+
+    <text class="axis" x="372" y="147">training</text>
+    <text class="axis" x="372" y="163">validation</text>
+    <text class="verdict" x="0" y="258">Not overfitting — underfitting. A bigger model, not more regularisation.</text>
+  </g>
+
+  <text class="verdict" x="20" y="322">Schematic. The axes carry no numbers because the shape is the point, not any measured value.</text>
+</svg>

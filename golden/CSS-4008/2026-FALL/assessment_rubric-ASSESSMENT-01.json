@@ -1,0 +1,212 @@
+{
+  "assessment": {
+    "course_version_id": "CSS-4008-2026-FALL",
+    "description": "Short quiz on problem formulation and method families.",
+    "due_at": "2026-09-29T23:59:00+05:00",
+    "id": "ASSESSMENT-01",
+    "maximum_score": 100.0,
+    "settings": {
+      "ai_review": {
+        "enabled": true,
+        "require_professor_approval": true
+      },
+      "allow_late_submission": false,
+      "anonymous_grading": false
+    },
+    "submission_type": [
+      "text"
+    ],
+    "title": "Foundations Quiz",
+    "type": "quiz",
+    "weight": 0.15
+  },
+  "criteria": [
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-AI-PROBLEM-TYPES",
+          "title": "AI problem types"
+        }
+      ],
+      "contributes_to_capability": null,
+      "criterion_id": "CRIT-01-01",
+      "description": null,
+      "levels": [
+        {
+          "description": "All problems classified correctly with reasons.",
+          "label": "full",
+          "score": 60.0
+        },
+        {
+          "description": "Most classifications correct, reasoning thin.",
+          "label": "partial",
+          "score": 35.0
+        },
+        {
+          "description": "Classifications largely incorrect.",
+          "label": "minimal",
+          "score": 10.0
+        }
+      ],
+      "maximum_score": 60.0,
+      "measures_outcome": {
+        "id": "LO-01",
+        "title": "Explain core AI problem types and methods"
+      },
+      "title": "Correct classification of problem types"
+    },
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-SEARCH",
+          "title": "State-space search"
+        }
+      ],
+      "contributes_to_capability": null,
+      "criterion_id": "CRIT-01-02",
+      "description": null,
+      "levels": [
+        {
+          "description": "Method family justified against problem structure.",
+          "label": "full",
+          "score": 40.0
+        },
+        {
+          "description": "Method named without justification.",
+          "label": "partial",
+          "score": 20.0
+        },
+        {
+          "description": "No connection between problem and method.",
+          "label": "minimal",
+          "score": 5.0
+        }
+      ],
+      "maximum_score": 40.0,
+      "measures_outcome": {
+        "id": "LO-01",
+        "title": "Explain core AI problem types and methods"
+      },
+      "title": "Method selection reasoning"
+    }
+  ],
+  "items": [
+    {
+      "answer_key": null,
+      "concepts": [
+        "CONCEPT-AI-PROBLEM-TYPES"
+      ],
+      "criterion_id": "CRIT-01-01",
+      "item_id": "ITEM-01-01",
+      "marking_guidance": null,
+      "maximum_score": 20.0,
+      "number": 1,
+      "options": [
+        {
+          "correct": true,
+          "indicates_misconception_of": null,
+          "label": "a",
+          "note": null,
+          "text": "Supervised learning"
+        },
+        {
+          "correct": false,
+          "indicates_misconception_of": "CONCEPT-AI-PROBLEM-TYPES",
+          "label": "b",
+          "note": "Treats any decision problem as search; misses that labelled history is what makes this learnable.",
+          "text": "State-space search"
+        },
+        {
+          "correct": false,
+          "indicates_misconception_of": "CONCEPT-SUPERVISED-LEARNING",
+          "label": "c",
+          "note": "Does not recognise that the outcome labels are already present.",
+          "text": "Unsupervised learning"
+        }
+      ],
+      "outcome_id": "LO-01",
+      "prompt": "A hospital wants to predict which admitted patients will need intensive care, using five years of labelled admission records. Which problem formulation fits?",
+      "type": "multiple_choice"
+    },
+    {
+      "answer_key": null,
+      "concepts": [
+        "CONCEPT-TRAIN-TEST-SPLIT",
+        "CONCEPT-MODEL-EVALUATION"
+      ],
+      "criterion_id": "CRIT-01-01",
+      "item_id": "ITEM-01-02",
+      "marking_guidance": null,
+      "maximum_score": 20.0,
+      "number": 2,
+      "options": [
+        {
+          "correct": true,
+          "indicates_misconception_of": null,
+          "label": "a",
+          "note": null,
+          "text": "Nothing — the model was measured on data it had already seen."
+        },
+        {
+          "correct": false,
+          "indicates_misconception_of": "CONCEPT-TRAIN-TEST-SPLIT",
+          "label": "b",
+          "note": "The core misconception the course targets: memorisation being read as generalisation.",
+          "text": "It is valid, because the model still had to learn the pattern."
+        },
+        {
+          "correct": false,
+          "indicates_misconception_of": "CONCEPT-TRAIN-TEST-SPLIT",
+          "label": "c",
+          "note": "Believes leakage is diluted by scale rather than invalidating the measure.",
+          "text": "It is valid if the dataset is large enough."
+        }
+      ],
+      "outcome_id": "LO-01",
+      "prompt": "A student reports 99% accuracy. You then learn the same rows appear in both the training and the test set. What is the accuracy figure worth?",
+      "type": "multiple_choice"
+    },
+    {
+      "answer_key": "Search fits when states, actions and a goal test can be stated explicitly. It does not fit when the mapping must be induced from examples because no goal test is available.",
+      "concepts": [
+        "CONCEPT-SEARCH",
+        "CONCEPT-AI-PROBLEM-TYPES"
+      ],
+      "criterion_id": "CRIT-01-02",
+      "item_id": "ITEM-01-03",
+      "marking_guidance": "Full marks require the distinguishing criterion, not just two examples.",
+      "maximum_score": 30.0,
+      "number": 3,
+      "options": [],
+      "outcome_id": "LO-01",
+      "prompt": "Give one problem that can be formulated as state-space search and one that cannot, and say what distinguishes them.",
+      "type": "short_answer"
+    },
+    {
+      "answer_key": "The problem formulation determines the method family; the algorithm is chosen within it, against data and constraints.",
+      "concepts": [
+        "CONCEPT-AI-PROBLEM-TYPES"
+      ],
+      "criterion_id": "CRIT-01-02",
+      "item_id": "ITEM-01-04",
+      "marking_guidance": "Accept any answer that puts problem structure before algorithm choice and gives a reason.",
+      "maximum_score": 30.0,
+      "number": 4,
+      "options": [],
+      "outcome_id": "LO-01",
+      "prompt": "You are asked to choose between a method family and a specific algorithm. Which decision comes first, and why?",
+      "type": "short_answer"
+    }
+  ],
+  "outcomes": [
+    {
+      "description": "The student can classify a problem as search, optimisation, supervised learning or unsupervised learning, and can explain which family of methods applies.",
+      "id": "LO-01",
+      "level": [
+        "understand"
+      ],
+      "title": "Explain core AI problem types and methods"
+    }
+  ],
+  "rubric_id": "RUBRIC-01"
+}

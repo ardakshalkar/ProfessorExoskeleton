@@ -1,0 +1,162 @@
+# A reading-led session where the discussion is the content.
+#
+# Fill every {{ slot }} and delete every slide you do not use, including these
+# comments. Plan in this order: goal, then deck grammar, then beats, then
+# slides. A list of slides written without beats under it produces slides that
+# are individually reasonable and collectively inert.
+#
+# Every concept named here must belong to the module. If the session needs one
+# the module does not have, that is a claim, and it is the professor's — stop
+# and say which, rather than adding it.
+
+outline_version: 1
+deck: "{{ MODULE-ID }}-seminar"
+title: "{{ session title }}"
+course_id: "{{ COURSE-ID }}"
+course_version_id: "{{ COURSE-ID-YYYY-TERM }}"
+module_id: "{{ MODULE-ID }}"
+
+# The approval gate. Left as `draft` by the skill that wrote this; moved to
+# `approved` by the professor, or by an agent they explicitly told to. Nothing
+# is built or rendered from a draft.
+status: draft
+approved_by: null
+approved_at: null
+
+presentation:
+  audience: "{{ asked, not assumed }}"
+  style: seminar
+  language: "{{ from preferences }}"
+  duration_minutes: "{{ from the scheduled meeting }}"
+  max_slides: "{{ see the note beside each style below }}"
+
+  # The deck grammar. See references/deck-grammars.md.
+  deck_archetype: seminar
+  # Which representation ladder applies — history climbs artifact → observation
+  # → comparison → context; physics climbs phenomenon → schematic → model →
+  # equation. One generic shape for both is how a humanities deck ends up full
+  # of definitions.
+  discipline: "{{ the field }}"
+  # teaching | handout | hybrid. A deck read by a student who missed the class
+  # is a handout whatever it was written as.
+  output_mode: hybrid
+
+# max_slides is deliberately low: if the slides account for most of the session,
+# this is a lecture wearing a seminar's name. Say so rather than writing more.
+
+# Written before the beats. A slide list with no arc is a list of topics.
+arc:
+  starts_from: "{{ what they can already do, from the previous module }}"
+  argues: "{{ the one claim this session makes true — a claim, not a topic }}"
+  turn: "{{ where the obvious answer stops working }}"
+  leaves_them_able_to: "{{ a capability a check-for-understanding could test }}"
+
+outcomes: ["{{ LO-ID }}"]
+concepts: ["{{ CONCEPT-ID }}"]
+
+beats:
+  - beat: analyze-artifact
+    goal: have them read the source before being told what it means
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    transition_question: "{{ … }}"
+    slides: [1, 2, 3]
+
+  - beat: compare-evidence
+    goal: "{{ … }}"
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    transition_question: "{{ … }}"
+    slides: [4, 5]
+
+  - beat: story-so-far
+    goal: say what is settled and what stays open
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    slides: [6]
+
+slides:
+  - number: 1
+    intent: create_need
+    archetype: section_opener
+    title: "{{ the claim on the table }}"
+    minutes: 5
+    purpose: state the claim, and where it comes from
+    text_roles: [claim, source]
+    density: sparse
+    sources: ["{{ RES-ID }}"]
+
+  # The reading in its own terms, before anyone argues with it. A seminar that
+  # opens with the critique has skipped the reading.
+  - number: 2
+    intent: provide_evidence
+    archetype: primary_source
+    title: "{{ what the reading establishes }}"
+    minutes: 10
+    purpose: "{{ the evidence, stated fairly }}"
+    text_roles: [evidence, source, annotation]
+    density: dense
+    sources: ["{{ RES-ID }}"]
+
+  # In humanities teaching the interpretation is often spoken rather than
+  # printed, and that is not an omission — it is why delivery_dependency exists.
+  - number: 3
+    intent: check_understanding
+    archetype: question
+    title: "{{ what should we notice? }}"
+    minutes: 5
+    purpose: "{{ … }}"
+    text_roles: [question]
+    density: sparse
+    delivery_dependency: high
+
+  - number: 4
+    intent: compare
+    archetype: visual_comparison
+    title: "{{ the disagreement }}"
+    minutes: 10
+    purpose: "{{ two or three defensible positions, and what separates them }}"
+    text_roles: [label, annotation, claim]
+    density: sparse
+    concepts: ["{{ CONCEPT-ID }}"]
+
+  # Most of the session happens after this slide, not on it.
+  - number: 5
+    intent: check_understanding
+    archetype: activity
+    title: "{{ the question that opens the discussion }}"
+    minutes: "{{ the bulk of the session }}"
+    purpose: "{{ what has to be established before the room moves on }}"
+    text_roles: [question, instruction]
+    density: sparse
+    delivery_dependency: high
+    concepts: ["{{ CONCEPT-ID }}"]
+
+  # A synthesis that closes a question the field has not closed is worse than
+  # no synthesis.
+  - number: 6
+    intent: integrate
+    archetype: synthesis
+    title: "{{ where that leaves us }}"
+    minutes: 10
+    purpose: what is settled, and what stays open
+    text_roles: [takeaway, question]
+    density: moderate
+    outcomes: ["{{ LO-ID }}"]
+
+# An omission is often right. An unrecorded omission is indistinguishable from
+# having forgotten, and `pres outline check` treats it as an error.
+coverage:
+  outcomes_served: ["{{ LO-ID }}"]
+  concepts_covered: ["{{ CONCEPT-ID }}"]
+  concepts_omitted:
+    - concept: "{{ CONCEPT-ID }}"
+      why: "{{ why this session is not the place for it }}"
+
+generated_by:
+  produced_by: outline-presentation-skill
+  model_id: "{{ model }}"
+  prompt_version: outline-presentation/v2
+  input_refs: ["{{ MODULE-ID }}", "{{ LO-ID }}"]
+  created_at: "{{ ISO-8601 }}"
+  source: "{{ the provenance line from pres source }}"

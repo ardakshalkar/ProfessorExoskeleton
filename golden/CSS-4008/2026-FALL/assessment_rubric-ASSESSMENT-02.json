@@ -1,0 +1,111 @@
+{
+  "assessment": {
+    "course_version_id": "CSS-4008-2026-FALL",
+    "description": "Prepare the teaching dataset for supervised learning and report the choices made, with their consequences for what can be concluded.",
+    "due_at": "2026-10-06T23:59:00+05:00",
+    "id": "ASSESSMENT-02",
+    "maximum_score": 100.0,
+    "settings": {
+      "allow_late_submission": true,
+      "anonymous_grading": true,
+      "late_penalty_per_day": 0.1
+    },
+    "submission_type": [
+      "pdf",
+      "notebook"
+    ],
+    "title": "Data Preparation Report",
+    "type": "assignment",
+    "weight": 0.15
+  },
+  "criteria": [
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-DATA-PREPARATION",
+          "title": "Data preparation"
+        }
+      ],
+      "contributes_to_capability": {
+        "id": "CAP-DATA-REASONING",
+        "title": "Reason about data"
+      },
+      "criterion_id": "CRIT-02-01",
+      "description": "Does the student explain how preparation choices change what the model can learn, rather than only listing the steps taken?",
+      "levels": [
+        {
+          "description": "Consequences of each choice are argued and evidenced.",
+          "label": "strong",
+          "score": 60.0
+        },
+        {
+          "description": "Choices described, consequences only partly explored.",
+          "label": "adequate",
+          "score": 35.0
+        },
+        {
+          "description": "Steps listed without reasoning.",
+          "label": "weak",
+          "score": 15.0
+        }
+      ],
+      "maximum_score": 60.0,
+      "measures_outcome": {
+        "id": "LO-03",
+        "title": "Prepare and reason about data for learning"
+      },
+      "title": "Quality of data reasoning"
+    },
+    {
+      "concepts": [
+        {
+          "id": "CONCEPT-DATA-PREPARATION",
+          "title": "Data preparation"
+        },
+        {
+          "id": "CONCEPT-TRAIN-TEST-SPLIT",
+          "title": "Train-test separation"
+        }
+      ],
+      "contributes_to_capability": null,
+      "criterion_id": "CRIT-02-02",
+      "description": null,
+      "levels": [
+        {
+          "description": "Pipeline is reproducible and free of leakage.",
+          "label": "strong",
+          "score": 40.0
+        },
+        {
+          "description": "Pipeline runs but contains a minor leakage risk.",
+          "label": "adequate",
+          "score": 20.0
+        },
+        {
+          "description": "Pipeline does not reproduce or leaks test data.",
+          "label": "weak",
+          "score": 5.0
+        }
+      ],
+      "maximum_score": 40.0,
+      "measures_outcome": {
+        "id": "LO-03",
+        "title": "Prepare and reason about data for learning"
+      },
+      "title": "Correctness of the preparation pipeline"
+    }
+  ],
+  "items": [],
+  "outcomes": [
+    {
+      "description": "The student can inspect, clean and split a dataset, and can explain how preparation choices affect what a model can learn.",
+      "id": "LO-03",
+      "level": [
+        "apply",
+        "analyze"
+      ],
+      "title": "Prepare and reason about data for learning"
+    }
+  ],
+  "rubric_id": "RUBRIC-02"
+}

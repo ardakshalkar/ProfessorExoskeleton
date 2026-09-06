@@ -1,0 +1,33 @@
+/* Plain — the everyday dashboard, read on screen beside the course files.
+
+   Passed to `ainar dashboard --template plain` and pasted into the shell for the
+   hand-built pages, so the generated progress page and the rest of the site look
+   like one thing. Every value below is one the surface already uses; this is
+   where to change it. */
+
+:root {
+  --b1: #f4c7c3;   /* very weak */
+  --b2: #f8ddb8;   /* weak */
+  --b3: #f2ecc0;   /* mixed */
+  --b4: #cfe3c4;   /* secure */
+  --b5: #a8d5a2;   /* strong */
+  --none: #f6f6f6; /* never assessed — deliberately not on the band scale */
+  --none-fg: #9a9a9a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --b1: #6b3a37; --b2: #6d5730; --b3: #5f5c2c; --b4: #3f5a38; --b5: #2f6b3c;
+    --none: #1e2126; --none-fg: #6b6b6b;
+  }
+}
+
+body { font-size: 15px; }
+main { max-width: 78rem; }
+
+/* A wide grid is read by running a finger along a row, so give the rows edges. */
+tbody tr:hover { outline: 1px solid var(--line); }
+th.row { min-width: 16rem; }
+
+/* The blank cell is the one thing on this page that must not read as a number. */
+td.none { font-style: italic; }

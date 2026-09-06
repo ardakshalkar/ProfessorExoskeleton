@@ -1,0 +1,230 @@
+# A taught session where the deck carries the argument.
+#
+# Fill every {{ slot }} and delete every slide you do not use, including these
+# comments. Plan in this order: goal, then deck grammar, then beats, then
+# slides. A list of slides written without beats under it produces slides that
+# are individually reasonable and collectively inert.
+#
+# Every concept named here must belong to the module. If the session needs one
+# the module does not have, that is a claim, and it is the professor's — stop
+# and say which, rather than adding it.
+
+outline_version: 1
+deck: "{{ MODULE-ID }}-slides"
+title: "{{ session title }}"
+course_id: "{{ COURSE-ID }}"
+course_version_id: "{{ COURSE-ID-YYYY-TERM }}"
+module_id: "{{ MODULE-ID }}"
+
+# The approval gate. Left as `draft` by the skill that wrote this; moved to
+# `approved` by the professor, or by an agent they explicitly told to. Nothing
+# is built or rendered from a draft.
+status: draft
+approved_by: null
+approved_at: null
+
+presentation:
+  audience: "{{ asked, not assumed }}"
+  style: lecture
+  language: "{{ from preferences }}"
+  duration_minutes: "{{ from the scheduled meeting }}"
+  max_slides: "{{ see the note beside each style below }}"
+
+  # The deck grammar. See references/deck-grammars.md.
+  deck_archetype: conceptual_lecture
+  # Which representation ladder applies — history climbs artifact → observation
+  # → comparison → context; physics climbs phenomenon → schematic → model →
+  # equation. One generic shape for both is how a humanities deck ends up full
+  # of definitions.
+  discipline: "{{ the field }}"
+  # teaching | handout | hybrid. A deck read by a student who missed the class
+  # is a handout whatever it was written as.
+  output_mode: hybrid
+
+# Written before the beats. A slide list with no arc is a list of topics.
+arc:
+  starts_from: "{{ what they can already do, from the previous module }}"
+  argues: "{{ the one claim this session makes true — a claim, not a topic }}"
+  turn: "{{ where the obvious answer stops working }}"
+  leaves_them_able_to: "{{ a capability a check-for-understanding could test }}"
+
+outcomes: ["{{ LO-ID }}"]
+concepts: ["{{ CONCEPT-ID }}"]
+
+# Two to four beats for a section; five to nine for a ninety-minute lecture.
+# Read the file in beats/ for each one you pick. Every slide belongs to exactly
+# one beat.
+beats:
+  - beat: open-lecture
+    goal: give the room a reason to be in it
+    entry_question: "{{ what they walk in wondering }}"
+    exit_understanding: "{{ what is true for them after this beat }}"
+    transition_question: "{{ the question that opens the next beat }}"
+    slides: [1, 2]
+
+  - beat: diagnose-misconception
+    goal: "{{ correct the shared wrong model before adding to it }}"
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    transition_question: "{{ … }}"
+    slides: [3]
+
+  - beat: intuition-to-definition
+    goal: "{{ give them something to attach the definition to }}"
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    transition_question: "{{ … }}"
+    slides: [4, 5, 6]
+
+  - beat: predict-reveal-explain
+    goal: "{{ get every student to commit before they are told }}"
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    transition_question: "{{ … }}"
+    slides: [7]
+
+  - beat: story-so-far
+    goal: restore their position before next week builds on it
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    slides: [8]
+
+# The beats' sequence steps become these. `intent` is what the learner is
+# doing; `archetype` is how the information is represented. They are different
+# questions, and keeping them apart is what makes the variation follow from the
+# teaching rather than from a rule against repeating a layout.
+slides:
+  # The title slide's picture is a plan decision, not an outline one — the
+  # renderer composes this slide rather than flowing it, and reads
+  # `title_slide.image` from `<deck>.plan.yaml`. An image, not a diagram: a
+  # mechanism here shows the payoff before anything has asked the question.
+  - number: 1
+    intent: orient
+    archetype: section_opener
+    title: "{{ session title }}"
+    minutes: 1
+    purpose: open
+    density: sparse
+
+  # Open by placing the session in the sequence. Both halves are read from the
+  # module before this one; neither is a summary of what you hope they know.
+  #
+  # And draw it. Everything an opening answers is positional — where are we,
+  # what do you already have, where does this go — and a roadmap written as
+  # "last time / today / builds on" makes the room rebuild the map from three
+  # sentences, every week. Orientation cannot be premature: it *is* the
+  # need-creation, so the usual rule against a diagram arriving before the
+  # question does not apply here.
+  #
+  # The best version of this picture is the same one every week with the marker
+  # moved, which is what `visual_anchor` is for — and why slide 8 below carries
+  # the same anchor one module further on.
+  - number: 2
+    intent: orient
+    archetype: roadmap
+    title: "{{ where we are }}"
+    minutes: 5
+    purpose: last time, today, what this builds on
+    text_roles: [headline, label]
+    density: sparse
+    visual_anchor: course-arc
+    focus: "{{ MODULE-ID }}"
+    required_visual: >-
+      the course as its modules left to right, this one marked current and the
+      one before it marked done
+    concepts: ["{{ CONCEPT-ID }}"]
+
+  # The correction goes before the new content, and only if the professor named
+  # a real misconception. Delete this slide rather than inventing one.
+  - number: 3
+    intent: diagnose_misconception
+    archetype: big_idea
+    title: "{{ the known weakness }}"
+    minutes: 8
+    purpose: "{{ what they converge on, and what replaces it }}"
+    text_roles: [claim, takeaway]
+    density: sparse
+    concepts: ["{{ CONCEPT-ID }}"]
+
+  - number: 4
+    intent: introduce_concept
+    archetype: definition
+    title: "{{ concept title }}"
+    minutes: 10
+    purpose: "{{ what this slide has to leave behind }}"
+    text_roles: [headline, claim, explanation]
+    density: moderate
+    outcomes: ["{{ LO-ID }}"]
+    concepts: ["{{ CONCEPT-ID }}"]
+    sources: ["{{ RES-ID }}"]
+
+  # A diagram IS the explanation. Labels sit on the parts they name; do not
+  # follow it with a bullet glossary. Set visual_anchor if later slides build on
+  # this same picture — one diagram with the emphasis moving beats five
+  # unrelated diagrams, every time.
+  - number: 5
+    intent: explain_mechanism
+    archetype: annotated_object
+    title: "{{ figure title }}"
+    minutes: 8
+    purpose: "{{ what the picture makes concrete }}"
+    text_roles: [label, annotation]
+    density: sparse
+    visual_anchor: "{{ anchor-name }}"
+    required_visual: "{{ what the picture must show }}"
+    concepts: ["{{ CONCEPT-ID }}"]
+
+  - number: 6
+    intent: apply
+    archetype: worked_example
+    title: "{{ worked example }}"
+    minutes: 15
+    purpose: "{{ the step students actually trip on }}"
+    text_roles: [headline, explanation, takeaway]
+    density: moderate
+    outcomes: ["{{ LO-ID }}"]
+    concepts: ["{{ CONCEPT-ID }}"]
+
+  # No answer on this slide. Not in small text, not at the bottom. The
+  # whitespace and the missing answer are the teaching, and `pres outline
+  # check` treats an explanation role here as an error.
+  - number: 7
+    intent: check_understanding
+    archetype: question
+    title: Check yourself
+    minutes: 8
+    purpose: one question per new concept
+    text_roles: [question]
+    density: sparse
+    concepts: ["{{ CONCEPT-ID }}"]
+
+  # The same arc as slide 2, one module further on. A picture the room now
+  # recognises beats a fresh summary of it, and it closes the session where it
+  # opened.
+  - number: 8
+    intent: integrate
+    archetype: synthesis
+    title: Next
+    minutes: 3
+    purpose: what the next session does with this
+    text_roles: [takeaway]
+    density: sparse
+    visual_anchor: course-arc
+    focus: "{{ the next MODULE-ID }}"
+
+# An omission is often right. An unrecorded omission is indistinguishable from
+# having forgotten, and `pres outline check` treats it as an error.
+coverage:
+  outcomes_served: ["{{ LO-ID }}"]
+  concepts_covered: ["{{ CONCEPT-ID }}"]
+  concepts_omitted:
+    - concept: "{{ CONCEPT-ID }}"
+      why: "{{ why this session is not the place for it }}"
+
+generated_by:
+  produced_by: outline-presentation-skill
+  model_id: "{{ model }}"
+  prompt_version: outline-presentation/v2
+  input_refs: ["{{ MODULE-ID }}", "{{ LO-ID }}"]
+  created_at: "{{ ISO-8601 }}"
+  source: "{{ the provenance line from pres source }}"

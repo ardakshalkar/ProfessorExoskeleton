@@ -1,0 +1,44 @@
+beat: contradiction-surprise
+name: Contradiction
+family: create_need
+purpose: >-
+  Use the gap between what students expect and what happens as the motivation.
+best_for:
+  - physics, economics, psychology, statistics, biology
+  - a result that is genuinely counter-intuitive
+avoid_when:
+  - the surprise is only surprising to someone who has not thought about it
+slides: 4
+sequence:
+  - step: the situation, with a prediction asked for
+    intent: create_need
+    archetype: question
+    density: sparse
+    note: the students must commit to an answer, or there is no contradiction
+  - step: what actually happens
+    intent: provide_evidence
+    archetype: data_evidence
+    density: sparse
+    note: the headline states the result, the chart carries it
+  - step: why the expected answer was reasonable
+    intent: build_intuition
+    archetype: big_idea
+    density: sparse
+    note: >-
+      do not skip this. A student whose reasoning is dismissed rather than
+      explained keeps the reasoning
+  - step: what an explanation has to account for
+    intent: introduce_concept
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  image_dominance: high
+ask_the_professor:
+  - condition: the surprising result has no citable source
+    question: >-
+      Where does this result come from? A surprising number with no source is
+      the most quotable thing you can put on a slide.
+exit_condition: >-
+  The student holds an open question they generated themselves.
+transition: >-
+  The unexplained gap is the entry question of the explanation beat.

@@ -1,0 +1,32 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0101",
+      "message": "scheduled 2027-03-01, outside 2026-09-01..2026-12-20"
+    },
+    {
+      "code": "schedule.week_mismatch",
+      "level": "warning",
+      "location": "ACT-0101",
+      "message": "falls in week 27 of the run but teaches MODULE-01, which is week 1 (a holiday shifting the calendar is a fair reason)"
+    }
+  ],
+  "mutation": "meeting-scheduled-outside-the-run",
+  "patch": {
+    "activities.0.scheduled_at": "2027-03-01T10:00:00+05:00"
+  }
+}

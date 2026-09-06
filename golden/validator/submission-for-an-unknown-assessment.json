@@ -1,0 +1,44 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "RESP-9060-0101",
+      "message": "item belongs to ASSESSMENT-01 but the submission is for ASSESSMENT-99"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "RESP-9060-0102",
+      "message": "item belongs to ASSESSMENT-01 but the submission is for ASSESSMENT-99"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "RESP-9060-0103",
+      "message": "item belongs to ASSESSMENT-01 but the submission is for ASSESSMENT-99"
+    },
+    {
+      "code": "ref.assessment",
+      "level": "error",
+      "location": "SUB-9060",
+      "message": "unknown assessment ASSESSMENT-99"
+    }
+  ],
+  "mutation": "submission-for-an-unknown-assessment",
+  "patch": {
+    "submissions.0.assessment_id": "ASSESSMENT-99"
+  }
+}

@@ -1,0 +1,25 @@
+# The menu /design-assessment reads out. Two of these are read by students, and
+# what must never reach them is in the skill's §6 — an item's answer key or
+# correct-option marker, and anything written for the marker. That is the one
+# mistake here that cannot be undone, so the student-facing templates carry the
+# check in the file itself. See references/templates.md.
+surface: design-assessment
+public: false
+default: brief
+templates:
+  - id: brief
+    file: brief.md
+    name: Assignment brief
+    suits: the document students read — task, deliverables, deadline, rubric
+  - id: exam-paper
+    file: exam-paper.md
+    name: Exam paper
+    suits: a timed paper of questions, printed or sat online
+  - id: starter-readme
+    file: starter-readme.md
+    name: Starter repository README
+    suits: "work that arrives as a repository, when `delivery: github_repo`"
+
+parts:
+  - file: assessment-draft.yaml
+    purpose: the Assessment, its criteria and its Document, as a draft to approve

@@ -1,0 +1,253 @@
+{
+  "$defs": {
+    "ItemDifficulty": {
+      "description": "How hard the professor *intended* an item to be.\n\nDistinct from observed difficulty, which ``ainar score-items`` computes from\nwhat the class actually did. Both are worth having precisely because they\ndisagree: an item declared ``easy`` that a third of the class fails is either\na badly worded question or a topic that did not land, and neither is visible\nfrom the success rate alone.",
+      "enum": [
+        "easy",
+        "medium",
+        "complex"
+      ],
+      "title": "ItemDifficulty",
+      "type": "string"
+    },
+    "ItemOption": {
+      "additionalProperties": false,
+      "description": "One answer option of a choice item.\n\nA wrong option is more useful when it says *why* it is wrong. Mapping a\ndistractor to the concept it misreads turns \"12 students chose (c)\" into\n\"12 students are treating the validation split as unseen data\", which is a\ndiagnosis rather than a score.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "label": {
+          "description": "Short label shown to the student, e.g. 'a'.",
+          "title": "Label",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "correct": {
+          "default": false,
+          "title": "Correct",
+          "type": "boolean"
+        },
+        "indicates_misconception_of": {
+          "anyOf": [
+            {
+              "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The concept a student choosing this option has misread.",
+          "title": "Indicates Misconception Of"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the choice reveals, for the professor.",
+          "title": "Note"
+        }
+      },
+      "required": [
+        "label",
+        "text"
+      ],
+      "title": "ItemOption",
+      "type": "object"
+    },
+    "ItemRole": {
+      "description": "Where an item sits relative to the task it belongs to.\n\n``preparation`` is the one that carries behaviour rather than description. It\nis asked *before* the work, to find out whether a student is ready, so a wrong\nanswer is an expected and useful outcome — ``ainar extract-evidence`` skips\nthese, because recording \"did not demonstrate the concept\" against a question\ndesigned to be attempted cold would misread the whole point of asking it.",
+      "enum": [
+        "preparation",
+        "main",
+        "followup"
+      ],
+      "title": "ItemRole",
+      "type": "string"
+    },
+    "ItemType": {
+      "description": "Shape of a single question or task inside an assessment.",
+      "enum": [
+        "multiple_choice",
+        "multiple_select",
+        "true_false",
+        "short_answer",
+        "numeric",
+        "essay",
+        "code",
+        "practical",
+        "other"
+      ],
+      "title": "ItemType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One question or task inside an assessment.\n\nA quiz scored only as a total tells you a student got 60%. The same quiz\nwith concept-tagged items tells you which concept cost them the other 40,\nwhich is what concept states and gap detection actually need.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "item_id": {
+      "pattern": "^ITEM-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "assessment_id": {
+      "pattern": "^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Assessment Id",
+      "type": "string"
+    },
+    "item_model_id": {
+      "anyOf": [
+        {
+          "pattern": "^ITEM-MODEL-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Reusable item model this generated question instantiates.",
+      "title": "Item Model Id"
+    },
+    "type": {
+      "$ref": "#/$defs/ItemType"
+    },
+    "prompt": {
+      "title": "Prompt",
+      "type": "string"
+    },
+    "number": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Position within the assessment.",
+      "title": "Number"
+    },
+    "maximum_score": {
+      "default": 1,
+      "minimum": 0,
+      "title": "Maximum Score",
+      "type": "number"
+    },
+    "role": {
+      "$ref": "#/$defs/ItemRole",
+      "default": "main",
+      "description": "Where this sits relative to its task. A preparation item is asked before the work and is skipped by extract-evidence; see ItemRole."
+    },
+    "difficulty": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ItemDifficulty"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How hard this is meant to be. Declared by the professor, as against the success rate `ainar score-items` observes."
+    },
+    "outcome_id": {
+      "anyOf": [
+        {
+          "pattern": "^LO-[0-9]{2,3}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outcome Id"
+    },
+    "criterion_id": {
+      "anyOf": [
+        {
+          "pattern": "^CRIT-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Rubric criterion this item contributes to, when there is one.",
+      "title": "Criterion Id"
+    },
+    "concepts": {
+      "description": "Concepts the item exercises. Without these it cannot inform diagnosis.",
+      "items": {
+        "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Concepts",
+      "type": "array"
+    },
+    "options": {
+      "items": {
+        "$ref": "#/$defs/ItemOption"
+      },
+      "title": "Options",
+      "type": "array"
+    },
+    "answer_key": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Expected answer for non-choice items.",
+      "title": "Answer Key"
+    },
+    "marking_guidance": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Marking Guidance"
+    }
+  },
+  "required": [
+    "item_id",
+    "assessment_id",
+    "type",
+    "prompt"
+  ],
+  "title": "AssessmentItem",
+  "type": "object"
+}

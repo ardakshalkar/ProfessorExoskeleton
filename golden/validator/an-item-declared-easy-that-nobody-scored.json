@@ -1,0 +1,25 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    }
+  ],
+  "mutation": "an-item-declared-easy-that-nobody-scored",
+  "patch": {
+    "item_responses.0.score": 0,
+    "item_responses.1.score": 0,
+    "item_responses.2.score": 0,
+    "item_responses.3.score": 0,
+    "item_responses.4.score": 0,
+    "items.0.difficulty": "easy"
+  }
+}

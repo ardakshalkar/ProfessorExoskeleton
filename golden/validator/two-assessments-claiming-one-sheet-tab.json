@@ -1,0 +1,35 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "lms.duplicate_tab",
+      "level": "error",
+      "location": "CSS-4008-2026-FALL",
+      "message": "tab 'A02' is claimed by ASSESSMENT-01, ASSESSMENT-02; each push rewrites a tab whole, so one would erase the other. Set extensions.lms.sheet_tab on one of them"
+    }
+  ],
+  "mutation": "two-assessments-claiming-one-sheet-tab",
+  "patch": {
+    "assessments.0.extensions": {
+      "lms": {
+        "sheet_tab": "A02"
+      }
+    },
+    "versions.0.extensions": {
+      "lms": {
+        "sheet_id": "1AbCdEf"
+      }
+    }
+  }
+}

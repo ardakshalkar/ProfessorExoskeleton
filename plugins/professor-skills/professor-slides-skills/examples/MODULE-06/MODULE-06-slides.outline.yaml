@@ -1,0 +1,240 @@
+# A worked outline. See ../README.md — the approval below is part of the
+# illustration, not a decision anybody took.
+#
+# Read it alongside references/teaching-beats.md and references/visual-grammar.md:
+# the beats say what each stretch of the session is for, and each slide names
+# both what the learner is doing (intent) and how the information is represented
+# (archetype).
+
+outline_version: 1
+deck: MODULE-06-slides
+title: Model evaluation and overfitting
+course_id: CSS-4008
+course_version_id: CSS-4008-2026-FALL
+module_id: MODULE-06
+
+status: approved
+approved_by: EXAMPLE-NOT-A-PERSON
+approved_at: 2026-09-28T11:04:00+05:00
+
+presentation:
+  audience: second-year students who have trained one model
+  style: lecture
+  language: English
+  duration_minutes: 100
+  max_slides: 12
+  deck_archetype: technical_lecture
+  discipline: computer science
+  output_mode: hybrid
+
+# The title slide's picture would go here, and the renderer would bleed it down
+# the right of slide 1 with the text column narrowing to suit:
+#
+#   title_slide:
+#     image: MODULE-06-title.jpg
+#     image_alt: An empty lecture theatre seen from the back row.
+#
+# It is commented out because no image ships in this repository, and a plan
+# naming a file that is not beside the deck renders with a warning. An image
+# there is the one picture in a deck allowed to carry no information — and it
+# should be an image rather than a diagram: a mechanism on the title slide shows
+# the payoff before anything has asked the question. See references/typography.md.
+#
+# It sits in the outline rather than the plan because the plan is generated:
+# pointing at a photograph is a decision, and decisions live in the files a
+# professor edits. `pres plan build` carries it across.
+
+arc:
+  starts_from: they can split a dataset and report an accuracy (MODULE-05)
+  argues: a score measured on data you tuned against is not evidence of anything
+  turn: the model that scored 0.97 last week scores 0.61 on data it has not seen
+  leaves_them_able_to: say which of two reported accuracies is trustworthy, and why
+
+outcomes: [LO-02, LO-04]
+concepts: [CONCEPT-MODEL-EVALUATION, CONCEPT-OVERFITTING]
+
+# Five beats. Note that the visual variation across the deck is not imposed —
+# it falls out of the beats, because each one asks the room to do something
+# different.
+beats:
+  - beat: open-lecture
+    goal: place the session in the sequence
+    entry_question: What was that 0.97 last week actually telling us?
+    exit_understanding: >-
+      The student knows the session is about what a score is evidence for.
+    transition_question: So what was wrong with the number?
+    slides: [1, 2]
+
+  - beat: problem-before-solution
+    goal: make the room want held-out evaluation before it is named
+    entry_question: Why would a score measured after training be misleading?
+    exit_understanding: >-
+      The student can say which question a training score answers and which one
+      it does not.
+    transition_question: What would we have to hold back to answer the other one?
+    slides: [3, 4]
+
+  - beat: intuition-to-definition
+    goal: separate overfitting the phenomenon from the symptom they already know
+    entry_question: Is a high score the problem?
+    exit_understanding: >-
+      The student can diagnose overfitting from the gap between two curves rather
+      than from either number alone.
+    transition_question: How do you decide which reported score to believe?
+    slides: [5, 6]
+
+  - beat: compare-alternatives
+    goal: turn the principle into a criterion they can apply to somebody's report
+    entry_question: Three numbers, three ways of measuring — which one survives?
+    exit_understanding: >-
+      The student can say why a best-of-forty validation score is a training score.
+    transition_question: Can you apply that to a claim you have not seen before?
+    slides: [7]
+
+  - beat: story-so-far
+    goal: restore their position before MODULE-07 builds on it
+    entry_question: What do we now know about reading a reported score?
+    exit_understanding: >-
+      The student can state the rule and knows what next week adds to it.
+    slides: [8, 9]
+
+slides:
+  - number: 1
+    intent: orient
+    archetype: section_opener
+    title: Model evaluation and overfitting
+    minutes: 1
+    purpose: open
+    text_roles: [headline]
+    density: sparse
+
+  # Drawn, because everything this slide answers is positional — where are we,
+  # what do you already have, where does this go. Three bullets here would make
+  # the room rebuild the map from a description of it. Orientation cannot be
+  # premature: it is the need-creation, so the usual rule against a diagram
+  # arriving before the question does not apply.
+  #
+  # The anchor is the same arc slide 9 closes on, with the marker moved. One
+  # picture the room comes to recognise beats two summaries of it.
+  - number: 2
+    intent: orient
+    archetype: roadmap
+    title: Where we are
+    minutes: 6
+    purpose: place the session — last week's split, this week's question
+    text_roles: [headline, label]
+    density: sparse
+    visual_anchor: course-arc
+    focus: MODULE-06
+    required_visual: the course arc, module 6 current and module 5 done
+    concepts: [CONCEPT-MODEL-EVALUATION]
+
+  # One claim, large and alone. Three paragraphs of prose here would be a
+  # different archetype and a worse slide.
+  - number: 3
+    intent: demonstrate_problem
+    archetype: big_idea
+    title: The number that meant nothing
+    minutes: 12
+    purpose: take last week's own result apart before introducing anything new
+    text_roles: [claim]
+    density: sparse
+    outcomes: [LO-02]
+    concepts: [CONCEPT-MODEL-EVALUATION]
+
+  # The diagram is the explanation: the labels sit on the bands they name, and
+  # the slide carries no bullet glossary underneath it.
+  - number: 4
+    intent: build_intuition
+    archetype: annotated_object
+    title: Three sets, and what each one is for
+    minutes: 12
+    purpose: make the tuning/held-out distinction concrete before naming it
+    text_roles: [label, annotation]
+    density: sparse
+    outcomes: [LO-02]
+    concepts: [CONCEPT-MODEL-EVALUATION]
+    required_visual: annotated train / validation / test split
+
+  - number: 5
+    intent: introduce_concept
+    archetype: definition
+    title: Overfitting, stated precisely
+    minutes: 14
+    purpose: separate the phenomenon from the symptom students already know
+    text_roles: [headline, claim, explanation]
+    density: moderate
+    outcomes: [LO-02]
+    concepts: [CONCEPT-OVERFITTING]
+
+  - number: 6
+    intent: apply
+    archetype: visual_comparison
+    title: Reading two curves
+    minutes: 18
+    purpose: the step people trip on — deciding which gap is the diagnostic one
+    text_roles: [annotation, claim]
+    density: sparse
+    outcomes: [LO-02, LO-04]
+    concepts: [CONCEPT-OVERFITTING]
+    sources: [RES-442]
+    required_visual: two runs, training against validation, with the gap marked
+
+  - number: 7
+    intent: compare
+    archetype: structured_comparison
+    title: Which score do you believe?
+    minutes: 14
+    purpose: turn the principle into a criterion they can apply to a report
+    text_roles: [label, claim]
+    density: moderate
+    outcomes: [LO-04]
+    concepts: [CONCEPT-MODEL-EVALUATION]
+
+  # No answers on this slide, in any size. The whitespace and the missing answer
+  # are the teaching, and `pres outline check` makes that an error rather than
+  # a warning.
+  # Not a `question` slide. That archetype is one large question and the
+  # whitespace around it; this is two written problems the room works through,
+  # which is an `activity` — and an activity carrying two of them is moderate on
+  # purpose, so it says so here rather than tripping the density check.
+  #
+  # The override belongs in this file and nowhere else. `<deck>.plan.yaml` is
+  # generated from this outline and the markdown, so a density set there would be
+  # overwritten the next time `pres plan build` ran.
+  - number: 8
+    intent: check_understanding
+    archetype: activity
+    title: Check yourself
+    minutes: 12
+    purpose: one problem per new concept; leave time for the answers
+    text_roles: [question, instruction]
+    density: moderate
+    concepts: [CONCEPT-MODEL-EVALUATION, CONCEPT-OVERFITTING]
+
+  # Slide 2's arc, one module on. Identical geometry, so the two read as one
+  # picture moving rather than as two diagrams.
+  - number: 9
+    intent: integrate
+    archetype: synthesis
+    title: Next
+    minutes: 4
+    purpose: hand over to regularisation, and name the lab task
+    text_roles: [takeaway]
+    density: sparse
+    visual_anchor: course-arc
+    focus: MODULE-07
+    required_visual: the same arc, module 6 done and module 7 next
+
+coverage:
+  outcomes_served: [LO-02, LO-04]
+  concepts_covered: [CONCEPT-MODEL-EVALUATION, CONCEPT-OVERFITTING]
+  concepts_omitted: []
+
+generated_by:
+  produced_by: outline-presentation-skill
+  model_id: claude-opus-5
+  prompt_version: outline-presentation/v2
+  input_refs: [MODULE-06, LO-02, LO-04, RES-442]
+  created_at: 2026-09-28T10:52:00+05:00
+  source: course-directory — ProfessorHarness/courses/CSS-4008

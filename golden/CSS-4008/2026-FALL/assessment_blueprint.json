@@ -1,0 +1,350 @@
+{
+  "concepts_in_scope": [
+    {
+      "already_assessed_by": [
+        "CRIT-01-01",
+        "CRIT-05-01",
+        "ITEM-01-01",
+        "ITEM-01-03",
+        "ITEM-01-04"
+      ],
+      "concept_id": "CONCEPT-AI-PROBLEM-TYPES",
+      "existing_items": 3,
+      "flagged": false,
+      "observed_success_rate": 0.83,
+      "prerequisites": [],
+      "taught_in": [
+        "MODULE-01"
+      ],
+      "title": "AI problem types"
+    },
+    {
+      "already_assessed_by": [
+        "CRIT-01-02",
+        "ITEM-01-03"
+      ],
+      "concept_id": "CONCEPT-SEARCH",
+      "existing_items": 1,
+      "flagged": false,
+      "observed_success_rate": 0.67,
+      "prerequisites": [
+        "CONCEPT-AI-PROBLEM-TYPES"
+      ],
+      "taught_in": [
+        "MODULE-02"
+      ],
+      "title": "State-space search"
+    },
+    {
+      "already_assessed_by": [
+        "CRIT-02-01",
+        "CRIT-02-02",
+        "CRIT-05-02"
+      ],
+      "concept_id": "CONCEPT-DATA-PREPARATION",
+      "existing_items": 0,
+      "flagged": false,
+      "observed_success_rate": null,
+      "prerequisites": [],
+      "taught_in": [
+        "MODULE-03"
+      ],
+      "title": "Data preparation"
+    },
+    {
+      "already_assessed_by": [
+        "CRIT-05-03"
+      ],
+      "concept_id": "CONCEPT-SUPERVISED-LEARNING",
+      "existing_items": 0,
+      "flagged": false,
+      "observed_success_rate": null,
+      "prerequisites": [
+        "CONCEPT-AI-PROBLEM-TYPES",
+        "CONCEPT-DATA-PREPARATION"
+      ],
+      "taught_in": [
+        "MODULE-04"
+      ],
+      "title": "Supervised learning"
+    },
+    {
+      "already_assessed_by": [
+        "CRIT-02-02",
+        "CRIT-04-02",
+        "CRIT-05-02",
+        "ITEM-01-02"
+      ],
+      "concept_id": "CONCEPT-TRAIN-TEST-SPLIT",
+      "existing_items": 1,
+      "flagged": true,
+      "observed_success_rate": 0.33,
+      "prerequisites": [
+        "CONCEPT-DATA-PREPARATION"
+      ],
+      "taught_in": [
+        "MODULE-05"
+      ],
+      "title": "Train-test separation"
+    },
+    {
+      "already_assessed_by": [
+        "CRIT-04-02",
+        "CRIT-05-03",
+        "ITEM-01-02"
+      ],
+      "concept_id": "CONCEPT-MODEL-EVALUATION",
+      "existing_items": 1,
+      "flagged": false,
+      "observed_success_rate": 0.33,
+      "prerequisites": [
+        "CONCEPT-TRAIN-TEST-SPLIT",
+        "CONCEPT-SUPERVISED-LEARNING"
+      ],
+      "taught_in": [
+        "MODULE-06"
+      ],
+      "title": "Model evaluation"
+    },
+    {
+      "already_assessed_by": [
+        "CRIT-04-03"
+      ],
+      "concept_id": "CONCEPT-OVERFITTING",
+      "existing_items": 0,
+      "flagged": true,
+      "observed_success_rate": null,
+      "prerequisites": [
+        "CONCEPT-MODEL-EVALUATION",
+        "CONCEPT-TRAIN-TEST-SPLIT"
+      ],
+      "taught_in": [
+        "MODULE-06"
+      ],
+      "title": "Overfitting"
+    },
+    {
+      "already_assessed_by": [
+        "CRIT-04-03"
+      ],
+      "concept_id": "CONCEPT-REGULARIZATION",
+      "existing_items": 0,
+      "flagged": false,
+      "observed_success_rate": null,
+      "prerequisites": [
+        "CONCEPT-OVERFITTING"
+      ],
+      "taught_in": [
+        "MODULE-07"
+      ],
+      "title": "Regularization"
+    },
+    {
+      "already_assessed_by": [],
+      "concept_id": "CONCEPT-NEURAL-NETWORKS",
+      "existing_items": 0,
+      "flagged": false,
+      "observed_success_rate": null,
+      "prerequisites": [
+        "CONCEPT-SUPERVISED-LEARNING"
+      ],
+      "taught_in": [
+        "MODULE-08"
+      ],
+      "title": "Neural networks"
+    },
+    {
+      "already_assessed_by": [
+        "CRIT-04-01",
+        "CRIT-04-04",
+        "CRIT-05-04"
+      ],
+      "concept_id": "CONCEPT-EXPERIMENT-DESIGN",
+      "existing_items": 0,
+      "flagged": false,
+      "observed_success_rate": null,
+      "prerequisites": [
+        "CONCEPT-MODEL-EVALUATION"
+      ],
+      "taught_in": [
+        "MODULE-09"
+      ],
+      "title": "AI experiment design"
+    },
+    {
+      "already_assessed_by": [],
+      "concept_id": "CONCEPT-LOSS-FUNCTIONS",
+      "existing_items": 0,
+      "flagged": false,
+      "observed_success_rate": null,
+      "prerequisites": [
+        "CONCEPT-SUPERVISED-LEARNING"
+      ],
+      "taught_in": [
+        "MODULE-11"
+      ],
+      "title": "Loss functions"
+    }
+  ],
+  "never_assessed": [
+    "CONCEPT-NEURAL-NETWORKS",
+    "CONCEPT-LOSS-FUNCTIONS"
+  ],
+  "run": {
+    "course_version_id": "CSS-4008-2026-FALL",
+    "id": "CSS-4008-2026-FALL",
+    "title": "Artificial Intelligence"
+  },
+  "scope": {
+    "last_week": null,
+    "modules": [
+      {
+        "module_id": "MODULE-01",
+        "title": "What AI Is and Is Not",
+        "week": 1
+      },
+      {
+        "module_id": "MODULE-02",
+        "title": "Search and Problem Formulation",
+        "week": 2
+      },
+      {
+        "module_id": "MODULE-03",
+        "title": "Working with Data",
+        "week": 3
+      },
+      {
+        "module_id": "MODULE-04",
+        "title": "Supervised Learning",
+        "week": 4
+      },
+      {
+        "module_id": "MODULE-05",
+        "title": "Train-Test Separation",
+        "week": 5
+      },
+      {
+        "module_id": "MODULE-06",
+        "title": "Model Evaluation and Overfitting",
+        "week": 6
+      },
+      {
+        "module_id": "MODULE-07",
+        "title": "Regularization and Generalisation",
+        "week": 7
+      },
+      {
+        "module_id": "MODULE-08",
+        "title": "Neural Networks",
+        "week": 8
+      },
+      {
+        "module_id": "MODULE-09",
+        "title": "Designing an AI Experiment",
+        "week": 9
+      },
+      {
+        "module_id": "MODULE-11",
+        "title": "Optimisation",
+        "week": 11
+      }
+    ],
+    "through": null
+  },
+  "target_outcomes": [
+    {
+      "current_share_of_grade": 0.25,
+      "declared_weight": 0.2,
+      "level": [
+        "understand"
+      ],
+      "outcome_id": "LO-01",
+      "suggested_marks": 20.0,
+      "taught_in": [
+        "MODULE-01",
+        "MODULE-02"
+      ],
+      "title": "Explain core AI problem types and methods"
+    },
+    {
+      "current_share_of_grade": 0.275,
+      "declared_weight": 0.3,
+      "level": [
+        "apply"
+      ],
+      "outcome_id": "LO-02",
+      "suggested_marks": 30.0,
+      "taught_in": [
+        "MODULE-04",
+        "MODULE-05",
+        "MODULE-06",
+        "MODULE-07",
+        "MODULE-08",
+        "MODULE-11"
+      ],
+      "title": "Implement and evaluate a machine learning model"
+    },
+    {
+      "current_share_of_grade": 0.25,
+      "declared_weight": 0.2,
+      "level": [
+        "apply",
+        "analyze"
+      ],
+      "outcome_id": "LO-03",
+      "suggested_marks": 20.0,
+      "taught_in": [
+        "MODULE-03",
+        "MODULE-05"
+      ],
+      "title": "Prepare and reason about data for learning"
+    },
+    {
+      "current_share_of_grade": 0.225,
+      "declared_weight": 0.3,
+      "level": [
+        "apply",
+        "analyze"
+      ],
+      "outcome_id": "LO-04",
+      "suggested_marks": 30.0,
+      "taught_in": [
+        "MODULE-06",
+        "MODULE-09"
+      ],
+      "title": "Design and evaluate an AI solution"
+    }
+  ],
+  "weighting": {
+    "declared_total": 1.0,
+    "existing_assessments": [
+      {
+        "assessment_id": "ASSESSMENT-01",
+        "title": "Foundations Quiz",
+        "type": "quiz",
+        "weight": 0.15
+      },
+      {
+        "assessment_id": "ASSESSMENT-02",
+        "title": "Data Preparation Report",
+        "type": "assignment",
+        "weight": 0.15
+      },
+      {
+        "assessment_id": "ASSESSMENT-04",
+        "title": "Model Evaluation Assignment",
+        "type": "assignment",
+        "weight": 0.2
+      },
+      {
+        "assessment_id": "ASSESSMENT-05",
+        "title": "Final AI Project",
+        "type": "project",
+        "weight": 0.5
+      }
+    ],
+    "proposed_weight": null,
+    "total_if_added": 1.0,
+    "total_marks": 100.0
+  }
+}

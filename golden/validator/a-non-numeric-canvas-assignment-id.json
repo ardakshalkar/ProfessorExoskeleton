@@ -1,0 +1,36 @@
+{
+  "issues": [
+    {
+      "code": "delivery.unreachable",
+      "level": "warning",
+      "location": "ASSESSMENT-04",
+      "message": "arrives as a Canvas upload but has no extensions.lms.canvas_assignment_id, so `lms push` cannot write its column"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "lms.malformed",
+      "level": "error",
+      "location": "ASSESSMENT-01",
+      "message": "canvas_assignment_id should be the numeric Canvas assignment id, not 'a-04'"
+    }
+  ],
+  "mutation": "a-non-numeric-canvas-assignment-id",
+  "patch": {
+    "assessments.0.extensions": {
+      "lms": {
+        "canvas_assignment_id": "a-04"
+      }
+    }
+  }
+}

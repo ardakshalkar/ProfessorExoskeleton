@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 320" width="880" height="320"
+     role="img" aria-labelledby="figure-title figure-description">
+  <title id="figure-title">The course arc, with module 6 done and module 7 next</title>
+  <desc id="figure-description">The same three modules as the opening slide, with
+  the marker moved. Module 5, splitting data, and module 6, evaluation and
+  overfitting, are both marked done. Module 7, closing the gap, is now marked as
+  where the course goes next, and the arrow into it carries the gap they have
+  just learned to read.</desc>
+
+  <!--
+    Geometry identical to fig-03-arc-now, so the two read as one picture moving
+    rather than as two diagrams. Only the markers and the two closing lines
+    differ. When `visual_anchor` resolves to a file, these collapse into one arc
+    with `focus` moving across it.
+  -->
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#52616B"/>
+    </marker>
+  </defs>
+
+  <style>
+    .caption  { font: 15px Calibri, "Segoe UI", sans-serif; fill: #52616B; }
+    .module   { font: 600 13px Calibri, "Segoe UI", sans-serif; fill: #52616B; letter-spacing: 1px; }
+    .name     { font: 600 19px Cambria, Georgia, serif; fill: #1F2933; }
+    .state    { font: 600 14px Calibri, "Segoe UI", sans-serif; fill: #1F2933; }
+    .carry    { font: italic 14px Calibri, "Segoe UI", sans-serif; fill: #52616B; }
+    .stub     { font: 600 22px Calibri, "Segoe UI", sans-serif; fill: #8C9AA8; }
+  </style>
+
+  <text class="caption" x="20" y="32">Each module assumes the one before it.</text>
+
+  <text class="stub" x="24" y="140">…</text>
+
+  <!-- module 5: done -->
+  <rect x="60" y="70" width="200" height="110" rx="4" fill="#EDF1F7" stroke="#8C9AA8" stroke-width="1.5"/>
+  <text class="module" x="80" y="98">MODULE-05</text>
+  <text class="name"   x="80" y="126">Splitting</text>
+  <text class="name"   x="80" y="148">data</text>
+  <text class="state"  x="80" y="170">✓ done</text>
+
+  <!-- module 6: done as of today -->
+  <rect x="328" y="70" width="200" height="110" rx="4" fill="#EDF1F7" stroke="#8C9AA8" stroke-width="1.5"/>
+  <text class="module" x="348" y="98">MODULE-06</text>
+  <text class="name"   x="348" y="126">Evaluation and</text>
+  <text class="name"   x="348" y="148">overfitting</text>
+  <text class="state"  x="348" y="170">✓ done</text>
+
+  <!-- module 7: where the course goes next -->
+  <rect x="596" y="70" width="200" height="110" rx="4" fill="#DBE4F0" stroke="#1F2933" stroke-width="3"/>
+  <text class="module" x="616" y="98">MODULE-07</text>
+  <text class="name"   x="616" y="126">Closing</text>
+  <text class="name"   x="616" y="148">the gap</text>
+  <text class="state"  x="616" y="170">→ next</text>
+
+  <text class="stub" x="820" y="140">…</text>
+
+  <!-- what each arrow carries -->
+  <line x1="266" y1="125" x2="322" y2="125" stroke="#52616B" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text class="carry" x="294" y="216" text-anchor="middle">the 0.97 you reported</text>
+
+  <line x1="534" y1="125" x2="590" y2="125" stroke="#52616B" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <text class="carry" x="562" y="216" text-anchor="middle">the gap you can now read</text>
+
+  <line x1="20" y1="252" x2="860" y2="252" stroke="#C6CED6" stroke-width="1"/>
+  <text class="caption" x="20" y="280">You can now say which of two reported accuracies is trustworthy, and why.</text>
+  <text class="caption" x="20" y="302">Module 7 asks what closes the gap you have learned to read.</text>
+</svg>

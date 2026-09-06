@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "enrollment.duplicate",
+      "level": "error",
+      "location": "ENR-55292",
+      "message": "STUDENT-JNG7SN is enrolled twice in CSS-4008-2026-FALL"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    }
+  ],
+  "mutation": "a-student-enrolled-twice",
+  "patch": {
+    "enrollments.1.student_id": "STUDENT-JNG7SN"
+  }
+}

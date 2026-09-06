@@ -1,0 +1,46 @@
+beat: problem-before-solution
+name: Problem before solution
+family: create_need
+purpose: >-
+  Make the room want the concept before naming it.
+best_for:
+  - any concept that exists because something simpler failed
+  - the default opening of a technical section
+avoid_when:
+  - the students already know the problem and are waiting for the answer
+slides: 4
+sequence:
+  - step: a real problem, stated as a question
+    intent: create_need
+    archetype: question
+    density: sparse
+  - step: what the obvious approach produces
+    intent: demonstrate_problem
+    archetype: single_visual
+    density: sparse
+    note: >-
+      the actual output, not a description of it. A wrong answer on the screen
+      does more than a sentence saying the approach fails
+  - step: why it fails
+    intent: demonstrate_problem
+    archetype: annotated_object
+    density: moderate
+    note: annotate the failure on the thing itself
+  - step: the capability that would fix it
+    intent: introduce_concept
+    archetype: big_idea
+    density: sparse
+    note: name the concept here, and only here
+visual_rules:
+  image_dominance: high
+  avoid_dense_text_initially: true
+ask_the_professor:
+  - condition: no failing example is available
+    question: >-
+      Do you have a case where the obvious approach visibly fails? Without one
+      this beat becomes a definition with a preamble.
+exit_condition: >-
+  The student can say what problem the concept solves before being told what it is.
+transition: >-
+  "So how does that actually work?" — into an introduce_concept or
+  explain_mechanism beat.

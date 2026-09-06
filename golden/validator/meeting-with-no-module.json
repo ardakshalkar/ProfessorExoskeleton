@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "schedule.no_module",
+      "level": "warning",
+      "location": "ACT-0101",
+      "message": "meeting names no module, so nothing links it to what is taught (deliberate for a revision or consultation slot)"
+    }
+  ],
+  "mutation": "meeting-with-no-module",
+  "patch": {
+    "activities.0.module_id": null
+  }
+}

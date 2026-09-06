@@ -1,0 +1,235 @@
+{
+  "allow_partial": false,
+  "assessments": [
+    {
+      "assessment_id": "ASSESSMENT-04",
+      "criteria": [
+        {
+          "criterion_id": "CRIT-04-01",
+          "maximum": 25.0,
+          "outcome_id": "LO-04",
+          "title": "Method selection"
+        },
+        {
+          "criterion_id": "CRIT-04-02",
+          "maximum": 25.0,
+          "outcome_id": "LO-02",
+          "title": "Evaluation design"
+        },
+        {
+          "criterion_id": "CRIT-04-03",
+          "maximum": 25.0,
+          "outcome_id": "LO-02",
+          "title": "Diagnosis of overfitting"
+        },
+        {
+          "criterion_id": "CRIT-04-04",
+          "maximum": 25.0,
+          "outcome_id": "LO-04",
+          "title": "Reporting and reproducibility"
+        }
+      ],
+      "due_at": "2026-10-15T23:59:00+05:00",
+      "issues": [],
+      "maximum": 100.0,
+      "rows": [
+        {
+          "assessment_id": "ASSESSMENT-04",
+          "blocked": [
+            "3 of 4 criteria undecided: CRIT-04-02, CRIT-04-03, CRIT-04-04"
+          ],
+          "comment": "Method selection: The oral defence supplied the missing justification.",
+          "criteria": [
+            {
+              "comment": "The oral defence supplied the missing justification.",
+              "criterion_id": "CRIT-04-01",
+              "maximum": 25.0,
+              "note": null,
+              "score": 20.0,
+              "source": "decision",
+              "status": "decided",
+              "title": "Method selection"
+            },
+            {
+              "comment": null,
+              "criterion_id": "CRIT-04-02",
+              "maximum": 25.0,
+              "note": "no professor decision",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Evaluation design"
+            },
+            {
+              "comment": null,
+              "criterion_id": "CRIT-04-03",
+              "maximum": 25.0,
+              "note": "no professor decision",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Diagnosis of overfitting"
+            },
+            {
+              "comment": null,
+              "criterion_id": "CRIT-04-04",
+              "maximum": 25.0,
+              "note": "no professor decision",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Reporting and reproducibility"
+            }
+          ],
+          "exportable": false,
+          "maximum": 100.0,
+          "percent": 20.0,
+          "score": 20.0,
+          "status": "partially_graded",
+          "student_id": "STUDENT-JNG7SN",
+          "submission_id": "SUB-9081"
+        },
+        {
+          "assessment_id": "ASSESSMENT-04",
+          "blocked": [
+            "4 of 4 criteria undecided: CRIT-04-01, CRIT-04-02, CRIT-04-03, CRIT-04-04"
+          ],
+          "comment": null,
+          "criteria": [
+            {
+              "comment": null,
+              "criterion_id": "CRIT-04-01",
+              "maximum": 25.0,
+              "note": "no professor decision",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Method selection"
+            },
+            {
+              "comment": null,
+              "criterion_id": "CRIT-04-02",
+              "maximum": 25.0,
+              "note": "no professor decision",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Evaluation design"
+            },
+            {
+              "comment": null,
+              "criterion_id": "CRIT-04-03",
+              "maximum": 25.0,
+              "note": "no professor decision",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Diagnosis of overfitting"
+            },
+            {
+              "comment": null,
+              "criterion_id": "CRIT-04-04",
+              "maximum": 25.0,
+              "note": "no professor decision",
+              "score": null,
+              "source": null,
+              "status": "missing",
+              "title": "Reporting and reproducibility"
+            }
+          ],
+          "exportable": false,
+          "maximum": 100.0,
+          "percent": null,
+          "score": null,
+          "status": "partially_graded",
+          "student_id": "STUDENT-K4QM2X",
+          "submission_id": "SUB-9082"
+        },
+        {
+          "assessment_id": "ASSESSMENT-04",
+          "blocked": [
+            "no submission"
+          ],
+          "comment": null,
+          "criteria": [],
+          "exportable": false,
+          "maximum": 100.0,
+          "percent": null,
+          "score": null,
+          "status": "not_submitted",
+          "student_id": "STUDENT-R7TB5D",
+          "submission_id": null
+        }
+      ],
+      "summary": {
+        "enrolled": 3,
+        "exportable": 0,
+        "graded": 0,
+        "maximum": null,
+        "mean": null,
+        "median": null,
+        "minimum": null,
+        "n_scored": 0,
+        "not_submitted": 1,
+        "partially_graded": 2,
+        "submitted": 2
+      },
+      "title": "Model Evaluation Assignment",
+      "type": "assignment",
+      "weight": 0.2
+    }
+  ],
+  "generated_by": "gradebook/2026.08.1",
+  "notes": [
+    "Scores come from professor decisions only. An ai_suggestion is never counted, whatever its confidence.",
+    "A blank is not a zero: a row with no submission or an undecided criterion carries no score and is not exportable.",
+    "percent_of_graded is a share of the assessments graded so far, not a final grade. No letter grade is computed — a grading scheme is a claim and this model has no field for one.",
+    "Only ASSESSMENT-04 is in scope, so the totals cover that assessment alone — 'complete' does not mean the course is fully graded."
+  ],
+  "run": {
+    "id": "CSS-4008-2026-FALL",
+    "term": "2026-FALL",
+    "title": "Artificial Intelligence"
+  },
+  "scope": {
+    "assessment_id": "ASSESSMENT-04",
+    "assessments_counted": [
+      "ASSESSMENT-04"
+    ]
+  },
+  "totals": [
+    {
+      "assessments_counted": [],
+      "assessments_outstanding": [
+        "ASSESSMENT-04"
+      ],
+      "complete": false,
+      "earned_weighted": 0.0,
+      "percent_of_graded": null,
+      "student_id": "STUDENT-JNG7SN",
+      "weight_graded": 0.0
+    },
+    {
+      "assessments_counted": [],
+      "assessments_outstanding": [
+        "ASSESSMENT-04"
+      ],
+      "complete": false,
+      "earned_weighted": 0.0,
+      "percent_of_graded": null,
+      "student_id": "STUDENT-K4QM2X",
+      "weight_graded": 0.0
+    },
+    {
+      "assessments_counted": [],
+      "assessments_outstanding": [
+        "ASSESSMENT-04"
+      ],
+      "complete": false,
+      "earned_weighted": 0.0,
+      "percent_of_graded": null,
+      "student_id": "STUDENT-R7TB5D",
+      "weight_graded": 0.0
+    }
+  ]
+}

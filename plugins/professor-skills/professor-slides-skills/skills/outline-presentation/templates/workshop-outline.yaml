@@ -1,0 +1,184 @@
+# A practical where the slides punctuate the work rather than fill it.
+#
+# Fill every {{ slot }} and delete every slide you do not use, including these
+# comments. Plan in this order: goal, then deck grammar, then beats, then
+# slides. A list of slides written without beats under it produces slides that
+# are individually reasonable and collectively inert.
+#
+# Every concept named here must belong to the module. If the session needs one
+# the module does not have, that is a claim, and it is the professor's — stop
+# and say which, rather than adding it.
+
+outline_version: 1
+deck: "{{ MODULE-ID }}-workshop"
+title: "{{ session title }}"
+course_id: "{{ COURSE-ID }}"
+course_version_id: "{{ COURSE-ID-YYYY-TERM }}"
+module_id: "{{ MODULE-ID }}"
+
+# The approval gate. Left as `draft` by the skill that wrote this; moved to
+# `approved` by the professor, or by an agent they explicitly told to. Nothing
+# is built or rendered from a draft.
+status: draft
+approved_by: null
+approved_at: null
+
+presentation:
+  audience: "{{ asked, not assumed }}"
+  style: workshop
+  language: "{{ from preferences }}"
+  duration_minutes: "{{ from the scheduled meeting }}"
+  max_slides: "{{ see the note beside each style below }}"
+
+  # The deck grammar. See references/deck-grammars.md.
+  deck_archetype: workshop
+  # Which representation ladder applies — history climbs artifact → observation
+  # → comparison → context; physics climbs phenomenon → schematic → model →
+  # equation. One generic shape for both is how a humanities deck ends up full
+  # of definitions.
+  discipline: "{{ the field }}"
+  # teaching | handout | hybrid. A deck read by a student who missed the class
+  # is a handout whatever it was written as.
+  output_mode: hybrid
+
+# The unit here is the task block, not the slide. Each block ends with a
+# checkpoint — something observable that says whether the room can move on.
+
+# What the room needs before anything runs. A workshop that discovers a missing
+# dependency at minute twenty has lost twenty minutes of every person in it.
+prerequisites_in_the_room:
+  - "{{ software, data or accounts, and how they were told to have it ready }}"
+
+# Written before the beats. A slide list with no arc is a list of topics.
+arc:
+  starts_from: "{{ what they can already do, from the previous module }}"
+  argues: "{{ the one claim this session makes true — a claim, not a topic }}"
+  turn: "{{ where the obvious answer stops working }}"
+  leaves_them_able_to: "{{ a capability a check-for-understanding could test }}"
+
+outcomes: ["{{ LO-ID }}"]
+concepts: ["{{ CONCEPT-ID }}"]
+
+beats:
+  - beat: problem-before-solution
+    goal: "{{ what the exercise is for }}"
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    transition_question: "{{ … }}"
+    slides: [1, 2]
+
+  - beat: code-walkthrough
+    goal: read it with them before they write it
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    transition_question: "{{ … }}"
+    slides: [3, 4]
+
+  - beat: worked-example
+    goal: "{{ … }}"
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    transition_question: "{{ … }}"
+    slides: [5, 6]
+
+  - beat: story-so-far
+    goal: the generalisation the exercise earns
+    entry_question: "{{ … }}"
+    exit_understanding: "{{ … }}"
+    slides: [7]
+
+slides:
+  - number: 1
+    intent: orient
+    archetype: section_opener
+    title: "{{ what we are building and why }}"
+    minutes: 5
+    purpose: the framing, and what will be true at the end
+    text_roles: [headline, claim]
+    density: sparse
+
+  # A diagram of the pipeline, not a screenshot of results — a screenshot of a
+  # result is read as a measurement.
+  - number: 2
+    intent: demonstrate
+    archetype: system_diagram
+    title: "{{ the thing done once, in front of them }}"
+    minutes: 10
+    purpose: "{{ the step that is hard to describe and easy to show }}"
+    text_roles: [label, annotation]
+    density: sparse
+    visual_anchor: "{{ anchor-name }}"
+    required_visual: "{{ what has to be on screen }}"
+
+  - number: 3
+    intent: explain_mechanism
+    archetype: algorithm
+    title: "{{ the code they will start from }}"
+    minutes: 8
+    purpose: "{{ the lines that matter }}"
+    text_roles: [annotation, explanation]
+    density: dense
+
+  - number: 4
+    intent: apply
+    archetype: activity
+    title: "{{ task 1 }}"
+    minutes: 25
+    purpose: "{{ what they do, and the checkpoint that says they did it }}"
+    text_roles: [instruction]
+    density: sparse
+    outcomes: ["{{ LO-ID }}"]
+    concepts: ["{{ CONCEPT-ID }}"]
+    sources: ["{{ RES-ID }}"]
+
+  # Placed where the failure happens, not at the end. Delete if there is no
+  # predictable failure.
+  - number: 5
+    intent: diagnose_misconception
+    archetype: big_idea
+    title: "{{ where this usually goes wrong }}"
+    minutes: 8
+    purpose: "{{ the failure, and the rule that avoids it }}"
+    text_roles: [claim, takeaway]
+    density: moderate
+    concepts: ["{{ CONCEPT-ID }}"]
+
+  - number: 6
+    intent: apply
+    archetype: activity
+    title: "{{ task 2 }}"
+    minutes: 25
+    purpose: "{{ what they do, and the checkpoint }}"
+    text_roles: [instruction]
+    density: sparse
+    outcomes: ["{{ LO-ID }}"]
+
+  # Only what the exercise earns. One dataset does not establish a claim about
+  # datasets.
+  - number: 7
+    intent: integrate
+    archetype: synthesis
+    title: "{{ what we saw }}"
+    minutes: 12
+    purpose: "{{ the generalisation the exercise earns }}"
+    text_roles: [takeaway]
+    density: moderate
+    outcomes: ["{{ LO-ID }}"]
+    concepts: ["{{ CONCEPT-ID }}"]
+
+# An omission is often right. An unrecorded omission is indistinguishable from
+# having forgotten, and `pres outline check` treats it as an error.
+coverage:
+  outcomes_served: ["{{ LO-ID }}"]
+  concepts_covered: ["{{ CONCEPT-ID }}"]
+  concepts_omitted:
+    - concept: "{{ CONCEPT-ID }}"
+      why: "{{ why this session is not the place for it }}"
+
+generated_by:
+  produced_by: outline-presentation-skill
+  model_id: "{{ model }}"
+  prompt_version: outline-presentation/v2
+  input_refs: ["{{ MODULE-ID }}", "{{ LO-ID }}"]
+  created_at: "{{ ISO-8601 }}"
+  source: "{{ the provenance line from pres source }}"

@@ -1,0 +1,75 @@
+# The system layer: what every professor skill does when nobody has said
+# otherwise. Shipped with DataLayer and committed.
+#
+# Four layers resolve on top of this, each beating the one before it:
+#
+#   1. this file                                          system
+#   2. $PROFESSOR_HOME/preferences.yaml                   professor
+#   3. courses/<COURSE_ID>/preferences.yaml               course
+#      courses/<COURSE_ID>/versions/<TERM>/preferences.yaml
+#   4. flags on the invoking command                      task
+#
+# A value of `ask` is deliberately not defaulted: guessing it saves a question
+# and costs a rebuild. See docs/settings.md.
+
+version: 1
+profile_id: professor-datalayer-defaults
+scope: system
+
+values:
+  language:
+    default: English
+
+  assessment:
+    avoid_trick_questions: true
+    require_answer_key: true
+    require_validation: true
+    # A machine suggestion is a suggestion until a person says otherwise.
+    require_professor_approval: true
+
+  grading:
+    # Below this, the suggestion is surfaced for review rather than queued as
+    # routine. It does not lower the approval requirement — nothing does.
+    review_below_confidence: 0.8
+    surface_disagreement: true
+
+  presentation:
+    # There is no sensible default for these two: a deck built for the wrong
+    # audience is not a deck with one wrong slide, it is the wrong deck.
+    audience: ask
+    duration_minutes: ask
+
+    style: lecture              # lecture | seminar | workshop
+    density: moderate           # sparse | moderate | dense
+    include_learning_objectives: true
+    include_checks_for_understanding: true
+    # Roughly one slide per four minutes of a taught session. A ceiling, not a
+    # target.
+    slides_per_10_minutes: 2.5
+
+  outline:
+    # An outline that is only a list of slides is a list of topics. The arc is
+    # what makes the sequence mean something.
+    require_arc: true
+    # Cover every concept the module claims, or say which one is being left out
+    # and why. Never silently.
+    require_coverage_statement: true
+
+  figures:
+    source_format: svg          # what is committed; PNG is a render of it
+    max_per_deck: 6
+    require_alt_text: true
+    # Colour is never the only channel: a red/green distinction is invisible to
+    # part of every cohort and to every projector with a tired lamp.
+    colour_only_encoding: forbidden
+
+  render:
+    target: pptx
+    also_pdf: true
+    output_directory: output
+
+  publishing:
+    # Nothing about an identified student leaves the machine without the
+    # professor saying so, in the moment, for that thing.
+    require_explicit_instruction: true
+    student_facing_defaults_to_public_only: true

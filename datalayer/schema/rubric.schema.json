@@ -1,0 +1,199 @@
+{
+  "$defs": {
+    "CriterionLevel": {
+      "additionalProperties": false,
+      "description": "One performance band of a rubric criterion.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "score": {
+          "minimum": 0,
+          "title": "Score",
+          "type": "number"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "description": {
+          "title": "Description",
+          "type": "string"
+        }
+      },
+      "required": [
+        "score",
+        "description"
+      ],
+      "title": "CriterionLevel",
+      "type": "object"
+    },
+    "RubricCriterion": {
+      "additionalProperties": false,
+      "description": "One line of a rubric.\n\nThe link from criterion to outcome and capability is what turns grading\ninto evidence. Without it AINAR can compute marks but cannot build a\ncapability map.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "criterion_id": {
+          "pattern": "^CRIT-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Criterion Id",
+          "type": "string"
+        },
+        "rubric_id": {
+          "pattern": "^RUBRIC-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Rubric Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "maximum_score": {
+          "exclusiveMinimum": 0,
+          "title": "Maximum Score",
+          "type": "number"
+        },
+        "weight": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Weight"
+        },
+        "outcome_id": {
+          "anyOf": [
+            {
+              "pattern": "^LO-[0-9]{2,3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Outcome Id"
+        },
+        "capability_id": {
+          "anyOf": [
+            {
+              "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capability Id"
+        },
+        "concepts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Concepts",
+          "type": "array"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/CriterionLevel"
+          },
+          "title": "Levels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "criterion_id",
+        "rubric_id",
+        "title",
+        "maximum_score"
+      ],
+      "title": "RubricCriterion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A set of criteria used to evaluate submissions of an assessment.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "rubric_id": {
+      "pattern": "^RUBRIC-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Rubric Id",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "criteria": {
+      "items": {
+        "$ref": "#/$defs/RubricCriterion"
+      },
+      "title": "Criteria",
+      "type": "array"
+    }
+  },
+  "required": [
+    "rubric_id"
+  ],
+  "title": "Rubric",
+  "type": "object"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "professor-assignment-skills",
+  "description": "Create aligned homework, labs, seminars, and practice sessions at selectable depth from course context.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": { "name": "Ardak Shalkarbayuly" }
+}

@@ -1,0 +1,175 @@
+{
+  "capabilities": [
+    {
+      "capability_id": "CAP-AI-EXPERIMENT",
+      "evidence_ids": [
+        "EVID-3011"
+      ],
+      "level": 3,
+      "source_count": 1,
+      "title": "Design an AI experiment"
+    }
+  ],
+  "concepts": [
+    {
+      "concept_id": "CONCEPT-AI-PROBLEM-TYPES",
+      "evidence_count": 2,
+      "evidence_ids": [
+        "EVID-9060-0101-1",
+        "EVID-9060-0103-2"
+      ],
+      "highest_level": null,
+      "mean_proportion": 0.83,
+      "sources": [
+        "RESP-9060-0101",
+        "RESP-9060-0103"
+      ],
+      "state": null,
+      "title": "AI problem types"
+    },
+    {
+      "concept_id": "CONCEPT-MODEL-EVALUATION",
+      "evidence_count": 1,
+      "evidence_ids": [
+        "EVID-9060-0102-2"
+      ],
+      "highest_level": null,
+      "mean_proportion": 0.0,
+      "sources": [
+        "RESP-9060-0102"
+      ],
+      "state": null,
+      "title": "Model evaluation"
+    },
+    {
+      "concept_id": "CONCEPT-SEARCH",
+      "evidence_count": 1,
+      "evidence_ids": [
+        "EVID-9060-0103-1"
+      ],
+      "highest_level": null,
+      "mean_proportion": 0.67,
+      "sources": [
+        "RESP-9060-0103"
+      ],
+      "state": null,
+      "title": "State-space search"
+    },
+    {
+      "concept_id": "CONCEPT-TRAIN-TEST-SPLIT",
+      "evidence_count": 2,
+      "evidence_ids": [
+        "EVID-2801",
+        "EVID-9060-0102-1"
+      ],
+      "highest_level": 2,
+      "mean_proportion": 0.0,
+      "sources": [
+        "RESP-9060-0102",
+        "SUB-9070"
+      ],
+      "state": "needs_review",
+      "title": "Train-test separation"
+    }
+  ],
+  "course_run": {
+    "id": "CSS-4008-2026-FALL",
+    "term": "2026-FALL",
+    "title": "Artificial Intelligence"
+  },
+  "gaps": [
+    {
+      "concept_id": "CONCEPT-MODEL-EVALUATION",
+      "evidence_ids": [
+        "EVID-9060-0102-2"
+      ],
+      "mean_proportion": 0.0,
+      "prerequisite_state": {
+        "CONCEPT-SUPERVISED-LEARNING": "no evidence",
+        "CONCEPT-TRAIN-TEST-SPLIT": "needs_review"
+      },
+      "prerequisites": [
+        "CONCEPT-TRAIN-TEST-SPLIT",
+        "CONCEPT-SUPERVISED-LEARNING"
+      ],
+      "title": "Model evaluation"
+    },
+    {
+      "concept_id": "CONCEPT-TRAIN-TEST-SPLIT",
+      "evidence_ids": [
+        "EVID-2801",
+        "EVID-9060-0102-1"
+      ],
+      "mean_proportion": 0.0,
+      "prerequisite_state": {
+        "CONCEPT-DATA-PREPARATION": "no evidence"
+      },
+      "prerequisites": [
+        "CONCEPT-DATA-PREPARATION"
+      ],
+      "title": "Train-test separation"
+    }
+  ],
+  "note": "Derived from recorded evidence only. Absence of evidence is not evidence of absence — a concept with no evidence was never assessed.",
+  "outcomes": [
+    {
+      "evidence_count": 5,
+      "evidence_ids": [
+        "EVID-9060-0101-1",
+        "EVID-9060-0102-1",
+        "EVID-9060-0102-2",
+        "EVID-9060-0103-1",
+        "EVID-9060-0103-2"
+      ],
+      "highest_level": null,
+      "mean_proportion": 0.47,
+      "outcome_id": "LO-01",
+      "sources": [
+        "RESP-9060-0101",
+        "RESP-9060-0102",
+        "RESP-9060-0103"
+      ],
+      "title": "Explain core AI problem types and methods"
+    },
+    {
+      "evidence_count": 1,
+      "evidence_ids": [
+        "EVID-2801"
+      ],
+      "highest_level": 2,
+      "mean_proportion": null,
+      "outcome_id": "LO-03",
+      "sources": [
+        "SUB-9070"
+      ],
+      "title": "Prepare and reason about data for learning"
+    },
+    {
+      "evidence_count": 1,
+      "evidence_ids": [
+        "EVID-3011"
+      ],
+      "highest_level": 3,
+      "mean_proportion": null,
+      "outcome_id": "LO-04",
+      "sources": [
+        "SUB-9081"
+      ],
+      "title": "Design and evaluate an AI solution"
+    }
+  ],
+  "signals": [
+    {
+      "description": "Train-test separation has been handled loosely in two submissions, and the overfitting diagnosis in the model evaluation assignment stops at naming the gap.",
+      "evidence_ids": [
+        "EVID-2801",
+        "EVID-3011"
+      ],
+      "severity": "medium",
+      "signal_id": "SIGNAL-772",
+      "status": "open",
+      "type": "repeated_concept_difficulty"
+    }
+  ],
+  "student_id": "STUDENT-JNG7SN"
+}

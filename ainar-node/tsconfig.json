@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "outDir": "dist",
+    "rootDir": ".",
+    "declaration": false,
+    "sourceMap": false,
+    // The source imports `./x.ts` so `--experimental-strip-types` can run it
+    // with no build. These two let tsc accept that and rewrite the specifiers
+    // to `.js` on the way out, so the compiled bundle is ordinary ESM.
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": ["src/**/*.ts", "bin/server.ts", "bin/http-server.ts", "bin/ainar.ts"]
+}

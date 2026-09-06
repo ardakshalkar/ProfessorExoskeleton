@@ -1,0 +1,77 @@
+<!--
+  Three sections, and the order is the argument: what they can do, what they
+  know, and what is missing underneath. Copy them into the shell in this order.
+
+  Every figure comes from `ainar student`, and the command line is printed above
+  each section so a professor sitting beside the student can say where the number
+  came from.
+-->
+
+<!-- block: capabilities ---------------------------------------------------- -->
+<h2>What they can do</h2>
+<p class="source">python -m ainar student {{ STUDENT-XXXXXX }} --course-version {{ COURSE_VERSION_ID }}</p>
+
+<!-- One ladder per capability. Levels come from the capability's own
+     descriptions; the achieved rung is marked. A capability accumulates across
+     courses, so say which ones contributed — that is the whole reason it is not
+     a grade. -->
+<h3>{{ CAPABILITY-ID }} {{ capability title }}</h3>
+<div class="rung"><span class="box"></span>{{ level 1 description }}</div>
+<div class="rung at"><span class="box"></span>{{ level 2 description }}</div>
+<div class="rung"><span class="box"></span>{{ level 3 description }}</div>
+<p class="note">At level {{ n }}, from {{ n }} source(s) across
+  {{ which courses }}.</p>
+
+<!-- A capability with no evidence is written like this, and never as level 0. -->
+<h3>{{ CAPABILITY-ID }} {{ capability title }}</h3>
+<p class="note">No level. Nothing recorded has been evidence for this capability
+  yet, which is not the same as being at the bottom of it.</p>
+<!-- end block -->
+
+<!-- block: concepts -------------------------------------------------------- -->
+<h2>What the evidence shows</h2>
+<p class="source">python -m ainar student {{ STUDENT-XXXXXX }} --course-version {{ COURSE_VERSION_ID }}</p>
+
+<!-- In teaching order, in three visually distinct states. The bar carries its
+     number; the state carries the words. Colour is never the only channel. -->
+<div class="row">
+  <span class="bar"><i style="width:{{ proportion }}%"></i></span>
+  <span class="state">demonstrated · {{ proportion }}%</span>
+  <span>{{ CONCEPT-ID }} {{ concept title }} — {{ n }} piece(s) of evidence</span>
+</div>
+
+<div class="row">
+  <span class="bar weak"><i style="width:{{ proportion }}%"></i></span>
+  <span class="state">assessed, weak · {{ proportion }}%</span>
+  <span>{{ CONCEPT-ID }} {{ concept title }} — {{ n }} piece(s) of evidence</span>
+</div>
+
+<div class="row">
+  <span class="bar none"></span>
+  <span class="state">never assessed</span>
+  <span>{{ CONCEPT-ID }} {{ concept title }} — no evidence recorded</span>
+</div>
+
+<p class="note">{{ n }} of {{ total }} concepts have never been assessed. They are
+  drawn empty rather than at zero, because nothing has measured them.</p>
+<!-- end block -->
+
+<!-- block: gaps ------------------------------------------------------------ -->
+<h2>What the gaps rest on</h2>
+<p class="source">python -m ainar student {{ STUDENT-XXXXXX }} --course-version {{ COURSE_VERSION_ID }}</p>
+
+<!-- The section that makes the page worth drawing: not "struggling with model
+     evaluation" but which prerequisite underneath it was weak, and which was
+     never assessed at all. The chain comes from the command; do not extend it
+     with a link you reasoned out yourself. -->
+<p><strong>{{ CONCEPT-ID }} {{ concept title }}</strong> — {{ proportion, or
+  "never assessed" }}</p>
+<ul class="chain">
+  <li>needs {{ CONCEPT-ID }}: {{ state, verbatim from the command }}</li>
+  <li>needs {{ CONCEPT-ID }}: no evidence</li>
+</ul>
+
+<p class="note">{{ Say which of these were never assessed rather than assessed
+  and weak. They lead to different conversations: one is a gap in what the course
+  has measured, the other is a gap in what the student has shown. }}</p>
+<!-- end block -->

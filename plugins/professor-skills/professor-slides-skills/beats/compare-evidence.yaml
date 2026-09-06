@@ -1,0 +1,38 @@
+beat: compare-evidence
+name: Compare two sources
+family: evidence
+purpose: >-
+  Make a difference visible by putting two things in the same frame.
+best_for:
+  - history, comparative politics, medicine, materials, design
+avoid_when:
+  - the two are not comparable on any dimension the course cares about
+slides: 4
+sequence:
+  - step: the two, side by side
+    intent: provide_evidence
+    archetype: visual_comparison
+    density: sparse
+    note: same scale, same crop, parallel labels — the layout does the comparing
+  - step: what differs?
+    intent: check_understanding
+    archetype: question
+    density: sparse
+  - step: possible explanations
+    intent: build_intuition
+    archetype: structured_comparison
+    density: moderate
+  - step: which one the evidence supports
+    intent: integrate
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  parallel_composition: true
+  source_required: true
+  note: >-
+    inconsistent framing between the two is an argument the professor did not
+    intend to make
+exit_condition: >-
+  The student can state the difference and a reason for it.
+transition: >-
+  The surviving explanation becomes the next section's claim.

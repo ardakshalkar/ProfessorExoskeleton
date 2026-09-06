@@ -1,0 +1,13 @@
+# The configuration layer this bundle contributes: one loader entry, so that
+# `dsh-client-modules` sees a package with a web `dsh.client` half and serves
+# its bundle under /plugins.
+#
+# Weakest of the four layers, exactly as `dsh-ainar-course-model`'s patch is: a
+# professor who wants the pane off for one profile overrides the row above
+# rather than editing anything here.
+#
+# The row names the package rather than a relative path, which is what lets
+# Node resolution find the installed code from wherever the profile lives.
+- insert:
+    - id: professor-pane
+      name: dsh-professor-pane

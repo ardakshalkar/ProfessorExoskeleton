@@ -1,0 +1,36 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "notion.database_url",
+      "level": "warning",
+      "location": "CSS-4008-2026-FALL",
+      "message": "topics_database_id holds a URL; the id alone — the 32 characters before the '?v=' — is what the API wants"
+    },
+    {
+      "code": "notion.partial",
+      "level": "warning",
+      "location": "CSS-4008-2026-FALL",
+      "message": "assignments_database_id, grading_database_id not recorded; `notion pull` reads what is there and reports the rest as absent"
+    }
+  ],
+  "mutation": "a-notion-database-id-that-is-a-url",
+  "patch": {
+    "versions.0.extensions": {
+      "notion": {
+        "topics_database_id": "https://notion.so/abc?v=1"
+      }
+    }
+  }
+}

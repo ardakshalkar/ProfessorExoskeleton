@@ -1,0 +1,28 @@
+/* Plain — one student's page on screen, often with the student next to you.
+
+   Sized to be read at arm's length by two people rather than one, and kept to
+   bars and ladders: whatever is on this page has to be explainable out loud. */
+
+:root {
+  --have: #a8d5a2;   /* demonstrated */
+  --weak: #f8ddb8;   /* assessed, and low */
+  --none: #f6f6f6;   /* never assessed */
+  --none-fg: #9a9a9a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --have: #2f6b3c; --weak: #6d5730; --none: #1e2126; --none-fg: #6b6b6b; }
+}
+
+body { font-size: 16px; }
+main { max-width: 62rem; }
+
+.row { margin: .35rem 0; }
+.bar { flex-basis: 14rem; height: 1rem; }
+.state { flex-basis: 11rem; }
+
+/* The empty bar has to look deliberately empty, not merely unfilled. */
+.bar.none { background: repeating-linear-gradient(
+    45deg, var(--none), var(--none) 4px, transparent 4px, transparent 8px); }
+
+.chain { border-left: 2px solid var(--line); padding-left: .8rem; margin-left: .6rem; }

@@ -1,0 +1,182 @@
+{
+  "$defs": {
+    "CognitiveLevel": {
+      "description": "Bloom-style cognitive level of a learning outcome.",
+      "enum": [
+        "remember",
+        "understand",
+        "apply",
+        "analyze",
+        "evaluate",
+        "create"
+      ],
+      "title": "CognitiveLevel",
+      "type": "string"
+    },
+    "ItemType": {
+      "description": "Shape of a single question or task inside an assessment.",
+      "enum": [
+        "multiple_choice",
+        "multiple_select",
+        "true_false",
+        "short_answer",
+        "numeric",
+        "essay",
+        "code",
+        "practical",
+        "other"
+      ],
+      "title": "ItemType",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "A reusable pedagogical model from which question instances are made.\n\nThe LLM supplies the surface wording. This record fixes what is measured,\nwhat evidence is expected, and which controlled variables may change.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "item_model_id": {
+      "pattern": "^ITEM-MODEL-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Item Model Id",
+      "type": "string"
+    },
+    "course_version_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Course Version Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "outcome_id": {
+      "anyOf": [
+        {
+          "pattern": "^LO-[0-9]{2,3}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outcome Id"
+    },
+    "capability_id": {
+      "anyOf": [
+        {
+          "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Capability Id"
+    },
+    "concepts": {
+      "items": {
+        "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Concepts",
+      "type": "array"
+    },
+    "cognitive_level": {
+      "$ref": "#/$defs/CognitiveLevel"
+    },
+    "evidence_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Evidence Requirements",
+      "type": "array"
+    },
+    "task_structure": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Task Structure",
+      "type": "array"
+    },
+    "scenario_variables": {
+      "additionalProperties": {
+        "items": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "type": "array"
+      },
+      "title": "Scenario Variables",
+      "type": "object"
+    },
+    "difficulty_features": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "type": "object"
+      },
+      "title": "Difficulty Features",
+      "type": "object"
+    },
+    "misconceptions": {
+      "items": {
+        "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Misconceptions",
+      "type": "array"
+    },
+    "answer_requirements": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Answer Requirements",
+      "type": "array"
+    },
+    "allowed_item_types": {
+      "items": {
+        "$ref": "#/$defs/ItemType"
+      },
+      "title": "Allowed Item Types",
+      "type": "array"
+    }
+  },
+  "required": [
+    "item_model_id",
+    "course_version_id",
+    "title",
+    "cognitive_level",
+    "evidence_requirements",
+    "task_structure"
+  ],
+  "title": "ItemModel",
+  "type": "object"
+}

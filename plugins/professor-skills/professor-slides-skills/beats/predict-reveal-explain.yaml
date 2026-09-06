@@ -1,0 +1,37 @@
+beat: predict-reveal-explain
+name: Predict, reveal, explain
+family: student_thinking
+purpose: >-
+  Get every student to commit to an answer before they are given one.
+best_for:
+  - any session; one of the strongest teaching rhythms there is
+avoid_when:
+  - there is no time left to handle a wrong prediction properly
+slides: 4
+sequence:
+  - step: the situation
+    intent: orient
+    archetype: single_visual
+    density: sparse
+  - step: what will happen?
+    intent: check_understanding
+    archetype: activity
+    density: sparse
+    note: >-
+      the answer does not go on this slide. Not in small text, not at the bottom,
+      not in the speaker notes read aloud early. The commitment is the mechanism
+  - step: what happens
+    intent: provide_evidence
+    archetype: data_evidence
+    density: sparse
+  - step: why the common answer was wrong
+    intent: diagnose_misconception
+    archetype: big_idea
+    density: moderate
+visual_rules:
+  whitespace: intentional
+  answer_on_question_slide: forbidden
+exit_condition: >-
+  The student has had a prediction tested and knows why it held or failed.
+transition: >-
+  The corrected model carries into the next concept.

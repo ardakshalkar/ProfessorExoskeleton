@@ -1,0 +1,55 @@
+# The items behind the report, as work/<COURSE_VERSION_ID>/action-items-draft.yaml.
+#
+# `available_actions` is set to what actually applies. An item with nothing
+# drafted to approve does not offer `approve` — it exists to ask a question, and
+# offering approval on a question is offering to approve nothing.
+#
+# `due_at` is when the professor should act, which is usually earlier than the
+# thing it concerns. Never invent one: a structural step has no deadline in the
+# data, and giving it one is inventing urgency.
+
+action_items:
+  # Something drafted, waiting on a decision.
+  - action_id: ACTION-DRAFT-{{ nnn }}
+    course_run_id: "{{ COURSE_VERSION_ID }}"
+    assigned_to: "{{ USER-… }}"
+    type: "{{ review_grades / review_signal / … }}"
+    title: "{{ what it is, in one line }}"
+    description: >-
+      {{ The identifiers, what is missing, and the confidence the command
+      reported. Never a student's name — the pseudonym. }}
+    priority: "{{ high / medium / low }}"
+    source_event_id: "{{ EVENT-… }}"
+    source_refs: ["{{ ASSESSMENT-… }}", "{{ EVAL-… }}"]
+    status: pending
+    due_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+    available_actions: [review, approve, dismiss]
+    provenance:
+      produced_by: action-inbox-skill
+      model_id: "{{ the model that wrote it }}"
+      workflow_version: claude-code/prototype
+      prompt_version: action-inbox/v1
+      input_refs: ["{{ EVENT-… }}", "{{ EVAL-… }}"]
+      created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+
+  # A step from the readiness ladder. Sourced to the rung it came from and to
+  # nothing else. No `approve` — nothing has been drafted. No `due_at`.
+  - action_id: ACTION-DRAFT-{{ nnn }}
+    course_run_id: "{{ COURSE_VERSION_ID }}"
+    assigned_to: "{{ USER-… }}"
+    type: build_course
+    title: "{{ the step }}"
+    description: >-
+      {{ readiness.<rung> is <state> — <detail, verbatim>. What it is underneath,
+      and which skill records it once the professor has stated it. }}
+    priority: "{{ high / medium / low }}"
+    source_refs: ["readiness:{{ rung }}"]
+    status: pending
+    available_actions: [review, dismiss]
+    provenance:
+      produced_by: action-inbox-skill
+      model_id: "{{ the model that wrote it }}"
+      workflow_version: claude-code/prototype
+      prompt_version: action-inbox/v1
+      input_refs: ["readiness:{{ rung }}"]
+      created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"

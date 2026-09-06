@@ -1,0 +1,49 @@
+beat: analyze-artifact
+name: Analyse an artifact
+family: evidence
+purpose: >-
+  Put a primary object in front of students and have them read it before being
+  told what it means.
+best_for:
+  - history, art, architecture, literature, law, medicine
+avoid_when:
+  - the artifact is decorative rather than evidential
+slides: 5
+sequence:
+  - step: the artifact, alone
+    intent: provide_evidence
+    archetype: single_visual
+    density: sparse
+    note: >-
+      identification and source only. Describing what the students can already
+      see wastes the slide and the room
+  - step: what should we notice?
+    intent: check_understanding
+    archetype: question
+    density: sparse
+  - step: the artifact, annotated
+    intent: provide_evidence
+    archetype: annotated_object
+    density: moderate
+  - step: the context it came from
+    intent: explain_mechanism
+    archetype: primary_source
+    density: dense
+  - step: the interpretation
+    intent: integrate
+    archetype: big_idea
+    density: moderate
+visual_rules:
+  image_dominance: high
+  preserve_original: true
+  source_required: true
+  minimize_description: true
+delivery_dependency: high
+notes: >-
+  In humanities teaching the interpretation is often spoken rather than printed,
+  and that is not an omission. Mark such slides delivery_dependency: high so the
+  handout mode knows they need filling in.
+exit_condition: >-
+  The student can make an observation about a comparable artifact unaided.
+transition: >-
+  A second artifact opens compare-evidence.

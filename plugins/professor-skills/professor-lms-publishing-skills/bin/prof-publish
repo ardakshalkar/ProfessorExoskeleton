@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+entry="$here/../node/bin/prof-publish.mjs"
+
+for candidate in "$PROF_PUBLISH_NODE" node nodejs; do
+    [ -z "$candidate" ] && continue
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    exec "$candidate" "$entry" "$@"
+done
+
+echo "prof-publish: Node 22.6 or later is required." >&2
+exit 127

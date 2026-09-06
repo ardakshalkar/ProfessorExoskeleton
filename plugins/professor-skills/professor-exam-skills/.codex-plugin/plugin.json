@@ -1,0 +1,23 @@
+{
+  "name": "professor-exam-skills",
+  "version": "0.1.0",
+  "description": "Design complete exams, individual questions, marking guides, and equivalent variants at the depth the request needs.",
+  "author": { "name": "Ardak Shalkarbayuly" },
+  "license": "MIT",
+  "keywords": ["assessment", "education", "exam-design", "marking", "rubrics", "teaching"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Exam Skills",
+    "shortDescription": "Create aligned exams, keys, rubrics, and equivalent variants without unnecessary process.",
+    "longDescription": "Two focused skills cover exam creation. make-exam is the default: it answers small requests directly and produces a compact exam package for full assessments. design-exam is optional for high-stakes work, approval-first design, complex variants, or formal alignment evidence. A shared exam specification connects question generation, equivalent variants, marking, and future AI grading, but quick requests are never forced through a large workflow. The bundle has no CLI, runtime dependencies, hooks, or mandatory research stage.",
+    "developerName": "Ardak Shalkarbayuly",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Create a 60-minute midterm from these course materials.",
+      "Write one application question with an answer key and rubric.",
+      "Generate four equivalent exam variants.",
+      "Design an exam blueprint for approval before writing questions."
+    ]
+  }
+}

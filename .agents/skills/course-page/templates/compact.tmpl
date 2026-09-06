@@ -1,0 +1,61 @@
+{# A one-page version of the plan: the dates, what is taught, when things are
+   due. It drops what a student browsing on a phone does not read — the concept
+   and outcome chips, the resources hanging off each meeting, the description —
+   and it puts assessment first, because that is what they open the page for.
+
+   Same view, same payload, different arrangement. `ainar page --structure
+   compact` renders it; the values come from `model()` in
+   `ainar/mcp/widget-assets/course-outline.js`, and the language is in
+   `template.js`: escaped `{{ paths }}`, `{% if %}`, `{% for %}`, nothing else.
+
+   Three things are not yours to drop, here or in any structure. A week nobody
+   planned says so rather than rendering empty; a weight nobody set says so
+   rather than printing a number; and the closing note says the page carries
+   nothing derived from student work. Tests assert all three against the
+   rendered bytes. #}
+
+<h1>{{ run.course_id }} — {{ run.title }}</h1>
+<p class="sub">{{ run.term }} · {{ run.start_date }} – {{ run.end_date }} · {{ run.id }}</p>
+
+{% if assessments %}
+<h2>What is assessed</h2>
+<div class="scroll"><table><thead><tr><th>Assessment</th><th class="n">Due</th><th class="n">Weight</th></tr></thead><tbody>
+{% for a in assessments %}
+<tr><td class="name">{{ a.title }}</td><td class="n">{% if a.due_on %}{{ a.due_on }}{% else %}not set{% endif %}</td><td class="n">{% if a.weight %}{{ a.weight }}{% else %}<span class="flag">weight not set</span>{% endif %}</td></tr>
+{% endfor %}
+</tbody></table></div>
+<p class="strip">Weights total {% if total_weight %}{{ total_weight }}{% else %}<span class="flag">weight not set</span>{% endif %}</p>
+{% endif %}
+
+{% if grading_note %}
+<div class="note"><strong class="flag">The grading policy.</strong> {{ grading_note }}</div>
+{% endif %}
+
+<h2>The term, week by week</h2>
+{% for w in weeks %}
+<div class="wk {{ w.classes }}">
+<div class="wk-when"><b>Week {{ w.week }}</b><small>{{ w.starts_on }} – {{ w.ends_on }}</small>{% if w.is_current %}<span class="now">this week</span>{% endif %}</div>
+<div class="wk-body">
+{% if w.planned %}
+{% for t in w.topics %}
+<div class="topic"><b>{{ t.title }}</b><small>{{ t.module_id }}</small></div>
+{% endfor %}
+{% else %}
+<p class="empty">Unplanned — nothing is recorded for this week, which is not the same as nothing being taught.</p>
+{% endif %}
+{% if w.meetings %}
+<ul class="meet">{% for m in w.meetings %}<li><span class="kind">{{ m.type }}</span> {{ m.title }}<small>{{ m.at }}{% if m.location %} · {{ m.location }}{% endif %}</small></li>{% endfor %}</ul>
+{% endif %}
+{% if w.marks %}
+<div class="marks">{% for k in w.marks %}<span class="mark {{ k.kind }}">{{ k.label }} · {{ k.title }}<small>{% if k.weight %}{{ k.weight }} of the grade{% else %}weight not set{% endif %}</small></span>{% endfor %}</div>
+{% endif %}
+</div>
+</div>
+{% endfor %}
+
+{% if materials %}
+<h2>What you need</h2>
+<ul class="plain">{% for m in materials %}<li>{% if m.href %}<a href="{{ m.href }}">{{ m.title }}</a>{% else %}{{ m.title }}{% endif %} <span class="kind">{{ m.kind }}</span></li>{% endfor %}</ul>
+{% endif %}
+
+<div class="note"><strong>The plan only.</strong> {{ placement }} Nothing here is derived from student work.</div>

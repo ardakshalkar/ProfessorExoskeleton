@@ -1,0 +1,40 @@
+{
+  "name": "professor-slides-skills",
+  "description": "Outline, build and render course presentations from a Supabase course database, a YAML course directory, or a single flat course file.",
+  "version": "0.2.0",
+  "author": {
+    "name": "Ardak Shalkarbayuly"
+  },
+  "license": "MIT",
+  "keywords": [
+    "course-design",
+    "education",
+    "lecture-slides",
+    "marp",
+    "pptx",
+    "presentations",
+    "slides",
+    "teaching"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "interface": {
+    "displayName": "Presentation Skills",
+    "shortDescription": "Plan a lecture, write its slides, and render the PowerPoint and PDF — at the depth the request needs.",
+    "longDescription": "Four skills over one course model, and the interesting decision is that the workflow is chosen rather than fixed. `pres route` picks one of three depths from the request: FAST for a few slides or notes to turn into a deck, STANDARD by default for a real session, DEEP when there is a concrete reason — a new lecture, research wanted, accreditation, material other instructors will teach from, a long deck, or a professor who asked to approve the plan first. An explicit fast, standard or deep always wins. The same rules about teaching apply in all three; what changes is how much of the reasoning becomes a file on disk.\n\nThe course is found rather than assumed: a Supabase link first, a YAML course directory next, a single flat course.yaml last — and the answer always says which one produced it, because a fallback is an excellent way to hide a stale course. `--source local` never touches the network, `--source database` refuses to fall back, an unreachable database is remembered so the second command in a session is instant rather than slow, and `--timing` says where the seconds went.\n\nPlanning runs down three taxonomies rather than jumping from a section to a list of slides: deck grammar, teaching beat, slide intent, visual archetype. The CLI serves each as a compact catalogue — `pres grammar`, `pres beats`, `pres archetypes`, `pres rules` — so choosing from them costs a few lines instead of several thousand words of reference documents, which remain for the reasoning and for DEEP mode.\n\nBuilding fills the outline in: slides as Marp markdown written as their archetypes, diagrams as committed SVG, tables built from the source material, openly-licensed images fetched with their attribution attached, and a written prompt for any illustration the professor must generate themselves. The render contract beside the deck is generated rather than transcribed, because every field in it was already stated in the outline or the markdown — judgement is the model's, bookkeeping is the code's. Rendering produces a PowerPoint with real editable shapes and speaker notes, and a PDF converted from that same deck.\n\nFour rules are enforced by the renderer rather than left to judgement: a deck whose mode requires approval is refused without it and every render says which mode built it, the plan must match the markdown in count, order and title, a figure claiming a source without an attribution line stops the build, and any slide running past the bottom margin is named. Readings and book chapters come from the course's own resource records, so there is no second list of sources to keep true.",
+    "developerName": "Ardak Shalkarbayuly",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Make 5 slides explaining retrieval-augmented generation.",
+      "Prepare next week's lecture for CSS-4008.",
+      "Research how others teach attention, then build the lecture — outline first.",
+      "Render the deck to PowerPoint and PDF."
+    ],
+    "composerIcon": "./assets/icon.png",
+    "logo": "./assets/logo.png"
+  }
+}

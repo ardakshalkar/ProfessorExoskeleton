@@ -1,0 +1,32 @@
+{
+  "issues": [
+    {
+      "code": "id.unapproved_draft",
+      "level": "warning",
+      "location": "SIGNAL-DRAFT-999",
+      "message": "signals: draft identifier in the course record — approve it with `ainar approve` rather than copying it"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "ref.signal",
+      "level": "error",
+      "location": "INT-204",
+      "message": "unknown signal SIGNAL-772"
+    }
+  ],
+  "mutation": "draft-identifier-in-the-course",
+  "patch": {
+    "signals.0.signal_id": "SIGNAL-DRAFT-999"
+  }
+}

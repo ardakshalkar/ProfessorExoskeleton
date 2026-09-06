@@ -1,0 +1,443 @@
+# The data description every professor skill reads.
+#
+# This file is the machine-readable half of DataLayer: one entry per entity,
+# saying what it is called, which JSON Schema validates it, where it is
+# authored, where it is stored, and how sensitive it is. The prose half is in
+# docs/ — start with docs/model.md.
+#
+# A consumer (a skill, a CLI, an MCP server) should read this file rather than
+# hard-coding globs and table names, so that a layout change lands in one place.
+
+format: professor.datalayer
+format_version: "1.0"
+model: ainar                      # entity names, id patterns and schemas are AINAR's
+model_source: ProfessorHarness    # schema/ is lifted from there; see schema/README.md
+
+# --------------------------------------------------------------------------
+# Sensitivity classes
+#
+# The class decides where a record may live, not how interesting it is.
+# --------------------------------------------------------------------------
+sensitivity:
+  public:
+    description: >-
+      May appear on a page a student reads. Course design, dates, weights,
+      reading lists.
+  internal:
+    description: >-
+      The professor's working material. Answer keys, item statistics, drafts,
+      inbox items. Not published, but about the course rather than a person.
+  restricted:
+    description: >-
+      Identifies a student or records what one did. Never written into the
+      course tree, never committed, never included in a prompt beyond the one
+      student the task is about.
+    storage: supabase
+    on_disk: forbidden
+
+# --------------------------------------------------------------------------
+# Storage
+# --------------------------------------------------------------------------
+storage:
+  yaml:
+    description: >-
+      Authored by hand (or drafted by a skill and approved) in the course tree,
+      reviewed in a diff, and pushed to Supabase as a read model. The tree is
+      the source of truth for everything it holds.
+    root: courses/<COURSE_ID>/
+  supabase:
+    description: >-
+      PostgreSQL. The source of truth for student records and for anything
+      accumulated at runtime. Nothing here is mirrored back to disk.
+    schemas: [academic, delivery, assessment, learning, content]
+  derived:
+    description: Projection of records that already exist elsewhere. Never authored.
+
+# --------------------------------------------------------------------------
+# Entities
+#
+# storage:  yaml | supabase | derived
+# yaml:     patterns relative to the course root; the first is the conventional
+#           single-file form, the rest are the directory forms. All are read and
+#           merged by id — see docs/yaml-layout.md.
+# --------------------------------------------------------------------------
+entities:
+
+  # ---- academic — what the course claims, independent of any term ----------
+
+  - entity: course
+    title: Course
+    group: academic
+    schema: schema/course.schema.json
+    id_pattern: "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$"
+    id_example: CSS-4008
+    storage: yaml
+    sensitivity: public
+    yaml: [course.yaml]
+    postgres: academic.courses
+
+  - entity: learning_outcome
+    title: LearningOutcome
+    group: academic
+    schema: schema/learning_outcome.schema.json
+    id_pattern: "^LO-[0-9]{2,3}$"
+    id_example: LO-04
+    storage: yaml
+    sensitivity: public
+    yaml: [outcomes.yaml, "outcomes/*.yaml"]
+    postgres: academic.learning_outcomes
+
+  - entity: concept
+    title: Concept
+    group: academic
+    schema: schema/concept.schema.json
+    id_pattern: "^CONCEPT-[A-Z0-9][A-Z0-9-]*$"
+    id_example: CONCEPT-OVERFITTING
+    storage: yaml
+    sensitivity: public
+    yaml: [concepts.yaml, "concepts/*.yaml"]
+    shared: shared/concepts.yaml
+    postgres: academic.concepts
+
+  - entity: concept_edge
+    title: ConceptEdge
+    group: academic
+    schema: schema/concept_edge.schema.json
+    storage: yaml
+    sensitivity: public
+    yaml: [concept-edges.yaml]
+    postgres: academic.concepts.prerequisite_codes   # prerequisite edges inline on the concept
+    note: >-
+      Prerequisites are normally written inline on the concept. This entity
+      carries the other relationship types and edges between shared concepts.
+
+  - entity: capability
+    title: Capability
+    group: academic
+    schema: schema/capability.schema.json
+    id_pattern: "^CAP-[A-Z0-9][A-Z0-9-]*$"
+    id_example: CAP-AI-EXPERIMENT
+    storage: yaml
+    sensitivity: public
+    yaml: [capabilities.yaml]
+    shared: shared/capabilities.yaml
+    postgres: academic.capabilities
+
+  - entity: module
+    title: Module
+    group: academic
+    schema: schema/module.schema.json
+    id_pattern: "^MODULE-(?:DRAFT-)?[0-9]{2,3}$"
+    id_example: MODULE-06
+    storage: yaml
+    sensitivity: public
+    yaml: [modules.yaml, "modules/*.yaml"]
+    postgres: academic.modules
+
+  # ---- delivery — one term of it ------------------------------------------
+
+  - entity: course_version
+    title: CourseVersion
+    group: delivery
+    schema: schema/course_version.schema.json
+    id_pattern: "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$"
+    id_example: CSS-4008-2026-FALL
+    storage: yaml
+    sensitivity: public
+    yaml: ["versions/*/version.yaml"]
+    postgres: delivery.course_versions
+    note: The term is the identity. One offering, and the version approved for it.
+
+  - entity: user
+    title: User
+    group: delivery
+    schema: schema/user.schema.json
+    id_pattern: "^USER-[A-Z0-9][A-Z0-9-]*$"
+    id_example: USER-ARD-A01
+    storage: yaml
+    sensitivity: internal
+    yaml: [people/users.yaml, "people/*.yaml"]
+    shared: shared/users.yaml
+    postgres: delivery.users
+    note: >-
+      Staff only. A student is never a row in this file — see enrollment.
+
+  - entity: enrollment
+    title: Enrollment
+    group: delivery
+    schema: schema/enrollment.schema.json
+    id_pattern: "^ENR-[A-Z0-9][A-Z0-9-]*$"
+    storage: supabase
+    sensitivity: restricted
+    postgres: delivery.enrollments
+    note: >-
+      The roster. It names real people, so it lives in the database and the
+      course tree holds at most an expected headcount.
+
+  - entity: learning_activity
+    title: LearningActivity
+    group: delivery
+    schema: schema/learning_activity.schema.json
+    id_pattern: "^ACT-[A-Z0-9][A-Z0-9-]*$"
+    id_example: ACT-0602
+    storage: yaml
+    sensitivity: public
+    yaml: ["versions/*/activities.yaml", "versions/*/activities/*.yaml"]
+    postgres: delivery.learning_activities
+
+  - entity: resource
+    title: Resource
+    group: delivery
+    schema: schema/resource.schema.json
+    id_pattern: "^RES-[A-Z0-9][A-Z0-9-]*$"
+    storage: yaml
+    sensitivity: public
+    yaml: ["versions/*/resources.yaml", "versions/*/resources/*.yaml"]
+    postgres: delivery.resources
+    note: >-
+      The reading list, concept-tagged. There is no second list of books
+      anywhere; a second list would be a second thing to keep true.
+
+  # ---- assessment — what is asked, and what came back ----------------------
+
+  - entity: assessment
+    title: Assessment
+    group: assessment
+    schema: schema/assessment.schema.json
+    id_pattern: "^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$"
+    storage: yaml
+    sensitivity: internal
+    yaml: ["versions/*/assessments.yaml", "versions/*/assessments/*.yaml"]
+    postgres: assessment.assessments
+    note: >-
+      Title, weight and deadline are public; the rest of the record is not.
+      A consumer building a student-facing page copies fields, never the record.
+
+  - entity: rubric
+    title: Rubric
+    group: assessment
+    schema: schema/rubric.schema.json
+    id_pattern: "^RUBRIC-[A-Z0-9][A-Z0-9-]*$"
+    storage: yaml
+    sensitivity: internal
+    yaml: ["versions/*/rubrics.yaml", "versions/*/rubrics/*.yaml"]
+    postgres: assessment.rubrics
+
+  - entity: assessment_item
+    title: AssessmentItem
+    group: assessment
+    schema: schema/assessment_item.schema.json
+    id_pattern: "^ITEM-[A-Z0-9][A-Z0-9-]*$"
+    storage: yaml
+    sensitivity: internal
+    yaml: ["versions/*/items.yaml", "versions/*/items/*.yaml", "versions/*/assessments/items/*.yaml"]
+    postgres: assessment.assessment_items
+    note: Carries answer keys. Internal, always, including before the exam.
+
+  - entity: item_model
+    title: ItemModel
+    group: assessment
+    schema: schema/item_model.schema.json
+    id_pattern: "^ITEM-MODEL-[A-Z0-9][A-Z0-9-]*$"
+    storage: yaml
+    sensitivity: internal
+    yaml: ["versions/*/item-models.yaml", "versions/*/item-models/*.yaml"]
+    postgres: assessment.item_models
+
+  - entity: submission
+    title: Submission
+    group: assessment
+    schema: schema/submission.schema.json
+    id_pattern: "^SUB-[A-Z0-9][A-Z0-9-]*$"
+    storage: supabase
+    sensitivity: restricted
+    postgres: assessment.submissions
+
+  - entity: item_response
+    title: ItemResponse
+    group: assessment
+    schema: schema/item_response.schema.json
+    id_pattern: "^RESP-[A-Z0-9][A-Z0-9-]*$"
+    storage: supabase
+    sensitivity: restricted
+    postgres: assessment.item_responses
+
+  - entity: evaluation
+    title: Evaluation
+    group: assessment
+    schema: schema/evaluation.schema.json
+    id_pattern: "^EVAL-[A-Z0-9][A-Z0-9-]*$"
+    storage: supabase
+    sensitivity: restricted
+    postgres: assessment.evaluations
+    note: >-
+      Holds both the machine's suggestion and the professor's decision. A mark
+      exists only once a person has approved it.
+
+  # ---- learning — what the evidence says -----------------------------------
+
+  - entity: learning_evidence
+    title: LearningEvidence
+    group: learning
+    schema: schema/learning_evidence.schema.json
+    id_pattern: "^EVID-[A-Z0-9][A-Z0-9-]*$"
+    storage: supabase
+    sensitivity: restricted
+    postgres: learning.evidence
+
+  - entity: student_concept_state
+    title: StudentConceptState
+    group: learning
+    schema: schema/student_concept_state.schema.json
+    storage: supabase
+    sensitivity: restricted
+    postgres: learning.concept_states
+
+  - entity: student_capability_state
+    title: StudentCapabilityState
+    group: learning
+    schema: schema/course-bundle.schema.json#/$defs/StudentCapabilityState
+    storage: supabase
+    sensitivity: restricted
+    postgres: learning.capability_states
+    note: No standalone schema file; the bundle definition is the contract.
+
+  - entity: student_signal
+    title: StudentSignal
+    group: learning
+    schema: schema/student_signal.schema.json
+    id_pattern: "^SIGNAL-[A-Z0-9][A-Z0-9-]*$"
+    storage: supabase
+    sensitivity: restricted
+    postgres: learning.signals
+
+  - entity: intervention
+    title: Intervention
+    group: learning
+    schema: schema/intervention.schema.json
+    id_pattern: "^INT-[A-Z0-9][A-Z0-9-]*$"
+    storage: supabase
+    sensitivity: restricted
+    postgres: learning.interventions
+
+  # ---- harness — the professor's own runtime -------------------------------
+
+  - entity: course_event
+    title: CourseEvent
+    group: harness
+    schema: schema/course_event.schema.json
+    id_pattern: "^EVENT-[A-Z0-9][A-Z0-9-]*$"
+    storage: supabase
+    sensitivity: internal
+    postgres: learning.events
+
+  - entity: action_item
+    title: ActionItem
+    group: harness
+    schema: schema/action_item.schema.json
+    id_pattern: "^ACTION-[A-Z0-9][A-Z0-9-]*$"
+    storage: supabase
+    sensitivity: internal
+    postgres: learning.action_items
+    note: >-
+      May quote a student, so it is treated as restricted whenever its subject
+      is one.
+
+  # ---- content — the files behind everything else --------------------------
+
+  - entity: document
+    title: Document
+    group: content
+    schema: schema/document.schema.json
+    id_pattern: "^DOC-[A-Z0-9][A-Z0-9-]*$"
+    storage: yaml
+    sensitivity: internal
+    yaml: ["versions/*/documents.yaml", "versions/*/documents/*.yaml"]
+    files: "versions/*/materials/"
+    postgres: content.documents
+    note: >-
+      The record is YAML; the file it points at sits under materials/. Slides,
+      handouts and figures are written there.
+
+  - entity: course_bundle
+    title: CourseBundle
+    group: content
+    schema: schema/course-bundle.schema.json
+    storage: derived
+    sensitivity: internal
+    postgres: content.course_bundle_read_models
+    note: >-
+      Every yaml-stored entity above, in one document, in one shape. What a
+      consumer actually receives, whichever source answered.
+
+# --------------------------------------------------------------------------
+# Settings — the professor's preferences, not the course's claims
+#
+# Resolved system -> professor -> course -> task; explicit beats inferred
+# within a scope. See docs/settings.md.
+# --------------------------------------------------------------------------
+settings:
+  schema: schema/preference_profile.schema.json
+  scopes:
+    - scope: system
+      file: preferences/defaults.yaml
+      relative_to: datalayer
+      description: Shipped defaults. Committed here.
+    - scope: professor
+      file: preferences.yaml
+      relative_to: professor_home        # $PROFESSOR_HOME, default ~/.professor
+      description: Personal. Never committed, never in a course tree.
+    - scope: course
+      file: courses/<COURSE_ID>/preferences.yaml
+      relative_to: workspace
+      description: Shared with anyone who teaches the course.
+    - scope: course
+      file: courses/<COURSE_ID>/versions/<TERM>/preferences.yaml
+      relative_to: workspace
+      description: This term only. Applied after the course-level file.
+    - scope: task
+      file: null
+      description: Flags on the invoking command. Highest precedence, never persisted.
+  namespaces:
+    language: Language of instruction and of generated material.
+    assessment: How assessments are written and validated.
+    presentation: Audience, duration, style and density of a deck.
+    outline: What a presentation plan must state before it is filled in.
+    figures: How diagrams are drawn and what they must carry.
+    render: Output formats and where they are written.
+    grading: Thresholds and approval behaviour.
+    publishing: Where output may be sent, and what may leave the machine.
+  deprecated_namespaces:
+    presentations: >-
+      Early ProfessorHarness defaults used a single `presentations` block. Read
+      it as an alias for `presentation` when present; do not write it.
+
+# --------------------------------------------------------------------------
+# Where a course comes from, and in what order
+#
+# A consumer resolving `auto` tries these in order and must report which one
+# answered — including the ones it skipped and why. See docs/consuming.md.
+# --------------------------------------------------------------------------
+sources:
+  order: [supabase, course-directory, flat-file]
+  supabase:
+    query: SELECT payload FROM content.course_bundle_read_models WHERE course_code = $1
+    dsn_env: [SUPABASE_DB_URL, SUPABASE_URL]
+  course-directory:
+    root_env: [PROFESSOR_WORKSPACE]
+    layout: courses/<COURSE_ID>/
+  flat-file:
+    file: course.yaml
+    description: A single hand-written file, for a talk with no course behind it.
+  provenance_required: true
+
+env:
+  PROFESSOR_WORKSPACE: Directory holding courses/. Otherwise found by walking up.
+  PROFESSOR_HOME: Personal settings and caches. Default ~/.professor.
+  SUPABASE_DB_URL: PostgreSQL DSN. Read from the process, then .env, then .env.local.
+  SUPABASE_URL: Accepted as an alias when SUPABASE_DB_URL is unset.
+  aliases:
+    professor-slides-skills:
+      PROFESSOR_WORKSPACE: PRES_WORKSPACE
+      PROFESSOR_HOME: PRES_HOME
+      SUPABASE_DB_URL: PRES_COURSE_URL

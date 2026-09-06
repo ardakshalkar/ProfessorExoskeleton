@@ -1,0 +1,9 @@
+Vendored by `python -m exo setup` from:
+  C:\Users\Ardak Shalkar\Development\AIED\ProfessorSkills
+
+Do not edit anything here. Edit the ProfessorSkills checkout and re-run
+setup; a change made in this copy is lost on the next one, silently.
+
+node_modules is deliberately not copied. See PROFESSOR_SKILLS_EXCLUDE in
+exo/setup.py, and the npm command setup prints for the one plugin that
+needs it.

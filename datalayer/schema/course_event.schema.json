@@ -1,0 +1,69 @@
+{
+  "additionalProperties": false,
+  "description": "Something that happened in a course run, which workflows may react to.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "event_id": {
+      "pattern": "^EVENT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "event_type": {
+      "description": "e.g. course_run_created, syllabus_uploaded, lesson_completed, assessment_published, submission_received, grading_completed, quiz_average_dropped, student_signal_created, rubric_changed, university_policy_updated.",
+      "title": "Event Type",
+      "type": "string"
+    },
+    "course_version_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Course Version Id",
+      "type": "string"
+    },
+    "entity_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Entity Type"
+    },
+    "entity_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Entity Id"
+    },
+    "occurred_at": {
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "event_id",
+    "event_type",
+    "course_version_id",
+    "occurred_at"
+  ],
+  "title": "CourseEvent",
+  "type": "object"
+}

@@ -1,0 +1,43 @@
+beat: execution-trace
+name: Execution trace
+family: algorithm
+purpose: >-
+  Show state changing, on one frame, so the mechanism becomes visible.
+best_for:
+  - sorting, search, graph algorithms, optimisation, training loops
+avoid_when:
+  - the state is too large to show honestly
+slides: 6
+sequence:
+  - step: the input, and the initial state
+    intent: orient
+    archetype: annotated_object
+    density: sparse
+  - step: iteration one
+    intent: demonstrate
+    archetype: annotated_object
+    density: sparse
+  - step: iteration two
+    intent: demonstrate
+    archetype: annotated_object
+    density: sparse
+  - step: iteration three
+    intent: demonstrate
+    archetype: annotated_object
+    density: sparse
+  - step: the output
+    intent: integrate
+    archetype: annotated_object
+    density: sparse
+  - step: what the trace showed that the code did not
+    intent: integrate
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  reuse_visual_anchor: true
+  maintain_geometry: true
+  note: same frame, changing state. Moving the boxes between frames destroys the trace
+exit_condition: >-
+  The student can carry out the next iteration themselves.
+transition: >-
+  "What does that cost?" opens complexity, or straight to a comparison beat.

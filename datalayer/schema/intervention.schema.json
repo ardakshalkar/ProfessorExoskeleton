@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "InterventionStatus": {
+      "enum": [
+        "proposed",
+        "approved",
+        "scheduled",
+        "completed",
+        "cancelled"
+      ],
+      "title": "InterventionStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What the professor decided to do about a signal.\n\nRecording the intervention is what later allows AINAR to measure whether\nit worked: new evidence after the intervention is compared with the state\nthat triggered it.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "intervention_id": {
+      "pattern": "^INT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Intervention Id",
+      "type": "string"
+    },
+    "signal_id": {
+      "anyOf": [
+        {
+          "pattern": "^SIGNAL-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Signal Id"
+    },
+    "student_id": {
+      "anyOf": [
+        {
+          "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Student Id"
+    },
+    "course_version_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Course Version Id",
+      "type": "string"
+    },
+    "type": {
+      "description": "e.g. 'targeted_practice', 'office_hours', 'reteach'.",
+      "title": "Type",
+      "type": "string"
+    },
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "proposed_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Agent name or user id.",
+      "title": "Proposed By"
+    },
+    "approved_by": {
+      "anyOf": [
+        {
+          "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Approved By"
+    },
+    "status": {
+      "$ref": "#/$defs/InterventionStatus",
+      "default": "proposed"
+    },
+    "scheduled_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Scheduled At"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Completed At"
+    },
+    "effectiveness_note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Effectiveness Note"
+    }
+  },
+  "required": [
+    "intervention_id",
+    "course_version_id",
+    "type",
+    "description"
+  ],
+  "title": "Intervention",
+  "type": "object"
+}

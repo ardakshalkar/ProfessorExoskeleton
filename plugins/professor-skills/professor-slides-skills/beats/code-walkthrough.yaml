@@ -1,0 +1,41 @@
+beat: code-walkthrough
+name: Code walk-through
+family: algorithm
+purpose: >-
+  Read real code with the room rather than describe it to them.
+best_for:
+  - programming courses, library introductions, lab preparation
+avoid_when:
+  - the code is long enough that nobody can read it projected
+slides: 5
+sequence:
+  - step: what this code is for
+    intent: orient
+    archetype: big_idea
+    density: sparse
+  - step: the whole example, small
+    intent: demonstrate
+    archetype: algorithm
+    density: dense
+  - step: the lines that matter, highlighted
+    intent: explain_mechanism
+    archetype: algorithm
+    density: moderate
+  - step: what it produces
+    intent: demonstrate
+    archetype: single_visual
+    density: sparse
+  - step: change one thing — what happens?
+    intent: check_understanding
+    archetype: question
+    density: sparse
+visual_rules:
+  reuse_visual_anchor: true
+  progressive_highlighting: true
+  note: >-
+    the formal representation on one side, the interpretation beside it. Not a
+    screenshot of code with eight bullets underneath
+exit_condition: >-
+  The student can predict the effect of a small change.
+transition: >-
+  Into the lab task, or into the next construct.

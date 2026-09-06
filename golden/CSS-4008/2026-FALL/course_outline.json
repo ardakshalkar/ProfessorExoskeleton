@@ -1,0 +1,1057 @@
+{
+  "as_of": "2026-10-26",
+  "assessments": [
+    {
+      "assessment_id": "ASSESSMENT-01",
+      "criteria": 2,
+      "due_at": "2026-09-29T23:59:00+05:00",
+      "due_on": "2026-09-29",
+      "maximum_score": 100.0,
+      "module_id": "MODULE-02",
+      "opens_at": "2026-09-28T09:00:00+05:00",
+      "opens_on": "2026-09-28",
+      "outcomes": [
+        "LO-01"
+      ],
+      "rubric_id": "RUBRIC-01",
+      "submission_type": [
+        "text"
+      ],
+      "title": "Foundations Quiz",
+      "type": "quiz",
+      "weight": 0.15
+    },
+    {
+      "assessment_id": "ASSESSMENT-02",
+      "criteria": 2,
+      "due_at": "2026-10-06T23:59:00+05:00",
+      "due_on": "2026-10-06",
+      "maximum_score": 100.0,
+      "module_id": "MODULE-03",
+      "opens_at": null,
+      "opens_on": null,
+      "outcomes": [
+        "LO-03"
+      ],
+      "rubric_id": "RUBRIC-02",
+      "submission_type": [
+        "pdf",
+        "notebook"
+      ],
+      "title": "Data Preparation Report",
+      "type": "assignment",
+      "weight": 0.15
+    },
+    {
+      "assessment_id": "ASSESSMENT-04",
+      "criteria": 4,
+      "due_at": "2026-10-15T23:59:00+05:00",
+      "due_on": "2026-10-15",
+      "maximum_score": 100.0,
+      "module_id": "MODULE-06",
+      "opens_at": "2026-10-07T12:00:00+05:00",
+      "opens_on": "2026-10-07",
+      "outcomes": [
+        "LO-02",
+        "LO-04"
+      ],
+      "rubric_id": "RUBRIC-04",
+      "submission_type": [
+        "pdf",
+        "notebook",
+        "oral_defense"
+      ],
+      "title": "Model Evaluation Assignment",
+      "type": "assignment",
+      "weight": 0.2
+    },
+    {
+      "assessment_id": "ASSESSMENT-05",
+      "criteria": 4,
+      "due_at": "2026-12-15T23:59:00+05:00",
+      "due_on": "2026-12-15",
+      "maximum_score": 100.0,
+      "module_id": "MODULE-09",
+      "opens_at": "2026-10-27T09:00:00+05:00",
+      "opens_on": "2026-10-27",
+      "outcomes": [
+        "LO-01",
+        "LO-02",
+        "LO-03",
+        "LO-04"
+      ],
+      "rubric_id": "RUBRIC-05",
+      "submission_type": [
+        "pdf",
+        "code_repo",
+        "oral_defense"
+      ],
+      "title": "Final AI Project",
+      "type": "project",
+      "weight": 0.5
+    }
+  ],
+  "current_week": 8,
+  "grading": {
+    "complete": true,
+    "note": null,
+    "total_weight": 1.0,
+    "unweighted": []
+  },
+  "outcomes": [
+    {
+      "level": [
+        "understand"
+      ],
+      "outcome_id": "LO-01",
+      "title": "Explain core AI problem types and methods",
+      "weight": 0.2
+    },
+    {
+      "level": [
+        "apply"
+      ],
+      "outcome_id": "LO-02",
+      "title": "Implement and evaluate a machine learning model",
+      "weight": 0.3
+    },
+    {
+      "level": [
+        "apply",
+        "analyze"
+      ],
+      "outcome_id": "LO-03",
+      "title": "Prepare and reason about data for learning",
+      "weight": 0.2
+    },
+    {
+      "level": [
+        "apply",
+        "analyze"
+      ],
+      "outcome_id": "LO-04",
+      "title": "Design and evaluate an AI solution",
+      "weight": 0.3
+    }
+  ],
+  "placement": "Weeks are counted in sevens from the run's start date. A meeting sits in its module's week and shows its own date beside it; an assessment sits in the week it opens and in the week it is due. Whether a meeting's date disagrees with its module is `ainar validate`'s call (schedule.week_mismatch), not this document's.",
+  "required_materials": [
+    {
+      "document_id": null,
+      "kind": "reading",
+      "required": true,
+      "resource_id": "RES-101",
+      "title": "Course reader — problem formulation",
+      "url": "https://example.sdu.edu.kz/css-4007/reader-01"
+    },
+    {
+      "document_id": "DOC-3301",
+      "kind": "dataset",
+      "required": true,
+      "resource_id": "RES-301",
+      "title": "Student performance dataset (teaching copy)",
+      "url": null
+    },
+    {
+      "document_id": "DOC-4410",
+      "kind": "slides",
+      "required": true,
+      "resource_id": "RES-441",
+      "title": "Model evaluation and overfitting — slides",
+      "url": null
+    },
+    {
+      "document_id": "DOC-4420",
+      "kind": "notebook",
+      "required": true,
+      "resource_id": "RES-442",
+      "title": "Diagnosing overfitting — starter notebook",
+      "url": null
+    }
+  ],
+  "run": {
+    "course_id": "CSS-4008",
+    "credits": 5.0,
+    "department": "Institute of Digital Transformation and AI",
+    "description": "Introduction to artificial intelligence methods and their application: problem formulation, search, data preparation, supervised learning, evaluation, and the design of defensible AI experiments.",
+    "end_date": "2026-12-20",
+    "id": "CSS-4008-2026-FALL",
+    "instructors": [
+      "Ardak Shalkarbay-uly"
+    ],
+    "language": [
+      "en"
+    ],
+    "start_date": "2026-09-01",
+    "status": "scheduled",
+    "term": "2026-FALL",
+    "timezone": "Asia/Almaty",
+    "title": "Artificial Intelligence"
+  },
+  "totals": {
+    "assessments": 4,
+    "meetings": 10,
+    "modules": 10,
+    "weeks": 16,
+    "weeks_planned": 10
+  },
+  "unplaced": {
+    "assessments": [],
+    "meetings": [],
+    "modules": []
+  },
+  "weeks": [
+    {
+      "due": [],
+      "ends_on": "2026-09-07",
+      "meetings": [
+        {
+          "activity_id": "ACT-0101",
+          "concepts": [
+            {
+              "id": "CONCEPT-AI-PROBLEM-TYPES",
+              "title": "AI problem types"
+            }
+          ],
+          "duration_minutes": 100,
+          "location": "A-204",
+          "module_id": "MODULE-01",
+          "on": "2026-09-02",
+          "outcomes": [
+            "LO-01"
+          ],
+          "preparation": null,
+          "resources": [
+            {
+              "document_id": null,
+              "kind": "reading",
+              "required": true,
+              "resource_id": "RES-101",
+              "title": "Course reader — problem formulation",
+              "url": "https://example.sdu.edu.kz/css-4007/reader-01"
+            }
+          ],
+          "scheduled_at": "2026-09-02T10:00:00+05:00",
+          "title": "What counts as an AI problem",
+          "type": "lecture"
+        }
+      ],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-AI-PROBLEM-TYPES",
+              "title": "AI problem types"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-01",
+          "outcomes": [
+            {
+              "id": "LO-01",
+              "title": "Explain core AI problem types and methods"
+            }
+          ],
+          "title": "What AI Is and Is Not"
+        }
+      ],
+      "opens": [],
+      "planned": true,
+      "starts_on": "2026-09-01",
+      "week": 1,
+      "when": "past"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-09-14",
+      "meetings": [
+        {
+          "activity_id": "ACT-0202",
+          "concepts": [
+            {
+              "id": "CONCEPT-SEARCH",
+              "title": "State-space search"
+            }
+          ],
+          "duration_minutes": 100,
+          "location": "A-204",
+          "module_id": "MODULE-02",
+          "on": "2026-09-09",
+          "outcomes": [
+            "LO-01"
+          ],
+          "preparation": null,
+          "resources": [
+            {
+              "document_id": null,
+              "kind": "reading",
+              "required": true,
+              "resource_id": "RES-101",
+              "title": "Course reader — problem formulation",
+              "url": "https://example.sdu.edu.kz/css-4007/reader-01"
+            }
+          ],
+          "scheduled_at": "2026-09-09T10:00:00+05:00",
+          "title": "Formulating search problems",
+          "type": "seminar"
+        }
+      ],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-SEARCH",
+              "title": "State-space search"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-02",
+          "outcomes": [
+            {
+              "id": "LO-01",
+              "title": "Explain core AI problem types and methods"
+            }
+          ],
+          "title": "Search and Problem Formulation"
+        }
+      ],
+      "opens": [],
+      "planned": true,
+      "starts_on": "2026-09-08",
+      "week": 2,
+      "when": "past"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-09-21",
+      "meetings": [
+        {
+          "activity_id": "ACT-0301",
+          "concepts": [
+            {
+              "id": "CONCEPT-DATA-PREPARATION",
+              "title": "Data preparation"
+            }
+          ],
+          "duration_minutes": 150,
+          "location": "Lab B-113",
+          "module_id": "MODULE-03",
+          "on": "2026-09-16",
+          "outcomes": [
+            "LO-03"
+          ],
+          "preparation": "Read the dataset description and list three quality risks.",
+          "resources": [
+            {
+              "document_id": "DOC-3301",
+              "kind": "dataset",
+              "required": true,
+              "resource_id": "RES-301",
+              "title": "Student performance dataset (teaching copy)",
+              "url": null
+            }
+          ],
+          "scheduled_at": "2026-09-16T10:00:00+05:00",
+          "title": "Inspecting and cleaning a real dataset",
+          "type": "lab"
+        }
+      ],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-DATA-PREPARATION",
+              "title": "Data preparation"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-03",
+          "outcomes": [
+            {
+              "id": "LO-03",
+              "title": "Prepare and reason about data for learning"
+            }
+          ],
+          "title": "Working with Data"
+        }
+      ],
+      "opens": [],
+      "planned": true,
+      "starts_on": "2026-09-15",
+      "week": 3,
+      "when": "past"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-09-28",
+      "meetings": [
+        {
+          "activity_id": "ACT-0401",
+          "concepts": [
+            {
+              "id": "CONCEPT-SUPERVISED-LEARNING",
+              "title": "Supervised learning"
+            }
+          ],
+          "duration_minutes": 150,
+          "location": "Lab B-113",
+          "module_id": "MODULE-04",
+          "on": "2026-09-23",
+          "outcomes": [
+            "LO-02"
+          ],
+          "preparation": null,
+          "resources": [
+            {
+              "document_id": "DOC-3301",
+              "kind": "dataset",
+              "required": true,
+              "resource_id": "RES-301",
+              "title": "Student performance dataset (teaching copy)",
+              "url": null
+            }
+          ],
+          "scheduled_at": "2026-09-23T10:00:00+05:00",
+          "title": "Training a first supervised model",
+          "type": "lab"
+        }
+      ],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-SUPERVISED-LEARNING",
+              "title": "Supervised learning"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-04",
+          "outcomes": [
+            {
+              "id": "LO-02",
+              "title": "Implement and evaluate a machine learning model"
+            }
+          ],
+          "title": "Supervised Learning"
+        }
+      ],
+      "opens": [
+        {
+          "assessment_id": "ASSESSMENT-01",
+          "criteria": 2,
+          "due_at": "2026-09-29T23:59:00+05:00",
+          "due_on": "2026-09-29",
+          "maximum_score": 100.0,
+          "module_id": "MODULE-02",
+          "opens_at": "2026-09-28T09:00:00+05:00",
+          "opens_on": "2026-09-28",
+          "outcomes": [
+            "LO-01"
+          ],
+          "rubric_id": "RUBRIC-01",
+          "submission_type": [
+            "text"
+          ],
+          "title": "Foundations Quiz",
+          "type": "quiz",
+          "weight": 0.15
+        }
+      ],
+      "planned": true,
+      "starts_on": "2026-09-22",
+      "week": 4,
+      "when": "past"
+    },
+    {
+      "due": [
+        {
+          "assessment_id": "ASSESSMENT-01",
+          "criteria": 2,
+          "due_at": "2026-09-29T23:59:00+05:00",
+          "due_on": "2026-09-29",
+          "maximum_score": 100.0,
+          "module_id": "MODULE-02",
+          "opens_at": "2026-09-28T09:00:00+05:00",
+          "opens_on": "2026-09-28",
+          "outcomes": [
+            "LO-01"
+          ],
+          "rubric_id": "RUBRIC-01",
+          "submission_type": [
+            "text"
+          ],
+          "title": "Foundations Quiz",
+          "type": "quiz",
+          "weight": 0.15
+        }
+      ],
+      "ends_on": "2026-10-05",
+      "meetings": [
+        {
+          "activity_id": "ACT-0501",
+          "concepts": [
+            {
+              "id": "CONCEPT-TRAIN-TEST-SPLIT",
+              "title": "Train-test separation"
+            }
+          ],
+          "duration_minutes": 150,
+          "location": "Lab B-113",
+          "module_id": "MODULE-05",
+          "on": "2026-09-30",
+          "outcomes": [
+            "LO-02",
+            "LO-03"
+          ],
+          "preparation": null,
+          "resources": [
+            {
+              "document_id": "DOC-3301",
+              "kind": "dataset",
+              "required": true,
+              "resource_id": "RES-301",
+              "title": "Student performance dataset (teaching copy)",
+              "url": null
+            }
+          ],
+          "scheduled_at": "2026-09-30T10:00:00+05:00",
+          "title": "Splitting data honestly",
+          "type": "lab"
+        }
+      ],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-TRAIN-TEST-SPLIT",
+              "title": "Train-test separation"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-05",
+          "outcomes": [
+            {
+              "id": "LO-02",
+              "title": "Implement and evaluate a machine learning model"
+            },
+            {
+              "id": "LO-03",
+              "title": "Prepare and reason about data for learning"
+            }
+          ],
+          "title": "Train-Test Separation"
+        }
+      ],
+      "opens": [],
+      "planned": true,
+      "starts_on": "2026-09-29",
+      "week": 5,
+      "when": "past"
+    },
+    {
+      "due": [
+        {
+          "assessment_id": "ASSESSMENT-02",
+          "criteria": 2,
+          "due_at": "2026-10-06T23:59:00+05:00",
+          "due_on": "2026-10-06",
+          "maximum_score": 100.0,
+          "module_id": "MODULE-03",
+          "opens_at": null,
+          "opens_on": null,
+          "outcomes": [
+            "LO-03"
+          ],
+          "rubric_id": "RUBRIC-02",
+          "submission_type": [
+            "pdf",
+            "notebook"
+          ],
+          "title": "Data Preparation Report",
+          "type": "assignment",
+          "weight": 0.15
+        }
+      ],
+      "ends_on": "2026-10-12",
+      "meetings": [
+        {
+          "activity_id": "ACT-0601",
+          "concepts": [
+            {
+              "id": "CONCEPT-MODEL-EVALUATION",
+              "title": "Model evaluation"
+            }
+          ],
+          "duration_minutes": 100,
+          "location": "A-204",
+          "module_id": "MODULE-06",
+          "on": "2026-10-05",
+          "outcomes": [
+            "LO-02",
+            "LO-04"
+          ],
+          "preparation": null,
+          "resources": [
+            {
+              "document_id": "DOC-4410",
+              "kind": "slides",
+              "required": true,
+              "resource_id": "RES-441",
+              "title": "Model evaluation and overfitting — slides",
+              "url": null
+            }
+          ],
+          "scheduled_at": "2026-10-05T10:00:00+05:00",
+          "title": "Choosing a metric that means something",
+          "type": "lecture"
+        },
+        {
+          "activity_id": "ACT-0602",
+          "concepts": [
+            {
+              "id": "CONCEPT-OVERFITTING",
+              "title": "Overfitting"
+            }
+          ],
+          "duration_minutes": 150,
+          "location": "Lab B-113",
+          "module_id": "MODULE-06",
+          "on": "2026-10-07",
+          "outcomes": [
+            "LO-04"
+          ],
+          "preparation": "Bring the model you trained in week 5.",
+          "resources": [
+            {
+              "document_id": "DOC-4410",
+              "kind": "slides",
+              "required": true,
+              "resource_id": "RES-441",
+              "title": "Model evaluation and overfitting — slides",
+              "url": null
+            },
+            {
+              "document_id": "DOC-4420",
+              "kind": "notebook",
+              "required": true,
+              "resource_id": "RES-442",
+              "title": "Diagnosing overfitting — starter notebook",
+              "url": null
+            }
+          ],
+          "scheduled_at": "2026-10-07T10:00:00+05:00",
+          "title": "Diagnosing Overfitting",
+          "type": "lab"
+        }
+      ],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-MODEL-EVALUATION",
+              "title": "Model evaluation"
+            },
+            {
+              "id": "CONCEPT-OVERFITTING",
+              "title": "Overfitting"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-06",
+          "outcomes": [
+            {
+              "id": "LO-02",
+              "title": "Implement and evaluate a machine learning model"
+            },
+            {
+              "id": "LO-04",
+              "title": "Design and evaluate an AI solution"
+            }
+          ],
+          "title": "Model Evaluation and Overfitting"
+        }
+      ],
+      "opens": [
+        {
+          "assessment_id": "ASSESSMENT-04",
+          "criteria": 4,
+          "due_at": "2026-10-15T23:59:00+05:00",
+          "due_on": "2026-10-15",
+          "maximum_score": 100.0,
+          "module_id": "MODULE-06",
+          "opens_at": "2026-10-07T12:00:00+05:00",
+          "opens_on": "2026-10-07",
+          "outcomes": [
+            "LO-02",
+            "LO-04"
+          ],
+          "rubric_id": "RUBRIC-04",
+          "submission_type": [
+            "pdf",
+            "notebook",
+            "oral_defense"
+          ],
+          "title": "Model Evaluation Assignment",
+          "type": "assignment",
+          "weight": 0.2
+        }
+      ],
+      "planned": true,
+      "starts_on": "2026-10-06",
+      "week": 6,
+      "when": "past"
+    },
+    {
+      "due": [
+        {
+          "assessment_id": "ASSESSMENT-04",
+          "criteria": 4,
+          "due_at": "2026-10-15T23:59:00+05:00",
+          "due_on": "2026-10-15",
+          "maximum_score": 100.0,
+          "module_id": "MODULE-06",
+          "opens_at": "2026-10-07T12:00:00+05:00",
+          "opens_on": "2026-10-07",
+          "outcomes": [
+            "LO-02",
+            "LO-04"
+          ],
+          "rubric_id": "RUBRIC-04",
+          "submission_type": [
+            "pdf",
+            "notebook",
+            "oral_defense"
+          ],
+          "title": "Model Evaluation Assignment",
+          "type": "assignment",
+          "weight": 0.2
+        }
+      ],
+      "ends_on": "2026-10-19",
+      "meetings": [
+        {
+          "activity_id": "ACT-0701",
+          "concepts": [
+            {
+              "id": "CONCEPT-REGULARIZATION",
+              "title": "Regularization"
+            }
+          ],
+          "duration_minutes": 100,
+          "location": "A-204",
+          "module_id": "MODULE-07",
+          "on": "2026-10-12",
+          "outcomes": [
+            "LO-02"
+          ],
+          "preparation": null,
+          "resources": [
+            {
+              "document_id": "DOC-4420",
+              "kind": "notebook",
+              "required": true,
+              "resource_id": "RES-442",
+              "title": "Diagnosing overfitting — starter notebook",
+              "url": null
+            }
+          ],
+          "scheduled_at": "2026-10-12T10:00:00+05:00",
+          "title": "Regularization as a design choice",
+          "type": "lecture"
+        }
+      ],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-REGULARIZATION",
+              "title": "Regularization"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-07",
+          "outcomes": [
+            {
+              "id": "LO-02",
+              "title": "Implement and evaluate a machine learning model"
+            }
+          ],
+          "title": "Regularization and Generalisation"
+        }
+      ],
+      "opens": [],
+      "planned": true,
+      "starts_on": "2026-10-13",
+      "week": 7,
+      "when": "past"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-10-26",
+      "meetings": [
+        {
+          "activity_id": "ACT-0801",
+          "concepts": [
+            {
+              "id": "CONCEPT-NEURAL-NETWORKS",
+              "title": "Neural networks"
+            }
+          ],
+          "duration_minutes": 100,
+          "location": "A-204",
+          "module_id": "MODULE-08",
+          "on": "2026-10-19",
+          "outcomes": [
+            "LO-02"
+          ],
+          "preparation": null,
+          "resources": [],
+          "scheduled_at": "2026-10-19T10:00:00+05:00",
+          "title": "From linear models to neural networks",
+          "type": "lecture"
+        }
+      ],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-NEURAL-NETWORKS",
+              "title": "Neural networks"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-08",
+          "outcomes": [
+            {
+              "id": "LO-02",
+              "title": "Implement and evaluate a machine learning model"
+            }
+          ],
+          "title": "Neural Networks"
+        }
+      ],
+      "opens": [],
+      "planned": true,
+      "starts_on": "2026-10-20",
+      "week": 8,
+      "when": "current"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-11-02",
+      "meetings": [
+        {
+          "activity_id": "ACT-0901",
+          "concepts": [
+            {
+              "id": "CONCEPT-EXPERIMENT-DESIGN",
+              "title": "AI experiment design"
+            }
+          ],
+          "duration_minutes": 100,
+          "location": "A-204",
+          "module_id": "MODULE-09",
+          "on": "2026-10-26",
+          "outcomes": [
+            "LO-04"
+          ],
+          "preparation": null,
+          "resources": [
+            {
+              "document_id": "DOC-9010",
+              "kind": "other",
+              "required": false,
+              "resource_id": "RES-901",
+              "title": "Experiment report template",
+              "url": null
+            }
+          ],
+          "scheduled_at": "2026-10-26T10:00:00+05:00",
+          "title": "Turning a question into an experiment",
+          "type": "seminar"
+        }
+      ],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-EXPERIMENT-DESIGN",
+              "title": "AI experiment design"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-09",
+          "outcomes": [
+            {
+              "id": "LO-04",
+              "title": "Design and evaluate an AI solution"
+            }
+          ],
+          "title": "Designing an AI Experiment"
+        }
+      ],
+      "opens": [
+        {
+          "assessment_id": "ASSESSMENT-05",
+          "criteria": 4,
+          "due_at": "2026-12-15T23:59:00+05:00",
+          "due_on": "2026-12-15",
+          "maximum_score": 100.0,
+          "module_id": "MODULE-09",
+          "opens_at": "2026-10-27T09:00:00+05:00",
+          "opens_on": "2026-10-27",
+          "outcomes": [
+            "LO-01",
+            "LO-02",
+            "LO-03",
+            "LO-04"
+          ],
+          "rubric_id": "RUBRIC-05",
+          "submission_type": [
+            "pdf",
+            "code_repo",
+            "oral_defense"
+          ],
+          "title": "Final AI Project",
+          "type": "project",
+          "weight": 0.5
+        }
+      ],
+      "planned": true,
+      "starts_on": "2026-10-27",
+      "week": 9,
+      "when": "upcoming"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-11-09",
+      "meetings": [],
+      "modules": [],
+      "opens": [],
+      "planned": false,
+      "starts_on": "2026-11-03",
+      "week": 10,
+      "when": "upcoming"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-11-16",
+      "meetings": [],
+      "modules": [
+        {
+          "concepts": [
+            {
+              "id": "CONCEPT-LOSS-FUNCTIONS",
+              "title": "Loss functions"
+            }
+          ],
+          "description": null,
+          "estimated_hours": 6.0,
+          "module_id": "MODULE-11",
+          "outcomes": [
+            {
+              "id": "LO-02",
+              "title": "Implement and evaluate a machine learning model"
+            }
+          ],
+          "title": "Optimisation"
+        }
+      ],
+      "opens": [],
+      "planned": true,
+      "starts_on": "2026-11-10",
+      "week": 11,
+      "when": "upcoming"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-11-23",
+      "meetings": [],
+      "modules": [],
+      "opens": [],
+      "planned": false,
+      "starts_on": "2026-11-17",
+      "week": 12,
+      "when": "upcoming"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-11-30",
+      "meetings": [],
+      "modules": [],
+      "opens": [],
+      "planned": false,
+      "starts_on": "2026-11-24",
+      "week": 13,
+      "when": "upcoming"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-12-07",
+      "meetings": [],
+      "modules": [],
+      "opens": [],
+      "planned": false,
+      "starts_on": "2026-12-01",
+      "week": 14,
+      "when": "upcoming"
+    },
+    {
+      "due": [],
+      "ends_on": "2026-12-14",
+      "meetings": [],
+      "modules": [],
+      "opens": [],
+      "planned": false,
+      "starts_on": "2026-12-08",
+      "week": 15,
+      "when": "upcoming"
+    },
+    {
+      "due": [
+        {
+          "assessment_id": "ASSESSMENT-05",
+          "criteria": 4,
+          "due_at": "2026-12-15T23:59:00+05:00",
+          "due_on": "2026-12-15",
+          "maximum_score": 100.0,
+          "module_id": "MODULE-09",
+          "opens_at": "2026-10-27T09:00:00+05:00",
+          "opens_on": "2026-10-27",
+          "outcomes": [
+            "LO-01",
+            "LO-02",
+            "LO-03",
+            "LO-04"
+          ],
+          "rubric_id": "RUBRIC-05",
+          "submission_type": [
+            "pdf",
+            "code_repo",
+            "oral_defense"
+          ],
+          "title": "Final AI Project",
+          "type": "project",
+          "weight": 0.5
+        }
+      ],
+      "ends_on": "2026-12-20",
+      "meetings": [],
+      "modules": [],
+      "opens": [],
+      "planned": false,
+      "starts_on": "2026-12-15",
+      "week": 16,
+      "when": "upcoming"
+    }
+  ]
+}

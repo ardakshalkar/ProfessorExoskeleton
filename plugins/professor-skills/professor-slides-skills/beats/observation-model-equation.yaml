@@ -1,0 +1,42 @@
+beat: observation-model-equation
+name: Observation, model, equation
+family: formalize
+purpose: >-
+  Arrive at a formula the student can read, because they watched it get built.
+best_for:
+  - physics, economics, statistics, quantitative social science
+avoid_when:
+  - the equation is a definition rather than a description of something observed
+slides: 5
+sequence:
+  - step: the phenomenon
+    intent: build_intuition
+    archetype: single_visual
+    density: sparse
+  - step: a simplified representation of it
+    intent: build_intuition
+    archetype: annotated_object
+    density: sparse
+  - step: what varies, named
+    intent: formalize
+    archetype: definition
+    density: moderate
+    note: every symbol gets its meaning here, before it appears in a formula
+  - step: the equation
+    intent: formalize
+    archetype: derivation
+    density: dense
+  - step: what it says, in a sentence
+    intent: integrate
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  reuse_visual_anchor: true
+  progressive_complexity: true
+  note: >-
+    do not put y = wx + b on a slide before x, w, b and y mean something. An
+    equation whose symbols are unattached is a picture of an equation
+exit_condition: >-
+  The student can say what each symbol refers to in the phenomenon.
+transition: >-
+  Into a derivation, or straight into a worked example.

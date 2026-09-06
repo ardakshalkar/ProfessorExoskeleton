@@ -1,0 +1,24 @@
+# The menu /course-dashboard reads out. Private surface: nothing here is ever
+# published, and a template from here must never be passed to `ainar page`.
+# See references/templates.md.
+surface: course-dashboard
+public: false
+default: plain
+templates:
+  - id: plain
+    file: plain.css
+    name: Plain
+    suits: reading on screen while editing the course — the everyday one
+  - id: print
+    file: print.css
+    name: Printed
+    suits: taking to a meeting, or marking up with a pen
+
+# Not choices. `shell.html` is the frame every page of the site is filled into
+# and `blocks.html` holds the parts that go in it — both fixed, so two runs a
+# fortnight apart produce the same site rather than the same data rearranged.
+parts:
+  - file: shell.html
+    purpose: the frame for every page of the site
+  - file: blocks.html
+    purpose: the sections that frame is filled with

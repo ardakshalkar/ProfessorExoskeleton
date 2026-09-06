@@ -1,0 +1,116 @@
+{
+  "issues": [
+    {
+      "code": "date.order",
+      "level": "error",
+      "location": "CSS-4008-2026-FALL",
+      "message": "end_date precedes start_date"
+    },
+    {
+      "code": "date.order",
+      "level": "error",
+      "location": "CSS-4008-2026-FALL",
+      "message": "end_date precedes start_date"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0101",
+      "message": "scheduled 2026-09-02, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0202",
+      "message": "scheduled 2026-09-09, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0301",
+      "message": "scheduled 2026-09-16, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0401",
+      "message": "scheduled 2026-09-23, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0501",
+      "message": "scheduled 2026-09-30, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0601",
+      "message": "scheduled 2026-10-05, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0602",
+      "message": "scheduled 2026-10-07, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0701",
+      "message": "scheduled 2026-10-12, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0801",
+      "message": "scheduled 2026-10-19, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ACT-0901",
+      "message": "scheduled 2026-10-26, outside 2026-09-01..2026-08-01"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ASSESSMENT-01",
+      "message": "due 2026-09-29, outside the run window"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ASSESSMENT-02",
+      "message": "due 2026-10-06, outside the run window"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ASSESSMENT-04",
+      "message": "due 2026-10-15, outside the run window"
+    },
+    {
+      "code": "schedule.outside_run",
+      "level": "warning",
+      "location": "ASSESSMENT-05",
+      "message": "due 2026-12-15, outside the run window"
+    }
+  ],
+  "mutation": "offering-ending-before-it-starts",
+  "patch": {
+    "versions.0.end_date": "2026-08-01"
+  }
+}

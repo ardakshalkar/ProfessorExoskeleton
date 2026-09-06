@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "evaluation.pending_override",
+      "level": "warning",
+      "location": "EVAL-6001",
+      "message": "a professor decision is present but the evaluation is not approved yet"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    }
+  ],
+  "mutation": "decision-present-but-not-approved",
+  "patch": {
+    "evaluations.0.status": "in_review"
+  }
+}

@@ -1,0 +1,39 @@
+beat: reconnect-prior-knowledge
+name: Reconnect prior knowledge
+family: orient
+purpose: >-
+  Attach the new idea to one the student already has, rather than beside it.
+best_for:
+  - a concept whose prerequisite was taught weeks ago
+  - a cohort with mixed backgrounds
+avoid_when:
+  - the prerequisite was taught in the previous session
+slides: 3
+sequence:
+  - step: a question only the old concept answers
+    intent: check_understanding
+    archetype: question
+    density: sparse
+    note: this doubles as a diagnostic — the answers say whether to slow down
+  - step: the old concept, as it was taught
+    intent: orient
+    archetype: annotated_object
+    density: sparse
+  - step: the same picture, with the new thing on it
+    intent: build_intuition
+    archetype: annotated_object
+    density: moderate
+visual_rules:
+  reuse_visual_anchor: true
+  maintain_geometry: true
+  progressive_highlighting: true
+ask_the_professor:
+  - condition: the prerequisite has no recorded evidence of being met
+    question: >-
+      Should this session assume the prerequisite, or spend five minutes
+      rebuilding it? The answer changes how much fits.
+exit_condition: >-
+  The student sees the new concept as a modification of one they hold, not as a
+  separate fact.
+transition: >-
+  The modified picture is what the next beat develops.

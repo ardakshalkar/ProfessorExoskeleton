@@ -1,0 +1,113 @@
+<!--
+  The sections a dashboard page is built from. Copy the block you need into the
+  shell, fill the {{ slots }}, and delete the rest of this file's markers.
+
+  Each block names the command its figures come from, in the markup, where the
+  reader sees it. That line is not decoration: it is what lets a professor
+  holding two different numbers work out which one is real.
+
+  Never add a column, a total or a row this file does not have. If the figure you
+  want is not here, it is because no command produces it — put it in the shell's
+  "Not on this page" list instead.
+-->
+
+<!-- block: validation ------------------------------------------------------ -->
+<!-- On the front page, above everything. A site that renders a course with
+     warnings and shows none of them makes the course look finished. -->
+<h2>What the validator says</h2>
+<p class="source">python -m ainar validate {{ COURSE_ID }}</p>
+<div class="scroll"><table>
+  <thead><tr><th class="row">Code</th><th>Severity</th><th class="row">What it says</th></tr></thead>
+  <tbody>
+    <tr><th class="row">{{ code, e.g. coverage.outcome_unassessed }}</th>
+        <td>{{ error / warning }}</td>
+        <th class="row">{{ the message, verbatim }}</th></tr>
+  </tbody>
+</table></div>
+<p class="note">{{ "No errors and no warnings." if that is true — say it, do not
+  leave the section out }}</p>
+<!-- end block -->
+
+<!-- block: gradebook ------------------------------------------------------- -->
+<!-- One score per student per assessment, straight from the payload. The rows
+     the command flags as blocked go below the table, never inside it. -->
+<h2>Gradebook</h2>
+<p class="source">python -m ainar gradebook {{ COURSE_VERSION_ID }} --json</p>
+<div class="scroll"><table>
+  <thead><tr><th class="row">Student</th>{{ one th per assessment }}<th>Total</th><th>Status</th></tr></thead>
+  <tbody>
+    <tr><th class="row">{{ STUDENT-XXXXXX }}</th>
+        {{ one td.cell per assessment — the number from the payload }}
+        <td class="cell">{{ total }}</td><td>{{ status }}</td></tr>
+  </tbody>
+</table></div>
+<div class="warn"><strong>{{ n }} row(s) are not in the numbers above:</strong>
+  {{ STUDENT-XXXXXX }} — {{ partially_graded / not_submitted }}.
+  These are not zeros and must not be read as any. They are people the command
+  declined to total, and it declined for the reason printed beside each.</div>
+<!-- end block -->
+
+<!-- block: results --------------------------------------------------------- -->
+<!-- One assessment, for assessments that have actually been graded. -->
+<h2>{{ ASSESSMENT-ID }} — {{ title }}</h2>
+<p class="source">python -m ainar gradebook {{ COURSE_VERSION_ID }} --assessment {{ ASSESSMENT-ID }} --json</p>
+
+<h3>Where the marks went</h3>
+<div class="scroll"><table>
+  <thead><tr><th class="row">Criterion</th><th>Outcome</th><th>Class mean</th><th>Of</th></tr></thead>
+  <tbody>
+    <tr><th class="row">{{ CRIT-ID }} {{ criterion title }}</th>
+        <td>{{ LO-ID }}</td>
+        <td class="cell {{ band class b1..b5 }}">{{ mean, from the payload }}</td>
+        <td class="cell">{{ maximum }}</td></tr>
+  </tbody>
+</table></div>
+<p class="note">A criterion the whole class dropped is a finding about the
+  teaching or about the criterion's wording. It reads as a column here for that
+  reason, rather than as a list of people.</p>
+
+<h3>Items</h3>
+<p class="source">python -m ainar score-items {{ COURSE_VERSION_ID }} --assessment {{ ASSESSMENT-ID }}</p>
+<div class="scroll"><table>
+  <thead><tr><th class="row">Item</th><th>Correct</th><th>Declared difficulty</th>
+             <th class="row">What the class converged on</th></tr></thead>
+  <tbody>
+    <tr><th class="row">{{ ITEM-ID }} {{ stem, shortened }}</th>
+        <td class="cell">{{ success rate }}</td>
+        <td class="cell">{{ declared difficulty, or "not declared" }}</td>
+        <th class="row">{{ the distractor that collected the wrong answers, and the
+          misconception it indicates }}</th></tr>
+  </tbody>
+</table></div>
+<!-- end block -->
+
+<!-- block: pending --------------------------------------------------------- -->
+<h2>Still to grade</h2>
+<p class="source">python -m ainar pending {{ COURSE_VERSION_ID }}</p>
+<div class="scroll"><table>
+  <thead><tr><th class="row">Assessment</th><th>Submitted</th><th>Judgements done</th></tr></thead>
+  <tbody>
+    <tr><th class="row">{{ ASSESSMENT-ID }} {{ title }}</th>
+        <td class="cell">{{ n }} of {{ enrolled }}</td>
+        <td class="cell">{{ done }} / {{ total }}</td></tr>
+  </tbody>
+</table></div>
+<div class="warn"><strong>Has not submitted:</strong> {{ STUDENT-XXXXXX, … }}.
+  Not submitted is not a mark of zero; it is an absence of evidence.</div>
+<!-- end block -->
+
+<!-- block: legend --------------------------------------------------------- -->
+<!-- Wherever a band colour appears. Every colour carries its number as well,
+     because this will be printed and because hue alone is not readable. -->
+<div class="legend">
+  <span><span class="swatch" style="background:var(--b5)"></span>strong</span>
+  <span><span class="swatch" style="background:var(--b4)"></span>secure</span>
+  <span><span class="swatch" style="background:var(--b3)"></span>mixed</span>
+  <span><span class="swatch" style="background:var(--b2)"></span>weak</span>
+  <span><span class="swatch" style="background:var(--b1)"></span>very weak</span>
+  <span><span class="swatch" style="background:var(--none)"></span>never assessed</span>
+</div>
+<p class="note"><strong>A blank is not a zero.</strong> {{ n }} of {{ total }}
+  cells on this page are blank because nothing has assessed that concept for that
+  student — which is a gap in the assessment plan, not in the class.</p>
+<!-- end block -->

@@ -1,0 +1,42 @@
+beat: open-lecture
+name: Open the lecture
+family: orient
+purpose: >-
+  Give the room a reason to be in it before giving them anything to learn.
+best_for:
+  - the first beat of any taught session
+avoid_when:
+  - the session continues a worked problem from last week without a break
+slides: 3
+sequence:
+  - step: a question the session will answer
+    intent: create_need
+    archetype: question
+    density: sparse
+    note: not "today we will cover X" — something a student would want answered
+  - step: the concrete case that makes the question real
+    intent: demonstrate_problem
+    archetype: single_visual
+    density: sparse
+  - step: where the session goes
+    intent: orient
+    archetype: roadmap
+    density: sparse
+    required_visual: the session or course as its stops, this one marked
+    note: >-
+      three or four sections, not a table of contents — and drawn. "Where are
+      we" is a question about position, and position written as bullets makes
+      the room rebuild the map from a description of it.
+visual_rules:
+  image_dominance: high
+  avoid_dense_text_initially: true
+ask_the_professor:
+  - condition: no shared misconception is recorded
+    question: >-
+      Is there something students reliably get wrong here? Opening on their own
+      wrong answer is worth more than opening on a definition.
+exit_condition: >-
+  The student can say what question the next hour answers and why it matters.
+transition: >-
+  The roadmap names the first section; the first beat of that section picks the
+  question back up.

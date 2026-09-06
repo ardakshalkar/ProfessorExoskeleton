@@ -1,0 +1,44 @@
+beat: derive-step-by-step
+name: Derive, step by step
+family: formalize
+purpose: >-
+  Take a result apart so the student could reconstruct it.
+best_for:
+  - mathematics, theoretical physics, econometrics
+avoid_when:
+  - the derivation is standard and the result is what matters
+slides: 5
+sequence:
+  - step: what is being shown, and from what
+    intent: orient
+    archetype: big_idea
+    density: sparse
+  - step: the starting expression
+    intent: derive
+    archetype: derivation
+    density: moderate
+  - step: the operation, and what it buys
+    intent: derive
+    archetype: derivation
+    density: dense
+    note: the reason for each step, not only the step
+  - step: the result
+    intent: derive
+    archetype: derivation
+    density: moderate
+  - step: what it means
+    intent: integrate
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  progressive_reveal: true
+  note: >-
+    one line at a time in teaching mode. The complete derivation on one slide is
+    for the handout, where the reader controls the pace
+output_mode_notes:
+  teaching: progressive reveal, one operation per frame
+  handout: the full derivation on one slide, with the reasons beside the steps
+exit_condition: >-
+  The student can say why each step was taken, not only that it was.
+transition: >-
+  "What does that let us do?" opens an application beat.

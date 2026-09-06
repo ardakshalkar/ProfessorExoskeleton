@@ -1,0 +1,38 @@
+beat: claim-evidence-interpretation
+name: Claim, evidence, interpretation
+family: evidence
+purpose: >-
+  Support a statement with something the room can inspect.
+best_for:
+  - any discipline; the general academic pattern
+avoid_when:
+  - there is no citable evidence, in which case say so in words and drop the beat
+slides: 4
+sequence:
+  - step: the claim
+    intent: provide_evidence
+    archetype: big_idea
+    density: sparse
+  - step: the data
+    intent: provide_evidence
+    archetype: data_evidence
+    density: sparse
+    note: >-
+      the headline carries the claim — "accuracy drops sharply beyond 8K tokens",
+      not "accuracy by context length". The chart carries the evidence
+  - step: what to notice in it
+    intent: provide_evidence
+    archetype: annotated_object
+    density: moderate
+  - step: what follows, and what does not
+    intent: integrate
+    archetype: big_idea
+    density: sparse
+    note: naming what the evidence does not establish is half the teaching
+visual_rules:
+  source_required: true
+  colour_never_the_only_channel: true
+exit_condition: >-
+  The student can say what the evidence supports and what it leaves open.
+transition: >-
+  The open part opens the next beat.

@@ -1,0 +1,132 @@
+{
+  "$defs": {
+    "SubmissionFile": {
+      "additionalProperties": false,
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "document_id": {
+          "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+          "title": "Document Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/SubmissionFormat"
+        }
+      },
+      "required": [
+        "document_id",
+        "type"
+      ],
+      "title": "SubmissionFile",
+      "type": "object"
+    },
+    "SubmissionFormat": {
+      "enum": [
+        "pdf",
+        "docx",
+        "pptx",
+        "notebook",
+        "code_repo",
+        "audio",
+        "video",
+        "image",
+        "url",
+        "text",
+        "oral_defense"
+      ],
+      "title": "SubmissionFormat",
+      "type": "string"
+    },
+    "SubmissionStatus": {
+      "enum": [
+        "missing",
+        "draft",
+        "submitted",
+        "late",
+        "resubmitted",
+        "withdrawn"
+      ],
+      "title": "SubmissionStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Student work handed in for an assessment. Produced by the application.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "submission_id": {
+      "pattern": "^SUB-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "assessment_id": {
+      "pattern": "^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Assessment Id",
+      "type": "string"
+    },
+    "student_id": {
+      "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Student Id",
+      "type": "string"
+    },
+    "submitted_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Submitted At"
+    },
+    "files": {
+      "items": {
+        "$ref": "#/$defs/SubmissionFile"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/SubmissionStatus",
+      "default": "submitted"
+    },
+    "attempt": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Attempt",
+      "type": "integer"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Note"
+    }
+  },
+  "required": [
+    "submission_id",
+    "assessment_id",
+    "student_id"
+  ],
+  "title": "Submission",
+  "type": "object"
+}

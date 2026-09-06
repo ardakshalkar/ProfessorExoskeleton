@@ -1,0 +1,87 @@
+# The assessment as a draft, under work/<COURSE_VERSION_ID>/. Approval is what
+# makes it a record; the -DRAFT- segment says it is not one yet.
+#
+# Two fields here are claims and are the professor's, never yours:
+#
+#   weight    — what this is worth in the course. TODO until they state it, and
+#               a TODO you report rather than a gap you close. Adding an
+#               assessment that makes the run's weights stop summing to 1.0 is a
+#               warning to report, not a reason to adjust another assessment.
+#   outcomes  — which learning outcomes it measures, and the same on every
+#               criterion's `outcome_id`. A criterion with no outcome produces
+#               marks but no evidence, which defeats the point of the model.
+#
+# The instrument around them — the task, the wording, the levels, the items — is
+# an artefact and is yours to draft.
+
+assessment_id: ASSESSMENT-DRAFT-{{ nn }}
+course_version_id: "{{ COURSE_VERSION_ID }}"
+title: "{{ assessment title }}"
+type: "{{ quiz / assignment / exam / project }}"
+description: "{{ one or two sentences }}"
+module_id: "{{ MODULE-ID }}"
+maximum_score: {{ n }}
+weight: TODO   # the professor's; ask, and leave this until they answer
+opens_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+due_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+outcomes: ["{{ LO-ID }}"]   # the professor's
+submission_type: ["{{ text / file / url }}"]
+
+# The brief students read, written from templates/brief.md and registered so
+# approval files it with the course rather than leaving it in work/.
+instructions_document_id: DOC-DRAFT-{{ nnnn }}
+
+design:
+  purpose: "{{ formative knowledge check / summative … }}"
+  duration_minutes: {{ n }}
+  target_item_count: {{ n }}
+  # One cell per outcome and cognitive level the blueprint asked for.
+  cells:
+    - outcome_id: "{{ LO-ID }}"
+      cognitive_level: "{{ remember / understand / apply / analyze / evaluate / create }}"
+      difficulty: "{{ easy / medium / hard }}"
+      item_type: "{{ multiple_choice / short_answer / … }}"
+      item_count: {{ n }}
+      marks: {{ n }}
+  constraints:
+    closed_book: {{ true / false }}
+
+rubric:
+  rubric_id: RUBRIC-DRAFT-{{ nn }}
+  title: "{{ rubric title }}"
+  criteria:
+    - criterion_id: CRIT-DRAFT-{{ nn }}-01
+      rubric_id: RUBRIC-DRAFT-{{ nn }}
+      title: "{{ what this criterion judges }}"
+      maximum_score: {{ n }}
+      outcome_id: "{{ LO-ID }}"          # never blank
+      concepts: ["{{ CONCEPT-ID }}"]
+      levels:
+        - score: {{ n }}
+          label: "{{ level name }}"
+          description: "{{ what work at this level looks like }}"
+        - score: {{ n }}
+          label: "{{ level name }}"
+          description: "{{ what work at this level looks like }}"
+
+# Items, where the assessment has them. `answer_key`, `marking_guidance` and
+# `indicates_misconception_of` belong here on the item and NOWHERE a student can
+# read — not in the brief, not in the starter repository, not in a test fixture.
+items:
+  - item_id: ITEM-DRAFT-{{ nn }}-01
+    assessment_id: ASSESSMENT-DRAFT-{{ nn }}
+    criterion_id: CRIT-DRAFT-{{ nn }}-01
+    concepts: ["{{ CONCEPT-ID }}"]
+    item_type: multiple_choice
+    difficulty: "{{ easy / medium / hard }}"
+    stem: "{{ the question }}"
+    options:
+      - key: A
+        text: "{{ option }}"
+      - key: B
+        text: "{{ option }}"
+        indicates_misconception_of: "{{ CONCEPT-ID }}"
+        note: "{{ why a student holding that misconception picks this }}"
+    answer_key: "{{ the correct key }}"
+    marks: {{ n }}
+    marking_guidance: "{{ what makes two markers agree }}"

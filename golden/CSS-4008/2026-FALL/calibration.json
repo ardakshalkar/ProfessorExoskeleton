@@ -1,0 +1,34 @@
+{
+  "note": "Only approved and overridden evaluations that carried a suggestion are counted. A low agreement rate on a criterion usually means the criterion needs sharper level descriptions, not that the agent is broken.",
+  "overall": {
+    "agreed": 0,
+    "agreement_rate": 0.0,
+    "agreement_when_confident": 0.0,
+    "agreement_when_unsure": null,
+    "largest_deviation": 5.0,
+    "mean_absolute_deviation": 5.0,
+    "mean_deviation": 5.0,
+    "n": 1,
+    "reads_as": "the agent grades more harshly than you"
+  },
+  "per_criterion": [
+    {
+      "agreed": 0,
+      "agreement_rate": 0.0,
+      "agreement_when_confident": 0.0,
+      "agreement_when_unsure": null,
+      "criterion_id": "CRIT-04-01",
+      "largest_deviation": 5.0,
+      "maximum_score": 25.0,
+      "mean_absolute_deviation": 5.0,
+      "mean_deviation": 5.0,
+      "n": 1,
+      "outcome_id": "LO-04",
+      "title": "Method selection"
+    }
+  ],
+  "run": {
+    "id": "CSS-4008-2026-FALL",
+    "title": "Artificial Intelligence"
+  }
+}

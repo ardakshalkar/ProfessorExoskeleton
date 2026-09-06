@@ -1,0 +1,26 @@
+beat: start-section
+name: Start a section
+family: orient
+purpose: >-
+  Mark a change of subject so the learner files what follows separately.
+best_for:
+  - between two beats that teach different things
+avoid_when:
+  - the deck is under about ten slides
+slides: 2
+sequence:
+  - step: the section's question
+    intent: transition
+    archetype: section_opener
+    density: sparse
+  - step: why it matters, and where it ends
+    intent: orient
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  image_dominance: high
+exit_condition: >-
+  The student knows a new idea is starting and what it is for.
+transition: >-
+  Straight into the section's first beat, which should be a create_need beat
+  rather than a definition.

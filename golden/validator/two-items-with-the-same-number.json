@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.number_clash",
+      "level": "warning",
+      "location": "ASSESSMENT-01",
+      "message": "more than one item is numbered 1"
+    }
+  ],
+  "mutation": "two-items-with-the-same-number",
+  "patch": {
+    "items.1.number": 1
+  }
+}

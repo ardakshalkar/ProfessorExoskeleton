@@ -1,0 +1,28 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.model_mismatch",
+      "level": "warning",
+      "location": "ITEM-01-01",
+      "message": "multiple_choice is not allowed by ITEM-MODEL-PROBLEM-FORMULATION"
+    }
+  ],
+  "mutation": "item-of-a-type-its-model-disallows",
+  "patch": {
+    "item_models.0.allowed_item_types": [
+      "essay"
+    ]
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "additionalProperties": false,
+  "description": "A unit of knowledge structure.\n\nConcepts are what make gap detection explainable: AINAR can say students\nstruggle with overfitting *because* train-test separation is not yet\ndemonstrated, rather than emitting an unexplained label.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "concept_id": {
+      "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Concept Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "course_id": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Omit for shared concepts defined in shared/concepts.yaml.",
+      "title": "Course Id"
+    },
+    "prerequisites": {
+      "description": "Concepts that should be understood first.",
+      "items": {
+        "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Prerequisites",
+      "type": "array"
+    },
+    "related": {
+      "items": {
+        "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Related",
+      "type": "array"
+    },
+    "aliases": {
+      "description": "Alternative names, used for retrieval and tagging.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Aliases",
+      "type": "array"
+    }
+  },
+  "required": [
+    "concept_id",
+    "title"
+  ],
+  "title": "Concept",
+  "type": "object"
+}

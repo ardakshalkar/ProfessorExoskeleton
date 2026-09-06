@@ -1,0 +1,36 @@
+#!/usr/bin/env sh
+# The `pres` CLI, run by whichever Node this machine happens to have.
+#
+# Claude Code puts this directory on the Bash tool's PATH while the plugin is
+# enabled, so skills can say `pres source` instead of a path to a script and a
+# flag — which is the difference between a skill that works on a colleague's
+# laptop and one that does not.
+#
+# How TypeScript actually gets run is `node/bin/pres.mjs`'s problem, not this
+# script's. Node needs a different invocation on 22.6–22.17 than on 22.18+, and
+# two shims each carrying their own copy of that knowledge is two shims to fix
+# when it changes again. Set PRES_NODE to force an interpreter.
+
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+entry="$here/../node/bin/pres.mjs"
+
+for candidate in "$PRES_NODE" node nodejs; do
+    [ -z "$candidate" ] && continue
+    command -v "$candidate" >/dev/null 2>&1 || continue
+    exec "$candidate" "$entry" "$@"
+done
+
+cat >&2 <<'MESSAGE'
+pres: no Node on PATH.
+
+This plugin runs its TypeScript directly, which needs Node 22.6 or later
+(22.18 and later need no flag at all). Install a current Node, or point
+PRES_NODE at one:
+
+    PRES_NODE=/path/to/node pres source --course CSS-4008
+
+The first run also needs its dependencies:
+
+    cd node && npm install
+MESSAGE
+exit 127

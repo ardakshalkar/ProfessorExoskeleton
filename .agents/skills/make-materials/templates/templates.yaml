@@ -1,0 +1,24 @@
+# The menu /make-materials reads out. These are artefact shapes: they serve
+# claims the course already makes and carry none of their own. Every heading is
+# a slot, and no slot is ever filled with a plausible-sounding outcome.
+# See references/templates.md.
+surface: make-materials
+public: false
+default: lecture-slides
+templates:
+  - id: lecture-slides
+    file: lecture-slides.md
+    name: Lecture slides
+    suits: a taught session — Marp front matter, so it renders as a deck
+  - id: handout
+    file: handout.md
+    name: Handout
+    suits: two pages students keep, for a session where the deck is not the point
+  - id: lab-notebook
+    file: lab-notebook.md
+    name: Lab notebook
+    suits: a practical with tasks and checkpoints rather than slides
+
+parts:
+  - file: document-draft.yaml
+    purpose: the Document and Resource records that register whatever was written

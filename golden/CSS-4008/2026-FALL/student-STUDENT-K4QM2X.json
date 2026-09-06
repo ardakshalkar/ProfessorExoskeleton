@@ -1,0 +1,89 @@
+{
+  "capabilities": [],
+  "concepts": [
+    {
+      "concept_id": "CONCEPT-MODEL-EVALUATION",
+      "evidence_count": 1,
+      "evidence_ids": [
+        "EVID-9061-0102-2"
+      ],
+      "highest_level": null,
+      "mean_proportion": 0.0,
+      "sources": [
+        "RESP-9061-0102"
+      ],
+      "state": null,
+      "title": "Model evaluation"
+    },
+    {
+      "concept_id": "CONCEPT-TRAIN-TEST-SPLIT",
+      "evidence_count": 1,
+      "evidence_ids": [
+        "EVID-9061-0102-1"
+      ],
+      "highest_level": null,
+      "mean_proportion": 0.0,
+      "sources": [
+        "RESP-9061-0102"
+      ],
+      "state": null,
+      "title": "Train-test separation"
+    }
+  ],
+  "course_run": {
+    "id": "CSS-4008-2026-FALL",
+    "term": "2026-FALL",
+    "title": "Artificial Intelligence"
+  },
+  "gaps": [
+    {
+      "concept_id": "CONCEPT-MODEL-EVALUATION",
+      "evidence_ids": [
+        "EVID-9061-0102-2"
+      ],
+      "mean_proportion": 0.0,
+      "prerequisite_state": {
+        "CONCEPT-SUPERVISED-LEARNING": "no evidence",
+        "CONCEPT-TRAIN-TEST-SPLIT": "no evidence"
+      },
+      "prerequisites": [
+        "CONCEPT-TRAIN-TEST-SPLIT",
+        "CONCEPT-SUPERVISED-LEARNING"
+      ],
+      "title": "Model evaluation"
+    },
+    {
+      "concept_id": "CONCEPT-TRAIN-TEST-SPLIT",
+      "evidence_ids": [
+        "EVID-9061-0102-1"
+      ],
+      "mean_proportion": 0.0,
+      "prerequisite_state": {
+        "CONCEPT-DATA-PREPARATION": "no evidence"
+      },
+      "prerequisites": [
+        "CONCEPT-DATA-PREPARATION"
+      ],
+      "title": "Train-test separation"
+    }
+  ],
+  "note": "Derived from recorded evidence only. Absence of evidence is not evidence of absence — a concept with no evidence was never assessed.",
+  "outcomes": [
+    {
+      "evidence_count": 2,
+      "evidence_ids": [
+        "EVID-9061-0102-1",
+        "EVID-9061-0102-2"
+      ],
+      "highest_level": null,
+      "mean_proportion": 0.0,
+      "outcome_id": "LO-01",
+      "sources": [
+        "RESP-9061-0102"
+      ],
+      "title": "Explain core AI problem types and methods"
+    }
+  ],
+  "signals": [],
+  "student_id": "STUDENT-K4QM2X"
+}

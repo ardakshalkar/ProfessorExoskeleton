@@ -1,0 +1,42 @@
+beat: zoom-in-zoom-out
+name: Zoom in, zoom out
+family: explain_mechanism
+purpose: >-
+  Explain a component without losing the whole it belongs to.
+best_for:
+  - neural networks, cells, engines, institutions, software architecture
+avoid_when:
+  - the component is simple enough to explain in place
+slides: 5
+sequence:
+  - step: the whole system
+    intent: orient
+    archetype: system_diagram
+    density: sparse
+  - step: the component, highlighted in place
+    intent: orient
+    archetype: system_diagram
+    density: sparse
+  - step: inside the component
+    intent: explain_mechanism
+    archetype: annotated_object
+    density: moderate
+  - step: how its internals produce its behaviour
+    intent: explain_mechanism
+    archetype: process
+    density: moderate
+  - step: back to the whole, with the component understood
+    intent: integrate
+    archetype: system_diagram
+    density: sparse
+visual_rules:
+  reuse_visual_anchor: true
+  maintain_geometry: true
+  note: >-
+    returning to the same overview picture is the point. Discarding the
+    architecture the moment you zoom in is how students end up understanding
+    parts and no system
+exit_condition: >-
+  The student can say what the component contributes to the system's behaviour.
+transition: >-
+  Either the next component, or a formalisation beat.

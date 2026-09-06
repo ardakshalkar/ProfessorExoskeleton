@@ -1,0 +1,89 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-01",
+      "message": "module addresses no learning outcome"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-02",
+      "message": "module addresses no learning outcome"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-03",
+      "message": "module addresses no learning outcome"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-04",
+      "message": "module addresses no learning outcome"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-05",
+      "message": "module addresses no learning outcome"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-06",
+      "message": "module addresses no learning outcome"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-07",
+      "message": "module addresses no learning outcome"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-08",
+      "message": "module addresses no learning outcome"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-09",
+      "message": "module addresses no learning outcome"
+    },
+    {
+      "code": "module.no_outcomes",
+      "level": "warning",
+      "location": "MODULE-11",
+      "message": "module addresses no learning outcome"
+    }
+  ],
+  "mutation": "outcome-nothing-teaches",
+  "patch": {
+    "modules.0.outcomes": [],
+    "modules.1.outcomes": [],
+    "modules.2.outcomes": [],
+    "modules.3.outcomes": [],
+    "modules.4.outcomes": [],
+    "modules.5.outcomes": [],
+    "modules.6.outcomes": [],
+    "modules.7.outcomes": [],
+    "modules.8.outcomes": [],
+    "modules.9.outcomes": []
+  }
+}

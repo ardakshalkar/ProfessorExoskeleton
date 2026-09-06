@@ -1,0 +1,85 @@
+{
+  "$defs": {
+    "InferredPreference": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "Dot-separated preference path.",
+          "title": "Path",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "evidence_count": {
+          "minimum": 1,
+          "title": "Evidence Count",
+          "type": "integer"
+        },
+        "evidence_refs": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        }
+      },
+      "required": [
+        "path",
+        "value",
+        "confidence",
+        "evidence_count"
+      ],
+      "title": "InferredPreference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One explicit or learned preference layer.",
+  "properties": {
+    "version": {
+      "default": 1,
+      "minimum": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "profile_id": {
+      "title": "Profile Id",
+      "type": "string"
+    },
+    "scope": {
+      "enum": [
+        "system",
+        "professor",
+        "course",
+        "task"
+      ],
+      "title": "Scope",
+      "type": "string"
+    },
+    "values": {
+      "additionalProperties": true,
+      "title": "Values",
+      "type": "object"
+    },
+    "inferred": {
+      "items": {
+        "$ref": "#/$defs/InferredPreference"
+      },
+      "title": "Inferred",
+      "type": "array"
+    }
+  },
+  "required": [
+    "profile_id",
+    "scope"
+  ],
+  "title": "PreferenceProfile",
+  "type": "object"
+}

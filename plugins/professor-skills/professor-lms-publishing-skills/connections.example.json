@@ -1,0 +1,23 @@
+{
+  "profiles": {
+    "canvas-main": {
+      "type": "canvas",
+      "baseUrl": "https://canvas.example.edu",
+      "tokenEnv": "CANVAS_TOKEN",
+      "courseId": "42"
+    },
+    "moodle-main": {
+      "type": "moodle",
+      "baseUrl": "https://moodle.example.edu",
+      "tokenEnv": "MOODLE_TOKEN",
+      "courseId": "7",
+      "forumId": "12"
+    },
+    "telegram-course": {
+      "type": "telegram",
+      "tokenEnv": "TELEGRAM_BOT_TOKEN",
+      "chatId": "@course_channel",
+      "parseMode": "HTML"
+    }
+  }
+}

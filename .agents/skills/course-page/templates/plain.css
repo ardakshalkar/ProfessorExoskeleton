@@ -1,0 +1,25 @@
+/* Plain — the default, and deliberately close to what the command produces on
+   its own. It exists so the knobs are visible: every value below is one the
+   page already uses, written out where a professor can change it.
+
+   Appended after the page wrapper and the widget's own style sheet, so these
+   restate rather than override. Custom properties are the polite way in. */
+
+:root {
+  --accent: #2f6b3c;   /* the "this week" pill, and a due assessment's border */
+  --flag: #a4362f;     /* the only alarming colour on a student-facing page */
+  --panel: #fafafa;    /* the ground behind a note, a chip, the current week */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --accent: #7fc98d; --flag: #e08c85; --panel: #1c1f24; }
+}
+
+body { font-size: 15px; }
+
+/* Reading width. Long lines are the commonest reason a plan goes unread. */
+#root { max-width: 1080px; }
+
+/* A week is the unit of this page, so give it room to be one. */
+.wk { padding: .7rem 0; }
+.wk-when { flex-basis: 9rem; }

@@ -1,0 +1,51 @@
+/* Printed handout — black ink on white paper, one week per block, nothing that
+   depends on colour to be understood.
+
+   A printed plan is the copy that survives the term on a noticeboard, so this
+   fixes the two things that make a screen page print badly: a dark scheme that
+   comes out as a solid rectangle of toner, and a week split across a page
+   break. */
+
+:root {
+  --bg: #ffffff; --fg: #000000; --on-fg: #ffffff;
+  --muted: #444444; --line: #999999; --panel: #ffffff;
+  --accent: #000000; --flag: #000000;
+}
+
+/* The dark scheme is switched off rather than restyled: paper has one ground. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #ffffff; --fg: #000000; --on-fg: #ffffff;
+    --muted: #444444; --line: #999999; --panel: #ffffff;
+    --accent: #000000; --flag: #000000;
+  }
+}
+
+body {
+  background: #ffffff; color: #000000;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 11.5pt; line-height: 1.35;
+}
+
+#root { max-width: 46em; }
+
+h1 { font-size: 1.3rem; }
+h2 { color: #000000; letter-spacing: .06em; }
+
+/* A week stays whole, and its heading never ends a page on its own. */
+.wk { break-inside: avoid; page-break-inside: avoid; padding: .5rem 0; }
+.wk.current { background: #ffffff; outline: 1.5pt solid #000000; outline-offset: 3pt; }
+
+/* The pill has no fill to print, so it says what it means in a box instead. */
+.now { background: #ffffff; color: #000000; border: 1pt solid #000000; }
+
+/* Chips and marks read as bracketed text rather than as grey pills. */
+.chip, .mark, .kind { background: #ffffff; border-color: #666666; }
+.mark.due { border-width: 1.5pt; }
+
+.note { background: #ffffff; border: 1pt solid #666666; }
+
+/* On paper the footer's provenance line is the only date the reader has. */
+footer { border-top: 1pt solid #000000; color: #000000; }
+
+@page { margin: 18mm; }

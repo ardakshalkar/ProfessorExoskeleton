@@ -1,0 +1,22 @@
+{
+  "name": "professor-lms-publishing-skills",
+  "version": "0.1.0",
+  "description": "Preview and explicitly publish professor-approved content to Canvas, Moodle, or Telegram.",
+  "author": { "name": "Ardak Shalkarbayuly" },
+  "license": "MIT",
+  "keywords": ["canvas", "moodle", "telegram", "lms", "publishing"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Professor LMS Publishing Skills",
+    "shortDescription": "Publish approved course content to LMS and Telegram.",
+    "longDescription": "Three focused skills prepare, preview, validate, and explicitly publish course announcements, pages, messages, and documents through Canvas, Moodle, or Telegram connection profiles. A shared TypeScript CLI keeps credentials local, redacts secrets, and makes dry-run planning the default.",
+    "developerName": "Ardak Shalkarbayuly",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write", "Network"],
+    "defaultPrompt": [
+      "Preview this announcement for Canvas.",
+      "Publish this approved update to Moodle.",
+      "Send this approved message to our Telegram channel."
+    ]
+  }
+}

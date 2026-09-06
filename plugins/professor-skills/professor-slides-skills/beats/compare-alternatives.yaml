@@ -1,0 +1,41 @@
+beat: compare-alternatives
+name: Compare alternatives
+family: student_thinking
+purpose: >-
+  Turn a set of options into a criterion for choosing between them.
+best_for:
+  - engineering and design decisions, methods, treatments, policies
+avoid_when:
+  - one option is obviously correct and the comparison is theatre
+slides: 5
+sequence:
+  - step: the decision
+    intent: create_need
+    archetype: question
+    density: sparse
+  - step: each option, briefly
+    intent: build_intuition
+    archetype: visual_comparison
+    density: sparse
+    note: >-
+      individual intuition first. A large matrix dumped before the options mean
+      anything is a table nobody reads
+  - step: the dimensions that separate them
+    intent: compare
+    archetype: structured_comparison
+    density: moderate
+  - step: the trade-offs
+    intent: compare
+    archetype: structured_comparison
+    density: moderate
+  - step: when to choose each
+    intent: integrate
+    archetype: big_idea
+    density: moderate
+visual_rules:
+  parallel_composition: true
+  note: build the matrix up column by column rather than showing it complete
+exit_condition: >-
+  The student can choose between the options for a stated situation and justify it.
+transition: >-
+  Into a case where they make the choice.

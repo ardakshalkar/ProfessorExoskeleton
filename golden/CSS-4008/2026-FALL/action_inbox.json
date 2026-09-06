@@ -1,0 +1,334 @@
+{
+  "as_of": "2026-10-26",
+  "assessments": [
+    {
+      "assessment_id": "ASSESSMENT-01",
+      "due_at": "2026-09-29T23:59:00+05:00",
+      "enrolled": 3,
+      "missing": [],
+      "status": "closed",
+      "submissions_received": 3,
+      "title": "Foundations Quiz",
+      "type": "quiz",
+      "weight": 0.15
+    },
+    {
+      "assessment_id": "ASSESSMENT-02",
+      "due_at": "2026-10-06T23:59:00+05:00",
+      "enrolled": 3,
+      "missing": [
+        "STUDENT-K4QM2X",
+        "STUDENT-R7TB5D"
+      ],
+      "status": "closed",
+      "submissions_received": 1,
+      "title": "Data Preparation Report",
+      "type": "assignment",
+      "weight": 0.15
+    },
+    {
+      "assessment_id": "ASSESSMENT-04",
+      "due_at": "2026-10-15T23:59:00+05:00",
+      "enrolled": 3,
+      "missing": [
+        "STUDENT-R7TB5D"
+      ],
+      "status": "closed",
+      "submissions_received": 2,
+      "title": "Model Evaluation Assignment",
+      "type": "assignment",
+      "weight": 0.2
+    },
+    {
+      "assessment_id": "ASSESSMENT-05",
+      "due_at": "2026-12-15T23:59:00+05:00",
+      "enrolled": 3,
+      "missing": [],
+      "status": "upcoming",
+      "submissions_received": 0,
+      "title": "Final AI Project",
+      "type": "project",
+      "weight": 0.5
+    }
+  ],
+  "existing_action_items": [
+    {
+      "action_id": "ACTION-991",
+      "due_at": "2026-10-20T17:00:00+05:00",
+      "priority": "high",
+      "source_event_id": "EVENT-882",
+      "status": "pending",
+      "title": "Review 24 suggested grades for the Model Evaluation Assignment",
+      "type": "review_grades"
+    },
+    {
+      "action_id": "ACTION-992",
+      "due_at": "2026-10-21T17:00:00+05:00",
+      "priority": "medium",
+      "source_event_id": null,
+      "status": "pending",
+      "title": "Approve targeted practice for 1 student on train-test separation",
+      "type": "approve_intervention"
+    }
+  ],
+  "interventions_awaiting_approval": [],
+  "open_signals": [
+    {
+      "concepts": [
+        "CONCEPT-TRAIN-TEST-SPLIT",
+        "CONCEPT-OVERFITTING"
+      ],
+      "description": "Train-test separation has been handled loosely in two submissions, and the overfitting diagnosis in the model evaluation assignment stops at naming the gap.",
+      "detected_at": "2026-10-19T15:00:00+05:00",
+      "evidence_count": 2,
+      "has_intervention": true,
+      "severity": "medium",
+      "signal_id": "SIGNAL-772",
+      "student_id": "STUDENT-JNG7SN",
+      "type": "repeated_concept_difficulty"
+    }
+  ],
+  "pending_evaluations": {
+    "by_assessment": [
+      {
+        "assessment_id": "ASSESSMENT-04",
+        "low_confidence": 0,
+        "pending": 1,
+        "title": "Model Evaluation Assignment"
+      }
+    ],
+    "low_confidence": [],
+    "total": 1
+  },
+  "readiness": {
+    "by_importance": {
+      "advisable": [
+        "MODULE-11"
+      ],
+      "optional": [],
+      "required": [
+        "MODULE-08"
+      ]
+    },
+    "checklist": [
+      {
+        "detail": "no slides, handout or resource for this week",
+        "id": "MODULE-08",
+        "importance": "required",
+        "kind": "draft",
+        "label": "week 8",
+        "next": "/make-materials, or /prepare-lesson if it is the next session",
+        "position": 8,
+        "timing": "due_now",
+        "title": "Neural Networks"
+      },
+      {
+        "detail": "no slides, handout or resource for this week",
+        "id": "MODULE-11",
+        "importance": "advisable",
+        "kind": "draft",
+        "label": "week 11",
+        "next": "/make-materials, or /prepare-lesson if it is the next session",
+        "position": 11,
+        "timing": "soon",
+        "title": "Optimisation"
+      }
+    ],
+    "has_student_work": true,
+    "next_step": {
+      "detail": "8 of 10 modules have material",
+      "due": "rolling",
+      "importance": "advisable",
+      "items": [
+        {
+          "detail": "no slides, handout or resource for this week",
+          "id": "MODULE-08",
+          "importance": "required",
+          "label": "week 8",
+          "next": "/make-materials, or /prepare-lesson if it is the next session",
+          "position": 8,
+          "timing": "due_now",
+          "title": "Neural Networks"
+        },
+        {
+          "detail": "no slides, handout or resource for this week",
+          "id": "MODULE-11",
+          "importance": "advisable",
+          "label": "week 11",
+          "next": "/make-materials, or /prepare-lesson if it is the next session",
+          "position": 11,
+          "timing": "soon",
+          "title": "Optimisation"
+        }
+      ],
+      "kind": "draft",
+      "next": "/make-materials, or /prepare-lesson for the next session",
+      "position": 8,
+      "stage": "materials",
+      "state": "partial",
+      "timing": "due_now"
+    },
+    "phase": {
+      "state": "running",
+      "week": 8,
+      "weeks": 16
+    },
+    "reminders": [],
+    "stages": [
+      {
+        "detail": "4 of 4 outcomes stated",
+        "due": "before_start",
+        "importance": "required",
+        "kind": "claim",
+        "next": null,
+        "position": 0,
+        "stage": "outcomes",
+        "state": "ready",
+        "timing": "overdue"
+      },
+      {
+        "detail": "11 of 11 concepts named, 12 prerequisite edges",
+        "due": "before_start",
+        "importance": "advisable",
+        "kind": "draft",
+        "next": null,
+        "position": 1,
+        "stage": "concepts",
+        "state": "ready",
+        "timing": "overdue"
+      },
+      {
+        "detail": "10 of 10 weeks named",
+        "due": "before_start",
+        "importance": "advisable",
+        "kind": "draft",
+        "next": null,
+        "position": 2,
+        "stage": "modules",
+        "state": "ready",
+        "timing": "overdue"
+      },
+      {
+        "detail": "10 meetings, 0 without a date",
+        "due": "before_start",
+        "importance": "required",
+        "kind": "draft",
+        "next": null,
+        "position": 3,
+        "stage": "schedule",
+        "state": "ready",
+        "timing": "overdue"
+      },
+      {
+        "detail": "4 of 4 assessments named",
+        "due": "before_start",
+        "importance": "required",
+        "kind": "draft",
+        "next": null,
+        "position": 4,
+        "stage": "assessments",
+        "state": "ready",
+        "timing": "overdue"
+      },
+      {
+        "detail": "weights sum to 1.000",
+        "due": "before_start",
+        "importance": "required",
+        "kind": "claim",
+        "next": null,
+        "position": 5,
+        "stage": "weights",
+        "state": "ready",
+        "timing": "overdue"
+      },
+      {
+        "detail": "4 assessments are markable",
+        "due": "first_assessment",
+        "importance": "required",
+        "kind": "draft",
+        "next": null,
+        "position": 6,
+        "stage": "rubrics",
+        "state": "ready",
+        "timing": "overdue"
+      },
+      {
+        "detail": "3 students enrolled",
+        "due": "first_week",
+        "importance": "required",
+        "kind": "command",
+        "next": null,
+        "position": 7,
+        "stage": "roster",
+        "state": "ready",
+        "timing": "overdue"
+      },
+      {
+        "detail": "8 of 10 modules have material",
+        "due": "rolling",
+        "importance": "advisable",
+        "items": [
+          {
+            "detail": "no slides, handout or resource for this week",
+            "id": "MODULE-08",
+            "importance": "required",
+            "label": "week 8",
+            "next": "/make-materials, or /prepare-lesson if it is the next session",
+            "position": 8,
+            "timing": "due_now",
+            "title": "Neural Networks"
+          },
+          {
+            "detail": "no slides, handout or resource for this week",
+            "id": "MODULE-11",
+            "importance": "advisable",
+            "label": "week 11",
+            "next": "/make-materials, or /prepare-lesson if it is the next session",
+            "position": 11,
+            "timing": "soon",
+            "title": "Optimisation"
+          }
+        ],
+        "kind": "draft",
+        "next": "/make-materials, or /prepare-lesson for the next session",
+        "position": 8,
+        "stage": "materials",
+        "state": "partial",
+        "timing": "due_now"
+      }
+    ],
+    "unfinished": 1
+  },
+  "recent_events": [
+    {
+      "entity_id": "ASSESSMENT-04",
+      "event_id": "EVENT-882",
+      "event_type": "grading_completed",
+      "occurred_at": "2026-10-17T08:40:00+05:00",
+      "payload": {
+        "low_confidence_count": 11,
+        "suggestions_produced": 96,
+        "workflow_version": "grading/2026.10.1"
+      }
+    },
+    {
+      "entity_id": "ASSESSMENT-04",
+      "event_id": "EVENT-881",
+      "event_type": "assessment_submissions_received",
+      "occurred_at": "2026-10-16T00:01:00+05:00",
+      "payload": {
+        "missing_count": 3,
+        "submission_count": 24
+      }
+    }
+  ],
+  "run": {
+    "enrolled_students": 3,
+    "id": "CSS-4008-2026-FALL",
+    "instructors": [
+      "USER-ARD-A01"
+    ],
+    "term": "2026-FALL",
+    "title": "Artificial Intelligence"
+  }
+}

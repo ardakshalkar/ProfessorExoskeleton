@@ -1,0 +1,36 @@
+beat: definition-to-non-example
+name: Definition and non-example
+family: introduce_concept
+purpose: >-
+  Fix the boundary of a concept by showing something that looks like it and is not.
+best_for:
+  - concepts students routinely over-apply
+  - two terms used interchangeably outside the field
+avoid_when:
+  - the concept has no plausible near-miss
+slides: 4
+sequence:
+  - step: the definition
+    intent: formalize
+    archetype: definition
+    density: moderate
+  - step: a clear example
+    intent: apply
+    archetype: worked_example
+    density: moderate
+  - step: a near-miss, beside the example
+    intent: diagnose_misconception
+    archetype: visual_comparison
+    density: sparse
+    note: it has to be genuinely tempting, or the boundary is not being tested
+  - step: what separates them
+    intent: integrate
+    archetype: big_idea
+    density: sparse
+visual_rules:
+  parallel_composition: true
+exit_condition: >-
+  The student can reject a case that satisfies the surface features and not the
+  concept.
+transition: >-
+  The distinguishing criterion carries into the mechanism or the formalism.

@@ -1,0 +1,45 @@
+{
+  "issues": [
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-01",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "item.criterion_score_mismatch",
+      "level": "warning",
+      "location": "CRIT-01-02",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling"
+    },
+    {
+      "code": "ref.course_version",
+      "level": "error",
+      "location": "LO-01",
+      "message": "unknown course_id CSS-9999"
+    },
+    {
+      "code": "ref.version_mismatch",
+      "level": "error",
+      "location": "MODULE-01",
+      "message": "outcome LO-01 belongs to CSS-9999"
+    },
+    {
+      "code": "ref.version_mismatch",
+      "level": "error",
+      "location": "MODULE-02",
+      "message": "outcome LO-01 belongs to CSS-9999"
+    },
+    {
+      "code": "weight.sum",
+      "level": "warning",
+      "location": "CSS-4008-2026-FALL",
+      "message": "outcome weights sum to 0.800, expected 1.0"
+    }
+  ],
+  "mutation": "module-outcome-from-another-course",
+  "patch": {
+    "modules.0.course_id": "CSS-4008",
+    "outcomes.0.course_id": "CSS-9999"
+  }
+}

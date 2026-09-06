@@ -1,0 +1,102 @@
+<!doctype html>
+<!--
+  The frame every page of the dashboard site is filled into: index, gradebook,
+  results-<ID>, pending. `progress.html` is not built from this — it is what
+  `ainar dashboard` writes, copied into the folder unchanged.
+
+  Fill every {{ slot }}. Nothing here may be deleted except where a comment says
+  so: the stamp, the provenance line and the draft banner are the parts a page
+  like this always loses first, and they are the parts that make it safe to read
+  in March.
+
+  Class names match the ones `ainar dashboard` emits, so one template styles the
+  generated page and these hand-built ones alike.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ COURSE_ID }} — {{ what this page is }}</title>
+<style>
+:root {
+  --bg: #ffffff; --fg: #1a1a1a; --muted: #6b6b6b; --line: #e0e0e0;
+  --b1: #f4c7c3; --b2: #f8ddb8; --b3: #f2ecc0; --b4: #cfe3c4; --b5: #a8d5a2;
+  --none: #f6f6f6; --none-fg: #9a9a9a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c; --fg: #e8e8e8; --muted: #9a9a9a; --line: #2e3239;
+    --b1: #6b3a37; --b2: #6d5730; --b3: #5f5c2c; --b4: #3f5a38; --b5: #2f6b3c;
+    --none: #1e2126; --none-fg: #6b6b6b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 2rem 1.25rem; background: var(--bg); color: var(--fg);
+       font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 78rem; margin: 0 auto; }
+h1 { font-size: 1.4rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.05rem; margin: 2.5rem 0 .5rem; }
+.sub { color: var(--muted); margin: 0 0 1.5rem; font-size: .9rem; }
+nav { margin: 0 0 1.5rem; font-size: .9rem; }
+nav a { margin-right: .9rem; }
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-size: .85rem; }
+th, td { padding: .45rem .6rem; text-align: center; border-bottom: 1px solid var(--line); }
+th.row { text-align: left; white-space: normal; min-width: 15rem; font-weight: 500; }
+td.cell { font-variant-numeric: tabular-nums; }
+td.b1 { background: var(--b1); } td.b2 { background: var(--b2); }
+td.b3 { background: var(--b3); } td.b4 { background: var(--b4); }
+td.b5 { background: var(--b5); }
+td.none, .none { background: var(--none); color: var(--none-fg); }
+.legend { display: flex; flex-wrap: wrap; gap: .75rem; margin: .75rem 0 0;
+          font-size: .8rem; color: var(--muted); align-items: center; }
+.swatch { display: inline-block; width: .85rem; height: .85rem; border-radius: 3px;
+          vertical-align: -1px; margin-right: .3rem; border: 1px solid var(--line); }
+.note { color: var(--muted); font-size: .85rem; margin-top: 1rem; }
+.warn { border-left: 3px solid var(--b2); padding: .5rem .75rem; margin-top: 1rem;
+        background: var(--none); font-size: .85rem; }
+.draft { border: 2px solid var(--b1); background: var(--b1); color: #1a1a1a;
+         padding: .6rem .8rem; margin: 0 0 1.25rem; font-weight: 600; }
+.source { font-size: .78rem; color: var(--muted); margin: .35rem 0 0;
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+<style>
+/* {{ the chosen template's CSS, pasted verbatim }} */
+</style>
+</head>
+<body>
+<main>
+
+<!-- Delete only if nothing on this page came from work/. A proposal that looks
+     approved defeats the point of approval, and a footnote is not enough. -->
+<p class="draft">DRAFT — {{ what on this page is unapproved }}. Nothing here is a
+record until <code>ainar approve</code> has run.</p>
+
+<h1>{{ COURSE_ID }} {{ course title }} — {{ what this page is }}</h1>
+<p class="sub">{{ COURSE_VERSION_ID }} · generated {{ YYYY-MM-DD }} ·
+  private: this page carries marks and is not for students</p>
+
+<nav>
+  <a href="index.html">Overview</a>
+  <a href="progress.html">Progress</a>
+  <a href="gradebook.html">Gradebook</a>
+  <a href="pending.html">To grade</a>
+  {{ one link per results-<ASSESSMENT_ID>.html }}
+</nav>
+
+{{ the page's blocks, from blocks.html }}
+
+<!-- Every page says what it could not show. A page that silently omits a figure
+     reads as a course with nothing missing. -->
+<h2>Not on this page</h2>
+<ul>
+  <li>{{ figure }} — no command produces it, so it is not shown. {{ what would }}</li>
+</ul>
+
+<p class="note">Every figure here is copied from the command named beside it.
+  Nothing on this page was computed by hand. This is a snapshot taken on
+  {{ YYYY-MM-DD }}; re-run <code>/course-dashboard</code> to refresh it.</p>
+
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+# What a presentation looks like when nobody has said otherwise.
+#
+# Resolved in four layers, each beating the one before it:
+#
+#   1. this file                         the plugin's defaults
+#   2. .pres/preferences.yaml            this machine, or this workspace
+#   3. <course>/preferences.yaml         this course
+#   4. the current request               what the professor just said
+#
+# A value that is `ask` is deliberately not defaulted. Audience and duration
+# change the shape of the whole deck, and a deck built for the wrong audience is
+# not a deck with one wrong slide — it is the wrong deck. Guessing them saves a
+# question and costs a rebuild.
+
+version: 1
+profile_id: professor-slides-defaults
+scope: system
+
+values:
+  language:
+    default: English
+
+  presentation:
+    # ask — there is no sensible default for these two.
+    audience: ask
+    duration_minutes: ask
+
+    style: lecture              # lecture | seminar | workshop
+    density: moderate           # sparse | moderate | dense
+    include_learning_objectives: true
+    include_checks_for_understanding: true
+    # Roughly one slide per four minutes of a taught session. A ceiling, not a
+    # target: the check refuses more, and never asks for more.
+    slides_per_10_minutes: 2.5
+
+  outline:
+    # An outline that is only a list of slides is a list of topics. The arc is
+    # what makes the sequence mean something, so it is required by default.
+    require_arc: true
+    # Cover every concept the module claims, or say in the outline which one is
+    # being left out and why. Never silently.
+    require_coverage_statement: true
+
+  figures:
+    source_format: svg          # what is committed; PNG is a render of it
+    max_per_deck: 6
+    require_alt_text: true      # not negotiable — the check enforces it
+    # Colour is never the only channel: a red/green distinction is invisible to
+    # part of every cohort and to every projector with a tired lamp.
+    colour_only_encoding: forbidden
+
+  render:
+    target: pptx
+    also_pdf: true
+    output_directory: output
