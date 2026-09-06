@@ -45,6 +45,8 @@ import {
   rosterDir,
 } from "../src/roster.ts";
 import { dump } from "../src/yaml-out.ts";
+import { SCHEMA_NAMES, jsonSchemaFor, shapeText } from "../src/schema.ts";
+import { newCourse, newRun } from "../src/scaffold.ts";
 import {
   ID_FIELDS,
   approveDrafts,
@@ -61,8 +63,6 @@ const REFUSED: Record<string, string> = {
   "score-items": "rewrites draft files in place.",
   sql: "generates the PostgreSQL import; run it from the CLI that owns the schema.",
   export: "writes dist/; a person should decide where.",
-  schema: "writes schema/.",
-  new: "scaffolds files.",
 };
 
 const args = process.argv.slice(2);
@@ -147,6 +147,10 @@ const HELP = `ainar (Node) — the read half of the workspace
   roster show [--run RUN] [--out PATH]     PRIVATE: names, to a terminal
   roster whois STUDENT-XXXXXX              PRIVATE: one identity
   roster status                            where the identities live
+
+  schema [ENTITY] [--json] [--out DIR]     what a record must look like
+  new course COURSE_ID [--title T] [--credits N] [--department D]
+  new run COURSE_ID TERM --start YYYY-MM-DD --end YYYY-MM-DD
 
   Enrollments hold pseudonyms only. Names, numbers and emails go to
   --roster-dir (default ~/.ainar/roster, or AINAR_ROSTER_DIR), which must
@@ -651,6 +655,100 @@ try {
 
       console.error(`unknown roster subcommand '${sub}'\n`);
       console.error(HELP);
+      process.exit(1);
+    }
+
+    /**
+     * What a record must look like, read out of the validator's own schemas.
+     *
+     * Written because the alternative was watched happening: an agent asked to
+     * start a course searched the filesystem for an unrelated workspace and
+     * copied its files, then minted an identifier the model refuses. The shape
+     * is derivable and now it is answerable.
+     */
+    case "schema": {
+      const wanted = rest[0];
+      const outDir = flag("out");
+
+      if (outDir) {
+        // The JSON Schema form, which is what Python's `schema` writes.
+        const names = wanted ? [wanted] : SCHEMA_NAMES;
+        let count = 0;
+        for (const name of names) {
+          const document = jsonSchemaFor(name);
+          if (document === null) throw new Error(`${name} is not an entity`);
+          const path = join(resolve(outDir), `${name}.schema.json`);
+          mkdirSync(dirname(path), { recursive: true });
+          writeFileSync(path, JSON.stringify(document, null, 2) + "\n", { encoding: "utf-8" });
+          count += 1;
+        }
+        out(`wrote ${count} schema file(s) to ${resolve(outDir)}`);
+        break;
+      }
+
+      if (!wanted) {
+        out("Entities. `schema <name>` for one of them:\n");
+        out("  " + SCHEMA_NAMES.join("\n  "));
+        break;
+      }
+
+      if (args.includes("--json")) {
+        const document = jsonSchemaFor(wanted);
+        if (document === null) throw new Error(`${wanted} is not an entity`);
+        out(document);
+        break;
+      }
+
+      out(shapeText(wanted));
+      break;
+    }
+
+    /**
+     * A course, or an offering of one, as files that already validate.
+     *
+     * Nothing is overwritten: a file that exists is reported and left alone.
+     */
+    case "new": {
+      const what = rest[0];
+
+      if (what === "course") {
+        const courseId = rest[1];
+        if (!courseId) throw new Error("usage: new course COURSE_ID [--title T]");
+        const written = newCourse({
+          root,
+          courseId,
+          title: flag("title"),
+          credits: flag("credits") ? Number(flag("credits")) : undefined,
+          department: flag("department"),
+        });
+        out(`Scaffolding ${courseId} in ${join(root, "courses", courseId)}`);
+        for (const entry of written) {
+          out(`  ${entry.created ? "created" : "skipped (exists)"} ${relative(root, entry.path).split(/[\\/]/).join("/")}`);
+        }
+        out(
+          "\nNo offering yet, so this will not validate until you add one:\n" +
+            `  new run ${courseId} <TERM> --start YYYY-MM-DD --end YYYY-MM-DD`,
+        );
+        break;
+      }
+
+      if (what === "run") {
+        const courseId = rest[1];
+        const term = rest[2];
+        const start = flag("start");
+        const end = flag("end");
+        if (!courseId || !term || !start || !end) {
+          throw new Error("usage: new run COURSE_ID TERM --start YYYY-MM-DD --end YYYY-MM-DD");
+        }
+        const written = newRun({ root, courseId, term, start, end });
+        out(`Scaffolding offering ${courseId}-${term}`);
+        for (const entry of written) {
+          out(`  ${entry.created ? "created" : "skipped (exists)"} ${relative(root, entry.path).split(/[\\/]/).join("/")}`);
+        }
+        break;
+      }
+
+      console.error("usage: new course COURSE_ID  |  new run COURSE_ID TERM --start … --end …");
       process.exit(1);
     }
 

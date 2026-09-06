@@ -19,7 +19,8 @@
     "jose": "^6.2.9",
     "pg": "^8.23.0",
     "yaml": "^2.6.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "zod-to-json-schema": "^3.24.0"
   },
   "//optionalDependencies": "Only `render-deck` needs these, and `sharp` is a native build. Reading a course must not depend on an image library, so a machine where these fail to install still runs `npm run check`.",
   "optionalDependencies": {

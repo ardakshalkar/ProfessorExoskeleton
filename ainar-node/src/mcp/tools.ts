@@ -21,6 +21,7 @@ import { outlinePayload } from "../outline.ts";
 import { dashboardPayload, studentRecord } from "../progress.ts";
 import { alignmentMarkdown, syllabusMarkdown } from "../report.ts";
 import { coverage, validate } from "../validate.ts";
+import { SCHEMA_NAMES, shapeOf } from "../schema.ts";
 import {
   ToolError,
   Workspace,
@@ -43,7 +44,7 @@ export const WITHHELD: Record<string, string> = {
   "extract-evidence / roll-up":
     "deterministic and safe to run, but they write records into courses/. Run them from the CLI after approving.",
   "score-items": "rewrites draft files in place.",
-  "export / sql / schema / new": "generate files; a person should decide where.",
+  "export / sql": "generate files; a person should decide where.",
 };
 
 const VERSION_ARG = {
@@ -374,6 +375,62 @@ export const TOOLS: Tool[] = [
     handler: (workspace, args) => {
       const courseVersionId = requireRunId(args);
       return alignmentMarkdown(workspace.findRun(courseVersionId), courseVersionId);
+    },
+  },
+  {
+    name: "model_schema",
+    description:
+      "What a record of one kind must contain: every field with its type, whether it is required, the values an enum allows and the pattern an identifier must match. Call this before writing or scaffolding YAML rather than copying the shape out of another course.",
+    inputSchema: schema(
+      {
+        entity: {
+          type: "string",
+          description: "Collection name, e.g. 'course', 'modules', 'assessments'. Omit to list them.",
+        },
+      },
+      [],
+    ),
+    handler: (_workspace, args) => {
+      const entity = String(args.entity ?? "").trim();
+      if (!entity) {
+        return {
+          entities: SCHEMA_NAMES,
+          note: "Call again with one of these as `entity`.",
+        };
+      }
+      const fields = shapeOf(entity);
+      if (fields === null) {
+        throw new ToolError(`${entity} is not an entity. One of: ${SCHEMA_NAMES.join(", ")}`);
+      }
+      return {
+        entity,
+        fields,
+        // Read out of the same schemas the validator uses, so this cannot
+        // describe a record the validator would then refuse.
+        note:
+          "Derived from the validator's own schemas at call time. A field marked required " +
+          "must be present; everything else may be omitted. `pattern` is a regular " +
+          "expression the whole value must match.",
+      };
+    },
+  },
+  {
+    name: "course_stats",
+    description:
+      "How much of the model is filled in for one course: a count per collection. Use it to tell an empty course from a missing one.",
+    inputSchema: schema(
+      { course_id: { type: "string", description: "e.g. CSS-4008 — the course, not the run" } },
+      ["course_id"],
+    ),
+    handler: (workspace, args) => {
+      const courseId = String(args.course_id ?? "").trim();
+      if (!courseId) throw new ToolError("course_id is required, e.g. 'CSS-4008'");
+      const { bundle } = workspace.load(courseId);
+      const counts: Record<string, number> = {};
+      for (const [key, value] of Object.entries(bundle as unknown as Record<string, unknown>)) {
+        if (Array.isArray(value)) counts[key] = value.length;
+      }
+      return { course_id: courseId, counts };
     },
   },
 ];
