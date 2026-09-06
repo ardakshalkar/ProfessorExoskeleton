@@ -246,6 +246,42 @@ function model(d) {
       // readings with no deck and no graded work still has materials.
       has_items: ind.items.length > 0 || ind.extras.length > 0,
       items: ind.items,
+      // What the card does not have room for, behind the ··· control.
+      //
+      // Only things that are NOT already on the card: the week's full span
+      // rather than its first day, the module's own hours, where the meeting
+      // happens, and what each piece of graded work is worth. A panel that
+      // repeated the chips would be a control that costs a press and returns
+      // what was already on screen.
+      details: (function () {
+        const out = [];
+        if (w.starts_on) {
+          out.push({
+            k: 'Dates',
+            v: shortDate(w.starts_on) + (w.ends_on ? ' \u2013 ' + shortDate(w.ends_on) : ''),
+          });
+        }
+        for (const m of w.modules || []) {
+          out.push({
+            k: 'Module',
+            v: [m.module_id, m.estimated_hours ? m.estimated_hours + ' h' : '']
+              .filter(Boolean).join(' \u00b7 '),
+          });
+        }
+        for (const m of w.meetings || []) {
+          out.push({
+            k: titled(m.type || 'meeting'),
+            v: [m.title, m.location].filter(Boolean).join(' \u00b7 ') || '\u2014',
+          });
+        }
+        for (const [list, verb] of [[w.opens, 'opens'], [w.due, 'due']]) {
+          for (const a of list || []) {
+            out.push({ k: a.title, v: pct(a.weight) || 'no weight set' });
+          }
+        }
+        return out;
+      })(),
+      prep: (w.meetings || []).map(function (m) { return m.preparation; }).filter(Boolean),
       extras: ind.extras,
       extras_count: ind.extras_count,
       // "+ 4 resources", not "4 more": a count with no noun makes the reader

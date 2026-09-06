@@ -456,13 +456,31 @@ window.__ModuleLoader__.load({
     /**
      * A widget document in an iframe, delivered as `srcdoc` rather than `src`.
      *
-     * `sandbox` is `allow-scripts` and nothing else — deliberately not
-     * `allow-same-origin`. The document needs to run its own script and needs
-     * nothing else: the widgets declare an empty CSP allow-list and their own
-     * README forbids network, images and `callTool`, so a frame with no origin
-     * privileges is the honest expression of what they are. Granting
-     * `allow-same-origin` beside `allow-scripts` would also be theatre — a
-     * frame with both can reach up and remove its own sandbox attribute.
+     * `sandbox` deliberately withholds `allow-same-origin`. The document needs
+     * to run its own script and needs no origin privileges: the widgets declare
+     * an empty CSP allow-list and their own README forbids network, images and
+     * `callTool`, so a frame with no origin is the honest expression of what
+     * they are. Granting `allow-same-origin` beside `allow-scripts` would also
+     * be theatre — a frame with both can reach up and remove its own sandbox
+     * attribute.
+     *
+     * `allow-popups` and `allow-popups-to-escape-sandbox` ARE granted, and the
+     * reason is the deck. Every slide link in the week view is a real file this
+     * app serves, and with `allow-scripts` alone Chrome stopped every one of
+     * them: a frame with an opaque origin may not navigate itself or the top
+     * document, so pressing PDF did nothing at all and looked like a broken
+     * link. The escape flag is the second half of it — without it the new tab
+     * inherits the opaque origin and a PDF viewer will not load in it.
+     *
+     * The alternative was to route each click out through the same postMessage
+     * channel the buttons use and call `window.open` from here. It is the more
+     * conservative shape and it does not work: the popup blocker wants the open
+     * to happen inside the gesture, and a message handler is a later task.
+     *
+     * What keeps this narrow is not the sandbox, it is the href. `safeUrl` in
+     * `runtime.js` returns null for anything that is not http, https or a
+     * relative path, so `javascript:` and `data:` never reach the document, and
+     * the payload that supplies the URLs is ours.
      *
      * Which is why this fetches the document and hands it over as `srcdoc`
      * instead of pointing `src` at the route. Navigating a frame that has no
@@ -538,7 +556,7 @@ window.__ModuleLoader__.load({
         h("iframe", {
           className: "pp-frame",
           srcDoc: doc.html,
-          sandbox: "allow-scripts",
+          sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox",
           "aria-label": props.title,
           title: props.title,
         }),

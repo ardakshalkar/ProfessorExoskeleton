@@ -113,6 +113,20 @@ function paint() {
     });
   });
 
+  // The week's details panel. Unlike the chip row this needs no measuring:
+  // the panel is built only when there is something in it that the card does
+  // not already show, so the control appears exactly when it does something.
+  root.querySelectorAll('[data-wkbtn]').forEach(function (button) {
+    var card = button.closest('.wk');
+    var panel = card ? card.querySelector('[data-wkpanel]') : null;
+    if (!panel) return;
+    button.addEventListener('click', function () {
+      panel.hidden = !panel.hidden;
+      button.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+      card.classList.toggle('open', !panel.hidden);
+    });
+  });
+
   root.querySelectorAll('[data-chips]').forEach(function (group) {
     var row = group.querySelector('.chiprow');
     var button = group.querySelector('[data-more]');

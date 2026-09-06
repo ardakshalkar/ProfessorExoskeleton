@@ -112,6 +112,23 @@ button.ask { border-style: dashed; color: var(--muted); }
 .wk-name small .ico { margin-top: .16rem; }
 .wk-name .unplanned { color: var(--muted); font-weight: 400; }
 .wk-body { min-width: 0; margin-top: .4rem; }
+/* The details control: a circle, because it opens rather than acts. */
+.dots { flex: none; align-self: flex-start; cursor: pointer; font: inherit;
+        font-size: .8rem; line-height: 1; letter-spacing: .04em;
+        width: 1.55rem; height: 1.55rem; padding: 0; border-radius: 999px;
+        border: 1px solid var(--line); background: var(--card);
+        color: var(--muted); }
+.dots:hover { color: var(--fg); border-color: currentColor; }
+.wk.open .dots { background: var(--fg); color: var(--on-fg); border-color: var(--fg); }
+/* What the card had no room for. Rows rather than chips, because these are
+ * facts to read once and not controls to press. */
+.wk-more { margin-top: .45rem; padding-top: .45rem; border-top: 1px solid var(--line); }
+.wk-more .row { display: flex; gap: .6rem; justify-content: space-between;
+                padding: .22rem 0; font-size: .72rem; border-bottom: none; }
+.wk-more .k { min-width: 0; overflow-wrap: anywhere; color: var(--fg); }
+.wk-more .v { color: var(--muted); white-space: nowrap; }
+.wk-more .prep { margin: .3rem 0 0; font-size: .72rem; color: var(--muted);
+                 font-style: italic; }
 .wk-hd .ask { flex: none; align-self: flex-start; border-style: solid;
               border-color: var(--accent-line); border-radius: 7px;
               background: var(--card); color: var(--accent-ink);
