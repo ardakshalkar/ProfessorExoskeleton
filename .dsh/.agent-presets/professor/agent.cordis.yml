@@ -1,0 +1,394 @@
+# The `standard` agent preset: the full coding agent, mounted once per process.
+#
+# This file is an AGENT-PLANE composition. The roster mounts it ONCE under a
+# standing scope; every session naming it joins by scope parentage, so the
+# tools and prompt sections registered here cover each joined agent while a
+# session's own state stays keyed per Session/Agent inside the plugins. The
+# host composition (`base.cordis.yml` + `web.cordis.yml`) keeps everything a
+# preset must not own: the registries themselves, the sandbox and approval
+# stack, persistence, and the model route.
+#
+# A service row here MUST sit inside a group carrying an `isolate` realm.
+# Without one it publishes into the root realm, where it is process-global —
+# another preset publishing the same name collides, and a host reader would
+# resolve one preset's instance for every session; `dsh-agent-presets` rejects
+# that at mount. `true` means an entry-local realm: this standing mount's own
+# private instance, apart from every other preset's. (A shared label does NOT
+# pool instances — `provide()` throws on the second registration under the
+# same realm symbol; labels join REALMS, and are not what this file needs.)
+
+# ── identity ────────────────────────────────────────────────────────────────
+
+# The preset's own persona, shadowing the deployment default for this agent.
+# `{{model}}` and `{{cwd}}` resolve from the agent's own route and workspace.
+#
+# This is one of two substantive edits against the `standard` preset it was
+# copied from: the same tools, a different job, and — in the skills section
+# below — a different set of skills. Everything else is `standard` unchanged,
+# and should stay that way: a professor who needs a coding agent is better
+# served by switching preset than by this one drifting into being both.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are the Professor Exoskeleton, powered by the {{model}} model, working
+      for one university teacher on their own machine. Your working directory is
+      {{cwd}}.
+
+
+      The course record is a folder of YAML the professor authors: the nearest
+      directory at or above your working directory that holds `courses/`. That
+      is how `bin/ainar` finds it — `--root <path>` if you pass one, otherwise
+      the directory you are standing in. It does NOT read AINAR_WORKSPACE. That
+      variable is what the Course pane and the MCP server fall back on for a
+      request arriving with no session; it is not how you find the record, and
+      a workspace it happens to name may not be the one the professor is looking
+      at. The record is mirrored into Supabase for the student application to
+      read. The `course_*`, `class_progress`, `gradebook`, `action_inbox` and
+      related tools read that record; they cannot write to it.
+
+
+      When the professor opens a session in their own words, start by running
+      `bin/ainar validate` and, for the run in hand, `bin/ainar inbox <RUN>` —
+      then tell them where their courses stand and what needs them. Do that
+      before asking what they want: the answer is usually there.
+
+
+      Do NOT open that way when the turn already carries one specific request —
+      a button in the Course pane, or a message naming the thing it wants. Those
+      arrive as a first message like any other, so the rule above would fire on
+      them, and it puts two sweeps of the whole course model between a press and
+      the one sentence it asked for. Answer what came in. If a check turns out to
+      be needed, run it then, for a reason you can say out loud. A prompt that
+      tells you to skip the sweep is not overriding this instruction; it is this
+      instruction.
+
+
+      They may teach several courses, so name the course whenever a number
+      belongs to one.
+
+
+      Nothing in this project runs Python. `bin/ainar` is the TypeScript CLI in
+      `ainar-node/`, and it is the only `ainar` you may call. A machine-wide
+      `ainar` also exists on PATH and is the Python one — do not use it. If a
+      skill's text tells you to run `python -m ainar <command>`, run
+      `bin/ainar <command>` instead; if that command is not there, say so rather
+      than reaching for Python.
+
+
+      Draft records into `work/` first: that is where a proposal belongs before
+      anybody has accepted it.
+
+
+      You MAY then run `bin/ainar approve` to promote those drafts into the
+      course record. Run `--dry-run` first, and when you write, say plainly what
+      you promoted, out of which directory, and which identifiers lost their
+      `-DRAFT-` marker. Approval is still a traceable act — it is now one you can
+      perform rather than one you can only describe. The Course pane has a button
+      that runs the same command, so the professor can do it without you.
+
+
+      What stays theirs is anything that LEAVES this machine and reaches a
+      student. Never push a grade to an LMS, never publish to Telegram, Canvas or
+      Moodle, and never write to Supabase without being asked to in that turn.
+      The line is drawn there deliberately: approving changes the professor's own
+      record on their own disk, where it can be read, diffed and undone, while a
+      grade in front of a student cannot be recalled. `prof-publish plan`
+      previews and is yours to run; `prof-publish publish --confirm` is theirs.
+
+
+      Your skills come from two sets. The AINAR ones are written against the
+      workspace and draft into `work/<RUN_ID>/`. The ProfessorSkills ones —
+      the activity, course-design, exam, publishing, presentation and student-
+      assessment skills — are written against a course and reach deterministic
+      work through a bundled CLI: `prof-assess` for grading checks,
+      `prof-publish` for LMS previews, `pres` for presentation grammar, course
+      source and deck rendering. Each says where its output goes; say so too,
+      because the two sets do not put it in the same place.
+
+
+      Real students are in this data. Pseudonyms stay pseudonyms unless the
+      professor asks for a name, and anything about one student stays out of files
+      that leave this machine.
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+# ── shell ───────────────────────────────────────────────────────────────────
+
+# `shell-env` stays in the HOST composition: `apps/cli/src/web.ts` injects it to
+# publish `DSH_WEB_URL`/`DSH_WEB_MODE`, and a host row that injects a service is
+# the criterion for host-plane ownership — injection resolves before any session
+# exists, so there is no agent to key by. Behind a preset realm those variables
+# never reached the model's shell at all. Both shell tools consume the host
+# registry from here; their executors (`bash-sandbox`/`pwsh-sandbox`) are
+# host-plane too.
+- id: tool-bash
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
+- id: tool-pwsh
+  name: '@deepseek-ai/dsh-tool-pwsh'
+  disabled: !!js process.platform !== 'win32'
+
+# ── filesystem ──────────────────────────────────────────────────────────────
+
+# Both register into the host `tools` registry and provide nothing, so
+# they need no realm. The `fs` service and its policy stay in the host.
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── background jobs ────────────────────────────────────────────────────────
+
+# Only the model-facing controls. The task REGISTRY stays on the host plane:
+# its producers sit outside any realm this file could put it in — `tool-bash`
+# above resolves it with `ctx.get`, and an entry-local realm here is invisible
+# to every sibling row, so `run_in_background` would answer "background jobs
+# unavailable" while these controls sat in the catalog. The registry is keyed by
+# owning agent anyway, so one host instance serves every session. What a preset
+# chooses is whether its agent can collect and stop background work at all.
+- id: tool-jobs
+  name: '@deepseek-ai/dsh-tool-jobs'
+
+# ── skills ──────────────────────────────────────────────────────────────────
+
+# The skill REGISTRY lives in the host composition and is layered per scope:
+# these rows register into THIS preset's layer of it, so they need no realm.
+# `skill-filesystem` contributes local-root discovery for agents on this preset, and
+# `tool-skill` gives them the catalog and loader; the merged catalog also
+# carries whatever the deployment registered globally (repository plugins).
+- id: skill-filesystem
+  name: '@deepseek-ai/dsh-skill-filesystem'
+  config:
+    # Every teaching skill this host has, named absolutely: the AINAR set that
+    # `exo setup` unpacks into `.agents/skills`, plus the six ProfessorSkills
+    # plugins it vendors into `plugins/professor-skills/`.
+    #
+    # The default roots would find the first at `<projectRoot>/.agents/skills`,
+    # but the project root is the SESSION's workspace — and the professor's
+    # workspace is a course folder, not this checkout. Relying on the default
+    # meant the skills appeared only when the workspace happened to be this
+    # directory, and vanished silently otherwise: no error, just a `/` menu with
+    # nothing teaching-related in it.
+    #
+    # The ProfessorSkills roots are each plugin's own `skills/` directory rather
+    # than one flattened tree, because a skill there reads resources from its
+    # PLUGIN root: `../../references/grading-contract.md`, `bin/prof-publish`,
+    # and — for every presentation skill — `bin/pres`, which reads `beats/`,
+    # `references/` and `preferences/` from beside it. One root per plugin is
+    # what keeps those paths resolving.
+    #
+    # ORDER IS LOAD-BEARING. Every entry here carries the same provider rank
+    # (`CUSTOM_RANK`, 300), so a name two roots both define is decided by
+    # position: earlier wins, and `dsh-skill` hides the loser with nothing but a
+    # log line. ProfessorSkills is listed first because it is the chosen winner
+    # of the three shared names — `grade-batch`, `grade-submission` and
+    # `publish-telegram`. That decision is not left to this list, though:
+    # `shadow_duplicates` in exo/setup.py removes the AINAR copies outright, so
+    # the outcome holds even in the one case this ordering does not cover — a
+    # session whose workspace IS this checkout, where `.agents/skills` is also
+    # found as a default root at the higher `PROJECT_AGENTS_RANK` and would
+    # otherwise take the name back.
+    #
+    # Anchored to THIS FILE, and to nothing else.
+    #
+    # `baseUrl` is the loader's own handle on where a composition sits, and for
+    # a preset `Include` sets it to the preset's directory — "right for a
+    # relative specifier", in `PresetTree.import`'s words, "a preset's own files
+    # travel with it". The redirection to the harness base that the same class
+    # performs applies to bare package specifiers in a row's `name`, not to this.
+    # It is the idiom the shipped `cordis` preset uses for its own skills, and
+    # the reason to prefer it here is that it cannot be wrong: no environment
+    # variable to be unset, no working directory to be somewhere else.
+    #
+    # The earlier spelling was `(process.env.EXO_HOME ?? process.cwd()) + '...'`,
+    # which put the professor's whole skill set behind two things that are only
+    # true when `bin/professor` is the way in. A plain `dsh --profile professor`
+    # exported no `EXO_HOME` and stood wherever the professor stood, and the
+    # thirty-five skills were then absent from the `/` menu with nothing said
+    # about it — the failure `dsh-skill` reports as a log line and no more.
+    #
+    # Three levels up is the project root: .dsh/.agent-presets/professor/ -> .
+    customSkillDirs:
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-assignment-skills/skills/', baseUrl))"
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-course-design-skills/skills/', baseUrl))"
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-exam-skills/skills/', baseUrl))"
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-lms-publishing-skills/skills/', baseUrl))"
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-slides-skills/skills/', baseUrl))"
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-student-assessment-skills/skills/', baseUrl))"
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../.agents/skills/', baseUrl))"
+
+- id: tool-skill
+  name: '@deepseek-ai/dsh-tool-skill'
+
+# ── goals ───────────────────────────────────────────────────────────────────
+
+# Only the model-facing tool. The goal SERVICE, its session driver, and the
+# `/goal` command stay on the host plane: the Gateway serves the goal domain as
+# Remote endpoints whose receiver comes from a generated descriptor, so it
+# resolves `goals` on the host and an entry-local realm here would hide it. The
+# registry is keyed by session anyway, so one host instance serves every
+# session. What a preset chooses is whether its agent can call the goal tool.
+- id: tool-goal
+  name: '@deepseek-ai/dsh-tool-goal'
+
+# ── plan mode ───────────────────────────────────────────────────────────────
+
+# Plan state is per-agent by nature, so an entry-local realm is not a
+# workaround here — it is the correct lifetime.
+- id: planning
+  name: cordis:group
+  group: true
+  isolate:
+    planMode: true
+  config:
+    - id: plan-mode
+      name: '@deepseek-ai/dsh-plan-mode'
+      config:
+        section: |
+              You are in plan mode. Stay in plan mode until exit_plan_mode succeeds or the user switches the session mode. Imperative language to implement changes means plan the implementation, not execute it. A user's conversational agreement — including an answer confirming something you asked — approves nothing and does not end plan mode; fold the confirmed decision into the plan and submit it through exit_plan_mode.
+
+              Explore first. Use non-mutating reads, searches, static analysis, and checks to ground the plan in the actual repository. Do not edit or write files, change configuration, run formatters or code generation that rewrites tracked files, commit, or otherwise carry out the plan. Prefer existing functions and patterns over new machinery.
+
+              The tool catalog stays the same across modes for request-cache stability. These plan-mode rules override any later tool description or guidance that suggests using mutation tools; those tools remain listed to keep the tool catalog unchanged. Do not use todo_write to track this planning phase: it tracks implementation after an approved plan, while the plan itself belongs in exit_plan_mode.
+
+              Resolve discoverable facts by inspection. Use ask_user_question only for user-owned choices or material ambiguity that inspection cannot answer. Do not ask the user where code lives or how current behavior works when you can find out.
+
+              Make the plan decision-complete: state the goal and success criteria; group implementation changes by subsystem; identify public API, schema, and data-flow changes; cover edge cases, failure modes, tests, acceptance criteria, and explicit assumptions. Keep it concise enough to review but detailed enough that another engineer can implement it without making design decisions.
+
+              When ready, call exit_plan_mode with the complete plan markdown, starting with a # title. Make exit_plan_mode the only and final tool call in that assistant response: it presents the plan for approval, and implementation begins only in a later step after approval. Do not paste the final plan as a plain reply or ask "should I proceed?" through prose or ask_user_question. If review rejects it, incorporate the feedback and present again. If the review channel is unavailable or aborted, stay in plan mode and ask the user to switch modes manually; do not proceed with implementation.
+
+# ── compaction ──────────────────────────────────────────────────────────────
+
+# `compaction-basic` reads `toolResultPrune` through `ctx.get`, so the pruner must
+# share this realm rather than sit outside it.
+#
+# `tokenMeter` is deliberately NOT in this realm: the meter stays on the HOST
+# plane, and the rows here resolve that one instance. It takes no configuration,
+# keys every fold by Session, and owns the context-meter projection units the
+# browser reads for every session — behind a realm those units would come and go
+# with whichever presets happen to be mounted. What a preset chooses is whether
+# its agent compacts at all, which is `compaction-basic` below.
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024
+
+# ── delegation and workflows ────────────────────────────────────────────────
+
+# The `subagents` registry and its spawn/fork backends live in the HOST
+# composition: the registry is a process singleton whose cross-session queries
+# the api-proxy serves to the browser, and a provider name may only be
+# registered once. This preset contributes the delegation TOOLS, which resolve
+# that host registry.
+#
+# `workflows` is different — nothing outside an agent reads it — so every row
+# that reaches it shares one entry-local realm here, and a consumer left
+# outside would resolve a host registry this preset does not populate.
+#
+# `tool-subagent-report` is host-plane for the same reason as the registry,
+# not because a preset may not want it: it registers a CONTINUABLE SETUP on
+# that singleton rather than a tool this agent calls, and the setup list is
+# not scope-aware — one copy per mounted preset means every child gets
+# `report` registered once per live session, which throws on the second.
+- id: delegation
+  name: cordis:group
+  group: true
+  isolate:
+    workflowEngine: true
+  config:
+    - id: tool-subagent-control
+      name: '@deepseek-ai/dsh-tool-subagent-control'
+
+    - id: tool-subagent-list-agents
+      name: '@deepseek-ai/dsh-tool-subagent-control/list-agents'
+
+    - id: tool-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent
+        backgroundMode: continuable
+
+    - id: tool-subagent-fork
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: fork
+        toolName: subagent_fork
+        backgroundMode: continuable
+
+    # Production dsh does not install these optional providers. Install the
+    # matching Bundle in this Profile and restart the Host, then copy this
+    # preset and remove `disabled` from the matching tool row. Host availability
+    # alone grants no tool.
+    - id: tool-subagent-codex
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: codex
+        toolName: subagent_codex
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+
+    - id: tool-subagent-claude-code
+      name: '@deepseek-ai/dsh-tool-subagent'
+      disabled: true
+      config:
+        provider: claude-code
+        toolName: subagent_claude_code
+        backgroundMode: one-shot
+        maxDepth: provider-managed
+
+    - id: workflow-worker-thread
+      name: '@deepseek-ai/dsh-workflow-worker-thread'
+      config:
+        provider: spawn
+
+    - id: tool-workflow
+      name: '@deepseek-ai/dsh-tool-workflow'
+
+    - id: tool-ralph
+      name: '@deepseek-ai/dsh-tool-ralph'
+      config:
+        subagentProvider: spawn
+        maxRounds: 64
+
+# ── remaining model-facing rows ─────────────────────────────────────────────
+
+- id: tool-ask-user
+  name: '@deepseek-ai/dsh-tool-ask-user'
+
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# The `web` service and its search provider stay in the host composition; only
+# the model-facing tool is per-session.
+- id: tool-web
+  name: '@deepseek-ai/dsh-tool-web'
+  config:
+    fetch: false
+    searchTimeoutMs: 60000

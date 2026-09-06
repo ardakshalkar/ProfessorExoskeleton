@@ -1,0 +1,60 @@
+# The sample profile's own patch layer, applied after every bundle layer
+# (dsh-base, then dsh-web-app, then dsh-sample) and before any --patch overlay.
+#
+# This is the layer to edit. A patch entry targets a row by `id` and REPLACES
+# that row's whole `config`, so restate every key you want, not only the one
+# you are changing.
+#
+# A top-level YAML array. `[]` is a valid, empty layer.
+
+# The sample plugin's own row, overridden here rather than in the plugin.
+#
+# This is the point of the four-layer arrangement: `plugins/dsh-sample/`
+# ships defaults and nothing about this machine, and everything that is a
+# choice — the greeting, the read limit, whether the HTTP route exists at
+# all — is made here, where a person editing it can see the profile it
+# belongs to.
+#
+# Comment the whole entry out and the plugin still mounts, on its own
+# defaults: "dsh-sample is mounted.", 1 MiB, route on.
+- id: sample
+  config:
+    greeting: dsh-sample is mounted, and this greeting comes from the profile.
+    maxBytes: 262144
+    route: true
+
+# Which model a new session starts on.
+#
+# dsh-base already sets `deepseek-official` / `deepseek-v4-flash`, so this
+# entry changes nothing until you point the variables at something else — it
+# is here to show where the choice lives and how to make it from `.env`
+# instead of from a tracked file:
+#
+#     SAMPLE_PROVIDER=openrouter
+#     SAMPLE_MODEL=deepseek/deepseek-v4-pro
+#
+# `bin/sample` passes both through to the environment, because a model id is
+# not a secret. The API KEY is not passed through, deliberately — see the
+# launcher's own comment for why that matters.
+- id: agent-default-model
+  config:
+    provider: !!js process.env.SAMPLE_PROVIDER || 'deepseek-official'
+    model: !!js process.env.SAMPLE_MODEL || 'deepseek-v4-flash'
+
+# The Professor preset, vendored from ../ProfessorExoskeletonDHS into
+# .dsh/.agent-presets/professor/ — the AINAR persona, the same tools the
+# `standard` preset carries, and the thirty-five teaching skills.
+#
+# ONE LINE MAKES IT THE DEFAULT, and this is that line. Comment this entry out
+# and the host goes back to the `standard` coding agent while the preset stays
+# installed and selectable in the UI; nothing else needs changing.
+#
+# Skills are NOT configurable from this file. The web-app bundle disables the
+# host `skill-filesystem` row because agent presets own local discovery, so a
+# row of that id here would patch the disabled host one and change nothing.
+# The preset's own agent.cordis.yml is where the skill roots live — and they
+# are anchored to the preset's own directory through `baseUrl`, which is why
+# copying the preset folder carried them intact.
+- id: agent-presets
+  config:
+    default: professor

@@ -1,0 +1,21 @@
+{
+  "name": "dsh-profile-sample",
+  "private": true,
+  "dependencies": {},
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-sample",
+        "dsh-ainar-course-model",
+        "dsh-professor-pane"
+      ]
+    }
+  },
+  "comments": {
+    "professor": "dsh-ainar-course-model must precede dsh-professor-pane: the pane's whole job is to draw that plugin's four widget documents, and it imports them directly. dsh-web-app must precede both — it brings the web server the pane's route attaches to and the client-module server that serves its browser half.",
+    "bundles": "The list IS the mount order, and each bundle contributes its own cordis.patch.yml as one layer: dsh-base first (the core rows, and the default model), then dsh-web-app (the browser UI and the web server this sample's route attaches to), then dsh-sample last. Drop dsh-web-app and the tools still mount while the route does not — which is the case index.js waits for webServer to avoid.",
+    "dependencies": "Empty on purpose. `dsh plugin add` forwards to pnpm, which cannot resolve a file:/link: spec whose absolute path contains a space — and this checkout lives under one. The plugin is a dependency of the PROJECT instead, so Node resolves `dsh-sample` from the dsh installation's own node_modules, which is the first place the loader looks."
+  }
+}

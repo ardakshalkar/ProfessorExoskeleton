@@ -1,0 +1,242 @@
+/* The host paints the ground behind the frame, so --bg stays transparent and
+   anything needing a real colour behind text uses --panel or --on-fg. An
+   inverted control cannot use --bg: transparent text on black is invisible. */
+:root {
+  --bg: transparent; --fg: #1a1a1a; --on-fg: #ffffff;
+  --muted: #6b6b6b; --line: #e3e3e6;
+  --panel: #fafafa; --accent: #2f6b3c; --flag: #a4362f;
+  --b1: #f4c7c3; --b2: #f8ddb8; --b3: #f2ecc0; --b4: #cfe3c4; --b5: #a8d5a2;
+  --none: #f6f6f6; --none-fg: #9a9a9a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e8e8e8; --on-fg: #16181c;
+    --muted: #9a9a9a; --line: #2e3239; --panel: #1c1f24;
+    --accent: #7fc98d; --flag: #e08c85;
+    --b1: #6b3a37; --b2: #6d5730; --b3: #5f5c2c; --b4: #3f5a38; --b5: #2f6b3c;
+    --none: #1e2126; --none-fg: #6b6b6b;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+h1 { font-size: 1.05rem; margin: 0 0 .15rem; font-weight: 600; }
+h2 { font-size: .85rem; margin: 1.25rem 0 .4rem; font-weight: 600;
+     text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.sub { color: var(--muted); font-size: .8rem; margin: 0 0 .9rem; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line);
+         white-space: nowrap; }
+th { font-weight: 600; color: var(--muted); font-size: .74rem;
+     text-transform: uppercase; letter-spacing: .03em; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+td.name { white-space: normal; min-width: 11rem; }
+td.name small { display: block; color: var(--muted); font-size: .7rem;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.cell { text-align: center; font-variant-numeric: tabular-nums; }
+.b1 { background: var(--b1); } .b2 { background: var(--b2); }
+.b3 { background: var(--b3); } .b4 { background: var(--b4); }
+.b5 { background: var(--b5); }
+.nil { background: var(--none); color: var(--none-fg); }
+.legend { display: flex; flex-wrap: wrap; gap: .6rem; margin: .6rem 0 0;
+          font-size: .72rem; color: var(--muted); align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: .3rem; }
+.swatch { width: .8rem; height: .8rem; border: 1px solid var(--line);
+          border-radius: 2px; display: inline-block; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+        padding: .55rem .7rem; margin: .8rem 0 0; font-size: .76rem;
+        color: var(--muted); }
+.note strong { color: var(--fg); }
+.flag { color: var(--flag); }
+ul.blocked { margin: .2rem 0 0; padding-left: 1rem; font-size: .72rem;
+             color: var(--flag); white-space: normal; }
+.tabs { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0 0 .7rem; }
+button {
+  font: inherit; font-size: .76rem; padding: .25rem .6rem; cursor: pointer;
+  background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+  border-radius: 999px;
+}
+button[aria-pressed="true"] { background: var(--fg); color: var(--on-fg);
+  border-color: var(--fg); }
+button.ask { border-style: dashed; color: var(--muted); }
+.sev-high { color: var(--flag); font-weight: 600; }
+.empty { color: var(--muted); font-size: .8rem; padding: .5rem 0; }
+
+/* The course outline. A week is one row: when it is on the left, what happens
+   in it on the right. The only colour that carries meaning here is the one on
+   an unplanned week — everything else is layout, because a week nobody has
+   planned is the single thing on this page a reader must not skim past. */
+.lede { margin: 0 0 .8rem; font-size: .82rem; color: var(--muted); }
+.strip { margin: 0 0 .4rem; font-size: .76rem; color: var(--muted);
+         font-variant-numeric: tabular-nums; }
+/* One week, stacked rather than columned.
+ *
+ * The old shape gave `.wk-when` a fixed 8.5rem — about ninety of the pane's
+ * three hundred pixels, on every one of sixteen weeks, to hold a number, two
+ * dates and a badge. The marker below is 2.4rem and carries the number with the
+ * month and day it starts; everything else gets the full width. */
+.wk { padding: .55rem 0; border-top: 1px solid var(--line); }
+.wk-hd { display: flex; gap: .5rem; align-items: flex-start; }
+.wk-mark { flex: none; width: 2.4rem; text-align: center; padding: .1rem 0;
+           border: 1px solid var(--line); border-radius: 5px;
+           background: var(--panel); }
+.wk-mark b { display: block; font-size: .9rem; line-height: 1.1; }
+.wk-mark small { display: block; color: var(--muted); font-size: .66rem;
+                 line-height: 1.3; font-variant-numeric: tabular-nums; }
+.wk-name { flex: 1 1 auto; min-width: 0; }
+.wk-name b { font-size: .84rem; }
+.wk-name small { display: block; color: var(--muted); font-size: .7rem;
+                 font-variant-numeric: tabular-nums; }
+.wk-name .unplanned { color: var(--muted); font-weight: 400; }
+.wk-body { min-width: 0; margin-top: .25rem; }
+.wk.current { background: var(--panel); }
+.wk.past .wk-name b { color: var(--muted); }
+.wk.gap .wk-body { opacity: .85; }
+
+/* What the week offers, as one row of small cards.
+ *
+ * The row used to be a line of identical grey pills, which is the failure mode
+ * of a chip row: everything is present and nothing is findable. Three things
+ * separate them now — a glyph for the kind, a left edge coloured by urgency,
+ * and full-contrast text on the two that matter. The deck and the graded work
+ * stay on the row; readings, notebooks, tools and repositories fold behind a
+ * count, because they are materials rather than the answer to "what do I have
+ * to have ready".
+ *
+ * The colour scale is the same one the rest of the page uses: --accent for the
+ * thing that is prepared, --flag for the thing with a deadline, --line for the
+ * rest. No fourth hue. */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ico { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor;
+       stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round;
+       color: var(--muted); }
+.mats { margin-top: .4rem; }
+.ind { display: flex; flex-wrap: wrap; gap: .3rem; }
+.it { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem;
+      border: 1px solid var(--line); border-left-width: 3px; border-radius: 5px;
+      padding: .15rem .4rem .15rem .35rem; color: var(--fg);
+      background: var(--panel); max-width: 100%; }
+.itk { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.itl { color: inherit; text-decoration: none; border-bottom: 1px solid var(--line); }
+.itl:hover { border-bottom-color: currentColor; }
+.itw { white-space: nowrap; font-variant-numeric: tabular-nums;
+       color: var(--muted); }
+/* The deck: the one artefact a professor opens minutes before the class. */
+.it-deck { border-left-color: var(--accent); font-weight: 600; }
+.it-deck .ico { color: var(--accent); }
+/* Graded work. `due` is the week it lands, and is the only red on the row. */
+.it-task { border-left-color: var(--muted); }
+.it-due { border-left-color: var(--flag); }
+.it-due .ico, .it-due .itw.due { color: var(--flag); }
+/* Work this week teaches that nobody has dated.
+ *
+ * Dashed on the left, because the item is real and the schedule around it is
+ * not — the same reading a dashed border already carries on an outcome chip.
+ * The clock and the two words are the indicator; the button beside them is the
+ * only thing on this row that starts a conversation instead of opening a file,
+ * so it is the one control shaped like a control. */
+.it-todo { border-left-style: dashed; border-left-color: var(--flag); }
+.it-todo .ico { color: var(--flag); }
+.itw.gap { display: inline-flex; align-items: center; gap: .2rem;
+           color: var(--flag); }
+.itw.gap .ico { width: 11px; height: 11px; color: var(--flag); }
+.itb { cursor: pointer; font: inherit; font-size: .62rem; letter-spacing: .03em;
+       padding: 0 .3rem; border: 1px solid var(--flag); border-radius: 3px;
+       background: var(--bg); color: var(--flag); }
+.itb:hover { background: var(--flag); color: var(--on-fg); }
+
+/* Everything else, once the count is opened. Dashed on all four sides so the
+ * fold is legible as a fold rather than as more of the same row. */
+.it-x { border: 1px dashed var(--line); color: var(--muted);
+        background: none; padding: .15rem .4rem; }
+.it-x .itk { max-width: 15rem; }
+/* The count itself, a button shaped like the cards it opens. */
+.it-more { cursor: pointer; font: inherit; font-size: .72rem;
+           border: 1px solid var(--line); border-left-width: 3px;
+           color: var(--muted); }
+.it-more:hover { color: var(--fg); }
+.matlist { display: none; margin-top: .3rem; }
+.mats[data-open] .matlist { display: flex; }
+/* A proposal nobody has accepted, marked on the item rather than only in the
+ * banner above the frame. The banner says the VIEW includes drafts; this says
+ * WHICH one is a draft, which is the question a professor actually has. */
+.itd { border: 1px solid currentColor; border-radius: 3px; padding: 0 .2rem;
+       font-size: .6rem; letter-spacing: .03em; color: var(--flag); }
+.now { display: inline-block; margin: .2rem 0 0 .35rem; font-size: .68rem;
+       background: var(--accent); color: var(--on-fg); border-radius: 999px;
+       padding: .05rem .4rem; }
+.topic b { font-size: .84rem; }
+.topic small { color: var(--muted); font-size: .7rem; margin-left: .35rem;
+               font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.source-topic { padding: .35rem .45rem; border-left: 3px solid var(--line);
+                background: var(--panel); }
+.source-topic b { font-size: .84rem; }
+.source-topic p { margin: .2rem 0 0; color: var(--muted); font-size: .76rem; }
+.source-topic small { display: block; margin-top: .2rem; color: var(--muted);
+                      font-size: .7rem; }
+/* Concept and outcome chips: one line by default.
+ *
+ * A module with twelve concepts used to grow a week block to six lines of
+ * chips, which pushed the meeting — the thing the professor came for — off the
+ * bottom of a 360px pane. The row clips to one line and a `more` button opens
+ * it; the button is added by script only when the row actually overflows, so a
+ * module with two concepts shows no control at all. */
+.chips { display: flex; align-items: flex-start; gap: .25rem; }
+.chiprow { display: flex; flex-wrap: wrap; gap: 0; overflow: hidden; flex: 1;
+           min-width: 0; max-height: 1.5rem; }
+.chips[data-open] .chiprow { max-height: none; }
+.more { flex: none; margin-top: .25rem; padding: .05rem .4rem; cursor: pointer;
+        border: 1px solid var(--line); border-radius: 999px; font: inherit;
+        font-size: .7rem; background: var(--panel); color: var(--muted); }
+.more:hover { color: var(--fg); }
+.chip { display: inline-block; margin: .25rem .25rem 0 0; padding: .05rem .4rem;
+        border: 1px solid var(--line); border-radius: 999px; font-size: .7rem;
+        background: var(--panel); color: var(--fg); }
+.chip.lo { border-style: dashed; color: var(--muted); }
+.chip.res { border-style: dotted; color: var(--muted); }
+
+/* The deck, and the formats it exists in.
+ *
+ * On its own line and never folded away: it is the one material a professor
+ * opens minutes before the class, and the readings and repositories behind it
+ * are not. The format buttons are text rather than glyphs — `PPTX` and `PDF`
+ * are already the words people use for these files, and a two-colour icon at
+ * 10px reads as a smudge. */
+.deck { display: flex; align-items: center; gap: .3rem; margin: .3rem 0 0;
+        flex-wrap: wrap; }
+.deckname { font-size: .78rem; }
+.fmt { flex: none; padding: 0 .3rem; border: 1px solid var(--line);
+       border-radius: 3px; font-size: .6rem; letter-spacing: .04em;
+       font-weight: 600; text-decoration: none; color: var(--muted);
+       background: var(--bg); }
+.fmt:hover { color: var(--on-fg); background: var(--fg); border-color: var(--fg); }
+.it-deck .fmt { color: var(--accent); border-color: var(--accent); }
+.it-deck .fmt:hover { color: var(--on-fg); background: var(--accent); }
+
+/* Everything else the meeting uses, behind one press. */
+.more-mats { margin: .3rem 0 0; }
+.matbtn { padding: .05rem .4rem; cursor: pointer; border: 1px solid var(--line);
+          border-radius: 999px; font: inherit; font-size: .68rem;
+          background: var(--panel); color: var(--muted); }
+.matbtn:hover { color: var(--fg); }
+.matlist { display: none; }
+.more-mats[data-open] .matlist { display: block; }
+ul.meet { list-style: none; margin: .4rem 0 0; padding: 0; }
+ul.meet li { margin: 0 0 .35rem; font-size: .8rem; }
+ul.meet small { display: block; color: var(--muted); font-size: .72rem;
+                font-variant-numeric: tabular-nums; }
+.kind { display: inline-block; font-size: .68rem; text-transform: uppercase;
+        letter-spacing: .04em; color: var(--muted); border: 1px solid var(--line);
+        border-radius: 3px; padding: 0 .25rem; margin-right: .3rem; }
+.prep { display: block; color: var(--muted); font-size: .72rem; font-style: italic; }
+.marks { margin-top: .4rem; }
+.mark { display: inline-block; margin: .2rem .3rem 0 0; padding: .2rem .45rem;
+        border-radius: 4px; font-size: .74rem; background: var(--panel);
+        border: 1px solid var(--line); }
+.mark small { display: block; color: var(--muted); font-size: .68rem;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mark.due { border-color: var(--accent); }
+ul.plain { margin: .2rem 0 0; padding-left: 1rem; font-size: .78rem; }

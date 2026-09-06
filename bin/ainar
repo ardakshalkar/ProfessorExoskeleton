@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# `ainar` — the AINAR course model CLI, in TypeScript, run straight from source.
+#
+#   bin/ainar validate CSS-4008
+#   bin/ainar inbox CSS-4008-2026-FALL --root /path/to/workspace
+#
+# No build step: Node strips the type annotations and runs the .ts files. That
+# is how the upstream project runs it too (`npm run ainar` in ainar-node), so
+# there is no compiled copy here to fall out of step with the source.
+#
+# --experimental-strip-types is required on Node 22 and is the default from
+# Node 23. It handles type annotations only, which is all this code uses.
+#
+# The workspace is `--root <path>`, or the directory you are standing in.
+# AINAR_WORKSPACE is not read — see README.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec node --experimental-strip-types "$here/ainar-node/bin/ainar.ts" "$@"

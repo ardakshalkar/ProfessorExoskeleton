@@ -1,0 +1,27 @@
+{
+  "name": "dsh-sample",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "A minimal DeepSeek Harness plugin, written to be read: two tools, one optional HTTP route, one config schema, and the bundle patch that mounts it.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib/tools.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "comments": {
+    "dependencies": "None, deliberately. `@deepseek-ai/dsh-tools` and `@deepseek-ai/schemastery` are imported at runtime and resolved from the HOST's node_modules — they are the harness this plugin is mounted into, not libraries it may pin a version of. The project root lists them so a fresh checkout has them; see its package.json.",
+    "file-dep": "The project root depends on this directory with a `file:` spec rather than copying it, so `cordis.patch.yml` can name the PACKAGE (`dsh-sample`) instead of a relative path and Node resolution finds the code from wherever a profile lives. Note that pnpm — which `dsh plugin add` forwards to — cannot resolve a file: spec whose absolute path contains a space; use npm at the project root if your checkout is under such a path."
+  }
+}

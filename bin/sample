@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# The same front door for git-bash, WSL, macOS and Linux.
+#
+#   bin/sample              boot the harness on the `sample` profile
+#   bin/sample --help       everything after the script name goes to dsh
+#
+# One thing has to be true before dsh boots, and it is a silent failure if it is
+# not: DSH_HOME must point at THIS project's .dsh, so the profile that mounts
+# the sample plugin is the one found rather than whatever is in $HOME.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$here"
+
+export DSH_HOME="$here/.dsh"
+
+# Only what is not a secret, and only if it is not already set — a value in the
+# environment is a deliberate one-run override.
+#
+# Deliberately NOT `set -a; . .env`. The process environment is the top layer of
+# dsh's credential resolution and the one layer that is read-only by design: a
+# key exported here reads as `source: env, writable: false` on the Models page
+# and the UI refuses to change it. dsh reads .env itself as its own project-env
+# layer, where the managed store can override it, so the key belongs in the file
+# and not in this process.
+for file in .env.local .env; do
+  [ -f "$file" ] || continue
+  while IFS='=' read -r key value; do
+    case "$key" in
+      SAMPLE_PROVIDER) [ -n "${SAMPLE_PROVIDER:-}" ] || export SAMPLE_PROVIDER="$value" ;;
+      SAMPLE_MODEL) [ -n "${SAMPLE_MODEL:-}" ] || export SAMPLE_MODEL="$value" ;;
+    esac
+  done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$file" || true)
+done
+
+dsh_bin="$here/node_modules/@deepseek-ai/dsh/lib/bin.js"
+if [ ! -f "$dsh_bin" ]; then
+  echo "sample: the harness is not installed in this checkout." >&2
+  echo "  npm install --legacy-peer-deps" >&2
+  echo "The flag is required. See package.json's comments for why." >&2
+  exit 1
+fi
+
+exec node "$dsh_bin" --profile sample "$@"

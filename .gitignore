@@ -1,0 +1,39 @@
+# The credential file. `.env.example` is the tracked one.
+.env
+.env.local
+
+node_modules/
+
+# The harness's own state: sessions, credentials, whatever a profile installs
+# beside itself. The profile DEFINITIONS under .dsh/profiles/*/ are tracked —
+# they are the source of how this host is composed — and everything dsh writes
+# next to them is not.
+.dsh/sessions/
+.dsh/storages/
+.dsh/profiles/*/node_modules/
+.dsh/.credentials*
+.dsh/settings*
+
+# Per-machine telemetry id, written by dsh at boot.
+.dsh/.anonymous-user-id
+
+# Vendored plugins — copies, not source. See plugins/VENDORED.txt for the chain
+# that produces each one. plugins/dsh-sample IS source and stays tracked, which
+# is why these are named individually rather than ignoring plugins/ wholesale
+# the way ../ProfessorExoskeletonDHS does.
+plugins/dsh-ainar-course-model/
+plugins/dsh-professor-pane/
+plugins/professor-skills/
+datalayer/
+
+# Vendored skills: the 16 AINAR ones, unpacked by `python -m exo setup`.
+.agents/skills/
+
+# The AINAR TypeScript port, vendored from ../ProfessorHarness/node. Carries
+# the `ainar` CLI that bin/ainar runs, its src/, and its node_modules.
+ainar-node/
+
+# Test fixtures and shared assets, vendored from ../ProfessorHarness so
+# ainar-node's own suite can run here. See plugins/VENDORED.txt.
+golden/
+ainar/

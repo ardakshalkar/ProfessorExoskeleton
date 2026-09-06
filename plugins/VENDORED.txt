@@ -1,0 +1,113 @@
+What in this directory is source, and what is a copy.
+
+  dsh-sample/               SOURCE. Written here. Edit it here.
+
+  dsh-ainar-course-model/   COPIES, taken on 2026-09-04 from
+  dsh-professor-pane/       ..\ProfessorExoskeletonDHS\plugins\
+  professor-skills/
+
+Do not edit the copies. The chain above them is:
+
+  ProfessorHarness  --python plugin/build.py --target dsh-->  dsh-ainar-course-model
+  ProfessorSkills   --python -m exo setup------------------>  professor-skills
+  ProfessorSkills/DataLayer  --python -m exo setup--------->  ..\datalayer
+
+so a change made in a copy here is lost the next time anybody re-vendors, and
+lost silently. Edit the upstream checkout and re-vendor.
+
+dsh-professor-pane is hand-written in ProfessorExoskeletonDHS rather than
+generated, so that one has a real home to edit: ..\ProfessorExoskeletonDHS.
+
+One way this copy DIVERGES from what `exo setup` produces: setup deliberately
+omits node_modules (see PROFESSOR_SKILLS_EXCLUDE in its setup.py), and these
+copies were taken with a plain recursive copy, so professor-skills carries the
+63 MB node/node_modules that had been installed in the source checkout. That is
+why `pres` works here without the separate npm install its own README asks for —
+and why professor-skills/SOURCE.txt's last paragraph is not true of this copy.
+
+
+ALSO VENDORED, one level up rather than in here:
+
+  ..inar-node\    from ..\ProfessorHarness
+ode — the AINAR TypeScript
+                     port itself: src/, test/, and bin/ainar.ts, which is the
+                     `ainar` CLI that ..ininar runs. This is the SOURCE
+                     that dsh-ainar-course-model/server/ is built from, so the
+                     two are the same code at different stages: edit neither
+                     here, edit ProfessorHarness/node/src.
+
+Two more, vendored only so ainar-node's test suite runs here. Both come from
+..\ProfessorHarness and neither is source:
+
+  ..\golden\                    the parity fixtures. postgres-course-store's
+                                 tests open golden/CSS-4008/bundle.json by a
+                                 path relative to the REPOSITORY root, so they
+                                 need it at this project's root too.
+
+  ..inar\mcp\widget-assets\   the widget JS and CSS, shared with the Python
+  ..inar-node\widget-assets\   MCP server. Vendored TWICE on purpose:
+                                 src/mcp/widgets.ts searches several locations
+                                 and finds the copy inside ainar-node, while
+                                 test/widgets.test.ts opens
+                                 ainar/mcp/widget-assets/template.js by a
+                                 hardcoded path. One copy satisfies the code and
+                                 the other satisfies its test; deleting either
+                                 breaks one of them.
+
+Without these two the suite reported 92 of 94 passing, and the two failures
+looked like a broken port rather than an incomplete copy.
+
+
+=============================================================================
+LOCAL DIVERGENCES, as of 2026-09-06
+=============================================================================
+
+The copies below no longer match their upstream. They are tracked in this
+project's git history — force-added past .gitignore — precisely because the
+warning at the top of this file is real: a re-vendor overwrites them, and
+without a commit here there would be nothing to notice the loss against, let
+alone anything to port back.
+
+This list is the porting worklist. Each line's real home is named above.
+
+  ainar-node/  ->  ..\ProfessorHarness\node
+    src/approve.ts        stageDocuments returns staged ids; CLAIM_FILES,
+                          approveClaim and CLAIM_HEADER removed; writeRecords
+                          no longer takes courseDir; non-draftable collections
+                          fail loudly with approve.not_draftable
+    src/drafts.ts         concepts and modules dropped from DRAFTABLE, so they
+                          become records without an approval step. Diverges
+                          from ainar/loader.py on purpose.
+    src/evidence.ts       NEW. The extract-evidence port.
+    src/progress.ts       roll-up: ROLL_UP_WORKFLOW, pairKey, latest,
+                          rollUpCapabilities
+    src/outline.ts        an assessment with no dates sits in its module's
+                          week, in a new `undated` bucket, rather than falling
+                          off the plan
+    src/mcp/workspace.ts  Workspace carries `origin`: how its root was resolved
+    src/mcp/tools.ts      the "no courses/ here" advice is phrased from that
+                          origin instead of always naming AINAR_WORKSPACE
+    bin/ainar.ts          extract-evidence and roll-up commands; --dry-run
+                          filters document.missing_file for staged ids
+    bin/server.ts         passes origin "env"
+    test/                 approve, drafts changed; evidence and roll-up new
+    widget-assets/        no upstream at all: this directory exists only here.
+                          course-outline.{js,tmpl}, shell.css and runtime.js
+                          carry the compact week layout, the icon sprite, the
+                          draft badge and the undated-assessment control.
+
+  ainar/mcp/widget-assets/  ->  ..\ProfessorHarness\ainar
+    the same four files, kept byte-identical to the ainar-node copy.
+
+  plugins/dsh-professor-pane/  ->  ..\ProfessorExoskeletonDHS
+    index.js              grading and ready views, withMaterialLinks,
+                          sendMaterial, runApprove, resolveWorkspace passes an
+                          origin
+    lib/client.js         per-tab subviews, drafts on by default, the approval
+                          strip
+
+  plugins/dsh-ainar-course-model/  ->  generated from ..\ProfessorHarness
+    server/ mirrors the ainar-node .ts edits above by hand, because the build
+    that normally produces it is `python plugin/build.py --target dsh` and
+    nothing in this project runs Python. index.js passes an origin.
+    widget-assets/ is the third copy of the four widget files.

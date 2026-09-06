@@ -1,0 +1,28 @@
+# The configuration layer this bundle contributes: one loader row, so the
+# plugin is mounted whenever a profile lists `dsh-sample` in
+# `dsh.profile.bundles`.
+#
+# dsh applies each installed bundle's patch in order, then the profile's own
+# `cordis.patch.yml`, then `$DSH_HOME/cordis.patch.yml`, then anything passed
+# as `--patch`. So this is the weakest of the four layers on purpose: someone
+# who wants different config for one profile overrides the row from above
+# rather than editing anything in here. `.dsh/profiles/sample/cordis.patch.yml`
+# shows what that override looks like.
+#
+# The row names the PACKAGE rather than a relative path, which is what lets
+# Node resolution find the installed code from wherever the profile lives.
+#
+# The shape is a top-level YAML ARRAY of patch entries, one of which carries
+# the `insert` list. Making the mapping itself the document — a bare `insert:`
+# at the top — is refused outright:
+#
+#     overlay .../cordis.patch.yml must be a top-level YAML array of loader
+#     patch entries
+#
+# and that is a boot failure for the whole harness, not a bundle that mounts
+# nothing. The two spellings are not close: one works, the other stops the host.
+- insert:
+    - id: sample
+      name: dsh-sample
+      # No `config:` here. The plugin's own defaults apply, and a profile that
+      # wants other values patches this `id` — see the profile's patch file.
