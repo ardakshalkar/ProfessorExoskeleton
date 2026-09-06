@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# `deck-build` — run a hand-built deck script. See bin/deck-build.cmd.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+exec node --experimental-strip-types "$here/ainar-node/bin/build-deck.ts" "$@"
