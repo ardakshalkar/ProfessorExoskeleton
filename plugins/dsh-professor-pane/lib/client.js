@@ -64,6 +64,96 @@ window.__ModuleLoader__.load({
       return path + (path.indexOf("?") === -1 ? "?" : "&") + "session=" + encodeURIComponent(sessionId);
     }
 
+    /** How often to ask whether the course model on disk has moved. */
+    const REVISION_POLL_MS = 2500;
+
+    /**
+     * Redraw when something outside the pane writes to the workspace.
+     *
+     * The pane knew about its own writes — an approval bumped `reload` — and
+     * about nothing else. An agent setting a due date, `bin/ainar approve` in a
+     * terminal, a file edited by hand: all of them left the professor reading a
+     * page that no longer matched the record, with nothing on screen to say so.
+     * A course model is the sort of thing two people and a model all write to,
+     * so "it changed" has to be observed rather than assumed.
+     *
+     * `/api/revision` hashes the size and mtime of every YAML under `courses/`
+     * and `work/`. This polls it and calls `onChange` when the answer differs
+     * from the last one seen.
+     *
+     * Three things this deliberately does not do:
+     *
+     * - **It does not fire on the first answer.** The first response only
+     *   establishes the baseline; treating it as a change would reload the
+     *   frame once on every mount, which looks like a flicker and costs a
+     *   payload.
+     * - **It does not poll a hidden tab.** `visibilitychange` restarts it, and
+     *   the check on becoming visible is immediate — the case where the record
+     *   changed while the professor was elsewhere is exactly the case worth
+     *   catching promptly.
+     * - **It does not treat a failed request as a change.** A harness restart
+     *   would otherwise reload the frame repeatedly while the server is down.
+     */
+    function useRevisionWatch(url, onChange) {
+      const seen = React.useRef(null);
+      const changed = React.useRef(onChange);
+      changed.current = onChange;
+
+      React.useEffect(() => {
+        if (url === null) return undefined;
+        seen.current = null;
+        let live = true;
+        let timer = null;
+
+        const check = () => {
+          if (!live) return;
+          fetch(url, { headers: { accept: "application/json" } })
+            .then((response) => response.json())
+            .then((value) => {
+              if (!live || !value || typeof value.revision !== "string") return;
+              if (seen.current === null) {
+                seen.current = value.revision;
+                return;
+              }
+              if (seen.current !== value.revision) {
+                seen.current = value.revision;
+                changed.current();
+              }
+            })
+            .catch(() => {
+              // The harness restarting, or the workspace briefly unreadable.
+              // Keep the last revision and try again on the next tick.
+            });
+        };
+
+        const start = () => {
+          if (timer !== null) return;
+          timer = setInterval(check, REVISION_POLL_MS);
+        };
+        const stop = () => {
+          if (timer === null) return;
+          clearInterval(timer);
+          timer = null;
+        };
+        const onVisibility = () => {
+          if (document.visibilityState === "visible") {
+            check();
+            start();
+          } else {
+            stop();
+          }
+        };
+
+        onVisibility();
+        document.addEventListener("visibilitychange", onVisibility);
+        return () => {
+          live = false;
+          stop();
+          document.removeEventListener("visibilitychange", onVisibility);
+        };
+      }, [url]);
+    }
+
     /**
      * The button bar, in order.
      *
@@ -547,6 +637,13 @@ window.__ModuleLoader__.load({
       // Re-fetched when the session changes, because a different session may be
       // a different workspace and therefore a different set of courses.
       const runs = useJson(scoped(BASE + "/api/runs", props.sessionId));
+
+      // Anything that writes to the workspace redraws the pane, whoever wrote
+      // it. `setReload` is the same counter an approval bumps, so a change
+      // arriving from outside and one made here take the identical path.
+      useRevisionWatch(scoped(BASE + "/api/revision", props.sessionId), () => {
+        setReload((count) => count + 1);
+      });
 
       // The widgets' buttons ask the model a question. They reach the harness
       // as a postMessage from a sandboxed frame, so the origin check is `null`

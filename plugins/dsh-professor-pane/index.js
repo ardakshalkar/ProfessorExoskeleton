@@ -24,6 +24,7 @@
 // checkout's TypeScript `ainar` rather than reimplementing the approval gate.
 // See `runApprove`. Nothing else in this file starts a process.
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -228,6 +229,66 @@ const draftedPayload = (workspace, root, tool, runId, on) => {
     default:
       throw new ToolError(`${tool} has no drafted form`);
   }
+};
+
+/**
+ * A fingerprint of the course model on disk, for the pane to poll.
+ *
+ * The pane used to redraw only when the professor changed something through it
+ * — a run, a tab, an approval. Everything else that writes to the workspace
+ * left it showing yesterday: an agent setting a due date, `bin/ainar approve`
+ * run in a terminal, a file edited by hand. The professor then read a stale
+ * page with no way to tell it was stale, which is the failure this pane exists
+ * to avoid everywhere else.
+ *
+ * Name, size and mtime of every YAML under `courses/` and `work/`, hashed. Not
+ * the contents: this runs every few seconds and the point is to be cheap. The
+ * cost of hashing metadata instead is one real case — a write that changes
+ * neither size nor mtime, which on a filesystem with millisecond timestamps
+ * means a same-millisecond same-length rewrite. That is a missed refresh, not
+ * a wrong page, and the professor still has the pane's own reload.
+ *
+ * Entries are sorted, so two machines walking the same tree agree, and the
+ * revision does not flicker because a directory listing came back in a
+ * different order.
+ */
+const revisionDocument = (root) => {
+  const hash = createHash("sha256");
+  let files = 0;
+
+  const walk = (directory, depth) => {
+    // Deep enough for versions/<term>/<collection>/<file>.yaml with room to
+    // spare, shallow enough that a symlink loop cannot spin here forever.
+    if (depth > 8) return;
+    let entries;
+    try {
+      entries = readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of [...entries].sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      if (entry.name.startsWith(".")) continue;
+      const full = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        walk(full, depth + 1);
+        continue;
+      }
+      if (!/\.ya?ml$/i.test(entry.name)) continue;
+      let stats;
+      try {
+        stats = statSync(full);
+      } catch {
+        continue;
+      }
+      hash.update(full);
+      hash.update(String(stats.mtimeMs));
+      hash.update(String(stats.size));
+      files += 1;
+    }
+  };
+
+  for (const top of ["courses", "work"]) walk(join(root, top), 0);
+  return { revision: hash.digest("hex").slice(0, 16), files };
 };
 
 /**
@@ -1242,6 +1303,10 @@ const handler = (registry) => (req, res) => {
   try {
     if (path === "/api/runs") {
       return sendJson(res, 200, runsDocument(workspace, root));
+    }
+
+    if (path === "/api/revision") {
+      return sendJson(res, 200, revisionDocument(root));
     }
 
     if (path === "/api/preferences") {

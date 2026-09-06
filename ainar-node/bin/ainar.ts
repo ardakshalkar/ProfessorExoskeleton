@@ -21,8 +21,9 @@
  * The remaining write verbs are absent, and absent loudly — see `REFUSED`.
  */
 
-import { join, relative, resolve } from "node:path";
-import { courseContext, runById } from "../src/bundle.ts";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { courseContext, enrollmentsOf, runById } from "../src/bundle.ts";
 import { blueprintPayload } from "../src/blueprint.ts";
 import { gradebookPayload } from "../src/gradebook.ts";
 import { calibrationPayload, pendingPayload, rubricPayload } from "../src/grading.ts";
@@ -34,6 +35,16 @@ import { alignmentMarkdown, syllabusMarkdown } from "../src/report.ts";
 import { coverage, validate } from "../src/validate.ts";
 import { IssueList, describe } from "../src/issues.ts";
 import { loadDrafts, mergeDrafts } from "../src/drafts.ts";
+import {
+  ENROLLMENTS_HEADER,
+  RosterStore,
+  buildRoster,
+  loadSalt,
+  readRows,
+  refuseInsideRepo,
+  rosterDir,
+} from "../src/roster.ts";
+import { dump } from "../src/yaml-out.ts";
 import {
   ID_FIELDS,
   approveDrafts,
@@ -47,8 +58,6 @@ import { Workspace } from "../src/mcp/workspace.ts";
 /** Commands that exist in `python -m ainar` and deliberately not here. */
 const REFUSED: Record<string, string> = {
   lms: "reaches Canvas or a spreadsheet, and `push` can put a grade in front of a student within seconds.",
-  roster:
-    "derives pseudonyms from a secret salt. A derivation that differs by a byte would silently break every cross-course identity, so there is one implementation of it and it is Python's.",
   "score-items": "rewrites draft files in place.",
   sql: "generates the PostgreSQL import; run it from the CLI that owns the schema.",
   export: "writes dist/; a person should decide where.",
@@ -132,6 +141,17 @@ const HELP = `ainar (Node) — the read half of the workspace
   blueprint RUN
   approve DRAFTS --as USER [--only IDS] [--reject IDS] [--dry-run]
 
+  roster import FILE.csv [--run RUN] [--id-column C] [--name-column C]
+                         [--email-column C] [--group-column C]
+                         [--delimiter D] [--dry-run]
+  roster show [--run RUN] [--out PATH]     PRIVATE: names, to a terminal
+  roster whois STUDENT-XXXXXX              PRIVATE: one identity
+  roster status                            where the identities live
+
+  Enrollments hold pseudonyms only. Names, numbers and emails go to
+  --roster-dir (default ~/.ainar/roster, or AINAR_ROSTER_DIR), which must
+  stay outside the workspace and must never be committed.
+
   These derive records and write them into courses/. Each validates the merged
   bundle first and writes nothing if it fails, and each takes --dry-run:
 
@@ -139,6 +159,7 @@ const HELP = `ainar (Node) — the read half of the workspace
   roll-up [RUN] [--dry-run]            capability states from that evidence
 
   --root DIR               the workspace (default: the current directory)
+  --roster-dir DIR         where identities live (default: ~/.ainar/roster)
 
 These stay Python's: ${Object.keys(REFUSED).join(", ")}.
 Run \`python -m ainar <command>\` for those.`;
@@ -467,6 +488,170 @@ try {
       }
       out(`\n${total(approval)} record(s) approved. The drafts in ${draftsDir} can now be removed.`);
       break;
+    }
+
+    /**
+     * The class list, and the boundary it sits on.
+     *
+     * Every branch here either keeps identities outside the workspace or
+     * refuses. `import` writes pseudonymous enrollments into `courses/` and the
+     * names beside them into `--roster-dir`; `show` and `whois` print to a
+     * terminal and refuse any output path inside the workspace.
+     *
+     * The interesting code is in `src/roster.ts` — what is here is the part
+     * that says no.
+     */
+    case "roster": {
+      const sub = rest[0] ?? "";
+      const directory = rosterDir(flag("roster-dir"));
+
+      if (sub === "status") {
+        const store = RosterStore.load(directory);
+        const inside = (resolve(directory) + sep).startsWith(resolve(root) + sep);
+        out(`roster directory   ${directory}`);
+        out(`inside the repo    ${inside ? "YES — MOVE IT" : "no"}`);
+        out(`salt               ${existsSync(join(directory, "salt")) ? "present" : "not created yet"}`);
+        out(`people known       ${Object.keys(store.people).length}`);
+        // `runs` is the key `record()` writes. Python reads `versions` here and
+        // so never prints this line; the bug is not worth carrying across.
+        const runs = [
+          ...new Set(Object.values(store.people).flatMap((person) => person.runs ?? [])),
+        ].sort();
+        if (runs.length) out(`course runs        ${runs.join(", ")}`);
+        out("\nOverride the location with --roster-dir or the AINAR_ROSTER_DIR variable.");
+        break;
+      }
+
+      if (sub === "whois") {
+        const studentId = rest[1];
+        if (!studentId) throw new Error("usage: roster whois STUDENT-XXXXXX");
+        const person = RosterStore.load(directory).whois(studentId);
+        if (person === null) {
+          console.error(`${studentId} is not in the local roster`);
+          process.exit(1);
+        }
+        out(`PRIVATE — ${studentId}`);
+        for (const key of ["name", "institutional_id", "email", "first_seen"] as const) {
+          if (person[key]) out(`  ${key.padEnd(18)} ${person[key]}`);
+        }
+        if (person.runs?.length) out(`  ${"runs".padEnd(18)} ${person.runs.join(", ")}`);
+        break;
+      }
+
+      if (sub === "show") {
+        const target = flag("out");
+        // Checked before anything is read, so a bad path cannot first pull names
+        // into memory and then fail.
+        refuseInsideRepo(target, root);
+        const courseVersionId = flag("run") ?? flag("course-version");
+        const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
+        const resolvedRun = courseVersionId ?? soleRun(bundle);
+        const store = RosterStore.load(directory);
+        const enrolled = enrollmentsOf(bundle, resolvedRun);
+        const lines = [
+          "PRIVATE — contains student identities. Do not paste into the repository,",
+          "an issue tracker, or any shared document.",
+          "",
+          resolvedRun,
+          "",
+        ];
+        for (const enrollment of enrolled) {
+          const person = store.whois(enrollment.student_id) ?? {};
+          const name = person.name ?? "(unknown — not in the local roster)";
+          const institutional = person.institutional_id ?? "";
+          const group = enrollment.group ? `  [${enrollment.group}]` : "";
+          lines.push(`  ${enrollment.student_id}  ${name}  ${institutional}${group}`);
+        }
+        lines.push("", `${enrolled.length} enrolled`);
+        const text = lines.join("\n");
+        if (target) {
+          mkdirSync(dirname(resolve(target)), { recursive: true });
+          writeFileSync(resolve(target), text + "\n", { encoding: "utf-8" });
+          out(`wrote ${resolve(target)}`);
+        } else {
+          out(text);
+        }
+        break;
+      }
+
+      if (sub === "import") {
+        const file = rest[1];
+        if (!file) {
+          throw new Error("usage: roster import FILE.csv [--run RUN] [--dry-run]");
+        }
+        const courseVersionId = flag("run") ?? flag("course-version");
+        const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
+        const resolvedRun = courseVersionId ?? soleRun(bundle);
+        const run = runById(bundle).get(resolvedRun) as { term: string };
+        const courseId = (bundle.course as { course_id: string }).course_id;
+
+        const salt = loadSalt(directory);
+        const store = RosterStore.load(directory);
+        const rows = readRows(resolve(file), flag("delimiter"));
+        const result = buildRoster(rows, {
+          courseVersionId: resolvedRun,
+          store,
+          salt,
+          idColumn: flag("id-column"),
+          nameColumn: flag("name-column"),
+          emailColumn: flag("email-column"),
+          groupColumn: flag("group-column"),
+          today: today(),
+        });
+
+        const chosen = Object.entries(result.columns)
+          .filter(([, value]) => value)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(", ");
+        out(`Read ${rows.length} row(s) from ${file}`);
+        out(`  columns: ${chosen}`);
+        out(`  ${result.added.length} new, ${result.known.length} already known`);
+        for (const note of result.skipped) out(`  skipped ${note}`);
+        if (!result.enrollments.length) {
+          console.error("\nnothing to write");
+          process.exit(1);
+        }
+
+        if (args.includes("--dry-run")) {
+          out("\ndry run — nothing written");
+          for (const enrollment of result.enrollments.slice(0, 5)) {
+            out(`  ${enrollment.student_id}  ${enrollment.group ?? ""}`);
+          }
+          if (result.enrollments.length > 5) {
+            out(`  … and ${result.enrollments.length - 5} more`);
+          }
+          break;
+        }
+
+        // `versions/<term>/`, where the loader reads enrollments. Python still
+        // writes `runs/<term>/`, which is the layout from before version and run
+        // were merged — a file written there today is a file nothing loads.
+        const courseDir = join(root, "courses", courseId);
+        const path = join(courseDir, "versions", run.term, "enrollments.yaml");
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, ENROLLMENTS_HEADER + dump({ enrollments: result.enrollments }), {
+          encoding: "utf-8",
+        });
+        const saved = store.save();
+        out(
+          `\nwrote ${relative(root, path).split(/[\\/]/).join("/")}  ` +
+            `(${result.enrollments.length} enrollments, pseudonyms only)`,
+        );
+        out(`wrote ${saved}  (identities, outside the repository)`);
+
+        const { bundle: reloaded, issues: loadIssues } = loadCourse(courseDir, root);
+        const issues = reloaded ? validate(reloaded, { root }) : loadIssues;
+        if (issues.errors.length) {
+          console.error("\nthe course no longer validates:");
+          for (const issue of issues.errors) console.error(`    ${describe(issue)}`);
+          process.exit(1);
+        }
+        break;
+      }
+
+      console.error(`unknown roster subcommand '${sub}'\n`);
+      console.error(HELP);
+      process.exit(1);
     }
 
     default:

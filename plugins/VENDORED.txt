@@ -111,3 +111,20 @@ This list is the porting worklist. Each line's real home is named above.
     that normally produces it is `python plugin/build.py --target dsh` and
     nothing in this project runs Python. index.js passes an origin.
     widget-assets/ is the third copy of the four widget files.
+
+  Added 2026-09-06, later the same day:
+    ainar-node/src/roster.ts        NEW. The roster port: HMAC pseudonyms,
+    ainar-node/test/roster.test.ts  base32, CSV, the private store. The tests
+                                    pin the derivation to RFC 4648 and RFC 4231
+                                    vectors, which is what makes a second
+                                    implementation of it safe.
+    ainar-node/bin/ainar.ts         the `roster` command; `roster` removed from
+                                    REFUSED
+    bin/ainar.cmd                   finds node.exe itself. THIS FILE IS SOURCE,
+                                    not vendored — listed here only because the
+                                    same day's work touched it.
+    plugins/dsh-professor-pane/
+      index.js                      /api/revision, a fingerprint of the YAML
+                                    under courses/ and work/
+      lib/client.js                 useRevisionWatch: polls it and redraws when
+                                    something outside the pane writes

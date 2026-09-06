@@ -163,8 +163,12 @@ function model(d) {
           + ' ("' + a.title + '")? Skip the usual opening validate and inbox '
           + 'sweep, and do not read any file first: these two dates exist only '
           + 'in my head, so nothing on disk can answer this. Once I have '
-          + 'answered, set opens_at and due_at on that assessment in run '
-          + (run.id || '') + ' and tell me which weeks it lands in.',
+          + 'answered, set opens_at and due_at on that record — it is the '
+          + a.assessment_id + ' entry in '
+          + 'courses/' + (run.course_id || '') + '/versions/'
+          + (run.term || '') + '/assessments/generated.yaml — and then just '
+          + 'confirm what you wrote. Do not work out which week the dates fall '
+          + 'in; the Course pane places them itself and will show it.',
         formats: [],
       });
     }
