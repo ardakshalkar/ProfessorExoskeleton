@@ -119,12 +119,23 @@ function paint() {
     if (!row || !button) return;
     requestAnimationFrame(function () {
       if (row.scrollHeight <= row.clientHeight + 1) return;
+      // How many did not fit, so the control says what it opens. Counted by
+      // comparing each chip's top against the first one's: a chip on a lower
+      // row is a chip the professor cannot see.
+      var first = row.firstElementChild;
+      var top = first ? first.offsetTop : 0;
+      var hidden = 0;
+      row.querySelectorAll('.chip').forEach(function (chip) {
+        if (chip.offsetTop > top + 1) hidden += 1;
+      });
+      var shut = '+ ' + hidden + (hidden === 1 ? ' topic' : ' topics');
+      button.textContent = shut;
       button.hidden = false;
       button.addEventListener('click', function () {
         var open = group.hasAttribute('data-open');
         if (open) group.removeAttribute('data-open');
         else group.setAttribute('data-open', '');
-        button.textContent = open ? 'more' : 'less';
+        button.textContent = open ? shut : 'less';
       });
     });
   });

@@ -1725,7 +1725,7 @@ const handler = (registry) => (req, res) => {
         // table and a policy note between the professor and what they opened
         // this tab for. The widget keeps both by default — a chat client has no
         // tabs to move them to — so the pane has to ask.
-        data = { ...data, sections: { assessments: false, grading: false } };
+        data = { ...data, sections: { assessments: false, grading: false, header: false } };
       }
       const dark = url.searchParams.get("dark") === "1";
       res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");

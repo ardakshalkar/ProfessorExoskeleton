@@ -33,8 +33,8 @@ function model(d) {
     });
   }
 
-  const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun',
-                  'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   // `2026-09-15` as `sep 15`. Parsed by hand rather than through `Date`, which
   // reads a bare ISO date as UTC and can shift it a day west of here.
@@ -74,6 +74,12 @@ function model(d) {
   // the one on the record titles (HW1) and on the folder the work lives in.
   const ASSESS_WORD = { assignment: 'homework', oral_defense: 'defense' };
 
+  /** `quiz` as `Quiz`. The enum is the record's spelling, not the reader's. */
+  function titled(word) {
+    const text = String(word || '');
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  }
+
   /**
    * The directory a run's assessments live in, as a fallback.
    *
@@ -110,7 +116,7 @@ function model(d) {
       for (const r of m.resources || []) {
         const deck = r.kind === 'slides';
         (deck ? main : extra).push({
-          label: deck ? 'slides' : r.title,
+          label: deck ? 'Slides' : r.title,
           icon: RES_ICON[r.kind] || 'doc',
           tone: deck ? 'deck' : 'x',
           kind: r.kind,
@@ -132,13 +138,14 @@ function model(d) {
         const on = shortDate(a.due_on || a.opens_on);
         const type = a.type || 'assessment';
         main.push({
-          label: ASSESS_WORD[type] || type,
+          label: titled(ASSESS_WORD[type] || type),
           icon: ASSESS_ICON[type] || 'doc',
           tone: verb === 'due' ? 'due' : 'task',
           kind: type,
           name: a.title,
           href: safeUrl(a.url),
           when: on ? verb + ' ' + on : '',
+          sep: Boolean(on),
           overdue: verb === 'due',
           draft: isDraft(a.assessment_id),
           formats: [],
@@ -155,7 +162,7 @@ function model(d) {
     for (const a of w.undated || []) {
       const type = a.type || 'assessment';
       main.push({
-        label: ASSESS_WORD[type] || type,
+        label: titled(ASSESS_WORD[type] || type),
         icon: ASSESS_ICON[type] || 'doc',
         tone: 'todo',
         kind: type,
@@ -199,6 +206,9 @@ function model(d) {
     const ind = indicators(w);
     return {
       week: w.week,
+      // `01`, the way the mockup writes it: two digits keep the left column a
+      // fixed width from week 9 to week 10.
+      week_label: w.week < 10 ? '0' + w.week : String(w.week),
       classes: w.when + (w.planned ? '' : ' gap'),
       starts_on: w.starts_on,
       // The end date without its year: the row already carries the start in
@@ -220,7 +230,7 @@ function model(d) {
           const at = m.on
             ? m.on.slice(5) + (m.scheduled_at ? ' ' + m.scheduled_at.slice(11, 16) : '')
             : 'not scheduled';
-          return [m.type, at, m.duration_minutes ? m.duration_minutes + ' min' : '']
+          return [titled(m.type), at, m.duration_minutes ? m.duration_minutes + ' min' : '']
             .filter(Boolean)
             .join(' · ');
         })
@@ -228,20 +238,19 @@ function model(d) {
           // The module's own identifier and hours, which used to head the topic
           // block. The title moved into the header, so these follow it rather
           // than repeating the title underneath.
-          (w.modules || []).map(function (m) {
-            return [m.module_id, m.estimated_hours ? m.estimated_hours + ' h' : '']
-              .filter(Boolean)
-              .join(' · ');
-          }),
+          (w.modules || []).map(function (m) { return m.module_id; }),
         )
         .filter(Boolean)
-        .join(' / '),
+        .join(' · '),
       // The row exists when there is anything at all to put in it: a week of
       // readings with no deck and no graded work still has materials.
       has_items: ind.items.length > 0 || ind.extras.length > 0,
       items: ind.items,
       extras: ind.extras,
       extras_count: ind.extras_count,
+      // "+ 4 resources", not "4 more": a count with no noun makes the reader
+      // press the button to find out what was counted.
+      extras_word: ind.extras_count === 1 ? '1 resource' : ind.extras_count + ' resources',
       topics: (w.modules || []).map(function (m) {
         return {
           title: m.title,
@@ -334,6 +343,14 @@ function model(d) {
   const sections = d.sections || {};
 
   return {
+    // The pane's run picker already names the course and the term, so the
+    // title block is three lines of duplication in a three-hundred-pixel
+    // column. The standalone page has no picker and keeps it.
+    show_header: sections.header !== false,
+    // `complete` is the model's own verdict on whether the weights add up. The
+    // figure beside it is the same one either way — this only decides whether
+    // it is drawn as a fact or as a fault.
+    weights_short: grading.complete !== true,
     show_assessments: sections.assessments !== false && (d.assessments || []).length > 0,
     show_grading_note: sections.grading !== false && Boolean(grading.note),
     run: {

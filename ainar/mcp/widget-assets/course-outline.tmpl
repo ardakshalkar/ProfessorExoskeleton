@@ -31,15 +31,18 @@
 <symbol id="i-play" viewBox="0 0 16 16"><rect x="1.6" y="2.6" width="12.8" height="10.8" rx="1.4"/><path d="M6.6 5.9l4 2.1-4 2.1z"/></symbol>
 <symbol id="i-link" viewBox="0 0 16 16"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.9.3l2-2a2.6 2.6 0 0 0-3.7-3.7l-1.1 1.1"/><path d="M9.2 6.8a2.6 2.6 0 0 0-3.9-.3l-2 2a2.6 2.6 0 0 0 3.7 3.7l1.1-1.1"/></symbol>
 <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 4.4V8l2.4 1.6"/></symbol>
+<symbol id="i-meet" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.7 5.5l4 2.5-4 2.5z"/></symbol>
 <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.6v8.8M3.6 8h8.8"/></symbol>
 </defs></svg>
 
+{% if show_header %}
 <h1>{{ run.course_id }} — {{ run.title }}</h1>
 <p class="sub">{{ run.term }} · {{ run.start_date }} – {{ run.end_date }} · {{ run.instructors }} · {{ run.id }}</p>
 {% if run.description %}
 <p class="lede">{{ run.description }}</p>
 {% endif %}
-<p class="strip">{{ totals.weeks }} weeks · {{ totals.weeks_planned }} with a module · {{ totals.meetings }} meetings · {{ totals.assessments }} assessments · weights total {% if total_weight %}{{ total_weight }}{% else %}<span class="flag">weight not set</span>{% endif %}</p>
+{% endif %}
+<p class="strip">{{ totals.weeks }} weeks · {{ totals.weeks_planned }} with a module · {{ totals.meetings }} meetings · {{ totals.assessments }} assessments · weights total {% if total_weight %}<span class="{% if weights_short %}flag{% endif %}">{{ total_weight }}</span>{% else %}<span class="flag">weight not set</span>{% endif %}</p>
 
 {% if show_assessments %}
 <h2>Assessment</h2>
@@ -57,7 +60,7 @@
 <h2>Week by week</h2>
 {% for w in weeks %}
 <div class="wk {{ w.classes }}">
-<div class="wk-hd"><div class="wk-mark"><b>{{ w.week }}</b><small>{{ w.mark }}</small></div><div class="wk-name">{% if w.title %}<b>{{ w.title }}</b>{% else %}<b class="unplanned">Unplanned</b>{% endif %}{% if w.is_current %}<span class="now">now</span>{% endif %}{% if w.subtitle %}<small>{{ w.subtitle }}</small>{% endif %}</div>{% if w.is_current %}<button class="ask" data-ask="For week {{ w.week }} of {{ run.id }}, what should I teach and what should I revisit first?">prepare</button>{% endif %}</div>
+<div class="wk-hd"><div class="wk-mark"><b>{{ w.week_label }}</b><small>{{ w.mark }}</small></div><div class="wk-name">{% if w.title %}<b>{{ w.title }}</b>{% else %}<b class="unplanned">Unplanned</b>{% endif %}{% if w.is_current %}<span class="now">now</span>{% endif %}{% if w.subtitle %}<small><svg class="ico" aria-hidden="true"><use href="#i-meet"></use></svg><span>{{ w.subtitle }}</span></small>{% endif %}</div>{% if w.is_current %}<button class="ask" data-ask="For week {{ w.week }} of {{ run.id }}, what should I teach and what should I revisit first?">Prepare →</button>{% endif %}</div>
 <div class="wk-body">
 {% if w.planned %}
 {% for t in w.topics %}
@@ -75,12 +78,12 @@
 {% if w.has_items %}
 <div class="mats" data-mats>
 <div class="ind">
-{% for i in w.items %}<span class="it it-{{ i.tone }}"{% if i.name %} title="{{ i.name }}"{% endif %}><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg><span class="itk">{{ i.label }}</span>{% if i.draft %}<span class="itd">draft</span>{% endif %}{% if i.when %}<span class="itw{% if i.overdue %} due{% endif %}">{{ i.when }}</span>{% endif %}{% if i.ask %}<span class="itw gap"><svg class="ico" aria-hidden="true"><use href="#i-clock"></use></svg>no date</span><button type="button" class="itb" data-ask="{{ i.ask }}">set date</button>{% endif %}{% if i.formats %}{% for f in i.formats %}<a class="fmt" href="{{ f.href }}">{{ f.label }}</a>{% endfor %}{% else %}{% if i.href %}<a class="fmt" href="{{ i.href }}">open</a>{% endif %}{% endif %}</span>{% endfor %}
-{% if w.extras %}<button type="button" class="it it-more" data-matbtn><svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg><span class="itk" data-matlabel>{{ w.extras_count }} more</span></button>{% endif %}
+{% for i in w.items %}<span class="it it-{{ i.tone }}"{% if i.name %} title="{{ i.name }}"{% endif %}><span class="itc"><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg><span class="itk">{{ i.label }}</span>{% if i.when %}<span class="itdot">·</span><span class="itw{% if i.overdue %} due{% endif %}">{{ i.when }}</span>{% endif %}{% if i.draft %}<span class="itd">draft</span>{% endif %}</span>{% if i.ask %}<span class="itc gap"><svg class="ico" aria-hidden="true"><use href="#i-clock"></use></svg>no date</span><button type="button" class="itb" data-ask="{{ i.ask }}">set date</button>{% endif %}{% if i.formats %}{% for f in i.formats %}<a class="fmt" href="{{ f.href }}">{{ f.label }}</a>{% endfor %}{% else %}{% if i.href %}<a class="fmt" href="{{ i.href }}">open</a>{% endif %}{% endif %}</span>{% endfor %}
+{% if w.extras %}<button type="button" class="itc it-more" data-matbtn><svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg><span class="itk" data-matlabel>{{ w.extras_word }}</span></button>{% endif %}
 </div>
 {% if w.extras %}
 <div class="ind matlist">
-{% for i in w.extras %}<span class="it it-x" title="{{ i.kind }} · {{ i.name }}"><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg>{% if i.href %}<a class="itk itl" href="{{ i.href }}">{{ i.label }}</a>{% else %}<span class="itk">{{ i.label }}</span>{% endif %}{% if i.draft %}<span class="itd">draft</span>{% endif %}</span>{% endfor %}
+{% for i in w.extras %}<span class="itc it-x" title="{{ i.kind }} · {{ i.name }}"><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg>{% if i.href %}<a class="itk itl" href="{{ i.href }}">{{ i.label }}</a>{% else %}<span class="itk">{{ i.label }}</span>{% endif %}{% if i.draft %}<span class="itd">draft</span>{% endif %}</span>{% endfor %}
 </div>
 {% endif %}
 </div>
