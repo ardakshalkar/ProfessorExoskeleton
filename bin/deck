@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# `deck` — render an approved slide deck to .pptx, and with --pdf to PDF too.
+#
+#   bin/deck --course-version CSS-4007-2026-FALL --document DOC-DECK-01 --pdf
+#
+# See bin/deck.cmd for why this launcher exists: the renderer has worked since
+# it was ported and had no command in front of it, so the decks for weeks 1 to 7
+# were converted by calling soffice by hand.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+if [ -z "${SOFFICE_PATH:-}" ]; then
+  for candidate in \
+    "/c/Program Files/LibreOffice/program/soffice.exe" \
+    "/c/Program Files (x86)/LibreOffice/program/soffice.exe" \
+    "/usr/bin/soffice" \
+    "/Applications/LibreOffice.app/Contents/MacOS/soffice"; do
+    if [ -x "$candidate" ]; then export SOFFICE_PATH="$candidate"; break; fi
+  done
+fi
+exec node --experimental-strip-types "$here/ainar-node/bin/render-deck.ts" "$@"

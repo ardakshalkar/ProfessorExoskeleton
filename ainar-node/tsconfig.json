@@ -17,5 +17,14 @@
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true
   },
-  "include": ["src/**/*.ts", "bin/server.ts", "bin/http-server.ts", "bin/ainar.ts"]
+  // `bin/render-deck.ts` was outside this list, so nothing typechecked it. A
+  // missing `basename` import survived a clean `tsc --noEmit` and would have
+  // failed at run time, fifteen seconds into a PDF conversion.
+  "include": [
+    "src/**/*.ts",
+    "bin/server.ts",
+    "bin/http-server.ts",
+    "bin/ainar.ts",
+    "bin/render-deck.ts"
+  ]
 }

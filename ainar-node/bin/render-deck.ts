@@ -38,7 +38,7 @@ import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { documentById } from "../src/bundle.ts";
 import {
@@ -343,18 +343,49 @@ const SOFFICE = [
   "/Applications/LibreOffice.app/Contents/MacOS/soffice",
 ].filter(Boolean) as string[];
 
-function toPdf(pptx: string, outDir: string): string | null {
+/**
+ * The .pptx through LibreOffice, or null with a reason.
+ *
+ * Three things this had wrong, all of which read as "LibreOffice not found":
+ *
+ * 1. **It looked for the PDF beside the SOURCE**, not in `--outdir`. Those are
+ *    the same directory in the normal path and different the moment anyone
+ *    passes `--out`, and the mismatch surfaced as a missing converter.
+ * 2. **It ignored the exit code**, so a conversion that failed and left an
+ *    older PDF in place was reported as a success — the worst of the three,
+ *    because the stale file then gets registered as this deck's render.
+ * 3. **It said nothing about why.** LibreOffice writes its complaint to stderr
+ *    and the caller printed a guess instead.
+ *
+ * A conversion takes about fifteen seconds per deck on this machine, so the
+ * failure being silent also meant waiting fifteen seconds to be misinformed.
+ */
+function toPdf(pptx: string, outDir: string): { pdf: string } | { error: string } {
+  const attempts: string[] = [];
   for (const binary of SOFFICE) {
     const result = spawnSync(
       binary,
       ["--headless", "--convert-to", "pdf", "--outdir", outDir, pptx],
       { encoding: "utf8" },
     );
-    if (result.error) continue;
-    const pdf = pptx.replace(/\.pptx$/, ".pdf");
-    if (existsSync(pdf)) return pdf;
+    if (result.error) {
+      attempts.push(`${binary}: ${result.error.message}`);
+      continue;
+    }
+    // Where LibreOffice actually writes: the source's basename, in --outdir.
+    const pdf = join(outDir, basename(pptx).replace(/\.pptx$/i, ".pdf"));
+    if (result.status === 0 && existsSync(pdf)) return { pdf };
+    attempts.push(
+      `${binary}: exit ${result.status}` +
+        (result.stderr?.trim() ? ` — ${result.stderr.trim().split("\n")[0]}` : "") +
+        (existsSync(pdf) ? " (a PDF is there, but it is from an earlier run)" : ""),
+    );
   }
-  return null;
+  return {
+    error: attempts.length
+      ? `LibreOffice did not convert it:\n    ${attempts.join("\n    ")}`
+      : "No LibreOffice binary to try. Set SOFFICE_PATH to soffice.exe.",
+  };
 }
 
 // --- main -------------------------------------------------------------------
@@ -402,6 +433,20 @@ async function main(): Promise<void> {
       `${documentId} is still a draft (${storageKey}).\n` +
       "A deck rendered from work/ looks finished and nobody approved what is inside it.\n" +
       `Approve it first: python -m ainar approve work/${courseVersionId} --as <USER>`,
+    );
+  }
+  // The source is markdown. Saying so is worth four lines because the failure
+  // without it is silent and expensive: on 2026-09-06 this was pointed at a
+  // deck document whose `storage_key` is the rendered `.pptx` — the output, not
+  // the source — and it read a megabyte of zip as text, found no `---` rules,
+  // called the whole binary one slide, and wrote a .pptx and a PDF of it. The
+  // only sign was an overflow warning reading `slide 1 runs to 724.22" of 7"`.
+  if (!/\.(md|markdown)$/i.test(storageKey)) {
+    throw new Error(
+      `${documentId} points at ${storageKey}, which is not markdown.\n` +
+        "This renders a deck FROM its markdown source; a document whose storage_key is\n" +
+        "the built .pptx is the output of that. Point --document at the markdown, or\n" +
+        "register the source as its own document.",
     );
   }
   const sourcePath = resolve(root, storageKey);
@@ -454,9 +499,12 @@ async function main(): Promise<void> {
   console.log(`wrote ${file}`);
 
   if (has("pdf")) {
-    const pdf = toPdf(file, outDir);
-    if (pdf) console.log(`wrote ${pdf}`);
-    else console.warn("LibreOffice not found — the .pptx is written, the PDF is not. Set SOFFICE_PATH.");
+    const result = toPdf(file, outDir);
+    if ("pdf" in result) console.log(`wrote ${result.pdf}`);
+    // The .pptx is already on disk and is the thing that was asked for, so this
+    // is a warning and not an exit code — but it says what happened rather than
+    // guessing that the converter is absent.
+    else console.warn(`the .pptx is written, the PDF is not. ${result.error}`);
   }
 
   for (const warning of warnings) console.warn(`  ${warning}`);
