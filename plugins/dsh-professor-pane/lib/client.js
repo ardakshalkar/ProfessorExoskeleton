@@ -164,6 +164,7 @@ window.__ModuleLoader__.load({
      */
     const TABS = [
       { id: "outline", label: "Course outline", hint: "Student's view", view: "outline" },
+      { id: "students", label: "Students", hint: "The class list, by subgroup", view: "students" },
       { id: "progress", label: "Progress", hint: "The class, by concept", view: "progress" },
       { id: "tasks", label: "Tasks", hint: "What is waiting for you", view: "tasks" },
       { id: "preferences", label: "Preferences", hint: "Resolved, read-only", view: null },
@@ -204,6 +205,16 @@ window.__ModuleLoader__.load({
 
     /** The default sub-view for a tab: the first one listed. */
     const defaultSub = (tabId) => (SUBVIEWS[tabId] ? SUBVIEWS[tabId][0].id : null);
+
+    /**
+     * Tabs that draw no segmented row at all.
+     *
+     * Not the same as "no sub-views": a tab absent from `SUBVIEWS` still gets
+     * the Record / + drafts pair, because most single-document views have a
+     * drafted half worth seeing. These two do not — Preferences is not a view
+     * of a run, and the class list has no draftable half — so they get no row.
+     */
+    const NO_SEGMENTED_ROW = new Set(["preferences", "students"]);
 
     /**
      * Which halves of the course a view is computed over.
@@ -889,7 +900,11 @@ window.__ModuleLoader__.load({
         ),
         // The segmented row: which document, and which halves of the course it
         // is computed over. Preferences has neither — it is not a view of a run.
-        tab === "preferences"
+        // Students has neither either, for a different reason: `DRAFTABLE`
+        // refuses enrollments in a draft file, so there is no drafted class
+        // list and never will be. A Record / + drafts pair that changed nothing
+        // would be a control implying an answer it does not have.
+        NO_SEGMENTED_ROW.has(tab)
           ? null
           : h(
               "div",

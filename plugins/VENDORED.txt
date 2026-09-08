@@ -165,3 +165,20 @@ This list is the porting worklist. Each line's real home is named above.
     model/delivery.js, bundle.js, progress.js, gradebook.js, inbox.js,
     outline.js, mcp/tools.js. The .d.ts beside them were NOT updated; nothing
     in this project typechecks against them.
+
+  Added 2026-09-08, later the same day — the Students tab:
+    plugins/dsh-professor-pane/
+      index.js                      studentsDocument and loadedRun: the class
+                                    list by subgroup, pseudonyms only, with
+                                    dropped students under a heading of their
+                                    own. Says which of three states it is in —
+                                    loaded from samples/, refused
+                                    (storage.forbidden), or nothing imported —
+                                    because an empty list looks the same in all
+                                    three and means something different in each.
+                                    Routed at /view/students.
+      lib/client.js                 the Students tab, second after Course
+                                    outline; NO_SEGMENTED_ROW so it draws no
+                                    Record / + drafts pair, since DRAFTABLE
+                                    refuses enrollments and there is no drafted
+                                    class list to switch to.

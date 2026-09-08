@@ -29,7 +29,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runById } from "dsh-ainar-course-model/server/bundle.js";
+import { enrollmentsOf, runById } from "dsh-ainar-course-model/server/bundle.js";
 import { loadDrafts, mergeDrafts } from "dsh-ainar-course-model/server/drafts.js";
 import { gradebookPayload } from "dsh-ainar-course-model/server/gradebook.js";
 import { inboxPayload } from "dsh-ainar-course-model/server/inbox.js";
@@ -1241,6 +1241,215 @@ const readyDocument = (workspace, root, runId, dark) => {
 };
 
 /**
+ * The bundle owning a run, WITH the complaints its load produced.
+ *
+ * `workspace.findRun` hands back the bundle alone, which is all the widget
+ * views need. The class list needs the complaints too: whether enrollments are
+ * absent, refused or synthetic is the difference between three very different
+ * sentences, and the loader says which in an issue rather than in the data.
+ */
+const loadedRun = (workspace, runId) => {
+  for (const courseId of workspace.courseIds()) {
+    try {
+      const loaded = workspace.load(courseId);
+      if (runById(loaded.bundle).has(runId)) return loaded;
+    } catch {
+      // A course that will not load cannot be the one owning this run, and its
+      // error would replace the run's own. `draftedPayload` skips the same way.
+      continue;
+    }
+  }
+  throw new ToolError(`no course run '${runId}' in this workspace`);
+};
+
+/**
+ * The class list, by subgroup.
+ *
+ * **No names, and there cannot be any.** The record holds pseudonyms; the
+ * mapping back to real people lives outside the repository on purpose, and
+ * `ainar roster whois STUDENT-XXXXXX` resolves one in a terminal, for the
+ * professor's own eyes. A pane is a surface that gets screen-shared in a
+ * meeting, so this is the view where that boundary matters most — it is stated
+ * on screen rather than merely observed, so nobody reads the pseudonyms as a
+ * missing feature and goes looking for a setting.
+ *
+ * Three states, and telling them apart is most of what this view is for:
+ *
+ * * **loaded** — read from `versions/<term>/samples/enrollments*.yaml`, the
+ *   only place this harness will read them from. They are fixtures, and the
+ *   loader says so; so does this.
+ * * **refused** — `versions/<term>/enrollments.yaml` exists and the loader
+ *   would not read it (`storage.forbidden`). Drawing an empty list here would
+ *   describe a course nobody had enrolled in, which is a different and false
+ *   thing.
+ * * **absent** — nothing has been imported yet, and `ainar roster import` is
+ *   the answer.
+ *
+ * Dropped students are drawn, dimmed, under a heading of their own. They are in
+ * the record because an import marks a departure rather than deleting the row,
+ * and a class list that silently omitted them would undo the point of that.
+ */
+const studentsDocument = (workspace, runId, dark) => {
+  const { bundle, issues } = loadedRun(workspace, runId);
+  const enrolled = enrollmentsOf(bundle, runId);
+
+  const issueItems = issues && Array.isArray(issues.items) ? issues.items : [];
+  const refused = issueItems.filter(
+    (issue) => issue.code === "storage.forbidden" && /enrollments/.test(issue.message ?? ""),
+  );
+  const synthetic = issueItems.some((issue) => issue.code === "storage.fixture");
+
+  const note = (text) =>
+    '<p class="dim" style="border-left:3px solid var(--line);padding-left:10px">' + text + "</p>";
+
+  /*
+   * The refused file is worth saying even when there IS a list to draw.
+   *
+   * A workspace can hold both: fixtures under `samples/` that loaded, and a
+   * real `enrollments.yaml` beside them that did not. Reporting the refusal
+   * only on an empty list would draw the fixtures as though they were the
+   * class and stay silent about student identities sitting in a git tree —
+   * which is the one thing on this screen a professor most needs told.
+   */
+  const refusedHtml = refused.length
+    ? '<p class="empty">An enrollments file in this run was <b>not read</b>. It ' +
+      "names students, so it belongs in Supabase rather than in the course tree, " +
+      "and the loader refuses it rather than pulling identities into a bundle a " +
+      "prompt or a widget could serialise. Move it out of the repository.</p>" +
+      refused
+        .map(
+          (issue) =>
+            '<div class="row"><span class="k"><code>' +
+            escapeText(issue.location ?? "enrollments.yaml") +
+            "</code></span></div>",
+        )
+        .join("")
+    : "";
+
+  if (enrolled.length === 0) {
+    const body =
+      refusedHtml ||
+      '<p class="empty">Nobody is enrolled in this run yet. Importing a class ' +
+        "list is <code>ainar roster import export.csv --run " +
+        escapeText(runId) +
+        "</code>, which writes pseudonyms here and the names themselves outside " +
+        "the repository.</p>";
+    return documentPage("<section><h2>Students</h2>" + body + "</section>", dark);
+  }
+
+  // Per-student marks, from the gradebook rather than recomputed. The record is
+  // one place; two arithmetics over it would eventually disagree, and the one
+  // on this screen would be the one nobody had tested.
+  let totals = new Map();
+  try {
+    const book = gradebookPayload(bundle, runId, {});
+    totals = new Map((book.totals ?? []).map((row) => [row.student_id, row]));
+  } catch {
+    // A course whose rubrics do not add up cannot be totalled, and that is the
+    // gradebook's complaint to make, on the gradebook's tab. A class list is
+    // still a class list without the marks column.
+  }
+
+  const active = enrolled.filter((entry) => entry.status === "active");
+  const inactive = enrolled.filter((entry) => entry.status !== "active");
+
+  const label = (entry) => String(entry.group ?? "").trim();
+  const groups = [...new Set(active.map(label))].sort((a, b) => {
+    // The ungrouped go last: they are the remainder, not a subgroup called "".
+    if (a === "") return 1;
+    if (b === "") return -1;
+    return a.localeCompare(b);
+  });
+
+  const marks = (studentId) => {
+    const row = totals.get(studentId);
+    if (!row) return '<span class="dim">no work graded yet</span>';
+    const counted = (row.assessments_counted ?? []).length;
+    const outstanding = (row.assessments_outstanding ?? []).length;
+    const percent = row.percent_of_graded;
+    const of = counted + outstanding;
+    return (
+      (percent === null || percent === undefined
+        ? '<span class="dim">—</span>'
+        : escapeText(String(percent)) + "%") +
+      '<br><span class="dim">' +
+      escapeText(String(counted)) +
+      " of " +
+      escapeText(String(of)) +
+      " graded</span>"
+    );
+  };
+
+  const row = (entry, dimmed) =>
+    '<div class="row"><span class="k"' +
+    (dimmed ? ' style="color:var(--dim)"' : "") +
+    ">" +
+    escapeText(entry.student_id ?? "") +
+    (entry.role && entry.role !== "student"
+      ? ' <span class="dim">' + escapeText(entry.role) + "</span>"
+      : "") +
+    '</span><span class="v">' +
+    (dimmed
+      ? '<span class="todo">' +
+        escapeText(entry.status ?? "inactive") +
+        "</span>" +
+        (label(entry) ? '<br><span class="dim">' + escapeText(label(entry)) + "</span>" : "")
+      : marks(entry.student_id)) +
+    "</span></div>";
+
+  const sections = groups
+    .map((group) => {
+      const members = active
+        .filter((entry) => label(entry) === group)
+        .sort((a, b) => String(a.student_id).localeCompare(String(b.student_id)));
+      return (
+        "<section><h2>" +
+        escapeText(group === "" ? "No subgroup" : group) +
+        ' <span class="dim">· ' +
+        escapeText(String(members.length)) +
+        " active</span></h2>" +
+        members.map((entry) => row(entry, false)).join("") +
+        "</section>"
+      );
+    })
+    .join("");
+
+  const departed = inactive.length
+    ? "<section><h2>No longer active</h2>" +
+      inactive
+        .sort((a, b) => String(a.student_id).localeCompare(String(b.student_id)))
+        .map((entry) => row(entry, true))
+        .join("") +
+      "</section>"
+    : "";
+
+  const header =
+    "<section><h2>Students</h2>" +
+    '<p class="dim">' +
+    escapeText(String(active.length)) +
+    " active" +
+    (inactive.length ? " · " + escapeText(String(inactive.length)) + " no longer active" : "") +
+    (groups.filter((group) => group !== "").length
+      ? " · " + escapeText(String(groups.filter((group) => group !== "").length)) + " subgroups"
+      : "") +
+    "</p>" +
+    note(
+      "Pseudonyms only. The names behind them are outside this repository — " +
+        "<code>ainar roster whois STUDENT-XXXXXX</code> resolves one in a terminal.",
+    ) +
+    (synthetic
+      ? note(
+          "Read from <code>samples/</code>: synthetic fixtures, not the roster. " +
+            "Real enrollments come from Supabase.",
+        )
+      : "") +
+    refusedHtml +
+    "</section>";
+
+  return documentPage(header + sections + departed, dark);
+};
+
+/**
  * Give every resource that names a document somewhere to go.
  *
  * The widget will not invent a path — `safeUrl` in its runtime returns null for
@@ -1647,6 +1856,19 @@ const handler = (registry) => (req, res) => {
                 session,
               )
             : examsDocument(workspace, root, runId, dark, withDrafts, on),
+      );
+    }
+
+    // The class list. No drafts toggle: `DRAFTABLE` refuses enrollments in a
+    // draft file, so there is never a drafted half of this view to show, and a
+    // toggle that changed nothing would suggest otherwise.
+    if (view === "students") {
+      if (!runId) return sendErrorPage(res, "No run chosen.");
+      return send(
+        res,
+        200,
+        "text/html; charset=utf-8",
+        studentsDocument(workspace, runId, url.searchParams.get("dark") === "1"),
       );
     }
 
