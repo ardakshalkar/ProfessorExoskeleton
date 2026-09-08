@@ -1,0 +1,41 @@
+# A grade is not the same thing as evidence.
+#
+# Evidence names what was demonstrated, at what level, from which source, and
+# whether a human has confirmed it.
+
+evidence:
+  - evidence_id: EVID-2801
+    student_id: STUDENT-JNG7SN
+    course_version_id: CSS-4008-2026-FALL
+    source_type: assessment
+    source_id: SUB-9070
+    concept_id: CONCEPT-TRAIN-TEST-SPLIT
+    outcome_id: LO-03
+    demonstrated_level: 2
+    confidence: 0.71
+    verified_by: USER-ARD-A01
+    recorded_at: 2026-10-09T11:05:00+05:00
+    provenance:
+      produced_by: evidence-extractor
+      model_id: claude-opus-5
+      workflow_version: evidence/2026.10.1
+      input_refs: [SUB-9070, CRIT-02-02]
+      created_at: 2026-10-09T10:58:00+05:00
+
+  - evidence_id: EVID-3011
+    student_id: STUDENT-JNG7SN
+    course_version_id: CSS-4008-2026-FALL
+    source_type: assessment
+    source_id: SUB-9081
+    outcome_id: LO-04
+    capability_id: CAP-AI-EXPERIMENT
+    demonstrated_level: 3
+    confidence: 0.88
+    verified_by: USER-ARD-A01
+    recorded_at: 2026-10-19T14:11:00+05:00
+    provenance:
+      produced_by: evidence-extractor
+      model_id: claude-opus-5
+      workflow_version: evidence/2026.10.1
+      input_refs: [SUB-9081, EVAL-6001]
+      created_at: 2026-10-19T14:11:00+05:00

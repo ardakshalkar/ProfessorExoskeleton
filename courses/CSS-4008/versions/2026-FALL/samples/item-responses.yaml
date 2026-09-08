@@ -1,0 +1,57 @@
+# Item-level results. This is what makes concept diagnosis specific rather
+# than inferred: STUDENT-JNG7SN lost ITEM-01-02 by choosing the distractor that
+# reads memorisation as generalisation, which is exactly the train-test
+# separation weakness that later shows up in SUB-9081.
+
+item_responses:
+  - response_id: RESP-9060-0101
+    submission_id: SUB-9060
+    item_id: ITEM-01-01
+    student_id: STUDENT-JNG7SN
+    chosen_options: [a]
+    score: 20
+    correct: true
+    scored_by: auto
+    responded_at: 2026-09-29T14:12:00+05:00
+
+  - response_id: RESP-9060-0102
+    submission_id: SUB-9060
+    item_id: ITEM-01-02
+    student_id: STUDENT-JNG7SN
+    chosen_options: [b]
+    score: 0
+    correct: false
+    scored_by: auto
+    responded_at: 2026-09-29T14:15:00+05:00
+
+  - response_id: RESP-9060-0103
+    submission_id: SUB-9060
+    item_id: ITEM-01-03
+    student_id: STUDENT-JNG7SN
+    raw_response: >-
+      Route planning can be search because you know the states and the goal.
+      Predicting exam grades cannot.
+    score: 20
+    correct: false
+    scored_by: USER-ARD-A01
+    responded_at: 2026-09-29T14:22:00+05:00
+
+  - response_id: RESP-9061-0102
+    submission_id: SUB-9061
+    item_id: ITEM-01-02
+    student_id: STUDENT-K4QM2X
+    chosen_options: [b]
+    score: 0
+    correct: false
+    scored_by: auto
+    responded_at: 2026-09-29T15:02:00+05:00
+
+  - response_id: RESP-9062-0102
+    submission_id: SUB-9062
+    item_id: ITEM-01-02
+    student_id: STUDENT-R7TB5D
+    chosen_options: [a]
+    score: 20
+    correct: true
+    scored_by: auto
+    responded_at: 2026-09-29T16:40:00+05:00

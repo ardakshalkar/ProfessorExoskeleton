@@ -1,0 +1,25 @@
+# Written by `ainar approve`.
+#
+# These are claims about what the course teaches: proposed by an agent from
+# source material, reviewed, and accepted by the person named in
+# `extensions.approval`. Editing them here is fine — they are course content
+# now, not machine state. Move one into the hand-authored file whenever that
+# reads better; nothing depends on which file it sits in.
+
+modules:
+- module_id: MODULE-11
+  course_id: CSS-4008
+  title: Optimisation
+  week: 11
+  outcomes:
+  - LO-02
+  concepts:
+  - CONCEPT-LOSS-FUNCTIONS
+  estimated_hours: 6.0
+  extensions:
+    proposal:
+      proposed_by: propose-concepts-skill
+      source: syllabus-2026-fall.md, week 11
+    approval:
+      approved_by: USER-ARD-A01
+      approved_at: '2026-08-08T09:17:57+05:00'

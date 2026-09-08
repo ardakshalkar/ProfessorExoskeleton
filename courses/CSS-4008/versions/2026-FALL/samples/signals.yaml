@@ -1,0 +1,23 @@
+# A signal always carries its evidence. AINAR does not emit labels such as
+# "weak student" — it points at what was observed and where.
+
+signals:
+  - signal_id: SIGNAL-772
+    student_id: STUDENT-JNG7SN
+    course_version_id: CSS-4008-2026-FALL
+    type: repeated_concept_difficulty
+    severity: medium
+    description: >-
+      Train-test separation has been handled loosely in two submissions, and
+      the overfitting diagnosis in the model evaluation assignment stops at
+      naming the gap.
+    evidence_ids: [EVID-2801, EVID-3011]
+    concepts: [CONCEPT-TRAIN-TEST-SPLIT, CONCEPT-OVERFITTING]
+    status: open
+    detected_at: 2026-10-19T15:00:00+05:00
+    provenance:
+      produced_by: knowledge-gap-agent
+      model_id: claude-opus-5
+      workflow_version: gaps/2026.10.2
+      input_refs: [EVID-2801, EVID-3011]
+      created_at: 2026-10-19T15:00:00+05:00

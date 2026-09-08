@@ -1,0 +1,39 @@
+# Capabilities are broader than course concepts: a student accumulates evidence
+# for them across several courses. They live here rather than inside one course
+# so that a capability map can be built instead of a transcript.
+#
+# A course pulls in only the capabilities its outcomes and rubric criteria
+# actually reference.
+
+capabilities:
+  - capability_id: CAP-AI-EXPERIMENT
+    title: Design an AI experiment
+    description: >-
+      Formulate a question about a model or method, design a procedure that
+      can answer it, and defend the conclusion.
+    domain: computer-science
+    levels:
+      - level: 1
+        description: Explain the components of an experiment.
+      - level: 2
+        description: Follow a provided experimental procedure.
+      - level: 3
+        description: Design and justify an experiment independently.
+      - level: 4
+        description: Validate an experiment in a real context.
+
+  - capability_id: CAP-DATA-REASONING
+    title: Reason about data
+    description: >-
+      Judge whether data supports a claim: representativeness, leakage,
+      missingness and the limits of what a dataset can show.
+    domain: computer-science
+    levels:
+      - level: 1
+        description: Describe a dataset and its fields.
+      - level: 2
+        description: Identify obvious quality problems in a dataset.
+      - level: 3
+        description: Explain how preparation choices change what can be concluded.
+      - level: 4
+        description: Design data collection appropriate to a research question.

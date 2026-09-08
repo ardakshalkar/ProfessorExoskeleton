@@ -1,0 +1,74 @@
+assessment_id: ASSESSMENT-01
+course_version_id: CSS-4008-2026-FALL
+title: Foundations Quiz
+type: quiz
+description: Short quiz on problem formulation and method families.
+module_id: MODULE-02
+maximum_score: 100
+weight: 0.15
+opens_at: 2026-09-28T09:00:00+05:00
+due_at: 2026-09-29T23:59:00+05:00
+outcomes: [LO-01]
+submission_type: [text]
+settings:
+  anonymous_grading: false
+  allow_late_submission: false
+  ai_review:
+    enabled: true
+    require_professor_approval: true
+design:
+  purpose: formative knowledge check
+  duration_minutes: 30
+  target_item_count: 4
+  cells:
+    - outcome_id: LO-01
+      cognitive_level: apply
+      difficulty: easy
+      item_type: multiple_choice
+      item_count: 2
+      marks: 40
+    - outcome_id: LO-01
+      cognitive_level: analyze
+      difficulty: medium
+      item_type: short_answer
+      item_count: 2
+      marks: 60
+  constraints:
+    closed_book: true
+    require_justification_on_short_answer: true
+rubric:
+  rubric_id: RUBRIC-01
+  title: Foundations quiz rubric
+  criteria:
+    - criterion_id: CRIT-01-01
+      rubric_id: RUBRIC-01
+      title: Correct classification of problem types
+      maximum_score: 60
+      outcome_id: LO-01
+      concepts: [CONCEPT-AI-PROBLEM-TYPES]
+      levels:
+        - score: 60
+          label: full
+          description: All problems classified correctly with reasons.
+        - score: 35
+          label: partial
+          description: Most classifications correct, reasoning thin.
+        - score: 10
+          label: minimal
+          description: Classifications largely incorrect.
+    - criterion_id: CRIT-01-02
+      rubric_id: RUBRIC-01
+      title: Method selection reasoning
+      maximum_score: 40
+      outcome_id: LO-01
+      concepts: [CONCEPT-SEARCH]
+      levels:
+        - score: 40
+          label: full
+          description: Method family justified against problem structure.
+        - score: 20
+          label: partial
+          description: Method named without justification.
+        - score: 5
+          label: minimal
+          description: No connection between problem and method.

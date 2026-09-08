@@ -1,0 +1,29 @@
+# Documents behind the sample submissions.
+#
+# Metadata only — the bytes are in object storage and never in this repository.
+# Student work is referenced by pseudonymous identifier and nothing else.
+
+documents:
+  - document_id: DOC-7701
+    title: Data preparation report
+    storage_key: object://courses/css-4007/2026-fall/a02/submissions/student-1023.pdf
+    mime_type: application/pdf
+    course_version_id: CSS-4008-2026-FALL
+
+  - document_id: DOC-7741
+    title: Model evaluation report
+    storage_key: object://courses/css-4007/2026-fall/a04/submissions/student-1023.pdf
+    mime_type: application/pdf
+    course_version_id: CSS-4008-2026-FALL
+
+  - document_id: DOC-7742
+    title: Model evaluation notebook
+    storage_key: object://courses/css-4007/2026-fall/a04/submissions/student-1023.ipynb
+    mime_type: application/x-ipynb+json
+    course_version_id: CSS-4008-2026-FALL
+
+  - document_id: DOC-7751
+    title: Model evaluation report
+    storage_key: object://courses/css-4007/2026-fall/a04/submissions/student-1024.pdf
+    mime_type: application/pdf
+    course_version_id: CSS-4008-2026-FALL

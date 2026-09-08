@@ -1,0 +1,27 @@
+# Sample membership only.
+#
+# The real roster comes from the SIS (Platonus) through the integration layer.
+# Do not maintain student personal data in this repository — only the SIS
+# identifier and the membership fact.
+
+enrollments:
+  - enrollment_id: ENR-55291
+    course_version_id: CSS-4008-2026-FALL
+    student_id: STUDENT-JNG7SN
+    role: student
+    status: active
+    group: CS-401
+
+  - enrollment_id: ENR-55292
+    course_version_id: CSS-4008-2026-FALL
+    student_id: STUDENT-K4QM2X
+    role: student
+    status: active
+    group: CS-401
+
+  - enrollment_id: ENR-55293
+    course_version_id: CSS-4008-2026-FALL
+    student_id: STUDENT-R7TB5D
+    role: student
+    status: active
+    group: CS-402

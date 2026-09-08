@@ -1,0 +1,29 @@
+# The professor's action inbox. Each item names the event that produced it, so
+# nothing is asked of the professor without a traceable reason.
+
+action_items:
+  - action_id: ACTION-991
+    course_version_id: CSS-4008-2026-FALL
+    assigned_to: USER-ARD-A01
+    type: review_grades
+    title: Review 24 suggested grades for the Model Evaluation Assignment
+    description: >-
+      11 criterion suggestions are below the confidence threshold and are
+      listed first.
+    priority: high
+    source_event_id: EVENT-882
+    source_refs: [ASSESSMENT-04, EVAL-6002]
+    status: pending
+    due_at: 2026-10-20T17:00:00+05:00
+    available_actions: [review, approve, delegate, dismiss]
+
+  - action_id: ACTION-992
+    course_version_id: CSS-4008-2026-FALL
+    assigned_to: USER-ARD-A01
+    type: approve_intervention
+    title: Approve targeted practice for 1 student on train-test separation
+    priority: medium
+    source_refs: [SIGNAL-772, INT-204]
+    status: pending
+    due_at: 2026-10-21T17:00:00+05:00
+    available_actions: [review, approve, dismiss]

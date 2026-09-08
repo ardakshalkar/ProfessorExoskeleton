@@ -1,0 +1,46 @@
+# Teaching materials. The file itself lives in object storage; this record is
+# the metadata and the pointer. A resource tagged with concepts can be
+# retrieved by the lesson-preparation agent without a full-text search.
+
+resources:
+  - resource_id: RES-101
+    title: Course reader — problem formulation
+    kind: reading
+    course_version_id: CSS-4008-2026-FALL
+    url: https://example.sdu.edu.kz/css-4007/reader-01
+    concepts: [CONCEPT-AI-PROBLEM-TYPES, CONCEPT-SEARCH]
+    required: true
+
+  - resource_id: RES-301
+    title: Student performance dataset (teaching copy)
+    kind: dataset
+    course_version_id: CSS-4008-2026-FALL
+    document_id: DOC-3301
+    concepts: [CONCEPT-DATA-PREPARATION, CONCEPT-TRAIN-TEST-SPLIT]
+    description: Anonymised dataset used for the data preparation report.
+    required: true
+
+  - resource_id: RES-441
+    title: Model evaluation and overfitting — slides
+    kind: slides
+    course_version_id: CSS-4008-2026-FALL
+    document_id: DOC-4410
+    concepts: [CONCEPT-MODEL-EVALUATION, CONCEPT-OVERFITTING]
+    required: true
+
+  - resource_id: RES-442
+    title: Diagnosing overfitting — starter notebook
+    kind: notebook
+    course_version_id: CSS-4008-2026-FALL
+    document_id: DOC-4420
+    concepts: [CONCEPT-OVERFITTING, CONCEPT-REGULARIZATION]
+    required: true
+
+  - resource_id: RES-901
+    title: Experiment report template
+    kind: other
+    course_version_id: CSS-4008-2026-FALL
+    document_id: DOC-9010
+    concepts: [CONCEPT-EXPERIMENT-DESIGN]
+    description: Structure students must follow when reporting an experiment.
+    required: false

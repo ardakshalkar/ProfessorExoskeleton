@@ -1,0 +1,62 @@
+# Learning outcomes for CSS-4008 v3.
+#
+# Weights sum to 1.0. Identifiers are stable: LO-04 stays LO-04 even when the
+# wording is revised, because student evidence from earlier semesters points
+# at it.
+
+outcomes:
+  - outcome_id: LO-01
+    course_id: CSS-4008
+    title: Explain core AI problem types and methods
+    description: >-
+      The student can classify a problem as search, optimisation, supervised
+      learning or unsupervised learning, and can explain which family of
+      methods applies.
+    level: understand
+    weight: 0.20
+    concepts:
+      - CONCEPT-AI-PROBLEM-TYPES
+      - CONCEPT-SEARCH
+
+  - outcome_id: LO-02
+    course_id: CSS-4008
+    title: Implement and evaluate a machine learning model
+    description: >-
+      The student can implement a supervised model, measure its performance
+      honestly, and interpret the result.
+    level: apply
+    weight: 0.30
+    concepts:
+      - CONCEPT-SUPERVISED-LEARNING
+      - CONCEPT-MODEL-EVALUATION
+      - CONCEPT-OVERFITTING
+      - CONCEPT-REGULARIZATION
+      - CONCEPT-NEURAL-NETWORKS
+
+  - outcome_id: LO-03
+    course_id: CSS-4008
+    title: Prepare and reason about data for learning
+    description: >-
+      The student can inspect, clean and split a dataset, and can explain how
+      preparation choices affect what a model can learn.
+    level: apply-analyze
+    weight: 0.20
+    concepts:
+      - CONCEPT-DATA-PREPARATION
+      - CONCEPT-TRAIN-TEST-SPLIT
+    capabilities:
+      - CAP-DATA-REASONING
+
+  - outcome_id: LO-04
+    course_id: CSS-4008
+    title: Design and evaluate an AI solution
+    description: >-
+      The student can select, implement and evaluate an appropriate AI
+      approach for a stated problem, and can justify the choice.
+    level: apply-analyze
+    weight: 0.30
+    concepts:
+      - CONCEPT-EXPERIMENT-DESIGN
+      - CONCEPT-MODEL-EVALUATION
+    capabilities:
+      - CAP-AI-EXPERIMENT

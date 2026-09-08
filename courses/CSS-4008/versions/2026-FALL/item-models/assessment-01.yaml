@@ -1,0 +1,28 @@
+item_models:
+  - item_model_id: ITEM-MODEL-PROBLEM-FORMULATION
+    course_version_id: CSS-4008-2026-FALL
+    title: Select a method family from the evidence available
+    outcome_id: LO-01
+    concepts: [CONCEPT-AI-PROBLEM-TYPES]
+    cognitive_level: apply
+    evidence_requirements:
+      - identifies the kind of evidence present in the scenario
+      - selects a compatible problem formulation
+      - distinguishes the formulation from a specific algorithm
+    task_structure:
+      - present a realistic decision scenario
+      - state what data or state representation is available
+      - ask for the best problem formulation
+    scenario_variables:
+      domain: [healthcare, education, logistics]
+      evidence_shape: [labelled_history, explicit_states_and_actions, unlabelled_examples]
+    difficulty_features:
+      easy:
+        competing_formulations: 2
+        irrelevant_details: 0
+      complex:
+        competing_formulations: 4
+        irrelevant_details: 3
+    misconceptions: [CONCEPT-AI-PROBLEM-TYPES]
+    answer_requirements: [formulation, evidence-based justification]
+    allowed_item_types: [multiple_choice, short_answer]

@@ -1,0 +1,22 @@
+# One offering of CSS-4008, and the version approved for it.
+#
+# This was two records until the merge: a CourseVersion holding the approved
+# definition and a CourseRun holding the semester. The definition never varied
+# and now belongs to the course, so what is left here is the term plus the
+# approval record — see docs/version-run-merge.md.
+
+course_version_id: CSS-4008-2026-FALL
+course_id: CSS-4008
+term: 2026-FALL
+start_date: 2026-09-01
+end_date: 2026-12-20
+instructors:
+  - USER-ARD-A01
+timezone: Asia/Almaty
+status: scheduled
+lms_course_id: canvas-88219
+expected_enrollment: 27
+approved_by: academic-council
+notes: >-
+  Assessment rebalanced towards the final project, with an explicit
+  experiment-design outcome added.

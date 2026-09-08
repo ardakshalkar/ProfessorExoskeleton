@@ -1,0 +1,85 @@
+# The knowledge structure of the course.
+#
+# Prerequisite edges are what let AINAR explain a gap rather than label a
+# student: "difficulty with overfitting" is only useful next to "train-test
+# separation is not yet demonstrated".
+
+concepts:
+  - concept_id: CONCEPT-AI-PROBLEM-TYPES
+    course_id: CSS-4008
+    title: AI problem types
+    description: >-
+      Search, optimisation, supervised learning, unsupervised learning and
+      reinforcement learning as distinct problem formulations.
+    prerequisites: []
+
+  - concept_id: CONCEPT-SEARCH
+    course_id: CSS-4008
+    title: State-space search
+    description: Representing a problem as states, actions and goal tests.
+    prerequisites:
+      - CONCEPT-AI-PROBLEM-TYPES
+
+  - concept_id: CONCEPT-DATA-PREPARATION
+    course_id: CSS-4008
+    title: Data preparation
+    description: Cleaning, encoding, scaling and handling missing values.
+    prerequisites: []
+
+  - concept_id: CONCEPT-SUPERVISED-LEARNING
+    course_id: CSS-4008
+    title: Supervised learning
+    description: Learning a mapping from labelled examples.
+    prerequisites:
+      - CONCEPT-AI-PROBLEM-TYPES
+      - CONCEPT-DATA-PREPARATION
+
+  - concept_id: CONCEPT-TRAIN-TEST-SPLIT
+    course_id: CSS-4008
+    title: Train-test separation
+    description: >-
+      Holding out data the model never sees during training, so that measured
+      performance means something.
+    prerequisites:
+      - CONCEPT-DATA-PREPARATION
+    aliases: [holdout, train/test split, validation split]
+
+  - concept_id: CONCEPT-MODEL-EVALUATION
+    course_id: CSS-4008
+    title: Model evaluation
+    description: Choosing and interpreting metrics appropriate to the task.
+    prerequisites:
+      - CONCEPT-TRAIN-TEST-SPLIT
+      - CONCEPT-SUPERVISED-LEARNING
+
+  - concept_id: CONCEPT-OVERFITTING
+    course_id: CSS-4008
+    title: Overfitting
+    description: >-
+      A model performs well on training data but poorly on unseen data.
+    prerequisites:
+      - CONCEPT-MODEL-EVALUATION
+      - CONCEPT-TRAIN-TEST-SPLIT
+
+  - concept_id: CONCEPT-REGULARIZATION
+    course_id: CSS-4008
+    title: Regularization
+    description: Constraining model capacity to improve generalisation.
+    prerequisites:
+      - CONCEPT-OVERFITTING
+
+  - concept_id: CONCEPT-NEURAL-NETWORKS
+    course_id: CSS-4008
+    title: Neural networks
+    description: Layered differentiable models trained by gradient descent.
+    prerequisites:
+      - CONCEPT-SUPERVISED-LEARNING
+
+  - concept_id: CONCEPT-EXPERIMENT-DESIGN
+    course_id: CSS-4008
+    title: AI experiment design
+    description: >-
+      Stating a hypothesis, choosing a baseline, controlling variables and
+      reporting a result that another person could reproduce.
+    prerequisites:
+      - CONCEPT-MODEL-EVALUATION

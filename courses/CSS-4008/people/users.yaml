@@ -1,0 +1,11 @@
+# Staff identities for this course. Students are not duplicated here — they are
+# referenced by their SIS identifier through enrollments.
+
+users:
+  - user_id: USER-ARD-A01
+    display_name: Course Instructor
+    email: instructor@example.edu
+    role: professor
+    external_ids:
+      platonus: TODO
+      canvas: TODO

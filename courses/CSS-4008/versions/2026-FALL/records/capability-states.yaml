@@ -1,0 +1,27 @@
+# Written by `ainar approve`.
+#
+# Every entry was proposed by an agent and accepted by a person. AI
+# suggestions are preserved beside the decisions that superseded them.
+# Machine-managed — change these through approval, not by hand.
+
+capability_states:
+- student_id: STUDENT-JNG7SN
+  capability_id: CAP-AI-EXPERIMENT
+  course_version_id: CSS-4008-2026-FALL
+  level: 3
+  source_count: 1
+  evidence_ids:
+  - EVID-3011
+  verified_by: USER-ARD-A01
+  last_updated_at: '2026-10-19T14:11:00+05:00'
+  provenance:
+    produced_by: capability-roll-up
+    workflow_version: progress/roll-up-1
+    input_refs:
+    - EVID-3011
+    created_at: '2026-08-03T08:54:41+05:00'
+  extensions:
+    levels_seen:
+    - 3
+    sources:
+    - SUB-9081

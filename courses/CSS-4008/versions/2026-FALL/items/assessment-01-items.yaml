@@ -1,0 +1,102 @@
+# Items for ASSESSMENT-01 (Foundations Quiz).
+#
+# A quiz scored only as a total says a student got 60%. Concept-tagged items
+# say which concept cost them the other 40. Distractors that name the
+# misconception they reveal turn "12 students chose (c)" into a diagnosis.
+#
+# Item scores sum to the assessment maximum (100).
+
+items:
+  - item_id: ITEM-01-01
+    assessment_id: ASSESSMENT-01
+    item_model_id: ITEM-MODEL-PROBLEM-FORMULATION
+    number: 1
+    type: multiple_choice
+    prompt: >-
+      A hospital wants to predict which admitted patients will need intensive
+      care, using five years of labelled admission records. Which problem
+      formulation fits?
+    maximum_score: 20
+    # Declared, as against the rate `ainar score-items` observes. The two
+    # disagreeing is a finding about the question or the teaching, not about the
+    # students — see `item.difficulty_mismatch`.
+    difficulty: easy
+    outcome_id: LO-01
+    criterion_id: CRIT-01-01
+    concepts: [CONCEPT-AI-PROBLEM-TYPES]
+    options:
+      - label: a
+        text: Supervised learning
+        correct: true
+      - label: b
+        text: State-space search
+        indicates_misconception_of: CONCEPT-AI-PROBLEM-TYPES
+        note: >-
+          Treats any decision problem as search; misses that labelled history
+          is what makes this learnable.
+      - label: c
+        text: Unsupervised learning
+        indicates_misconception_of: CONCEPT-SUPERVISED-LEARNING
+        note: Does not recognise that the outcome labels are already present.
+
+  - item_id: ITEM-01-02
+    assessment_id: ASSESSMENT-01
+    number: 2
+    type: multiple_choice
+    prompt: >-
+      A student reports 99% accuracy. You then learn the same rows appear in
+      both the training and the test set. What is the accuracy figure worth?
+    maximum_score: 20
+    outcome_id: LO-01
+    criterion_id: CRIT-01-01
+    concepts: [CONCEPT-TRAIN-TEST-SPLIT, CONCEPT-MODEL-EVALUATION]
+    options:
+      - label: a
+        text: Nothing — the model was measured on data it had already seen.
+        correct: true
+      - label: b
+        text: It is valid, because the model still had to learn the pattern.
+        indicates_misconception_of: CONCEPT-TRAIN-TEST-SPLIT
+        note: >-
+          The core misconception the course targets: memorisation being read
+          as generalisation.
+      - label: c
+        text: It is valid if the dataset is large enough.
+        indicates_misconception_of: CONCEPT-TRAIN-TEST-SPLIT
+        note: Believes leakage is diluted by scale rather than invalidating the measure.
+
+  - item_id: ITEM-01-03
+    assessment_id: ASSESSMENT-01
+    number: 3
+    type: short_answer
+    prompt: >-
+      Give one problem that can be formulated as state-space search and one
+      that cannot, and say what distinguishes them.
+    maximum_score: 30
+    outcome_id: LO-01
+    criterion_id: CRIT-01-02
+    concepts: [CONCEPT-SEARCH, CONCEPT-AI-PROBLEM-TYPES]
+    answer_key: >-
+      Search fits when states, actions and a goal test can be stated
+      explicitly. It does not fit when the mapping must be induced from
+      examples because no goal test is available.
+    marking_guidance: >-
+      Full marks require the distinguishing criterion, not just two examples.
+
+  - item_id: ITEM-01-04
+    assessment_id: ASSESSMENT-01
+    number: 4
+    type: short_answer
+    prompt: >-
+      You are asked to choose between a method family and a specific
+      algorithm. Which decision comes first, and why?
+    maximum_score: 30
+    outcome_id: LO-01
+    criterion_id: CRIT-01-02
+    concepts: [CONCEPT-AI-PROBLEM-TYPES]
+    answer_key: >-
+      The problem formulation determines the method family; the algorithm is
+      chosen within it, against data and constraints.
+    marking_guidance: >-
+      Accept any answer that puts problem structure before algorithm choice
+      and gives a reason.

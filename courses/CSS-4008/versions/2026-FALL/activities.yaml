@@ -1,0 +1,126 @@
+# Scheduled teaching for the run. Times are timezone-aware (+05:00, Asia/Almaty).
+#
+# This file is deliberately partial — it shows the shape. Fill in the remaining
+# weeks as the semester schedule is confirmed.
+
+activities:
+  - activity_id: ACT-0101
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-01
+    type: lecture
+    title: What counts as an AI problem
+    scheduled_at: 2026-09-02T10:00:00+05:00
+    duration_minutes: 100
+    location: A-204
+    outcomes: [LO-01]
+    concepts: [CONCEPT-AI-PROBLEM-TYPES]
+    resources: [RES-101]
+
+  - activity_id: ACT-0301
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-03
+    type: lab
+    title: Inspecting and cleaning a real dataset
+    scheduled_at: 2026-09-16T10:00:00+05:00
+    duration_minutes: 150
+    location: Lab B-113
+    outcomes: [LO-03]
+    concepts: [CONCEPT-DATA-PREPARATION]
+    resources: [RES-301]
+    preparation: Read the dataset description and list three quality risks.
+
+  - activity_id: ACT-0501
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-05
+    type: lab
+    title: Splitting data honestly
+    scheduled_at: 2026-09-30T10:00:00+05:00
+    duration_minutes: 150
+    location: Lab B-113
+    outcomes: [LO-02, LO-03]
+    concepts: [CONCEPT-TRAIN-TEST-SPLIT]
+    resources: [RES-301]
+
+  - activity_id: ACT-0601
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-06
+    type: lecture
+    title: Choosing a metric that means something
+    scheduled_at: 2026-10-05T10:00:00+05:00
+    duration_minutes: 100
+    location: A-204
+    outcomes: [LO-02, LO-04]
+    concepts: [CONCEPT-MODEL-EVALUATION]
+    resources: [RES-441]
+
+  - activity_id: ACT-0602
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-06
+    type: lab
+    title: Diagnosing Overfitting
+    scheduled_at: 2026-10-07T10:00:00+05:00
+    duration_minutes: 150
+    location: Lab B-113
+    outcomes: [LO-04]
+    concepts: [CONCEPT-OVERFITTING]
+    resources: [RES-441, RES-442]
+    preparation: Bring the model you trained in week 5.
+
+  - activity_id: ACT-0701
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-07
+    type: lecture
+    title: Regularization as a design choice
+    scheduled_at: 2026-10-12T10:00:00+05:00
+    duration_minutes: 100
+    location: A-204
+    outcomes: [LO-02]
+    concepts: [CONCEPT-REGULARIZATION]
+    resources: [RES-442]
+
+  - activity_id: ACT-0801
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-08
+    type: lecture
+    title: From linear models to neural networks
+    scheduled_at: 2026-10-19T10:00:00+05:00
+    duration_minutes: 100
+    location: A-204
+    outcomes: [LO-02]
+    concepts: [CONCEPT-NEURAL-NETWORKS]
+
+  - activity_id: ACT-0901
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-09
+    type: seminar
+    title: Turning a question into an experiment
+    scheduled_at: 2026-10-26T10:00:00+05:00
+    duration_minutes: 100
+    location: A-204
+    outcomes: [LO-04]
+    concepts: [CONCEPT-EXPERIMENT-DESIGN]
+    resources: [RES-901]
+
+  - activity_id: ACT-0202
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-02
+    type: seminar
+    title: Formulating search problems
+    scheduled_at: 2026-09-09T10:00:00+05:00
+    duration_minutes: 100
+    location: A-204
+    outcomes: [LO-01]
+    concepts: [CONCEPT-SEARCH]
+    resources: [RES-101]
+
+  - activity_id: ACT-0401
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-04
+    type: lab
+    title: Training a first supervised model
+    scheduled_at: 2026-09-23T10:00:00+05:00
+    duration_minutes: 150
+    location: Lab B-113
+    outcomes: [LO-02]
+    concepts: [CONCEPT-SUPERVISED-LEARNING]
+    resources: [RES-301]

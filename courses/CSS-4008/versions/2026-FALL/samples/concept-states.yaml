@@ -1,0 +1,25 @@
+# A derived estimate of understanding, not a permanent fact about a student.
+# It carries the evidence it was derived from and can move in either direction.
+
+concept_states:
+  - student_id: STUDENT-JNG7SN
+    concept_id: CONCEPT-OVERFITTING
+    course_version_id: CSS-4008-2026-FALL
+    state: developing
+    mastery_estimate: 0.58
+    evidence_ids: [EVID-2801, EVID-3011]
+    last_updated_at: 2026-10-19T14:15:00+05:00
+    provenance:
+      produced_by: knowledge-gap-agent
+      model_id: claude-opus-5
+      workflow_version: gaps/2026.10.2
+      input_refs: [EVID-2801, EVID-3011, CONCEPT-OVERFITTING]
+      created_at: 2026-10-19T14:15:00+05:00
+
+  - student_id: STUDENT-JNG7SN
+    concept_id: CONCEPT-TRAIN-TEST-SPLIT
+    course_version_id: CSS-4008-2026-FALL
+    state: needs_review
+    mastery_estimate: 0.44
+    evidence_ids: [EVID-2801]
+    last_updated_at: 2026-10-19T14:15:00+05:00

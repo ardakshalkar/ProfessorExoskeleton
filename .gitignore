@@ -45,3 +45,20 @@ __pycache__/
 # Editor and OS litter.
 .DS_Store
 Thumbs.db
+
+# Rendered decks, and the scratch directories that build them.
+#
+# `pres render` writes to `<cwd>/output` by default, so decks built from this
+# checkout land inside it. Slides are the one output that reliably carries
+# things this repository must not publish — a draft argument, an unannounced
+# result, a photograph, a student's work quoted as an example — and unlike the
+# roster there is no code refusing to write them here. So the directory is
+# excluded, and the decks this project has already produced were moved to
+# `..\ProfessorExoskeleton-decks\` rather than left one `git add -A` from
+# publication.
+#
+# To keep a deck out of reach entirely, render with an explicit destination
+# outside the checkout: `pres render DECK.md --out-dir ..\ProfessorExoskeleton-decks`.
+output/
+.codex-build/
+.codex-finalizer/

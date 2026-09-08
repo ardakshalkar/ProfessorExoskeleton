@@ -1,0 +1,24 @@
+# Events are what workflows react to. Everything the exoskeleton does should be
+# traceable back to one.
+
+events:
+  - event_id: EVENT-881
+    event_type: assessment_submissions_received
+    course_version_id: CSS-4008-2026-FALL
+    entity_type: assessment
+    entity_id: ASSESSMENT-04
+    occurred_at: 2026-10-16T00:01:00+05:00
+    payload:
+      submission_count: 24
+      missing_count: 3
+
+  - event_id: EVENT-882
+    event_type: grading_completed
+    course_version_id: CSS-4008-2026-FALL
+    entity_type: assessment
+    entity_id: ASSESSMENT-04
+    occurred_at: 2026-10-17T08:40:00+05:00
+    payload:
+      suggestions_produced: 96
+      low_confidence_count: 11
+      workflow_version: grading/2026.10.1

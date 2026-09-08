@@ -1,0 +1,57 @@
+assessment_id: ASSESSMENT-02
+course_version_id: CSS-4008-2026-FALL
+title: Data Preparation Report
+type: assignment
+description: >-
+  Prepare the teaching dataset for supervised learning and report the choices
+  made, with their consequences for what can be concluded.
+module_id: MODULE-03
+maximum_score: 100
+weight: 0.15
+due_at: 2026-10-06T23:59:00+05:00
+outcomes: [LO-03]
+submission_type: [pdf, notebook]
+settings:
+  anonymous_grading: true
+  allow_late_submission: true
+  late_penalty_per_day: 0.1
+rubric:
+  rubric_id: RUBRIC-02
+  title: Data preparation report rubric
+  criteria:
+    - criterion_id: CRIT-02-01
+      rubric_id: RUBRIC-02
+      title: Quality of data reasoning
+      description: >-
+        Does the student explain how preparation choices change what the model
+        can learn, rather than only listing the steps taken?
+      maximum_score: 60
+      outcome_id: LO-03
+      capability_id: CAP-DATA-REASONING
+      concepts: [CONCEPT-DATA-PREPARATION]
+      levels:
+        - score: 60
+          label: strong
+          description: Consequences of each choice are argued and evidenced.
+        - score: 35
+          label: adequate
+          description: Choices described, consequences only partly explored.
+        - score: 15
+          label: weak
+          description: Steps listed without reasoning.
+    - criterion_id: CRIT-02-02
+      rubric_id: RUBRIC-02
+      title: Correctness of the preparation pipeline
+      maximum_score: 40
+      outcome_id: LO-03
+      concepts: [CONCEPT-DATA-PREPARATION, CONCEPT-TRAIN-TEST-SPLIT]
+      levels:
+        - score: 40
+          label: strong
+          description: Pipeline is reproducible and free of leakage.
+        - score: 20
+          label: adequate
+          description: Pipeline runs but contains a minor leakage risk.
+        - score: 5
+          label: weak
+          description: Pipeline does not reproduce or leaks test data.

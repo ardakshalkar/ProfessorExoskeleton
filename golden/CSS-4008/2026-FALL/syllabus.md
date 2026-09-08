@@ -5,7 +5,7 @@
 | Credits | 5 |
 | Department | Institute of Digital Transformation and AI |
 | Language of instruction | en |
-| Instructor | Ardak Shalkarbay-uly |
+| Instructor | Course Instructor |
 | Dates | 2026-09-01 – 2026-12-20 |
 | Syllabus version | CSS-4008-2026-FALL (scheduled) |
 

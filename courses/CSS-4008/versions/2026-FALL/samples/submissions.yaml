@@ -1,0 +1,53 @@
+# Runtime fixtures — hand-written, not authored course content.
+#
+# In production the application creates these. They live here so the full
+# chain (submission -> suggestion -> decision -> evidence -> signal ->
+# intervention -> action) can be exercised before the application exists.
+
+submissions:
+  - submission_id: SUB-9060
+    assessment_id: ASSESSMENT-01
+    student_id: STUDENT-JNG7SN
+    submitted_at: 2026-09-29T14:25:00+05:00
+    status: submitted
+
+  - submission_id: SUB-9061
+    assessment_id: ASSESSMENT-01
+    student_id: STUDENT-K4QM2X
+    submitted_at: 2026-09-29T15:10:00+05:00
+    status: submitted
+
+  - submission_id: SUB-9062
+    assessment_id: ASSESSMENT-01
+    student_id: STUDENT-R7TB5D
+    submitted_at: 2026-09-29T16:45:00+05:00
+    status: submitted
+
+  - submission_id: SUB-9070
+    assessment_id: ASSESSMENT-02
+    student_id: STUDENT-JNG7SN
+    submitted_at: 2026-10-06T21:15:00+05:00
+    files:
+      - document_id: DOC-7701
+        type: pdf
+    status: submitted
+
+  - submission_id: SUB-9081
+    assessment_id: ASSESSMENT-04
+    student_id: STUDENT-JNG7SN
+    submitted_at: 2026-10-15T19:42:00+05:00
+    files:
+      - document_id: DOC-7741
+        type: pdf
+      - document_id: DOC-7742
+        type: notebook
+    status: submitted
+
+  - submission_id: SUB-9082
+    assessment_id: ASSESSMENT-04
+    student_id: STUDENT-K4QM2X
+    submitted_at: 2026-10-15T23:51:00+05:00
+    files:
+      - document_id: DOC-7751
+        type: pdf
+    status: submitted

@@ -1,0 +1,11 @@
+course_id: CSS-4008
+title: Artificial Intelligence
+description: >-
+  Introduction to artificial intelligence methods and their application:
+  problem formulation, search, data preparation, supervised learning,
+  evaluation, and the design of defensible AI experiments.
+credits: 5
+department: Institute of Digital Transformation and AI
+language: [en]
+status: active
+owner: USER-ARD-A01

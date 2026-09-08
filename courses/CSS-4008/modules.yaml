@@ -1,0 +1,77 @@
+# Weekly teaching structure. Every module names the outcomes it serves and the
+# concepts it introduces — that link is what the lesson-preparation agent reads.
+
+modules:
+  - module_id: MODULE-01
+    course_id: CSS-4008
+    title: What AI Is and Is Not
+    week: 1
+    outcomes: [LO-01]
+    concepts: [CONCEPT-AI-PROBLEM-TYPES]
+    estimated_hours: 6
+
+  - module_id: MODULE-02
+    course_id: CSS-4008
+    title: Search and Problem Formulation
+    week: 2
+    outcomes: [LO-01]
+    concepts: [CONCEPT-SEARCH]
+    estimated_hours: 6
+
+  - module_id: MODULE-03
+    course_id: CSS-4008
+    title: Working with Data
+    week: 3
+    outcomes: [LO-03]
+    concepts: [CONCEPT-DATA-PREPARATION]
+    estimated_hours: 6
+
+  - module_id: MODULE-04
+    course_id: CSS-4008
+    title: Supervised Learning
+    week: 4
+    outcomes: [LO-02]
+    concepts: [CONCEPT-SUPERVISED-LEARNING]
+    estimated_hours: 6
+
+  - module_id: MODULE-05
+    course_id: CSS-4008
+    title: Train-Test Separation
+    week: 5
+    outcomes: [LO-02, LO-03]
+    concepts: [CONCEPT-TRAIN-TEST-SPLIT]
+    estimated_hours: 6
+
+  - module_id: MODULE-06
+    course_id: CSS-4008
+    title: Model Evaluation and Overfitting
+    week: 6
+    outcomes: [LO-02, LO-04]
+    concepts:
+      - CONCEPT-MODEL-EVALUATION
+      - CONCEPT-OVERFITTING
+    estimated_hours: 6
+
+  - module_id: MODULE-07
+    course_id: CSS-4008
+    title: Regularization and Generalisation
+    week: 7
+    outcomes: [LO-02]
+    concepts: [CONCEPT-REGULARIZATION]
+    estimated_hours: 6
+
+  - module_id: MODULE-08
+    course_id: CSS-4008
+    title: Neural Networks
+    week: 8
+    outcomes: [LO-02]
+    concepts: [CONCEPT-NEURAL-NETWORKS]
+    estimated_hours: 6
+
+  - module_id: MODULE-09
+    course_id: CSS-4008
+    title: Designing an AI Experiment
+    week: 9
+    outcomes: [LO-04]
+    concepts: [CONCEPT-EXPERIMENT-DESIGN]
+    estimated_hours: 6

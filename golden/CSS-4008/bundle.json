@@ -2520,8 +2520,8 @@
   ],
   "users": [
     {
-      "display_name": "Ardak Shalkarbay-uly",
-      "email": "ardak.shalkarbay-uly@sdu.edu.kz",
+      "display_name": "Course Instructor",
+      "email": "instructor@example.edu",
       "extensions": {},
       "external_ids": {
         "canvas": "TODO",

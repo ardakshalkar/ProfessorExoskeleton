@@ -1,0 +1,55 @@
+# An AI suggestion is not a grade.
+#
+# The suggestion and the professor's decision are stored side by side and the
+# suggestion is never overwritten. That is what makes the grade auditable and
+# what lets the grading agent be measured against the professor over time.
+
+evaluations:
+  - evaluation_id: EVAL-6001
+    submission_id: SUB-9081
+    criterion_id: CRIT-04-01
+    status: approved
+    ai_suggestion:
+      score: 15
+      confidence: 0.82
+      comment: >-
+        A random forest is a defensible choice for this dataset, but the
+        report does not say why it was preferred to the linear baseline.
+      evidence:
+        - document_id: DOC-7741
+          location: page 4, paragraph 2
+          text_reference: The student selected a random forest
+      provenance:
+        produced_by: grading-agent
+        model_id: claude-opus-5
+        workflow_version: grading/2026.10.1
+        prompt_version: criterion-grader/v4
+        input_refs: [SUB-9081, CRIT-04-01, RUBRIC-04, RES-901]
+        created_at: 2026-10-17T08:20:00+05:00
+    professor_decision:
+      score: 20
+      comment: The oral defence supplied the missing justification.
+      decided_by: USER-ARD-A01
+      decided_at: 2026-10-19T14:10:00+05:00
+
+  - evaluation_id: EVAL-6002
+    submission_id: SUB-9081
+    criterion_id: CRIT-04-03
+    status: suggested
+    ai_suggestion:
+      score: 15
+      confidence: 0.64
+      comment: >-
+        The train/test gap is reported but not named as overfitting, and no
+        remedy is proposed.
+      evidence:
+        - document_id: DOC-7742
+          location: cell 18
+          text_reference: train accuracy 0.98, test accuracy 0.71
+      provenance:
+        produced_by: grading-agent
+        model_id: claude-opus-5
+        workflow_version: grading/2026.10.1
+        prompt_version: criterion-grader/v4
+        input_refs: [SUB-9081, CRIT-04-03, RUBRIC-04]
+        created_at: 2026-10-17T08:20:00+05:00

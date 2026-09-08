@@ -1,0 +1,24 @@
+# Written by `ainar approve`.
+#
+# These are claims about what the course teaches: proposed by an agent from
+# source material, reviewed, and accepted by the person named in
+# `extensions.approval`. Editing them here is fine — they are course content
+# now, not machine state. Move one into the hand-authored file whenever that
+# reads better; nothing depends on which file it sits in.
+
+concepts:
+- concept_id: CONCEPT-LOSS-FUNCTIONS
+  title: Loss functions
+  description: What a model is asked to minimise, and why the choice matters.
+  course_id: CSS-4008
+  prerequisites:
+  - CONCEPT-SUPERVISED-LEARNING
+  related: []
+  aliases: []
+  extensions:
+    proposal:
+      proposed_by: propose-concepts-skill
+      source: syllabus-2026-fall.md, week 11
+    approval:
+      approved_by: USER-ARD-A01
+      approved_at: '2026-08-08T09:17:57+05:00'

@@ -1,0 +1,16 @@
+# What the professor decided to do, recorded so its effect can be measured
+# later against new evidence.
+
+interventions:
+  - intervention_id: INT-204
+    signal_id: SIGNAL-772
+    student_id: STUDENT-JNG7SN
+    course_version_id: CSS-4008-2026-FALL
+    type: targeted_practice
+    description: >-
+      Assign the diagnostic exercise on train-test separation before the
+      project proposal is due.
+    proposed_by: knowledge-gap-agent
+    approved_by: USER-ARD-A01
+    status: scheduled
+    scheduled_at: 2026-10-22T09:00:00+05:00
