@@ -83,12 +83,28 @@ const midpoint = (start: string, end: string): string => {
 let checked = 0;
 let failed = 0;
 
+/**
+ * Line endings are normalised before comparing, and that is not a loosening.
+ *
+ * These fixtures are stored with LF and this repository is checked out with
+ * `core.autocrlf=true`, so on Windows every markdown fixture arrives with CRLF
+ * and every line differs at column one. Python never saw it: `Path.read_text`
+ * translates on read, which is why upstream's checker could compare the strings
+ * directly. `readFileSync` does not translate, so the translation is done here.
+ *
+ * What it costs: this checker can no longer tell a real line-ending change from
+ * a checkout artefact. Nothing here produces `\r` — every writer in `src/` emits
+ * `\n` — so there is no real one to miss, and the alternative was two fixtures
+ * that failed on every Windows machine and told the reader nothing.
+ */
+const lf = (text: string): string => text.replace(/\r\n/g, "\n");
+
 const compareText = (relative: string, produced: string): void => {
   const fixture = join(golden, relative);
   if (!existsSync(fixture)) return;
   checked += 1;
-  const expected = readFileSync(fixture, "utf-8");
-  if (produced === expected) {
+  const expected = lf(readFileSync(fixture, "utf-8"));
+  if (lf(produced) === expected) {
     console.log(`ok    ${relative}`);
     return;
   }
