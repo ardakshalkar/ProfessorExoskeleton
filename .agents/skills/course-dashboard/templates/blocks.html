@@ -15,7 +15,7 @@
 <!-- On the front page, above everything. A site that renders a course with
      warnings and shows none of them makes the course look finished. -->
 <h2>What the validator says</h2>
-<p class="source">python -m ainar validate {{ COURSE_ID }}</p>
+<p class="source">bin/ainar validate {{ COURSE_ID }}</p>
 <div class="scroll"><table>
   <thead><tr><th class="row">Code</th><th>Severity</th><th class="row">What it says</th></tr></thead>
   <tbody>
@@ -32,7 +32,7 @@
 <!-- One score per student per assessment, straight from the payload. The rows
      the command flags as blocked go below the table, never inside it. -->
 <h2>Gradebook</h2>
-<p class="source">python -m ainar gradebook {{ COURSE_VERSION_ID }} --json</p>
+<p class="source">bin/ainar gradebook {{ COURSE_VERSION_ID }} --json</p>
 <div class="scroll"><table>
   <thead><tr><th class="row">Student</th>{{ one th per assessment }}<th>Total</th><th>Status</th></tr></thead>
   <tbody>
@@ -50,7 +50,7 @@
 <!-- block: results --------------------------------------------------------- -->
 <!-- One assessment, for assessments that have actually been graded. -->
 <h2>{{ ASSESSMENT-ID }} — {{ title }}</h2>
-<p class="source">python -m ainar gradebook {{ COURSE_VERSION_ID }} --assessment {{ ASSESSMENT-ID }} --json</p>
+<p class="source">bin/ainar gradebook {{ COURSE_VERSION_ID }} --assessment {{ ASSESSMENT-ID }} --json</p>
 
 <h3>Where the marks went</h3>
 <div class="scroll"><table>
@@ -67,7 +67,7 @@
   reason, rather than as a list of people.</p>
 
 <h3>Items</h3>
-<p class="source">python -m ainar score-items {{ COURSE_VERSION_ID }} --assessment {{ ASSESSMENT-ID }}</p>
+<p class="source">bin/ainar score-items {{ COURSE_VERSION_ID }} --assessment {{ ASSESSMENT-ID }}</p>
 <div class="scroll"><table>
   <thead><tr><th class="row">Item</th><th>Correct</th><th>Declared difficulty</th>
              <th class="row">What the class converged on</th></tr></thead>
@@ -83,7 +83,7 @@
 
 <!-- block: pending --------------------------------------------------------- -->
 <h2>Still to grade</h2>
-<p class="source">python -m ainar pending {{ COURSE_VERSION_ID }}</p>
+<p class="source">bin/ainar pending {{ COURSE_VERSION_ID }}</p>
 <div class="scroll"><table>
   <thead><tr><th class="row">Assessment</th><th>Submitted</th><th>Judgements done</th></tr></thead>
   <tbody>

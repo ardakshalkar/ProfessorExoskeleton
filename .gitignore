@@ -2,15 +2,14 @@
 #
 # It used to exclude every vendored tree — `ainar-node/`, `ainar/`, `golden/`,
 # `.agents/skills/`, `datalayer/` and three of the four plugins — on the ground
-# that they are copies rather than source. True, and it meant a fresh clone was
-# not a working host: it needed `python -m exo setup` and a manual copy of two
-# sibling checkouts, and the harness could not start until both had run.
+# that they were copies rather than source. That meant a fresh clone was not a
+# working host: it needed `python -m exo setup` and a manual copy of two sibling
+# checkouts, and the harness could not start until both had run.
 #
-# So the copies are tracked now. `plugins/VENDORED.txt` still says where each
-# came from and which files this project has changed since; that record is what
-# makes a re-vendor a merge rather than a silent overwrite, and it does the job
-# whether or not the tree is in git. Excluding the trees never protected
-# anything — it only made the repository unusable on its own.
+# They are all tracked now, and as of 2026-09-08 they are not copies either:
+# nothing outside this repository writes into it, and `PROVENANCE.md` records
+# where each tree originally came from. Excluding them never protected anything —
+# it only made the repository unusable on its own.
 #
 # Without their node_modules the whole set is about six megabytes.
 
@@ -36,9 +35,9 @@ dist/
 # Per-machine telemetry id, written by dsh at boot.
 .dsh/.anonymous-user-id
 
-# Python bytecode from the vendored `ainar/` tree, which is carried for its
-# widget assets and its docstrings rather than to be run — nothing in this
-# project executes Python.
+# Python bytecode. There is no Python in this repository — `ainar/` is carried
+# for its widget assets alone — so anything matching these got here by someone
+# running an interpreter over a sibling checkout from inside this directory.
 __pycache__/
 *.py[cod]
 

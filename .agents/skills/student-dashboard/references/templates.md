@@ -144,7 +144,7 @@ Two rules when filling one:
 ## Adding one
 
 Write the file, add the entry to `templates.yaml` — `templates:` for a style,
-`structures:` for a layout — run `python -m pytest tests/test_templates.py`, and
-regenerate the plugin with `python plugin/sync_skills.py`. If the new template is for a surface a command renders,
+`structures:` for a layout — and check it with
+`ainar page --template <id>` or `ainar dashboard --template <id>`. If the new template is for a surface a command renders,
 check it against a real course before offering it — CSS fails silently and a
 template nobody tried is a page nobody can read.

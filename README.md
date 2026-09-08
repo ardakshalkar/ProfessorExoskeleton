@@ -74,6 +74,41 @@ node --experimental-strip-types ainar-node/bin/ainar.ts gradebook CSS-4008-2026-
 `student`, `class-progress`, `calibration`, `blueprint`, `schema`, `new
 course`, `new run`, `roster`, `approve`, `deck fit`.
 
+### The write layer
+
+Four commands used to print *"run `python -m ainar` for that"*, and two more
+were simply absent. All six were ported on 2026-09-08, so nothing in this
+project reaches for Python any more — see [`PROVENANCE.md`](PROVENANCE.md) for
+what each was checked against.
+
+```bash
+bin/ainar score-items work/CSS-4008-2026-FALL --course-version CSS-4008-2026-FALL --dry-run
+bin/ainar export --out dist/            # canonical JSON for the application
+bin/ainar sql --out dist/               # an idempotent PostgreSQL import
+bin/ainar dashboard CSS-4008-2026-FALL  # the professor's grid, marks by pseudonym
+bin/ainar page CSS-4008-2026-FALL       # the students' course page, no script at all
+```
+
+The two HTML surfaces are deliberate opposites, and the wall between them is
+the design: `dashboard` draws marks and is private; `page` draws the plan, is
+the only output written for a public URL, and copies a material file only after
+an answer-key scan that has no override.
+
+`lms` is the last one and the only thing here that reaches a third party:
+
+```bash
+bin/ainar lms plan CSS-4008-2026-FALL --assessment ASSESSMENT-04     # read-only
+bin/ainar lms diff CSS-4008-2026-FALL --assessment ASSESSMENT-04     # three-way
+bin/ainar lms push CSS-4008-2026-FALL --assessment ASSESSMENT-04 --out ~/upload.csv
+```
+
+A cell is new, unchanged, a change this workspace owns, or **drift** — somebody
+edited it in the target by hand — and drift is reported and left alone. Names,
+numbers and emails are joined in from the private roster at the moment of
+export and never written back; a file that names students is refused a path
+inside the workspace. `--target canvas-api` and `--target sheets-api` reach a
+live gradebook, need `--confirm`, and are not for an agent to run.
+
 A course taught in subgroups narrows with `--group`, which the gradebook,
 class progress, the inbox and the term plan all honour — and which refuses a
 label the run does not use, because a typo would otherwise read as an empty
@@ -106,6 +141,11 @@ them today:
   feature, not a stale fixture.
 - `course_outline.json` pins an older wording of its `placement` note than the
   code now emits. That one is genuinely just stale.
+
+A third fixture was added on 2026-09-08: `golden/CSS-4008/import.sql`, the 655
+lines `python -m ainar sql` wrote for the example course before Python was cut
+loose. `test/sqlgen.test.ts` compares the port's output against it line by line
+and names the only difference it is allowed to have.
 
 ## Roadmap
 
@@ -172,7 +212,7 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
 - [ ] CI on Linux and Windows — every green result so far is one machine
 - [ ] A green `npm run check`. `npm test` passes; the golden half does not,
       for the two reasons named above
-- [ ] Settle the vendored-vs-source boundary so a contribution has somewhere to land
+- [x] Settle the vendored-vs-source boundary so a contribution has somewhere to land — everything is source; see `PROVENANCE.md`
 - [ ] Rename `bin/sample`, which is a leftover from what this repository started as
 
 ## Run it
@@ -278,9 +318,12 @@ bin/sample[.cmd]               the front door: set DSH_HOME, then exec dsh
 .dsh/profiles/sample/          how this host is composed
 ```
 
-[`plugins/VENDORED.txt`](plugins/VENDORED.txt) is required reading before
-editing anything under `plugins/`: three of the four are copies from sibling
-checkouts, and a change made here is lost, silently, on the next re-vendor.
+Everything under `plugins/` is source: edit it here. Three of the four began as
+copies from sibling checkouts and one still has a generated twin —
+`dsh-ainar-course-model/server/` is `ainar-node/src/` one build stage later, and
+a change to one is copied to the other by hand.
+[`PROVENANCE.md`](PROVENANCE.md) records where each tree came from and what this
+project has changed since.
 
 ## Writing a plugin against this
 

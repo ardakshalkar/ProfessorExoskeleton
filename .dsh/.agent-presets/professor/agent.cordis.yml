@@ -70,10 +70,16 @@
 
       Nothing in this project runs Python. `bin/ainar` is the TypeScript CLI in
       `ainar-node/`, and it is the only `ainar` you may call. A machine-wide
-      `ainar` also exists on PATH and is the Python one — do not use it. If a
-      skill's text tells you to run `python -m ainar <command>`, run
-      `bin/ainar <command>` instead; if that command is not there, say so rather
-      than reaching for Python.
+      `ainar` may also exist on PATH and be a different program — do not use it.
+      An older skill's text may still say `python -m ainar <command>`; run
+      `bin/ainar <command>` instead. Every command those texts name is there.
+
+      Two of them reach a third party and are not yours to run:
+      `bin/ainar lms push --target canvas-api` posts a grade a student can see
+      within seconds, and `--target sheets-api` writes into a spreadsheet the
+      professor edits by hand. Both need `--confirm`, and the professor types
+      that. `lms plan` and `lms diff` are read-only and you may run them freely;
+      say what a push would do and let them decide.
 
 
       Draft records into `work/` first: that is where a proposal belongs before
@@ -175,9 +181,10 @@
 - id: skill-filesystem
   name: '@deepseek-ai/dsh-skill-filesystem'
   config:
-    # Every teaching skill this host has, named absolutely: the AINAR set that
-    # `exo setup` unpacks into `.agents/skills`, plus the six ProfessorSkills
-    # plugins it vendors into `plugins/professor-skills/`.
+    # Every teaching skill this host has, named absolutely: the AINAR set under
+    # `.agents/skills`, plus the six presentation and grading plugins under
+    # `plugins/professor-skills/`. Both trees are source in this repository —
+    # see PROVENANCE.md for where they were originally taken from.
     #
     # The default roots would find the first at `<projectRoot>/.agents/skills`,
     # but the project root is the SESSION's workspace — and the professor's
@@ -198,12 +205,11 @@
     # position: earlier wins, and `dsh-skill` hides the loser with nothing but a
     # log line. ProfessorSkills is listed first because it is the chosen winner
     # of the three shared names — `grade-batch`, `grade-submission` and
-    # `publish-telegram`. That decision is not left to this list, though:
-    # `shadow_duplicates` in exo/setup.py removes the AINAR copies outright, so
-    # the outcome holds even in the one case this ordering does not cover — a
-    # session whose workspace IS this checkout, where `.agents/skills` is also
-    # found as a default root at the higher `PROJECT_AGENTS_RANK` and would
-    # otherwise take the name back.
+    # `publish-telegram`. The AINAR copies of those three are absent from
+    # `.agents/skills` entirely, which is what makes the outcome hold even in
+    # the one case this ordering does not cover: a session whose workspace IS
+    # this checkout, where `.agents/skills` is also found as a default root at
+    # the higher `PROJECT_AGENTS_RANK` and would otherwise take the name back.
     #
     # Anchored to THIS FILE, and to nothing else.
     #
@@ -225,10 +231,12 @@
     #
     # Three levels up is the project root: .dsh/.agent-presets/professor/ -> .
     customSkillDirs:
-      # This host's own skills, and the only root here that is not a vendored
-      # copy. It is first because it is the one a re-vendor cannot overwrite:
-      # everything below arrives from ProfessorSkills or AINAR, and anything
-      # written into those directories is lost the next time they are unpacked.
+      # This host's own skills, written here rather than taken from anywhere.
+      # It is first because it is the root whose names should win: everything
+      # below it began as a copy from ProfessorSkills or AINAR, and this is
+      # where a skill that overrides one of theirs belongs. All of it is source
+      # now — see PROVENANCE.md — so the ordering is a choice about precedence
+      # rather than a defence against a build step.
       - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../skills/', baseUrl))"
       - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-assignment-skills/skills/', baseUrl))"
       - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-course-design-skills/skills/', baseUrl))"

@@ -1,17 +1,23 @@
 # Schemas
 
-Twenty-eight JSON Schemas, one per entity plus the bundle. They are generated
-from the pydantic model in ProfessorHarness (`ainar/model/`) and copied here
-byte-for-byte:
+Twenty-eight JSON Schemas, one per entity plus the bundle. They are **generated**,
+not authored: `python -m ainar schema` wrote them from the pydantic model in
+ProfessorHarness, and they were copied here byte-for-byte.
 
-```bash
-# in ProfessorHarness
-ainar schema --out ../ProfessorSkills/DataLayer/schema
-```
+**Nothing in this repository regenerates them today, and the reason is worth
+knowing before you try.** `bin/ainar schema --out <dir>` exists and writes JSON
+Schema from the zod model in `ainar-node/src/model/` — the same model in the
+language this project runs — but it names its files after *collections*
+(`items.schema.json`) where these are named after *entities*
+(`assessment_item.schema.json`), it does not emit the `course-bundle` envelope,
+and it has no `preference_profile` because `ainar/preferences.py` was not part
+of the port. Pointing it at this directory would leave twenty-six new files
+beside the twenty-eight already here rather than replacing them.
 
-The copies are not edited. A change to the model lands there, is regenerated,
-and arrives here; editing a schema by hand produces a contract the model does
-not honour, which is the failure this arrangement exists to prevent.
+So: do not edit one by hand, and do not regenerate them with the command that
+looks like it would. A change belongs in `ainar-node/src/model/`; closing the
+gap means teaching `src/schema.ts` the entity names and the envelope, which is
+about an afternoon and has not been done.
 
 ## Conventions
 

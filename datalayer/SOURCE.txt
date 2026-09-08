@@ -1,5 +1,7 @@
-Vendored by `python -m exo setup` from:
-  C:\Users\Ardak Shalkar\Development\AIED\ProfessorSkills\DataLayer
+Originally unpacked by `python -m exo setup` from ProfessorSkills/DataLayer,
+on 2026-09-04.
 
-Do not edit anything here. Edit the DataLayer checkout and re-run setup;
-a change made in this copy is lost on the next one, silently.
+That link is cut. This directory is source: edit it here. Nothing writes into
+it from outside this repository any more, and there is no setup step to re-run.
+
+See PROVENANCE.md at the repository root for where every tree came from.

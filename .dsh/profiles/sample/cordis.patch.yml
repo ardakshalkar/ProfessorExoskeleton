@@ -41,8 +41,8 @@
     provider: !!js process.env.SAMPLE_PROVIDER || 'deepseek-official'
     model: !!js process.env.SAMPLE_MODEL || 'deepseek-v4-flash'
 
-# The Professor preset, vendored from ../ProfessorExoskeletonDHS into
-# .dsh/.agent-presets/professor/ — the AINAR persona, the same tools the
+# The Professor preset, in .dsh/.agent-presets/professor/ — the AINAR persona,
+# originally taken from ProfessorExoskeletonDHS and source here now, the same tools the
 # `standard` preset carries, and the thirty-five teaching skills.
 #
 # ONE LINE MAKES IT THE DEFAULT, and this is that line. Comment this entry out

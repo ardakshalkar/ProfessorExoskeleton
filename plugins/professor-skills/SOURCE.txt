@@ -1,9 +1,12 @@
-Vendored by `python -m exo setup` from:
-  C:\Users\Ardak Shalkar\Development\AIED\ProfessorSkills
+Originally unpacked by `python -m exo setup` from ProfessorSkills, on
+2026-09-04.
 
-Do not edit anything here. Edit the ProfessorSkills checkout and re-run
-setup; a change made in this copy is lost on the next one, silently.
+That link is cut. This directory is source: edit it here. Nothing writes into
+it from outside this repository any more, and there is no setup step to re-run.
 
-node_modules is deliberately not copied. See PROFESSOR_SKILLS_EXCLUDE in
-exo/setup.py, and the npm command setup prints for the one plugin that
-needs it.
+One thing to know about this copy: it was taken with a plain recursive copy
+rather than through `exo setup`, which omits node_modules. So it carries the
+63 MB of dependencies that were installed in the checkout it came from — which
+is why `pres` works here without the separate npm install its README asks for.
+
+See PROVENANCE.md at the repository root for where every tree came from.
