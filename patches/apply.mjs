@@ -63,9 +63,35 @@ const detailsWithoutSession = {
   // How to recognise our own work, so a second run is a no-op rather than a
   // failure to find the original text.
   marker: "PATCHED (patches/apply.mjs)",
+  note: "details column no longer needs a session",
 };
 
-const PATCHES = [detailsWithoutSession];
+/**
+ * The browser tab's title.
+ *
+ * `plugins/dsh-professor-brand/` replaces the sidebar mark, the sidebar
+ * wordmark and the conversation hero mark through UI slots, which is the
+ * supported route and needs no patch. The title is the one piece of the brand
+ * with no slot at all: `ui-brand-official`'s own README says so — "the browser
+ * title is independent; `DSH_CLIENT_TITLE` selects title text at BUILD time
+ * rather than through a UI slot" — and this project consumes a published
+ * bundle rather than building the frontend, so that build-time variable is not
+ * a lever it has.
+ *
+ * Which leaves the shipped `index.html`, one `<title>` in it, and this file.
+ * The result is that every surface says the same name; without it the tab
+ * still reads "DeepSeek Harness" beside a sidebar that does not.
+ */
+const browserTitle = {
+  package: "@deepseek-ai/dsh-web-frontend",
+  file: "dist/index.html",
+  find: "<title>DeepSeek Harness</title>",
+  replace: "<title>Professor's Exoskeleton</title><!-- PATCHED (patches/apply.mjs) -->",
+  marker: "PATCHED (patches/apply.mjs)",
+  note: "browser tab title is this host's own",
+};
+
+const PATCHES = [detailsWithoutSession, browserTitle];
 
 let changed = 0;
 let already = 0;
@@ -98,7 +124,7 @@ for (const patch of PATCHES) {
   }
 
   writeFileSync(path, source.replace(patch.find, patch.replace), "utf8");
-  console.log(`patches: ${patch.package} patched — details column no longer needs a session`);
+  console.log(`patches: ${patch.package} patched — ${patch.note}`);
   changed += 1;
 }
 

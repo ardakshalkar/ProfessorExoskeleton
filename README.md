@@ -160,12 +160,14 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
 - [x] `ainar` CLI (the read half of the workspace)
 - [x] MCP server, so the model reads the course rather than being told about it
 - [x] A harness pane for clicking through a course while editing it
+- [x] The harness wearing this project's own name and mark rather than the
+      shipped DeepSeek brand — see [`plugins/dsh-professor-brand`](plugins/dsh-professor-brand/)
 - [x] Telegram announcements, with explicit confirmation before anything sends
 - [ ] Canvas and Moodle publishing as a live integration rather than a file
 
 **Before this is fair to hand to an early user**
 
-- [ ] **A LICENSE.** There isn't one yet, so nobody has permission to use this
+- [x] **A LICENSE** — [MIT](LICENSE)
 - [ ] Install that does not need `--legacy-peer-deps` and a manual second `npm install`
 - [ ] CI on Linux and Windows — every green result so far is one machine
 - [ ] A green `npm run check`. `npm test` passes; the golden half does not,
@@ -268,6 +270,7 @@ golden/                        expected output, and 98 validator mutations
 plugins/
   dsh-ainar-course-model/      the model as a harness plugin + MCP server
   dsh-professor-pane/          the UI for clicking through a course
+  dsh-professor-brand/         this host's own mark and wordmark, not DeepSeek's
   professor-skills/            19 skills: slides, assessment, grading, publishing
   dsh-sample/                  a minimal plugin, kept as the contract example
 .agents/skills/                16 course-level skills: planning, gaps, dashboards
@@ -290,3 +293,16 @@ harness instead of the one plugin. It is short and worth reading once.
 The four-layer config arrangement, the mount order, and how the pieces find
 each other are documented there too, along with `--dump-config`, which answers
 "is my row actually mounted, and whose value won" without booting anything.
+
+## License
+
+[MIT](LICENSE), which covers the code in this repository — the model, the read
+layer, the skills and the plugins.
+
+Two things it does not speak for. The `@deepseek-ai` harness packages are
+dependencies rather than code carried here, and are licensed by their own
+authors. And the example course's teaching content is under the same MIT terms
+as the rest, but an institutional logo or a photograph a professor drops into
+`materials/` is not — the slide tooling deliberately refuses to invent an
+attribution for a figure, because whether a mark may go on a deck is the
+professor's call and a trademark question rather than a licensing one.

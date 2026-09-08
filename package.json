@@ -2,6 +2,7 @@
   "name": "dsh-sample-host",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "A runnable DeepSeek Harness host with one sample plugin mounted, for learning the plugin contract.",
   "scripts": {
@@ -37,6 +38,7 @@
     "@deepseek-ai/dsh-workflow": "^0.1.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.1",
     "dsh-ainar-course-model": "file:./plugins/dsh-ainar-course-model",
+    "dsh-professor-brand": "file:./plugins/dsh-professor-brand",
     "dsh-professor-pane": "file:./plugins/dsh-professor-pane",
     "dsh-sample": "file:./plugins/dsh-sample",
     "react": "^19.0.0",

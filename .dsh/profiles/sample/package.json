@@ -9,7 +9,8 @@
         "@deepseek-ai/dsh-web-app",
         "dsh-sample",
         "dsh-ainar-course-model",
-        "dsh-professor-pane"
+        "dsh-professor-pane",
+        "dsh-professor-brand"
       ]
     }
   },

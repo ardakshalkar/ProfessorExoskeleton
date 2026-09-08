@@ -1,0 +1,14 @@
+# The configuration layer this bundle contributes: one loader entry, so that
+# `dsh-client-modules` sees a package with a web `dsh.client` half and serves
+# its bundle under /plugins.
+#
+# No `config` block, because there is nothing to configure: the wording and the
+# mark are constants in `lib/client.js`, which index.js explains. A profile that
+# wants the shipped DeepSeek brand back overrides the row above with
+# `disabled: true` rather than editing anything here.
+#
+# The row names the package rather than a relative path, which is what lets
+# Node resolution find the installed code from wherever the profile lives.
+- insert:
+    - id: professor-brand
+      name: dsh-professor-brand

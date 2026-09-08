@@ -1,0 +1,38 @@
+{
+  "name": "dsh-professor-brand",
+  "version": "0.1.0",
+  "private": false,
+  "license": "MIT",
+  "type": "module",
+  "description": "This host's own mark and wordmark in the harness sidebar and conversation hero, in place of the shipped DeepSeek brand.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "comments": {
+    "client": "`lib/client.js` is HAND-WRITTEN in the module loader's registration form rather than produced by a bundler, for the reason dsh-professor-pane's package.json gives at greater length: every shipped client half in node_modules/@deepseek-ai is that same shape, so the format is the loader's contract. This one is a hundred-odd lines of React.createElement and needs a build step even less than the pane does.",
+    "inject": "`dsh.client.inject` names PACKAGES whose client halves must be live first, not services. ui-sidebar declares `sidebar.brand.mark` and `sidebar.brand.name`; ui-conversation declares `conversation.hero.brand.mark`; client-runtime provides `slots`. The nested `slots.inject` in client.js means the order is not actually load-critical — the registrations wait for each declaration and withdraw with it — but naming them is what makes that robustness explicit rather than accidental.",
+    "official": "@deepseek-ai/dsh-client-ui-brand-official stays mounted. All three slots are `kind: single`, which shadows rather than stacks and renders the LOWEST priority, so registering at -1 displaces the shipped brand without unmounting anything. Disabling its row instead would not work alone: ui-sidebar renders each brand slot with `fallback: FishLogo`, so an empty slot shows the shipped whale."
+  }
+}
