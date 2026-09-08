@@ -35,6 +35,7 @@ import { loadDrafts, mergeDrafts } from "dsh-ainar-course-model/server/drafts.js
 import { gradebookPayload } from "dsh-ainar-course-model/server/gradebook.js";
 import { inboxPayload } from "dsh-ainar-course-model/server/inbox.js";
 import { IssueList } from "dsh-ainar-course-model/server/issues.js";
+import { YamlCourseStore } from "dsh-ainar-course-model/server/mcp/course-store.js";
 import { callTool } from "dsh-ainar-course-model/server/mcp/tools.js";
 import { BY_TOOL } from "dsh-ainar-course-model/server/mcp/widgets.js";
 import {
@@ -631,6 +632,20 @@ const documentPage = (bodyHtml, dark) =>
   "code{font:12px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--warnbg);" +
   "color:var(--warn);border-radius:3px;padding:1px 5px}" +
   ".empty{border-left:3px solid var(--line);padding-left:10px;color:var(--dim)}" +
+  // The filter row. Shaped after `pp-segbtn` in the browser half rather than
+  // sharing it: that stylesheet belongs to the pane's own chrome and does not
+  // reach inside a srcdoc frame, and one of the two had to own these five
+  // lines.
+  //
+  // Not sticky, though a long class list argues for it. `body` here is
+  // deliberately transparent so the pane's own surface shows through, and a
+  // sticky bar needs an opaque background to be worth having — which would
+  // mean guessing the pane's colour and painting a strip that does not quite
+  // match it. A row that scrolls away beats a row that looks wrong.
+  ".chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 0 10px}" +
+  ".chip{font:inherit;font-size:11px;cursor:pointer;padding:2px 9px;border-radius:20px;" +
+  "background:0 0;color:var(--dim);border:1px solid var(--line)}" +
+  ".chip[aria-pressed=true]{color:var(--fg);font-weight:600;border-color:var(--fg)}" +
   "</style>" +
   bodyHtml;
 
@@ -1457,7 +1472,14 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
   };
 
   const row = (entry, dimmed) =>
-    '<div class="row"><span class="k"' +
+    // The group travels with the row so the filter can act on a departed
+    // student too. Their section is not grouped — it is one list of everyone
+    // who left — but they belonged to a subgroup while they were here, and a
+    // filter that showed the whole departed list under every subgroup would
+    // be answering a different question each time.
+    '<div class="row" data-group="' +
+    escapeText(label(entry)) +
+    '"><span class="k"' +
     (dimmed ? ' style="color:var(--dim)"' : "") +
     ">" +
     heading(entry.student_id ?? "") +
@@ -1493,7 +1515,9 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
     .map((group) => {
       const members = active.filter((entry) => label(entry) === group).sort(byDisplayed);
       return (
-        "<section><h2>" +
+        '<section data-group="' +
+        escapeText(group) +
+        '"><h2>' +
         escapeText(group === "" ? "No subgroup" : group) +
         ' <span class="dim">· ' +
         escapeText(String(members.length)) +
@@ -1505,7 +1529,7 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
     .join("");
 
   const departed = inactive.length
-    ? "<section><h2>No longer active</h2>" +
+    ? '<section data-departed="1"><h2>No longer active</h2>' +
       inactive
         .slice()
         .sort(byDisplayed)
@@ -1565,7 +1589,81 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
     refusedHtml +
     "</section>";
 
-  return documentPage(header + sections + departed, dark);
+  /*
+   * The subgroup filter, drawn above everything else.
+   *
+   * Inside the document rather than in the pane's segmented row, and filtering
+   * in the page rather than refetching. Three reasons, in order of weight:
+   *
+   * * the groups are a property of the run, so the browser half would have to
+   *   be told them before it could draw a control for them — a header, a
+   *   parse, and a second source of truth for what the subgroups are;
+   * * a refetch per press would re-resolve the roster and rebuild the list to
+   *   show a subset of what is already on screen;
+   * * the professor switching between CSS4007-ENG-8 and -9 in a meeting wants
+   *   it to happen at the speed of a click.
+   *
+   * Only drawn when there is something to choose between: one subgroup, or
+   * none at all, and the control would be a row of buttons that all do the
+   * same thing.
+   */
+  const chip = (value, text, count, pressed) =>
+    '<button type="button" class="chip" data-filter="' +
+    escapeText(value) +
+    '" aria-pressed="' +
+    (pressed ? "true" : "false") +
+    '">' +
+    escapeText(text) +
+    ' <span class="dim">' +
+    escapeText(String(count)) +
+    "</span></button>";
+
+  const filterBar =
+    groups.length > 1
+      ? '<div class="chips">' +
+        chip("*", "All", active.length, true) +
+        groups
+          .map((group) =>
+            chip(
+              group,
+              group === "" ? "No subgroup" : group,
+              active.filter((entry) => label(entry) === group).length,
+              false,
+            ),
+          )
+          .join("") +
+        "</div>"
+      : "";
+
+  /*
+   * The filter, as eighteen lines of DOM toggling.
+   *
+   * `hidden` rather than a class, so a section that is filtered out is out of
+   * the accessibility tree as well as off the screen — a screen reader running
+   * down a filtered list should not read the ninety students the professor
+   * just filtered away.
+   *
+   * The departed section is handled row by row and then hidden if it emptied,
+   * because it is one list rather than one section per group.
+   */
+  const filterScript = filterBar
+    ? "<script>(function(){" +
+      "var chips=[].slice.call(document.querySelectorAll('.chip'));" +
+      "var sections=[].slice.call(document.querySelectorAll('section[data-group]'));" +
+      "var gone=document.querySelector('section[data-departed]');" +
+      "function apply(want){" +
+      "chips.forEach(function(c){c.setAttribute('aria-pressed',String(c.dataset.filter===want));});" +
+      "sections.forEach(function(s){s.hidden=want!=='*'&&s.dataset.group!==want;});" +
+      "if(gone){var seen=0;" +
+      "[].forEach.call(gone.querySelectorAll('.row'),function(r){" +
+      "var off=want!=='*'&&r.dataset.group!==want;r.hidden=off;if(!off)seen++;});" +
+      "gone.hidden=seen===0;}" +
+      "}" +
+      "chips.forEach(function(c){c.addEventListener('click',function(){apply(c.dataset.filter);});});" +
+      "})();</script>"
+    : "";
+
+  return documentPage(filterBar + header + sections + departed + filterScript, dark);
 };
 
 /**
