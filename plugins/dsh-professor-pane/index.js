@@ -26,6 +26,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -1263,25 +1264,76 @@ const loadedRun = (workspace, runId) => {
 };
 
 /**
+ * Where the private roster lives, by the same rule `roster.ts` applies.
+ *
+ * Duplicated rather than imported because `dsh-ainar-course-model` has no
+ * roster module and should not gain one: everything in that package is loaded
+ * by MCP tools whose output goes to a model, and a reader for the identity
+ * store is the one thing that must never be reachable from there. This copy is
+ * eleven lines, is read-only, and is called from exactly one place.
+ */
+const rosterPath = () => {
+  const configured = (process.env.AINAR_ROSTER_DIR || "").trim();
+  const directory = configured
+    ? resolve(configured.startsWith("~") ? join(homedir(), configured.slice(1)) : configured)
+    : join(homedir(), ".ainar", "roster");
+  return join(directory, "people.json");
+};
+
+/**
+ * The identity map, read fresh, held only for the length of one response.
+ *
+ * Returns `null` when there is no store to read — which is not an error. A
+ * professor who has never run `ainar roster import` has no names to show, and
+ * the view says so rather than drawing an empty column.
+ */
+const rosterPeople = () => {
+  const path = rosterPath();
+  try {
+    if (!existsSync(path) || !statSync(path).isFile()) return null;
+    const payload = JSON.parse(readFileSync(path, "utf-8"));
+    const people = payload && payload.people;
+    return people && typeof people === "object" ? people : null;
+  } catch {
+    // A store that will not parse is a store that cannot name anybody. The
+    // caller falls back to pseudonyms, which is always a correct answer.
+    return null;
+  }
+};
+
+/**
  * The class list, by subgroup.
  *
- * **No names, and there cannot be any.** The record holds pseudonyms; the
- * mapping back to real people lives outside the repository on purpose, and
- * `ainar roster whois STUDENT-XXXXXX` resolves one in a terminal, for the
- * professor's own eyes. A pane is a surface that gets screen-shared in a
- * meeting, so this is the view where that boundary matters most — it is stated
- * on screen rather than merely observed, so nobody reads the pseudonyms as a
- * missing feature and goes looking for a setting.
+ * **Names by default; pseudonyms one press away.** The record holds pseudonyms
+ * and always will — the mapping back to real people lives outside the
+ * repository on purpose, and nothing this view does changes what is on disk.
+ * What changed is which question this view answers first. A class list is a
+ * list of people, the professor is the one person entitled to read it, and
+ * sending them to `ainar roster whois` seventy-four times was friction dressed
+ * up as a safeguard.
+ *
+ * The case for opening on pseudonyms was real but narrow: this pane gets
+ * screen-shared and thrown at lecture-hall projectors. That is a minority of
+ * the times it is opened, and paying for it on every other one was the wrong
+ * trade. It is covered instead by two things — `Pseudonyms` is a single press
+ * and sits in the segmented row where it can be found in a hurry, and a
+ * coloured rule at the top says names are showing, so the state is never
+ * something to remember.
+ *
+ * The names are resolved from `~/.ainar/roster/people.json` at render time and
+ * exist only in the string this function returns. Nothing is written, nothing
+ * is cached, and nothing is sent anywhere.
  *
  * Three states, and telling them apart is most of what this view is for:
  *
- * * **loaded** — read from `versions/<term>/samples/enrollments*.yaml`, the
- *   only place this harness will read them from. They are fixtures, and the
- *   loader says so; so does this.
- * * **refused** — `versions/<term>/enrollments.yaml` exists and the loader
- *   would not read it (`storage.forbidden`). Drawing an empty list here would
- *   describe a course nobody had enrolled in, which is a different and false
- *   thing.
+ * * **loaded** — read from `versions/<term>/enrollments.yaml`, where
+ *   `ainar roster import` writes the pseudonyms, or from
+ *   `versions/<term>/samples/enrollments*.yaml`. Fixtures are announced as
+ *   fixtures; a real roster is not.
+ * * **refused** — an enrollments file sits under `versions/<term>/records/`,
+ *   the location reserved for the rows Supabase owns, and the loader would not
+ *   read it (`storage.forbidden`). Drawing an empty list here would describe a
+ *   course nobody had enrolled in, which is a different and false thing.
  * * **absent** — nothing has been imported yet, and `ainar roster import` is
  *   the answer.
  *
@@ -1289,9 +1341,33 @@ const loadedRun = (workspace, runId) => {
  * the record because an import marks a departure rather than deleting the row,
  * and a class list that silently omitted them would undo the point of that.
  */
-const studentsDocument = (workspace, runId, dark) => {
+const studentsDocument = (workspace, runId, dark, withNames) => {
   const { bundle, issues } = loadedRun(workspace, runId);
   const enrolled = enrollmentsOf(bundle, runId);
+
+  // Read once per response, not once per student: the store is one file and
+  // twenty-seven reads of it would be twenty-seven chances to catch it
+  // half-written by a concurrent `ainar roster import`.
+  const people = withNames ? rosterPeople() : null;
+
+  /**
+   * What to show for one person, and what to show underneath it.
+   *
+   * The pseudonym never disappears. It is the identifier every other surface
+   * uses — the gradebook, `whois`, a bug report — so a named row that dropped
+   * it would be a row the professor could not act on anywhere else.
+   */
+  const heading = (studentId) => {
+    const person = people ? people[studentId] : null;
+    const name = person && typeof person.name === "string" ? person.name.trim() : "";
+    if (!name) return escapeText(studentId);
+    return (
+      escapeText(name) +
+      '<br><span class="dim" style="font-weight:400"><code>' +
+      escapeText(studentId) +
+      "</code></span>"
+    );
+  };
 
   const issueItems = issues && Array.isArray(issues.items) ? issues.items : [];
   const refused = issueItems.filter(
@@ -1384,7 +1460,7 @@ const studentsDocument = (workspace, runId, dark) => {
     '<div class="row"><span class="k"' +
     (dimmed ? ' style="color:var(--dim)"' : "") +
     ">" +
-    escapeText(entry.student_id ?? "") +
+    heading(entry.student_id ?? "") +
     (entry.role && entry.role !== "student"
       ? ' <span class="dim">' + escapeText(entry.role) + "</span>"
       : "") +
@@ -1397,11 +1473,25 @@ const studentsDocument = (workspace, runId, dark) => {
       : marks(entry.student_id)) +
     "</span></div>";
 
+  /*
+   * Sort by what is on screen.
+   *
+   * With names off that is the pseudonym, which is the order every other
+   * surface uses. With names on, a list ordered by pseudonym is a shuffled
+   * list — the derivation is a hash, so it has no relation to anything a
+   * professor can scan for. Falling back to the pseudonym keeps someone the
+   * store does not know from floating to an arbitrary place in the list.
+   */
+  const sortKey = (entry) => {
+    const person = people ? people[entry.student_id] : null;
+    const name = person && typeof person.name === "string" ? person.name.trim() : "";
+    return name || String(entry.student_id ?? "");
+  };
+  const byDisplayed = (a, b) => sortKey(a).localeCompare(sortKey(b));
+
   const sections = groups
     .map((group) => {
-      const members = active
-        .filter((entry) => label(entry) === group)
-        .sort((a, b) => String(a.student_id).localeCompare(String(b.student_id)));
+      const members = active.filter((entry) => label(entry) === group).sort(byDisplayed);
       return (
         "<section><h2>" +
         escapeText(group === "" ? "No subgroup" : group) +
@@ -1417,11 +1507,43 @@ const studentsDocument = (workspace, runId, dark) => {
   const departed = inactive.length
     ? "<section><h2>No longer active</h2>" +
       inactive
-        .sort((a, b) => String(a.student_id).localeCompare(String(b.student_id)))
+        .slice()
+        .sort(byDisplayed)
         .map((entry) => row(entry, true))
         .join("") +
       "</section>"
     : "";
+
+  /*
+   * Which of the three identity states this render is in, said on screen.
+   *
+   * The named case gets a band rather than the usual quiet grey line. It is
+   * the one state where the screen holds something that must not be projected
+   * by accident, and a professor who has just plugged into a lecture-hall HDMI
+   * should be able to see it from the back of the room.
+   */
+  const identityNote = !withNames
+    ? note(
+        "Pseudonyms — safe to screen-share. Press <b>Names</b> above to go back " +
+          "to reading the list; names are what this view opens with.",
+      )
+    : people === null
+      ? note(
+          "<b>No names available.</b> There is no roster store at <code>" +
+            escapeText(rosterPath()) +
+            "</code>. Import a class list with <code>ainar roster import " +
+            "export.csv --run " +
+            escapeText(runId) +
+            "</code>, or point <code>AINAR_ROSTER_DIR</code> at the directory " +
+            "holding it.",
+        )
+      : // Names are the normal state now, so this is a marker rather than a
+        // warning: a filled amber alarm on every load would be wallpaper
+        // within a week and would stop being read at the one moment it
+        // matters. A coloured rule and one sentence stay legible.
+        '<p style="border-left:3px solid #a5561f;padding-left:10px;margin:8px 0;' +
+        'color:#a5561f"><b>Real names on screen.</b> Press <b>Pseudonyms</b> ' +
+        "before screen-sharing or projecting this.</p>";
 
   const header =
     "<section><h2>Students</h2>" +
@@ -1433,10 +1555,7 @@ const studentsDocument = (workspace, runId, dark) => {
       ? " · " + escapeText(String(groups.filter((group) => group !== "").length)) + " subgroups"
       : "") +
     "</p>" +
-    note(
-      "Pseudonyms only. The names behind them are outside this repository — " +
-        "<code>ainar roster whois STUDENT-XXXXXX</code> resolves one in a terminal.",
-    ) +
+    identityNote +
     (synthetic
       ? note(
           "Read from <code>samples/</code>: synthetic fixtures, not the roster. " +
@@ -1868,7 +1987,15 @@ const handler = (registry) => (req, res) => {
         res,
         200,
         "text/html; charset=utf-8",
-        studentsDocument(workspace, runId, url.searchParams.get("dark") === "1"),
+        studentsDocument(
+          workspace,
+          runId,
+          url.searchParams.get("dark") === "1",
+          // Opt-in per request. The pane asks for names only when the professor
+          // has pressed for them, so a route replayed from a log or a history
+          // entry without the parameter renders pseudonyms.
+          url.searchParams.get("names") === "1",
+        ),
       );
     }
 

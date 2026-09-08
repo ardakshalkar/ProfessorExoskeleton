@@ -63,7 +63,7 @@ const COLLECTIONS = {
     modules: ["modules.yaml", "modules/*.yaml"],
     users: ["people/users.yaml", "people/*.yaml"],
     versions: ["versions/*/version.yaml"],
-    enrollments: [],
+    enrollments: ["versions/*/enrollments.yaml"],
     activities: ["versions/*/activities.yaml", "versions/*/activities/*.yaml"],
     documents: ["versions/*/documents.yaml", "versions/*/documents/*.yaml"],
     resources: ["versions/*/resources.yaml", "versions/*/resources/*.yaml"],
@@ -99,7 +99,7 @@ const FIXTURES = {
 };
 
 const FORBIDDEN = {
-    enrollments: ["versions/*/records/enrollments*.yaml", "versions/*/enrollments.yaml"],
+    enrollments: ["versions/*/records/enrollments*.yaml"],
     submissions: ["versions/*/records/submissions*.yaml"],
     item_responses: ["versions/*/records/item-responses*.yaml"],
     evaluations: ["versions/*/records/evaluations*.yaml"],
@@ -138,16 +138,16 @@ const readCollection = (base, name, schema, issues) => {
             );
         }
     }
-    const patterns = [...(COLLECTIONS[name] ?? []), ...(FIXTURES[name] ?? [])];
-    const loaded = readInto(base, name, patterns, schema, issues);
-    if (loaded.length && RESTRICTED.has(name)) {
+    const authored = readInto(base, name, COLLECTIONS[name] ?? [], schema, issues);
+    const fixtures = readInto(base, name, FIXTURES[name] ?? [], schema, issues);
+    if (fixtures.length && RESTRICTED.has(name)) {
         issues.warn(
             "storage.fixture",
-            `${loaded.length} ${name} read from samples/ - synthetic fixtures, `
+            `${fixtures.length} ${name} read from samples/ - synthetic fixtures, `
                 + `not the roster. Real ${name} come from Supabase.`,
         );
     }
-    return loaded;
+    return [...authored, ...fixtures];
 };
 // <<< END generated from DataLayer
 // --------------------------------------------------------------------------

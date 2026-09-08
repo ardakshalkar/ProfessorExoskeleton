@@ -207,14 +207,50 @@ window.__ModuleLoader__.load({
     const defaultSub = (tabId) => (SUBVIEWS[tabId] ? SUBVIEWS[tabId][0].id : null);
 
     /**
-     * Tabs that draw no segmented row at all.
+     * Tabs that draw no Record / + drafts pair.
      *
      * Not the same as "no sub-views": a tab absent from `SUBVIEWS` still gets
-     * the Record / + drafts pair, because most single-document views have a
-     * drafted half worth seeing. These two do not — Preferences is not a view
-     * of a run, and the class list has no draftable half — so they get no row.
+     * the pair, because most single-document views have a drafted half worth
+     * seeing. These two do not — Preferences is not a view of a run, and the
+     * class list has no draftable half, since `DRAFTABLE` refuses enrollments
+     * in a draft file.
+     *
+     * Students is in this set and still draws a row: the identity pair below
+     * is its own control and has nothing to do with drafts.
      */
-    const NO_SEGMENTED_ROW = new Set(["preferences", "students"]);
+    const NO_DRAFT_PAIR = new Set(["preferences", "students"]);
+
+    /** Tabs with no segmented row of any kind. */
+    const NO_SEGMENTED_ROW = new Set(["preferences"]);
+
+    /**
+     * Pseudonyms or real names, on the class list only.
+     *
+     * The record holds pseudonyms and this does not change that — it asks the
+     * host to resolve them against `~/.ainar/roster/people.json` for the length
+     * of one render. Nothing is written and nothing leaves the machine.
+     *
+     * **Names are the default**, at the professor's instruction. A class list
+     * is a list of people, and the argument for opening on pseudonyms was
+     * about one situation — a screen shared in a meeting or thrown at a
+     * lecture-hall projector — rather than about the ordinary case of a
+     * professor reading their own roster at their own desk. Optimising every
+     * use for the rarer one made the common one worse.
+     *
+     * The projector case is still handled, by the two things that survive the
+     * flip: `Pseudonyms` is one press away and stays on screen as a control, so
+     * covering the list before plugging in the HDMI is a single click; and the
+     * band across the top of the view says names are showing, so nobody has to
+     * remember which mode they left it in.
+     */
+    const IDENTITY_MODES = [
+      { label: "Names", names: true, hint: "real names from your private roster" },
+      {
+        label: "Pseudonyms",
+        names: false,
+        hint: "STUDENT-XXXXXX — press before screen-sharing or projecting",
+      },
+    ];
 
     /**
      * Which halves of the course a view is computed over.
@@ -272,6 +308,11 @@ window.__ModuleLoader__.load({
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-segbtn[aria-pressed=true]{color:var(--dsw-alias-label-primary,#111);font-weight:600;
   border-color:var(--dsw-alias-label-primary,#111)}
+/* Names, while they are showing. The one control in the pane that changes what
+   is safe to have on a projector, so it does not look like the others while it
+   is engaged. */
+.pp-segbtn-warn[aria-pressed=true]{color:#a5561f;border-color:#a5561f;
+  background:rgba(165,86,31,.10)}
 .pp-approve{flex:none;padding:8px 12px 0}
 .pp-approverow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .pp-as{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
@@ -514,7 +555,11 @@ window.__ModuleLoader__.load({
           "?run=" +
           encodeURIComponent(props.runId) +
           (props.dark ? "&dark=1" : "") +
-          (props.drafts ? "&drafts=1" : ""),
+          (props.drafts ? "&drafts=1" : "") +
+          // Only ever sent affirmatively, and only by the class list. Every
+          // other view's URL is unchanged, so nothing else can start naming
+          // people because a parameter leaked into a shared link.
+          (props.names ? "&names=1" : ""),
         props.sessionId,
       );
       const [doc, setDoc] = React.useState(null);
@@ -614,6 +659,13 @@ window.__ModuleLoader__.load({
       // other question — `Record` is one press away, and the segmented row makes
       // which one is live plain on screen.
       const [drafts, setDrafts] = React.useState(true);
+
+      // Real names on the class list, on by default — see `IDENTITY_MODES`.
+      //
+      // Still not persisted, and that is no longer a safeguard but a
+      // simplification: the initial state is the same every time, so what the
+      // pane shows never depends on what was pressed in some earlier session.
+      const [names, setNames] = React.useState(true);
 
       // The approval strip: what the last press produced, and whether the next
       // press writes.
@@ -725,6 +777,15 @@ window.__ModuleLoader__.load({
         setApproval({ phase: "idle", text: "" });
       }, [current ? current.runId : null, tab, drafts]);
 
+      // Switching run returns to the default rather than carrying the last
+      // press across. It matters in one direction now: a professor who pressed
+      // `Pseudonyms` to cover one class list was covering THAT list, and the
+      // press should not go on quietly hiding a different cohort they navigate
+      // to next and expect to be able to read.
+      React.useEffect(() => {
+        setNames(true);
+      }, [current ? current.runId : null]);
+
       /**
        * Run `ainar approve` on the server, previewing unless `confirm`.
        *
@@ -807,15 +868,24 @@ window.__ModuleLoader__.load({
           runId: current.runId,
           dark: dark,
           drafts: drafts,
+          // Only the class list resolves identities, so only it is ever asked
+          // to. A `names` state left on while the professor moves to the
+          // gradebook must not quietly name people there too.
+          names: tab === "students" && names,
           sessionId: props.sessionId,
           title: TABS.find((t) => t.id === tab).label,
-          // Run, view, theme and draft mode in the key: switching any of them
-          // replaces the frame rather than leaving a document holding a payload
-          // for a question the professor is no longer asking.
+          // Run, view, theme, draft mode and identity mode in the key:
+          // switching any of them replaces the frame rather than leaving a
+          // document holding a payload for a question the professor is no
+          // longer asking. Identity belongs here for a sharper reason than the
+          // others — a frame kept across the switch back to Pseudonyms would go
+          // on displaying the names it already had.
           key:
             view +
             "|" +
             current.runId +
+            "|" +
+            (tab === "students" && names ? "n" : "p") +
             "|" +
             (dark ? "d" : "l") +
             "|" +
@@ -898,12 +968,14 @@ window.__ModuleLoader__.load({
             ),
           ),
         ),
-        // The segmented row: which document, and which halves of the course it
-        // is computed over. Preferences has neither — it is not a view of a run.
-        // Students has neither either, for a different reason: `DRAFTABLE`
-        // refuses enrollments in a draft file, so there is no drafted class
-        // list and never will be. A Record / + drafts pair that changed nothing
-        // would be a control implying an answer it does not have.
+        // The segmented row: which document, which halves of the course it is
+        // computed over, and — on the class list only — whether people are
+        // named. Preferences has none of it; it is not a view of a run.
+        //
+        // Students gets no Record / + drafts pair, because `DRAFTABLE` refuses
+        // enrollments in a draft file: there is no drafted class list and never
+        // will be, and a pair that changed nothing would be a control implying
+        // an answer it does not have. It gets the identity pair instead.
         NO_SEGMENTED_ROW.has(tab)
           ? null
           : h(
@@ -928,20 +1000,39 @@ window.__ModuleLoader__.load({
                   )
                 : null,
               h("span", { className: "pp-segspacer" }),
-              DRAFT_MODES.map((entry) =>
-                h(
-                  "button",
-                  {
-                    type: "button",
-                    className: "pp-segbtn",
-                    "aria-pressed": drafts === entry.drafts,
-                    title: entry.hint,
-                    onClick: () => setDrafts(entry.drafts),
-                    key: entry.label,
-                  },
-                  entry.label,
-                ),
-              ),
+              NO_DRAFT_PAIR.has(tab)
+                ? null
+                : DRAFT_MODES.map((entry) =>
+                    h(
+                      "button",
+                      {
+                        type: "button",
+                        className: "pp-segbtn",
+                        "aria-pressed": drafts === entry.drafts,
+                        title: entry.hint,
+                        onClick: () => setDrafts(entry.drafts),
+                        key: entry.label,
+                      },
+                      entry.label,
+                    ),
+                  ),
+              tab === "students"
+                ? IDENTITY_MODES.map((entry) =>
+                    h(
+                      "button",
+                      {
+                        type: "button",
+                        className:
+                          "pp-segbtn" + (entry.names && names ? " pp-segbtn-warn" : ""),
+                        "aria-pressed": names === entry.names,
+                        title: entry.hint,
+                        onClick: () => setNames(entry.names),
+                        key: entry.label,
+                      },
+                      entry.label,
+                    ),
+                  )
+                : null,
             ),
         // The approval strip. Only on Tasks, because that is the tab that shows
         // what is drafted — a button to accept proposals belongs beside the list
