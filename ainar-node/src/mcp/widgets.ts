@@ -148,7 +148,7 @@ export interface Widget {
   title: string;
   description: string;
   uri: string;
-  html: () => string;
+  html: (structure?: string) => string;
   descriptor: () => Record<string, unknown>;
   contents: () => Record<string, unknown>;
   toolMeta: () => Record<string, unknown>;
@@ -170,11 +170,18 @@ const build = (entry: ManifestEntry): Widget => {
    * `Widget.html` in `ainar/mcp/widgets.py` exactly, including the newlines. A
    * test compares them. The engine ships only in a document that uses one.
    */
-  const html = (): string => {
+  const html = (replacement?: string): string => {
     const bands = JSON.stringify(MANIFEST.bands.map(([floor, css]) => [floor, css]));
-    const template = structure
-      ? `const TEMPLATE = ${jsString(structure)};\n${ENGINE}\n`
-      : "";
+    // `replacement` is `ainar page --structure`: the professor has chosen a
+    // different arrangement of the same sections. It is markup and it still
+    // cannot introduce a figure — the model it is handed comes from
+    // `outline.ts`, which carries nothing about a student. A widget with no
+    // template of its own refuses one rather than silently ignoring it.
+    const markup = replacement === undefined ? structure : replacement;
+    if (markup && !structure) {
+      throw new Error(`${entry.name} has no template for a structure to replace`);
+    }
+    const template = markup ? `const TEMPLATE = ${jsString(markup)};\n${ENGINE}\n` : "";
     return (
       '<div id="root"></div>' +
       `<style>\n${STYLE}</style>` +
@@ -216,3 +223,13 @@ export const WIDGETS: Widget[] = MANIFEST.widgets.map(build);
 
 export const BY_TOOL = new Map(WIDGETS.map((widget) => [widget.tool, widget]));
 export const BY_URI = new Map(WIDGETS.map((widget) => [widget.uri, widget]));
+
+/**
+ * The shared style sheet on its own.
+ *
+ * A prerendered page has the markup already and needs the style without the
+ * script that produced it, which is the one caller for this. Exposed as a
+ * function rather than letting that caller read `shell.css` itself, so the path
+ * stays this module's business. Mirrors `stylesheet()` in `ainar/mcp/widgets.py`.
+ */
+export const stylesheet = (): string => STYLE;

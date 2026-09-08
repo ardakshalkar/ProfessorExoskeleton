@@ -432,7 +432,7 @@ async function main(): Promise<void> {
     throw new Error(
       `${documentId} is still a draft (${storageKey}).\n` +
       "A deck rendered from work/ looks finished and nobody approved what is inside it.\n" +
-      `Approve it first: python -m ainar approve work/${courseVersionId} --as <USER>`,
+      `Approve it first: ainar approve work/${courseVersionId} --as <USER>`,
     );
   }
   // The source is markdown. Saying so is worth four lines because the failure

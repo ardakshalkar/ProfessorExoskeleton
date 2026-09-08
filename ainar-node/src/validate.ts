@@ -167,7 +167,7 @@ export const coverage = () => ({
     `${IMPLEMENTED.length} of ${TOTAL_CODES} checks` +
     (IMPLEMENTED.length === TOTAL_CODES
       ? ", the complete set. Held to `validate.py` by the 98 mutations in `golden/validator/`."
-      : ". Run `python -m ainar validate` for the complete set."),
+      : ". The rest are not implemented; this number is the gate, so it is printed rather than assumed."),
 });
 
 /** `WEIGHT_TOLERANCE` in `validate.py`. */

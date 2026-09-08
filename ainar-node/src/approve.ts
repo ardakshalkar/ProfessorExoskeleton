@@ -134,15 +134,15 @@ const rewrite = (node: unknown, idMap: Map<string, string>): unknown => {
 // --------------------------------------------------------------------------
 
 /**
- * `datetime.now(run_timezone(...)).replace(microsecond=0).isoformat()`.
+ * A run's UTC offset in minutes — `run_timezone(...)`, resolved once.
  *
- * The offset comes from the run's own `timezone`, falling back to Asia/Almaty
- * the way Python's does — a stamp is the record of when a person decided, so a
- * silent UTC substitution would misreport it by five hours.
+ * Exported because two other places need the same answer: the lms ledger stamps
+ * a push with it, and `lms.pull` converts Canvas's UTC timestamps into it. Two
+ * mechanisms for one question is how two records of the same moment end up an
+ * hour apart.
  */
-export const decidedAt = (timezone: string | undefined, now: Date = new Date()): string => {
+export const zoneOffsetMinutes = (timezone: string | undefined, now: Date = new Date()): number => {
   const zone = timezone || "Asia/Almaty";
-  let offsetMinutes: number;
   try {
     const format = new Intl.DateTimeFormat("en-US", {
       timeZone: zone,
@@ -150,13 +150,21 @@ export const decidedAt = (timezone: string | undefined, now: Date = new Date()):
     });
     const part = format.formatToParts(now).find((entry) => entry.type === "timeZoneName")?.value;
     const match = /GMT([+-])(\d{2}):(\d{2})/.exec(part ?? "");
-    offsetMinutes = match
-      ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3]))
-      : 300;
+    return match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) : 300;
   } catch {
-    offsetMinutes = 300; // +05:00, the same fallback `run_timezone` uses
+    return 300; // +05:00, the same fallback `run_timezone` uses
   }
+};
 
+/**
+ * `datetime.now(run_timezone(...)).replace(microsecond=0).isoformat()`.
+ *
+ * The offset comes from the run's own `timezone`, falling back to Asia/Almaty
+ * the way Python's does — a stamp is the record of when a person decided, so a
+ * silent UTC substitution would misreport it by five hours.
+ */
+export const decidedAt = (timezone: string | undefined, now: Date = new Date()): string => {
+  const offsetMinutes = zoneOffsetMinutes(timezone, now);
   const shifted = new Date(now.getTime() + offsetMinutes * 60_000);
   const pad = (value: number, width = 2): string => String(value).padStart(width, "0");
   const sign = offsetMinutes < 0 ? "-" : "+";

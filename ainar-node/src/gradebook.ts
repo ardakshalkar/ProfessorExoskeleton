@@ -55,7 +55,7 @@ export interface GradeRow {
 }
 
 /** Python's `%g`: shortest representation, no trailing zeros. */
-const g = (value: number): string => String(Number(value.toPrecision(6)));
+export const g = (value: number): string => String(Number(value.toPrecision(6)));
 
 const criterion = (source: any, extra: Partial<CriterionScore> = {}): CriterionScore => ({
   criterion_id: source.criterion_id,
@@ -152,10 +152,10 @@ const assessmentIssues = (assessment: any, criteria: any[]): string[] => {
   return [];
 };
 
-const percent = (row: GradeRow): number | null =>
+export const percent = (row: GradeRow): number | null =>
   row.score === null || !row.maximum ? null : roundHalfEven((row.score / row.maximum) * 100, 1);
 
-const exportable = (row: GradeRow): boolean => row.score !== null && !row.blocked.length;
+export const exportable = (row: GradeRow): boolean => row.score !== null && !row.blocked.length;
 
 const rowAsDict = (row: GradeRow): Record<string, unknown> => ({
   student_id: row.student_id,

@@ -100,7 +100,7 @@ const SIDECARS = [".plan.yaml", ".outline.yaml"];
  * not, so `ainar validate` said a workspace was clean while the pane serving
  * the same files listed a hundred and sixteen errors against it.
  */
-const draftFiles = (directory: string): string[] => {
+export const draftFiles = (directory: string): string[] => {
   const found: string[] = [];
   const walk = (path: string): void => {
     for (const entry of readdirSync(path).sort()) {

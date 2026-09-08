@@ -1,30 +1,49 @@
 /**
- * The read half of the CLI, in Node. Phase 5 of `docs/node-migration.md`.
+ * The whole CLI, in Node.
  *
  *     node --experimental-strip-types bin/ainar.ts <command> [args]
  *
- * Every command here is a **surface over already-verified code**: it parses
- * arguments and prints, and the payload underneath is one the golden fixtures
- * already hold to `ainar/`. No logic is reimplemented, so nothing here can
- * drift from Python in a way `npm run golden` would not catch.
+ * Most commands here are a **surface over already-verified code**: they parse
+ * arguments and print, and the payload underneath is one the golden fixtures
+ * hold to the implementation this port replaces. No logic is reimplemented in
+ * those, so nothing in them can drift in a way `npm run golden` would not catch.
  *
- * `approve` is the exception, and it is not a surface over verified code — it is
- * a second implementation of the one gate. `docs/node-migration.md` argued
- * against exactly that, on the grounds that two gates can disagree. What makes it
- * defensible here is that the disagreement is *measured*:
- * `tests/test_approve_parity.py` runs both gates over the same drafts and compares
- * the trees they write, `tests/test_yaml_parity.py` compares the emitters scalar by
- * scalar, and since Phase 4 the refusal is the same width as Python's — all 94
- * checks, held there by 98 mutations. It still prints its coverage on every run,
- * because that number is the gate and a reader should not have to trust it.
+ * `approve` is the oldest exception, and it is not a surface over verified code —
+ * it is a second implementation of the one gate, which is exactly what the
+ * migration plan argued against on the grounds that two gates can disagree. What
+ * made it defensible was that the disagreement was *measured*: both gates were
+ * run over the same drafts and the trees they wrote compared, the emitters were
+ * compared scalar by scalar, and the refusal is the same width — all 94 checks,
+ * held there by the 98 mutations in `golden/validator/`. It still prints its
+ * coverage on every run, because that number is the gate and a reader should not
+ * have to trust it.
  *
- * The remaining write verbs are absent, and absent loudly — see `REFUSED`.
+ * ## The write verbs
+ *
+ * There used to be a `REFUSED` table here: `lms`, `score-items`, `sql` and
+ * `export` printed "run `python -m ainar` for that" and exited 1, and `dashboard`
+ * and `page` were absent entirely. All six were ported on 2026-09-08 and Python
+ * is not a dependency of this project any more — `PROVENANCE.md` records what
+ * each was checked against. Each writes something, so each says what it wrote and
+ * where; `score-items` and `import-submissions` take `--dry-run`, and the two
+ * live `lms` targets take `--confirm` instead, because a dry run of a grade post
+ * is a plan and this file already prints one.
+ *
+ * `lms` is the only command that reaches a third party, and the whole of it lives
+ * in `src/lms/` — this file parses its arguments and nothing else.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { parse } from "yaml";
-import { courseContext, enrollmentsOf, groupsOf, requireGroups, runById } from "../src/bundle.ts";
+import {
+  courseContext,
+  enrollmentsOf,
+  groupsOf,
+  itemById,
+  requireGroups,
+  runById,
+} from "../src/bundle.ts";
 import { blueprintPayload } from "../src/blueprint.ts";
 import { gradebookPayload } from "../src/gradebook.ts";
 import { calibrationPayload, pendingPayload, rubricPayload } from "../src/grading.ts";
@@ -32,10 +51,35 @@ import { inboxPayload } from "../src/inbox.ts";
 import { discoverCourses, loadCourse } from "../src/loader.ts";
 import { dashboardPayload, rollUpCapabilities, studentRecord } from "../src/progress.ts";
 import { extractEvidence } from "../src/evidence.ts";
+import { bundleStats, exportBundle } from "../src/export.ts";
+import { buildScript, schemaSql } from "../src/sqlgen.ts";
+import { renderHtml } from "../src/dashboard.ts";
+import { TARGETS } from "../src/lms/index.ts";
+import { MATCH_KEYS } from "../src/lms/base.ts";
+import { runLms } from "../src/lms/command.ts";
+import { outlinePayload } from "../src/outline.ts";
+import { loadStructure, loadStyle } from "../src/templates.ts";
+import {
+  copyMaterials,
+  href,
+  linkMaterials,
+  publishable,
+  renderPage,
+  renderStatic,
+  scanOrRefuse,
+} from "../src/page.ts";
+// @ts-ignore -- plain .mjs so `node prerender-widget.mjs` still needs no flags
+import { prerender } from "./prerender-widget.mjs";
 import { alignmentMarkdown, syllabusMarkdown } from "../src/report.ts";
 import { coverage, validate } from "../src/validate.ts";
 import { IssueList, describe } from "../src/issues.ts";
-import { loadDrafts, mergeDrafts } from "../src/drafts.ts";
+import { DRAFTABLE, draftFiles, loadDrafts, mergeDrafts } from "../src/drafts.ts";
+import {
+  dominantMisconception,
+  emptyResult,
+  scoreChoiceItems,
+  successRate,
+} from "../src/scoring.ts";
 import {
   ENROLLMENTS_HEADER,
   type Enrollment,
@@ -54,6 +98,7 @@ import { LAYOUT, measureDeck } from "../src/deck.ts";
 import {
   ID_FIELDS,
   approveDrafts,
+  floatPaths,
   decidedAt,
   stageDocuments,
   total,
@@ -61,13 +106,7 @@ import {
 } from "../src/approve.ts";
 import { Workspace } from "../src/mcp/workspace.ts";
 
-/** Commands that exist in `python -m ainar` and deliberately not here. */
-const REFUSED: Record<string, string> = {
-  lms: "reaches Canvas or a spreadsheet, and `push` can put a grade in front of a student within seconds.",
-  "score-items": "rewrites draft files in place.",
-  sql: "generates the PostgreSQL import; run it from the CLI that owns the schema.",
-  export: "writes dist/; a person should decide where.",
-};
+
 
 const args = process.argv.slice(2);
 
@@ -85,7 +124,30 @@ const flag = (name: string): string | undefined => {
  * about an argument that is right there on the line. The same trap was waiting
  * for `--keep-absent`, which is what made it worth naming them all.
  */
-const BOOLEAN_FLAGS = new Set(["dry-run", "json", "verbose", "keep-absent"]);
+const BOOLEAN_FLAGS = new Set([
+  "dry-run",
+  "json",
+  "verbose",
+  "keep-absent",
+  "partial",
+  "rescore",
+  "ddl",
+  "prune",
+  // Accepted and ignored: `page` cannot produce a page that needs JavaScript
+  // any more, so there is nothing left for this to refuse. A skill still
+  // passing it should not fail.
+  "static",
+  // `lms`
+  "allow-partial",
+  "with-names",
+  "no-comments",
+  "comments",
+  "confirm",
+  "quiet",
+  "overwrite-drift",
+  "summary",
+  "all",
+]);
 
 /** Every occurrence of a repeatable flag, with comma-separated values split. */
 const flagList = (name: string): string[] => {
@@ -154,7 +216,7 @@ const soleRun = (bundle: ReturnType<typeof onlyCourse>): string => {
   return runs[0]!;
 };
 
-const HELP = `ainar (Node) — the read half of the workspace
+const HELP = `ainar — the AINAR course model CLI
 
   validate [COURSE]        referential checks, ${coverage().implemented} of ${coverage().total}
   stats [COURSE]           how much of the model is filled in
@@ -205,11 +267,71 @@ const HELP = `ainar (Node) — the read half of the workspace
   extract-evidence [RUN] [--dry-run]   evidence from approved decisions and scored items
   roll-up [RUN] [--dry-run]            capability states from that evidence
 
-  --root DIR               the workspace (default: the current directory)
-  --roster-dir DIR         where identities live (default: ~/.ainar/roster)
+  These write files. Each says what it wrote and where:
 
-These stay Python's: ${Object.keys(REFUSED).join(", ")}.
-Run \`python -m ainar <command>\` for those.`;
+  score-items DRAFTS --course-version RUN [--partial] [--rescore] [--dry-run]
+  export [COURSE] [--out DIR]              canonical JSON, default dist/
+  sql [COURSE] [--out DIR] [--prune]       an idempotent PostgreSQL import
+  sql --ddl [--out FILE]                   the schema the import expects
+
+  Two HTML surfaces, and deliberately opposite ones. dashboard draws marks by
+  pseudonym and is the professor's; page draws the plan and is the only output
+  here written to be hosted where students can read it.
+
+  dashboard RUN [--json] [--out PATH] [--template T]
+  page RUN [--date D] [--out DIR] [--template T] [--structure S]
+
+  --template is appearance only: a style sheet, refused if it carries markup or
+  fetches anything, and refused outright if it declares a different surface.
+  --structure is the section layout for page, on the same terms.
+
+  The gradebook targets. plan and diff are read-only; push to a -csv target
+  writes a file somebody still has to upload, and the two -api targets reach a
+  live gradebook, need --confirm, and are not for an agent to run:
+
+  lms plan RUN --assessment A [--target T] [--from export.csv] [--json]
+  lms diff RUN --assessment A [--target T] [--from export.csv]
+  lms push RUN --assessment A --target canvas-csv --from export.csv --out FILE
+  lms push RUN --assessment A --target sheet-csv --out FILE [--with-names]
+  lms push RUN --assessment A --target canvas-api --confirm [--comments]
+  lms push RUN [--assessment A | --summary | --all] --target sheets-api --confirm
+  lms import-submissions RUN --assessment A [--target T] [--out FILE] [--dry-run]
+
+  --target is canvas-csv (default), canvas-api, sheet-csv or sheets-api.
+  --by is sis-id (default), login or email — how a target's rows match ours.
+  --allow-partial exports a partly graded assessment. --overwrite-drift
+  replaces a value somebody edited in the target; without it, a drifted cell is
+  reported and left alone.
+
+  Names, numbers and emails come from the private roster at the moment of
+  export and are never written back. A file naming students may not land
+  inside the workspace, and the command refuses a path that would.
+
+  --root DIR               the workspace (default: the current directory)
+  --roster-dir DIR         where identities live (default: ~/.ainar/roster)`;
+
+/**
+ * A path under the workspace shown relative to it, and anything else shown in
+ * full. `Path.is_relative_to` in `cmd_export`, which is how `--out ../elsewhere`
+ * prints an absolute path rather than a wall of `..`.
+ */
+const within = (base: string, path: string): string => {
+  const rel = relative(base, path);
+  return rel && !rel.startsWith("..") ? rel : path;
+};
+
+/** `_emit` in `ainar/commands/common.py`: to `--out` if there is one, else stdout. */
+const emit = (text: string): void => {
+  const target = flag("out");
+  if (!target) {
+    out(text);
+    return;
+  }
+  const path = resolve(target);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, text, { encoding: "utf-8" });
+  out(`wrote ${within(root, path)}`);
+};
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
@@ -256,12 +378,6 @@ const readEnrollments = (path: string): Enrollment[] => {
 };
 
 try {
-  if (command in REFUSED) {
-    console.error(`\`${command}\` is not in the Node CLI: it ${REFUSED[command]}`);
-    console.error(`Run \`python -m ainar ${command} …\` instead.`);
-    process.exit(1);
-  }
-
   switch (command) {
     case "help":
     case "--help":
@@ -462,6 +578,339 @@ try {
         out(`wrote ${relative(root, path)}`);
       }
       out(`\n${produced.length} capability state(s) derived.`);
+      break;
+    }
+
+    case "lms": {
+      // Ported from `ainar/commands/lms.py`, which is where the whole group
+      // lives — this is argument parsing and nothing else.
+      //
+      // `await` at the top level of a module, because the two live targets speak
+      // HTTP and Node has no synchronous client. Python's `urllib` did, which is
+      // the only reason its version of this reads as straight-line code.
+      const subcommand = rest[0];
+      if (!subcommand || !rest[1]) {
+        console.error(
+          "usage: lms {plan|push|diff|import-submissions} RUN --assessment A [--target T]",
+        );
+        process.exit(1);
+      }
+      const by = (flag("by") ?? "sis-id") as "sis-id" | "login" | "email";
+      if (!MATCH_KEYS.includes(by)) {
+        throw new Error(`--by is one of ${MATCH_KEYS.join(", ")}; got '${by}'`);
+      }
+      const target = flag("target") ?? "canvas-csv";
+      if (!TARGETS.includes(target as never)) {
+        throw new Error(`--target is one of ${TARGETS.join(", ")}; got '${target}'`);
+      }
+
+      const code = await runLms(
+        {
+          subcommand,
+          run: rest[1]!,
+          assessment: flag("assessment") ?? null,
+          target,
+          by,
+          source: flag("from") ?? null,
+          column: flag("column") ?? null,
+          out: flag("out") ?? null,
+          tab: flag("tab") ?? null,
+          sheet: flag("sheet") ?? null,
+          canvasUrl: flag("canvas-url") ?? null,
+          canvasCourse: flag("canvas-course") ?? null,
+          canvasAssignment: flag("canvas-assignment") ?? null,
+          rosterDir: flag("roster-dir") ?? null,
+          syncDir: flag("sync-dir") ?? null,
+          allowPartial: args.includes("--allow-partial"),
+          withNames: args.includes("--with-names"),
+          noComments: args.includes("--no-comments"),
+          comments: args.includes("--comments"),
+          confirm: args.includes("--confirm"),
+          dryRun: args.includes("--dry-run"),
+          quiet: args.includes("--quiet"),
+          json: args.includes("--json"),
+          overwriteDrift: args.includes("--overwrite-drift"),
+          summary: args.includes("--summary"),
+          allTabs: args.includes("--all"),
+        },
+        forRun(rest[1]!),
+        root,
+        { out: (line) => out(line) },
+      );
+      if (code) process.exit(code);
+      break;
+    }
+
+    case "dashboard": {
+      // Ported from `cmd_dashboard` in `ainar/cli.py`. The private surface: it
+      // draws marks, by pseudonym, and is not written for a URL.
+      const runId = rest[0]!;
+      const bundle = forRun(runId);
+      if (args.includes("--json")) {
+        emit(JSON.stringify(dashboardPayload(bundle, runId), null, 2));
+        break;
+      }
+      const [style, template] = loadStyle(flag("template"), "course-dashboard", root);
+      const target = resolve(
+        flag("out") ??
+          join(root, "dist", (bundle.course as any).course_id, `${runId}-progress.html`),
+      );
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, renderHtml(bundle, runId, { style }), { encoding: "utf-8" });
+      out(`wrote ${within(root, target)}`);
+      if (template) {
+        out(`  styled with the ${template} template — appearance only, nothing added`);
+      }
+      out("Open it in a browser. Students are shown by pseudonym.");
+      break;
+    }
+
+    case "page": {
+      // Ported from `cmd_page` in `ainar/commands/page.py`. The public surface,
+      // and deliberately the opposite one: it draws the plan, and it is the only
+      // output here written to be hosted where students can read it.
+      const runId = rest[0]!;
+      const bundle = forRun(runId);
+      const on = onDate(runId);
+      const payload = outlinePayload(bundle, runId, on, {
+        groups: runGroups(runId),
+      }) as Record<string, any>;
+
+      // Before anything is written: a template that cannot be read, or that is a
+      // dashboard's, should stop the command rather than half a site.
+      const [style, template] = loadStyle(flag("template"), "course-page", root);
+      const [markupTemplate, structureName] = loadStructure(
+        flag("structure"),
+        "course-page",
+        root,
+      );
+
+      const { published, heldBack, tally } = publishable(bundle, runId, root);
+      const scanned = scanOrRefuse(published, bundle);
+      const materials = scanned.safe;
+      const withheld = [...heldBack, ...scanned.heldBack];
+      linkMaterials(payload, materials);
+
+      const site = resolve(flag("out") ?? join(root, "dist", "pages", runId));
+      copyMaterials(site, materials);
+
+      const title = `${(bundle.course as any).course_id} — ${(bundle.course as any).title}`;
+      const document = renderPage(payload, title, style, markupTemplate || undefined);
+      const { markup, problems } = prerender(document, "course_outline");
+      if (problems.length) {
+        // Python fell back to shipping the payload and the view for the browser
+        // to run. There is no such fallback here: the prerenderer runs in this
+        // very process, so a failure is the view failing, and a page nobody can
+        // read is worse than no page.
+        throw new Error(
+          `the course outline view did not render, so there is no page to write:\n  ` +
+            problems.join("\n  "),
+        );
+      }
+
+      const index = join(site, "index.html");
+      writeFileSync(index, renderStatic(markup, payload, title, style), { encoding: "utf-8" });
+
+      out(`wrote ${within(root, index)}`);
+      out("  static HTML, no script");
+      if (template) {
+        out(`  styled with the ${template} template — appearance only, nothing added`);
+      }
+      if (structureName) {
+        out(`  arranged by the ${structureName} structure — the same view, same payload`);
+      }
+      out(`  the week marked 'this week' is the one containing ${on}`);
+      for (const material of materials) {
+        out(`  published ${href(material)} — ${material.title}`);
+      }
+      for (const reason of withheld) out(`  held back ${reason}`);
+      for (const [reason, count] of Object.entries(tally)) {
+        if (count) out(`  ${count} document(s) not published: ${reason}`);
+      }
+      if (scanned.unchecked.length) {
+        out(`  the answer-key scan could not cover ${scanned.unchecked.length} recorded answer(s):`);
+        for (const entry of scanned.unchecked) out(`    ${entry}`);
+      }
+      out("Student-safe: the outline carries no enrollment, submission or score.");
+      break;
+    }
+
+    case "sql": {
+      // Ported from `cmd_sql` in `ainar/cli.py`. `--ddl` prints (or writes) the
+      // hand-written schema and stops; otherwise every validating course becomes
+      // an idempotent import script under `dist/<COURSE>/import.sql`.
+      if (args.includes("--ddl")) {
+        const target = flag("out");
+        if (!target) {
+          out(schemaSql());
+        } else {
+          mkdirSync(dirname(resolve(target)), { recursive: true });
+          writeFileSync(resolve(target), schemaSql(), { encoding: "utf-8" });
+          out(`wrote ${within(root, resolve(target))}`);
+        }
+        break;
+      }
+
+      const selected = discoverCourses(root).filter(
+        (courseDir) => !rest[0] || rest[0] === courseDir.split(/[\\/]/).pop(),
+      );
+      const doPrune = args.includes("--prune");
+      if (doPrune && selected.length > 1) {
+        throw new Error("--prune needs one course; name it");
+      }
+
+      const outDir = resolve(flag("out") ?? join(root, "dist"));
+      let failed = false;
+      for (const courseDir of selected) {
+        const courseId = courseDir.split(/[\\/]/).pop()!;
+        const { bundle, issues: loadIssues } = loadCourse(courseDir, root);
+        const issues = bundle ? validate(bundle, { root }) : loadIssues;
+        if (!bundle || issues.errors.length) {
+          failed = true;
+          out(`${courseId}: not exported`);
+          for (const issue of issues.errors) out(`    ${describe(issue)}`);
+          continue;
+        }
+        const script = buildScript(bundle, { prune: doPrune });
+        const path = join(outDir, (bundle.course as any).course_id, "import.sql");
+        mkdirSync(dirname(path), { recursive: true });
+        writeFileSync(path, script, { encoding: "utf-8" });
+        const statements = script.split(";\n").length - 1;
+        out(`wrote ${within(root, path)}  (${statements} statements)`);
+      }
+
+      if (failed) {
+        out("\nfix the errors above, then generate again");
+        process.exit(1);
+      }
+      out(
+        "\nApply with:\n" +
+          "  psql -d ainar -f ainar-node/src/sql/schema.sql\n" +
+          `  psql -d ainar -f ${outDir.split(/[\\/]/).pop()}/<COURSE>/import.sql`,
+      );
+      break;
+    }
+
+    case "export": {
+      // Ported from `cmd_export` in `ainar/cli.py`. A course that does not
+      // validate is not exported, and the run continues to the next one, so a
+      // workspace with one broken course still produces the others.
+      const outDir = resolve(flag("out") ?? join(root, "dist"));
+      let failed = false;
+      for (const courseDir of discoverCourses(root)) {
+        const courseId = courseDir.split(/[\\/]/).pop()!;
+        if (rest[0] && rest[0] !== courseId) continue;
+        const { bundle, issues: loadIssues } = loadCourse(courseDir, root);
+        const issues = bundle ? validate(bundle, { root }) : loadIssues;
+        if (!bundle || issues.errors.length) {
+          failed = true;
+          out(`${courseId}: not exported`);
+          for (const issue of issues.errors) out(`    ${describe(issue)}`);
+          continue;
+        }
+        for (const path of exportBundle(bundle, outDir, today())) {
+          out(`wrote ${within(root, path)}`);
+        }
+      }
+      if (failed) {
+        out("\nfix the errors above, then export again");
+        process.exit(1);
+      }
+      break;
+    }
+
+    case "score-items": {
+      // Ported from `cmd_score_items` in `ainar/cli.py`.
+      //
+      // Two deliberate departures from Python, both about which files it opens:
+      //
+      // * It walks with `draftFiles`, so a dot-directory, a `node_modules` and a
+      //   deck's `.plan.yaml` sidecar are skipped. Python globbed everything and
+      //   relied on `item_responses` being absent from whatever it picked up.
+      // * A file it rewrites is emitted by `dump`, which leaves a timestamp as
+      //   the text the author wrote. Python round-tripped it through a `datetime`
+      //   and rewrote every one of them in its own spelling.
+      const draftsDir = rest[0];
+      const runFlag = flag("course-version") ?? flag("run");
+      if (!draftsDir || !runFlag) {
+        console.error(
+          "usage: score-items DRAFTS_DIR --course-version RUN [--partial] [--rescore] [--dry-run]",
+        );
+        process.exit(1);
+      }
+
+      const items = itemById(forRun(runFlag)) as Map<string, any>;
+      const files = draftFiles(resolve(draftsDir));
+      if (!files.length) {
+        out(`no draft files in ${draftsDir}`);
+        process.exit(1);
+      }
+
+      // Every collection's floats, not just `item_responses`: one draft file may
+      // hold several, and the ones this command does not touch are still rewritten.
+      const floats = new Set<string>();
+      for (const [collection, schema] of Object.entries(DRAFTABLE)) {
+        for (const path of floatPaths(schema, [collection])) floats.add(path);
+      }
+
+      const combined = emptyResult();
+      const touched: string[] = [];
+      for (const path of files) {
+        const document = parse(readFileSync(path, "utf-8")) ?? {};
+        if (typeof document !== "object" || Array.isArray(document)) continue;
+        if (!("item_responses" in document)) continue;
+
+        const responses = ((document as any).item_responses ?? []) as Record<string, any>[];
+        const result = scoreChoiceItems(responses, items, {
+          partial: args.includes("--partial"),
+          rescore: args.includes("--rescore"),
+        });
+        combined.scored.push(...result.scored);
+        combined.alreadyScored.push(...result.alreadyScored);
+        combined.unscorable.push(...result.unscorable);
+        for (const [itemId, stats] of result.stats) combined.stats.set(itemId, stats);
+
+        if (result.scored.length && !args.includes("--dry-run")) {
+          writeFileSync(path, dump(document, (p) => floats.has(p.join("."))), {
+            encoding: "utf-8",
+          });
+          touched.push(path);
+        }
+      }
+
+      out(`Scored ${combined.scored.length} response(s) against the answer key`);
+      if (combined.alreadyScored.length) {
+        out(`  ${combined.alreadyScored.length} already scored (use --rescore to redo)`);
+      }
+      for (const note of combined.unscorable) out(`  needs a human: ${note}`);
+
+      if (combined.stats.size) {
+        out("\nItem difficulty");
+        for (const itemId of [...combined.stats.keys()].sort()) {
+          const stats = combined.stats.get(itemId)!;
+          if (!stats.responses) continue;
+          // A rate is already two decimals, so no value here can land on a half
+          // percent and `Math.round` cannot disagree with Python's `:.0%`.
+          const percent = Math.round((successRate(stats) ?? 0) * 100);
+          out(`  ${itemId}  ${stats.correct}/${stats.responses} correct  (${percent}%)`);
+          const dominant = dominantMisconception(stats);
+          if (dominant?.misconception) {
+            out(
+              `      ${dominant.chose} chose (${dominant.label}) — reads as a ` +
+                `misconception of ${dominant.misconception}`,
+            );
+          }
+        }
+      }
+
+      if (args.includes("--dry-run")) {
+        out("\ndry run — nothing written");
+        break;
+      }
+      for (const path of touched) out(`\nupdated ${path}`);
+      if (combined.scored.length) {
+        out(`\nReview, then: ainar approve ${draftsDir} --as USER-…`);
+      }
       break;
     }
 

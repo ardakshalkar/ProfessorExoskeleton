@@ -65,6 +65,6 @@ function view(d) {
     + '<div class="note"><strong>Approval is yours.</strong> This window reads the '
     + 'course model and cannot approve, grade or send anything. When a draft is '
     + 'ready, the command is '
-    + '<code>python -m ainar approve work/' + esc(run.id) + ' --as USER-ARD-A01</code>.'
+    + '<code>ainar approve work/' + esc(run.id) + ' --as USER-ARD-A01</code>.'
     + '</div>';
 }
