@@ -91,7 +91,37 @@ const browserTitle = {
   note: "browser tab title is this host's own",
 };
 
-const PATCHES = [detailsWithoutSession, browserTitle];
+/**
+ * The browser tab's title once a session is open.
+ *
+ * `browserTitle` above covers the document the server sends, which is what the
+ * tab reads until React mounts. It is not the whole story: `ui-renderer`'s
+ * `DocumentTitle` then takes the tab over for the rest of the session's life
+ * and composes it from its OWN hardcoded constant —
+ *
+ *     const productTitle = "DeepSeek Harness";
+ *     document.title = title === void 0 ? productTitle : `${title} — ${productTitle}`;
+ *
+ * — so patching only the served HTML left the tab reading "Professor's
+ * Exoskeleton" on the start screen and "<session title> — DeepSeek Harness"
+ * the moment a conversation was open. That is the state in which anybody
+ * actually uses the thing, and it is the state a screenshot catches.
+ *
+ * Both patches are needed, and neither is redundant: this constant is also the
+ * title restored on unmount, while the served HTML is what shows before any of
+ * this JavaScript has run.
+ */
+const sessionBrowserTitle = {
+  package: "@deepseek-ai/dsh-client-ui-renderer",
+  file: "lib/client.js",
+  find: 'const productTitle = "DeepSeek Harness";',
+  replace:
+    '/* PATCHED (patches/apply.mjs) */ const productTitle = "Professor\'s Exoskeleton";',
+  marker: "PATCHED (patches/apply.mjs)",
+  note: "session tab titles carry this host's name, not DeepSeek's",
+};
+
+const PATCHES = [detailsWithoutSession, browserTitle, sessionBrowserTitle];
 
 let changed = 0;
 let already = 0;
