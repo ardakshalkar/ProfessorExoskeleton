@@ -7,7 +7,7 @@ import {
   assessmentById,
   assessmentsOf,
   criterionById,
-  enrollmentsOf,
+  enrolledIn,
   runById,
   type CourseBundle,
 } from "./bundle.ts";
@@ -18,7 +18,13 @@ const DUE_SOON_DAYS = 7;
 const daysBetween = (from: string, to: string): number =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 
-export const inboxPayload = (b: CourseBundle, courseVersionId: string, on: string): Record<string, unknown> => {
+export const inboxPayload = (
+  b: CourseBundle,
+  courseVersionId: string,
+  on: string,
+  options: { groups?: readonly string[] | null } = {},
+): Record<string, unknown> => {
+  const groups = (options.groups ?? []).map((group) => group.trim()).filter(Boolean);
   const run = runById(b).get(courseVersionId) as any;
   const assessments = assessmentsOf(b, courseVersionId);
   const assessmentIds = new Set(assessments.map((a) => a.assessment_id as string));
@@ -27,14 +33,27 @@ export const inboxPayload = (b: CourseBundle, courseVersionId: string, on: strin
   const submissionById = new Map(submissions.map((s) => [s.submission_id as string, s]));
 
   const activeStudents = new Set(
-    enrollmentsOf(b, courseVersionId)
-      .filter((e) => ["student", "auditor"].includes(e.role) && e.status === "active")
-      .map((e) => e.student_id as string),
+    enrolledIn(b, courseVersionId, { groups }).map((e) => e.student_id as string),
   );
+
+  /*
+   * Narrowing to a subgroup narrows the work as well as the class.
+   *
+   * `enrolled` and `missing` come off `activeStudents`, so they follow the
+   * filter on their own. Pending evaluations do not — they hang off
+   * submissions, which name a student but not a group — so a subgroup's inbox
+   * would otherwise report the whole class's ungraded pile beside its own
+   * three missing submissions, which is worse than not filtering at all.
+   */
+  const inScope = (studentId: string): boolean =>
+    !groups.length || activeStudents.has(studentId);
 
   // ------------------------------------------------------------ evaluations
   const pending = (b.evaluations as any[]).filter(
-    (evaluation) => submissionById.has(evaluation.submission_id) && !evaluation.professor_decision,
+    (evaluation) =>
+      submissionById.has(evaluation.submission_id) &&
+      !evaluation.professor_decision &&
+      inScope(submissionById.get(evaluation.submission_id)!.student_id as string),
   );
 
   const byAssessment = new Map<string, Record<string, unknown>>();
@@ -82,7 +101,7 @@ export const inboxPayload = (b: CourseBundle, courseVersionId: string, on: strin
   const assessmentState = assessments.map((assessment) => {
     const received = new Set(
       submissions
-        .filter((s) => s.assessment_id === assessment.assessment_id)
+        .filter((s) => s.assessment_id === assessment.assessment_id && inScope(s.student_id))
         .map((s) => s.student_id as string),
     );
     const due = assessment.due_at ? (assessment.due_at as string).slice(0, 10) : null;
@@ -107,8 +126,16 @@ export const inboxPayload = (b: CourseBundle, courseVersionId: string, on: strin
   });
 
   // ---------------------------------------------------------------- signals
+  // A signal or an intervention with no student is about the class, so it
+  // belongs in every subgroup's inbox. One naming a student belongs only in
+  // theirs.
   const openSignals = (b.signals as any[])
-    .filter((signal) => signal.course_version_id === courseVersionId && signal.status === "open")
+    .filter(
+      (signal) =>
+        signal.course_version_id === courseVersionId &&
+        signal.status === "open" &&
+        (!signal.student_id || inScope(signal.student_id)),
+    )
     .map((signal) => ({
       signal_id: signal.signal_id,
       student_id: signal.student_id ?? null,
@@ -125,7 +152,10 @@ export const inboxPayload = (b: CourseBundle, courseVersionId: string, on: strin
 
   const awaitingApproval = (b.interventions as any[])
     .filter(
-      (intervention) => intervention.course_version_id === courseVersionId && intervention.status === "proposed",
+      (intervention) =>
+        intervention.course_version_id === courseVersionId &&
+        intervention.status === "proposed" &&
+        (!intervention.student_id || inScope(intervention.student_id)),
     )
     .map((intervention) => ({
       intervention_id: intervention.intervention_id,
@@ -164,6 +194,9 @@ export const inboxPayload = (b: CourseBundle, courseVersionId: string, on: strin
       instructors: run.instructors,
       enrolled_students: activeStudents.size,
     },
+    // Present only when it is a real filter; absence is the whole run, and is
+    // what keeps an unnarrowed payload identical to inbox.py's.
+    ...(groups.length ? { groups } : {}),
     as_of: on,
     pending_evaluations: {
       total: pending.length,

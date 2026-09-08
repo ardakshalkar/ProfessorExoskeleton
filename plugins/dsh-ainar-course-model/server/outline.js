@@ -14,7 +14,7 @@
  *   the date in that datetime's own offset; slicing gives the same answer and
  *   `report.ts` already relies on it for due dates.
  */
-import { activitiesOf, allRubrics, assessmentsOf, conceptById, modulesOf, outcomesOf, resourceById, runById, userById, } from "./bundle.js";
+import { activitiesFor, allRubrics, assessmentsOf, conceptById, modulesOf, outcomesOf, resourceById, runById, userById, } from "./bundle.js";
 import { roundHalfEven } from "./grading.js";
 /** How placement works, carried in the payload so a surface can print it. */
 export const PLACEMENT = "Weeks are counted in sevens from the run's start date. A meeting sits in " +
@@ -81,6 +81,8 @@ const meeting = (activity, resources, concepts) => ({
     on: dateOf(activity.scheduled_at),
     duration_minutes: activity.duration_minutes ?? null,
     location: activity.location ?? null,
+    // Null is "the whole run meets".
+    group: activity.group ?? null,
     preparation: activity.preparation ?? null,
     outcomes: activity.outcomes,
     concepts: titled(activity.concepts, concepts),
@@ -133,7 +135,8 @@ const grading = (assessments) => {
         note,
     };
 };
-export const outlinePayload = (b, courseVersionId, on) => {
+export const outlinePayload = (b, courseVersionId, on, options = {}) => {
+    const groups = (options.groups ?? []).map((group) => group.trim()).filter(Boolean);
     const run = runById(b).get(courseVersionId);
     const course = b.course;
     const users = userById(b);
@@ -142,7 +145,7 @@ export const outlinePayload = (b, courseVersionId, on) => {
     const rubrics = allRubrics(b);
     const outcomes = new Map(outcomesOf(b, course.course_id).map((outcome) => [outcome.outcome_id, outcome]));
     const modules = modulesOf(b, course.course_id);
-    const activities = activitiesOf(b, courseVersionId);
+    const activities = activitiesFor(b, courseVersionId, groups);
     const assessments = assessmentsOf(b, courseVersionId);
     const totalWeeks = weekNumber(run.start_date, run.end_date);
     const sourceOutline = sourceOutlineByWeek(b, run, course, totalWeeks);
@@ -296,6 +299,9 @@ export const outlinePayload = (b, courseVersionId, on) => {
             meetings: activities.length,
             assessments: assessments.length,
         },
+        // Present only when it is a real filter; absence is the whole run,
+        // and is what keeps an unnarrowed payload identical to the Python one.
+        ...(groups.length ? { groups } : {}),
         placement: PLACEMENT,
     };
 };

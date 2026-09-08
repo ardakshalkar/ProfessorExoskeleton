@@ -6,10 +6,9 @@
  * assessed, and is not a zero. It stays `null` here and is counted separately
  * in `concepts_with_no_evidence`.
  */
-import { capabilityById, conceptById, enrollmentsOf, modulesOf, outcomeById, runById, } from "./bundle.js";
+import { capabilityById, conceptById, enrolledIn, modulesOf, outcomeById, runById, } from "./bundle.js";
 import { roundHalfEven } from "./grading.js";
-const students = (b, courseVersionId) => enrollmentsOf(b, courseVersionId)
-    .filter((e) => ["student", "auditor"].includes(e.role) && e.status === "active")
+const students = (b, courseVersionId, groups) => enrolledIn(b, courseVersionId, { groups })
     .map((e) => e.student_id)
     .sort();
 const proportion = (record) => {
@@ -107,8 +106,9 @@ export const studentRecord = (b, courseVersionId, studentId) => {
     };
 };
 /** The class as a grid: concepts in teaching order against students. */
-export const dashboardPayload = (b, courseVersionId) => {
-    const roster = students(b, courseVersionId);
+export const dashboardPayload = (b, courseVersionId, options = {}) => {
+    const groups = (options.groups ?? []).map((group) => group.trim()).filter(Boolean);
+    const roster = students(b, courseVersionId, groups);
     const run = runById(b).get(courseVersionId);
     const ordered = [];
     for (const module of modulesOf(b, b.course.course_id)) {
@@ -183,6 +183,9 @@ export const dashboardPayload = (b, courseVersionId) => {
     }
     return {
         run: { id: courseVersionId, title: b.course.title, course_id: b.course.course_id, term: run.term },
+        // Present only when it is a real filter; absence is the whole run,
+        // and is what keeps an unnarrowed payload identical to the Python one.
+        ...(groups.length ? { groups } : {}),
         students: roster,
         concepts: grid,
         capabilities: capabilityRows,

@@ -16,7 +16,7 @@
  */
 
 import {
-  activitiesOf,
+  activitiesFor,
   allRubrics,
   assessmentsOf,
   conceptById,
@@ -119,6 +119,9 @@ const meeting = (
   on: dateOf(activity.scheduled_at),
   duration_minutes: activity.duration_minutes ?? null,
   location: activity.location ?? null,
+  // Null is "the whole run meets". Emitted either way, because two subgroups'
+  // labs in the same week are otherwise two identical rows.
+  group: activity.group ?? null,
   preparation: activity.preparation ?? null,
   outcomes: activity.outcomes,
   concepts: titled(activity.concepts, concepts),
@@ -177,7 +180,9 @@ export const outlinePayload = (
   b: CourseBundle,
   courseVersionId: string,
   on: string,
+  options: { groups?: readonly string[] | null } = {},
 ): Record<string, unknown> => {
+  const groups = (options.groups ?? []).map((group) => group.trim()).filter(Boolean);
   const run = runById(b).get(courseVersionId) as any;
   const course = b.course as any;
   const users = userById(b);
@@ -189,7 +194,9 @@ export const outlinePayload = (
   );
 
   const modules = modulesOf(b, course.course_id);
-  const activities = activitiesOf(b, courseVersionId);
+  // A meeting with no group is the whole run's, so it stays in every subgroup's
+  // plan; only a meeting labelled for a different subgroup drops out.
+  const activities = activitiesFor(b, courseVersionId, groups);
   const assessments = assessmentsOf(b, courseVersionId);
 
   const totalWeeks = weekNumber(run.start_date, run.end_date);
@@ -345,6 +352,9 @@ export const outlinePayload = (
       meetings: unplacedMeetings.map((activity) => meeting(activity, resources, concepts)),
       assessments: unplacedAssessments.map((a) => assessmentEntry(a, rubrics)),
     },
+    // Present only when it is a real filter; the meetings above are then this
+    // subgroup's plus everything every subgroup attends.
+    ...(groups.length ? { groups } : {}),
     totals: {
       weeks: totalWeeks,
       weeks_planned: weeks.filter((week) => week.planned).length,

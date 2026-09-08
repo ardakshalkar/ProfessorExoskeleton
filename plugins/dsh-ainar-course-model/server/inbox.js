@@ -2,22 +2,26 @@
  * What is waiting for the professor, assembled from the record.
  * Ported from `ainar/inbox.py`.
  */
-import { assessmentById, assessmentsOf, criterionById, enrollmentsOf, runById, } from "./bundle.js";
+import { assessmentById, assessmentsOf, criterionById, enrolledIn, runById, } from "./bundle.js";
 const LOW_CONFIDENCE = 0.6;
 const DUE_SOON_DAYS = 7;
 const daysBetween = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
-export const inboxPayload = (b, courseVersionId, on) => {
+export const inboxPayload = (b, courseVersionId, on, options = {}) => {
+    const groups = (options.groups ?? []).map((group) => group.trim()).filter(Boolean);
     const run = runById(b).get(courseVersionId);
     const assessments = assessmentsOf(b, courseVersionId);
     const assessmentIds = new Set(assessments.map((a) => a.assessment_id));
     const submissions = b.submissions.filter((s) => assessmentIds.has(s.assessment_id));
     const criteria = criterionById(b);
     const submissionById = new Map(submissions.map((s) => [s.submission_id, s]));
-    const activeStudents = new Set(enrollmentsOf(b, courseVersionId)
-        .filter((e) => ["student", "auditor"].includes(e.role) && e.status === "active")
-        .map((e) => e.student_id));
+    const activeStudents = new Set(enrolledIn(b, courseVersionId, { groups }).map((e) => e.student_id));
+    // Narrowing to a subgroup narrows the work as well as the class: pending
+    // evaluations hang off submissions, which name a student but not a group.
+    const inScope = (studentId) => !groups.length || activeStudents.has(studentId);
     // ------------------------------------------------------------ evaluations
-    const pending = b.evaluations.filter((evaluation) => submissionById.has(evaluation.submission_id) && !evaluation.professor_decision);
+    const pending = b.evaluations.filter((evaluation) => submissionById.has(evaluation.submission_id) &&
+        !evaluation.professor_decision &&
+        inScope(submissionById.get(evaluation.submission_id).student_id));
     const byAssessment = new Map();
     for (const evaluation of pending) {
         const assessmentId = submissionById.get(evaluation.submission_id).assessment_id;
@@ -57,7 +61,7 @@ export const inboxPayload = (b, courseVersionId, on) => {
     // -------------------------------------------------------------- deadlines
     const assessmentState = assessments.map((assessment) => {
         const received = new Set(submissions
-            .filter((s) => s.assessment_id === assessment.assessment_id)
+            .filter((s) => s.assessment_id === assessment.assessment_id && inScope(s.student_id))
             .map((s) => s.student_id));
         const due = assessment.due_at ? assessment.due_at.slice(0, 10) : null;
         let status;
@@ -82,8 +86,10 @@ export const inboxPayload = (b, courseVersionId, on) => {
         };
     });
     // ---------------------------------------------------------------- signals
+    // A signal or intervention with no student is about the class, so it
+    // belongs in every subgroup's inbox. One naming a student belongs only in theirs.
     const openSignals = b.signals
-        .filter((signal) => signal.course_version_id === courseVersionId && signal.status === "open")
+        .filter((signal) => signal.course_version_id === courseVersionId && signal.status === "open" && (!signal.student_id || inScope(signal.student_id)))
         .map((signal) => ({
         signal_id: signal.signal_id,
         student_id: signal.student_id ?? null,
@@ -96,7 +102,7 @@ export const inboxPayload = (b, courseVersionId, on) => {
         has_intervention: b.interventions.some((intervention) => intervention.signal_id === signal.signal_id),
     }));
     const awaitingApproval = b.interventions
-        .filter((intervention) => intervention.course_version_id === courseVersionId && intervention.status === "proposed")
+        .filter((intervention) => intervention.course_version_id === courseVersionId && intervention.status === "proposed" && (!intervention.student_id || inScope(intervention.student_id)))
         .map((intervention) => ({
         intervention_id: intervention.intervention_id,
         signal_id: intervention.signal_id ?? null,
@@ -131,6 +137,9 @@ export const inboxPayload = (b, courseVersionId, on) => {
             instructors: run.instructors,
             enrolled_students: activeStudents.size,
         },
+        // Present only when it is a real filter; absence is the whole run,
+        // and is what keeps an unnarrowed payload identical to the Python one.
+        ...(groups.length ? { groups } : {}),
         as_of: on,
         pending_evaluations: {
             total: pending.length,

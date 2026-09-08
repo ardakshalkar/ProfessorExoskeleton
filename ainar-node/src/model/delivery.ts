@@ -85,6 +85,16 @@ export const LearningActivity = entity({
   scheduled_at: awareDatetime().nullish(),
   duration_minutes: z.number().int().min(0).nullish(),
   location: z.string().nullish(),
+  /**
+   * Which subgroup this meeting is for, matching `Enrollment.group`.
+   *
+   * A course taught in subgroups holds one activity per subgroup per session —
+   * the same lab at two different times — and before this field there was no
+   * way to say which was which except by writing it into the title. Null means
+   * the whole run meets, which is what every activity written before this
+   * field existed means.
+   */
+  group: z.string().nullish(),
   outcomes: z.array(OutcomeId).default([]),
   concepts: z.array(ConceptId).default([]),
   resources: z.array(ResourceId).default([]),

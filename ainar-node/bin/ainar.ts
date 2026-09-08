@@ -23,7 +23,8 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { courseContext, enrollmentsOf, runById } from "../src/bundle.ts";
+import { parse } from "yaml";
+import { courseContext, enrollmentsOf, groupsOf, requireGroups, runById } from "../src/bundle.ts";
 import { blueprintPayload } from "../src/blueprint.ts";
 import { gradebookPayload } from "../src/gradebook.ts";
 import { calibrationPayload, pendingPayload, rubricPayload } from "../src/grading.ts";
@@ -37,10 +38,12 @@ import { IssueList, describe } from "../src/issues.ts";
 import { loadDrafts, mergeDrafts } from "../src/drafts.ts";
 import {
   ENROLLMENTS_HEADER,
+  type Enrollment,
   RosterStore,
   buildRoster,
   loadSalt,
   readRows,
+  reconcileEnrollments,
   refuseInsideRepo,
   rosterDir,
 } from "../src/roster.ts";
@@ -73,12 +76,38 @@ const flag = (name: string): string | undefined => {
   return index >= 0 ? args[index + 1] : undefined;
 };
 
+/**
+ * Flags that take no value, so the loop below does not eat the argument after
+ * them.
+ *
+ * Without this list `ainar roster import --dry-run export.csv` loses the file —
+ * `--dry-run` swallows it as its value and the command reports a usage error
+ * about an argument that is right there on the line. The same trap was waiting
+ * for `--keep-absent`, which is what made it worth naming them all.
+ */
+const BOOLEAN_FLAGS = new Set(["dry-run", "json", "verbose", "keep-absent"]);
+
+/** Every occurrence of a repeatable flag, with comma-separated values split. */
+const flagList = (name: string): string[] => {
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] !== `--${name}`) continue;
+    const value = args[index + 1];
+    if (value === undefined || value.startsWith("--")) continue;
+    for (const entry of value.split(",")) {
+      const trimmed = entry.trim();
+      if (trimmed) values.push(trimmed);
+    }
+  }
+  return values;
+};
+
 /** Positional arguments only — a flag may sit before the command or after it. */
 const positional: string[] = [];
 for (let index = 0; index < args.length; index += 1) {
   const value = args[index]!;
   if (value.startsWith("--")) {
-    index += 1; // skip the flag's value
+    if (!BOOLEAN_FLAGS.has(value.slice(2))) index += 1; // skip the flag's value
     continue;
   }
   positional.push(value);
@@ -132,21 +161,22 @@ const HELP = `ainar (Node) — the read half of the workspace
   context RUN [--date D]   the Course Context document
   syllabus RUN             the syllabus, as markdown
   alignment RUN            the constructive alignment report
-  gradebook RUN [--assessment A]
+  gradebook RUN [--assessment A] [--group G]
   pending RUN [--assessment A]
   rubric ASSESSMENT
   student RUN STUDENT
-  class-progress RUN
-  inbox RUN [--date D]
+  class-progress RUN [--group G]
+  inbox RUN [--date D] [--group G]
   calibration RUN
   blueprint RUN
   approve DRAFTS --as USER [--only IDS] [--reject IDS] [--dry-run]
 
   roster import FILE.csv [--run RUN] [--id-column C] [--name-column C]
                          [--email-column C] [--group-column C]
-                         [--delimiter D] [--dry-run]
+                         [--delimiter D] [--group G] [--keep-absent] [--dry-run]
   roster show [--run RUN] [--out PATH]     PRIVATE: names, to a terminal
   roster whois STUDENT-XXXXXX              PRIVATE: one identity
+  roster groups [--run RUN]                the subgroups, and who is in them
   roster status                            where the identities live
 
   schema [ENTITY] [--json] [--out DIR]     what a record must look like
@@ -157,6 +187,17 @@ const HELP = `ainar (Node) — the read half of the workspace
   Enrollments hold pseudonyms only. Names, numbers and emails go to
   --roster-dir (default ~/.ainar/roster, or AINAR_ROSTER_DIR), which must
   stay outside the workspace and must never be committed.
+
+  An import never deletes: a student the export no longer lists is marked
+  \`status: dropped\`, and every count in the model reads only \`active\`.
+  --group G restricts that to one subgroup, for a class whose exports arrive
+  one subgroup at a time; --keep-absent turns the marking off entirely.
+
+  --group narrows gradebook, class-progress and inbox to one subgroup, and
+  the term plan to the meetings that subgroup attends — an activity with no
+  group is the whole run's and stays in every subgroup's view. It may be
+  repeated or given a comma-separated list, and a label this run does not
+  have is refused rather than answered with an empty class.
 
   These derive records and write them into courses/. Each validates the merged
   bundle first and writes nothing if it fails, and each takes --dry-run:
@@ -178,6 +219,40 @@ const onDate = (courseVersionId: string): string => {
   const run = runById(forRun(courseVersionId)).get(courseVersionId) as any;
   const now = today();
   return now < run.start_date ? run.start_date : now > run.end_date ? run.end_date : now;
+};
+
+/**
+ * `--group`, checked against the run before anything is filtered by it.
+ *
+ * A subgroup nobody is in is almost always a typo, and the shape of the
+ * mistake is an empty class rather than an error — every count reads zero and
+ * nothing says why. `requireGroups` turns it into a refusal that names the
+ * groups the run does have.
+ */
+const runGroups = (courseVersionId: string): string[] =>
+  requireGroups(forRun(courseVersionId), courseVersionId, flagList("group"));
+
+/**
+ * The enrollments already written for a term, exactly as the file holds them.
+ *
+ * Read from the file rather than from the loaded bundle deliberately. The
+ * bundle has been through the schema, which fills in every default the author
+ * did not write; this list is about to be written straight back out, so
+ * sourcing it from the bundle would reformat every row on the first re-import
+ * and bury the two or three that actually changed.
+ *
+ * A file that exists but is not shaped like an enrollments file is a refusal,
+ * not an empty list — silently treating it as empty would overwrite it.
+ */
+const readEnrollments = (path: string): Enrollment[] => {
+  if (!existsSync(path)) return [];
+  const parsed = parse(readFileSync(path, "utf-8")) as { enrollments?: unknown } | null;
+  const entries = parsed?.enrollments ?? null;
+  if (entries === null) return [];
+  if (!Array.isArray(entries)) {
+    throw new Error(`${path} holds no \`enrollments:\` list; refusing to overwrite it`);
+  }
+  return entries as Enrollment[];
 };
 
 try {
@@ -239,7 +314,12 @@ try {
       out(alignmentMarkdown(forRun(rest[0]!), rest[0]!));
       break;
     case "gradebook":
-      out(gradebookPayload(forRun(rest[0]!), rest[0]!, { assessmentId: flag("assessment") ?? null }));
+      out(
+        gradebookPayload(forRun(rest[0]!), rest[0]!, {
+          assessmentId: flag("assessment") ?? null,
+          groups: runGroups(rest[0]!),
+        }),
+      );
       break;
     case "pending":
       out(pendingPayload(forRun(rest[0]!), rest[0]!, flag("assessment")));
@@ -251,10 +331,10 @@ try {
       out(studentRecord(forRun(rest[0]!), rest[0]!, rest[1]!));
       break;
     case "class-progress":
-      out(dashboardPayload(forRun(rest[0]!), rest[0]!));
+      out(dashboardPayload(forRun(rest[0]!), rest[0]!, { groups: runGroups(rest[0]!) }));
       break;
     case "inbox":
-      out(inboxPayload(forRun(rest[0]!), rest[0]!, onDate(rest[0]!)));
+      out(inboxPayload(forRun(rest[0]!), rest[0]!, onDate(rest[0]!), { groups: runGroups(rest[0]!) }));
       break;
     case "calibration":
       out(calibrationPayload(forRun(rest[0]!), rest[0]!));
@@ -528,6 +608,49 @@ try {
         break;
       }
 
+      /*
+       * The subgroups, and how many are in each.
+       *
+       * Every other command that takes `--group` refuses a label this run does
+       * not have, so this is the list to look at first. It counts active
+       * students only — a subgroup everyone dropped out of shows as 0 rather
+       * than disappearing, which is the more useful of the two.
+       */
+      if (sub === "groups") {
+        const courseVersionId = flag("run") ?? flag("course-version");
+        const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
+        const resolvedRun = courseVersionId ?? soleRun(bundle);
+        const labels = groupsOf(bundle, resolvedRun);
+        if (!labels.length) {
+          out(`${resolvedRun} has no subgroups: no enrollment or activity carries a group.`);
+          break;
+        }
+        out(resolvedRun);
+        const enrolled = enrollmentsOf(bundle, resolvedRun);
+        for (const label of labels) {
+          const active = enrolled.filter(
+            (entry) =>
+              entry.status === "active" &&
+              ["student", "auditor"].includes(entry.role) &&
+              String(entry.group ?? "").trim() === label,
+          ).length;
+          const meetings = (bundle.activities as any[]).filter(
+            (activity) =>
+              activity.course_version_id === resolvedRun &&
+              String(activity.group ?? "").trim() === label,
+          ).length;
+          out(`  ${label.padEnd(16)} ${String(active).padStart(3)} active  ${meetings} meeting(s)`);
+        }
+        const ungrouped = enrolled.filter(
+          (entry) =>
+            entry.status === "active" &&
+            ["student", "auditor"].includes(entry.role) &&
+            !String(entry.group ?? "").trim(),
+        ).length;
+        if (ungrouped) out(`  ${"(no group)".padEnd(16)} ${String(ungrouped).padStart(3)} active`);
+        break;
+      }
+
       if (sub === "whois") {
         const studentId = rest[1];
         if (!studentId) throw new Error("usage: roster whois STUDENT-XXXXXX");
@@ -566,9 +689,20 @@ try {
           const name = person.name ?? "(unknown — not in the local roster)";
           const institutional = person.institutional_id ?? "";
           const group = enrollment.group ? `  [${enrollment.group}]` : "";
-          lines.push(`  ${enrollment.student_id}  ${name}  ${institutional}${group}`);
+          // Since an import marks departures rather than deleting them, this
+          // list holds people who are no longer in the class. Saying which is
+          // the difference between a class list and a list of everyone who was
+          // ever on it.
+          const status = enrollment.status === "active" ? "" : `  (${enrollment.status})`;
+          lines.push(`  ${enrollment.student_id}  ${name}  ${institutional}${group}${status}`);
         }
-        lines.push("", `${enrolled.length} enrolled`);
+        const active = enrolled.filter((entry) => entry.status === "active").length;
+        lines.push(
+          "",
+          active === enrolled.length
+            ? `${active} enrolled`
+            : `${active} enrolled, ${enrolled.length - active} no longer active`,
+        );
         const text = lines.join("\n");
         if (target) {
           mkdirSync(dirname(resolve(target)), { recursive: true });
@@ -583,7 +717,9 @@ try {
       if (sub === "import") {
         const file = rest[1];
         if (!file) {
-          throw new Error("usage: roster import FILE.csv [--run RUN] [--dry-run]");
+          throw new Error(
+            "usage: roster import FILE.csv [--run RUN] [--group G] [--keep-absent] [--dry-run]",
+          );
         }
         const courseVersionId = flag("run") ?? flag("course-version");
         const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
@@ -618,30 +754,67 @@ try {
           process.exit(1);
         }
 
-        if (args.includes("--dry-run")) {
-          out("\ndry run — nothing written");
-          for (const enrollment of result.enrollments.slice(0, 5)) {
-            out(`  ${enrollment.student_id}  ${enrollment.group ?? ""}`);
-          }
-          if (result.enrollments.length > 5) {
-            out(`  … and ${result.enrollments.length - 5} more`);
-          }
-          break;
-        }
-
         // `versions/<term>/`, where the loader reads enrollments. Python still
         // writes `runs/<term>/`, which is the layout from before version and run
         // were merged — a file written there today is a file nothing loads.
         const courseDir = join(root, "courses", courseId);
         const path = join(courseDir, "versions", run.term, "enrollments.yaml");
+
+        /*
+         * Two runs can share a term — a course taught to two sections is two
+         * CourseVersions with one `term` between them, and the loader globs
+         * `versions/*​/enrollments.yaml`, so both sections' rows live in this one
+         * file. Reconciling has to see only the rows belonging to the run being
+         * imported, and writing has to put the other run's rows back untouched.
+         */
+        const onDisk = readEnrollments(path);
+        const mine = onDisk.filter((entry) => entry.course_version_id === resolvedRun);
+        const others = onDisk.filter((entry) => entry.course_version_id !== resolvedRun);
+
+        const groups = flagList("group");
+        const merged = reconcileEnrollments(mine, result.enrollments, {
+          groups,
+          markDropped: !args.includes("--keep-absent"),
+        });
+
+        const say = (label: string, ids: string[]): void => {
+          if (!ids.length) return;
+          const shown = ids.slice(0, 5).join(", ") + (ids.length > 5 ? ", …" : "");
+          out(`  ${label.padEnd(19)}${String(ids.length).padStart(4)}  ${shown}`);
+        };
+        out("");
+        if (groups.length) out(`  reconciling group(s): ${groups.join(", ")}`);
+        say("newly enrolled", merged.arrived);
+        say("marked dropped", merged.dropped);
+        say("back from dropped", merged.returned);
+        // The one number a professor should look at twice. An export that
+        // covers only part of the class leaves the rest here rather than
+        // dropping them, and saying so is how they find out the scope was
+        // wrong before it becomes a grade nobody counted.
+        say("absent, left active", merged.held);
+
+        if (args.includes("--dry-run")) {
+          out("\ndry run — nothing written");
+          for (const enrollment of merged.enrollments.slice(0, 5)) {
+            out(`  ${enrollment.student_id}  ${enrollment.status}  ${enrollment.group ?? ""}`);
+          }
+          if (merged.enrollments.length > 5) {
+            out(`  … and ${merged.enrollments.length - 5} more`);
+          }
+          break;
+        }
+
+        const written = [...others, ...merged.enrollments];
         mkdirSync(dirname(path), { recursive: true });
-        writeFileSync(path, ENROLLMENTS_HEADER + dump({ enrollments: result.enrollments }), {
+        writeFileSync(path, ENROLLMENTS_HEADER + dump({ enrollments: written }), {
           encoding: "utf-8",
         });
         const saved = store.save();
+        const active = merged.enrollments.filter((entry) => entry.status === "active").length;
         out(
           `\nwrote ${relative(root, path).split(/[\\/]/).join("/")}  ` +
-            `(${result.enrollments.length} enrollments, pseudonyms only)`,
+            `(${merged.enrollments.length} enrollments for ${resolvedRun}, ` +
+            `${active} active, pseudonyms only)`,
         );
         out(`wrote ${saved}  (identities, outside the repository)`);
 

@@ -128,3 +128,40 @@ This list is the porting worklist. Each line's real home is named above.
                                     under courses/ and work/
       lib/client.js                 useRevisionWatch: polls it and redraws when
                                     something outside the pane writes
+
+  Added 2026-09-08 — enrollment status, and subgroups:
+    ainar-node/src/roster.ts        reconcileEnrollments: an import marks a
+                                    student the export no longer lists as
+                                    `status: dropped` instead of dropping the
+                                    row. IMPORTED_ROLES; ENROLLMENTS_HEADER
+                                    says so.
+    ainar-node/src/model/           LearningActivity.group — which subgroup a
+      delivery.ts                   meeting is for. Null is the whole run.
+    ainar-node/src/bundle.ts        ROSTER_ROLES, enrolledIn, activitiesFor,
+                                    groupsOf, requireGroups: the one place
+                                    that decides what a subgroup view holds.
+    ainar-node/src/progress.ts      dashboardPayload takes `groups`
+    ainar-node/src/gradebook.ts     gradeRows and gradebookPayload take
+                                    `groups`; scope.groups and a note saying
+                                    the totals are the subgroup's
+    ainar-node/src/inbox.ts         inboxPayload takes `groups`; pending
+                                    evaluations, submissions, signals and
+                                    interventions narrow with the class
+    ainar-node/src/outline.ts       outlinePayload takes `groups`; a meeting
+                                    carries its group; an ungrouped meeting is
+                                    in every subgroup's plan
+    ainar-node/src/mcp/tools.ts     GROUPS_ARG and requestedGroups on
+                                    course_outline, gradebook, class_progress
+                                    and action_inbox
+    ainar-node/bin/ainar.ts         --group on gradebook, class-progress and
+                                    inbox; `roster groups`; roster import
+                                    takes --group and --keep-absent;
+                                    BOOLEAN_FLAGS so a valueless flag stops
+                                    eating the next positional
+    ainar-node/test/                roster.test.ts extended; groups.test.ts new
+
+  plugins/dsh-ainar-course-model/server/  mirrors all of the above by hand,
+    minus roster.ts, which has no place in a read-only tool surface:
+    model/delivery.js, bundle.js, progress.js, gradebook.js, inbox.js,
+    outline.js, mcp/tools.js. The .d.ts beside them were NOT updated; nothing
+    in this project typechecks against them.

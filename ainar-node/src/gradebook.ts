@@ -15,7 +15,14 @@
  *    `professor_decision.comment` alone.
  */
 
-import { allRubrics, assessmentsOf, enrollmentsOf, itemsOf, runById, type CourseBundle } from "./bundle.ts";
+import {
+  allRubrics,
+  assessmentsOf,
+  enrolledIn,
+  itemsOf,
+  runById,
+  type CourseBundle,
+} from "./bundle.ts";
 import { roundHalfEven } from "./grading.ts";
 
 export const GRADEBOOK_VERSION = "gradebook/2026.08.1";
@@ -167,14 +174,17 @@ const rowAsDict = (row: GradeRow): Record<string, unknown> => ({
 export const gradeRows = (
   b: CourseBundle,
   courseVersionId: string,
-  options: { assessmentId?: string | null; allowPartial?: boolean } = {},
+  options: {
+    assessmentId?: string | null;
+    allowPartial?: boolean;
+    groups?: readonly string[] | null;
+  } = {},
 ): Map<string, GradeRow[]> => {
-  const { assessmentId = null, allowPartial = false } = options;
+  const { assessmentId = null, allowPartial = false, groups = null } = options;
   const assessments = assessmentsOf(b, courseVersionId).filter(
     (a) => assessmentId === null || a.assessment_id === assessmentId,
   );
-  const students = enrollmentsOf(b, courseVersionId)
-    .filter((e) => GRADED_ROLES.has(e.role) && e.status === "active")
+  const students = enrolledIn(b, courseVersionId, { roles: GRADED_ROLES, groups })
     .map((e) => e.student_id as string)
     .sort();
 
@@ -354,11 +364,16 @@ const totals = (
 export const gradebookPayload = (
   b: CourseBundle,
   courseVersionId: string,
-  options: { assessmentId?: string | null; allowPartial?: boolean } = {},
+  options: {
+    assessmentId?: string | null;
+    allowPartial?: boolean;
+    groups?: readonly string[] | null;
+  } = {},
 ): Record<string, unknown> => {
   const { assessmentId = null, allowPartial = false } = options;
+  const groups = (options.groups ?? []).map((group) => group.trim()).filter(Boolean);
   const run = runById(b).get(courseVersionId) as any;
-  const rowsByAssessment = gradeRows(b, courseVersionId, { assessmentId, allowPartial });
+  const rowsByAssessment = gradeRows(b, courseVersionId, { assessmentId, allowPartial, groups });
   const assessments = new Map(assessmentsOf(b, courseVersionId).map((a) => [a.assessment_id as string, a]));
 
   const payloadAssessments = [...rowsByAssessment.entries()].map(([aid, rows]) => {
@@ -398,12 +413,22 @@ export const gradebookPayload = (
         "alone — 'complete' does not mean the course is fully graded.",
     );
   }
+  if (groups.length) {
+    notes.push(
+      `Only group ${groups.join(", ")} is in scope. Every count here is that ` +
+        "subgroup's, not the class's.",
+    );
+  }
 
   return {
     run: { id: courseVersionId, title: b.course.title, term: run.term },
     generated_by: GRADEBOOK_VERSION,
     allow_partial: allowPartial,
-    scope: { assessment_id: assessmentId, assessments_counted: [...rowsByAssessment.keys()].sort() },
+    scope: {
+      assessment_id: assessmentId,
+      ...(groups.length ? { groups } : {}),
+      assessments_counted: [...rowsByAssessment.keys()].sort(),
+    },
     assessments: payloadAssessments,
     totals: totals(b, courseVersionId, rowsByAssessment),
     notes,

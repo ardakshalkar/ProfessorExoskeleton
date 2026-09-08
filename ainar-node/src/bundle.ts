@@ -185,6 +185,109 @@ export const activitiesOf = (b: CourseBundle, courseVersionId: string): any[] =>
 export const enrollmentsOf = (b: CourseBundle, courseVersionId: string): any[] =>
   (b.enrollments as any[]).filter((enrollment) => enrollment.course_version_id === courseVersionId);
 
+// ------------------------------------------------------------------- subgroups
+
+/**
+ * Subgroups, and the one place that decides what a subgroup view contains.
+ *
+ * A course taught in subgroups meets each of them separately, and the numbers
+ * a professor wants are per subgroup: this Tuesday lab's gradebook, this
+ * subgroup's progress. `Enrollment.group` and `LearningActivity.group` carry
+ * the label; these three functions are what read it, so `gradebook`,
+ * `class-progress` and `inbox` cannot drift into three different ideas of what
+ * "group CS-01" means.
+ *
+ * An empty or absent list means the whole run, everywhere. That is what makes
+ * the filter additive: every existing caller passes nothing and sees exactly
+ * what it saw before.
+ */
+
+/** The roles a class-level report is about. An instructor is not in the class. */
+export const ROSTER_ROLES: ReadonlySet<string> = new Set(["student", "auditor"]);
+
+const asSet = (groups: readonly string[] | null | undefined): Set<string> | null => {
+  const named = (groups ?? []).map((group) => group.trim()).filter(Boolean);
+  return named.length ? new Set(named) : null;
+};
+
+/** A run's active enrollments, optionally narrowed to one or more subgroups. */
+export const enrolledIn = (
+  b: CourseBundle,
+  courseVersionId: string,
+  options: { roles?: ReadonlySet<string>; groups?: readonly string[] | null } = {},
+): any[] => {
+  const roles = options.roles ?? ROSTER_ROLES;
+  const groups = asSet(options.groups);
+  return enrollmentsOf(b, courseVersionId).filter(
+    (enrollment) =>
+      roles.has(enrollment.role) &&
+      enrollment.status === "active" &&
+      (groups === null || groups.has(String(enrollment.group ?? "").trim())),
+  );
+};
+
+/**
+ * A run's activities, optionally narrowed to one or more subgroups.
+ *
+ * An activity with no group is a meeting of the whole run, so it belongs in
+ * every subgroup's view — a lecture both subgroups attend does not disappear
+ * because you asked about one of them. Only a meeting labelled for a different
+ * subgroup is filtered out.
+ */
+export const activitiesFor = (
+  b: CourseBundle,
+  courseVersionId: string,
+  groups?: readonly string[] | null,
+): any[] => {
+  const wanted = asSet(groups);
+  if (wanted === null) return activitiesOf(b, courseVersionId);
+  return activitiesOf(b, courseVersionId).filter((activity) => {
+    const group = String(activity.group ?? "").trim();
+    return group === "" || wanted.has(group);
+  });
+};
+
+/** Every subgroup label a run actually uses, from enrollments and meetings alike. */
+export const groupsOf = (b: CourseBundle, courseVersionId: string): string[] => {
+  const labels = new Set<string>();
+  for (const enrollment of enrollmentsOf(b, courseVersionId)) {
+    const group = String(enrollment.group ?? "").trim();
+    if (group) labels.add(group);
+  }
+  for (const activity of activitiesOf(b, courseVersionId)) {
+    const group = String(activity.group ?? "").trim();
+    if (group) labels.add(group);
+  }
+  return [...labels].sort();
+};
+
+/**
+ * Refuse a subgroup this run has never heard of.
+ *
+ * Without this a typo — `CS-1` for `CS-01` — is not an error but an empty
+ * class: every count reads zero, every list is blank, and nothing says why.
+ * Callers that accept a group from a person should run it through here first.
+ */
+export const requireGroups = (
+  b: CourseBundle,
+  courseVersionId: string,
+  groups: readonly string[] | null | undefined,
+): string[] => {
+  const named = (groups ?? []).map((group) => group.trim()).filter(Boolean);
+  if (!named.length) return [];
+  const known = groupsOf(b, courseVersionId);
+  const unknown = named.filter((group) => !known.includes(group));
+  if (unknown.length) {
+    throw new Error(
+      `${courseVersionId} has no group ${unknown.map((group) => `'${group}'`).join(", ")}. ` +
+        (known.length
+          ? `Groups in this run: ${known.join(", ")}`
+          : "This run has no subgroups: no enrollment or activity carries a group."),
+    );
+  }
+  return named;
+};
+
 const daysBetween = (from: string, to: string): number =>
   Math.floor((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 

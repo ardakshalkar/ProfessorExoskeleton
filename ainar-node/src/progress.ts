@@ -10,7 +10,7 @@
 import {
   capabilityById,
   conceptById,
-  enrollmentsOf,
+  enrolledIn,
   modulesOf,
   outcomeById,
   runById,
@@ -18,9 +18,12 @@ import {
 } from "./bundle.ts";
 import { roundHalfEven } from "./grading.ts";
 
-const students = (b: CourseBundle, courseVersionId: string): string[] =>
-  enrollmentsOf(b, courseVersionId)
-    .filter((e) => ["student", "auditor"].includes(e.role) && e.status === "active")
+const students = (
+  b: CourseBundle,
+  courseVersionId: string,
+  groups?: readonly string[] | null,
+): string[] =>
+  enrolledIn(b, courseVersionId, { groups })
     .map((e) => e.student_id as string)
     .sort();
 
@@ -261,8 +264,13 @@ export const studentRecord = (
 };
 
 /** The class as a grid: concepts in teaching order against students. */
-export const dashboardPayload = (b: CourseBundle, courseVersionId: string): Record<string, unknown> => {
-  const roster = students(b, courseVersionId);
+export const dashboardPayload = (
+  b: CourseBundle,
+  courseVersionId: string,
+  options: { groups?: readonly string[] | null } = {},
+): Record<string, unknown> => {
+  const groups = (options.groups ?? []).map((group) => group.trim()).filter(Boolean);
+  const roster = students(b, courseVersionId, groups);
   const run = runById(b).get(courseVersionId) as any;
 
   const ordered: string[] = [];
@@ -343,6 +351,16 @@ export const dashboardPayload = (b: CourseBundle, courseVersionId: string): Reco
 
   return {
     run: { id: courseVersionId, title: b.course.title, course_id: b.course.course_id, term: run.term },
+    /*
+     * Present only when it is a real filter.
+     *
+     * A subgroup's numbers must not be readable as the class's, so a narrowed
+     * payload says so. An unnarrowed one stays byte-identical to what
+     * `progress.py` emits, which is what `golden/` compares — a key that is
+     * always there, even as `[]`, is a parity break for every caller that
+     * never asked about subgroups.
+     */
+    ...(groups.length ? { groups } : {}),
     students: roster,
     concepts: grid,
     capabilities: capabilityRows,

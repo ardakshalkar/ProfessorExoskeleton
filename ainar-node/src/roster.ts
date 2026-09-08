@@ -488,6 +488,131 @@ export const buildRoster = (
   return result;
 };
 
+// --------------------------------------------------------------------------
+// Reconciling against the enrollments already written
+// --------------------------------------------------------------------------
+
+/**
+ * Roles an export speaks for.
+ *
+ * A Platonus export is a list of students. An instructor or a teaching
+ * assistant enrolled by hand is not in it and never will be, so their absence
+ * is not evidence that they left — reconciliation must not touch them.
+ */
+export const IMPORTED_ROLES = new Set(["student", "auditor"]);
+
+export interface ReconcileOptions {
+  /**
+   * Restrict the drop candidates to enrollments carrying one of these groups.
+   *
+   * This is the flag for a course taught in subgroups whose exports arrive one
+   * subgroup at a time: importing CS-01's list must not conclude that all of
+   * CS-02 has left. Empty or absent means the export speaks for the whole run.
+   */
+  groups?: readonly string[] | null;
+  /** false carries absent students over untouched instead of dropping them. */
+  markDropped?: boolean;
+}
+
+export interface ReconcileResult {
+  enrollments: Enrollment[];
+  /** Enrolled in this run for the first time. */
+  arrived: string[];
+  /** Active before, absent from the export, now `dropped`. */
+  dropped: string[];
+  /** `dropped` before, back in the export, now `active` again. */
+  returned: string[];
+  /** Active, absent from the export, and deliberately left active anyway. */
+  held: string[];
+}
+
+/**
+ * Merge a freshly built roster into the enrollments already on disk.
+ *
+ * Before this existed, `roster import` wrote only what the export contained,
+ * so a student who withdrew was not recorded as having withdrawn — their row
+ * simply stopped being there. Two things were lost with it: the fact that they
+ * had ever been enrolled, and any chance for a reader to tell a withdrawal
+ * apart from a truncated export.
+ *
+ * So absence is now written down rather than acted on destructively. Nothing
+ * is ever removed from the file; a student the export no longer lists becomes
+ * `status: dropped`, and every reader in the model already filters on
+ * `status === "active"` — `gradebook`, `class-progress`, `inbox` and
+ * `course_context` all do — so a drop takes them out of the class counts
+ * without taking them out of the record.
+ *
+ * Three cases are deliberately left alone, because in each one absence means
+ * something other than "they left":
+ *
+ * * a role the export does not speak for (see `IMPORTED_ROLES`);
+ * * a status that is already terminal — `dropped` stays dropped, `completed`
+ *   is a finished student and not a departed one;
+ * * a group the caller said this export does not cover.
+ *
+ * Existing rows keep their position and their `enrollment_id`. A re-import
+ * then reads in a diff as the statuses that changed plus the arrivals at the
+ * end, rather than as a rewritten file.
+ */
+export const reconcileEnrollments = (
+  existing: readonly Enrollment[],
+  incoming: readonly Enrollment[],
+  options: ReconcileOptions = {},
+): ReconcileResult => {
+  const markDropped = options.markDropped ?? true;
+  const named = (options.groups ?? []).map((group) => group.trim()).filter(Boolean);
+  const scope = named.length ? new Set(named) : null;
+
+  const byStudent = new Map(incoming.map((enrollment) => [enrollment.student_id, enrollment]));
+  const matched = new Set<string>();
+  const result: ReconcileResult = {
+    enrollments: [],
+    arrived: [],
+    dropped: [],
+    returned: [],
+    held: [],
+  };
+
+  for (const current of existing) {
+    const match = byStudent.get(current.student_id);
+
+    if (match) {
+      matched.add(current.student_id);
+      const merged: Enrollment = { ...current };
+      // An export that carries no group column must not erase the groups an
+      // earlier one recorded — the same rule `RosterStore.record` applies to a
+      // name, for the same reason.
+      if (match.group !== undefined) merged.group = match.group;
+      // Back on the list. Only `dropped` is reversed: `completed` is a student
+      // who finished, and an export listing them again does not undo that.
+      if (current.status === "dropped") {
+        merged.status = "active";
+        result.returned.push(current.student_id);
+      }
+      result.enrollments.push(merged);
+      continue;
+    }
+
+    const speaksFor = IMPORTED_ROLES.has(current.role) && current.status === "active";
+    const inScope = scope === null || scope.has((current.group ?? "").trim());
+    if (speaksFor && markDropped && inScope) {
+      result.enrollments.push({ ...current, status: "dropped" });
+      result.dropped.push(current.student_id);
+    } else {
+      result.enrollments.push({ ...current });
+      if (speaksFor) result.held.push(current.student_id);
+    }
+  }
+
+  for (const enrollment of incoming) {
+    if (matched.has(enrollment.student_id)) continue;
+    result.enrollments.push(enrollment);
+    result.arrived.push(enrollment.student_id);
+  }
+
+  return result;
+};
+
 export const ENROLLMENTS_HEADER = `# Course membership. Written by \`ainar roster import\`.
 #
 # Pseudonymous identifiers only. The mapping to real students lives outside
@@ -497,6 +622,11 @@ export const ENROLLMENTS_HEADER = `# Course membership. Written by \`ainar roste
 # Re-importing an updated export is safe: identifiers are derived from the
 # student's institutional id, so the same person keeps the same pseudonym
 # across every course and semester.
+#
+# Nothing here is ever deleted. A student the latest export no longer lists is
+# marked \`status: dropped\` rather than removed, so the record keeps the fact
+# that they were enrolled; every reader counts only \`active\`. They go back to
+# \`active\` by themselves if a later export lists them again.
 
 `;
 

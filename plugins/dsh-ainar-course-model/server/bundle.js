@@ -120,6 +120,65 @@ export const activitiesOf = (b, courseVersionId) => b.activities
     return byTime || a.activity_id.localeCompare(c.activity_id);
 });
 export const enrollmentsOf = (b, courseVersionId) => b.enrollments.filter((enrollment) => enrollment.course_version_id === courseVersionId);
+// ------------------------------------------------------------------- subgroups
+/** The roles a class-level report is about. An instructor is not in the class. */
+export const ROSTER_ROLES = new Set(["student", "auditor"]);
+const asSet = (groups) => {
+    const named = (groups ?? []).map((group) => group.trim()).filter(Boolean);
+    return named.length ? new Set(named) : null;
+};
+/** A run's active enrollments, optionally narrowed to one or more subgroups. */
+export const enrolledIn = (b, courseVersionId, options = {}) => {
+    const roles = options.roles ?? ROSTER_ROLES;
+    const groups = asSet(options.groups);
+    return enrollmentsOf(b, courseVersionId).filter((enrollment) => roles.has(enrollment.role) &&
+        enrollment.status === "active" &&
+        (groups === null || groups.has(String(enrollment.group ?? "").trim())));
+};
+/**
+ * A run's activities, optionally narrowed to one or more subgroups. An activity
+ * with no group is a meeting of the whole run, so it belongs in every
+ * subgroup's view.
+ */
+export const activitiesFor = (b, courseVersionId, groups) => {
+    const wanted = asSet(groups);
+    if (wanted === null)
+        return activitiesOf(b, courseVersionId);
+    return activitiesOf(b, courseVersionId).filter((activity) => {
+        const group = String(activity.group ?? "").trim();
+        return group === "" || wanted.has(group);
+    });
+};
+/** Every subgroup label a run actually uses, from enrollments and meetings alike. */
+export const groupsOf = (b, courseVersionId) => {
+    const labels = new Set();
+    for (const enrollment of enrollmentsOf(b, courseVersionId)) {
+        const group = String(enrollment.group ?? "").trim();
+        if (group)
+            labels.add(group);
+    }
+    for (const activity of activitiesOf(b, courseVersionId)) {
+        const group = String(activity.group ?? "").trim();
+        if (group)
+            labels.add(group);
+    }
+    return [...labels].sort();
+};
+/** Refuse a subgroup this run has never heard of, rather than an empty class. */
+export const requireGroups = (b, courseVersionId, groups) => {
+    const named = (groups ?? []).map((group) => group.trim()).filter(Boolean);
+    if (!named.length)
+        return [];
+    const known = groupsOf(b, courseVersionId);
+    const unknown = named.filter((group) => !known.includes(group));
+    if (unknown.length) {
+        throw new Error(`${courseVersionId} has no group ${unknown.map((group) => `'${group}'`).join(", ")}. ` +
+            (known.length
+                ? `Groups in this run: ${known.join(", ")}`
+                : "This run has no subgroups: no enrollment or activity carries a group."));
+    }
+    return named;
+};
 const daysBetween = (from, to) => Math.floor((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 /** The module whose week contains `on`, counted from the run's start date. */
 export const currentModule = (b, courseVersionId, on) => {

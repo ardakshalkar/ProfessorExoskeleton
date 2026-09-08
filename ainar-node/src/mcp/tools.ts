@@ -11,7 +11,13 @@
 
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { assessmentsOf, courseContext, runById } from "../bundle.ts";
+import {
+  assessmentsOf,
+  courseContext,
+  requireGroups,
+  runById,
+  type CourseBundle,
+} from "../bundle.ts";
 import { blueprintPayload } from "../blueprint.ts";
 import { gradebookPayload } from "../gradebook.ts";
 import { calibrationPayload, pendingPayload, rubricPayload } from "../grading.ts";
@@ -54,6 +60,21 @@ const DATE_ARG = { date: { type: "string", description: "YYYY-MM-DD; defaults to
 const ASSESSMENT_ARG = {
   assessment_id: { type: "string", description: "Restrict to one assessment" },
 };
+/**
+ * Subgroups, for a course taught to more than one at a time.
+ *
+ * Omitted means the whole run, which is what every caller written before
+ * subgroups existed sends. A label the run does not use is an error naming the
+ * ones it does, rather than an empty class nothing explains.
+ */
+const GROUPS_ARG = {
+  groups: {
+    type: "array",
+    items: { type: "string" },
+    description:
+      "Restrict to one or more subgroups, e.g. ['CS-01']. Omit for the whole run.",
+  },
+};
 
 const schema = (properties: object, required: string[] = ["course_version_id"]) => ({
   type: "object" as const,
@@ -61,6 +82,29 @@ const schema = (properties: object, required: string[] = ["course_version_id"]) 
   required,
   additionalProperties: false,
 });
+
+/**
+ * The `groups` argument, checked against the run that is about to be filtered.
+ *
+ * A model calling these tools will guess a label as readily as a person will
+ * mistype one, and the failure is silent in both cases: every count reads zero
+ * because nobody is in group `CS-1`. `requireGroups` turns that into an error
+ * naming the groups the run has, which is a thing a model can act on.
+ */
+const requestedGroups = (
+  bundle: CourseBundle,
+  courseVersionId: string,
+  args: Record<string, unknown>,
+): string[] => {
+  const raw = args.groups;
+  if (raw === undefined || raw === null) return [];
+  const values = (Array.isArray(raw) ? raw : [raw]).map((group) => String(group));
+  try {
+    return requireGroups(bundle, courseVersionId, values);
+  } catch (error) {
+    throw new ToolError((error as Error).message);
+  }
+};
 
 export interface Tool {
   name: string;
@@ -195,11 +239,13 @@ export const TOOLS: Tool[] = [
     name: "course_outline",
     description:
       "One run as a term plan, week by week: the module taught in each week, the lectures and labs scheduled inside it with dates and rooms, and the assessments that open or fall due there, plus the declared weights and the required materials. This is the course page — what a student would see. A week with no module is reported as unplanned rather than as empty, and no figure derived from student work appears: for those, call gradebook or class_progress.",
-    inputSchema: schema({ ...VERSION_ARG, ...DATE_ARG }),
+    inputSchema: schema({ ...VERSION_ARG, ...DATE_ARG, ...GROUPS_ARG }),
     handler: (workspace, args) => {
       const courseVersionId = requireRunId(args);
       const bundle = workspace.findRun(courseVersionId);
-      return outlinePayload(bundle, courseVersionId, referenceDate(bundle, courseVersionId, args.date));
+      return outlinePayload(bundle, courseVersionId, referenceDate(bundle, courseVersionId, args.date), {
+        groups: requestedGroups(bundle, courseVersionId, args),
+      });
     },
   },
   {
@@ -270,6 +316,7 @@ export const TOOLS: Tool[] = [
     inputSchema: schema({
       ...VERSION_ARG,
       ...ASSESSMENT_ARG,
+      ...GROUPS_ARG,
       allow_partial: {
         type: "boolean",
         description: "Treat part-graded rows as exportable. Off by default.",
@@ -277,9 +324,11 @@ export const TOOLS: Tool[] = [
     }),
     handler: (workspace, args) => {
       const courseVersionId = requireRunId(args);
-      return gradebookPayload(workspace.findRun(courseVersionId), courseVersionId, {
+      const bundle = workspace.findRun(courseVersionId);
+      return gradebookPayload(bundle, courseVersionId, {
         assessmentId: (args.assessment_id as string) ?? null,
         allowPartial: Boolean(args.allow_partial),
+        groups: requestedGroups(bundle, courseVersionId, args),
       });
     },
   },
@@ -330,21 +379,26 @@ export const TOOLS: Tool[] = [
     name: "class_progress",
     description:
       "The class as a grid: concepts in teaching order against students by pseudonym, with the mean proportion of marks earned on evidence tagged with each concept, plus capability levels.",
-    inputSchema: schema(VERSION_ARG),
+    inputSchema: schema({ ...VERSION_ARG, ...GROUPS_ARG }),
     handler: (workspace, args) => {
       const courseVersionId = requireRunId(args);
-      return dashboardPayload(workspace.findRun(courseVersionId), courseVersionId);
+      const bundle = workspace.findRun(courseVersionId);
+      return dashboardPayload(bundle, courseVersionId, {
+        groups: requestedGroups(bundle, courseVersionId, args),
+      });
     },
   },
   {
     name: "action_inbox",
     description:
       "What is waiting for the professor in one run: grades awaiting approval, missing submissions, open signals, interventions to approve and upcoming deadlines, with the event behind each.",
-    inputSchema: schema({ ...VERSION_ARG, ...DATE_ARG }),
+    inputSchema: schema({ ...VERSION_ARG, ...DATE_ARG, ...GROUPS_ARG }),
     handler: (workspace, args) => {
       const courseVersionId = requireRunId(args);
       const bundle = workspace.findRun(courseVersionId);
-      return inboxPayload(bundle, courseVersionId, referenceDate(bundle, courseVersionId, args.date));
+      return inboxPayload(bundle, courseVersionId, referenceDate(bundle, courseVersionId, args.date), {
+        groups: requestedGroups(bundle, courseVersionId, args),
+      });
     },
   },
   {

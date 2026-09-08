@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 import {
+  type Enrollment,
   PSEUDONYM_ALPHABET,
   RosterStore,
   b32encode,
@@ -13,6 +14,7 @@ import {
   parseDelimited,
   pseudonym,
   readRows,
+  reconcileEnrollments,
   refuseInsideRepo,
   rosterDir,
   sniffDelimiter,
@@ -251,4 +253,111 @@ test("writing identities anywhere inside the workspace is refused", () => {
 test("the roster directory is outside the repository by default and overridable", () => {
   assert.ok(rosterDir().includes(".ainar"));
   assert.equal(rosterDir("C:/tmp/elsewhere"), resolve("C:/tmp/elsewhere"));
+});
+
+// --------------------------------------------------------------------------
+// Reconciling against what is already written
+// --------------------------------------------------------------------------
+
+const enrollment = (overrides: Partial<Enrollment> & { student_id: string }): Enrollment => ({
+  enrollment_id: `ENR-${overrides.student_id.replace(/^STUDENT-/, "")}`,
+  course_version_id: "CSS-4007-2026-FALL",
+  role: "student",
+  status: "active",
+  ...overrides,
+});
+
+const incoming = (...ids: string[]): Enrollment[] =>
+  ids.map((student_id) => enrollment({ student_id }));
+
+test("a student the export no longer lists is dropped, not deleted", () => {
+  const before = [enrollment({ student_id: "STUDENT-AAAAAA" }), enrollment({ student_id: "STUDENT-BBBBBB" })];
+  const result = reconcileEnrollments(before, incoming("STUDENT-AAAAAA"));
+
+  assert.equal(result.enrollments.length, 2, "nothing is ever removed from the file");
+  assert.deepEqual(result.dropped, ["STUDENT-BBBBBB"]);
+  assert.deepEqual(result.enrollments.map((entry) => entry.status), ["active", "dropped"]);
+  // The row is otherwise untouched — the id in particular, since anything that
+  // referenced it would be orphaned by a regenerated one.
+  assert.equal(result.enrollments[1]!.enrollment_id, "ENR-BBBBBB");
+});
+
+test("dropping twice reports the drop once", () => {
+  const before = [enrollment({ student_id: "STUDENT-BBBBBB", status: "dropped" })];
+  const result = reconcileEnrollments(before, []);
+  assert.deepEqual(result.dropped, [], "already dropped is not dropped again");
+  assert.deepEqual(result.enrollments.map((entry) => entry.status), ["dropped"]);
+});
+
+test("a student back on the export is active again", () => {
+  const before = [enrollment({ student_id: "STUDENT-BBBBBB", status: "dropped" })];
+  const result = reconcileEnrollments(before, incoming("STUDENT-BBBBBB"));
+  assert.deepEqual(result.returned, ["STUDENT-BBBBBB"]);
+  assert.equal(result.enrollments[0]!.status, "active");
+  assert.deepEqual(result.arrived, [], "they were already in this run");
+});
+
+test("absence means nothing for a role or a status the export does not speak for", () => {
+  const before = [
+    enrollment({ student_id: "STUDENT-TEACH", role: "instructor" }),
+    enrollment({ student_id: "STUDENT-ASSIS", role: "teaching_assistant" }),
+    enrollment({ student_id: "STUDENT-DONE1", status: "completed" }),
+    enrollment({ student_id: "STUDENT-AUDIT", role: "auditor" }),
+  ];
+  const result = reconcileEnrollments(before, []);
+  // Only the auditor is a person the export would have listed.
+  assert.deepEqual(result.dropped, ["STUDENT-AUDIT"]);
+  assert.deepEqual(
+    result.enrollments.map((entry) => entry.status),
+    ["active", "active", "completed", "dropped"],
+  );
+});
+
+test("a subgroup's export drops only that subgroup", () => {
+  const before = [
+    enrollment({ student_id: "STUDENT-AAAAAA", group: "CS-01" }),
+    enrollment({ student_id: "STUDENT-BBBBBB", group: "CS-01" }),
+    enrollment({ student_id: "STUDENT-CCCCCC", group: "CS-02" }),
+  ];
+  const result = reconcileEnrollments(before, [enrollment({ student_id: "STUDENT-AAAAAA", group: "CS-01" })], {
+    groups: ["CS-01"],
+  });
+  assert.deepEqual(result.dropped, ["STUDENT-BBBBBB"]);
+  // CS-02 was never in this export's scope, and is reported rather than dropped.
+  assert.deepEqual(result.held, ["STUDENT-CCCCCC"]);
+  assert.equal(result.enrollments[2]!.status, "active");
+});
+
+test("--keep-absent leaves everyone active and says who was absent", () => {
+  const before = [enrollment({ student_id: "STUDENT-AAAAAA" }), enrollment({ student_id: "STUDENT-BBBBBB" })];
+  const result = reconcileEnrollments(before, incoming("STUDENT-AAAAAA"), { markDropped: false });
+  assert.deepEqual(result.dropped, []);
+  assert.deepEqual(result.held, ["STUDENT-BBBBBB"]);
+  assert.deepEqual(result.enrollments.map((entry) => entry.status), ["active", "active"]);
+});
+
+test("arrivals are appended, so a re-import diffs as the rows that changed", () => {
+  const before = [enrollment({ student_id: "STUDENT-BBBBBB" }), enrollment({ student_id: "STUDENT-AAAAAA" })];
+  const result = reconcileEnrollments(before, incoming("STUDENT-AAAAAA", "STUDENT-CCCCCC"));
+  assert.deepEqual(
+    result.enrollments.map((entry) => entry.student_id),
+    ["STUDENT-BBBBBB", "STUDENT-AAAAAA", "STUDENT-CCCCCC"],
+  );
+  assert.deepEqual(result.arrived, ["STUDENT-CCCCCC"]);
+  assert.deepEqual(result.dropped, ["STUDENT-BBBBBB"]);
+});
+
+test("a group moves when the export says so, and survives an export with no group column", () => {
+  const before = [enrollment({ student_id: "STUDENT-AAAAAA", group: "CS-01" })];
+  const moved = reconcileEnrollments(before, [enrollment({ student_id: "STUDENT-AAAAAA", group: "CS-02" })]);
+  assert.equal(moved.enrollments[0]!.group, "CS-02");
+
+  const silent = reconcileEnrollments(before, incoming("STUDENT-AAAAAA"));
+  assert.equal(silent.enrollments[0]!.group, "CS-01", "a missing column is not an erasure");
+});
+
+test("reconciling does not mutate what it was handed", () => {
+  const before = [enrollment({ student_id: "STUDENT-BBBBBB" })];
+  reconcileEnrollments(before, []);
+  assert.equal(before[0]!.status, "active");
 });

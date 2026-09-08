@@ -58,6 +58,8 @@ export const LearningActivity = entity({
     scheduled_at: awareDatetime().nullish(),
     duration_minutes: z.number().int().min(0).nullish(),
     location: z.string().nullish(),
+    /** Which subgroup this meeting is for, matching Enrollment.group. Null = the whole run. */
+    group: z.string().nullish(),
     outcomes: z.array(OutcomeId).default([]),
     concepts: z.array(ConceptId).default([]),
     resources: z.array(ResourceId).default([]),
