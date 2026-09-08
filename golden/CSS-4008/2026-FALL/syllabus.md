@@ -52,7 +52,7 @@ On completion of this course the student is able to:
 Total weight: **100%**
 
 ## Required materials
-- **Course reader — problem formulation** (reading) https://example.sdu.edu.kz/css-4007/reader-01
+- **Course reader — problem formulation** (reading) https://example.edu/css-4007/reader-01
 - **Student performance dataset (teaching copy)** (dataset) `DOC-3301`
 - **Model evaluation and overfitting — slides** (slides) `DOC-4410`
 - **Diagnosing overfitting — starter notebook** (notebook) `DOC-4420`
