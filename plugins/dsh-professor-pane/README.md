@@ -81,7 +81,9 @@ lines, not before.
 | --- | --- |
 | `GET /professor-pane/api/runs` | every course and offering in `AINAR_WORKSPACE` |
 | `GET /professor-pane/api/preferences?course=&term=` | the preference layers |
+| `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/` and `work/`, for the pane's refresh poll |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
+| `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
 
 `drafts=1` merges `work/<RUN>/` before computing the payload. The response says
 what it did in `x-professor-pane-drafts` and reports the draft loader's own
@@ -120,6 +122,68 @@ resolve through the same function, so the tools and this pane cannot name
 different courses on the same screen. It was briefly a twelve-line twin, kept in
 step by hand, which is a bad trade for twelve lines — the drift would not have
 been an error but a wrong number.
+
+## The Checklist
+
+Under **Tasks**, beside Pending and Ready. It answers the four questions a
+course still being built raises, and it answers them together because a
+professor asks them together:
+
+| Section | The question |
+| --- | --- |
+| What is not created | outcomes, modules, meetings, assessments, rubrics, an instructor, a roster — how many of each, and how many weeks hold a module |
+| Deadlines | which graded work carries no due date |
+| Weights | do the declared weights come to 100%, and which assessments carry none |
+| Slides | week by week: a deck in the course, a deck only proposed, or no deck |
+
+Two things it does not do.
+
+**It computes no figure of its own.** The weights are `course_outline`'s own
+`grading` section — `total_weight`, `unweighted`, `complete`, and the sentence
+the model writes when something is wrong, which names the assessments at fault
+in a way a percentage cannot. The counts are the payload's `totals`. This is
+not fastidiousness: an earlier `gradingDocument` did the arithmetic itself,
+forgot that `weight` is a fraction of one, and reported a correct scheme as
+"1%, not 100". A checklist that said *incomplete* while the Grading policy tab
+one press away said *100%* would be the worst version of that bug, because the
+professor would have no way to tell which half was lying.
+
+**It takes no Record / + drafts toggle**, for `ready`'s reason and one of its
+own: this view *is* the comparison. Every row says which half a thing is in —
+amber for what nobody has written, blue for what is written and waiting for
+`ainar approve` — so a setting that hid one half would remove the answer rather
+than narrow it.
+
+## What is computed once, and what is computed again
+
+Three caches, none of which changes when a re-read happens — only what is
+thrown away between requests.
+
+**The course parse, per workspace root.** `YamlCourseStore` already stamps each
+loaded course with the newest mtime under its directory and re-reads only when
+that moves; `Workspace`'s own header explains why, since a course takes about a
+second to parse. That cache was doing nothing here, because `resolveWorkspace`
+built a `new Workspace(root)` per request and therefore a new store with an
+empty map. The **store** is now kept per root and a fresh `Workspace` is built
+around it, which keeps `origin` honest — it is only used to word the advice in
+a "no workspace" error, and that advice differs by how the root was reached.
+Measured on the sample course, one `course_outline` request went from 177ms to
+23ms; a real course has more files.
+
+**The revision hash, for one second.** `/api/revision` is polled every 2500ms
+and the Checklist now keys its cache off the same hash, so a poll landing beside
+a frame reload used to walk the tree twice for an answer that cannot have
+changed between them. The window is well under the poll interval, so the poll
+still gets a fresh walk every time it asks.
+
+**The Checklist report, per revision.** It is the most expensive thing in
+`index.js` — it builds the outline payload twice, once over the record and once
+over the merge — and the key is that same revision hash. So the cache is
+exactly as fresh as the pane itself: the hash that tells the browser to reload
+the frame is the hash that invalidates what the frame is about to be served,
+and there is no window in which the pane redraws and gets the previous answer.
+The report is data, not HTML, because `dark` varies per request and the numbers
+do not.
 
 ## Two things worth knowing before you change it
 

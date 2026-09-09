@@ -197,9 +197,16 @@ window.__ModuleLoader__.load({
         { id: "progress", label: "Concepts" },
         { id: "gradebook", label: "Gradebook" },
       ],
+      // Pending, then Ready, then Checklist: the order is how close a thing is
+      // to being finished. Pending is work awaiting the professor's judgement,
+      // Ready is work awaiting their approval, and Checklist is what nobody has
+      // started. Pending stays the default because a thing awaiting judgement
+      // outranks a thing merely drafted, and both outrank a thing not yet
+      // written.
       tasks: [
         { id: "tasks", label: "Pending" },
         { id: "ready", label: "Ready" },
+        { id: "checklist", label: "Checklist" },
       ],
     };
 

@@ -100,6 +100,47 @@ const VIEWS = {
 };
 
 /**
+ * One `YamlCourseStore` per workspace root, kept for the life of the process.
+ *
+ * The store is where the course model's parse cache lives: it stamps each
+ * loaded course with the newest mtime under its directory and re-reads only
+ * when that moves. `Workspace`'s own header says why — a course takes about a
+ * second to parse, and nothing on these routes writes.
+ *
+ * That cache was doing nothing here. `resolveWorkspace` built a
+ * `new Workspace(root)` per request, which built a new store, which started
+ * with an empty map — so every view re-parsed every course from disk, and a
+ * single render of the Course outline tab paid for it more than once, because
+ * `gradingDocument` and friends ask for a payload AND call `findRun`.
+ *
+ * Caching the STORE rather than the `Workspace` is what keeps `origin`
+ * honest: it is only ever used to word the advice in a "no workspace" error,
+ * and that advice differs by how the root was arrived at. A `Workspace` is a
+ * few fields around a store, so building a fresh one per request costs nothing
+ * and lets a session-resolved request and an `AINAR_WORKSPACE` one share the
+ * parse while still naming the right thing to fix.
+ *
+ * Invalidation is entirely the store's, so an `ainar approve`, a roster import
+ * or a hand-edited YAML is picked up on the next request exactly as before —
+ * this changes what is thrown away between requests, not when a re-read
+ * happens.
+ *
+ * Unbounded, deliberately: the key is a workspace root the professor opened in
+ * the sidebar, so the map holds one entry per folder they have looked at this
+ * session — units, not thousands — and evicting one would only throw away a
+ * parse we would immediately redo.
+ */
+const STORES = new Map();
+
+const storeFor = (root) => {
+  const found = STORES.get(root);
+  if (found) return found;
+  const made = new YamlCourseStore(root);
+  STORES.set(root, made);
+  return made;
+};
+
+/**
  * The workspace one request is about, resolved per request rather than at load.
  *
  * The order `ainar/commands/common.py` argues for, with the session standing in
@@ -120,7 +161,7 @@ const resolveWorkspace = (registry, sessionId) => {
     for (const workspace of registry.list()) {
       if (!workspace.sessionIds.includes(sessionId)) continue;
       const standing = workspaceRootFor(workspace.path);
-      if (standing) return { workspace: new Workspace(standing, "session"), root: standing };
+      if (standing) return { workspace: new Workspace(storeFor(standing), "session"), root: standing };
       // A registered workspace that holds no courses/ is a real answer: the
       // professor opened a folder that is not a course workspace. Say so rather
       // than quietly reporting on whatever AINAR_WORKSPACE names.
@@ -147,7 +188,7 @@ const resolveWorkspace = (registry, sessionId) => {
         "— and neither is anything above it.",
     );
   }
-  return { workspace: new Workspace(fallback, "env"), root: fallback };
+  return { workspace: new Workspace(storeFor(fallback), "env"), root: fallback };
 };
 
 /**
@@ -324,7 +365,7 @@ const withRecordPaths = (data, root, courseId, term) => {
  * revision does not flicker because a directory listing came back in a
  * different order.
  */
-const revisionDocument = (root) => {
+const walkRevision = (root) => {
   const hash = createHash("sha256");
   let files = 0;
 
@@ -361,6 +402,32 @@ const revisionDocument = (root) => {
 
   for (const top of ["courses", "work"]) walk(join(root, top), 0);
   return { revision: hash.digest("hex").slice(0, 16), files };
+};
+
+/**
+ * The same answer, computed at most once per `REVISION_TTL_MS` per root.
+ *
+ * The walk is cheap but not free, and it now has two callers rather than one:
+ * `/api/revision`, which the pane polls every 2500ms, and every view that
+ * caches a computed report against the revision as its key. Without this, one
+ * poll landing beside one frame reload walks the tree twice for an answer that
+ * cannot have changed between them.
+ *
+ * The window is a second, well under the poll interval, so the poll still gets
+ * a fresh walk every time it asks — this collapses only the burst that a single
+ * redraw causes, and the most a change can sit unnoticed is a second longer
+ * than it already could.
+ */
+const REVISION_TTL_MS = 1000;
+const REVISIONS = new Map();
+
+const revisionDocument = (root) => {
+  const now = Date.now();
+  const found = REVISIONS.get(root);
+  if (found && now - found.at < REVISION_TTL_MS) return found.value;
+  const value = walkRevision(root);
+  REVISIONS.set(root, { at: now, value });
+  return value;
 };
 
 /**
@@ -611,11 +678,13 @@ const escapeText = (value) =>
 const documentPage = (bodyHtml, dark) =>
   '<!doctype html><meta charset="utf-8">' +
   "<style>" +
-  ":root{--fg:#1f1f1f;--dim:#6b6b6b;--line:#e3e3e3;--warn:#8a6d1f;--warnbg:#fdf6e3}" +
+  ":root{--fg:#1f1f1f;--dim:#6b6b6b;--line:#e3e3e3;--warn:#8a6d1f;--warnbg:#fdf6e3;" +
+  "--info:#3a5f8a;--infobg:#eef2f8}" +
   (dark
-    ? ":root{--fg:#e8e8e8;--dim:#9a9a9a;--line:#3a3a3a;--warn:#d8b55a;--warnbg:#2e2a1e}"
+    ? ":root{--fg:#e8e8e8;--dim:#9a9a9a;--line:#3a3a3a;--warn:#d8b55a;--warnbg:#2e2a1e;" +
+      "--info:#8fb0d8;--infobg:#1e242e}"
     : "@media(prefers-color-scheme:dark){:root{--fg:#e8e8e8;--dim:#9a9a9a;--line:#3a3a3a;" +
-      "--warn:#d8b55a;--warnbg:#2e2a1e}}") +
+      "--warn:#d8b55a;--warnbg:#2e2a1e;--info:#8fb0d8;--infobg:#1e242e}}") +
   "body{margin:0;padding:14px 16px;font:13px/1.55 system-ui,-apple-system,'Segoe UI',sans-serif;" +
   "color:var(--fg);background:transparent}" +
   "h2{font-size:13px;margin:0 0 2px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}" +
@@ -629,6 +698,15 @@ const documentPage = (bodyHtml, dark) =>
   ".v{color:var(--dim);white-space:nowrap}" +
   ".todo{background:var(--warnbg);color:var(--warn);border-radius:3px;padding:0 5px;" +
   "font-size:12px;white-space:nowrap}" +
+  // Drafted, not missing. A second badge rather than a second shade of the
+  // TODO amber, because the two say opposite things about whose move it is:
+  // amber is "nobody has written this", blue is "it is written and waiting for
+  // you to approve it". One colour with two meanings would make the Checklist
+  // unreadable at a glance, which is the only thing it is for.
+  ".draft{background:var(--infobg);color:var(--info);border-radius:3px;padding:0 5px;" +
+  "font-size:12px;white-space:nowrap}" +
+  // The count row under a heading: `4 in the course · 2 drafted · 1 missing`.
+  ".tally{color:var(--dim);font-size:12px;margin:0 0 6px}" +
   "code{font:12px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--warnbg);" +
   "color:var(--warn);border-radius:3px;padding:1px 5px}" +
   ".empty{border-left:3px solid var(--line);padding-left:10px;color:var(--dim)}" +
@@ -1254,6 +1332,494 @@ const readyDocument = (workspace, root, runId, dark) => {
     "</p></section>";
 
   return documentPage(body, dark);
+};
+
+/**
+ * A count that exists in two halves.
+ *
+ * `recorded` is what `courses/` holds. `merged` is what it would hold if every
+ * proposal in `work/<RUN>/` were approved. The drafted half is the difference
+ * rather than a count of the draft files, because `mergeDrafts` is what decides
+ * whether a proposal actually lands — `DRAFTABLE` refuses whole collections —
+ * and a draft the merge threw away must not be reported here as work in hand.
+ */
+const split = (recorded, merged) => ({
+  recorded,
+  drafted: Math.max(0, merged - recorded),
+  state: recorded > 0 ? "done" : merged > 0 ? "draft" : "todo",
+});
+
+const countOf = (value) => (Array.isArray(value) ? value.length : 0);
+
+/** Every week's slide decks, by week number, from one outline payload. */
+const decksByWeek = (data) => {
+  const found = new Map();
+  for (const week of data.weeks ?? []) {
+    for (const meeting of week.meetings ?? []) {
+      for (const resource of meeting.resources ?? []) {
+        if (resource.kind !== "slides") continue;
+        const list = found.get(week.week) ?? [];
+        list.push(resource);
+        found.set(week.week, list);
+      }
+    }
+  }
+  return found;
+};
+
+/**
+ * What is not finished in one run, and whose move each thing is.
+ *
+ * Four questions, which is what the professor actually asks of a course they
+ * are still building: what has not been created, what carries no deadline, do
+ * the weights come to 100%, and is each week's deck written or only proposed.
+ *
+ * **Nothing is recomputed here that the model already computes.** The weights
+ * come out of `course_outline`'s own `grading` section — `total_weight`,
+ * `unweighted`, `complete`, and the sentence it writes when something is wrong
+ * — for the reason `gradingDocument`'s header gives at length: an earlier
+ * version of that view did the arithmetic itself, forgot that `weight` is a
+ * fraction of one, and told a professor their correct scheme was "1%, not
+ * 100". Two views disagreeing about a number is the failure this whole pane is
+ * shaped to avoid, and a checklist that says "incomplete" while the Grading
+ * policy tab says "100%" would be the worst instance of it. Likewise the
+ * counts: `totals` is the payload's, and the deadline column is `due_on` as
+ * the outline reports it.
+ *
+ * **Both halves, always.** Like `ready`, this view does not take the Record /
+ * `+ drafts` toggle — it loads the record AND the merge and reports the
+ * difference, because "written, or only proposed" is the question rather than
+ * a setting. A toggle that hid one column would remove the answer.
+ *
+ * Returns data, not HTML. The document is rendered per request because `dark`
+ * varies with the professor's theme; the report does not, so it is the half
+ * worth caching. See `checklistFor`.
+ */
+const checklistReport = (workspace, root, runId) => {
+  const record = payload(workspace, "course_outline", { course_version_id: runId });
+
+  // A run nobody has drafted for merges to itself, which is the right answer:
+  // every drafted count comes out zero and every row reads "in the course".
+  let merged = record;
+  try {
+    merged = draftedPayload(workspace, root, "course_outline", runId, null).payload;
+  } catch {
+    // The record loaded, so the run is real; only the draft directory failed.
+    // `ready` is the view that reports draft-loading complaints, and it says
+    // more about them than a line here could.
+    merged = record;
+  }
+
+  // Roles, not head count: `enrollments` is refused in a draft file, so this
+  // has no drafted half and is read from the bundle rather than a payload.
+  let enrolled = null;
+  try {
+    enrolled = enrollmentsOf(workspace.findRun(runId), runId).filter(
+      (entry) => ["student", "auditor"].includes(entry.role) && entry.status === "active",
+    ).length;
+  } catch {
+    enrolled = null;
+  }
+
+  const recordTotals = record.totals ?? {};
+  const mergedTotals = merged.totals ?? {};
+  const at = (totals, key) => (typeof totals[key] === "number" ? totals[key] : 0);
+
+  const withRubric = (data) =>
+    (data.assessments ?? []).filter((row) => (row.criteria ?? 0) > 0).length;
+
+  const structure = [
+    {
+      label: "Learning outcomes",
+      piece: split(countOf(record.outcomes), countOf(merged.outcomes)),
+      hint: "/propose-concepts",
+    },
+    {
+      label: "Weekly modules",
+      piece: split(at(recordTotals, "modules"), at(mergedTotals, "modules")),
+      hint: "/plan-term",
+    },
+    {
+      label: "Meetings scheduled",
+      piece: split(at(recordTotals, "meetings"), at(mergedTotals, "meetings")),
+      hint: "/plan-term",
+    },
+    {
+      label: "Assessments",
+      piece: split(at(recordTotals, "assessments"), at(mergedTotals, "assessments")),
+      hint: "/design-assessment",
+    },
+    {
+      label: "Assessments with a rubric",
+      piece: split(withRubric(record), withRubric(merged)),
+      hint: "/design-assessment",
+      of: at(mergedTotals, "assessments"),
+    },
+  ];
+
+  // Two things `versions` owns, and `versions` is not draftable — so these are
+  // present or absent, never proposed, and a "drafted" column against them
+  // would be a column that can only ever read zero.
+  const fixed = [
+    { label: "Instructor named", have: countOf(record.run?.instructors), hint: "versions/<term>/version.yaml" },
+    { label: "Students enrolled", have: enrolled, hint: "ainar roster import" },
+  ];
+
+  const weeksPlanned = {
+    planned: at(mergedTotals, "weeks_planned"),
+    total: at(mergedTotals, "weeks"),
+  };
+
+  // Weeks that hold a meeting. A week with none has no class to write a deck
+  // for, and counting it as a missing deck would report the same hole twice —
+  // once here and once as "Meetings scheduled".
+  const meetingWeeks = (merged.weeks ?? []).filter((week) => (week.meetings ?? []).length > 0);
+
+  const recordDecks = decksByWeek(record);
+  const mergedDecks = decksByWeek(merged);
+
+  const slides = meetingWeeks.map((week) => {
+    const recorded = (recordDecks.get(week.week) ?? []).length;
+    const all = mergedDecks.get(week.week) ?? [];
+    return {
+      week: week.week,
+      title: (week.modules ?? [])[0]?.title ?? null,
+      recorded,
+      drafted: Math.max(0, all.length - recorded),
+      // Registered as a resource with nothing behind it: no file to open and
+      // no document to serve. `resource.no_location` is the validator's name
+      // for it, and it is the difference between a deck that exists and a deck
+      // somebody meant to make.
+      unlocated: all.filter((resource) => !resource.url && !resource.document_id).length,
+      state: recorded > 0 ? "done" : all.length > 0 ? "draft" : "todo",
+    };
+  });
+
+  // Undated work, read off the merge so a drafted assessment with no deadline
+  // is caught before it is approved rather than after.
+  const recordedIds = new Set((record.assessments ?? []).map((row) => row.assessment_id));
+
+  // `unplaced` is the outline's own word for a record that lands in no week.
+  // For an assessment that means neither an in-run date nor a module to inherit
+  // a week from — so an undated one is usually here too, and the two faults are
+  // reported together on its own row rather than as a second anonymous count
+  // under another heading. What is left over is the different fault: work with
+  // a date that falls outside the run.
+  const unplacedIds = new Set(
+    (merged.unplaced?.assessments ?? []).map((row) => row.assessment_id),
+  );
+
+  const undated = (merged.assessments ?? [])
+    .filter((row) => !row.due_on)
+    .map((row) => ({
+      assessment_id: row.assessment_id,
+      title: row.title ?? row.assessment_id ?? "untitled",
+      type: row.type ?? null,
+      drafted: !recordedIds.has(row.assessment_id),
+      // No module either, so nothing places it in a week: the deadline is the
+      // fix for both, which is why it is said here and not twice.
+      unplaced: unplacedIds.has(row.assessment_id),
+    }));
+
+  const undatedIds = new Set(undated.map((row) => row.assessment_id));
+
+  return {
+    structure,
+    fixed,
+    weeksPlanned,
+    unplaced: {
+      modules: countOf(merged.unplaced?.modules),
+      meetings: countOf(merged.unplaced?.meetings),
+      assessments: [...unplacedIds].filter((id) => !undatedIds.has(id)).length,
+    },
+    slides,
+    undated,
+    dated: countOf(merged.assessments) - undated.length,
+    grading: { record: record.grading ?? {}, merged: merged.grading ?? {} },
+    // True when the merge added nothing, which is the ordinary state of a
+    // course whose proposals have all been approved. The page drops its
+    // "drafted" language entirely in that case rather than printing a column
+    // of zeroes.
+    anyDrafted:
+      structure.some((entry) => entry.piece.drafted > 0) ||
+      slides.some((entry) => entry.drafted > 0) ||
+      undated.some((entry) => entry.drafted),
+  };
+};
+
+/**
+ * The report, computed at most once per change to the workspace.
+ *
+ * `checklistReport` is the most expensive thing this file does: it builds the
+ * outline payload twice — once over the record, once over the record with
+ * `work/<RUN>/` merged — and the merge re-parses the draft directory. Doing
+ * that on every frame load would be paying a course parse for a page whose
+ * answer cannot change until a file does.
+ *
+ * The key is the revision hash the pane ALREADY computes for its own refresh
+ * poll: name, size and mtime of every YAML under `courses/` and `work/`. That
+ * makes the cache exactly as fresh as the pane itself — the same hash that
+ * tells the browser to reload the frame is the one that invalidates what the
+ * frame is about to be served, so there is no window in which the pane redraws
+ * and gets the previous answer back.
+ *
+ * Capped and evicted oldest-first. A professor switches between a handful of
+ * runs, so the cap is never reached in practice; it is here so that a long
+ * session driving many runs cannot grow the map without bound.
+ */
+const CHECKLIST_CACHE_MAX = 24;
+const CHECKLISTS = new Map();
+
+const checklistFor = (workspace, root, runId) => {
+  const key = root + " " + runId;
+  const { revision } = revisionDocument(root);
+
+  const found = CHECKLISTS.get(key);
+  if (found && found.revision === revision) return found.report;
+
+  const report = checklistReport(workspace, root, runId);
+  CHECKLISTS.set(key, { revision, report });
+  if (CHECKLISTS.size > CHECKLIST_CACHE_MAX) {
+    // Insertion order is Map's own guarantee, so the first key is the oldest.
+    CHECKLISTS.delete(CHECKLISTS.keys().next().value);
+  }
+  return report;
+};
+
+/** `4 in the course · 2 drafted`, or the amber badge when there is neither. */
+const countValue = (piece, none) => {
+  const parts = [];
+  if (piece.recorded > 0) {
+    parts.push('<span class="dim">' + piece.recorded + " in the course</span>");
+  }
+  if (piece.drafted > 0) {
+    parts.push('<span class="draft">' + piece.drafted + " drafted</span>");
+  }
+  return parts.length ? parts.join(" · ") : '<span class="todo">' + escapeText(none) + "</span>";
+};
+
+const checkRow = (label, hint, value) =>
+  '<div class="row"><span class="k">' +
+  escapeText(label) +
+  (hint ? '<br><span class="dim">' + escapeText(hint) + "</span>" : "") +
+  '</span><span class="v">' +
+  value +
+  "</span></div>";
+
+/**
+ * The Checklist tab: the four questions a course under construction raises.
+ *
+ * Every figure on this page comes from `checklistReport`, which takes them from
+ * `course_outline`. Nothing is computed in the rendering.
+ */
+const checklistDocument = (workspace, root, runId, dark) => {
+  const report = checklistFor(workspace, root, runId);
+
+  const asPercent = (fraction) =>
+    typeof fraction === "number" ? Math.round(fraction * 1000) / 10 + "%" : "—";
+
+  // ---- What has not been created ----------------------------------------
+
+  const structureRows = report.structure
+    .map((entry) => {
+      const value =
+        entry.of !== undefined && entry.piece.recorded + entry.piece.drafted > 0
+          ? countValue(entry.piece, "none") +
+            ' <span class="dim">of ' +
+            entry.of +
+            "</span>"
+          : countValue(entry.piece, "none");
+      return checkRow(entry.label, entry.piece.state === "todo" ? entry.hint : "", value);
+    })
+    .join("");
+
+  const fixedRows = report.fixed
+    .map((entry) =>
+      checkRow(
+        entry.label,
+        entry.have ? "" : entry.hint,
+        entry.have === null
+          ? '<span class="dim">—</span>'
+          : entry.have > 0
+            ? '<span class="dim">' + entry.have + "</span>"
+            : '<span class="todo">none</span>',
+      ),
+    )
+    .join("");
+
+  const { planned, total } = report.weeksPlanned;
+  const weeksRow = checkRow(
+    "Weeks with a module",
+    planned < total ? "/plan-term places a module in each" : "",
+    total === 0
+      ? '<span class="todo">the run has no weeks</span>'
+      : '<span class="' +
+        (planned === total ? "dim" : "todo") +
+        '">' +
+        planned +
+        " of " +
+        total +
+        "</span>",
+  );
+
+  // Created but attached to nothing, which is a different fault from missing
+  // and has a different fix: the record exists, and the week it belongs in is
+  // what is absent.
+  const UNPLACED_NOUNS = { modules: "module", meetings: "meeting", assessments: "assessment" };
+  const unplaced = Object.entries(report.unplaced).filter(([, count]) => count > 0);
+  const unplacedRow = unplaced.length
+    ? checkRow(
+        "Created but not placed",
+        "no week, or dated outside the run",
+        unplaced
+          .map(
+            ([kind, count]) =>
+              '<span class="todo">' +
+              count +
+              " " +
+              escapeText(UNPLACED_NOUNS[kind]) +
+              (count === 1 ? "" : "s") +
+              "</span>",
+          )
+          .join(" "),
+      )
+    : "";
+
+  const notCreated =
+    "<section><h2>What is not created</h2>" +
+    structureRows +
+    weeksRow +
+    fixedRows +
+    unplacedRow +
+    "</section>";
+
+  // ---- Deadlines ---------------------------------------------------------
+
+  const deadlines =
+    "<section><h2>Deadlines</h2>" +
+    (report.undated.length === 0
+      ? report.dated === 0
+        ? '<p class="empty">There is no graded work in this run yet, so there is nothing ' +
+          "to give a date to. Drafting one is <code>/design-assessment</code>.</p>"
+        : '<p class="dim">All ' +
+          report.dated +
+          " pieces of graded work carry a due date.</p>"
+      : '<p class="tally">' +
+        report.undated.length +
+        " of " +
+        (report.dated + report.undated.length) +
+        " carry no due date. A deadline is the professor's to set — " +
+        "no skill writes one.</p>" +
+        report.undated
+          .map((entry) =>
+            checkRow(
+              entry.title,
+              [entry.type, entry.unplaced ? "no module either, so no week holds it" : null]
+                .filter(Boolean)
+                .join(" · "),
+              '<span class="todo">no deadline</span>' +
+                (entry.drafted ? ' <span class="draft">drafted</span>' : ""),
+            ),
+          )
+          .join("")) +
+    "</section>";
+
+  // ---- Weights -----------------------------------------------------------
+  //
+  // `total_weight` is a fraction of one and `complete` is the model's own
+  // verdict on it. Neither is recomputed here; `note` is the model's sentence,
+  // which names the assessments at fault in a way a percentage cannot.
+
+  const scheme = report.grading.record;
+  const withDrafts = report.grading.merged;
+  const differs = scheme.total_weight !== withDrafts.total_weight;
+
+  const weights =
+    "<section><h2>Weights</h2>" +
+    checkRow(
+      "Declared in the course",
+      "",
+      scheme.complete === true
+        ? '<span class="dim">' + asPercent(scheme.total_weight) + "</span>"
+        : '<span class="todo">' + asPercent(scheme.total_weight) + " of 100%</span>",
+    ) +
+    (differs
+      ? checkRow(
+          "If every draft were approved",
+          "",
+          withDrafts.complete === true
+            ? '<span class="draft">' + asPercent(withDrafts.total_weight) + "</span>"
+            : '<span class="todo">' + asPercent(withDrafts.total_weight) + " of 100%</span>",
+        )
+      : "") +
+    ((withDrafts.unweighted ?? []).length
+      ? checkRow(
+          "Carrying no weight",
+          "",
+          '<span class="todo">' + withDrafts.unweighted.length + "</span>",
+        )
+      : "") +
+    (withDrafts.note ? '<p class="empty">' + escapeText(withDrafts.note) + "</p>" : "") +
+    "</section>";
+
+  // ---- Slides ------------------------------------------------------------
+
+  const missingDecks = report.slides.filter((entry) => entry.state === "todo").length;
+  const draftedDecks = report.slides.filter((entry) => entry.state === "draft").length;
+  const readyDecks = report.slides.filter((entry) => entry.state === "done").length;
+
+  const slides =
+    "<section><h2>Slides</h2>" +
+    (report.slides.length === 0
+      ? '<p class="empty">No week in this run holds a meeting, so there is nowhere for a ' +
+        "deck to attach. A deck reaches this list by being a <code>slides</code> resource " +
+        "on a learning activity.</p>"
+      : '<p class="tally">' +
+        readyDecks +
+        " ready · " +
+        draftedDecks +
+        " drafted · " +
+        missingDecks +
+        " with no deck, over " +
+        report.slides.length +
+        " weeks that meet.</p>" +
+        report.slides
+          .map((entry) =>
+            checkRow(
+              "Week " + entry.week + (entry.title ? " · " + entry.title : ""),
+              "",
+              entry.state === "todo"
+                ? '<span class="todo">no deck</span>'
+                : (entry.recorded > 0
+                    ? '<span class="dim">' + entry.recorded + " in the course</span>"
+                    : "") +
+                  (entry.drafted > 0
+                    ? (entry.recorded > 0 ? " · " : "") +
+                      '<span class="draft">' +
+                      entry.drafted +
+                      " drafted</span>"
+                    : "") +
+                  (entry.unlocated > 0
+                    ? ' <span class="todo">' + entry.unlocated + " with no file</span>"
+                    : ""),
+            ),
+          )
+          .join("")) +
+    "</section>";
+
+  // The closing sentence, which changes with the answer: a course whose gaps
+  // are all drafted needs `ainar approve`, and one whose gaps are empty needs a
+  // skill run. Saying both every time would say neither.
+  const closing =
+    '<section><p class="dim">' +
+    (report.anyDrafted
+      ? "Blue is written and waiting for you — <code>ainar approve</code> puts it in the " +
+        "course. Amber is not written yet."
+      : "Nothing is drafted for this run, so every amber row above needs a skill run " +
+        "rather than an approval.") +
+    "</p></section>";
+
+  return documentPage(notCreated + deadlines + weights + slides + closing, dark);
 };
 
 /**
@@ -2094,6 +2660,20 @@ const handler = (registry) => (req, res) => {
           // entry without the parameter renders pseudonyms.
           url.searchParams.get("names") === "1",
         ),
+      );
+    }
+
+    // The Checklist. No drafts toggle, for `ready`'s reason and one more of its
+    // own: this view IS the record-against-drafts comparison — every row says
+    // which half a thing is in — so a setting that removed one half would
+    // remove the answer rather than narrow it.
+    if (view === "checklist") {
+      if (!runId) return sendErrorPage(res, "No run chosen.");
+      return send(
+        res,
+        200,
+        "text/html; charset=utf-8",
+        checklistDocument(workspace, root, runId, url.searchParams.get("dark") === "1"),
       );
     }
 
