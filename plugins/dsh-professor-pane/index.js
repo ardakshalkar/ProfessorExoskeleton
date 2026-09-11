@@ -2,14 +2,32 @@
  * The host half of the professor's visualization pane.
  *
  * It registers one prefix route and nothing else. Everything the pane draws
- * comes back through `/professor-pane/...`, and everything behind that route is
- * a read: `callTool` from `dsh-ainar-course-model`, which is read-only by
- * construction, plus the preference files, which are read with `readFileSync`.
- * There is no write verb in this file and no place to add one — a pane that
- * could approve a grade would be a second approval path, and `AGENTS.md` says
- * there is one and the professor runs it.
+ * comes back through `/professor-pane/...`, and nearly everything behind that
+ * route is a read: `callTool` from `dsh-ainar-course-model`, which is read-only
+ * by construction, plus the preference and record files, read with
+ * `readFileSync`.
  *
- * Why HTTP rather than a service the browser half calls: the four views this
+ * Four exceptions, and each one's own header argues for itself:
+ *
+ * * `/api/approve` spawns this checkout's `ainar approve` rather than
+ *   reimplementing the approval gate. The gate stays where `AGENTS.md` puts it.
+ * * `/api/preferences` writes a preference layer. A preference is how the
+ *   professor wants the skills to behave, not a claim about a student, so there
+ *   is nothing in it for `approve` to gate.
+ * * `/api/canvas/selection` writes `extensions.lms.canvas_sections` on the run
+ *   record — which Canvas section feeds which subgroup. A fact about the
+ *   professor's own LMS that no skill drafts and no agent can propose, and
+ *   therefore one with no drafted half for `approve` to promote.
+ * * `/api/canvas/catalogue` is the only outbound request in this plugin: two
+ *   read-only Canvas endpoints, POST so that no link, prefetch or refresh can
+ *   spend the professor's token.
+ *
+ * What is still true, and is the line worth keeping: **nothing here can approve
+ * a judgement about a student, and nothing here can push a grade.** A pane that
+ * could approve one would be a second approval path, and `AGENTS.md` says there
+ * is one and the professor runs it.
+ *
+ * Why HTTP rather than a service the browser half calls: four of the views this
  * pane switches between are already written. `dsh-ainar-course-model` ships
  * four widget documents — `course-outline`, `class-progress`, `gradebook`,
  * `action-inbox` — assembled from `widget-assets/`, and DSH renders none of
@@ -25,12 +43,18 @@
 // See `runApprove`. Nothing else in this file starts a process.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { enrollmentsOf, runById } from "dsh-ainar-course-model/server/bundle.js";
+import {
+  assessmentsOf,
+  enrollmentsOf,
+  groupsOf,
+  requireGroups,
+  runById,
+} from "dsh-ainar-course-model/server/bundle.js";
 import { loadDrafts, mergeDrafts } from "dsh-ainar-course-model/server/drafts.js";
 import { gradebookPayload } from "dsh-ainar-course-model/server/gradebook.js";
 import { inboxPayload } from "dsh-ainar-course-model/server/inbox.js";
@@ -44,9 +68,20 @@ import {
   referenceDate,
   workspaceRootFor,
 } from "dsh-ainar-course-model/server/mcp/workspace.js";
+import { writeAssessmentLinks } from "dsh-ainar-course-model/server/lms/link.js";
 import { outlinePayload } from "dsh-ainar-course-model/server/outline.js";
+import { dump as dumpYaml } from "dsh-ainar-course-model/server/yaml-out.js";
 import { dashboardPayload } from "dsh-ainar-course-model/server/progress.js";
-import { parse as parseYaml } from "yaml";
+// `parseDocument` alongside `parse`, for one caller: `writeCanvasSelection`
+// edits a file a professor also writes by hand, and the plain parse would hand
+// back a JS object with every comment in `version.yaml` already discarded.
+import { parse as parseYaml, parseDocument as parseYamlDocument } from "yaml";
+
+// The pane's own text layer: HTML escaping, and the markdown renderer `/file`
+// serves a brief and a deck through. Separate from this file because it is the
+// only part of the server half a test can call with no workspace and no
+// harness — see `test/pane-markdown.test.mjs`.
+import { MARKDOWN_STYLE, escapeText, renderMarkdown } from "./lib/markdown.js";
 
 export const name = "professor-pane";
 
@@ -86,11 +121,16 @@ const DEFAULTS_YAML = resolve(
 );
 
 /**
- * The four tabs, in the order the button bar shows them.
+ * The views a widget document answers, keyed by the path segment.
  *
- * `widget` names a document in `dsh-ainar-course-model`'s manifest, keyed there
- * by tool. `preferences` has no widget because no tool returns preferences —
- * that view is drawn by the browser half from `/api/preferences` below.
+ * Not the tab list — `lib/client.js` owns that, and most tabs are no longer in
+ * here. Each entry names a tool in `dsh-ainar-course-model`'s manifest, which
+ * is keyed by tool. Everything else the pane draws has no widget behind it:
+ * the class list, the Checklist, the assessment, slide and exam tables and the
+ * grading policy are assembled in this file, while Preferences and
+ * Integrations are drawn by the browser half from `/api/preferences` and
+ * `/api/integrations` — those two have forms, and a form cannot live in the
+ * sandboxed frame the served documents go into.
  */
 const VIEWS = {
   outline: { tool: "course_outline" },
@@ -295,13 +335,11 @@ const draftedPayload = (workspace, root, tool, runId, on) => {
  * per outline request — and it only runs when there is a dateless assessment to
  * ask about, which is nearly never.
  */
-const withRecordPaths = (data, root, courseId, term) => {
+const withRecordPaths = (data, root, courseId, term, entries) => {
   if (data === null || typeof data !== "object") return data;
   const wanted = new Set();
-  for (const week of data.weeks ?? []) {
-    for (const entry of week.undated ?? []) {
-      if (entry?.assessment_id) wanted.add(entry.assessment_id);
-    }
+  for (const entry of entries) {
+    if (entry?.assessment_id) wanted.add(entry.assessment_id);
   }
   if (!wanted.size) return data;
 
@@ -335,11 +373,9 @@ const withRecordPaths = (data, root, courseId, term) => {
   }
   if (!found.size) return data;
 
-  for (const week of data.weeks ?? []) {
-    for (const entry of week.undated ?? []) {
-      const path = found.get(entry?.assessment_id);
-      if (path) entry.source_file = path;
-    }
+  for (const entry of entries) {
+    const path = found.get(entry?.assessment_id);
+    if (path) entry.source_file = path;
   }
   return data;
 };
@@ -510,7 +546,90 @@ const runsDocument = (workspace, root) => {
  * The task layer — flags on the invoking command — is not a file and cannot be
  * read here, so it is absent rather than empty.
  */
-const preferencesDocument = (root, courseId, term) => {
+/**
+ * Every option a professor may set, and what a control for it should be.
+ *
+ * Derived from `defaults.yaml` rather than declared here, because that file is
+ * already the list of what DataLayer reads. A second copy would be a list of
+ * what the pane BELIEVES DataLayer reads, and the first setting either one grew
+ * without the other would be a control writing a key nothing consults.
+ *
+ * The choices come out of the file's own trailing comments — `style: lecture
+ * # lecture | seminar | workshop`. That comment is not decoration; it is the
+ * only place the alternatives are written down, and reading it is cheaper and
+ * truer than restating them here. A key whose comment says something else, or
+ * nothing at all, gets a plain field.
+ *
+ * A key appearing twice under different groups with DIFFERENT choices is
+ * dropped from the option table rather than guessed at: the comment is matched
+ * on the key alone, and two answers mean the match is not a match.
+ */
+const OPTION_COMMENT = /^\s*([A-Za-z0-9_]+):\s*[^#\s][^#]*#\s*([^|#]+(?:\|[^|#]+)+?)\s*$/;
+
+const preferenceSchema = () => {
+  let text;
+  let parsed;
+  try {
+    text = readFileSync(DEFAULTS_YAML, "utf8");
+    parsed = parseYaml(text) ?? {};
+  } catch {
+    // No defaults file, so nothing is known to be settable. The view reports
+    // the system layer absent for the same reason and by the same route.
+    return [];
+  }
+
+  const choices = new Map();
+  const ambiguous = new Set();
+  for (const line of text.split(/\r?\n/)) {
+    const match = OPTION_COMMENT.exec(line);
+    if (!match) continue;
+    const words = match[2].split("|").map((word) => word.trim()).filter(Boolean);
+    const seen = choices.get(match[1]);
+    if (seen && seen.join("|") !== words.join("|")) ambiguous.add(match[1]);
+    choices.set(match[1], words);
+  }
+
+  const fields = [];
+  const walk = (node, path) => {
+    for (const [key, value] of Object.entries(node ?? {})) {
+      const here = [...path, key];
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+        walk(value, here);
+        continue;
+      }
+      const options = ambiguous.has(key) ? null : choices.get(key) ?? null;
+      fields.push({
+        path: here.join("."),
+        group: path.join(".") || "general",
+        label: key.replace(/_/g, " "),
+        type: options
+          ? "enum"
+          : typeof value === "boolean"
+            ? "boolean"
+            : typeof value === "number"
+              ? "number"
+              : "text",
+        options,
+        // `2.5` must not come back as `2` when a professor rounds it: PyYAML
+        // writes a float differently from an integer, and `yaml-out` takes
+        // float-ness from the caller because JavaScript has one number type.
+        float: typeof value === "number" && !Number.isInteger(value),
+        fallback: value,
+      });
+    }
+  };
+  walk(parsed.values ?? {}, []);
+  return fields;
+};
+
+/**
+ * The layers and where each one lives, named once.
+ *
+ * Read and write both need this list and must not disagree about it: a Save
+ * that wrote somewhere the view does not read would look like a Save that did
+ * nothing at all.
+ */
+const preferenceLayerPaths = (root, courseId, term) => {
   const candidates = [
     {
       scope: "system",
@@ -538,6 +657,11 @@ const preferencesDocument = (root, courseId, term) => {
     }
   }
 
+  return candidates;
+};
+
+const preferencesDocument = (root, courseId, term) => {
+  const candidates = preferenceLayerPaths(root, courseId, term);
   const layers = candidates.map((candidate) => {
     let text;
     try {
@@ -564,10 +688,1392 @@ const preferencesDocument = (root, courseId, term) => {
 
   return {
     layers,
+    schema: preferenceSchema(),
     note:
-      "Read-only. Four layers resolve on top of each other and the last one — " +
-      "flags on the invoking command — is not a file, so it is not shown. " +
-      "Editing a preference means editing the file its row names.",
+      "Four layers resolve on top of each other, each beating the one before " +
+      "it, and the last — flags on the invoking command — is not a file, so it " +
+      "is not shown. The DataLayer defaults ship with the harness and are not " +
+      "editable here; the other three are yours, and a layer overrides only " +
+      "the keys it names.",
+  };
+};
+
+/**
+ * A request body, with a ceiling on it.
+ *
+ * The two routes that read one — the preference form and the Canvas selection.
+ * The cap is enforced on what arrives rather than trusted from
+ * `content-length`, because that header is the sender's claim about the body
+ * and this is the body.
+ */
+const readBody = (req, limit = 256 * 1024) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new Error("the request body is too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    req.on("error", reject);
+  });
+
+/**
+ * Write one preference layer, and only keys the schema knows.
+ *
+ * The second write verb in this pane, and unlike the first it is not an
+ * approval. A preference is how the professor wants the skills to behave, not a
+ * claim about a student, so there is nothing here for `ainar approve` to gate
+ * and no second approval path is created by allowing it.
+ *
+ * What it shares with the first is that it writes a file a person also edits by
+ * hand, so it goes through `yaml-out`'s `dump` — the emitter `approve` uses,
+ * held to PyYAML byte for byte — and a file this saves is indistinguishable in
+ * style from one written beside it.
+ *
+ * Unknown keys are refused rather than dropped quietly. The form is built FROM
+ * the schema, so a key outside it did not come from the form, and writing it
+ * would put a setting in the file that nothing ever reads.
+ *
+ * An empty result does not create a file. "No file here" and "a file that sets
+ * nothing" are different facts about a layer — the view says so in those words
+ * — and pressing Save on a form nobody filled in must not turn one into the
+ * other.
+ */
+const writePreferences = (root, scope, courseId, term, values) => {
+  if (scope === "system") {
+    return { error: "The DataLayer defaults ship with the harness. They are not yours to edit here." };
+  }
+  const layer = preferenceLayerPaths(root, courseId, term).find((entry) => entry.scope === scope);
+  if (!layer) {
+    return { error: "No " + scope + " layer for this selection. A course layer needs a course, and a run layer needs a run." };
+  }
+  if (!existsSync(dirname(layer.path))) {
+    return { error: "Nowhere to write: " + dirname(layer.path) + " does not exist." };
+  }
+
+  const schema = new Map(preferenceSchema().map((field) => [field.path, field]));
+  const floats = new Set();
+  const tree = {};
+  let count = 0;
+
+  for (const [path, raw] of Object.entries(values ?? {})) {
+    const field = schema.get(path);
+    if (!field) return { error: path + " is not a preference DataLayer reads." };
+    // An empty control means "inherit", which is the ABSENCE of the key rather
+    // than a value of its own. That is the whole grammar of a layer.
+    if (raw === null || raw === undefined || raw === "") continue;
+
+    let value = raw;
+    if (field.type === "boolean") {
+      if (raw !== true && raw !== false && raw !== "true" && raw !== "false") {
+        return { error: path + " takes true or false." };
+      }
+      value = raw === true || raw === "true";
+    } else if (field.type === "number") {
+      value = typeof raw === "number" ? raw : Number(String(raw).trim());
+      if (!Number.isFinite(value)) return { error: path + " takes a number." };
+      if (field.float || !Number.isInteger(value)) floats.add("values." + path);
+    } else if (field.type === "enum" && !field.options.includes(String(raw))) {
+      return { error: path + " takes one of: " + field.options.join(", ") + "." };
+    } else {
+      value = String(raw);
+    }
+
+    const parts = path.split(".");
+    let node = tree;
+    for (const part of parts.slice(0, -1)) {
+      if (typeof node[part] !== "object" || node[part] === null) node[part] = {};
+      node = node[part];
+    }
+    node[parts[parts.length - 1]] = value;
+    count += 1;
+  }
+
+  if (count === 0 && !existsSync(layer.path)) {
+    return { written: false, path: layer.path, count: 0 };
+  }
+
+  // Whatever the file already called itself, it goes on calling itself. The id
+  // is how a professor recognises their own layer in a log, and a Save is not
+  // a reason to rename it.
+  let profileId = null;
+  try {
+    profileId = (parseYaml(readFileSync(layer.path, "utf8")) ?? {}).profile_id ?? null;
+  } catch {
+    profileId = null;
+  }
+  if (!profileId) {
+    profileId =
+      scope === "professor"
+        ? "professor-local"
+        : scope === "course"
+          ? "course-" + courseId
+          : "run-" + courseId + "-" + term;
+  }
+
+  const document = { version: 1, profile_id: profileId, scope, values: tree };
+  writeFileSync(layer.path, dumpYaml(document, (path) => floats.has(path.join("."))), "utf8");
+  return { written: true, path: layer.path, count };
+};
+
+// ------------------------------------------------------------- integrations
+//
+// The Integrations tab: everything this run is wired to outside the workspace,
+// and — the half actually worth a tab — everything it is not.
+//
+// The facts are scattered across five files and five environment variables, and
+// that scattering is the reason this exists. A professor asking "will a push
+// reach Canvas" has to know that the target is on the run record, that the
+// course id is on the run record OR in its `extensions` and that only one of
+// the two is read, that the host is in a TOML file beside the roster, that the
+// token is an environment variable, and that Telegram is in a JSON file under a
+// different dot-directory again. Four of those are invisible from every other
+// tab in this pane.
+//
+// **Nothing here prints a credential.** Presence, the variable's name, and the
+// path it would be read from — never the value. A pane that showed a Canvas
+// token would be putting a grade-changing credential on a screen that gets
+// screen-shared, which is the trade the class list's `Pseudonyms` control
+// exists to avoid.
+
+/**
+ * The gradebook-target vocabulary, duplicated from `ainar/src/lms/index.ts`.
+ *
+ * Duplicated rather than imported for `rosterPath`'s reason: this pane reads
+ * the course model through `dsh-ainar-course-model/server/**`, and that package
+ * has no LMS module — its `lms-export.js` is exam formats, not gradebook
+ * targets. The TypeScript `ainar/src/lms/` is not on this package's resolution
+ * path and should not be put there, because everything in it can push a grade.
+ *
+ * What is copied is four strings and two key names. If they drift, this tab
+ * calls a supported target unsupported — a wrong sentence on a screen rather
+ * than a wrong grade in Canvas.
+ */
+const LMS_EXTENSION = "lms";
+const LMS_TARGETS = ["canvas-csv", "canvas-api", "sheet-csv", "sheets-api"];
+const LIVE_LMS_TARGETS = new Set(["canvas-api", "sheets-api"]);
+const CANVAS_SECTIONS_KEY = "canvas_sections";
+/**
+ * One Canvas course per subgroup, for a run taught in several Canvas shells.
+ *
+ * Duplicated from `src/lms/index.ts` for `LMS_TARGETS`' reason and with the
+ * same consequence if it drifts: this pane is vendored and cannot import from
+ * ainar-node, so the key name is repeated here and a mismatch would write a
+ * mapping the pusher does not read.
+ */
+const CANVAS_COURSES_KEY = "canvas_courses";
+const CANVAS_ASSIGNMENTS_KEY = "canvas_assignments";
+
+/** `extensions.lms` as an object, whatever the record actually holds there. */
+const lmsLinkage = (record) => {
+  const found = record?.extensions?.[LMS_EXTENSION];
+  return found && typeof found === "object" && !Array.isArray(found) ? found : {};
+};
+
+/**
+ * One linkage value, with `TODO` counted as absent.
+ *
+ * `isTodo` rather than a plain empty check, and it is not a nicety. The AINAR
+ * scaffolds write the literal string `TODO` where a decision is owed, so a run
+ * that has never chosen a gradebook target carries `target: TODO` — and the
+ * first version of this read it as a recorded value. The tab then said
+ * "Gradebook target · TODO · Recorded, but this workspace cannot reach it",
+ * which is two wrong claims at once: nobody recorded it, and the reason it
+ * cannot be reached is not that it is exotic. `isTodo`'s own header makes the
+ * general point — drawing a placeholder as though it were a decision is worse
+ * than saying nothing.
+ *
+ * Applied here rather than at each call site so it covers every key a scaffold
+ * can stamp: the target, the Canvas course and assignment ids, the spreadsheet
+ * and the tab names.
+ */
+const lmsString = (record, key) => {
+  const value = lmsLinkage(record)[key];
+  return isTodo(value) ? null : String(value);
+};
+
+/**
+ * The two or three keys this tooling reads out of `lms.toml`.
+ *
+ * A hand-rolled reader rather than a TOML parser, copied from `canvas-api.ts`
+ * for the reason its own header gives: what is wanted is a couple of string
+ * assignments inside one table, and a real parser would be a dependency added
+ * to read `base_url = "https://…"`.
+ *
+ * The `token` key is read only so that its PRESENCE can be reported. No caller
+ * puts it in a response.
+ */
+const readTomlTable = (path, table) => {
+  let text;
+  try {
+    if (!statSync(path).isFile()) return {};
+    text = readFileSync(path, "utf-8");
+  } catch {
+    return {};
+  }
+  const found = {};
+  let inside = false;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    if (line.startsWith("[")) {
+      inside = line === `[${table}]`;
+      continue;
+    }
+    if (!inside) continue;
+    const equals = line.indexOf("=");
+    if (equals === -1) continue;
+    const key = line.slice(0, equals).trim();
+    let value = line.slice(equals + 1).trim();
+    const quote = value[0];
+    if ((quote === '"' || quote === "'") && value.endsWith(quote)) value = value.slice(1, -1);
+    if (key && value) found[key] = value;
+  }
+  return found;
+};
+
+/** Whether an environment variable holds something, without saying what. */
+const envPresent = (name) => Boolean((process.env[name] || "").trim());
+
+/**
+ * The shared connections registry, which `ainar connections` owns.
+ *
+ * This is the file the pane should be reading, and the two below it —
+ * `lms.toml` and the publishing profiles — are the older places the same
+ * answer used to live. All three are still reported, because the honest
+ * picture during a migration is all three, and because "your Canvas host is in
+ * the file the pusher does not read" is precisely the diagnosis a professor
+ * needs and cannot get from a view that shows only one.
+ *
+ * Read-only, and presence-only for credentials: a `tokenEnv` is a variable
+ * NAME and is safe to print, a value never is. The registry is not supposed to
+ * contain one at all, so finding one is reported as a problem rather than
+ * quietly passed over.
+ */
+const registryPath = () => {
+  const fromEnv = (process.env.AINAR_CONNECTIONS || "").trim();
+  return fromEnv ? resolve(fromEnv) : join(homedir(), ".ainar", "connections.json");
+};
+
+const registryConnections = () => {
+  const path = registryPath();
+  let parsed;
+  try {
+    if (!existsSync(path) || !statSync(path).isFile()) {
+      return { path, present: false, connections: [], defaults: {}, error: null };
+    }
+    parsed = JSON.parse(readFileSync(path, "utf-8"));
+  } catch (error) {
+    return { path, present: true, connections: [], defaults: {}, error: String(error?.message ?? error) };
+  }
+  const table = parsed && typeof parsed.connections === "object" ? parsed.connections : null;
+  if (table === null) {
+    return { path, present: true, connections: [], defaults: {}, error: "no `connections` object in the file" };
+  }
+
+  // Duplicated from `src/connections/index.ts`, and it drifts the way
+  // `LMS_TARGETS` can drift: this plugin is vendored and cannot import from
+  // ainar-node. The consequence of drift here is a wrong variable name in a
+  // read-only column, which is why the duplication is tolerable and why the
+  // names are worth keeping in one obvious shape.
+  const FALLBACK = {
+    canvas: "AINAR_CANVAS_TOKEN",
+    sheets: "AINAR_SHEETS_TOKEN",
+    moodle: "AINAR_MOODLE_TOKEN",
+    telegram: "AINAR_TELEGRAM_BOT_TOKEN",
+  };
+
+  const connections = Object.entries(table)
+    .map(([name, entry]) => {
+      const type = String(entry?.type ?? "");
+      const variable = String(entry?.tokenEnv ?? "").trim() || FALLBACK[type] || null;
+      return {
+        name,
+        type,
+        supported: Object.hasOwn(FALLBACK, type),
+        baseUrl: entry?.baseUrl ?? null,
+        courseId: entry?.courseId ?? null,
+        chatId: entry?.chatId ?? null,
+        forumId: entry?.forumId ?? null,
+        keyFile: entry?.keyFile ?? null,
+        tokenEnv: variable,
+        tokenInEnv: variable ? envPresent(variable) : false,
+        // Never true in a healthy registry. Reported so that it cannot be true
+        // and unnoticed.
+        tokenInFile: Boolean(String(entry?.token ?? "").trim()),
+      };
+    })
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  const defaults = parsed?.defaults && typeof parsed.defaults === "object" ? parsed.defaults : {};
+  return { path, present: true, connections, defaults, error: null };
+};
+
+/**
+ * The grammar `credentialRef` accepts. A name outside it stored nothing.
+ *
+ * Checked here rather than by importing `credentialRef` from
+ * `@deepseek-ai/dsh-credentials`, and the difference matters: that import
+ * would throw at module load in a composition without the package, taking the
+ * whole pane with it, which is the same failure the nested-fiber injection
+ * above exists to avoid. The brand is a compile-time type — at runtime
+ * `credentialRef` validates against exactly this pattern and returns the
+ * string — so passing a name that has passed this test is the same call.
+ */
+const CREDENTIAL_REF = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * What the credential seam says about each variable the registry names.
+ *
+ * Three facts per name, and never a fourth: whether a value is configured,
+ * which layer supplies it, and whether this pane could write it. The value is
+ * not among them and no code path here can reach one — `describe` does not
+ * return it, by the seam's own design.
+ *
+ * `writable: false` is the interesting case. The local provider layers the
+ * inherited process environment OVER its managed document and refuses to write
+ * underneath it, because a write that resolution would keep shadowing is a
+ * write that appears to succeed and does nothing. So a professor who exported
+ * the variable in their shell must be shown a disabled field explaining that,
+ * rather than a form that swallows what they type.
+ *
+ * Without a provider the answer degrades to what this process can see for
+ * itself: presence in its own environment, and nothing writable.
+ */
+const credentialStatus = async (service, names) => {
+  const status = {};
+  for (const name of new Set(names)) {
+    if (!name || !CREDENTIAL_REF.test(name)) continue;
+    if (!service) {
+      status[name] = {
+        configured: envPresent(name),
+        source: envPresent(name) ? "env" : null,
+        writable: false,
+        why: "no credential provider is mounted, so this can only be set in the environment",
+      };
+      continue;
+    }
+    try {
+      const described = await service.describe(name);
+      status[name] = {
+        configured: Boolean(described?.configured),
+        source: described?.source ?? null,
+        writable: Boolean(described?.writable),
+        why:
+          described?.writable === false && described?.source === "env"
+            ? "set in the launching environment, which cannot be edited from here"
+            : null,
+      };
+    } catch (error) {
+      status[name] = {
+        configured: envPresent(name),
+        source: null,
+        writable: false,
+        why: String(error?.message ?? error),
+      };
+    }
+  }
+  return status;
+};
+
+/**
+ * A credential value, for the one route that has to send one.
+ *
+ * The only function in this file that holds a token, and it hands it straight
+ * to the request. Nothing stores it, logs it, or puts it in a response — the
+ * value exists for the duration of one outbound call and then is gone with the
+ * stack frame.
+ */
+const resolveCredential = async (service, name) => {
+  if (!service || !name || !CREDENTIAL_REF.test(name)) return null;
+  try {
+    const found = await service.resolve(name);
+    const value = String(found?.value ?? "").trim();
+    return value || null;
+  } catch {
+    // A provider that cannot answer is the same as one that has nothing: the
+    // caller falls back to what the process environment holds.
+    return null;
+  }
+};
+
+/**
+ * The Integrations payload, credentials and status resolved.
+ *
+ * Five routes answer with this document — the read, the credential write, the
+ * Canvas setup, the subgroup mapping and the section selection — and each one
+ * redraws the whole tab from what it returns. Assembling it in five places is
+ * how one of them ends up without the status block and a Save silently blanks
+ * half the view; there is already a comment two hundred lines up saying that
+ * about the credential block, which is exactly how this function came to be.
+ */
+const integrationsAnswer = async (workspace, root, runId, credentials, extra = {}) => {
+  const document = integrationsDocument(workspace, root, runId);
+  const refs = await credentialStatus(credentials.service, credentialRefsIn(document));
+  return {
+    ...document,
+    credentials: { available: Boolean(credentials.service), refs },
+    integrations: integrationsFor(document, refs),
+    ...extra,
+  };
+};
+
+/**
+ * Each integration as a checklist, so the tab opens on the answer.
+ *
+ * The question a professor arrives with is "will this work", and until now
+ * every fact needed to answer it was on the page but none of them said it:
+ * a host here, a token there, a course id on the run record, an assignment id
+ * per assessment. Five facts, four of them absent, and no line anywhere
+ * reading "Canvas is half set up".
+ *
+ * So each provider gets an ordered list of what it needs, each step done or
+ * not, and a state derived from the two:
+ *
+ * * **absent** — nothing at all is recorded. There is a form for this.
+ * * **partial** — some steps are done. The remaining ones are named, because
+ *   "partly configured" without saying which part is a worse answer than
+ *   nothing.
+ * * **ready** — every step is done. Not a promise that a push will succeed:
+ *   only Canvas answering can say that, and `doctor` is what asks.
+ *
+ * A step is a fact, not an instruction. `hint` says where the fact lives, so
+ * a professor who would rather edit YAML than press a button can.
+ *
+ * Pure over the payload that is already assembled, plus the credential status
+ * the route has just resolved — nothing here reads a file or the network, and
+ * nothing here can hold a credential value.
+ */
+const integrationsFor = (document, refs) => {
+  const configured = (name) => Boolean(name && refs[name] && refs[name].configured);
+  const step = (label, done, hint) => ({ label, done: Boolean(done), hint });
+
+  const stateOf = (steps) => {
+    if (steps.every((entry) => entry.done)) return "ready";
+    return steps.some((entry) => entry.done) ? "partial" : "absent";
+  };
+
+  // ---- Canvas ------------------------------------------------------------
+  const subgroups = (document.subgroups ?? []).map((entry) => entry.group);
+  const bound = Object.keys(document.subgroupCourses?.map ?? {});
+  // With subgroups, "the course is recorded" means every one of them has one.
+  // A run where CS-401 is bound and CS-402 is not cannot push CS-402, and
+  // calling that done would hide exactly the half that is missing.
+  const courseDone = subgroups.length
+    ? bound.length > 0 && subgroups.every((group) => bound.includes(group))
+    : Boolean(document.canvasCourse?.usable);
+  const linked = (document.assessments ?? []).filter(
+    (entry) => entry.canvasAssignmentId || Object.keys(entry.canvasAssignments ?? {}).length,
+  );
+
+  const canvasSteps = [
+    step("Host", Boolean(document.canvas?.host), "the address you open Canvas at"),
+    step(
+      "Token",
+      configured(document.canvas?.tokenEnv),
+      document.canvas?.tokenEnv ?? "AINAR_CANVAS_TOKEN",
+    ),
+    step(
+      subgroups.length ? `Course for each subgroup (${bound.length}/${subgroups.length})` : "Course",
+      courseDone,
+      subgroups.length ? "extensions.lms.canvas_courses" : "extensions.lms.canvas_course_id",
+    ),
+    step(
+      `Assessments linked (${linked.length}/${(document.assessments ?? []).length})`,
+      linked.length > 0 && linked.length === (document.assessments ?? []).length,
+      "extensions.lms.canvas_assignment_id on each assessment",
+    ),
+  ];
+
+  // ---- The registry-backed providers -------------------------------------
+  const ofType = (type) =>
+    (document.registry?.connections ?? []).filter((entry) => entry.type === type);
+  const legacyOfType = (type) =>
+    (document.connections?.profiles ?? []).filter((entry) => entry.type === type);
+
+  const telegram = ofType("telegram")[0] ?? legacyOfType("telegram")[0] ?? null;
+  const telegramSteps = [
+    step("Channel", Boolean(telegram?.chatId), "the @name or numeric id the bot posts to"),
+    step(
+      "Bot token",
+      configured(telegram?.tokenEnv) || Boolean(telegram?.tokenInEnv),
+      telegram?.tokenEnv ?? "AINAR_TELEGRAM_BOT_TOKEN",
+    ),
+  ];
+
+  const moodle = ofType("moodle")[0] ?? legacyOfType("moodle")[0] ?? null;
+  const moodleSteps = [
+    step("Host", Boolean(moodle?.baseUrl), "the address you open Moodle at"),
+    step(
+      "Web-service token",
+      configured(moodle?.tokenEnv) || Boolean(moodle?.tokenInEnv),
+      moodle?.tokenEnv ?? "AINAR_MOODLE_TOKEN",
+    ),
+  ];
+
+  const sheetsConnection = ofType("sheets")[0] ?? null;
+  const sheetsSteps = [
+    step("Spreadsheet", Boolean(document.sheet?.id), "extensions.lms.sheet_id on the run"),
+    step(
+      "Credential",
+      configured("AINAR_SHEETS_TOKEN") || Boolean(sheetsConnection?.keyFile),
+      "AINAR_SHEETS_TOKEN, or a service-account key",
+    ),
+  ];
+
+  return [
+    {
+      id: "canvas",
+      label: "Canvas",
+      what: "grades, and announcements",
+      state: stateOf(canvasSteps),
+      steps: canvasSteps,
+      // Which fields the form asks for. The client draws from this rather
+      // than knowing each provider, so a provider added here appears there.
+      fields: ["baseUrl", "token"],
+      canPushGrades: true,
+    },
+    {
+      id: "telegram",
+      label: "Telegram",
+      what: "announcements to the course channel",
+      state: stateOf(telegramSteps),
+      steps: telegramSteps,
+      fields: ["chatId", "token"],
+      canPushGrades: false,
+    },
+    {
+      id: "sheets",
+      label: "Google Sheets",
+      what: "the professor's own gradebook",
+      state: stateOf(sheetsSteps),
+      steps: sheetsSteps,
+      fields: ["sheetId", "token"],
+      canPushGrades: true,
+    },
+    {
+      id: "moodle",
+      label: "Moodle",
+      what: "announcements and pages",
+      state: stateOf(moodleSteps),
+      steps: moodleSteps,
+      fields: ["baseUrl", "token"],
+      // Said out loud rather than left to be discovered: `ainar lms push` has
+      // no Moodle target, and a row that looked like Canvas's would promise
+      // one. `prof-publish` reaches Moodle, and it publishes content.
+      canPushGrades: false,
+    },
+  ];
+};
+
+/** Every variable this run's integrations would read a credential from. */
+const credentialRefsIn = (document) =>
+  [
+    document?.canvas?.tokenEnv,
+    ...(document?.registry?.connections ?? []).map((connection) => connection.tokenEnv),
+  ].filter(Boolean);
+
+/**
+ * The publishing profiles in `~/.professor/connections.json`.
+ *
+ * A different file, written by a different tool — the
+ * `professor-lms-publishing-skills` package, which is where Moodle and Telegram
+ * live. It is reported here because from the professor's side it is the same
+ * question: what is this course wired to.
+ *
+ * A profile's literal `token` is dropped on the way out. `tokenEnv` is a
+ * variable NAME and is safe to print; all this says of a token in the file is
+ * that one is there — which is itself worth saying, because a credential in a
+ * JSON file is a credential somewhere the professor may not have meant.
+ */
+const connectionProfiles = () => {
+  const path = join(homedir(), ".professor", "connections.json");
+  let parsed;
+  try {
+    if (!existsSync(path) || !statSync(path).isFile()) {
+      return { path, present: false, profiles: [], error: null };
+    }
+    parsed = JSON.parse(readFileSync(path, "utf-8"));
+  } catch (error) {
+    return { path, present: true, profiles: [], error: String(error?.message ?? error) };
+  }
+  const table = parsed && typeof parsed.profiles === "object" ? parsed.profiles : null;
+  if (table === null) {
+    return { path, present: true, profiles: [], error: "no `profiles` object in the file" };
+  }
+  // The variable each provider falls back to when a profile names no
+  // `tokenEnv`, from `resolveToken` in that package's `config.ts`.
+  const FALLBACK = {
+    canvas: "CANVAS_TOKEN",
+    moodle: "MOODLE_TOKEN",
+    telegram: "TELEGRAM_BOT_TOKEN",
+  };
+  const profiles = Object.entries(table).map(([name, profile]) => {
+    const type = String(profile?.type ?? "");
+    const variable = String(profile?.tokenEnv ?? "").trim() || FALLBACK[type] || null;
+    return {
+      name,
+      type,
+      supported: Object.hasOwn(FALLBACK, type),
+      baseUrl: profile?.baseUrl ?? null,
+      courseId: profile?.courseId ?? null,
+      chatId: profile?.chatId ?? null,
+      forumId: profile?.forumId ?? null,
+      tokenEnv: variable,
+      tokenInFile: Boolean(String(profile?.token ?? "").trim()),
+      tokenInEnv: variable ? envPresent(variable) : false,
+    };
+  });
+  return { path, present: true, profiles, error: null };
+};
+
+/**
+ * Where the Canvas host and token would come from, resolved as
+ * `loadCanvasConfig` resolves them: the environment first, then `lms.toml`.
+ *
+ * The host IS returned, because a hostname is not a secret and the professor
+ * needs to see which Canvas this would push to — a course id pointing at the
+ * wrong instance is the failure this whole tab is meant to make visible. The
+ * token is returned only to `canvasCatalogue`, which sends it to that host and
+ * to nowhere else; every response-building caller reads the two booleans.
+ */
+const canvasSettings = (registry = registryConnections()) => {
+  const path = join(rosterDir(), "lms.toml");
+  const settings = readTomlTable(path, "canvas");
+  const fromEnv = (process.env.AINAR_CANVAS_URL || "").trim();
+
+  // The same order `loadCanvasConfig` resolves in, and it has to stay the same
+  // order: a pane that reported a different host from the one a push would use
+  // would be worse than a pane that reported nothing.
+  const usableCanvas = registry.connections.filter(
+    (connection) => connection.type === "canvas" && connection.baseUrl && !connection.tokenInFile,
+  );
+  const named = registry.defaults?.canvas
+    ? usableCanvas.find((connection) => connection.name === registry.defaults.canvas)
+    : null;
+  // One is unambiguous; two without a declared default are not, and the pusher
+  // refuses to guess between them, so the pane must not name one either.
+  const chosen = named ?? (usableCanvas.length === 1 ? usableCanvas[0] : null);
+
+  const variable = chosen?.tokenEnv ?? "AINAR_CANVAS_TOKEN";
+  return {
+    configPath: path,
+    registryPath: registry.path,
+    connection: chosen?.name ?? null,
+    host: fromEnv || chosen?.baseUrl || settings.base_url || null,
+    hostFrom: fromEnv
+      ? "AINAR_CANVAS_URL"
+      : chosen
+        ? `connection ${chosen.name} in ${registry.path}`
+        : settings.base_url
+          ? path
+          : null,
+    tokenEnv: variable,
+    tokenInEnv: envPresent(variable),
+    tokenInFile: Boolean(String(settings.token ?? "").trim()),
+    token: process.env[variable] || settings.token || null,
+  };
+};
+
+/**
+ * The sheet tab an assessment writes to when nothing was written down, as
+ * `defaultSheetTab` derives it: `ASSESSMENT-04` becomes `A04`.
+ *
+ * Duplicated for `LMS_TARGETS`' reason, with the same consequence if it drifts:
+ * a wrong tab name in a read-only column. Derived from the id and never from
+ * the title, because the tab name is the key the next push finds the tab by and
+ * titles are edited freely.
+ */
+const defaultSheetTab = (assessmentId) => {
+  const id = String(assessmentId ?? "");
+  const remainder = id.startsWith("ASSESSMENT-") ? id.slice("ASSESSMENT-".length) : id;
+  const derived = !remainder ? id : /^[0-9]/.test(remainder) ? `A${remainder}` : remainder;
+  const cleaned = [...derived]
+    .map((char) => ("[]*?/\\:".includes(char) ? "-" : char))
+    .join("")
+    .trim();
+  return cleaned.slice(0, 100) || "Sheet";
+};
+
+/**
+ * The Canvas sections and groups already bound to this run.
+ *
+ * A LIST rather than a map keyed by subgroup, and the shape is the whole design
+ * of the selection this tab offers. A Canvas course is divided into sections by
+ * a registrar and into student groups by the professor; a run carries
+ * subgroups, or carries none at all. Keying by subgroup would leave a run
+ * taught as one cohort with no key to write under, and would refuse the
+ * ordinary case of two Canvas sections feeding one subgroup.
+ *
+ * So each entry is one Canvas thing the professor selected, and `group` says
+ * which subgroup it feeds — absent meaning it feeds the whole run.
+ */
+const canvasSelections = (run) => {
+  const raw = lmsLinkage(run)[CANVAS_SECTIONS_KEY];
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry))
+    .map((entry) => ({
+      id: entry.id === null || entry.id === undefined ? "" : String(entry.id),
+      name: entry.name === null || entry.name === undefined ? null : String(entry.name),
+      kind: entry.kind === "group" ? "group" : "section",
+      group:
+        entry.group === null || entry.group === undefined || entry.group === ""
+          ? null
+          : String(entry.group),
+    }))
+    .filter((entry) => entry.id !== "");
+};
+
+/** The run record's own file, which is the one place `versions` may live. */
+const versionRecordPath = (root, courseId, term) =>
+  join(root, "courses", courseId, "versions", term, "version.yaml");
+
+/**
+ * Everything the Integrations tab draws, as JSON for the browser half.
+ *
+ * JSON rather than a served HTML document, unlike the class list and the
+ * Checklist. Those two are inert pages and go into the sandboxed frame; this
+ * one has a form that has to call back — the Canvas fetch, and the save — and
+ * the frame is delivered as `srcdoc` WITHOUT `allow-same-origin`, so a document
+ * inside it has an opaque origin and cannot reach these routes at all.
+ * Preferences is drawn in the browser half for exactly this reason.
+ */
+const integrationsDocument = (workspace, root, runId) => {
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId) ?? {};
+  const enrolled = enrollmentsOf(bundle, runId);
+  const registry = registryConnections();
+  const canvas = canvasSettings(registry);
+  const target = lmsString(run, "target");
+
+  // The course id, and WHICH field said it. Two fields can, and only one is
+  // read by the pusher: `lms_course_id` is a first-class column on the run
+  // record and is what onboarding writes, while `extensions.lms
+  // .canvas_course_id` is what `ainar lms push` actually looks at. A professor
+  // whose push cannot find a course needs to be told that the id they can see
+  // is sitting in the field the pusher does not read.
+  const extensionId = lmsString(run, "canvas_course_id");
+  // `isTodo` here too: `lms_course_id` is a scaffolded column like any other,
+  // and a run carrying the placeholder has not named a Canvas course.
+  const columnId = isTodo(run.lms_course_id) ? null : String(run.lms_course_id);
+  // The API takes a number. `canvas-88219` is a handle somebody wrote for a
+  // human, and reporting it as configured would describe a push that cannot
+  // work — so `usable` is separate from `id`.
+  const numeric = /^[0-9]+$/;
+
+  const activeIn = (group) =>
+    enrolled.filter(
+      (entry) => entry.status === "active" && String(entry.group ?? "").trim() === group,
+    ).length;
+
+  return {
+    run: {
+      runId,
+      courseId: run.course_id ?? null,
+      term: run.term ?? null,
+      section: run.section ?? null,
+      recordPath:
+        run.course_id && run.term
+          ? relative(root, versionRecordPath(root, run.course_id, run.term)).split(sep).join("/")
+          : null,
+    },
+
+    // ---- Targets ---------------------------------------------------------
+    target: {
+      value: target,
+      supported: target === null ? null : LMS_TARGETS.includes(target),
+      live: target !== null && LIVE_LMS_TARGETS.has(target),
+      options: LMS_TARGETS,
+    },
+    canvasCourse: {
+      id: extensionId ?? (columnId && numeric.test(columnId) ? columnId : null),
+      fromExtension: extensionId,
+      fromColumn: columnId,
+      usable: Boolean(
+        extensionId ? numeric.test(extensionId) : columnId && numeric.test(columnId),
+      ),
+    },
+    sheet: {
+      id: lmsString(run, "sheet_id"),
+      summaryTab: lmsString(run, "sheet_tab") || "Summary",
+    },
+
+    // One Canvas course per subgroup, where the run is taught in several
+    // Canvas shells. `conflict` is the state the validator calls
+    // `lms.both_course_forms`: reported here too, because the form has to
+    // refuse to write into a record that already answers the question the
+    // other way, and refusing without saying why is the worse half of that.
+    subgroupCourses: (() => {
+      const found = lmsLinkage(run)[CANVAS_COURSES_KEY];
+      const map = {};
+      if (found && typeof found === "object" && !Array.isArray(found)) {
+        for (const [group, value] of Object.entries(found)) {
+          const id = String(value ?? "").trim();
+          if (id) map[group] = id;
+        }
+      }
+      return {
+        map,
+        perSubgroup: Object.keys(map).length > 0,
+        // `extensionId` only, deliberately. `lms_course_id` is the column the
+        // pusher does not read, so a run carrying it alongside a subgroup
+        // mapping has one answer, not two — and the validator's
+        // `lms.both_course_forms` counts it the same way. Including it here
+        // would raise a conflict on every run scaffolded with that column.
+        conflict: Object.keys(map).length > 0 && Boolean(extensionId),
+        singleId: extensionId,
+      };
+    })(),
+
+    // ---- Credentials, by presence only -----------------------------------
+    canvas: {
+      host: canvas.host,
+      hostFrom: canvas.hostFrom,
+      configPath: canvas.configPath,
+      registryPath: canvas.registryPath,
+      connection: canvas.connection,
+      tokenEnv: canvas.tokenEnv,
+      tokenInEnv: canvas.tokenInEnv,
+      tokenInFile: canvas.tokenInFile,
+    },
+    environment: [
+      {
+        name: "AINAR_CANVAS_URL",
+        present: envPresent("AINAR_CANVAS_URL"),
+        what: "Which Canvas to talk to. Not a secret.",
+      },
+      {
+        name: "AINAR_CANVAS_TOKEN",
+        present: envPresent("AINAR_CANVAS_TOKEN"),
+        what: "Can change a grade. Keep it out of the repository.",
+      },
+      {
+        name: "AINAR_SHEETS_TOKEN",
+        present: envPresent("AINAR_SHEETS_TOKEN"),
+        what: "Overwrites the professor's own spreadsheet.",
+      },
+      {
+        name: "AINAR_TELEGRAM_BOT_TOKEN",
+        present: envPresent("AINAR_TELEGRAM_BOT_TOKEN"),
+        what: "Posts to the course channel students read.",
+      },
+      {
+        name: "AINAR_MOODLE_TOKEN",
+        present: envPresent("AINAR_MOODLE_TOKEN"),
+        what: "Publishes to Moodle, where nothing here can push grades yet.",
+      },
+      {
+        name: "AINAR_ROSTER_DIR",
+        present: envPresent("AINAR_ROSTER_DIR"),
+        what: "Where the private roster lives, if not ~/.ainar/roster.",
+      },
+      {
+        name: "AINAR_CONNECTIONS",
+        present: envPresent("AINAR_CONNECTIONS"),
+        what: "Where the connections registry lives, if not ~/.ainar/connections.json.",
+      },
+    ],
+    roster: (() => {
+      const path = rosterPath();
+      const people = rosterPeople();
+      return {
+        path,
+        present: existsSync(path),
+        // A count, never a name. The class list is where people are named, and
+        // only when the professor has pressed for it.
+        count: people === null ? null : Object.keys(people).length,
+      };
+    })(),
+    // Two address books during the migration, and the pane shows both: the
+    // registry every tool now reads first, and the older publishing profiles
+    // it falls back to. A professor whose push cannot find a host needs to see
+    // which of the two the host they can see is actually sitting in.
+    registry,
+    connections: connectionProfiles(),
+
+    // ---- Links -----------------------------------------------------------
+    assessments: assessmentsOf(bundle, runId).map((assessment) => ({
+      assessmentId: assessment.assessment_id,
+      title: assessment.title ?? null,
+      // What it is out of. The binder's last-resort pairing rule compares it
+      // against a Canvas assignment's points_possible, and a professor
+      // checking a suggested pair reads it before anything else.
+      maximumScore: assessment.maximum_score ?? null,
+      canvasAssignmentId: lmsString(assessment, "canvas_assignment_id"),
+      // The mapping itself, not just a count. The binder saves one subgroup
+      // at a time and the writer replaces the whole mapping, so the browser
+      // half has to send back the subgroups it is not editing — without this
+      // it would send only CS-401 and quietly unbind the other two.
+      canvasAssignments: (() => {
+        const found = lmsLinkage(assessment)[CANVAS_ASSIGNMENTS_KEY];
+        const map = {};
+        if (found && typeof found === "object" && !Array.isArray(found)) {
+          for (const [group, value] of Object.entries(found)) {
+            const id = String(value ?? "").trim();
+            if (id) map[group] = id;
+          }
+        }
+        return map;
+      })(),
+      sheetTab: lmsString(assessment, "sheet_tab"),
+      defaultSheetTab: defaultSheetTab(assessment.assessment_id),
+    })),
+    subgroups: groupsOf(bundle, runId).map((group) => ({ group, students: activeIn(group) })),
+    ungrouped: activeIn(""),
+    selections: canvasSelections(run),
+  };
+};
+
+/**
+ * Canvas's sections and student groups for one course, fetched live.
+ *
+ * The one outbound request this plugin makes, and everything about how it is
+ * reached follows from that:
+ *
+ * * **POST, not GET.** It is a read as far as Canvas is concerned, so GET would
+ *   be the honest verb — but it spends the professor's API quota and sends a
+ *   grade-changing token, and this file's rule for that is already written on
+ *   `/api/approve`: a side effect behind a GET is one a link, a prefetch, a
+ *   refresh or a replayed history entry can fire without anybody having decided
+ *   to. A professor pressing `Fetch from Canvas` has decided to.
+ * * **No caching.** The answer is a list of sections a registrar edits, and a
+ *   stale one would be mapped against by mistake.
+ * * **Two read-only endpoints and no others.** There is no branch here that can
+ *   write to Canvas.
+ *
+ * Pagination is Canvas's `Link` header. Bounded at ten pages, because a
+ * thousand sections is not a course, it is a wrong course id — and an unbounded
+ * follow would sit here spending quota on discovering that.
+ */
+const canvasCatalogue = async (courseId, host, token) => {
+  const api = host.replace(/\/+$/, "") + "/api/v1";
+  const read = async (collection, params) => {
+    const rows = [];
+    let next =
+      `${api}/courses/${encodeURIComponent(courseId)}/${collection}?per_page=100` +
+      (params ? `&${params}` : "");
+    for (let page = 0; page < 10 && next; page += 1) {
+      const response = await fetch(next, {
+        headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+      });
+      if (!response.ok) {
+        // The status and Canvas's own sentence. Never the request, which is
+        // where the Authorization header is.
+        let detail = "";
+        try {
+          detail = (await response.text()).slice(0, 400);
+        } catch {
+          detail = "";
+        }
+        throw new Error(
+          `Canvas answered ${response.status} for ${collection}` + (detail ? `: ${detail}` : ""),
+        );
+      }
+      const body = await response.json();
+      if (Array.isArray(body)) rows.push(...body);
+      const found = /<([^>]+)>\s*;\s*rel="next"/.exec(response.headers.get("link") || "");
+      next = found ? found[1] : null;
+    }
+    return rows;
+  };
+
+  // Both, because both are called "groups" in conversation and guessing which
+  // one the professor meant is how this control would end up mapping the wrong
+  // thing. Sections are what a registrar-fed course is actually divided by;
+  // student groups are the professor's own grouping, and each is labelled as
+  // what it is so the choice is theirs rather than this function's.
+  const [sections, groups] = await Promise.all([
+    read("sections", "include[]=total_students"),
+    read("groups", null),
+  ]);
+
+  const option = (row, kind) => ({
+    id: String(row.id ?? ""),
+    name: String(row.name ?? row.id ?? ""),
+    kind,
+    students:
+      typeof row.total_students === "number"
+        ? row.total_students
+        : typeof row.members_count === "number"
+          ? row.members_count
+          : null,
+    sisId: row.sis_section_id ? String(row.sis_section_id) : null,
+  });
+
+  return {
+    host: host.replace(/\/+$/, ""),
+    courseId: String(courseId),
+    options: [
+      ...sections.map((row) => option(row, "section")),
+      ...groups.map((row) => option(row, "group")),
+    ].filter((entry) => entry.id !== ""),
+  };
+};
+
+/**
+ * Write the Canvas selection into the run record.
+ *
+ * The third write verb in this pane, and the first that touches `courses/`. Why
+ * it is allowed to, where a grade is not:
+ *
+ * `ainar approve` gates the promotion of DRAFTS — claims about students and
+ * about what the course teaches, produced by an agent, which a professor has to
+ * read before they become the record. This writes neither. It records which
+ * Canvas section corresponds to which subgroup: a fact about the professor's
+ * own LMS that only they know, that no skill drafts and no agent can propose,
+ * and that therefore has no drafted half for `approve` to promote. Refusing it
+ * would not protect the record — it would mean the fact stays settable only by
+ * hand-editing YAML, which is the friction this tab exists to remove.
+ *
+ * What it borrows from `approve` is the care:
+ *
+ * * **`extensions.lms.canvas_sections` and nothing else.** The document is
+ *   re-read, that one key is replaced, everything else written back untouched.
+ *   No path here can reach `start_date`, `status` or `instructors`.
+ * * **Comments survive**, through `parseDocument` rather than `parse`.
+ *   `version.yaml` opens with a comment explaining the version/run merge, and a
+ *   save that silently deleted a professor's writing would be a bug worse than
+ *   the friction it removed. `writePreferences` may use the plain emitter
+ *   because it owns its file whole; this one does not own the file at all.
+ * * **A subgroup this run has never heard of is refused**, by `requireGroups`,
+ *   for that function's own reason. A typo'd label would otherwise sit in the
+ *   record binding a Canvas section to a cohort that does not exist.
+ */
+const writeCanvasSelection = (workspace, root, runId, selections) => {
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId);
+  if (!run) return { error: `no course run '${runId}' in this workspace` };
+  if (!run.course_id || !run.term) {
+    return { error: `${runId} carries no course_id and term, so its record cannot be located.` };
+  }
+  if (!Array.isArray(selections)) return { error: "The selection must be a list." };
+  if (selections.length > 200) return { error: "That is more than 200 selections." };
+
+  const cleaned = [];
+  const seen = new Set();
+  for (const entry of selections) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      return { error: "Each selection must be an object." };
+    }
+    const id = String(entry.id ?? "").trim();
+    if (!id) return { error: "A selection with no Canvas id cannot be recorded." };
+    if (!/^[0-9]+$/.test(id)) return { error: `${id} is not a Canvas id.` };
+    const kind = entry.kind === "group" ? "group" : "section";
+    if (seen.has(`${kind}:${id}`)) continue;
+    seen.add(`${kind}:${id}`);
+    const group = String(entry.group ?? "").trim();
+    // Throws on a label this run does not have, which is the point of asking
+    // the bundle rather than trusting the form.
+    if (group) requireGroups(bundle, runId, [group]);
+    const row = { id, kind };
+    const name = String(entry.name ?? "").trim();
+    if (name) row.name = name;
+    if (group) row.group = group;
+    cleaned.push(row);
+  }
+
+  const path = versionRecordPath(root, run.course_id, run.term);
+  if (!existsSync(path)) return { error: `Nowhere to write: ${path} does not exist.` };
+
+  let original;
+  let document;
+  try {
+    original = readFileSync(path, "utf8");
+    document = parseYamlDocument(original);
+  } catch (error) {
+    return { error: `${path} will not parse: ${String(error?.message ?? error)}` };
+  }
+  if (document.errors?.length) {
+    return { error: `${path} will not parse: ${document.errors[0].message}` };
+  }
+
+  if (cleaned.length === 0) {
+    // An empty selection REMOVES the key rather than writing an empty list, by
+    // the grammar `writePreferences` states: absent and "set to nothing" are
+    // different facts about a record, and unmapping every section should leave
+    // the file saying nothing at all about Canvas sections. The now-empty
+    // parents go with it, so a run that was never wired to Canvas reads exactly
+    // as it did before this tab was ever opened.
+    document.deleteIn(["extensions", LMS_EXTENSION, CANVAS_SECTIONS_KEY]);
+    const emptied = (node) => node && Array.isArray(node.items) && node.items.length === 0;
+    if (emptied(document.getIn(["extensions", LMS_EXTENSION]))) {
+      document.deleteIn(["extensions", LMS_EXTENSION]);
+    }
+    if (emptied(document.get("extensions"))) document.delete("extensions");
+  } else {
+    document.setIn(["extensions", LMS_EXTENSION, CANVAS_SECTIONS_KEY], cleaned);
+  }
+
+  // The emitter always produces LF. A `version.yaml` that arrived with CRLF —
+  // one edited on Windows in something that is not an editor — would otherwise
+  // come back with every line changed, and a one-selection change would show up
+  // in `git diff` as a rewrite of the whole record. The endings the professor
+  // had are the endings they keep.
+  const written = /\r\n/.test(original)
+    ? String(document).replace(/\r?\n/g, "\r\n")
+    : String(document);
+  writeFileSync(path, written, "utf8");
+  return {
+    written: true,
+    path: relative(root, path).split(sep).join("/"),
+    count: cleaned.length,
+  };
+};
+
+/**
+ * Write each assessment's Canvas assignment linkage into its own record.
+ *
+ * The fourth writer here and the only one that edits a file other than
+ * `version.yaml`, which brings two things worth stating.
+ *
+ * **Which file.** `RECORD_GLOBS` accepts `versions/<term>/assessments.yaml`
+ * and `versions/<term>/assessments/*.yaml`, so an assessment sits wherever it
+ * was authored or approved into. The file is found by scanning for the id as
+ * a value of `assessment_id`, the way `withRecordPaths` does for the same
+ * reason: guessing `generated.yaml` is right until somebody hand-authors one,
+ * and then it silently edits the wrong record.
+ *
+ * **The header that says not to.** Files `ainar approve` writes carry
+ * "Machine-managed — change these through approval, not by hand", and this
+ * edits them. The line that makes it defensible: approval is a gate on
+ * *decisions* — what a student was given, what an outcome claims — and a
+ * Canvas assignment id is neither. It is a pointer at another system, it
+ * carries no academic content, it changes when somebody rebuilds a Canvas
+ * shell, and nothing about it is a judgement anybody should have to re-accept.
+ * Every other field in the record is left exactly as it was.
+ *
+ * A multi-document file is refused rather than rewritten. The emitter would
+ * have to reproduce the separators and the per-document formatting, and a
+ * half-right rewrite of a professor's records is worse than an honest refusal
+ * naming the file.
+ */
+const recordAssessmentLinks = (workspace, root, runId, links) => {
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId);
+  if (!run) return { error: `no course run '${runId}' in this workspace` };
+  if (!run.course_id || !run.term) {
+    return { error: `${runId} carries no course_id and term, so its records cannot be located.` };
+  }
+  if (!links || typeof links !== "object" || Array.isArray(links)) {
+    return { error: "The links must be an object of assessment id to Canvas assignment id." };
+  }
+
+  const known = new Set(assessmentsOf(bundle, runId).map((entry) => entry.assessment_id));
+  const groups = new Set(groupsOf(bundle, runId));
+
+  // Normalise every entry first, so a single bad value stops the whole write
+  // rather than leaving half the assessments edited.
+  const wanted = new Map();
+  for (const [assessmentId, value] of Object.entries(links)) {
+    if (!known.has(assessmentId)) {
+      return { error: `${assessmentId} is not an assessment of ${runId}.` };
+    }
+    if (value === null || value === "" || value === undefined) {
+      wanted.set(assessmentId, null);
+      continue;
+    }
+    if (typeof value === "object" && !Array.isArray(value)) {
+      const mapping = {};
+      for (const [group, id] of Object.entries(value)) {
+        if (!groups.has(group)) {
+          return { error: `${runId} has no subgroup '${group}'.` };
+        }
+        const cleaned = String(id ?? "").trim();
+        if (!cleaned) continue;
+        if (!/^[0-9]+$/.test(cleaned)) {
+          return { error: `'${cleaned}' is not a Canvas assignment id — the API takes the number.` };
+        }
+        mapping[group] = cleaned;
+      }
+      wanted.set(assessmentId, Object.keys(mapping).length ? mapping : null);
+      continue;
+    }
+    const cleaned = String(value).trim();
+    if (!/^[0-9]+$/.test(cleaned)) {
+      return { error: `'${cleaned}' is not a Canvas assignment id — the API takes the number.` };
+    }
+    wanted.set(assessmentId, cleaned);
+  }
+  if (!wanted.size) return { written: false, count: 0 };
+
+  // ---- and hand the editing to the one writer -----------------------------
+  //
+  // Finding the file, refusing a multi-document one, editing through the YAML
+  // document API so the comments survive, and keeping the line endings — all
+  // of that is `lms/link.js`, which `ainar lms assignment-push` also calls.
+  // This route used to hold a second copy of it, and two copies of a rule
+  // about rewriting a professor's records is one copy too many.
+  //
+  // What stays here is validation of an untrusted browser payload, above:
+  // whether the run exists, whether the assessment is in it, whether a
+  // subgroup is one the run has, whether an id is the number the API takes.
+  // That belongs where the payload arrives, not in a module the CLI shares.
+  try {
+    const recorded = writeAssessmentLinks(root, run.course_id, run.term, wanted);
+    return { written: recorded.count > 0, count: recorded.count, files: recorded.written };
+  } catch (error) {
+    // The shared writer throws; this route answers in-band, because its caller
+    // is a `fetch` in the browser half and a sentence is what it draws.
+    return { error: String(error?.message ?? error) };
+  }
+};
+
+/**
+ * Set or clear one scalar under `extensions.lms` on the run record.
+ *
+ * The third writer of this file and the last one that needed writing, so it
+ * is the general shape the other two are special cases of: edit the document
+ * rather than rewrite it, delete the key and its emptied parents rather than
+ * write a blank, and keep the line endings the file arrived with.
+ */
+const writeRunLmsValue = (workspace, root, runId, key, value) => {
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId);
+  if (!run) return { error: `no course run '${runId}' in this workspace` };
+  if (!run.course_id || !run.term) {
+    return { error: `${runId} carries no course_id and term, so its record cannot be located.` };
+  }
+
+  const path = versionRecordPath(root, run.course_id, run.term);
+  if (!existsSync(path)) return { error: `Nowhere to write: ${path} does not exist.` };
+
+  let original;
+  let document;
+  try {
+    original = readFileSync(path, "utf8");
+    document = parseYamlDocument(original);
+  } catch (error) {
+    return { error: `${path} will not parse: ${String(error?.message ?? error)}` };
+  }
+  if (document.errors?.length) {
+    return { error: `${path} will not parse: ${document.errors[0].message}` };
+  }
+
+  const cleaned = String(value ?? "").trim();
+  if (!cleaned) {
+    document.deleteIn(["extensions", LMS_EXTENSION, key]);
+    const emptied = (node) => node && Array.isArray(node.items) && node.items.length === 0;
+    if (emptied(document.getIn(["extensions", LMS_EXTENSION]))) {
+      document.deleteIn(["extensions", LMS_EXTENSION]);
+    }
+    if (emptied(document.get("extensions"))) document.delete("extensions");
+  } else {
+    document.setIn(["extensions", LMS_EXTENSION, key], cleaned);
+  }
+
+  const written = /\r\n/.test(original)
+    ? String(document).replace(/\r?\n/g, "\r\n")
+    : String(document);
+  writeFileSync(path, written, "utf8");
+  return { written: true, path: relative(root, path).split(sep).join("/"), key, cleared: !cleaned };
+};
+
+/**
+ * Write `extensions.lms.canvas_courses` — one Canvas course per subgroup.
+ *
+ * The same shape and the same care as `writeCanvasSelection` next door: the
+ * document is edited rather than rewritten so a professor's comments and key
+ * order survive, an empty mapping removes the key and its emptied parents
+ * rather than writing `{}`, and the line endings the file arrived with are the
+ * ones it leaves with.
+ *
+ * Two refusals of its own:
+ *
+ * **A subgroup this run does not have is rejected**, by `requireGroups`, for
+ * that function's reason — a typo'd label would sit in the record binding a
+ * Canvas course to a cohort that does not exist, and at push time it reads as
+ * "that subgroup has no Canvas course" rather than as the typo it is.
+ *
+ * **Writing this while `canvas_course_id` is set is rejected.** The validator
+ * calls that `lms.both_course_forms` and so does this: two answers to which
+ * Canvas course a run is would be settled by whichever code path read first,
+ * and the cost of reading wrong is one cohort's marks in another's gradebook.
+ * The professor is told to clear the single id first, in those words.
+ */
+const writeCanvasCourses = (workspace, root, runId, mapping) => {
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId);
+  if (!run) return { error: `no course run '${runId}' in this workspace` };
+  if (!run.course_id || !run.term) {
+    return { error: `${runId} carries no course_id and term, so its record cannot be located.` };
+  }
+  if (!mapping || typeof mapping !== "object" || Array.isArray(mapping)) {
+    return { error: "The mapping must be an object of subgroup to Canvas course id." };
+  }
+
+  const entries = Object.entries(mapping);
+  if (entries.length > 100) return { error: "That is more than 100 subgroups." };
+
+  const cleaned = {};
+  for (const [group, value] of entries) {
+    const label = String(group ?? "").trim();
+    if (!label) return { error: "A mapping entry with no subgroup cannot be recorded." };
+    const id = String(value ?? "").trim();
+    // An entry with no id is an unmapping, not an error: the form sends every
+    // subgroup it drew, and the ones still to be decided arrive empty.
+    if (!id) continue;
+    if (!/^[0-9]+$/.test(id)) {
+      return {
+        error:
+          `'${id}' is not a Canvas course id. The API takes the number, which is the ` +
+          "one in the course URL.",
+      };
+    }
+    requireGroups(bundle, runId, [label]);
+    cleaned[label] = id;
+  }
+
+  const singleId = lmsString(run, "canvas_course_id");
+  if (Object.keys(cleaned).length && singleId) {
+    return {
+      error:
+        `This run already sets extensions.lms.canvas_course_id to ${singleId}, which says ` +
+        "the whole run is one Canvas course. Clear that first — a record holding both " +
+        "forms has two answers to which course a push should reach.",
+    };
+  }
+
+  const path = versionRecordPath(root, run.course_id, run.term);
+  if (!existsSync(path)) return { error: `Nowhere to write: ${path} does not exist.` };
+
+  let original;
+  let document;
+  try {
+    original = readFileSync(path, "utf8");
+    document = parseYamlDocument(original);
+  } catch (error) {
+    return { error: `${path} will not parse: ${String(error?.message ?? error)}` };
+  }
+  if (document.errors?.length) {
+    return { error: `${path} will not parse: ${document.errors[0].message}` };
+  }
+
+  if (!Object.keys(cleaned).length) {
+    document.deleteIn(["extensions", LMS_EXTENSION, CANVAS_COURSES_KEY]);
+    const emptied = (node) => node && Array.isArray(node.items) && node.items.length === 0;
+    if (emptied(document.getIn(["extensions", LMS_EXTENSION]))) {
+      document.deleteIn(["extensions", LMS_EXTENSION]);
+    }
+    if (emptied(document.get("extensions"))) document.delete("extensions");
+  } else {
+    document.setIn(["extensions", LMS_EXTENSION, CANVAS_COURSES_KEY], cleaned);
+  }
+
+  const written = /\r\n/.test(original)
+    ? String(document).replace(/\r?\n/g, "\r\n")
+    : String(document);
+  writeFileSync(path, written, "utf8");
+  return {
+    written: true,
+    path: relative(root, path).split(sep).join("/"),
+    count: Object.keys(cleaned).length,
   };
 };
 
@@ -616,6 +2122,22 @@ window.openai = {
       kind: 'ask',
       prompt: message && message.prompt
     }, '*');
+  },
+  // Show a material over the whole harness instead of in a new browser tab.
+  //
+  // THIS FUNCTION IS THE FEATURE TEST. runtime.js intercepts a click only
+  // where the host offers this, so the same widget served to ChatGPT or Claude
+  // Desktop — which have no page to put an overlay on and no route to the file
+  // — goes on following its link exactly as before. No payload flag, no
+  // second code path in the view: the capability is either here or it is not.
+  openMaterial: function (material) {
+    parent.postMessage({
+      source: 'professor-pane',
+      kind: 'view',
+      url: material && material.url,
+      label: material && material.label,
+      format: material && material.format
+    }, '*');
   }
 };
 </script>`;
@@ -651,11 +2173,59 @@ const send = (res, status, type, body) => {
 const sendJson = (res, status, value) =>
   send(res, status, "application/json; charset=utf-8", JSON.stringify(value));
 
-const escapeText = (value) =>
-  String(value).replace(
-    /[&<>]/g,
-    (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[character],
+
+/**
+ * An assessment named as the professor reads it, and as the record knows it.
+ *
+ * The title alone was ambiguous in the way that matters here. A course whose
+ * homework is titled "Homework" four times over drew four identical rows, and
+ * telling the professor WHICH one carries no deadline is the only thing the
+ * Deadlines section is for. The identifier is what distinguishes them, and it
+ * is also the string they would grep for under `versions/<term>/assessments/`
+ * or hand to `ainar` — so it is the useful half of the pair to print, not a
+ * debugging leftover.
+ *
+ * After the title and dimmed, because the title is what is read and the id is
+ * what is acted on. The widget documents this pane serves put it in the same
+ * place, so the two halves of the pane agree on where to look for it.
+ *
+ * Suppressed when the record has no title of its own: the fallback already IS
+ * the id, and printing it twice reads as a fault in the page rather than in
+ * the record.
+ */
+const titleWithId = (row) => {
+  const id = row.assessment_id ?? null;
+  const title = row.title ?? id ?? "untitled";
+  return (
+    escapeText(title) +
+    (id !== null && title !== id ? ' <span class="id">' + escapeText(id) + "</span>" : "")
   );
+};
+
+/**
+ * The click that shows a material over the harness instead of in a new tab.
+ *
+ * The pane's own pages have no `window.openai`, so they cannot reuse the shim
+ * the widgets get; this is the same contract written out in eight lines. It
+ * posts the identical `view` message, and the browser half accepts the URL
+ * only if it addresses this app's material route — see `materialUrl` there.
+ *
+ * Three ways out of it, all deliberate. A page opened directly in a tab has
+ * `parent === window`, nobody listening, and so takes no clicks at all. A
+ * modified click — ctrl, cmd, shift, middle — keeps the tab it always opened.
+ * And an anchor with no `data-view` is untouched, which is how a `.pptx` and a
+ * reading hosted on somebody else's server go on behaving as before.
+ */
+const VIEW_SCRIPT =
+  "<script>(function(){if(parent===window)return;" +
+  "document.addEventListener('click',function(e){" +
+  "var a=e.target.closest&&e.target.closest('a[data-view]');if(!a)return;" +
+  "if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;" +
+  "e.preventDefault();" +
+  "parent.postMessage({source:'professor-pane',kind:'view'," +
+  "url:a.getAttribute('href'),label:a.getAttribute('data-view')," +
+  "format:a.getAttribute('data-format')},'*');" +
+  "});})();<\/script>";
 
 /**
  * A failure on a `/view/` path, as a page rather than as JSON.
@@ -691,6 +2261,13 @@ const documentPage = (bodyHtml, dark) =>
   "section{margin:0 0 18px}" +
   "p{margin:0 0 8px}" +
   ".dim{color:var(--dim)}" +
+  // An identifier, wherever one sits beside a title. Monospaced rather than
+  // merely dim, because `.dim` is the heading colour too and an id inside an
+  // `h2` would otherwise be indistinguishable from the title it qualifies —
+  // and the transforms are reset for the same reason: `text-transform` on a
+  // heading must not reach a string the professor may have to type back.
+  ".id{font:12px/1.4 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--dim);" +
+  "text-transform:none;letter-spacing:0;font-weight:400}" +
   ".row{display:flex;gap:10px;justify-content:space-between;padding:5px 0;" +
   "border-bottom:1px solid var(--line)}" +
   ".row:last-child{border-bottom:none}" +
@@ -724,6 +2301,13 @@ const documentPage = (bodyHtml, dark) =>
   ".chip{font:inherit;font-size:11px;cursor:pointer;padding:2px 9px;border-radius:20px;" +
   "background:0 0;color:var(--dim);border:1px solid var(--line)}" +
   ".chip[aria-pressed=true]{color:var(--fg);font-weight:600;border-color:var(--fg)}" +
+  // A link that opens a document. Shaped like the format buttons the Slides
+  // list writes inline, and written here instead because two views now need
+  // it — the same five declarations copied a third time is how the two halves
+  // of one control start to drift apart.
+  ".chip-link{color:inherit;text-decoration:none;border:1px solid var(--line);" +
+  "border-radius:3px;padding:0 5px;font-size:11px;letter-spacing:.04em;white-space:nowrap}" +
+  ".chip-link:hover{border-color:var(--fg)}" +
   "</style>" +
   bodyHtml;
 
@@ -814,7 +2398,7 @@ const gradingDocument = (workspace, root, runId, dark, withDrafts, on) => {
           .map(
             (row) =>
               '<div class="row"><span class="k">' +
-              escapeText(row.title ?? row.assessment_id ?? "untitled") +
+              titleWithId(row) +
               '</span><span class="v">' +
               (row.weight === null || row.weight === undefined
                 ? '<span class="todo">no weight</span>'
@@ -836,6 +2420,43 @@ const gradingDocument = (workspace, root, runId, dark, withDrafts, on) => {
     : "";
 
   return documentPage(policy + facts + weights + note, dark);
+};
+
+/**
+ * The chip that opens a piece of graded work's brief, or the fact that there
+ * is not one.
+ *
+ * A brief is not optional in the way a weight or a rubric is optional. A
+ * weight the professor has not decided is a decision they can take next week;
+ * work with no brief is work a student cannot start, so its absence is drawn
+ * in the same amber the pane uses for every other hole rather than as a dash.
+ *
+ * `data-view` is the request to open it over the harness instead of in a tab,
+ * and it is written only when the format is one the browser will paint —
+ * `withMaterialLinks` decides that, and a `.docx` brief therefore keeps the
+ * tab it always opened. See VIEW_SCRIPT.
+ */
+const briefChip = (assessment) => {
+  const href = assessment.url;
+  if (!href) return '<span class="todo">no brief</span>';
+  // `open`, not the extension. The Slides list names formats — `PDF`, `PPTX` —
+  // because a deck there exists in several and the label is the choice being
+  // offered. A brief is one document, so its extension is not a choice, and
+  // naming it would put `MD` on screen as though that meant something to the
+  // person reading.
+  return (
+    '<a class="chip-link" href="' +
+    escapeText(href) +
+    '" target="_blank" rel="noopener"' +
+    (assessment.viewable
+      ? ' data-view="' +
+        escapeText(assessment.title ?? assessment.assessment_id ?? "Brief") +
+        '" data-format="' +
+        escapeText(assessment.format ?? "") +
+        '"'
+      : "") +
+    ">open</a>"
+  );
 };
 
 /**
@@ -881,8 +2502,23 @@ const rows = (entries) =>
  * Undated work sorts last rather than first, which is what `""` would do: a
  * deadline nobody has set is not a deadline in January.
  */
-const assessmentsDocument = (workspace, root, runId, dark, withDrafts, on) => {
-  const data = outlinePayloadFor(workspace, root, runId, withDrafts, on);
+const assessmentsDocument = (
+  workspace,
+  root,
+  runId,
+  dark,
+  withDrafts,
+  on,
+  origin,
+  sessionId,
+) => {
+  const data = withMaterialLinks(
+    outlinePayloadFor(workspace, root, runId, withDrafts, on),
+    origin,
+    sessionId,
+    workspace,
+    dark,
+  );
   const all = Array.isArray(data.assessments) ? [...data.assessments] : [];
   all.sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999"));
 
@@ -905,7 +2541,7 @@ const assessmentsDocument = (workspace, root, runId, dark, withDrafts, on) => {
               .join(" · ");
             return (
               '<div class="row"><span class="k">' +
-              escapeText(row.title ?? row.assessment_id ?? "untitled") +
+              titleWithId(row) +
               (detail ? '<br><span class="dim">' + detail + "</span>" : "") +
               '</span><span class="v">' +
               (weight === null ? '<span class="todo">no weight</span>' : weight) +
@@ -913,13 +2549,20 @@ const assessmentsDocument = (workspace, root, runId, dark, withDrafts, on) => {
               (row.due_on
                 ? '<span class="dim">due ' + escapeText(row.due_on) + "</span>"
                 : '<span class="todo">no date</span>') +
+              // The brief on its own line, under the weight and the date. Not
+              // beside the title: a course whose homework is titled "Homework"
+              // four times over already leans on the id to tell the rows
+              // apart, and a link in the middle of that is one more thing to
+              // read before finding the one you meant.
+              "<br>" +
+              briefChip(row) +
               "</span></div>"
             );
           })
           .join("");
 
   return documentPage(
-    "<section><h2>Assessments</h2>" + body + "</section>",
+    "<section><h2>Assessments</h2>" + body + VIEW_SCRIPT + "</section>",
     dark,
   );
 };
@@ -935,7 +2578,7 @@ const assessmentsDocument = (workspace, root, runId, dark, withDrafts, on) => {
  */
 const slidesDocument = (workspace, root, runId, dark, withDrafts, on, origin, sessionId) => {
   let data = outlinePayloadFor(workspace, root, runId, withDrafts, on);
-  data = withMaterialLinks(data, origin, sessionId, workspace);
+  data = withMaterialLinks(data, origin, sessionId, workspace, dark);
 
   const found = [];
   for (const week of data.weeks ?? []) {
@@ -947,8 +2590,19 @@ const slidesDocument = (workspace, root, runId, dark, withDrafts, on, origin, se
     }
   }
 
-  const link = (href, label) =>
-    '<a href="' + escapeText(href) + '" style="color:inherit;text-decoration:none;' +
+  // `title` is what the overlay would be called; a null one is a format the
+  // browser would only download, and the anchor is left as the tab it always
+  // was. See VIEW_SCRIPT, and SHOWABLE for which formats those are.
+  // `target` matters more here than it looks: this page is delivered into a
+  // frame with an opaque origin, and such a frame may not navigate itself, so
+  // a same-tab link was a link that did nothing at all. The frame is granted
+  // `allow-popups-to-escape-sandbox` for exactly this.
+  const link = (href, label, title, format) =>
+    '<a href="' + escapeText(href) + '" target="_blank" rel="noopener"' +
+    (title === null
+      ? ""
+      : ' data-view="' + escapeText(title) + '" data-format="' + escapeText(format ?? "") + '"') +
+    ' style="color:inherit;text-decoration:none;' +
     "border:1px solid var(--line);border-radius:3px;padding:0 5px;margin-left:4px;" +
     'font-size:11px;letter-spacing:.04em">' + escapeText(label) + "</a>";
 
@@ -960,20 +2614,35 @@ const slidesDocument = (workspace, root, runId, dark, withDrafts, on, origin, se
           .map((entry) => {
             const formats = (entry.resource.formats ?? [])
               .filter((format) => format.url)
-              .map((format) => link(format.url, format.label))
+              .map((format) =>
+                link(
+                  format.url,
+                  format.label,
+                  format.viewable ? (entry.title ?? "Slides") + " · " + format.label : null,
+                  format.format,
+                ),
+              )
               .join("");
             return (
               '<div class="row"><span class="k">' +
               '<span class="dim">week ' + escapeText(String(entry.week)) + "</span> " +
               escapeText(entry.title ?? "untitled") +
               '</span><span class="v">' +
-              (formats || (entry.resource.url ? link(entry.resource.url, "open") : '<span class="todo">no file</span>')) +
+              (formats ||
+                (entry.resource.url
+                  ? link(
+                      entry.resource.url,
+                      "open",
+                      entry.resource.viewable ? (entry.title ?? "Slides") : null,
+                      entry.resource.format,
+                    )
+                  : '<span class="todo">no file</span>')) +
               "</span></div>"
             );
           })
           .join("");
 
-  return documentPage("<section><h2>Slides</h2>" + body + "</section>", dark);
+  return documentPage("<section><h2>Slides</h2>" + body + VIEW_SCRIPT + "</section>", dark);
 };
 
 /**
@@ -985,8 +2654,14 @@ const slidesDocument = (workspace, root, runId, dark, withDrafts, on, origin, se
  * than for anything else. Filtering by the model's own `type` rather than by a
  * title convention means renaming "Midterm Exam 1" does not move it.
  */
-const examsDocument = (workspace, root, runId, dark, withDrafts, on) => {
-  const data = outlinePayloadFor(workspace, root, runId, withDrafts, on);
+const examsDocument = (workspace, root, runId, dark, withDrafts, on, origin, sessionId) => {
+  const data = withMaterialLinks(
+    outlinePayloadFor(workspace, root, runId, withDrafts, on),
+    origin,
+    sessionId,
+    workspace,
+    dark,
+  );
   const bundle = withDrafts
     ? null
     : workspace.findRun(runId);
@@ -1018,11 +2693,16 @@ const examsDocument = (workspace, root, runId, dark, withDrafts, on) => {
             const count = itemsById.get(row.assessment_id);
             return (
               "<section><h2>" +
-              escapeText(row.title ?? row.assessment_id ?? "untitled") +
+              titleWithId(row) +
               "</h2>" +
               rows([
                 ["When", row.due_on ? escapeText(row.due_on) : '<span class="todo">no date</span>'],
                 ["Weight", weight === null ? '<span class="todo">no weight</span>' : weight],
+                // First among the things that have to exist, because it is the
+                // one a room full of students will be handed. An exam with
+                // items written and no paper registered is the failure this
+                // row is here to make visible weeks earlier.
+                ["Paper", briefChip(row)],
                 [
                   "Questions",
                   count === undefined
@@ -1042,7 +2722,7 @@ const examsDocument = (workspace, root, runId, dark, withDrafts, on) => {
           })
           .join("");
 
-  return documentPage(body, dark);
+  return documentPage(body + VIEW_SCRIPT, dark);
 };
 
 /**
@@ -1571,7 +3251,7 @@ const CHECKLIST_CACHE_MAX = 24;
 const CHECKLISTS = new Map();
 
 const checklistFor = (workspace, root, runId) => {
-  const key = root + " " + runId;
+  const key = root + "\u0000" + runId;
   const { revision } = revisionDocument(root);
 
   const found = CHECKLISTS.get(key);
@@ -1598,13 +3278,22 @@ const countValue = (piece, none) => {
   return parts.length ? parts.join(" · ") : '<span class="todo">' + escapeText(none) + "</span>";
 };
 
-const checkRow = (label, hint, value) =>
+const checkRowHtml = (labelHtml, hint, value) =>
   '<div class="row"><span class="k">' +
-  escapeText(label) +
+  labelHtml +
   (hint ? '<br><span class="dim">' + escapeText(hint) + "</span>" : "") +
   '</span><span class="v">' +
   value +
   "</span></div>";
+
+/**
+ * A row whose label is text. The common case, and the safe one.
+ *
+ * Only `checkRowHtml` takes markup, and only one caller does — the deadline
+ * list, which needs `titleWithId`. Everything else keeps a signature that
+ * cannot be handed an unescaped course title by accident.
+ */
+const checkRow = (label, hint, value) => checkRowHtml(escapeText(label), hint, value);
 
 /**
  * The Checklist tab: the four questions a course under construction raises.
@@ -1712,8 +3401,8 @@ const checklistDocument = (workspace, root, runId, dark) => {
         "no skill writes one.</p>" +
         report.undated
           .map((entry) =>
-            checkRow(
-              entry.title,
+            checkRowHtml(
+              titleWithId(entry),
               [entry.type, entry.unplaced ? "no module either, so no week holds it" : null]
                 .filter(Boolean)
                 .join(" · "),
@@ -1851,15 +3540,21 @@ const loadedRun = (workspace, runId) => {
  * roster module and should not gain one: everything in that package is loaded
  * by MCP tools whose output goes to a model, and a reader for the identity
  * store is the one thing that must never be reachable from there. This copy is
- * eleven lines, is read-only, and is called from exactly one place.
+ * a dozen lines and is read-only.
+ *
+ * Split in two because the directory itself is now wanted separately:
+ * `lms.toml` sits beside `people.json`, and the Integrations tab reads it. One
+ * expansion of `~` and of `AINAR_ROSTER_DIR`, in one place, so the two files
+ * can never be looked for in different directories.
  */
-const rosterPath = () => {
+const rosterDir = () => {
   const configured = (process.env.AINAR_ROSTER_DIR || "").trim();
-  const directory = configured
+  return configured
     ? resolve(configured.startsWith("~") ? join(homedir(), configured.slice(1)) : configured)
     : join(homedir(), ".ainar", "roster");
-  return join(directory, "people.json");
 };
+
+const rosterPath = () => join(rosterDir(), "people.json");
 
 /**
  * The identity map, read fresh, held only for the length of one response.
@@ -1880,6 +3575,42 @@ const rosterPeople = () => {
     // caller falls back to pseudonyms, which is always a correct answer.
     return null;
   }
+};
+
+/**
+ * The inbox payload, with the students on it named.
+ *
+ * The one place this pane puts a real name into a WIDGET document, and the
+ * reasoning is the same as the class list's: the resolution happens here, from
+ * a file on the professor's own machine, and the document is served over
+ * loopback to their own browser. Nothing is written, the MCP tool's payload is
+ * untouched, and a chat client asking `action_inbox` gets what it always got.
+ *
+ * Only the pseudonyms already on the page are looked up. A run of two hundred
+ * with three missing submissions puts three names in the document, not two
+ * hundred — the map is what the view needs to draw, not a copy of the roster.
+ *
+ * No roster, or no name for an id, and the id stays as it is. `who()` in the
+ * widget falls back to the pseudonym, which is a correct answer everywhere.
+ */
+const withStudentNames = (data) => {
+  const people = rosterPeople();
+  if (people === null) return data;
+
+  const wanted = new Set();
+  for (const row of data.assessments ?? []) {
+    for (const id of row.missing ?? []) wanted.add(id);
+  }
+  for (const list of [data.open_signals, data.interventions_awaiting_approval]) {
+    for (const row of list ?? []) if (row.student_id) wanted.add(row.student_id);
+  }
+
+  const named = {};
+  for (const id of wanted) {
+    const name = people[id] && typeof people[id].name === "string" ? people[id].name.trim() : "";
+    if (name) named[id] = name;
+  }
+  return Object.keys(named).length === 0 ? data : { ...data, people: named };
 };
 
 /**
@@ -1922,7 +3653,7 @@ const rosterPeople = () => {
  * the record because an import marks a departure rather than deleting the row,
  * and a class list that silently omitted them would undo the point of that.
  */
-const studentsDocument = (workspace, runId, dark, withNames) => {
+const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId) => {
   const { bundle, issues } = loadedRun(workspace, runId);
   const enrolled = enrollmentsOf(bundle, runId);
 
@@ -2007,6 +3738,12 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
     // still a class list without the marks column.
   }
 
+  // The run's own assessments, by id. Doubles as the scope filter for
+  // submissions: a bundle holds every run's, and this view is about one.
+  const assessmentTitles = new Map(
+    assessmentsOf(bundle, runId).map((assessment) => [assessment.assessment_id, assessment]),
+  );
+
   const active = enrolled.filter((entry) => entry.status === "active");
   const inactive = enrolled.filter((entry) => entry.status !== "active");
 
@@ -2037,6 +3774,233 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
     );
   };
 
+  /* ------------------------------------------------------- what they handed in
+   *
+   * The class list said how much of the course each student had been marked
+   * on and nothing at all about what they wrote. A professor asking "what is
+   * in this?" — the question a mark cannot answer — had to leave the harness,
+   * find the file and open it, or read `item-responses.yaml` by hand.
+   *
+   * So each person's work opens under their row, and it opens CLOSED. This
+   * pane is screen-shared and projected; a class list that unfolded every
+   * student's answers on load would put a room's written work on a lecture
+   * theatre wall. One press per person is the right price for that, and it is
+   * the pane's own idiom already — the folded missing-students list works the
+   * same way.
+   *
+   * Rendered inline rather than fetched on demand, and that is forced rather
+   * than chosen: these documents are delivered into a frame with an opaque
+   * origin, which may neither navigate itself nor `fetch`. There is no
+   * "load it when pressed" available in here. See VIEW_SCRIPT.
+   */
+
+  const submissionsOf = new Map();
+  for (const submission of bundle.submissions ?? []) {
+    if (!assessmentTitles.has(submission.assessment_id)) continue;
+    const key = submission.student_id;
+    if (!submissionsOf.has(key)) submissionsOf.set(key, []);
+    submissionsOf.get(key).push(submission);
+  }
+  for (const list of submissionsOf.values()) {
+    // Newest last, the order they were handed in. An attempt 2 sorting above
+    // attempt 1 would read as the earlier answer.
+    list.sort((a, b) => String(a.submitted_at ?? "").localeCompare(String(b.submitted_at ?? "")));
+  }
+
+  const responsesOf = new Map();
+  for (const response of bundle.item_responses ?? []) {
+    const key = response.submission_id;
+    if (!responsesOf.has(key)) responsesOf.set(key, []);
+    responsesOf.get(key).push(response);
+  }
+
+  const itemById = new Map((bundle.items ?? []).map((item) => [item.item_id, item]));
+  const documentById = new Map((bundle.documents ?? []).map((row) => [row.document_id, row]));
+
+  /**
+   * One file a student handed in, as a link or as the reason there is not one.
+   *
+   * The reason matters more than it looks. `samples/documents.yaml` says it in
+   * as many words: the bytes of student work live in object storage and never
+   * in this repository. `sendMaterial` refuses any key carrying a scheme, so a
+   * submission recorded as `object://…` cannot be framed — not because this
+   * view forgot to link it, but because the model deliberately does not have
+   * it here. Saying so is the honest answer; a dead `open` link that returned
+   * a sentence about storage would be worse than no link.
+   *
+   * A professor who DOES keep submissions in the workspace gets the overlay
+   * for free: a repository-relative key is served by the same route a brief
+   * is, and a PDF, an image, a text file or markdown paints in the frame.
+   */
+  const fileRow = (file) => {
+    const record = documentById.get(file.document_id);
+    const title = record && record.title ? record.title : file.document_id;
+    const type = String(file.type ?? "").trim();
+    const key = String((record ?? {}).storage_key ?? "");
+    const left =
+      '<span class="k">' +
+      escapeText(title) +
+      (type ? ' <span class="dim">' + escapeText(type) + "</span>" : "") +
+      "</span>";
+
+    if (!record) {
+      return (
+        '<div class="row">' +
+        left +
+        '<span class="v"><span class="todo">no such document</span></span></div>'
+      );
+    }
+    if (!key || key.includes("://")) {
+      return (
+        '<div class="row">' +
+        left +
+        '<span class="v"><span class="dim">held outside the workspace</span></span></div>'
+      );
+    }
+    const extension = extensionOfKey(key);
+    const href =
+      `${origin}${BASE}/file?doc=` +
+      encodeURIComponent(file.document_id) +
+      (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
+      (dark ? "&dark=1" : "");
+    return (
+      '<div class="row">' +
+      left +
+      '<span class="v"><a class="chip-link" href="' +
+      escapeText(href) +
+      '" target="_blank" rel="noopener"' +
+      (SHOWABLE.has(extension)
+        ? ' data-view="' + escapeText(title) + '" data-format="' + escapeText(extension) + '"'
+        : "") +
+      ">open</a></span></div>"
+    );
+  };
+
+  /**
+   * One answer: the question, then what the student put.
+   *
+   * Both halves, because neither is legible alone. `chosen_options: [b]` says
+   * nothing without the option's own text, and a paragraph of `raw_response`
+   * says little without the question it answers. An item the course no longer
+   * has is named by its id rather than dropped — a response whose item was
+   * deleted is a thing to notice, not to hide.
+   */
+  const answer = (response) => {
+    const item = itemById.get(response.item_id);
+    const number = item && item.number ? String(item.number) + ". " : "";
+    const prompt = item
+      ? escapeText(item.prompt)
+      : '<span class="dim">' + escapeText(response.item_id) + " — no such item in the course</span>";
+
+    const chosen = Array.isArray(response.chosen_options) ? response.chosen_options : [];
+    const options = item && Array.isArray(item.options) ? item.options : [];
+    const picked = chosen.map((label) => {
+      const option = options.find((candidate) => candidate.label === label);
+      return (
+        "<b>" +
+        escapeText(label) +
+        "</b>" +
+        (option ? " " + escapeText(option.text) : "")
+      );
+    });
+
+    const scored =
+      response.score === null || response.score === undefined
+        ? '<span class="todo">not scored</span>'
+        : escapeText(String(response.score)) +
+          (item && typeof item.maximum_score === "number"
+            ? " of " + escapeText(String(item.maximum_score))
+            : "");
+
+    // `correct` is nullish on anything a person marked rather than a machine,
+    // and absent is not the same as wrong.
+    const verdict =
+      response.correct === true
+        ? ' · <span class="ok">correct</span>'
+        : response.correct === false
+          ? ' · <span class="bad">incorrect</span>'
+          : "";
+
+    return (
+      '<div class="qa"><p class="q">' +
+      escapeText(number) +
+      prompt +
+      "</p>" +
+      (picked.length ? '<p class="a">chose ' + picked.join("; ") + "</p>" : "") +
+      (response.raw_response
+        ? "<blockquote>" + escapeText(String(response.raw_response)) + "</blockquote>"
+        : "") +
+      (!picked.length && !response.raw_response
+        ? '<p class="a"><span class="dim">nothing recorded for this question</span></p>'
+        : "") +
+      '<p class="s">' +
+      scored +
+      verdict +
+      "</p></div>"
+    );
+  };
+
+  /** Everything one student handed in, closed until asked for. */
+  const workPanel = (entry) => {
+    const list = submissionsOf.get(entry.student_id) ?? [];
+    if (!list.length) return "";
+    return (
+      '<div class="row work" data-group="' +
+      escapeText(label(entry)) +
+      '" data-work="' +
+      escapeText(String(entry.student_id ?? "")) +
+      '" hidden><div class="wk">' +
+      list
+        .map((submission) => {
+          const assessment = assessmentTitles.get(submission.assessment_id) ?? {};
+          const responses = (responsesOf.get(submission.submission_id) ?? [])
+            .slice()
+            .sort((a, b) => {
+              const left = itemById.get(a.item_id);
+              const right = itemById.get(b.item_id);
+              // By the number the student saw, and by id where a question has
+              // none: the order on the paper is the order to read them in.
+              return (
+                (left && left.number ? left.number : 0) - (right && right.number ? right.number : 0) ||
+                String(a.item_id).localeCompare(String(b.item_id))
+              );
+            });
+          const files = Array.isArray(submission.files) ? submission.files : [];
+          return (
+            "<h3>" +
+            escapeText(assessment.title ?? submission.assessment_id) +
+            ' <span class="id">' +
+            escapeText(submission.assessment_id) +
+            "</span></h3>" +
+            '<p class="dim">' +
+            (submission.submitted_at
+              ? "handed in " + escapeText(stamp(submission.submitted_at))
+              : "no time recorded") +
+            (submission.status && submission.status !== "submitted"
+              ? " · " + escapeText(String(submission.status))
+              : "") +
+            (submission.attempt && submission.attempt > 1
+              ? " · attempt " + escapeText(String(submission.attempt))
+              : "") +
+            "</p>" +
+            (submission.note
+              ? '<p class="dim">' + escapeText(String(submission.note)) + "</p>"
+              : "") +
+            responses.map(answer).join("") +
+            files.map(fileRow).join("") +
+            // Handed in, and nothing to read: a file-only submission whose
+            // bytes are elsewhere, or a row created before any answer was
+            // recorded. Both are facts, and an empty panel would look broken.
+            (responses.length === 0 && files.length === 0
+              ? '<p class="dim">Nothing is recorded under this submission — no answers, no files.</p>'
+              : "")
+          );
+        })
+        .join("") +
+      "</div></div>"
+    );
+  };
+
   const row = (entry, dimmed) =>
     // The group travels with the row so the filter can act on a departed
     // student too. Their section is not grouped — it is one list of everyone
@@ -2059,7 +4023,29 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
         "</span>" +
         (label(entry) ? '<br><span class="dim">' + escapeText(label(entry)) + "</span>" : "")
       : marks(entry.student_id)) +
+    workButton(entry) +
     "</span></div>";
+
+  /**
+   * The press that opens one person's work, or nothing at all.
+   *
+   * Absent rather than disabled when there is nothing handed in: a row of
+   * dead buttons down a class list of which three have submitted is noise,
+   * and "no button" already says it. The count is on the button because the
+   * professor is choosing which row to open.
+   */
+  const workButton = (entry) => {
+    const count = (submissionsOf.get(entry.student_id) ?? []).length;
+    if (count === 0) return "";
+    return (
+      '<br><button type="button" class="chip" aria-expanded="false" data-workbtn="' +
+      escapeText(String(entry.student_id ?? "")) +
+      '">' +
+      escapeText(String(count)) +
+      (count === 1 ? " submission" : " submissions") +
+      "</button>"
+    );
+  };
 
   /*
    * Sort by what is on screen.
@@ -2088,7 +4074,7 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
         ' <span class="dim">· ' +
         escapeText(String(members.length)) +
         " active</span></h2>" +
-        members.map((entry) => row(entry, false)).join("") +
+        members.map((entry) => row(entry, false) + workPanel(entry)).join("") +
         "</section>"
       );
     })
@@ -2099,7 +4085,7 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
       inactive
         .slice()
         .sort(byDisplayed)
-        .map((entry) => row(entry, true))
+        .map((entry) => row(entry, true) + workPanel(entry))
         .join("") +
       "</section>"
     : "";
@@ -2221,7 +4207,7 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
       "chips.forEach(function(c){c.setAttribute('aria-pressed',String(c.dataset.filter===want));});" +
       "sections.forEach(function(s){s.hidden=want!=='*'&&s.dataset.group!==want;});" +
       "if(gone){var seen=0;" +
-      "[].forEach.call(gone.querySelectorAll('.row'),function(r){" +
+      "[].forEach.call(gone.querySelectorAll('.row:not(.work)'),function(r){" +
       "var off=want!=='*'&&r.dataset.group!==want;r.hidden=off;if(!off)seen++;});" +
       "gone.hidden=seen===0;}" +
       "}" +
@@ -2229,7 +4215,115 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
       "})();</script>"
     : "";
 
-  return documentPage(filterBar + header + sections + departed + filterScript, dark);
+  /*
+   * The disclosure, as nine lines of DOM toggling.
+   *
+   * `hidden` rather than a class, for the filter's reason: a panel nobody has
+   * opened should be out of the accessibility tree as well as off the screen.
+   * A screen reader running down a class list must not read every student's
+   * answers aloud.
+   *
+   * The panel is found by `data-work` matching the button's `data-workbtn`
+   * rather than by DOM adjacency, so the two can be reordered without this
+   * quietly opening the wrong person's work.
+   */
+  const workScript =
+    "<script>(function(){" +
+    "[].forEach.call(document.querySelectorAll('[data-workbtn]'),function(b){" +
+    "b.addEventListener('click',function(){" +
+    "var panel=document.querySelector('[data-work=\"'+b.dataset.workbtn+'\"]');" +
+    "if(!panel)return;" +
+    "panel.hidden=!panel.hidden;" +
+    "b.setAttribute('aria-expanded',String(!panel.hidden));" +
+    "});});" +
+    "})();</script>";
+
+  /*
+   * What a work panel needs that `documentPage` does not have.
+   *
+   * `.row[hidden]` is the one that is not cosmetic. `documentPage` gives
+   * `.row` a `display:flex`, and an author `display` beats the user agent's
+   * `[hidden]{display:none}` — so without this line every panel is open on
+   * load, which is precisely the state this view must never boot into.
+   */
+  const workStyle =
+    "<style>" +
+    ".row.work{display:block;border-bottom:1px solid var(--line);padding:0}" +
+    // AFTER `.row.work`, and the order is the whole point. Both selectors
+    // score the same, so the later one wins — with these two the other way
+    // round every panel was open on load, which is the one state this view
+    // must never boot into. Written as the more specific selector as well, so
+    // that a rule added between them cannot bring the bug back.
+    ".row.work[hidden]{display:none}" +
+    ".wk{padding:2px 0 10px 10px;border-left:2px solid var(--line);margin:0 0 6px}" +
+    ".wk h3{font-size:12px;margin:10px 0 2px;letter-spacing:.04em;text-transform:uppercase;" +
+    "color:var(--dim)}" +
+    ".wk h3:first-child{margin-top:2px}" +
+    ".wk p{margin:0 0 4px}" +
+    ".qa{margin:6px 0 10px}" +
+    ".qa .q{font-weight:600}" +
+    ".qa .a{margin:0 0 2px}" +
+    ".qa .s{font-size:12px;color:var(--dim)}" +
+    // The answer a student typed, set apart from the question and from the
+    // mark. It is the thing this whole panel exists to show, so it is the one
+    // element in here that is not dimmed.
+    ".qa blockquote{margin:2px 0 4px;border-left:3px solid var(--line);padding:0 0 0 9px;" +
+    "white-space:pre-wrap;overflow-wrap:anywhere}" +
+    ".ok{color:var(--info)}" +
+    ".bad{color:var(--warn)}" +
+    "</style>";
+
+  return documentPage(
+    workStyle + filterBar + header + sections + departed + filterScript + workScript + VIEW_SCRIPT,
+    dark,
+  );
+};
+
+/**
+ * Whether the browser will paint this format in a frame, or only download it.
+ *
+ * The narrow list, not the broad one. A `.pptx` and a `.docx` are downloads in
+ * every browser this runs in, and marking one showable would put a blank panel
+ * over the harness and call it a slide deck — worse than the tab it replaced.
+ *
+ * `.md` was out for that same reason and is now in, because the reason stopped
+ * being true rather than because the rule was relaxed. Chrome does download
+ * `text/markdown`, whatever the file is made of — so `/file` no longer sends
+ * one. A markdown document is RENDERED there and served as HTML, which is a
+ * format on this list, and the professor gets the document instead of a file
+ * in Downloads. That is not a cosmetic preference: this project's own skills
+ * write a deck as Marp markdown and the brief students read as markdown beside
+ * the YAML, so `.md` is the format most of a course is actually in.
+ *
+ * A format that is out is not broken here; it keeps the link it always had,
+ * and the overlay's header offers the same tab for a format that turns out to
+ * be a download after all.
+ *
+ * At module scope rather than inside `withMaterialLinks`, because the class
+ * list reads it as well — a student's handed-in PDF is the same question about
+ * the same route, and two copies of this list would drift.
+ */
+const SHOWABLE = new Set([
+  "pdf",
+  "html",
+  "svg",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "txt",
+  "csv",
+  "json",
+  "md",
+  "markdown",
+]);
+
+/** A storage key's extension, lowercased, or `""`. */
+const extensionOfKey = (key) => {
+  const name = String(key ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = name.lastIndexOf(".");
+  return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
 };
 
 /**
@@ -2253,13 +4347,22 @@ const studentsDocument = (workspace, runId, dark, withNames) => {
  * two ways, and a link in one place but not the other is what this pane looked
  * like before.
  */
-const withMaterialLinks = (data, origin, sessionId, workspace) => {
+const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
   if (!origin || data === null || typeof data !== "object") return data;
 
+  // `dark` travels on the address for one format only, and is inert for the
+  // rest: a PDF and a PNG are painted by the browser's own viewer, which has
+  // never asked this app what colour the harness is. It is on the URL because
+  // a RENDERED markdown document is a page of ours, framed over the whole
+  // harness, and a white brief in a dark harness is the one thing the overlay
+  // was supposed to stop happening. The harness's theme is an explicit choice
+  // and need not agree with the machine's, so it is passed rather than left to
+  // `prefers-color-scheme`.
   const address = (documentId) =>
     `${origin}${BASE}/file?doc=` +
     encodeURIComponent(documentId) +
-    (sessionId ? "&session=" + encodeURIComponent(sessionId) : "");
+    (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
+    (dark ? "&dark=1" : "");
 
   // Every document in the workspace, indexed by the basename of its storage key
   // with the extension removed.
@@ -2272,6 +4375,8 @@ const withMaterialLinks = (data, origin, sessionId, workspace) => {
   // pairing quietly stops. It is a convention worth having because the
   // alternative is two chips both called "slides" on one meeting.
   const byStem = new Map();
+  /** Every document's extension, so a link can say whether it is showable. */
+  const extensionOf = new Map();
   for (const courseId of workspace.courseIds()) {
     let loaded;
     try {
@@ -2288,10 +4393,13 @@ const withMaterialLinks = (data, origin, sessionId, workspace) => {
       if (dot <= 0) continue;
       const stem = name.slice(0, dot);
       const extension = name.slice(dot + 1).toLowerCase();
+      extensionOf.set(document.document_id, extension);
       if (!byStem.has(stem)) byStem.set(stem, []);
       byStem.get(stem).push({ id: document.document_id, extension });
     }
   }
+
+  const showable = (documentId) => SHOWABLE.has(extensionOf.get(documentId) ?? "");
 
   /** The formats a document is available in, itself first. */
   const formatsFor = (documentId) => {
@@ -2304,7 +4412,14 @@ const withMaterialLinks = (data, origin, sessionId, workspace) => {
       if (shown.length < 2) return [];
       return shown
         .sort((a, b) => (a.id === documentId ? -1 : b.id === documentId ? 1 : 0))
-        .map((entry) => ({ label: entry.extension.toUpperCase(), url: address(entry.id) }));
+        .map((entry) => ({
+          label: entry.extension.toUpperCase(),
+          url: address(entry.id),
+          viewable: SHOWABLE.has(entry.extension),
+          // The extension travels with the link because the overlay sandboxes
+          // a document and does not sandbox a PDF. See MEDIA in `client.js`.
+          format: entry.extension,
+        }));
     }
     return [];
   };
@@ -2313,17 +4428,72 @@ const withMaterialLinks = (data, origin, sessionId, workspace) => {
     if (!resource || typeof resource !== "object") return resource;
     if (!resource.document_id) return resource;
     const formats = formatsFor(resource.document_id);
+    // A resource that carries its own URL is hosted elsewhere and is not ours
+    // to frame: the overlay only shows what `/file` serves from this
+    // workspace, so an external reading keeps the tab it always opened.
+    const viewable = !resource.url && showable(resource.document_id);
     const url = resource.url || address(resource.document_id);
-    return { ...resource, url, formats };
+    return { ...resource, url, formats, viewable, format: extensionOf.get(resource.document_id) ?? "" };
+  };
+
+  /**
+   * The same address, for the brief a piece of graded work names.
+   *
+   * A `Resource` and an `Assessment` both point at a `Document` and neither
+   * spells the field the same way: a resource carries `document_id`, an
+   * assessment carries `instructions_document_id`, and that difference is the
+   * only reason this is a second function rather than an argument to `link`.
+   * Everything after the lookup — the absolute URL, whether the browser will
+   * paint it, the extension that decides how the overlay frames it — is
+   * identical, because it is the same route serving the same file.
+   *
+   * `formats` is left empty rather than paired by stem. The stem convention
+   * exists for a deck that was built into three files from one source; a brief
+   * is one document, and a second chip beside it would be inviting the
+   * professor to choose between a file and itself.
+   *
+   * An assessment with no brief is returned untouched — no `url`, so every
+   * view downstream keeps the "nothing to open" branch it already had rather
+   * than being handed a link to a document that does not exist.
+   */
+  const linkAssessment = (assessment) => {
+    if (!assessment || typeof assessment !== "object") return assessment;
+    const documentId = assessment.instructions_document_id;
+    if (!documentId) return assessment;
+    return {
+      ...assessment,
+      url: address(documentId),
+      viewable: showable(documentId),
+      format: extensionOf.get(documentId) ?? "",
+      formats: [],
+    };
   };
 
   for (const week of Array.isArray(data.weeks) ? data.weeks : []) {
     for (const meeting of Array.isArray(week.meetings) ? week.meetings : []) {
       if (Array.isArray(meeting.resources)) meeting.resources = meeting.resources.map(link);
     }
+    // Every list a week places graded work in. One assessment appears in two
+    // of them — the week it opens and the week it falls due — and both rows
+    // have to carry the link, because either is the one the professor happens
+    // to be looking at.
+    for (const key of ["opens", "due", "undated"]) {
+      if (Array.isArray(week[key])) week[key] = week[key].map(linkAssessment);
+    }
   }
   if (Array.isArray(data.required_materials)) {
     data.required_materials = data.required_materials.map(link);
+  }
+  // The flat list the Assessments and Exams tabs read, and the work `outline`
+  // could not place on any week at all. The last one matters more than its
+  // size suggests: an assessment with no module and no dates is exactly the
+  // one whose brief a professor is trying to find.
+  if (Array.isArray(data.assessments)) data.assessments = data.assessments.map(linkAssessment);
+  if (data.unplaced && Array.isArray(data.unplaced.assessments)) {
+    data.unplaced = {
+      ...data.unplaced,
+      assessments: data.unplaced.assessments.map(linkAssessment),
+    };
   }
   return data;
 };
@@ -2360,6 +4530,63 @@ const MIME_BY_EXTENSION = {
 };
 
 /**
+ * The extensions this pane renders rather than hands over.
+ *
+ * Markdown is the project's own working format — `make-materials` writes a
+ * deck as Marp markdown, `design-assessment` writes the brief students read as
+ * markdown beside the YAML, and both say so in as many words — so it is the
+ * one format where "serve the file" and "show the professor the document" are
+ * different acts.
+ */
+const MARKDOWN_EXTENSIONS = new Set(["md", "markdown"]);
+
+/**
+ * The one thing a rendered document needs that every other view must not have:
+ * a background of its own.
+ *
+ * `documentPage` paints `body` transparent on purpose — its pages are frames
+ * INSIDE the pane's column, and the pane's own surface is meant to show
+ * through. A rendered brief is the opposite case: it fills the overlay, and
+ * `.pp-modalframe` in the browser half paints that frame `#fff`. So a
+ * `dark=1` document, which sets `--fg` to near-white, was drawing pale grey
+ * text on white — measured, not guessed. It is fixed here rather than by
+ * darkening the frame, because the frame's white is the right default for a
+ * FOREIGN HTML handout that assumes a light page and brings its own black
+ * text; this is our document and knows its own palette.
+ *
+ * Both branches, in `documentPage`'s own shape: the harness's explicit choice
+ * wins where there is one, and the machine's preference decides where there is
+ * not.
+ */
+const MARKDOWN_GROUND = (dark) =>
+  "<style>" +
+  (dark
+    ? "body{background:#1e1e1e}"
+    : "body{background:#fff}" +
+      "@media(prefers-color-scheme:dark){body{background:#1e1e1e}}") +
+  "</style>";
+
+/**
+ * One markdown document as a page.
+ *
+ * The `<title>` is the document's own, because the overlay's header carries a
+ * label and a browser tab does not: `Open in a tab ↗` on a nameless page put
+ * `localhost:7411/professor-pane/file` in the tab strip.
+ */
+const markdownPage = (title, source, dark) =>
+  documentPage(
+    "<title>" +
+      escapeText(title) +
+      "</title>" +
+      MARKDOWN_GROUND(dark) +
+      MARKDOWN_STYLE +
+      '<article class="md">' +
+      renderMarkdown(source) +
+      "</article>",
+    dark,
+  );
+
+/**
  * Serve one material, addressed by the DOCUMENT that records it.
  *
  * By document id, never by path. The pane runs a web server on the professor's
@@ -2379,8 +4606,12 @@ const MIME_BY_EXTENSION = {
  *
  * Read-only, and no directory listing: a request that does not name a document
  * gets a sentence, not a browse.
+ *
+ * One format is transformed rather than served: markdown is rendered to HTML
+ * here. See `MARKDOWN_EXTENSIONS` for why that is this route's job and not the
+ * browser's.
  */
-const sendMaterial = (res, workspace, root, documentId) => {
+const sendMaterial = (res, workspace, root, documentId, dark) => {
   if (!documentId) return sendJson(res, 200, { error: "no document named" });
 
   let found = null;
@@ -2418,14 +4649,30 @@ const sendMaterial = (res, workspace, root, documentId) => {
   }
 
   const extension = (key.split(".").pop() ?? "").toLowerCase();
-  const type =
-    MIME_BY_EXTENSION[extension] ??
-    (typeof found.mime_type === "string" && found.mime_type ? found.mime_type : "application/octet-stream");
+
+  // Markdown becomes a page. The name it downloads under becomes `.html` with
+  // it, because a file whose bytes are HTML and whose name ends `.md` is a
+  // file the professor's editor opens as source.
+  let name = basename(full);
+  if (MARKDOWN_EXTENSIONS.has(extension)) {
+    body = Buffer.from(
+      markdownPage(String(found.title ?? name), body.toString("utf8"), dark === true),
+      "utf8",
+    );
+    name = name.replace(/\.[^.]+$/, "") + ".html";
+  }
+
+  const type = MARKDOWN_EXTENSIONS.has(extension)
+    ? "text/html; charset=utf-8"
+    : (MIME_BY_EXTENSION[extension] ??
+      (typeof found.mime_type === "string" && found.mime_type
+        ? found.mime_type
+        : "application/octet-stream"));
 
   res.setHeader("Content-Type", type);
   // `inline` so a deck opens in whatever the browser has rather than landing in
   // Downloads, and the filename so that when it does download it keeps its name.
-  res.setHeader("Content-Disposition", `inline; filename="${basename(full).replace(/"/g, "")}"`);
+  res.setHeader("Content-Disposition", `inline; filename="${name.replace(/"/g, "")}"`);
   res.setHeader("Content-Length", String(body.length));
   res.writeHead(200);
   res.end(body);
@@ -2519,6 +4766,320 @@ const runApprove = (res, root, runId, approver, confirm) => {
   );
 };
 
+/**
+ * Send an assessment's DEFINITION to Canvas, by spawning the CLI.
+ *
+ * Spawned rather than reimplemented, for the reason `runApprove` gives: the
+ * rules that matter here — what counts as drift, which fields this model has
+ * an opinion about, how a created assignment's id is written back into
+ * `courses/` without destroying the comments around it — live in
+ * `ainar-node/src/lms/`, and a second implementation in this file would have
+ * its own idea of all three. The LMS write layer is deliberately absent from
+ * `dsh-ainar-course-model/server/`, which is a read-only tool surface; the CLI
+ * is the seam that exists for exactly this.
+ *
+ * **Plan and push are one route with a flag**, and the flag is the professor's
+ * press. Both make an outbound request, so both are POST — a plan that Canvas
+ * has to answer is not something a prefetch or a replayed history entry should
+ * be able to fire, even though it changes nothing.
+ *
+ * The CLI's own text is passed through whole. "1 field(s) were edited in
+ * Canvas and are left alone" is the sentence the professor needs, and nothing
+ * this pane could summarise it into would be better.
+ */
+const runAssignmentPush = (res, root, runId, body) => {
+  const assessment = String(body.assessment ?? "").trim();
+  if (!assessment) {
+    return sendJson(res, 200, { error: "No assessment named." });
+  }
+  if (!/^[A-Za-z0-9_.:@+-]{1,200}$/.test(assessment)) {
+    return sendJson(res, 200, { error: `${assessment} is not an assessment id.` });
+  }
+  const group = String(body.group ?? "").trim();
+  if (group && !/^[A-Za-z0-9_.:@+-]{1,200}$/.test(group)) {
+    return sendJson(res, 200, { error: `${group} is not a subgroup label.` });
+  }
+
+  if (!existsSync(AINAR_CLI)) {
+    return sendJson(res, 200, {
+      error:
+        `The TypeScript ainar CLI is not at ${AINAR_CLI}. This pane will not ` +
+        "fall back to the Python `ainar` on PATH — install or restore " +
+        "ainar-node/ instead.",
+    });
+  }
+
+  const confirm = body.confirm === true;
+  const overwrite = body.overwriteDrift === true;
+  // Refused here as well as in the CLI. Replacing a colleague's edit is the
+  // one thing on this screen that destroys somebody else's work, and it must
+  // not be reachable by a press that meant "preview".
+  if (overwrite && !confirm) {
+    return sendJson(res, 200, {
+      error: "Overwriting what Canvas holds is part of sending, not of previewing.",
+    });
+  }
+
+  const args = [
+    "--experimental-strip-types",
+    AINAR_CLI,
+    "lms",
+    confirm ? "assignment-push" : "assignment-plan",
+    runId,
+    "--assessment",
+    assessment,
+  ];
+  if (group) args.push("--group", group);
+  if (confirm) args.push("--confirm");
+  if (overwrite) args.push("--overwrite-drift");
+
+  execFile(
+    process.execPath,
+    args,
+    { cwd: root, timeout: 120000, maxBuffer: 4 * 1024 * 1024 },
+    (error, stdout, stderr) => {
+      const code = error && typeof error.code === "number" ? error.code : error ? 1 : 0;
+      sendJson(res, 200, {
+        ok: code === 0,
+        confirmed: confirm,
+        exitCode: code,
+        command:
+          `bin/ainar lms ${confirm ? "assignment-push" : "assignment-plan"} ${runId} ` +
+          `--assessment ${assessment}${group ? " --group " + group : ""}` +
+          `${confirm ? " --confirm" : ""}${overwrite ? " --overwrite-drift" : ""}`,
+        output: [stdout, stderr].filter(Boolean).join("\n").trim(),
+      });
+    },
+  );
+};
+
+/**
+ * Write one connection into the registry, by spawning the CLI.
+ *
+ * Spawned rather than written here, for the reason `runApprove` gives about
+ * approval: the rules for what a usable connection is — HTTPS only, a numeric
+ * Canvas course id, which variable each type defaults to — live in
+ * `src/connections/`, and a second writer in this file would have its own
+ * version of them, held to nothing. `ainar connections add` refuses what it
+ * cannot use and prints why, and that text is what the professor sees.
+ *
+ * It cannot carry a credential: the command has no `--token` flag. The token
+ * goes through the credential seam separately, in the route below.
+ */
+const addConnection = (root, fields) =>
+  new Promise((resolve) => {
+    if (!existsSync(AINAR_CLI)) {
+      resolve({ error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.` });
+      return;
+    }
+    const args = ["--experimental-strip-types", AINAR_CLI, "connections", "add", fields.name];
+    for (const [flag, value] of [
+      ["--type", fields.type],
+      ["--base-url", fields.baseUrl],
+      ["--course-id", fields.courseId],
+      ["--chat-id", fields.chatId],
+    ]) {
+      if (value) args.push(flag, String(value));
+    }
+    if (fields.makeDefault) args.push("--default");
+
+    execFile(
+      process.execPath,
+      args,
+      { cwd: root, timeout: 30000, maxBuffer: 1024 * 1024 },
+      (error, stdout, stderr) => {
+        const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+        if (error) {
+          resolve({ error: output || String(error.message ?? error) });
+          return;
+        }
+        resolve({ ok: true, output });
+      },
+    );
+  });
+
+/**
+ * A name for a host a professor will recognise: `canvas.narxoz.kz` becomes
+ * `canvas-narxoz`.
+ *
+ * Derived rather than asked for. A connection name is a handle, it is editable
+ * in the file afterwards, and one more field in a setup form is one more thing
+ * to get wrong before anything works. Duplicated from `connections/legacy.ts`,
+ * where the same heuristic names what a migration finds.
+ */
+const GENERIC_HOST_LABELS = new Set([
+  "canvas",
+  "www",
+  "lms",
+  "moodle",
+  "elearning",
+  "learn",
+  "instructure",
+]);
+
+const connectionNameFor = (type, baseUrl) => {
+  let host;
+  try {
+    host = new URL(baseUrl).hostname;
+  } catch {
+    return `${type}-main`;
+  }
+  const labels = host.split(".").filter(Boolean);
+  const chosen = labels.find(
+    (label) => !GENERIC_HOST_LABELS.has(label.toLowerCase()) && label.length > 2,
+  );
+  return `${type}-${(chosen ?? labels[0] ?? "main").toLowerCase()}`;
+};
+
+/**
+ * Ask Canvas who the token belongs to. One read, and it proves the pair.
+ *
+ * Run at the end of setup so that "saved" means "Canvas answered", not "the
+ * file was written". A host typed with a typo and a token that is fine are
+ * indistinguishable in a config file and obvious the moment something asks.
+ */
+const canvasWhoAmI = async (host, token) => {
+  const response = await fetch(`${String(host).replace(/\/+$/, "")}/api/v1/users/self/profile`, {
+    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+  });
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      `Canvas refused the token (${response.status}). Check it is current and belongs ` +
+        "to an account that can see this course.",
+    );
+  }
+  if (!response.ok) throw new Error(`Canvas returned ${response.status}.`);
+  const body = await response.json();
+  return body?.name ?? body?.login_id ?? (body?.id ? String(body.id) : null);
+};
+
+/**
+ * Ask Telegram who the bot is. The Bot API puts the token in the path and
+ * offers no alternative, so this is the one check that cannot keep a
+ * credential out of a URL; it goes to api.telegram.org over HTTPS and the URL
+ * is never logged or printed here.
+ */
+const telegramWhoAmI = async (token) => {
+  const response = await fetch(`https://api.telegram.org/bot${token}/getMe`, {
+    headers: { accept: "application/json" },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body?.ok !== true) {
+    throw new Error(
+      `Telegram refused (${response.status}): ${body?.description ?? "no detail"}. ` +
+        "The token is the one @BotFather gave you.",
+    );
+  }
+  const bot = body.result ?? {};
+  return bot.username ? `@${bot.username}` : (bot.first_name ?? null);
+};
+
+/**
+ * Ask Moodle for its site info, by POST.
+ *
+ * Every example in Moodle's documentation puts the token in the query string.
+ * POST puts it in the body instead, which keeps a credential out of URLs and
+ * proxy logs for the price of one header. Moodle also answers 200 and puts
+ * the refusal in the body, so the status alone would report a dead token as a
+ * working connection.
+ */
+const moodleWhoAmI = async (host, token) => {
+  const response = await fetch(`${String(host).replace(/\/+$/, "")}/webservice/rest/server.php`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", accept: "application/json" },
+    body: new URLSearchParams({
+      wstoken: token,
+      wsfunction: "core_webservice_get_site_info",
+      moodlewsrestformat: "json",
+    }).toString(),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(`Moodle returned ${response.status}.`);
+  if (body?.exception) {
+    throw new Error(`Moodle refused the token: ${body.message ?? body.errorcode ?? body.exception}`);
+  }
+  return body?.sitename ?? body?.username ?? null;
+};
+
+/**
+ * The id out of a Google Sheets URL, or the id itself.
+ *
+ * Everyone pastes the URL. Refusing it teaches nothing and extracting the id
+ * is one split — the same accommodation `spreadsheetIdOf` makes in
+ * `src/lms/sheets.ts`, for the same reason.
+ */
+const spreadsheetIdFrom = (value) => {
+  const cleaned = String(value ?? "").trim();
+  if (!cleaned) return "";
+  if (!cleaned.includes("docs.google.com") && !cleaned.startsWith("http")) return cleaned;
+  let parts;
+  try {
+    parts = new URL(cleaned).pathname.split("/").filter(Boolean);
+  } catch {
+    return cleaned;
+  }
+  const index = parts.indexOf("d");
+  return index >= 0 && index + 1 < parts.length ? parts[index + 1] : cleaned;
+};
+
+/**
+ * One Canvas course's assignments, so an assessment is bound by picking a name.
+ *
+ * `points_possible` comes back with each, because it is the one field that
+ * makes a suggestion checkable: two assignments can share a name and differ
+ * by what they are out of, and a professor scanning a list of twenty-one
+ * pairings needs something to disagree with.
+ */
+const canvasAssignmentList = async (host, token, courseId) => {
+  const url =
+    `${String(host).replace(/\/+$/, "")}/api/v1/courses/${encodeURIComponent(courseId)}` +
+    "/assignments?per_page=100";
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+  });
+  if (response.status === 404) {
+    throw new Error(`Canvas has no course ${courseId}, or this token cannot see it.`);
+  }
+  if (!response.ok) throw new Error(`Canvas returned ${response.status} listing assignments.`);
+  const body = await response.json();
+  if (!Array.isArray(body)) throw new Error("Canvas did not return a list of assignments.");
+  return body
+    .filter((entry) => entry && entry.id)
+    .map((entry) => ({
+      id: String(entry.id),
+      name: entry.name ?? `Assignment ${entry.id}`,
+      points: entry.points_possible ?? null,
+      dueAt: entry.due_at ?? null,
+    }));
+};
+
+/**
+ * The courses this token can teach, so a subgroup is bound by picking a name.
+ *
+ * `enrollment_type=teacher` rather than every course the account can see: a
+ * professor's list is short, and the alternative is a picker holding every
+ * course they have ever been enrolled in as a student.
+ */
+const canvasCourseList = async (host, token) => {
+  const url =
+    `${String(host).replace(/\/+$/, "")}/api/v1/courses` +
+    "?enrollment_type=teacher&enrollment_state=active&per_page=100";
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+  });
+  if (!response.ok) throw new Error(`Canvas returned ${response.status} listing courses.`);
+  const body = await response.json();
+  if (!Array.isArray(body)) throw new Error("Canvas did not return a list of courses.");
+  return body
+    .filter((course) => course && course.id)
+    .map((course) => ({
+      id: String(course.id),
+      name: course.name ?? course.course_code ?? `Course ${course.id}`,
+      code: course.course_code ?? null,
+      term: course.term?.name ?? null,
+    }));
+};
+
 const sendErrorPage = (res, text) =>
   send(
     res,
@@ -2539,7 +5100,7 @@ const sendErrorPage = (res, text) =>
  * it are this file's own vocabulary and a collision inside it is a typo, not
  * the composition-level contract `webServer.register` is protecting.
  */
-const handler = (registry) => (req, res) => {
+const handler = (registry, credentials = { service: null }) => (req, res) => {
   let url;
   try {
     url = new URL(req.url ?? "/", "http://localhost");
@@ -2579,19 +5140,532 @@ const handler = (registry) => (req, res) => {
     }
 
     if (path === "/api/preferences") {
-      return sendJson(
-        res,
-        200,
-        preferencesDocument(
-          root,
-          url.searchParams.get("course") ?? "",
-          url.searchParams.get("term") ?? "",
-        ),
-      );
+      const course = url.searchParams.get("course") ?? "";
+      const term = url.searchParams.get("term") ?? "";
+
+      // A write, and therefore POST only, for `/api/approve`'s reason: a GET
+      // that changes a file is one a link, a prefetch or a refresh can fire
+      // without anybody having decided to.
+      if (req.method === "POST") {
+        return readBody(req)
+          .then((text) => {
+            let body;
+            try {
+              body = JSON.parse(text || "{}");
+            } catch {
+              return sendJson(res, 200, { error: "The preferences body is not JSON." });
+            }
+            const result = writePreferences(
+              root,
+              String(body.scope ?? ""),
+              course,
+              term,
+              body.values ?? {},
+            );
+            if (result.error) return sendJson(res, 200, result);
+            // The layers as they now are, in the same response. The form is
+            // drawn from them, so re-reading here is what makes a Save show
+            // the file rather than the browser's memory of it.
+            return sendJson(res, 200, {
+              ...preferencesDocument(root, course, term),
+              saved: result,
+            });
+          })
+          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+      }
+
+      return sendJson(res, 200, preferencesDocument(root, course, term));
+    }
+
+    if (path === "/api/integrations") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return integrationsAnswer(workspace, root, runId, credentials)
+        .then((answer) => sendJson(res, 200, answer))
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
+     * The credential write. POST only, and the only route in this plugin that
+     * accepts a secret.
+     *
+     * Three properties it has to keep, and each is a line below:
+     *
+     * **It only ever writes.** No GET returns a value, the response is the
+     * redrawn document with presence in it, and nothing is logged. A pane that
+     * could read a token back would be a pane that shows one on a screen that
+     * gets shared.
+     *
+     * **It writes only variables the registry names.** Anything else would
+     * make this a general-purpose secret writer for any environment variable
+     * on the machine, reachable from a browser. The registry's `tokenEnv`
+     * values are the whole allowed set.
+     *
+     * **It refuses rather than pretends.** The seam rejects a write under a
+     * shadowing read-only layer, and that rejection is passed through with its
+     * reason instead of being turned into a success the professor would
+     * discover was a lie the next time a push failed.
+     */
+    if (path === "/api/credentials") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "setting a credential is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      if (!credentials.service) {
+        return sendJson(res, 200, {
+          error:
+            "No credential provider is mounted in this composition, so there is nowhere " +
+            "to save a token. Export it in the environment instead — `ainar connections " +
+            "show NAME` prints which variable.",
+        });
+      }
+
+      return readBody(req)
+        .then(async (text) => {
+          let body;
+          try {
+            body = JSON.parse(text || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The credential body is not JSON." });
+          }
+
+          const ref = String(body.ref ?? "").trim();
+          const document = integrationsDocument(workspace, root, runId);
+          if (!CREDENTIAL_REF.test(ref) || !credentialRefsIn(document).includes(ref)) {
+            return sendJson(res, 200, {
+              error:
+                `'${ref}' is not a variable any connection in this run names. This route ` +
+                "writes only those, so that it cannot be used to set anything else on the machine.",
+            });
+          }
+
+          // A value that is only whitespace is a clearing, not a credential.
+          // The seam treats an empty stored value as absent everywhere, so
+          // writing one would leave a record that reads as unconfigured —
+          // removing it says the same thing without the litter.
+          const value = String(body.value ?? "");
+          try {
+            if (value.trim()) await credentials.service.set(ref, value.trim());
+            else await credentials.service.unset(ref);
+          } catch (error) {
+            return sendJson(res, 200, { error: String(error?.message ?? error) });
+          }
+
+          // Presence only, never the value.
+          return sendJson(
+            res,
+            200,
+            await integrationsAnswer(workspace, root, runId, credentials, {
+              saved: { ref, cleared: !value.trim() },
+            }),
+          );
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
+     * Set an integration up from nothing, or fill in the half that is missing.
+     *
+     * One route for every provider rather than one each, because the shape is
+     * the same for all of them and the differences are three lines apiece:
+     * what identifies the destination, where that fact belongs, and what
+     * question proves the credential works.
+     *
+     * The two halves always go to two different places, which is the point of
+     * the registry. What identifies the destination is configuration — a host,
+     * a channel, a spreadsheet — and lands in the connections registry or the
+     * run record. The token is a credential and goes through the seam into the
+     * harness's store. Neither lands in this repository.
+     *
+     * Ordered destination-then-token-then-check, and the order matters. The
+     * destination first means a professor who mistypes the token still has the
+     * rest recorded and only retries the half that failed. The check last is
+     * what lets the answer say "Telegram answered as @course_bot" rather than
+     * "saved" — a host with a typo and a token that is fine look identical in
+     * a config file and differ the moment something asks.
+     */
+    if (path === "/api/integrations/setup") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "setting an integration up is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+
+      return readBody(req)
+        .then(async (text) => {
+          let body;
+          try {
+            body = JSON.parse(text || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The setup body is not JSON." });
+          }
+
+          const provider = String(body.provider ?? "").trim();
+          const token = String(body.token ?? "").trim();
+          const baseUrl = String(body.baseUrl ?? "").trim();
+          const chatId = String(body.chatId ?? "").trim();
+          const sheetId = spreadsheetIdFrom(body.sheetId);
+
+          if (!["canvas", "telegram", "moodle", "sheets"].includes(provider)) {
+            return sendJson(res, 200, { error: `'${provider}' is not an integration this pane sets up.` });
+          }
+
+          // ---- the destination ------------------------------------------
+          let connectionName = null;
+          if (provider === "sheets") {
+            if (sheetId) {
+              const written = writeRunLmsValue(workspace, root, runId, "sheet_id", sheetId);
+              if (written.error) return sendJson(res, 200, written);
+            }
+          } else {
+            const identifier = provider === "telegram" ? chatId : baseUrl;
+            if (!identifier) {
+              return sendJson(res, 200, {
+                error:
+                  provider === "telegram"
+                    ? "A channel is needed — the @name the bot posts to, or its numeric id."
+                    : `A ${provider} address is needed — the one you open it at.`,
+              });
+            }
+            connectionName =
+              provider === "telegram"
+                ? `telegram-${chatId.replace(/^@/, "").toLowerCase()}`
+                : connectionNameFor(provider, baseUrl);
+            const added = await addConnection(root, {
+              name: connectionName,
+              type: provider,
+              baseUrl: provider === "telegram" ? null : baseUrl,
+              chatId: provider === "telegram" ? chatId : null,
+              // The first of a type is the one every command should reach
+              // without being told. A second one has to be named.
+              makeDefault: true,
+            });
+            if (added.error) return sendJson(res, 200, { error: added.error });
+          }
+
+          // ---- the credential -------------------------------------------
+          const variable = {
+            canvas: "AINAR_CANVAS_TOKEN",
+            telegram: "AINAR_TELEGRAM_BOT_TOKEN",
+            moodle: "AINAR_MOODLE_TOKEN",
+            sheets: "AINAR_SHEETS_TOKEN",
+          }[provider];
+
+          if (token) {
+            if (!credentials.service) {
+              return sendJson(res, 200, {
+                error:
+                  "The rest was saved, but no credential provider is mounted, so the " +
+                  `token could not be. Export ${variable} instead.`,
+              });
+            }
+            try {
+              await credentials.service.set(variable, token);
+            } catch (error) {
+              return sendJson(res, 200, {
+                error: `The rest was saved, but the token was not: ${String(error?.message ?? error)}`,
+              });
+            }
+          }
+
+          // ---- the check ------------------------------------------------
+          let answered = null;
+          let checkFailed = null;
+          const live = await resolveCredential(credentials.service, variable);
+          const fresh = canvasSettings();
+          if (live) {
+            try {
+              if (provider === "canvas" && fresh.host) {
+                answered = await canvasWhoAmI(fresh.host, live);
+              } else if (provider === "telegram") {
+                answered = await telegramWhoAmI(live);
+              } else if (provider === "moodle" && baseUrl) {
+                answered = await moodleWhoAmI(baseUrl, live);
+              }
+              // Sheets is not checked here, deliberately: proving a Google
+              // token means reading a spreadsheet, and a green tick that
+              // stands for nothing is worse than an honest silence.
+            } catch (error) {
+              checkFailed = String(error?.message ?? error);
+            }
+          }
+
+          return sendJson(
+            res,
+            200,
+            await integrationsAnswer(workspace, root, runId, credentials, {
+              setup: {
+                provider,
+                connection: connectionName,
+                answered,
+                checkFailed,
+                tokenSaved: Boolean(token),
+                checked: provider !== "sheets",
+              },
+            }),
+          );
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
+     * The professor's own Canvas courses, so a subgroup is bound by name.
+     *
+     * POST for `canvasCatalogue`'s reason: it spends the professor's API quota
+     * and sends their token, so it happens when they press for it and never
+     * because a URL was visited.
+     */
+    if (path === "/api/canvas/courses") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "listing Canvas courses is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      const settings = canvasSettings();
+      if (!settings.host) {
+        return sendJson(res, 200, {
+          error: "No Canvas host is configured yet. Set one up above first.",
+        });
+      }
+      return resolveCredential(credentials.service, settings.tokenEnv)
+        .then(async (token) => {
+          const usable = token || settings.token;
+          if (!usable) {
+            return sendJson(res, 200, {
+              error: `No Canvas token. Paste one into the ${settings.tokenEnv} field first.`,
+            });
+          }
+          return sendJson(res, 200, { courses: await canvasCourseList(settings.host, usable) });
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
+     * The assignments of one Canvas course, for the binder below.
+     *
+     * Takes the course id rather than deriving it: with a Canvas course per
+     * subgroup there are several, and the caller is binding one subgroup at a
+     * time. POST for `canvasCatalogue`'s reason — it spends the professor's
+     * quota and sends their token.
+     */
+    if (path === "/api/canvas/assignments") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "listing Canvas assignments is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      const settings = canvasSettings();
+      if (!settings.host) {
+        return sendJson(res, 200, { error: "No Canvas host is configured yet." });
+      }
+      return readBody(req)
+        .then(async (text) => {
+          let body;
+          try {
+            body = JSON.parse(text || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          const courseId = String(body.courseId ?? "").trim();
+          if (!/^[0-9]+$/.test(courseId)) {
+            return sendJson(res, 200, { error: "A numeric Canvas course id is needed." });
+          }
+          const token = await resolveCredential(credentials.service, settings.tokenEnv);
+          const usable = token || settings.token;
+          if (!usable) {
+            return sendJson(res, 200, {
+              error: `No Canvas token. Set ${settings.tokenEnv} first.`,
+            });
+          }
+          return sendJson(res, 200, {
+            courseId,
+            assignments: await canvasAssignmentList(settings.host, usable, courseId),
+          });
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
+     * Bind assessments to Canvas assignments.
+     *
+     * The body is `{links: {ASSESSMENT-01: "90218" | {CS-401: "90218"}}}` —
+     * a string for a run that is one Canvas course, a mapping for one that is
+     * several. An entry set to null clears the linkage.
+     *
+     * Writes into the assessment records, which is the one place in this pane
+     * that edits a file `ainar approve` owns. `recordAssessmentLinks` states
+     * why that is defensible; the short version is that a Canvas id is a
+     * pointer, not a decision.
+     */
+    if (path === "/api/canvas/assignment-map") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "the assignment mapping is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then(async (text) => {
+          let body;
+          try {
+            body = JSON.parse(text || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The mapping body is not JSON." });
+          }
+          const result = recordAssessmentLinks(workspace, root, runId, body.links);
+          if (result.error) return sendJson(res, 200, result);
+          return sendJson(
+            res,
+            200,
+            await integrationsAnswer(workspace, root, runId, credentials, { saved: result }),
+          );
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
+     * Bind each subgroup to its Canvas course.
+     *
+     * Writes `extensions.lms.canvas_courses` into the run record, which is
+     * what `ainar lms push --group` reads. Unlike `canvas_sections` beside it,
+     * this mapping is not decorative: with it set, a push refuses to run
+     * without `--group` and carries only that subgroup's students.
+     */
+    if (path === "/api/canvas/course-map") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "the subgroup mapping is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then(async (text) => {
+          let body;
+          try {
+            body = JSON.parse(text || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The mapping body is not JSON." });
+          }
+          const result = writeCanvasCourses(workspace, root, runId, body.mapping);
+          if (result.error) return sendJson(res, 200, result);
+
+          return sendJson(
+            res,
+            200,
+            await integrationsAnswer(workspace, root, runId, credentials, { saved: result }),
+          );
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // The live Canvas read, and the one outbound request in this plugin. POST
+    // for `canvasCatalogue`'s reason: it spends the professor's API quota and
+    // sends their token, so it happens when they press for it and never
+    // because a URL was visited.
+    if (path === "/api/canvas/catalogue") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "the Canvas catalogue is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      const document = integrationsDocument(workspace, root, runId);
+      const settings = canvasSettings();
+      // Every precondition named separately, because "it did not work" is the
+      // one answer this tab must never give: each of these is a different file
+      // to go and edit.
+      if (!document.canvasCourse.usable) {
+        return sendJson(res, 200, {
+          error: document.canvasCourse.fromColumn
+            ? `This run's Canvas course is recorded as ${document.canvasCourse.fromColumn}, ` +
+              "which is a handle rather than the numeric id the API takes. The number is in " +
+              "the Canvas course URL; record it as `extensions.lms.canvas_course_id`."
+            : "This run has no Canvas course id. It goes on the run record as " +
+              "`extensions.lms.canvas_course_id`, and the number is in the Canvas course URL.",
+        });
+      }
+      if (!settings.host) {
+        return sendJson(res, 200, {
+          error:
+            "No Canvas host is configured. Either export AINAR_CANVAS_URL, or write " +
+            `${settings.configPath} with a [canvas] table naming base_url.`,
+        });
+      }
+      // Through the seam first, then what this process can see for itself.
+      // `canvasSettings` reads `process.env`, which is only one of the two
+      // layers a token can now live in — without this, a token the professor
+      // had just saved in the field below would be reported missing by the
+      // button beside it.
+      return resolveCredential(credentials.service, settings.tokenEnv)
+        .then((token) => {
+          const usable = token || settings.token;
+          if (!usable) {
+            return sendJson(res, 200, {
+              error:
+                `No Canvas token. Paste one into the ${settings.tokenEnv} field above, or ` +
+                `export ${settings.tokenEnv} in your shell. Canvas → Account → Settings → ` +
+                "New Access Token. It can change grades, so keep it out of the repository.",
+            });
+          }
+          return canvasCatalogue(document.canvasCourse.id, settings.host, usable).then((result) =>
+            sendJson(res, 200, result),
+          );
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // The save. POST for `/api/approve`'s reason and one more of its own: this
+    // is the only route in the pane that writes to `courses/`.
+    if (path === "/api/canvas/assignment") {
+      // POST only, for `/api/approve`'s reason: this one reaches outside the
+      // machine, and with `--confirm` it changes what a class can see.
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "assignment is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then((raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          if (!body || typeof body !== "object" || Array.isArray(body)) {
+            return sendJson(res, 200, { error: "The request body must be an object." });
+          }
+          return runAssignmentPush(res, root, runId, body);
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    if (path === "/api/canvas/selection") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "the Canvas selection is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then((text) => {
+          let body;
+          try {
+            body = JSON.parse(text || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The selection body is not JSON." });
+          }
+          const result = writeCanvasSelection(workspace, root, runId, body.selections);
+          if (result.error) return sendJson(res, 200, result);
+          // The record as it now is, in the same response, for
+          // `/api/preferences`' reason: the form is drawn from this, so
+          // re-reading here is what makes a Save show the file rather than the
+          // browser's memory of what was ticked.
+          // The whole answer travels with every redraw, or saving a selection
+          // would blank the credential and status blocks the browser half
+          // draws from it.
+          return integrationsAnswer(workspace, root, runId, credentials, { saved: result }).then(
+            (answer) => sendJson(res, 200, answer),
+          );
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
     if (path === "/file") {
-      return sendMaterial(res, workspace, root, url.searchParams.get("doc") ?? "");
+      return sendMaterial(
+        res,
+        workspace,
+        root,
+        url.searchParams.get("doc") ?? "",
+        url.searchParams.get("dark") === "1",
+      );
     }
 
     if (path === "/api/approve") {
@@ -2626,7 +5700,16 @@ const handler = (registry) => (req, res) => {
         200,
         "text/html; charset=utf-8",
         view === "assessments"
-          ? assessmentsDocument(workspace, root, runId, dark, withDrafts, on)
+          ? assessmentsDocument(
+              workspace,
+              root,
+              runId,
+              dark,
+              withDrafts,
+              on,
+              host ? `http://${host}` : "",
+              session,
+            )
           : view === "slides"
             ? slidesDocument(
                 workspace,
@@ -2638,7 +5721,16 @@ const handler = (registry) => (req, res) => {
                 host ? `http://${host}` : "",
                 session,
               )
-            : examsDocument(workspace, root, runId, dark, withDrafts, on),
+            : examsDocument(
+                workspace,
+                root,
+                runId,
+                dark,
+                withDrafts,
+                on,
+                host ? `http://${host}` : "",
+                session,
+              ),
       );
     }
 
@@ -2659,6 +5751,8 @@ const handler = (registry) => (req, res) => {
           // has pressed for them, so a route replayed from a log or a history
           // entry without the parameter renders pseudonyms.
           url.searchParams.get("names") === "1",
+          req.headers.host ? `http://${req.headers.host}` : "",
+          url.searchParams.get("session") ?? "",
         ),
       );
     }
@@ -2742,10 +5836,17 @@ const handler = (registry) => (req, res) => {
           host ? `http://${host}` : "",
           url.searchParams.get("session") ?? "",
           workspace,
+          url.searchParams.get("dark") === "1",
         );
         const run = data?.run ?? {};
         if (run.course_id && run.term) {
-          data = withRecordPaths(data, root, run.course_id, run.term);
+          data = withRecordPaths(
+            data,
+            root,
+            run.course_id,
+            run.term,
+            (data.weeks ?? []).flatMap((week) => week.undated ?? []),
+          );
         }
         // The week view is the weeks. Assessments and the grading policy are
         // two tabs of their own now, and rendering them here as well put a
@@ -2753,6 +5854,35 @@ const handler = (registry) => (req, res) => {
         // this tab for. The widget keeps both by default — a chat client has no
         // tabs to move them to — so the pane has to ask.
         data = { ...data, sections: { assessments: false, grading: false, header: false } };
+      }
+      if (view === "tasks") {
+        // Where each dateless assessment lives, so the widget's "set dates"
+        // button can name the record instead of a directory. The inbox payload
+        // carries no `course_id` — only the run's own id and term — so the
+        // course is read off the bundle rather than parsed out of the run id,
+        // which is a convention and not a guarantee.
+        let courseId = null;
+        try {
+          courseId = workspace.findRun(runId)?.course?.course_id ?? null;
+        } catch {
+          // The payload built, so the run is real; without the bundle the
+          // prompt falls back to telling the model to grep for the id.
+          courseId = null;
+        }
+        const term = data?.run?.term ?? null;
+        if (courseId && term) {
+          data = withRecordPaths(
+            data,
+            root,
+            courseId,
+            term,
+            (data.assessments ?? []).filter((row) => !row.due_at),
+          );
+        }
+        // Names on the inbox, and nowhere else a widget is served. Opt-in per
+        // request exactly as the class list is, so a URL replayed without the
+        // parameter renders pseudonyms.
+        if (url.searchParams.get("names") === "1") data = withStudentNames(data);
       }
       const dark = url.searchParams.get("dark") === "1";
       res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
@@ -2788,12 +5918,35 @@ const handler = (registry) => (req, res) => {
  * makes an unload actually unload.
  */
 export function apply(ctx) {
+  /**
+   * The credential seam, if this composition has one.
+   *
+   * A holder rather than a direct `ctx.credentials`, because reading a service
+   * that is not in `inject` throws — and putting `credentials` in `inject`
+   * would make the WHOLE pane fail to activate wherever no provider is
+   * mounted. Losing the outline, the inbox and the class list because nobody
+   * can type a Canvas token is the wrong trade, so the dependency is a nested
+   * fiber: it fills the holder while a provider is live and empties it when
+   * one goes away, and the routes check.
+   *
+   * This cordis has no `inject: { optional }` form — every key in the object
+   * shape is required — which is why the nested fiber is the idiom here rather
+   * than a declaration.
+   */
+  const credentials = { service: null };
+  ctx.inject(["credentials"], (scoped) => {
+    credentials.service = scoped.credentials;
+    scoped.on("dispose", () => {
+      credentials.service = null;
+    });
+  });
+
   ctx.effect(
     () =>
       ctx.webServer.register({
         kind: "prefix",
         path: BASE,
-        handler: handler(ctx.workspaceRegistry),
+        handler: handler(ctx.workspaceRegistry, credentials),
       }),
     "professor-pane: the /professor-pane route",
   );

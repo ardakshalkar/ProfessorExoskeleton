@@ -2,18 +2,273 @@
 
 The right column of the DeepSeek Harness, as the professor's visualization pane.
 
-Four buttons across the top of it — **Course outline**, **Progress**, **Tasks**,
-**Preferences** — and under Progress a second pair, **Concepts** and
-**Gradebook**. The header names the run and its term dates, and offers a picker
-when the workspace holds more than one offering.
+Six buttons across the top of it — **Course outline**, **Students**,
+**Progress**, **Tasks**, **Preferences**, **Integrations** — and under most of
+them a segmented row of sub-views. The header names the run and its term dates,
+and offers a picker when the workspace holds more than one offering.
 
 | Button | What it draws | Where it comes from |
 | --- | --- | --- |
-| Course outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines | `course_outline` |
+| Course outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines. Every piece of graded work carries a link to the brief students read, or says it has none | `course_outline` |
+| Students | The class list by subgroup, named or pseudonymous, with each student's marks so far, and under each row what they actually handed in | the enrollments, `gradebook` for the marks, and the run's submissions and item responses |
 | Progress · Concepts | Concepts in teaching order against students by pseudonym, with the mean proportion of marks earned on evidence tagged with each | `class_progress` |
 | Progress · Gradebook | One score per student per assessment, from approved decisions only, with the rows that must not be exported and the reason for each | `gradebook` |
-| Tasks | Grades awaiting approval, outstanding submissions, open signals, interventions, upcoming deadlines | `action_inbox` |
+| Tasks | Work with no date and a button that sets one, grades awaiting approval, outstanding submissions, open signals, interventions | `action_inbox` |
 | Preferences | The DataLayer preference layers, each with its own file path and its own values | the preference files |
+| Integrations | What this run is wired to outside the workspace, and what it is not: the gradebook target, the Canvas course and host, the spreadsheet, which credentials are present, and which Canvas section feeds which subgroup | the run record, `lms.toml`, `connections.json`, the environment |
+
+## Opening a deck, or a homework brief
+
+A slide deck, a handout, an exam paper or the brief for a piece of homework
+opens **over the harness**, not in another browser tab: a full-page overlay
+with the document in it, closed with `Escape`, with the backdrop, or with the
+×. The pane is three hundred pixels wide and a slide is 4:3; nothing about
+reading one belongs in a column, which is the whole argument for the overlay.
+
+Where the links are:
+
+* the `PDF` chip on a week's deck, the `open` beside a reading, and the rows
+  under **Course outline · Slides**;
+* an `open` chip under the weight and the date on every row of **Course
+  outline · Assessments**, and a **Paper** row on each of **Course outline ·
+  Exams** — this is the assessment's `instructions_document_id`, the brief
+  students read, and a piece of graded work that has none says `no brief` in
+  the same amber the pane uses for a missing weight. Work a student cannot
+  start is a hole worth drawing, not a field worth leaving blank;
+* the same link on the assessment chips in the week-by-week view, including on
+  work with no deadline — which is usually the work whose brief you are
+  looking for.
+
+What still opens a tab, deliberately:
+
+* **A format the browser will not paint.** A `.pptx` and a `.docx` are
+  downloads everywhere this runs, and an overlay of one would be a blank panel
+  called a slide deck. The showable list is `pdf`, `html`, `svg`, the image
+  formats, plain text, and markdown; `sendMaterial` serves the rest exactly as
+  before. The overlay's own header keeps an **Open in a tab** link for the case
+  where a format turns out to be a download after all.
+* **A material hosted somewhere else.** An external reading keeps its own URL
+  and its own tab. The overlay frames one thing only: this app's `/file` route,
+  checked in `materialUrl` on the browser side, so a URL arriving from a
+  sandboxed document cannot point the frame anywhere else.
+* **A modified click.** Ctrl, cmd, shift and middle clicks are left alone, so
+  "open in a new tab" still means what it says.
+
+How the frame is sandboxed depends on the format, and the reason is measured
+rather than chosen. A frame with an opaque origin — `sandbox` without
+`allow-same-origin`, which is how the widget frames are delivered — cannot load
+a same-origin URL at all: the request fails as `ERR_BLOCKED_BY_CLIENT` and the
+panel stays blank. And the PDF viewer and the image viewer are documents of the
+browser's own, which a sandbox stops even when the origin matches.
+
+So a **PDF or an image** is framed with no sandbox, which costs nothing:
+neither can execute anything, and the PDF viewer has a sandbox of its own.
+Everything else — HTML, SVG, plain text — is framed with `allow-same-origin`
+and therefore **without** `allow-scripts`, because a workspace may hold an HTML
+handout downloaded from anywhere and a script in one has no business running
+with the professor's session. Scripts off is what makes that safe; the
+same-origin grant only makes it load. The table is in `MaterialModal`.
+
+### Markdown is rendered, not served
+
+`.md` is on the showable list, and it was not before. The reason it was
+excluded stopped being true rather than being overruled: Chrome downloads
+`text/markdown` whatever the file contains, so `/file` no longer sends one. A
+markdown document is rendered to HTML there — `lib/markdown.js` — and served as
+HTML, which the browser paints.
+
+This matters more than it sounds like it should, because markdown is what this
+project writes. `make-materials` produces a deck as Marp markdown;
+`design-assessment` writes the brief students read as markdown beside the YAML,
+and says why in as many words. Before this, the sample course's only deck and
+every drafted brief were files the professor could reach and not read.
+
+The renderer is a deliberate subset — headings, both kinds of list, fenced
+code, tables, blockquotes, rules, and inline code, links, images and emphasis —
+and not a markdown implementation. No dependency was added for one. What has to
+render is material this project's own skills wrote to their own templates, and
+the failure mode of a construct it does not know is a line that reads as its
+own source rather than a page that breaks. `test/pane-markdown.test.mjs` pins
+it, including the two failures that matter: a document that renders as
+something other than what it says, and a document that renders as markup it did
+not ask for. A brief may be a file downloaded from anywhere, so its text is
+escaped before anything marks it up, and a `javascript:` link keeps its words
+and loses its anchor.
+
+A YAML front-matter block at the top is dropped, and a later `---` is a rule —
+which is what makes a Marp deck read as a document rather than as its own
+source. A rendered page is framed `allow-same-origin` and therefore **without**
+`allow-scripts`, the same as any other HTML document this serves.
+
+The same widget served to ChatGPT or Claude Desktop is unchanged. The host
+offers `openMaterial` or it does not, and `runtime.js` intercepts a click only
+where it does — a capability, not a flag on the payload, so there is no second
+code path in the view.
+
+## What a student handed in
+
+A mark says how much of the course someone has been assessed on. It does not
+say what they wrote, and that is the question a professor asks when a mark
+looks wrong. So each row of the class list carries a press — **3 submissions**
+— that opens that person's work underneath it.
+
+What is in there, per submission: when it was handed in, its status and attempt
+where either is not the ordinary one, the professor's own note on it, then
+**every answer** — the question as the student saw it, the option they chose
+with that option's own text, the paragraph they typed, and the score with
+whether it was marked correct. Then the files.
+
+`chosen_options: [b]` is unreadable without the option's text, and a paragraph
+of `raw_response` is unreadable without the question above it. Both halves or
+neither.
+
+### It opens closed, and that is not a detail
+
+This pane gets screen-shared and thrown at lecture-hall projectors — the whole
+reason the class list has a `Pseudonyms` press and a coloured rule when names
+are showing. A view that unfolded every student's written answers on load would
+put a room's work on the wall behind the lecturer. So every panel starts
+`hidden`, one press opens one person, and `.row.work[hidden]` is declared
+**after** `.row.work` on purpose: the two selectors score the same, the later
+one wins, and with them the other way round every panel was open on load.
+
+Rendered inline rather than fetched when pressed, and that is forced rather
+than chosen. These documents are delivered into a frame with an opaque origin,
+which may neither navigate itself nor `fetch`. There is no "load it when
+pressed" available in here.
+
+### Files, and the ones that are not here
+
+A submission's file gets the same `open` chip a brief does, and opens in the
+same overlay — but only when the document's `storage_key` is relative to the
+repository. A key carrying a scheme says `held outside the workspace` instead.
+
+That is the model's decision, not this view's omission.
+`versions/<TERM>/samples/documents.yaml` says it in as many words: the bytes of
+student work live in object storage and never in this repository, and student
+work is referenced by pseudonymous identifier and nothing else. `sendMaterial`
+refuses any key with a scheme, and a dead `open` link that returned a sentence
+about object storage would be worse than no link at all.
+
+A professor who does keep submissions under the course workspace gets the
+overlay for nothing: a repository-relative key is served by the route a deck is
+served by, and a PDF, an image, a text file or a markdown report paints in the
+frame.
+
+## Integrations
+
+The tab exists because the facts are scattered. A professor asking "will a push
+reach Canvas" has to know that the target is on the run record, that the course
+id is on the run record **or** in its `extensions` and that `ainar lms push`
+reads only one of the two, that the host is in a TOML file beside the roster,
+that the token is an environment variable, and that Telegram is in a JSON file
+under a different dot-directory again. Four of those are invisible from every
+other tab.
+
+Three sub-views: **Targets** (where an approved grade would go, and what
+students would be told), **Credentials** (which of five environment variables
+and three files hold something), and **Links** (the Canvas sections, and each
+assessment's Canvas column).
+
+**No credential is ever drawn.** Presence, the variable's name, the layer it
+comes from, and the path it would be read from — never a value.
+`/api/integrations` sends booleans; there is no field on the payload that could
+carry a token. The Canvas *host* is drawn, because a hostname is not a secret
+and a course id pointing at the wrong instance is precisely the failure this
+tab is for.
+
+### Typing a token in
+
+**Credentials** has a field per variable the run's connections name. What is
+typed there goes through `ctx.credentials` into the harness's managed store —
+the same one the Models page writes API keys to — and never into a file in this
+repository. The field is write-only in the strong sense: no route returns a
+value, nothing pre-fills the box, and the box is cleared on every outcome,
+success or refusal.
+
+Three rules the route holds to, each for a reason worth keeping:
+
+- **Only variables the registry names.** Anything else would make a
+  browser-reachable route into a general-purpose writer for any environment
+  variable on the machine.
+- **A refusal is passed through, not smoothed over.** The credential seam
+  rejects a write underneath a read-only layer, because a value exported in the
+  launching shell would keep shadowing what was saved. The field is disabled in
+  that case, with the reason beside it, rather than swallowing what is typed.
+- **The pane degrades rather than disappears.** The seam is reached through a
+  nested `ctx.inject` fiber, not the plugin's own `inject`, so a composition
+  with no credential provider loses the field and keeps the outline, the inbox
+  and the class list.
+
+Chat is not one of the two places. A token pasted into a conversation is in the
+transcript, the context window and the provider's request; the skills say to
+refuse it and to tell the professor to reissue.
+
+### Sending a definition to Canvas
+
+**Links** ends with the one control in this pane that changes something a class
+can see: it sends an assessment's *definition* — title, points, dates, what may
+be handed in, and the brief as the Canvas description. Not the marks; those are
+`ainar lms push` and are not reachable from here at all.
+
+It spawns `ainar lms assignment-plan` / `assignment-push`, the way the approval
+strip spawns `ainar approve`, and for the same reason: what counts as drift,
+which fields this model has an opinion about, and how a created assignment's id
+is written back into `courses/` all live in `ainar-node/src/lms/`, and a second
+implementation in the plugin would have its own idea of all three. The LMS
+write layer is deliberately absent from `dsh-ainar-course-model/server/`, which
+is a read-only tool surface.
+
+Four rules, each of which is the reason a button is shaped the way it is:
+
+* **Preview first, always.** The red **Send to Canvas** button does not exist
+  until a plan has come back. A professor who has not read what would change
+  cannot send it, and changing the assessment or the subgroup throws the plan
+  away so the red button can never send something other than what was read.
+* **The plan names the host.** `Canvas: https://…` is its first line, because
+  the host comes from a registry in the professor's home directory rather than
+  from the course record — so which Canvas this is about is a fact to state,
+  not one to leave the reader assuming.
+* **Drift needs its own press.** A field somebody edited in Canvas is reported
+  and left alone. Replacing it is a checkbox that appears only when the plan
+  actually found drift, is refused by the route unless the same request is a
+  send, and is cleared after every send so it cannot carry into the next one.
+* **Every subgroup by default.** The selector opens on *Every subgroup*, which
+  is what the command does: one definition serves the whole class, and a send
+  that reached CS-401 and not CS-402 is how two halves end up being told
+  different things.
+
+`POST` only, like `/api/approve` — a plan makes Canvas answer, and that is not
+something a prefetch or a replayed history entry should be able to fire.
+
+### Selecting the Canvas sections
+
+**Links** offers a `Fetch from Canvas` button. Pressing it reads
+`GET /sections` and `GET /groups` for the run's Canvas course — the only
+outbound request anywhere in this plugin — and lists what came back, each
+labelled as a section or a student group, with its Canvas id and student count.
+Ticking one records it; where the run has subgroups, a picker beside it says
+which subgroup that section feeds, or leaves it feeding the whole run.
+
+Saving writes `extensions.lms.canvas_sections` on the run record:
+
+```yaml
+extensions:
+  lms:
+    canvas_sections:
+      - id: "9021"
+        kind: section
+        name: CSS-4008 Lecture 1
+        group: CS-401
+```
+
+A list rather than a map keyed by subgroup, because a run taught as one cohort
+would have no key to write under, and two Canvas sections feeding one subgroup
+is ordinary. `group` absent means the whole run.
+
+Unticking everything **removes** the key rather than writing an empty list, and
+takes the emptied `lms:` and `extensions:` with it — so a run that was never
+wired to Canvas reads exactly as it did before the tab was opened.
 
 ## Record, and record + drafts
 
@@ -56,8 +311,13 @@ drift. The rules those files are held to — a view computes nothing, a blank is
 never a zero, no network, no student's name, no `callTool` — hold here for free
 because it is the same code.
 
-Preferences is the one view drawn in this package, because no tool returns
-preferences.
+What is drawn in this package is what no tool returns. The class list, the
+Checklist, the assessment, slide and exam tables and the grading policy are
+assembled in `index.js` and served as plain pages into the same frame.
+Preferences and Integrations are drawn in `lib/client.js` instead, and the
+reason is narrower than "no tool returns them": both carry a **form**, and the
+frame is delivered as `srcdoc` without `allow-same-origin`, so a document
+inside it has an opaque origin and cannot call back to the routes a Save needs.
 
 ## The two halves
 
@@ -80,7 +340,12 @@ lines, not before.
 | Path | Answers |
 | --- | --- |
 | `GET /professor-pane/api/runs` | every course and offering in `AINAR_WORKSPACE` |
-| `GET /professor-pane/api/preferences?course=&term=` | the preference layers |
+| `GET /professor-pane/api/preferences?course=&term=` | the preference layers, and the schema of what may be set |
+| `POST /professor-pane/api/preferences?course=&term=` | write one layer; body is `{scope, values}` |
+| `GET /professor-pane/api/integrations?run=` | what this run is wired to: target, Canvas course and host, spreadsheet, credential presence, per-assessment links, subgroups, recorded sections |
+| `POST /professor-pane/api/credentials?run=` | store one credential; body is `{ref, value}`, an empty value clears it. Write-only: the response carries presence, never a value |
+| `POST /professor-pane/api/canvas/catalogue?run=` | ask Canvas for this course's sections and student groups |
+| `POST /professor-pane/api/canvas/selection?run=` | write `extensions.lms.canvas_sections`; body is `{selections}` |
 | `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/` and `work/`, for the pane's refresh poll |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
@@ -91,11 +356,43 @@ complaints in `x-professor-pane-draft-issues`, percent-encoded on one line —
 headers rather than payload fields, because the payload goes into a widget
 document shared with two other hosts and has no place to print them.
 
-Everything behind them is a read. `callTool` is read-only by construction and
-the preference files are opened with `readFileSync`; there is no write verb in
-`index.js` and no place to add one. A pane that could approve a grade would be a
-second approval path, and `AGENTS.md` says there is one and the professor runs
-it.
+Every view behind them is a read — `callTool` is read-only by construction —
+and four routes are not:
+
+* `POST /api/approve` spawns the CLI rather than reimplementing the gate.
+* `POST /api/preferences` writes a preference layer.
+* `POST /api/canvas/selection` writes `extensions.lms.canvas_sections`.
+* `POST /api/canvas/catalogue` writes nothing here, but is the one route that
+  reaches off this machine.
+
+**None of them is an approval path**, which is the property that matters.
+`AGENTS.md` says there is one and the professor runs it: `/api/approve` IS that
+command, run as it would be run in a terminal, `--dry-run` until a preview has
+been read. A preference is not a claim about a student — it is how the professor
+wants the skills to behave. And a Canvas section id is a fact about the
+professor's own LMS that only they know: no skill drafts it and no agent can
+propose it, so it has no drafted half for `ainar approve` to promote, and
+refusing it would only mean the fact stays settable by hand-editing YAML. A pane
+that could accept a *grade* on its own would be the second path, and there is
+still no route that does.
+
+Every write goes through the model's own emitter or the comment-preserving
+parser, because a professor also edits these files by hand and a file the pane
+saved must not be distinguishable from one they wrote:
+
+* `/api/preferences` uses `yaml-out`'s `dump`, the one `approve` uses and the
+  one held to PyYAML byte for byte. It owns its file whole.
+* `/api/canvas/selection` does not own its file at all — `version.yaml` opens
+  with a comment explaining the version/run merge — so it goes through `yaml`'s
+  `parseDocument`, replaces one key, and writes the rest back untouched, line
+  endings included. Nothing in it can reach `start_date`, `status` or
+  `instructors`.
+
+`POST` on the Canvas catalogue even though it is a read, for the reason
+`/api/approve` is POST: it spends the professor's API quota and sends a
+grade-changing token, and a side effect behind a `GET` is one a link, a
+prefetch, a refresh or a replayed history entry can fire without anybody having
+decided to. Pressing `Fetch from Canvas` is deciding to.
 
 ### Which workspace a request is about
 
@@ -153,6 +450,36 @@ own: this view *is* the comparison. Every row says which half a thing is in —
 amber for what nobody has written, blue for what is written and waiting for
 `ainar approve` — so a setting that hid one half would remove the answer rather
 than narrow it.
+
+## Names, and where they are allowed
+
+Two tabs can name a student — the class list and **Tasks** — and both draw the
+same pair of buttons: **Names** and **Pseudonyms**. Names are the default, at
+the professor's instruction; `Pseudonyms` is one press away for a projector.
+
+The resolution is the same on both: `~/.ainar/roster/people.json`, read here,
+held for the length of one response. `names=1` is sent only by those two tabs
+and only affirmatively, so a URL replayed without it renders pseudonyms.
+
+Tasks is the one place the pane puts a real name inside a WIDGET document —
+`withStudentNames` adds a `people` map to the `action_inbox` payload before it
+is embedded, and `action-inbox.js` falls back to the pseudonym when the field
+is absent, which is what every other host sees. What is looked up is only the
+ids already on the page, so a class of two hundred with three missing
+submissions puts three names in the document.
+
+Two things stay pseudonymous even there: the identifier under a row, because it
+is what `whois`, the gradebook and a bug report all use; and the text of an
+`ask` button, because that is a prompt going to a model and the model should
+work in the record's own vocabulary.
+
+There is no coloured band on Tasks, because the pane does not write inside a
+widget. The warning there is the amber on the `Names` button itself, which is in
+the pane's chrome and is the control that turns it off.
+
+A long list of missing students is folded: two are named, the rest sit hidden in
+the same document behind an `…` that opens them in place. Nothing is fetched on
+press — the payload already carries them.
 
 ## What is computed once, and what is computed again
 
