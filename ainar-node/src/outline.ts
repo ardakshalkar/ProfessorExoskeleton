@@ -148,6 +148,11 @@ const assessmentEntry = (assessment: any, rubrics: Map<string, any>): Record<str
     rubric_id: assessment.rubric_id ?? null,
     // Whether a rubric exists, not what it says.
     criteria: rubric ? (rubric.criteria ?? []).length : 0,
+    // The brief students read, named rather than described. A view that has a
+    // route to the file can then offer it; one that has not — the same payload
+    // served to a chat client — simply has an id it cannot open, which is the
+    // same position it is in for every other document the model names.
+    instructions_document_id: assessment.instructions_document_id ?? null,
   };
 };
 

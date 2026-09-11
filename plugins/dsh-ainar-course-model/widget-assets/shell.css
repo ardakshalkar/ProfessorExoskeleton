@@ -40,6 +40,10 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
 td.name { white-space: normal; min-width: 11rem; }
 td.name small { display: block; color: var(--muted); font-size: .7rem;
                 font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* The identifier line stays monospaced; the missing-students line does not,
+   because with a roster behind it that line holds people's names and a
+   proportional face is what names are set in. */
+td.name small.flag { font-family: inherit; }
 .cell { text-align: center; font-variant-numeric: tabular-nums; }
 .b1 { background: var(--b1); } .b2 { background: var(--b2); }
 .b3 { background: var(--b3); } .b4 { background: var(--b4); }
@@ -66,6 +70,17 @@ button {
 button[aria-pressed="true"] { background: var(--fg); color: var(--on-fg);
   border-color: var(--fg); }
 button.ask { border-style: dashed; color: var(--muted); }
+/* The ellipsis that opens a folded list. Not a pill: it sits inside a running
+   line of text, and the shared button chrome would put a bordered capsule in
+   the middle of a sentence. It inherits the colour of the line it ends. */
+button.rest { font: inherit; font-size: inherit; color: inherit; padding: 0 .2rem;
+              background: none; border: 0; border-radius: 0; }
+button.rest:hover { text-decoration: underline; }
+/* The tail opens underneath rather than alongside, which is what keeps the
+   control it opened from being pushed along the line. `[hidden]` has to be
+   restated: any `display` of our own outranks the browser's default rule. */
+small.flag [data-rest] { display: block; }
+small.flag [data-rest][hidden] { display: none; }
 .sev-high { color: var(--flag); font-weight: 600; }
 .empty { color: var(--muted); font-size: .8rem; padding: .5rem 0; }
 

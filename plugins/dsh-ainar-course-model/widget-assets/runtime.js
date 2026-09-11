@@ -56,6 +56,24 @@ function ask(question) {
   }
 }
 
+// Ask the host to show a material without leaving the page, and say whether it
+// took the job.
+//
+// Only a host that offers `openMaterial` has anywhere to put one — a pane
+// inside an application window does, a chat client rendering this widget in a
+// message does not, and neither does the published page, where the link IS the
+// navigation. So this is a capability test rather than a preference: false
+// means the click was not handled, and must be left alone to follow its href.
+function showMaterial(url, label, format) {
+  if (typeof api.openMaterial !== 'function') return false;
+  if (!url) return false;
+  // `format` is the file's extension, and the host needs it: a PDF and an
+  // image are painted by a viewer the browser will not run inside a sandboxed
+  // frame, and an HTML handout is a document that must be.
+  api.openMaterial({ url: url, label: label, format: format || '' });
+  return true;
+}
+
 function state() { return read('widgetState') || {}; }
 function setState(next) {
   if (typeof api.setWidgetState === 'function') api.setWidgetState(next);
@@ -77,6 +95,23 @@ function paint() {
   root.querySelectorAll('[data-ask]').forEach(function (node) {
     node.addEventListener('click', function () { ask(node.dataset.ask); });
   });
+  // A material the host can show in place, shown in place.
+  //
+  // The anchor keeps its href and its `target`, which is the point: a
+  // middle-click, a ctrl-click, a right-click "open in new tab" and a host
+  // with nowhere to put an overlay all still open the file the old way. Only
+  // the plain left click is taken, and only where `showMaterial` says the host
+  // accepted it.
+  root.querySelectorAll('a[data-view]').forEach(function (link) {
+    link.addEventListener('click', function (event) {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (showMaterial(link.getAttribute('href'), link.dataset.view, link.dataset.format)) {
+        event.preventDefault();
+      }
+    });
+  });
+
   root.querySelectorAll('[data-pick]').forEach(function (node) {
     node.addEventListener('click', function () {
       setState(Object.assign({}, state(), { picked: node.dataset.pick }));
@@ -124,6 +159,22 @@ function paint() {
       panel.hidden = !panel.hidden;
       button.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
       card.classList.toggle('open', !panel.hidden);
+    });
+  });
+
+  // The rest of a clipped list, behind the ellipsis standing in for it.
+  //
+  // Emitted by the view only when something is actually folded, so — like the
+  // week panel and unlike the chip row — there is nothing to measure: a control
+  // that exists is a control that opens something. `hidden` rather than a class
+  // so the tail is invisible before the stylesheet arrives as well as after.
+  root.querySelectorAll('[data-restbtn]').forEach(function (button) {
+    var rest = button.parentNode.querySelector('[data-rest]');
+    if (!rest) return;
+    button.addEventListener('click', function () {
+      rest.hidden = !rest.hidden;
+      button.setAttribute('aria-expanded', rest.hidden ? 'false' : 'true');
+      button.textContent = rest.hidden ? '…' : 'less';
     });
   });
 

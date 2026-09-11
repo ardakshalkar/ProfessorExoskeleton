@@ -122,8 +122,21 @@ function model(d) {
           kind: r.kind,
           name: r.title,
           href: safeUrl(r.url),
+          // What the host would title an overlay of this material, and by
+          // being empty, the request not to open one: a format the browser
+          // would only download says nothing here, and so does every payload
+          // from a host that has no route to the file. See `openMaterial`.
+          view: r.viewable ? r.title : '',
+          format: r.format || '',
           formats: (r.formats || [])
-            .map(function (f) { return { label: f.label, href: safeUrl(f.url) }; })
+            .map(function (f) {
+              return {
+                label: f.label,
+                href: safeUrl(f.url),
+                view: f.viewable ? r.title + ' · ' + f.label : '',
+                format: f.format || '',
+              };
+            })
             .filter(function (f) { return f.href; }),
           draft: isDraft(r.resource_id) || isDraft(r.document_id),
           slides: deck,
@@ -144,10 +157,14 @@ function model(d) {
           kind: type,
           name: a.title,
           href: safeUrl(a.url),
-          when: on ? verb + ' ' + on : '',
-          sep: Boolean(on),
-          overdue: verb === 'due',
-          draft: isDraft(a.assessment_id),
+          // The brief students read, when the payload knows where it is and
+          // the host has a route to it. Empty `view` is the request NOT to
+          // open an overlay — a format the browser would only download, or a
+          // chat client with no file route at all — and the link then behaves
+          // as the tab it always was. Same contract as a deck's; see the
+          // resources above.
+          view: a.viewable ? a.title : '',
+          format: a.format || '',
           formats: [],
         });
       }
@@ -168,6 +185,9 @@ function model(d) {
         kind: type,
         name: a.title,
         draft: isDraft(a.assessment_id),
+        href: safeUrl(a.url),
+        view: a.viewable ? a.title : '',
+        format: a.format || '',
         // The verb first, the reason after, and an explicit floor under the
         // tool use.
         //
@@ -421,7 +441,13 @@ function model(d) {
     // surface invents a path, and `safeUrl` returns null for anything that is
     // not http, https or a relative path.
     materials: (d.required_materials || []).map(function (r) {
-      return { title: r.title, kind: r.kind, href: safeUrl(r.url) };
+      return {
+        title: r.title,
+        kind: r.kind,
+        href: safeUrl(r.url),
+        view: r.viewable ? r.title : '',
+        format: r.format || '',
+      };
     }),
     stranded: stranded,
     placement: d.placement,

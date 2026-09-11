@@ -2,7 +2,7 @@
  * What is waiting for the professor, assembled from the record.
  * Ported from `ainar/inbox.py`.
  */
-import { assessmentById, assessmentsOf, criterionById, enrolledIn, runById, } from "./bundle.js";
+import { allRubrics, assessmentById, assessmentsOf, criterionById, enrolledIn, itemsOf, runById, } from "./bundle.js";
 const LOW_CONFIDENCE = 0.6;
 const DUE_SOON_DAYS = 7;
 const daysBetween = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
@@ -13,6 +13,7 @@ export const inboxPayload = (b, courseVersionId, on, options = {}) => {
     const assessmentIds = new Set(assessments.map((a) => a.assessment_id));
     const submissions = b.submissions.filter((s) => assessmentIds.has(s.assessment_id));
     const criteria = criterionById(b);
+    const rubrics = allRubrics(b);
     const submissionById = new Map(submissions.map((s) => [s.submission_id, s]));
     const activeStudents = new Set(enrolledIn(b, courseVersionId, { groups }).map((e) => e.student_id));
     // Narrowing to a subgroup narrows the work as well as the class: pending
@@ -60,6 +61,7 @@ export const inboxPayload = (b, courseVersionId, on, options = {}) => {
     });
     // -------------------------------------------------------------- deadlines
     const assessmentState = assessments.map((assessment) => {
+        const rubric = assessment.rubric_id ? rubrics.get(assessment.rubric_id) : assessment.rubric;
         const received = new Set(submissions
             .filter((s) => s.assessment_id === assessment.assessment_id && inScope(s.student_id))
             .map((s) => s.student_id));
@@ -79,10 +81,37 @@ export const inboxPayload = (b, courseVersionId, on, options = {}) => {
             type: assessment.type,
             weight: assessment.weight ?? null,
             due_at: assessment.due_at ?? null,
+            // How much there is to grade WITH, which is not the same question as how
+            // it is graded. A quiz is scored from its items and needs no rubric; an
+            // assignment a person reads needs criteria and has no items. Publishing
+            // both counts lets a reader say "nothing can mark this" without the view
+            // guessing which of the two a given type ought to have — the mistake that
+            // would flag ten perfectly gradeable quizzes as unfinished.
+            // Whether a rubric exists, not what it says.
+            //
+            // The same field, computed the same way, as `outline`'s `assessmentEntry`
+            // — deliberately, because the inbox and the term plan must not disagree
+            // about whether a piece of work can be marked at all. An assessment with
+            // no criteria cannot be graded by anybody, model or professor, so it
+            // belongs on the list of what is not ready rather than only in a survey
+            // one tab away.
+            criteria: rubric ? (rubric.criteria ?? []).length : 0,
+            items: itemsOf(b, assessment.assessment_id).length,
             status,
             enrolled: activeStudents.size,
             submissions_received: received.size,
-            missing: status !== "upcoming" ? [...activeStudents].filter((s) => !received.has(s)).sort() : [],
+            // Nobody is late for a deadline nobody set.
+            //
+            // `missing` was every active student for any status but `upcoming`, which
+            // swept `undated` in with `closed`: work whose dates the professor has not
+            // chosen yet was reported as a whole class failing to hand it in, and on a
+            // run of seventy-four that was seventy-four names in one row. An undated
+            // assessment has not been assigned, so nothing about it is outstanding —
+            // what it needs is a date, which the inbox now asks for in its own
+            // section rather than as an accusation in this one.
+            missing: status === "upcoming" || status === "undated"
+                ? []
+                : [...activeStudents].filter((s) => !received.has(s)).sort(),
         };
     });
     // ---------------------------------------------------------------- signals
