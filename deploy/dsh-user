@@ -1,0 +1,249 @@
+#!/usr/bin/env bash
+# `dsh-user` — boot one professor's harness, in their own home, on their own port.
+#
+#   deploy/dsh-user ardak            boot the harness for `ardak`
+#   deploy/dsh-user ardak --check    provision and print the resolved facts, boot nothing
+#   deploy/dsh-user ardak --port 0   everything after the name goes to dsh
+#
+# This is `bin/sample` with the one assumption removed. `bin/sample` points
+# DSH_HOME at THIS checkout's `.dsh`, which is right for one person on one
+# laptop and wrong the moment two people share a machine: DSH_HOME holds the
+# sessions, the workspace registry, the settings and the credential file, so a
+# shared home is a shared inbox, a shared course list and a shared API key.
+#
+# Here the home is per person — $DSH_ROOT/<name>/.dsh — and the checkout is
+# shared and read-only. That is the whole split. Everything else in this
+# directory exists to put an authenticating proxy in front of the result,
+# because the harness has none of its own; `deploy/README.md` says why in full.
+#
+# What is NOT per person, deliberately:
+#
+#   * the checkout, including plugins/ and node_modules/ — one installation,
+#     one version of the course model, updated once.
+#   * the `sample` profile and the `professor` agent preset, symlinked into
+#     each home from the checkout. A preset IS a composition and carries the
+#     same trust as shell access, so it belongs to the deployment rather than
+#     to whoever can write to their own home. Per-person overrides have their
+#     own seam and it is not this one: $DSH_HOME/cordis.patch.yml is the
+#     home-level patch layer, applied after the profile's.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# Where the per-person homes live. Override for a machine that keeps them
+# somewhere else; the systemd unit passes it explicitly so the service and a
+# hand-run command cannot disagree about which home they mean.
+DSH_ROOT="${DSH_ROOT:-/srv/dsh}"
+
+# The name → port table. A file rather than a hash of the name, because a hash
+# collides silently, and this way the ports are a thing a person can read — the
+# same list Caddy's `map` block is written from.
+USERS_CONF="${USERS_CONF:-$here/deploy/users.conf}"
+
+die() { echo "dsh-user: $*" >&2; exit 1; }
+
+user="${1:-}"
+[ -n "$user" ] || die "usage: deploy/dsh-user <name> [--check] [dsh args...]"
+shift
+
+# A name is a directory component and an OS account. Refuse anything that could
+# be neither, before it becomes a path.
+case "$user" in
+  *[!a-z0-9._-]* | "" | -* | .* ) die "refusing '$user' as a name: lowercase letters, digits, dot, dash, underscore" ;;
+esac
+
+check=""
+if [ "${1:-}" = "--check" ]; then check=1; shift; fi
+
+# ── the port ────────────────────────────────────────────────────────────────
+#
+# DSH_PORT overrides the table for one run. Otherwise the table is the
+# authority, and a name absent from it is an error rather than a default: a
+# default port would mean two professors quietly racing for one socket, and the
+# loser's service restart-looping on EADDRINUSE.
+port="${DSH_PORT:-}"
+if [ -z "$port" ]; then
+  [ -f "$USERS_CONF" ] || die "no $USERS_CONF. Copy deploy/users.conf.example and add a line for $user."
+  port="$(awk -v u="$user" '$1 !~ /^#/ && $1 == u { print $2; exit }' "$USERS_CONF")"
+  [ -n "$port" ] || die "$user is not in $USERS_CONF. Add a line: $user <port>"
+fi
+case "$port" in *[!0-9]*|"") die "port for $user is '$port', which is not a number" ;; esac
+
+home="$DSH_ROOT/$user/.dsh"
+
+# ── provisioning, on every boot, idempotently ───────────────────────────────
+#
+# Not a separate step a person can forget: a home that is half built produces a
+# harness that boots and is subtly wrong — no professor preset, so the standard
+# coding agent answers instead; no profile, so a boot error naming a directory
+# nobody created. Doing it here means `systemctl restart` repairs it.
+mkdir -p "$home/profiles" "$home/.agent-presets"
+
+# The profile and the preset follow the checkout rather than being copied out of
+# it: a copy means N versions of the composition drifting apart, with the next
+# `git pull` reaching none of them.
+#
+# But NOT by symlinking the directory itself, which is what this did first and
+# which does not boot. The loader imports a profile's plugins — `dsh-sample`,
+# `dsh-ainar-course-model`, `dsh-professor-pane`, `dsh-professor-brand` — as
+# ordinary Node packages resolved FROM THE PROFILE DIRECTORY. Inside the
+# checkout that works by the upward walk: .dsh/profiles/sample → .dsh → the
+# repository root, where node_modules is. A home under /srv/dsh walks up to /
+# and finds nothing, and the boot ends in
+#
+#     Cannot find package 'dsh-sample' imported from …/.dsh/profiles/sample/
+#
+# Symlinking the directory does not help, because the importer is still the path
+# under the home. So the per-person profile is a REAL directory whose contents
+# are links back to the checkout, plus one `node_modules` link that puts the
+# installation back on the resolution path. Mirroring the contents rather than
+# naming the four files means a file added to the profile upstream appears here
+# on the next boot instead of being silently missing.
+#
+# `link_into_home` also refuses to do the damage `ln -sfn` does on a re-run: a
+# destination that is already a real directory would otherwise receive the link
+# INSIDE it, leaving a profile at profiles/sample/sample that nothing reads.
+# Git-bash on Windows has no symlinks and copies instead — survivable, and
+# stated by --check rather than left as a surprise.
+
+# One link, however this platform makes them.
+#
+# `ln -s` is the answer on Linux, which is what this directory is for. Git-bash
+# on Windows has no symlinks and fakes them by copying, which for a directory
+# means it creates the destination and THEN fails — leaving a stub behind that
+# blocks every subsequent attempt. So on Windows a directory gets a junction,
+# which is a real link, needs no developer mode, and is the only reason this
+# arrangement can be exercised on a workstation before a server depends on it.
+make_link() {
+  local target="$1" link="$2"
+  if [ -d "$target" ] && command -v cygpath >/dev/null 2>&1; then
+    cmd.exe //c mklink //J "$(cygpath -w "$link")" "$(cygpath -w "$target")" >/dev/null 2>&1
+    return
+  fi
+  ln -s "$target" "$link" 2>/dev/null && return 0
+  rmdir "$link" 2>/dev/null || true   # clear a stub a failed `ln -s` left behind
+  return 1
+}
+
+# Create if missing, and never overwrite. Provisioning runs on every boot, so it
+# has to be the kind of operation that is safe to repeat; deciding whether an
+# existing link is the RIGHT link means comparing paths that a junction, a
+# relative symlink and a bind mount all spell differently, and getting that
+# wrong means clobbering something a person put there on purpose. `--check`
+# prints what each one actually points at instead, and repair is: delete it and
+# boot again.
+link_into_home() {
+  local target="$1" link="$2"
+  [ -e "$link" ] || [ -L "$link" ] && return 0
+  make_link "$target" "$link" && return 0
+
+  # No link available. A composition file is small, and copying it is a stated
+  # loss — it stops following the checkout, and --check says so. A DIRECTORY at
+  # this point is node_modules, and copying 147 MB per professor is not a
+  # degraded mode but a different and worse deployment; refuse it instead.
+  [ -d "$target" ] && die "cannot link $link -> $target, and refusing to copy a directory that size.
+  This platform makes no symlinks. Deploy on Linux, or enable them here."
+  cp "$target" "$link"
+}
+
+# Mirror one directory out of the checkout as links, and hand it the checkout's
+# node_modules so package resolution from inside it reaches the installation.
+mirror_from_checkout() {
+  local src="$1" dst="$2" entry
+  mkdir -p "$dst"
+  for entry in "$src"/*; do
+    [ -e "$entry" ] || continue
+    case "$(basename "$entry")" in node_modules) continue ;; esac
+    link_into_home "$entry" "$dst/$(basename "$entry")"
+  done
+  link_into_home "$here/node_modules" "$dst/node_modules"
+}
+
+describe_link() {
+  if [ -L "$1" ]; then printf 'symlink -> %s' "$(readlink "$1")"
+  elif [ -e "$1" ]; then printf 'a real path, not a link — it will not follow the checkout'
+  else printf 'MISSING'; fi
+}
+
+mirror_from_checkout "$here/.dsh/profiles/sample" "$home/profiles/sample"
+mirror_from_checkout "$here/.dsh/.agent-presets/professor" "$home/.agent-presets/professor"
+
+# The per-person credential file. dsh resolves a key through its credentials
+# seam — the process environment first, then $DSH_HOME/.credentials.yaml (what
+# the Models page writes), then the project's .env, then $DSH_HOME/.env — so
+# this file is the layer a professor owns without being able to see anyone
+# else's. 0600 because of what it will hold.
+if [ ! -f "$home/.env" ]; then
+  {
+    echo "# This professor's own harness environment. Not shared, not in the checkout."
+    echo "#"
+    echo "# The API key can live here, or be typed into the UI's Models page — which"
+    echo "# writes .credentials.yaml beside this file, and is reachable only when the"
+    echo "# proxy presents the harness as loopback. See deploy/README.md, 'The trust"
+    echo "# fence', for which of the two your deployment has."
+    echo "# DEEPSEEK_API_KEY="
+    echo ""
+    echo "# Which model a new session starts on. Not secrets."
+    echo "# SAMPLE_PROVIDER=deepseek-official"
+    echo "# SAMPLE_MODEL=deepseek-v4-flash"
+  } > "$home/.env"
+  chmod 600 "$home/.env"
+fi
+
+# The directory this professor's sessions open by default. dsh takes the
+# invoking directory as the workspace root, and the systemd unit sets its
+# WorkingDirectory here, so this is where a new session starts unless the
+# sidebar says otherwise.
+mkdir -p "$DSH_ROOT/$user/courses"
+
+# 0700 on the person's own tree. On a machine where each professor is an OS
+# account, this is the split that actually holds: the agent runs bash as them,
+# so what it can read is what they can read, and one professor's roster,
+# sessions and drafts are not readable by the next.
+chmod 700 "$DSH_ROOT/$user" 2>/dev/null || true
+
+export DSH_HOME="$home"
+
+# Only what is not a secret, and only if it is not already set — the same rule
+# `bin/sample` follows, and for the same reason: the process environment is the
+# top layer of dsh's credential resolution and the one layer that is read-only
+# by design, so a key exported here would read as `writable: false` and the
+# Models page would refuse to change it. A model id is not a key.
+for file in "$home/.env" "$here/.env"; do
+  [ -f "$file" ] || continue
+  while IFS='=' read -r key value; do
+    case "$key" in
+      SAMPLE_PROVIDER) [ -n "${SAMPLE_PROVIDER:-}" ] || export SAMPLE_PROVIDER="$value" ;;
+      SAMPLE_MODEL) [ -n "${SAMPLE_MODEL:-}" ] || export SAMPLE_MODEL="$value" ;;
+    esac
+  done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$file" || true)
+done
+
+dsh_bin="$here/node_modules/@deepseek-ai/dsh/lib/bin.js"
+if [ ! -f "$dsh_bin" ]; then
+  echo "dsh-user: the harness is not installed in this checkout." >&2
+  echo "  npm install --legacy-peer-deps" >&2
+  echo "The flag is required. See package.json's comments for why." >&2
+  exit 1
+fi
+
+if [ -n "$check" ]; then
+  printf 'user       %s\n' "$user"
+  printf 'DSH_HOME   %s\n' "$home"
+  printf 'workspace  %s\n' "$DSH_ROOT/$user/courses"
+  printf 'port       %s (127.0.0.1 only)\n' "$port"
+  printf 'profile    %s\n' "$(describe_link "$home/profiles/sample/cordis.patch.yml")"
+  printf 'preset     %s\n' "$(describe_link "$home/.agent-presets/professor/agent.cordis.yml")"
+  printf 'packages   %s\n' "$(describe_link "$home/profiles/sample/node_modules")"
+  printf 'caddy map  %s "127.0.0.1:%s"\n' "$user" "$port"
+  exit 0
+fi
+
+# `--host 127.0.0.1` is restated rather than left to the default, because it is
+# the one thing here that must not drift: the proxy is the only thing that may
+# reach this process, and the harness refuses `--host 0.0.0.0` precisely
+# because binding wider would expose remote code execution to the network.
+#
+# `--no-open` because there is no desktop to open a browser on, and the opener
+# would otherwise spawn a helper on every restart.
+exec node "$dsh_bin" --profile sample --host 127.0.0.1 --port "$port" --no-open "$@"

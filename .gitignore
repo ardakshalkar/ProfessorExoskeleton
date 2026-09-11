@@ -61,3 +61,8 @@ Thumbs.db
 output/
 .codex-build/
 .codex-finalizer/
+
+# The deployment's own user table: which professor listens on which port. It
+# names real people on a real machine, which is a fact about that machine and
+# not about this project. `deploy/users.conf.example` is the tracked one.
+deploy/users.conf

@@ -1,0 +1,28 @@
+# Line endings, for the files where they are not cosmetic.
+#
+# Nothing here is fixing a problem that exists today: every shell script in this
+# repository is stored with LF, and a Linux clone runs them. This file is a
+# guard, and it appeared with `deploy/` because that is the first tree written
+# to be cloned onto a Linux server by someone other than its author.
+#
+# What it guards against is cheap and specific. This checkout is developed on
+# Windows with core.autocrlf=true, and a bash script that reaches a Linux box
+# with CRLF does not run at all: the kernel reads the shebang as
+# `/usr/bin/env bash\r` and answers "bad interpreter". One editor or generator
+# that writes CRLF, one commit, and the failure lands on the server rather than
+# on the machine that caused it.
+#
+# The .cmd files are the other way round — cmd.exe wants CRLF, and they have it.
+
+*.sh text eol=lf
+deploy/dsh-user text eol=lf
+deploy/Caddyfile text eol=lf
+deploy/dsh@.service text eol=lf
+deploy/users.conf.example text eol=lf
+
+bin/ainar text eol=lf
+bin/deck text eol=lf
+bin/deck-build text eol=lf
+bin/sample text eol=lf
+
+*.cmd text eol=crlf

@@ -1,0 +1,154 @@
+# The authenticating front door.
+#
+#   cp deploy/Caddyfile /etc/caddy/Caddyfile   # then edit the marked lines
+#   caddy validate --config /etc/caddy/Caddyfile
+#   systemctl reload caddy
+#
+# The harness ships no authentication and says so: its web server lists "No
+# TLS, auth, or origin policy" under deferred work, its /api fence describes
+# itself as a reachability policy and explicitly not authentication, and its CLI
+# refuses `--host 0.0.0.0` on the grounds that binding wider would expose remote
+# code execution to the network. None of that is an oversight to work around.
+# It is a statement about where the boundary has to be, and this file is that
+# boundary.
+#
+# Two jobs, in order:
+#
+#   1. Decide who is asking. Nothing reaches a harness before this succeeds.
+#   2. Send them to their own harness — one process, one port, one person.
+#
+# Everything behind here is unauthenticated and assumes it is talking to its
+# owner on loopback. That assumption is true exactly as long as this file is
+# the only route in. Keep every harness bound to 127.0.0.1, keep the ports
+# closed at the firewall, and do not add a second way in.
+
+{
+	# EDIT: the address ACME notices go to.
+	email ops@example.edu
+}
+
+# EDIT: the name the certificate is for, and the name professors type.
+dsh.example.edu {
+
+	# ── 1. who is asking ─────────────────────────────────────────────────
+	#
+	# Two options. Pick one; do not run both.
+	#
+	# (a) basic_auth — no identity provider needed, works the afternoon you
+	#     set it up, and is a fine way to prove the rest of this file is
+	#     right. Generate a hash with `caddy hash-password`. It is a shared
+	#     secret per person with no revocation story beyond editing this
+	#     file, so it is a starting point rather than a destination.
+	#
+	#     `basic_auth` was `basicauth` before Caddy 2.8; rename it if
+	#     `caddy validate` says the directive is unknown.
+
+	basic_auth {
+		# EDIT: one line per professor: <name> <bcrypt hash>
+		ardak $2a$14$REPLACE_WITH_OUTPUT_OF_caddy_hash_password
+	}
+
+	# (b) forward_auth against oauth2-proxy in front of the university's
+	#     OIDC. This is the one to end up on: real accounts, real
+	#     revocation, and the professor signs in with the credentials they
+	#     already have. Comment out basic_auth above and uncomment all of
+	#     this, including the /oauth2 handler.
+	#
+	# handle /oauth2/* {
+	# 	reverse_proxy 127.0.0.1:4180
+	# }
+	#
+	# forward_auth 127.0.0.1:4180 {
+	# 	uri /oauth2/auth
+	# 	copy_headers X-Auth-Request-Preferred-Username>X-Dsh-User
+	# }
+	#
+	# Then change the map's source below from {http.auth.user.id} to
+	# {http.request.header.X-Dsh-User}, and make sure oauth2-proxy is
+	# configured to STRIP that header from what it receives — otherwise a
+	# client sets it themselves and becomes whoever they like.
+
+	# ── 2. which harness ─────────────────────────────────────────────────
+	#
+	# The authenticated name, mapped to the loopback port that person's
+	# service listens on. Keep this in step with deploy/users.conf; the left
+	# column here is what the identity provider calls them, which is not
+	# necessarily what the OS account is called.
+
+	map {http.auth.user.id} {dsh.upstream} {
+		# EDIT: one line per professor.
+		ardak   "127.0.0.1:3101"
+		default ""
+	}
+
+	# An authenticated person with no harness gets a sentence, not a 502 from
+	# a connection to nowhere. This is the case that happens when someone is
+	# added to the identity provider and provision-user.sh has not been run.
+	@unprovisioned expression `{dsh.upstream} == ""`
+	respond @unprovisioned "You are signed in, but no harness is provisioned for this account yet." 403
+
+	reverse_proxy {dsh.upstream} {
+		# ── the trust fence, and why these two lines exist ───────────
+		#
+		# The harness guards /api with a Host-header check: the Host must
+		# be loopback or a declared trusted authority, and an attached
+		# Origin must equal it. Its most privileged methods — the whole
+		# settings and credentials plane, agent-preset reads, the native
+		# dialogs — additionally require that check to pass with an EMPTY
+		# trust list, which is to say: loopback, and nothing else.
+		#
+		# Rewriting both headers to the upstream authority presents this
+		# request as what it now effectively is: a loopback request, made
+		# by a process that has already established who the human is. The
+		# professor gets the whole UI, Models page included.
+		#
+		# What this gives up is the DNS-rebinding defence, which exists to
+		# stop a BROWSER being tricked into reaching a loopback server
+		# nobody authenticated. That defence is doing a job this file now
+		# does properly, and only for requests that already got past
+		# step 1. It is a substitution, not a removal — but it is only a
+		# substitution while this proxy is the sole route to the port.
+		#
+		# The strict alternative, if you would rather not: delete these
+		# two lines, and instead declare the public authority to the
+		# harness, in the profile's cordis.patch.yml —
+		#
+		#     - id: connection
+		#       config:
+		#         trustedHosts: ['dsh.example.edu']
+		#
+		# Ordinary use works. Settings, Models and agent-preset reads
+		# answer 403, because those are pinned to loopback by name. Each
+		# professor's API key then has to be written into their
+		# $DSH_ROOT/<name>/.dsh/.env by hand.
+		header_up Host {dsh.upstream}
+		header_up Origin http://{dsh.upstream}
+
+		# The real client, for the harness's logs — the rewrite above has
+		# just made every request look local, and something should still
+		# be able to say where it came from.
+		header_up X-Forwarded-Host {host}
+
+		# The browser holds two downlink WebSockets per tab,
+		# /api/events.mux and /api/events.host. Caddy upgrades them
+		# without configuration; what it will not do is hold them open
+		# through an idle firewall, so if sessions go quiet and
+		# reconnect, that is where to look before this file.
+	}
+
+	# Everything on this host is behind the auth above, which is deliberate
+	# and worth saying out loud: the harness's own fence only ever covered
+	# /api, and this deployment serves more than that. The professor's pane
+	# registers /professor-pane as a plain prefix route with no fence of its
+	# own, and behind it are the gradebook, the action inbox and roster-joined
+	# student names. There is no route here that may be left open.
+
+	encode zstd gzip
+
+	log {
+		output file /var/log/caddy/dsh.log
+		# The path can name a course, a student pseudonym or an assessment.
+		# Keep these logs where student records are kept, not where web
+		# logs are kept.
+	}
+}

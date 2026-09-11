@@ -204,6 +204,11 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
       shipped DeepSeek brand — see [`plugins/dsh-professor-brand`](plugins/dsh-professor-brand/)
 - [x] Telegram announcements, with explicit confirmation before anything sends
 - [ ] Canvas and Moodle publishing as a live integration rather than a file
+- [ ] More than one professor on one machine. [`deploy/`](deploy/) has the
+      per-person launcher, the systemd template and an authenticating Caddy
+      front door, and the launcher and the harness's trust fence were both
+      exercised against a running host — but nothing here has stood up on a
+      real server, and the identity-provider half is left to the institution
 
 **Before this is fair to hand to an early user**
 
@@ -316,6 +321,9 @@ plugins/
 .agents/skills/                16 course-level skills: planning, gaps, dashboards
 bin/sample[.cmd]               the front door: set DSH_HOME, then exec dsh
 .dsh/profiles/sample/          how this host is composed
+deploy/                        the same host for more than one professor:
+                               a home and a port each, behind an authenticating
+                               proxy, because the harness has no login of its own
 ```
 
 Everything under `plugins/` is source: edit it here. Three of the four began as
