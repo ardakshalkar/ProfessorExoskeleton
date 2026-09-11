@@ -156,8 +156,18 @@ export class RecordedTransport implements Transport {
 }
 
 /** Canvas's `grade_data[123][posted_grade]` keys, safely encoded. */
-export const formEncode = (fields: Record<string, string>): Uint8Array => {
+/**
+ * A form body, from a mapping or from pairs.
+ *
+ * Pairs as well as a mapping because a form may repeat a key and an object may
+ * not: Canvas takes a list as `assignment[submission_types][]` said once per
+ * entry, and there is no way to express that as a `Record`.
+ */
+export const formEncode = (
+  fields: Record<string, string> | [string, string][],
+): Uint8Array => {
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(fields)) params.append(key, value);
+  const entries = Array.isArray(fields) ? fields : Object.entries(fields);
+  for (const [key, value] of entries) params.append(key, value);
   return new TextEncoder().encode(params.toString());
 };

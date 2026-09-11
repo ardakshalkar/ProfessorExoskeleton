@@ -36,6 +36,14 @@ import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { type Directory, type MatchKey } from "./base.ts";
 import {
+  type Connection,
+  explainMissing,
+  findConnection,
+  loadRegistry,
+  usable,
+} from "../connections/index.ts";
+import { resolveVariable } from "../connections/store.ts";
+import {
   type Response,
   type Transport,
   FetchTransport,
@@ -103,41 +111,116 @@ export const readTomlTable = (path: string, table: string): Record<string, strin
 export interface CanvasConfig {
   base_url: string;
   token: string;
+  /** Where the host came from, for a plan that has to say so. */
+  source?: string;
+  /** The registry connection this came from, when it came from one. */
+  connection?: string | null;
+  /** The Canvas course the connection names, when it names one. */
+  course_id?: string | null;
 }
 
 export const apiOf = (config: CanvasConfig): string => config.base_url.replace(/\/+$/, "") + API_ROOT;
 
 /**
- * Host from config or flag; token from the environment, preferably.
+ * Host and credential, from the first source that has them.
  *
- * The token is a credential that can change grades, so the environment is the
- * documented home for it. A `token` in the config file is honoured because a
- * professor may prefer it, but it is never printed and never written by this
- * tooling.
+ *   1. `--canvas-url`, an override typed for this one invocation
+ *   2. `--connection NAME`, a connection named explicitly
+ *   3. `AINAR_CANVAS_URL`
+ *   4. the connections registry, when it holds exactly one Canvas or names a default
+ *   5. `[canvas] base_url` in `lms.toml` beside the roster
+ *
+ * The registry sits above `lms.toml` and below the two explicit overrides,
+ * which is the ordering that makes it the answer without taking away a
+ * professor's ability to point one command somewhere else. `lms.toml` still
+ * works, unchanged, including its literal `token` — a merge that broke the
+ * setup people already have would not be a merge.
+ *
+ * A NAMED connection that does not resolve is an error rather than a fallback.
+ * Asking for `canvas-narxoz` and silently getting the other Canvas in the file
+ * is how grades reach the wrong course.
+ *
+ * The token is never taken from the registry, only its variable's name: the
+ * value is read from the environment here, at the moment a client is built,
+ * and is never printed or written by this tooling.
  */
 export const loadCanvasConfig = (
   directory: string | null,
-  { baseUrl }: { baseUrl?: string | null } = {},
+  {
+    baseUrl,
+    connection,
+    connectionsPath,
+  }: { baseUrl?: string | null; connection?: string | null; connectionsPath?: string | null } = {},
 ): CanvasConfig => {
+  const registry = loadRegistry(connectionsPath);
+
+  let chosen: Connection | null = null;
+  if (connection) {
+    chosen = findConnection(registry, { name: connection });
+    if (!chosen) {
+      throw new Error(
+        `no connection called '${connection}' in ${registry.path}. ` +
+          "`ainar connections list` shows what is there.",
+      );
+    }
+    if (chosen.type !== "canvas") {
+      throw new Error(`connection '${connection}' is a ${chosen.type} connection, not canvas`);
+    }
+    if (!usable(chosen)) {
+      const first = chosen.issues.find((issue) => issue.severity === "error");
+      throw new Error(`connection '${connection}' cannot be used: ${first?.message}`);
+    }
+  }
+
   const settings = directory ? readTomlTable(join(directory, CONFIG_NAME), "canvas") : {};
-  const resolved = baseUrl || process.env[BASE_URL_ENV] || settings.base_url;
+  const fromEnv = (process.env[BASE_URL_ENV] ?? "").trim();
+
+  // Only fall through to the registry's default when nothing more specific
+  // said which Canvas this is.
+  if (!chosen && !baseUrl && !fromEnv) {
+    const found = findConnection(registry, { type: "canvas" });
+    if (found && usable(found)) chosen = found;
+  }
+
+  const resolved = baseUrl || fromEnv || chosen?.baseUrl || settings.base_url;
   if (!resolved) {
     throw new Error(
-      "no Canvas host configured. Either set AINAR_CANVAS_URL, pass " +
-        `--canvas-url, or write ${CONFIG_NAME} beside the roster:\n\n` +
+      `no Canvas host configured. ${explainMissing(registry, "canvas")}\n\n` +
+        `Or set ${BASE_URL_ENV}, pass --canvas-url, or write ${CONFIG_NAME} beside ` +
+        "the roster:\n\n" +
         "    [canvas]\n" +
         '    base_url = "https://narxoz.instructure.com"\n',
     );
   }
-  const token = process.env[TOKEN_ENV] || settings.token;
+
+  const variable = chosen?.tokenEnv ?? TOKEN_ENV;
+  // The environment, then the harness's credentials document, then the legacy
+  // `token` in lms.toml. The first two are `store.ts`'s order; the third is
+  // the old file, still honoured so that a working setup keeps working.
+  const token = resolveVariable(variable)?.value || settings.token;
   if (!token) {
     throw new Error(
-      `no Canvas token. Export ${TOKEN_ENV} with a token from Canvas → ` +
+      `no Canvas token. Export ${variable} with a token from Canvas → ` +
         "Account → Settings → New Access Token. It is a credential that " +
         "can change grades; keep it out of the repository.",
     );
   }
-  return { base_url: resolved, token };
+
+  const source = baseUrl
+    ? "--canvas-url"
+    : chosen && !fromEnv
+      ? `connection ${chosen.name}`
+      : fromEnv
+        ? BASE_URL_ENV
+        : `${CONFIG_NAME} beside the roster`;
+
+  return {
+    base_url: resolved,
+    token,
+    source,
+    connection: chosen?.name ?? null,
+    course_id: chosen?.courseId ?? null,
+  };
 };
 
 /** Canvas's receipt for an asynchronous job. */
@@ -277,6 +360,11 @@ export class CanvasClient {
     return this.getAll(`/courses/${courseId}/assignments/${assignmentId}/submissions`);
   }
 
+  /** Every assignment in the course, for matching one we have not linked yet. */
+  assignments(courseId: string): Promise<Record<string, any>[]> {
+    return this.getAll(`/courses/${courseId}/assignments`);
+  }
+
   // ------------------------------------------------------------------ writes
 
   /**
@@ -310,6 +398,56 @@ export class CanvasClient {
       `grading ${grades.size} submission(s)`,
     );
     return progressOf(json(response) ?? {});
+  }
+
+  /**
+   * Create or update the assignment itself, not a grade on it.
+   *
+   * One method for both, because Canvas takes the same `assignment[...]` body
+   * either way and the only difference is the verb and whether there is an id.
+   * Splitting them would mean two copies of the field encoding and one of them
+   * eventually drifting.
+   *
+   * The fields are whatever the caller decided to send and nothing more. That
+   * is load-bearing: a PUT carrying every field would push our silence about
+   * `grading_type` or `assignment_group_id` over whatever the professor set in
+   * Canvas's own UI. `assignment.ts` sends the fields that differ, so a field
+   * this workspace has no opinion about is a field Canvas keeps.
+   */
+  async writeAssignment(
+    courseId: string,
+    assignmentId: string | null,
+    fields: Record<string, string | string[]>,
+  ): Promise<Record<string, any>> {
+    if (!Object.keys(fields).length) throw new Error("no assignment fields to send");
+    // `assignment[submission_types][]`, once per entry — Rails reads a repeated
+    // key as a list, and `assignment[submission_types][0]` as a mapping keyed
+    // "0", which Canvas then rejects as an unknown submission type.
+    const body: [string, string][] = [];
+    for (const name of Object.keys(fields).sort()) {
+      const value = fields[name]!;
+      if (Array.isArray(value)) {
+        for (const entry of value) body.push([`assignment[${name}][]`, entry]);
+      } else {
+        body.push([`assignment[${name}]`, value]);
+      }
+    }
+
+    const url = assignmentId
+      ? `${apiOf(this.config)}/courses/${courseId}/assignments/${assignmentId}`
+      : `${apiOf(this.config)}/courses/${courseId}/assignments`;
+    const response = this.check(
+      await this.transport.request(assignmentId ? "PUT" : "POST", url, {
+        headers: { ...this.headers(), "Content-Type": "application/x-www-form-urlencoded" },
+        body: formEncode(body),
+      }),
+      assignmentId ? `updating assignment ${assignmentId}` : `creating an assignment in ${courseId}`,
+    );
+    const payload = json(response) ?? {};
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      throw new TransportError("Canvas did not return the assignment it wrote");
+    }
+    return payload as Record<string, any>;
   }
 
   async progress(progressId: string): Promise<Progress> {

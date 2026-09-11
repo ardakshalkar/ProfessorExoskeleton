@@ -38,6 +38,14 @@ import { join } from "node:path";
 import { type Grid, STUDENT, TOTAL, height, width } from "./grid.ts";
 import { type Response, type Transport, FetchTransport, json } from "./http.ts";
 import { readTomlTable } from "./canvas-api.ts";
+import {
+  type Connection,
+  findConnection,
+  keyFilePath,
+  loadRegistry,
+  usable,
+} from "../connections/index.ts";
+import { resolveVariable } from "../connections/store.ts";
 
 const API_ROOT = "https://sheets.googleapis.com/v4/spreadsheets";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -178,10 +186,61 @@ const isFile = (path: string): boolean => {
   }
 };
 
-/** A token from the environment if there is one, else a service-account key. */
-export const loadCredentials = (directory: string | null = null): Credentials => {
-  const token = process.env[TOKEN_ENV];
+/**
+ * A token from the environment if there is one, else a service-account key.
+ *
+ *   1. `--connection NAME`, a sheets connection named explicitly
+ *   2. `AINAR_SHEETS_TOKEN`
+ *   3. the connections registry, when it holds exactly one sheets connection
+ *   4. `AINAR_SHEETS_KEY`, then `[sheets] key_file` in `lms.toml`
+ *   5. `sheets-key.json` beside the roster
+ *
+ * The same ordering as Canvas, and for the same reason: the registry is the
+ * answer, and the two explicit overrides above it are how one command is
+ * pointed elsewhere without editing it. A registry connection contributes a
+ * `keyFile` or the NAME of a variable — never a credential value.
+ */
+export const loadCredentials = (
+  directory: string | null = null,
+  {
+    connection,
+    connectionsPath,
+  }: { connection?: string | null; connectionsPath?: string | null } = {},
+): Credentials => {
+  const registry = loadRegistry(connectionsPath);
+
+  let chosen: Connection | null = null;
+  if (connection) {
+    chosen = findConnection(registry, { name: connection });
+    if (!chosen) {
+      throw new Error(
+        `no connection called '${connection}' in ${registry.path}. ` +
+          "`ainar connections list` shows what is there.",
+      );
+    }
+    if (chosen.type !== "sheets") {
+      throw new Error(`connection '${connection}' is a ${chosen.type} connection, not sheets`);
+    }
+    const named = resolveVariable(chosen.tokenEnv)?.value;
+    if (named) return new StaticToken(named);
+    const key = keyFilePath(chosen);
+    if (key) return new ServiceAccount(key);
+    throw new Error(
+      `connection '${connection}' has no credential: ${chosen.tokenEnv} is not set ` +
+        "and it names no keyFile.",
+    );
+  }
+
+  const token = resolveVariable(TOKEN_ENV)?.value;
   if (token) return new StaticToken(token);
+
+  const found = findConnection(registry, { type: "sheets" });
+  if (found && usable(found)) {
+    const named = resolveVariable(found.tokenEnv)?.value;
+    if (named) return new StaticToken(named);
+    const key = keyFilePath(found);
+    if (key) return new ServiceAccount(key);
+  }
 
   const settings = directory ? readTomlTable(join(directory, CONFIG_NAME), "sheets") : {};
   const keyPath = process.env[KEY_FILE_ENV] || settings.key_file;
@@ -193,7 +252,8 @@ export const loadCredentials = (directory: string | null = null): Credentials =>
       `  · export ${TOKEN_ENV} with an access token, or\n` +
       `  · put a service-account key at ${fallback ?? "~/.ainar/roster/sheets-key.json"}, ` +
       `or name it with ${KEY_FILE_ENV}, and share the spreadsheet with the ` +
-      "account's email address as an editor.",
+      "account's email address as an editor.\n" +
+      `  · or add a sheets connection to ${registry.path} — see \`ainar connections list\`.`,
   );
 };
 

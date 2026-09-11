@@ -39,8 +39,13 @@ import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from "nod
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-/** 2 added `content`, 3 added `pushed`. Older files load unchanged. */
-export const STORE_VERSION = 3;
+/**
+ * 2 added `content`, 3 added `pushed`, 4 added `assignments`. Older files load
+ * unchanged, and a file written by 4 is read by 3 with the assignment half
+ * ignored — which costs one spurious `drift` report on the first push after a
+ * downgrade, and loses nothing.
+ */
+export const STORE_VERSION = 4;
 
 const HEADER_NOTE =
   "Prepared gradebook values, written by `ainar lms push`, and the Notion " +
@@ -58,6 +63,10 @@ export const syncDir = (explicit?: string | null): string => {
 const key = (target: string, assessmentId: string, studentId: string): string =>
   `${target}|${assessmentId}|${studentId}`;
 
+/** No target in the key: an assignment definition only ever goes to Canvas. */
+const assignmentKey = (assessmentId: string, canvasCourseId: string): string =>
+  `${assessmentId}|${canvasCourseId}`;
+
 export interface Entry {
   score: number;
   maximum: number | null;
@@ -66,12 +75,33 @@ export interface Entry {
   file: string | null;
 }
 
+/**
+ * The assignment definition last sent to one Canvas course.
+ *
+ * Kept for exactly one purpose: telling `change` from `drift`. Without it,
+ * every field Canvas holds that differs from ours is indistinguishable from a
+ * field a colleague edited, so the first push would either refuse everything or
+ * overwrite everything. With it, the question "did we put that there?" has an
+ * answer.
+ *
+ * Keyed by Canvas COURSE as well as assessment, because a run taught to two
+ * subgroups is two assignments with two separate histories — CS-402's title may
+ * have been edited in Canvas while CS-401's was not.
+ */
+export interface AssignmentEntry {
+  /** The spec as sent: `name`, `points_possible`, `due_at`, and so on. */
+  spec: Record<string, unknown>;
+  canvas_assignment_id: string;
+  at: string;
+}
+
 /** One run's sync state: gradebook values prepared, plus whatever else it holds. */
 export class Ledger {
   path: string;
   entries: Record<string, Entry> = {};
   content: Record<string, unknown> = {};
   pushed: Record<string, unknown> = {};
+  assignments: Record<string, AssignmentEntry> = {};
 
   constructor(path: string) {
     this.path = path;
@@ -89,6 +119,7 @@ export class Ledger {
     ledger.entries = payload.entries ?? {};
     ledger.content = payload.content ?? {};
     ledger.pushed = payload.pushed ?? {};
+    ledger.assignments = payload.assignments ?? {};
     return ledger;
   }
 
@@ -136,6 +167,32 @@ export class Ledger {
     return touched;
   }
 
+  /** What we last sent for one assessment in one Canvas course, or null. */
+  preparedAssignment(assessmentId: string, canvasCourseId: string): AssignmentEntry | null {
+    return this.assignments[assignmentKey(assessmentId, canvasCourseId)] ?? null;
+  }
+
+  /**
+   * Note what an assignment push sent.
+   *
+   * Only ever called after Canvas returned the assignment, so unlike the
+   * gradebook half there is no `prepared` versus `applied` distinction to
+   * draw: an assignment write either came back or threw.
+   */
+  recordAssignment(
+    assessmentId: string,
+    canvasCourseId: string,
+    canvasAssignmentId: string,
+    spec: Record<string, unknown>,
+    at: string,
+  ): void {
+    this.assignments[assignmentKey(assessmentId, canvasCourseId)] = {
+      spec,
+      canvas_assignment_id: canvasAssignmentId,
+      at,
+    };
+  }
+
   save(): string {
     mkdirSync(dirname(this.path), { recursive: true });
     const payload = {
@@ -143,6 +200,7 @@ export class Ledger {
       note: HEADER_NOTE,
       content: this.content,
       entries: this.entries,
+      assignments: this.assignments,
       pushed: this.pushed,
     };
     writeFileSync(this.path, sortedJson(payload) + "\n", { encoding: "utf-8" });

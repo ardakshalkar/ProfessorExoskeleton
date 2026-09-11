@@ -551,15 +551,26 @@ test("giving up waiting is not the same as failing", async () => {
   assert.equal(final.state, "running", "still running is not failed");
 });
 
+/**
+ * A registry path that is guaranteed not to exist.
+ *
+ * Every `loadCanvasConfig` call here names one. Without it these tests would
+ * consult whatever `~/.ainar/connections.json` happens to hold on the machine
+ * running them, and a professor who had migrated their own connections would
+ * watch the suite fail for a reason that has nothing to do with the code.
+ */
+const NO_REGISTRY = { connectionsPath: join(tmpdir(), "ainar-no-such-registry.json") };
+
 test("a missing token is explained, not guessed", () => {
   const saved = process.env.AINAR_CANVAS_TOKEN;
   delete process.env.AINAR_CANVAS_TOKEN;
   try {
     assert.throws(
-      () => loadCanvasConfig(scratch(), { baseUrl: "https://canvas.example.edu" }),
+      () =>
+        loadCanvasConfig(scratch(), { baseUrl: "https://canvas.example.edu", ...NO_REGISTRY }),
       /AINAR_CANVAS_TOKEN/,
     );
-    assert.throws(() => loadCanvasConfig(scratch()), /no Canvas host configured/);
+    assert.throws(() => loadCanvasConfig(scratch(), NO_REGISTRY), /no Canvas host configured/);
   } finally {
     if (saved !== undefined) process.env.AINAR_CANVAS_TOKEN = saved;
   }
@@ -575,7 +586,9 @@ test("the host can come from the config file", () => {
   const saved = process.env.AINAR_CANVAS_URL;
   delete process.env.AINAR_CANVAS_URL;
   try {
-    assert.equal(loadCanvasConfig(dir).base_url, "https://from-config.example.edu");
+    const config = loadCanvasConfig(dir, NO_REGISTRY);
+    assert.equal(config.base_url, "https://from-config.example.edu");
+    assert.match(config.source ?? "", /lms\.toml/, "and it says where it came from");
   } finally {
     if (saved !== undefined) process.env.AINAR_CANVAS_URL = saved;
   }

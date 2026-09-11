@@ -69,18 +69,13 @@
  * `AINAR_CANVAS_TOKEN`, `AINAR_SHEETS_TOKEN` — or a service-account key beside
  * the roster, and the value is read at the moment a request is made.
  */
-
-export const TARGETS = ["canvas-csv", "canvas-api", "sheet-csv", "sheets-api"] as const;
-export type Target = (typeof TARGETS)[number];
-
+export const TARGETS = ["canvas-csv", "canvas-api", "sheet-csv", "sheets-api"];
 /** Targets that change something outside this machine when pushed. */
-export const LIVE_TARGETS: readonly string[] = ["canvas-api", "sheets-api"];
-
+export const LIVE_TARGETS = ["canvas-api", "sheets-api"];
 export const LMS_EXTENSION = "lms";
 export const CANVAS_ASSIGNMENT_KEY = "canvas_assignment_id";
 export const CANVAS_COURSE_KEY = "canvas_course_id";
 export const SHEET_ID_KEY = "sheet_id";
-
 /**
  * The per-subgroup keys, for a run that is several Canvas courses.
  *
@@ -101,7 +96,6 @@ export const SHEET_ID_KEY = "sheet_id";
  */
 export const CANVAS_COURSES_KEY = "canvas_courses";
 export const CANVAS_ASSIGNMENTS_KEY = "canvas_assignments";
-
 /**
  * The run's default target, set once at onboarding instead of typed every push.
  *
@@ -112,44 +106,36 @@ export const CANVAS_ASSIGNMENTS_KEY = "canvas_assignments";
  */
 export const TARGET_KEY = "target";
 export const SHEET_TAB_KEY = "sheet_tab";
-
-const linkage = (entity: any): Record<string, unknown> => {
-  const found = entity?.extensions?.[LMS_EXTENSION];
-  return found && typeof found === "object" && !Array.isArray(found) ? found : {};
+const linkage = (entity) => {
+    const found = entity?.extensions?.[LMS_EXTENSION];
+    return found && typeof found === "object" && !Array.isArray(found) ? found : {};
 };
-
-const str = (entity: any, key: string): string | null => {
-  const value = linkage(entity)[key];
-  return value === null || value === undefined ? null : String(value);
+const str = (entity, key) => {
+    const value = linkage(entity)[key];
+    return value === null || value === undefined ? null : String(value);
 };
-
 /** The Canvas assignment this assessment maps to, if it has been recorded. */
-export const canvasAssignmentId = (assessment: any): string | null =>
-  str(assessment, CANVAS_ASSIGNMENT_KEY);
-
-export const canvasCourseId = (run: any): string | null => str(run, CANVAS_COURSE_KEY);
-
+export const canvasAssignmentId = (assessment) => str(assessment, CANVAS_ASSIGNMENT_KEY);
+export const canvasCourseId = (run) => str(run, CANVAS_COURSE_KEY);
 /** A `subgroup -> id` mapping out of the linkage, or an empty map. */
-const mapping = (entity: any, key: string): Map<string, string> => {
-  const found = linkage(entity)[key];
-  const out = new Map<string, string>();
-  if (!found || typeof found !== "object" || Array.isArray(found)) return out;
-  for (const [group, value] of Object.entries(found as Record<string, unknown>)) {
-    if (value === null || value === undefined) continue;
-    const cleaned = String(value).trim();
-    if (cleaned) out.set(group, cleaned);
-  }
-  return out;
+const mapping = (entity, key) => {
+    const found = linkage(entity)[key];
+    const out = new Map();
+    if (!found || typeof found !== "object" || Array.isArray(found))
+        return out;
+    for (const [group, value] of Object.entries(found)) {
+        if (value === null || value === undefined)
+            continue;
+        const cleaned = String(value).trim();
+        if (cleaned)
+            out.set(group, cleaned);
+    }
+    return out;
 };
-
 /** Which Canvas course each subgroup is taught in, where they differ. */
-export const canvasCourses = (run: any): Map<string, string> =>
-  mapping(run, CANVAS_COURSES_KEY);
-
+export const canvasCourses = (run) => mapping(run, CANVAS_COURSES_KEY);
 /** Which Canvas assignment each subgroup submits to, where they differ. */
-export const canvasAssignments = (assessment: any): Map<string, string> =>
-  mapping(assessment, CANVAS_ASSIGNMENTS_KEY);
-
+export const canvasAssignments = (assessment) => mapping(assessment, CANVAS_ASSIGNMENTS_KEY);
 /**
  * The Canvas course for one subgroup: its own, else the run's single one.
  *
@@ -159,24 +145,23 @@ export const canvasAssignments = (assessment: any): Map<string, string> =>
  * CS-401's gradebook. So the fallback applies only when there is no mapping at
  * all; once a mapping exists, a subgroup missing from it is missing.
  */
-export const canvasCourseFor = (run: any, group: string | null): string | null => {
-  const perGroup = canvasCourses(run);
-  if (!perGroup.size) return canvasCourseId(run);
-  if (group === null) return null;
-  return perGroup.get(group) ?? null;
+export const canvasCourseFor = (run, group) => {
+    const perGroup = canvasCourses(run);
+    if (!perGroup.size)
+        return canvasCourseId(run);
+    if (group === null)
+        return null;
+    return perGroup.get(group) ?? null;
 };
-
 /** The same rule, one level down. */
-export const canvasAssignmentFor = (
-  assessment: any,
-  group: string | null,
-): string | null => {
-  const perGroup = canvasAssignments(assessment);
-  if (!perGroup.size) return canvasAssignmentId(assessment);
-  if (group === null) return null;
-  return perGroup.get(group) ?? null;
+export const canvasAssignmentFor = (assessment, group) => {
+    const perGroup = canvasAssignments(assessment);
+    if (!perGroup.size)
+        return canvasAssignmentId(assessment);
+    if (group === null)
+        return null;
+    return perGroup.get(group) ?? null;
 };
-
 /**
  * Whether this run is several Canvas courses rather than one.
  *
@@ -184,31 +169,24 @@ export const canvasAssignmentFor = (
  * because "the mapping is non-empty" reads as an implementation detail at the
  * call site while this reads as the fact it stands for.
  */
-export const isPerSubgroup = (run: any): boolean => canvasCourses(run).size > 0;
-
-export const sheetId = (run: any): string | null => str(run, SHEET_ID_KEY);
-
+export const isPerSubgroup = (run) => canvasCourses(run).size > 0;
+export const sheetId = (run) => str(run, SHEET_ID_KEY);
 /** The tab an assessment or a run writes to, when one was written down. */
-export const sheetTab = (entity: any): string | null => str(entity, SHEET_TAB_KEY);
-
+export const sheetTab = (entity) => str(entity, SHEET_TAB_KEY);
 // --------------------------------------------------------------------------
 // Default tab names
 // --------------------------------------------------------------------------
-
 /** Characters Google Sheets will not accept in a tab name. */
 const FORBIDDEN_IN_TAB = new Set("[]*?/\\:");
 const MAX_TAB_LENGTH = 100;
-
 export const SUMMARY_TAB = "Summary";
-
-const sanitise = (name: string): string => {
-  const cleaned = [...name]
-    .map((char) => (FORBIDDEN_IN_TAB.has(char) ? "-" : char))
-    .join("")
-    .trim();
-  return cleaned.slice(0, MAX_TAB_LENGTH) || "Sheet";
+const sanitise = (name) => {
+    const cleaned = [...name]
+        .map((char) => (FORBIDDEN_IN_TAB.has(char) ? "-" : char))
+        .join("")
+        .trim();
+    return cleaned.slice(0, MAX_TAB_LENGTH) || "Sheet";
 };
-
 /**
  * A tab name derived from the assessment id: `ASSESSMENT-04` → `A04`.
  *
@@ -222,37 +200,33 @@ const sanitise = (name: string): string => {
  * It also cannot collide: assessment ids are unique within a run, so the derived
  * names are too.
  */
-export const defaultSheetTab = (assessment: any): string => {
-  const id = assessment.assessment_id as string;
-  const remainder = id.startsWith("ASSESSMENT-") ? id.slice("ASSESSMENT-".length) : id;
-  if (!remainder) return sanitise(id);
-  return sanitise(/^[0-9]/.test(remainder) ? `A${remainder}` : remainder);
+export const defaultSheetTab = (assessment) => {
+    const id = assessment.assessment_id;
+    const remainder = id.startsWith("ASSESSMENT-") ? id.slice("ASSESSMENT-".length) : id;
+    if (!remainder)
+        return sanitise(id);
+    return sanitise(/^[0-9]/.test(remainder) ? `A${remainder}` : remainder);
 };
-
 /** What the assessment actually writes to: what was written down, or the default. */
-export const effectiveSheetTab = (assessment: any): string =>
-  sheetTab(assessment) || defaultSheetTab(assessment);
-
-export const effectiveSummaryTab = (run: any): string => sheetTab(run) || SUMMARY_TAB;
-
+export const effectiveSheetTab = (assessment) => sheetTab(assessment) || defaultSheetTab(assessment);
+export const effectiveSummaryTab = (run) => sheetTab(run) || SUMMARY_TAB;
 /**
  * Which entities want which tab, defaults included.
  *
  * A collision here is not cosmetic: each push rewrites a tab whole, so two
  * claimants means one silently erases the other.
  */
-export const tabOwners = (
-  runs: any[],
-  assessments: any[],
-  courseVersionId: string,
-): Map<string, string[]> => {
-  const owners = new Map<string, string[]>();
-  const add = (tab: string, who: string): void => {
-    if (!owners.has(tab)) owners.set(tab, []);
-    owners.get(tab)!.push(who);
-  };
-  const run = runs.find((entry) => entry.course_version_id === courseVersionId);
-  if (run) add(effectiveSummaryTab(run), `${courseVersionId} (summary)`);
-  for (const assessment of assessments) add(effectiveSheetTab(assessment), assessment.assessment_id);
-  return owners;
+export const tabOwners = (runs, assessments, courseVersionId) => {
+    const owners = new Map();
+    const add = (tab, who) => {
+        if (!owners.has(tab))
+            owners.set(tab, []);
+        owners.get(tab).push(who);
+    };
+    const run = runs.find((entry) => entry.course_version_id === courseVersionId);
+    if (run)
+        add(effectiveSummaryTab(run), `${courseVersionId} (summary)`);
+    for (const assessment of assessments)
+        add(effectiveSheetTab(assessment), assessment.assessment_id);
+    return owners;
 };

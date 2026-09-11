@@ -24,10 +24,14 @@ import { type CourseBundle } from "../bundle.ts";
 import { type GradeRow, gradeRows, gradebookPayload } from "../gradebook.ts";
 import {
   LIVE_TARGETS,
-  canvasAssignmentId,
+  canvasAssignmentFor,
+  canvasAssignments,
+  canvasCourseFor,
   canvasCourseId,
+  canvasCourses,
   effectiveSheetTab,
   effectiveSummaryTab,
+  isPerSubgroup,
   sheetId,
   sheetTab,
 } from "./index.ts";
@@ -45,6 +49,16 @@ import {
   refuseInside,
   writable,
 } from "./base.ts";
+import {
+  type AssignmentPlan,
+  type AssignmentSpec,
+  briefHtml,
+  drifted,
+  planAssignment,
+  specFor,
+  willWrite,
+} from "./assignment.ts";
+import { type AssignmentLink, writeAssessmentLinks } from "./link.ts";
 import {
   type CanvasExport,
   columnFor,
@@ -100,6 +114,18 @@ export interface LmsArgs {
   canvasUrl: string | null;
   canvasCourse: string | null;
   canvasAssignment: string | null;
+  /**
+   * The subgroup this push is for, when the run is several Canvas courses.
+   *
+   * Singular, unlike `--group` elsewhere in the CLI, and that is the point: a
+   * push reaches ONE Canvas course, so naming two subgroups whose courses
+   * differ is not a filter, it is two pushes.
+   */
+  group: string | null;
+  /** A connection named on the command line, from the registry. */
+  connection: string | null;
+  /** An alternative registry file, for a test or a second machine. */
+  connections: string | null;
   rosterDir: string | null;
   syncDir: string | null;
   allowPartial: boolean;
@@ -199,7 +225,9 @@ const openContext = async (
   };
 
   if (context.exported !== null && assessment !== null) {
-    const linked = canvasAssignmentId(assessment);
+    // Per subgroup too: with a Canvas course each, the column that carries
+    // CS-401's assignment id is not the column CS-402's marks belong in.
+    const linked = canvasAssignmentFor(assessment, args.group);
     if (args.column) {
       context.column = args.column;
     } else if (linked) {
@@ -258,7 +286,10 @@ const sheetsTarget = async (
   }
   context.spreadsheetId = spreadsheetIdOf(rawId);
   context.sheets = new SheetsClient(
-    loadCredentials(rosterDir(args.rosterDir)),
+    loadCredentials(rosterDir(args.rosterDir), {
+      connection: args.connection,
+      connectionsPath: args.connections,
+    }),
     deps.transport ?? new FetchTransport(),
   );
   return context.sheets.tabTitles(context.spreadsheetId);
@@ -319,23 +350,72 @@ const openSheets = async (args: LmsArgs, context: LmsContext, deps: Deps): Promi
 /** Resolve the live Canvas side: ids, the assignment, the roster join. */
 const openCanvas = async (args: LmsArgs, context: LmsContext, deps: Deps): Promise<void> => {
   const run = runOf(context.bundle, args.run);
-  context.courseId = args.canvasCourse || canvasCourseId(run);
-  context.assignmentId = args.canvasAssignment || canvasAssignmentId(context.assessment);
+
+  // A run taught to CS-401 and CS-402 in two separate Canvas shells has two
+  // answers to "which course", and picking one without being told which
+  // subgroup is being pushed would put one cohort's marks in the other's
+  // gradebook. So it is refused, by name.
+  //
+  // Before the host and the credential are resolved, deliberately. This is a
+  // question about the record and needs neither; asking for a token first
+  // would send a professor off to make one and only then tell them the
+  // command was missing an argument all along.
+  const perSubgroup = isPerSubgroup(run);
+  if (perSubgroup && !args.group) {
+    const groups = [...canvasCourses(run).keys()].sort();
+    throw new Error(
+      `${args.run} has a Canvas course per subgroup (${groups.join(", ")}), so a push ` +
+        "has to say which one it is for. Add --group " +
+        `${groups[0] ?? "GROUP"}, and run it once per subgroup.`,
+    );
+  }
+
+  // The host, which a connection may also name a course on — how a professor
+  // with one Canvas per course avoids writing the same number into every run
+  // record.
+  const config = loadCanvasConfig(rosterDir(args.rosterDir), {
+    baseUrl: args.canvasUrl,
+    connection: args.connection,
+    connectionsPath: args.connections,
+  });
+
+  // The repository's own statement outranks the connection's. The run record
+  // belongs to the course and is reviewable; the connection belongs to this
+  // machine, and a course should not change which Canvas course it is because
+  // somebody edited a file in their home directory.
+  context.courseId =
+    args.canvasCourse || canvasCourseFor(run, args.group) || config.course_id || null;
+  context.assignmentId =
+    args.canvasAssignment || canvasAssignmentFor(context.assessment, args.group);
   if (!context.courseId) {
     throw new Error(
-      `${args.run} has no extensions.lms.canvas_course_id, so there is no ` +
-        "course to talk to. Add it to run.yaml, or pass --canvas-course.",
+      perSubgroup
+        ? `${args.run} has no Canvas course for ${args.group} in ` +
+          "extensions.lms.canvas_courses, so there is no course to talk to."
+        : `${args.run} has no extensions.lms.canvas_course_id, so there is no ` +
+          "course to talk to. Add it to run.yaml, pass --canvas-course, or give " +
+          "the connection a courseId.",
     );
   }
   if (!context.assignmentId) {
     throw new Error(
-      `${context.assessment.assessment_id} has no ` +
-        "extensions.lms.canvas_assignment_id, so there is no assignment to " +
-        "grade. Add it to the assessment.",
+      perSubgroup
+        ? `${context.assessment.assessment_id} has no Canvas assignment for ` +
+          `${args.group} in extensions.lms.canvas_assignments. Each Canvas course ` +
+          "numbers its assignments separately, so this subgroup needs its own."
+        : `${context.assessment.assessment_id} has no ` +
+          "extensions.lms.canvas_assignment_id, so there is no assignment to " +
+          "grade. Add it to the assessment.",
+    );
+  }
+  if (args.group) {
+    context.notes.push(
+      `Subgroup ${args.group}: Canvas course ${context.courseId}, assignment ` +
+        `${context.assignmentId}. Only this subgroup's students are in this push.`,
     );
   }
 
-  const config = loadCanvasConfig(rosterDir(args.rosterDir), { baseUrl: args.canvasUrl });
+  context.notes.push(`Canvas host ${config.base_url} (from ${config.source}).`);
   context.client = new CanvasClient(config, deps.transport ?? new FetchTransport());
   context.canvasAssignment = await context.client.assignment(
     context.courseId,
@@ -373,6 +453,10 @@ const makePlan = (
     gradeRows(context.bundle, args.run, {
       assessmentId: assessment.assessment_id,
       allowPartial: args.allowPartial,
+      // Named or not, this is what keeps a per-subgroup push honest: the rows
+      // are the subgroup's, so a student in the other cohort cannot appear in
+      // a file addressed to this one's Canvas course.
+      groups: args.group ? [args.group] : null,
     }).get(assessment.assessment_id) ?? [];
 
   // Each target is asked about its own state. A sheet is a regenerated view and
@@ -1134,6 +1218,292 @@ const runImportSubmissions = async (
 };
 
 // --------------------------------------------------------------------------
+// The assignment itself
+// --------------------------------------------------------------------------
+
+/**
+ * Which Canvas courses one assignment push reaches, and under which subgroup.
+ *
+ * `[group, courseId]` pairs. A run with one Canvas course yields exactly one
+ * pair with a null group; a run with a course per subgroup yields one per
+ * subgroup, narrowed by `--group` when it was given.
+ *
+ * Fanning out is the deliberate difference from `lms push`, which insists on
+ * one subgroup per invocation. Marks differ per cohort, so two subgroups is two
+ * pushes of two different things. A DEFINITION does not differ: the same title,
+ * the same points and the same brief go to every course, and making the
+ * professor run it twice is how CS-401 and CS-402 end up saying different
+ * things to two halves of one class.
+ */
+const assignmentTargets = (
+  run: any,
+  group: string | null,
+): [group: string | null, courseId: string][] => {
+  const perGroup = canvasCourses(run);
+  if (!perGroup.size) {
+    const single = canvasCourseFor(run, null);
+    if (!single) return [];
+    if (group) {
+      throw new Error(
+        `${run.course_version_id} has one Canvas course for the whole run, so ` +
+          `--group ${group} names a split that does not exist. Drop it.`,
+      );
+    }
+    return [[null, single]];
+  }
+  const wanted = group ? [group] : [...perGroup.keys()].sort();
+  const out: [string | null, string][] = [];
+  for (const name of wanted) {
+    const courseId = perGroup.get(name);
+    if (!courseId) {
+      throw new Error(
+        `${run.course_version_id} has no Canvas course for ${name} in ` +
+          `extensions.lms.canvas_courses. It knows: ${[...perGroup.keys()].sort().join(", ")}.`,
+      );
+    }
+    out.push([name, courseId]);
+  }
+  return out;
+};
+
+/** One line per field, in the order the plan decided them. */
+const printAssignmentPlan = (plan: AssignmentPlan, out: (line: string) => void): void => {
+  const where = plan.group ? `${plan.group} · course ${plan.canvas_course_id}` : `course ${plan.canvas_course_id}`;
+  const what =
+    plan.operation === "create"
+      ? "would CREATE a new assignment"
+      : `assignment ${plan.canvas_assignment_id}`;
+  out(`${where} — ${what}`);
+  for (const note of plan.notes) out(`    note: ${note}`);
+  // One line per field, whatever the value is. A description is HTML with
+  // newlines in it, and printing those raw turns a column of verdicts into a
+  // page of markup — the one thing this summary exists to avoid.
+  const oneLine = (value: string | null): string => {
+    if (value === null) return "—";
+    const flat = value.replace(/\s+/g, " ").trim();
+    return flat.length > 60 ? flat.slice(0, 57) + "..." : flat;
+  };
+  for (const row of plan.fields) {
+    out(`    ${row.action.padEnd(9)} ${row.field.padEnd(18)} ${oneLine(row.desired)}`);
+    if (row.action === "drift") out(`              Canvas holds: ${oneLine(row.current)}`);
+  }
+  if (!willWrite(plan)) out("    nothing to write");
+};
+
+interface AssignmentRun {
+  plans: AssignmentPlan[];
+  wrote: boolean;
+}
+
+/**
+ * Plan, and optionally push, one assessment's definition to every linked course.
+ *
+ * Reads Canvas first in every case — a plan that guessed at the current state
+ * would be a plan that cannot report drift, which is the only reason the
+ * comparison exists.
+ */
+const runAssignment = async (
+  args: LmsArgs,
+  bundle: CourseBundle,
+  root: string,
+  deps: Deps,
+  write: boolean,
+): Promise<number> => {
+  const run = runOf(bundle, args.run);
+  if (!run) throw new Error(`no course run '${args.run}' in this workspace`);
+  if (!args.assessment) {
+    throw new Error("lms assignment-plan and assignment-push need --assessment");
+  }
+  const assessment = assessmentsOf(bundle, args.run).find(
+    (entry: any) => entry.assessment_id === args.assessment,
+  );
+  if (!assessment) {
+    throw new Error(`${args.assessment} is not an assessment of ${args.run}`);
+  }
+
+  const targets = assignmentTargets(run, args.group);
+  if (!targets.length) {
+    throw new Error(
+      `${args.run} has no Canvas course recorded. Add extensions.lms.canvas_course_id ` +
+        "to the run, or extensions.lms.canvas_courses for a course per subgroup.",
+    );
+  }
+
+  // The brief, read once: it is the same document for every subgroup.
+  const brief = briefHtml(bundle, assessment, root);
+  const spec = specFor(assessment, brief.html);
+
+  const config = loadCanvasConfig(rosterDir(args.rosterDir), {
+    baseUrl: args.canvasUrl,
+    connection: args.connection,
+    connectionsPath: args.connections,
+  });
+  const client = new CanvasClient(config, deps.transport ?? new FetchTransport());
+  const ledger = Ledger.load(args.run, args.syncDir);
+
+  // The host, first and by name. A definition push reaches outside the machine
+  // and the host comes from a registry in the professor's home directory, not
+  // from the course record — so which Canvas this is about is a fact the plan
+  // has to state rather than one the reader is left to assume. It is the one
+  // thing on screen that a wrong default would make dangerous.
+  if (!args.json) deps.out("Canvas: " + config.base_url);
+
+  const result: AssignmentRun = { plans: [], wrote: false };
+  // Subgroup to id, seeded with what the record already says. The writer
+  // replaces the mapping wholesale — that is what lets a pairing be REMOVED —
+  // so a push that only creates CS-402 has to send CS-401 back unchanged or it
+  // would unbind it.
+  const created = new Map<string, string>(canvasAssignments(assessment));
+  let anyCreated = false;
+
+  for (const [group, courseId] of targets) {
+    const linked = args.canvasAssignment || canvasAssignmentFor(assessment, group);
+    let current: Record<string, any> | null = null;
+    if (linked) {
+      try {
+        current = await client.assignment(courseId, linked);
+      } catch (error) {
+        throw new Error(
+          `${assessment.assessment_id} is linked to Canvas assignment ${linked} in ` +
+            `course ${courseId}, which could not be read: ${String((error as Error).message)}. ` +
+            "Fix the id or remove it; creating a second assignment silently would " +
+            "leave the class with two.",
+        );
+      }
+    }
+
+    const notes = brief.note ? [brief.note] : [];
+    const remembered = ledger.preparedAssignment(assessment.assessment_id, courseId);
+    const plan = planAssignment({
+      courseVersionId: args.run,
+      assessmentId: assessment.assessment_id,
+      group,
+      canvasCourseId: courseId,
+      canvasAssignmentId: linked,
+      spec,
+      current,
+      prepared: remembered ? (remembered.spec as any) : null,
+      notes,
+    });
+    result.plans.push(plan);
+  }
+
+  if (!args.json) {
+    for (const plan of result.plans) {
+      printAssignmentPlan(plan, deps.out);
+      deps.out("");
+    }
+  }
+
+  const conflicts = result.plans.flatMap((plan) => drifted(plan));
+  if (conflicts.length && !args.overwriteDrift) {
+    deps.out(
+      `${conflicts.length} field(s) were edited in Canvas and are left alone. ` +
+        "Re-run with --overwrite-drift to replace them with this workspace's values.",
+    );
+  }
+
+  if (!write) {
+    if (args.json) deps.out(JSON.stringify({ plans: result.plans }, null, 2));
+    return 0;
+  }
+
+  if (!args.confirm) {
+    throw new Error(
+      "assignment-push changes an assignment students can see. Re-run with --confirm.",
+    );
+  }
+
+  const at = new Date().toISOString();
+  for (const plan of result.plans) {
+    // `--overwrite-drift` puts the drifted fields back in, which is the only
+    // thing the flag does: without it the plan already excluded them.
+    const send = { ...plan.send };
+    if (args.overwriteDrift) {
+      for (const row of plan.fields) {
+        if (row.action !== "drift") continue;
+        const encoded = fieldValue(spec, row.field);
+        if (encoded) Object.assign(send, encoded);
+      }
+    }
+    if (!willWrite(plan) && !Object.keys(send).length) {
+      deps.out(`${plan.canvas_course_id}: already matches, nothing sent`);
+      continue;
+    }
+    if (plan.operation === "create" && !Object.keys(send).length) {
+      throw new Error(
+        `${plan.assessment_id} has nothing to send — it has no title, points, ` +
+          "dates or submission types, so there is no assignment to create.",
+      );
+    }
+
+    const written = await client.writeAssignment(
+      plan.canvas_course_id,
+      plan.canvas_assignment_id,
+      send,
+    );
+    const newId = String(written.id ?? plan.canvas_assignment_id ?? "");
+    result.wrote = true;
+    deps.out(
+      `${plan.canvas_course_id}: ${plan.operation === "create" ? "created" : "updated"} ` +
+        `assignment ${newId} (${Object.keys(send).length} field(s))`,
+    );
+
+    ledger.recordAssignment(plan.assessment_id, plan.canvas_course_id, newId, { ...spec }, at);
+    if (plan.operation === "create" && newId) {
+      anyCreated = true;
+      if (plan.group === null) created.set("", newId);
+      else created.set(plan.group, newId);
+    }
+  }
+
+  if (result.wrote) {
+    const path = ledger.save();
+    deps.out(`ledger: ${path}`);
+  }
+  if (anyCreated) {
+    // A run with one Canvas course keeps the singular key; one with a course
+    // per subgroup gets the mapping. The empty-string key is how a null group
+    // travelled this far and is never written.
+    const single = created.get("");
+    const value: AssignmentLink = single
+      ? single
+      : Object.fromEntries([...created].filter(([group]) => group !== ""));
+    const recorded = writeAssessmentLinks(root, run.course_id, run.term, {
+      [assessment.assessment_id]: value,
+    });
+    for (const file of recorded.written) deps.out(`linked: ${file}`);
+  }
+  if (args.json) deps.out(JSON.stringify({ plans: result.plans }, null, 2));
+  return 0;
+};
+
+/** The form fields for one named part of the spec, for `--overwrite-drift`. */
+const fieldValue = (
+  spec: AssignmentSpec,
+  field: string,
+): Record<string, string | string[]> | null => {
+  switch (field) {
+    case "name":
+      return { name: spec.name };
+    case "points_possible":
+      return spec.points_possible === null ? null : { points_possible: String(spec.points_possible) };
+    case "due_at":
+      return spec.due_at === null ? null : { due_at: spec.due_at };
+    case "unlock_at":
+      return spec.unlock_at === null ? null : { unlock_at: spec.unlock_at };
+    case "submission_types":
+      return { submission_types: spec.submission_types };
+    case "allowed_extensions":
+      return { allowed_extensions: spec.allowed_extensions };
+    case "description":
+      return spec.description === null ? null : { description: spec.description };
+    default:
+      return null;
+  }
+};
+
+// --------------------------------------------------------------------------
 // The entry point
 // --------------------------------------------------------------------------
 
@@ -1163,6 +1533,13 @@ export const runLms = async (
     );
   }
 
+  // Before `openContext`, deliberately: the assignment half needs no roster,
+  // no gradebook and no export, and demanding them would send a professor to
+  // import a class list before they could publish a brief.
+  if (args.subcommand === "assignment-plan" || args.subcommand === "assignment-push") {
+    return runAssignment(args, bundle, root, deps, args.subcommand === "assignment-push");
+  }
+
   const context = await openContext(args, bundle, root, deps);
   switch (args.subcommand) {
     case "plan":
@@ -1176,7 +1553,7 @@ export const runLms = async (
     default:
       throw new Error(
         `unknown lms subcommand '${args.subcommand}'. It is one of: plan, push, ` +
-          "diff, import-submissions",
+          "diff, import-submissions, assignment-plan, assignment-push",
       );
   }
 };

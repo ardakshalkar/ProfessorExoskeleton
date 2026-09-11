@@ -57,6 +57,7 @@ import { renderHtml } from "../src/dashboard.ts";
 import { TARGETS } from "../src/lms/index.ts";
 import { MATCH_KEYS } from "../src/lms/base.ts";
 import { runLms } from "../src/lms/command.ts";
+import { runConnections } from "../src/connections/command.ts";
 import { outlinePayload } from "../src/outline.ts";
 import { loadStructure, loadStyle } from "../src/templates.ts";
 import {
@@ -147,6 +148,8 @@ const BOOLEAN_FLAGS = new Set([
   "overwrite-drift",
   "summary",
   "all",
+  // `connections add`
+  "default",
 ]);
 
 /** Every occurrence of a repeatable flag, with comma-separated values split. */
@@ -297,7 +300,22 @@ const HELP = `ainar — the AINAR course model CLI
   lms push RUN [--assessment A | --summary | --all] --target sheets-api --confirm
   lms import-submissions RUN --assessment A [--target T] [--out FILE] [--dry-run]
 
+  lms assignment-plan RUN --assessment A [--group G]        what Canvas would get
+  lms assignment-push RUN --assessment A [--group G] --confirm [--overwrite-drift]
+
+  The assignment pair moves the DEFINITION — title, points, dates, what may be
+  handed in, and the brief as the description — not the marks. It fans out to
+  every Canvas course the run names, because one definition serves every
+  subgroup; --group narrows it to one. A field a person edited in Canvas is
+  reported and left alone unless --overwrite-drift says otherwise.
+
   --target is canvas-csv (default), canvas-api, sheet-csv or sheets-api.
+  --connection NAME picks a host from the connections registry; without it the
+  registry's default for that type is used, then lms.toml. --canvas-url still
+  overrides everything, for one invocation.
+  --group G is required when the run has a Canvas course per subgroup
+  (extensions.lms.canvas_courses). One push reaches one Canvas course, so it
+  is run once per subgroup and carries only that subgroup's students.
   --by is sis-id (default), login or email — how a target's rows match ours.
   --allow-partial exports a partly graded assessment. --overwrite-drift
   replaces a value somebody edited in the target; without it, a drifted cell is
@@ -306,6 +324,30 @@ const HELP = `ainar — the AINAR course model CLI
   Names, numbers and emails come from the private roster at the moment of
   export and are never written back. A file naming students may not land
   inside the workspace, and the command refuses a path that would.
+
+  Every outbound connection, in one registry. A connection is a host, the
+  non-secret ids that pin down a course or a channel, and the NAME of the
+  variable holding the credential — never the credential itself:
+
+  connections list [--json]                what is configured, and what is broken
+  connections show NAME                    one connection, in full
+  connections doctor [NAME] [--json]       ask each provider whether it agrees
+  connections add NAME --type T [--base-url URL] [--course-id N] [--chat-id C]
+                       [--forum-id F] [--key-file P] [--token-env VAR]
+                       [--default] [--dry-run]
+  connections migrate [--dry-run]          build it from what is already here
+  connections path                         where the registry lives
+
+  add writes one connection and refuses anything that could not be used. There
+  is no --token: the registry holds the NAME of the variable, never a value.
+  An update keeps every field this call does not mention.
+
+  migrate reads lms.toml, the prof-publish profiles and the AINAR_* hosts that
+  are set. It only ever adds: an existing connection is never edited and no
+  legacy file is touched. A literal token found in one is reported and NOT
+  copied — it should be revoked, not relocated.
+
+  --connections FILE       the registry (default: ~/.ainar/connections.json)
 
   --root DIR               the workspace (default: the current directory)
   --roster-dir DIR         where identities live (default: ~/.ainar/roster)`;
@@ -581,6 +623,35 @@ try {
       break;
     }
 
+    case "connections": {
+      // The registry every outbound target reads. No workspace is loaded: a
+      // connection is machine configuration and is answerable from a directory
+      // holding no courses at all — which is the state a professor is in when
+      // they are setting one up.
+      const code = await runConnections(
+        {
+          subcommand: rest[0] ?? "list",
+          name: rest[1] ?? null,
+          connections: flag("connections") ?? null,
+          rosterDir: flag("roster-dir") ?? null,
+          profiles: flag("profiles") ?? null,
+          json: args.includes("--json"),
+          dryRun: args.includes("--dry-run"),
+          type: flag("type") ?? null,
+          baseUrl: flag("base-url") ?? null,
+          courseId: flag("course-id") ?? null,
+          chatId: flag("chat-id") ?? null,
+          forumId: flag("forum-id") ?? null,
+          keyFile: flag("key-file") ?? null,
+          tokenEnv: flag("token-env") ?? null,
+          makeDefault: args.includes("--default"),
+        },
+        { out: (line) => out(line) },
+      );
+      if (code) process.exit(code);
+      break;
+    }
+
     case "lms": {
       // Ported from `ainar/commands/lms.py`, which is where the whole group
       // lives — this is argument parsing and nothing else.
@@ -591,7 +662,8 @@ try {
       const subcommand = rest[0];
       if (!subcommand || !rest[1]) {
         console.error(
-          "usage: lms {plan|push|diff|import-submissions} RUN --assessment A [--target T]",
+          "usage: lms {plan|push|diff|import-submissions|assignment-plan|" +
+            "assignment-push} RUN --assessment A [--target T]",
         );
         process.exit(1);
       }
@@ -619,6 +691,9 @@ try {
           canvasUrl: flag("canvas-url") ?? null,
           canvasCourse: flag("canvas-course") ?? null,
           canvasAssignment: flag("canvas-assignment") ?? null,
+          group: flag("group") ?? null,
+          connection: flag("connection") ?? null,
+          connections: flag("connections") ?? null,
           rosterDir: flag("roster-dir") ?? null,
           syncDir: flag("sync-dir") ?? null,
           allowPartial: args.includes("--allow-partial"),

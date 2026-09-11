@@ -34,6 +34,7 @@ import {
   conceptById,
   criterionById,
   documentById,
+  groupsOf,
   itemById,
   moduleById,
   modulesOf,
@@ -160,14 +161,40 @@ export const IMPLEMENTED = [
 /** `validate.py`'s total, asserted against it by `tests/test_validate.py`. */
 export const TOTAL_CODES = 94;
 
+/**
+ * Checks this port has and `validate.py` never did. Kept sorted.
+ *
+ * Separate from `IMPLEMENTED` on purpose, and the separation is the point.
+ * `IMPLEMENTED` is not a list of what this file happens to check — it is the
+ * claim that the port lost nothing, and the 98 mutations in
+ * `golden/validator/` are what hold it there. Folding a new check into it
+ * would turn "94 of 94" from a guarantee into a tautology: a number that
+ * counts itself and can never be short.
+ *
+ * So a check added here is added here, and `coverage()` reports the two
+ * numbers separately. None of these can fire on the golden corpus — every one
+ * needs `canvas_courses`, which no fixture has — so `validator-check.ts`
+ * continues to compare like for like.
+ */
+export const ADDED = [
+  "lms.both_course_forms",
+  "lms.unknown_subgroup",
+  "lms.unmapped_subgroup",
+] as const;
+
 export const coverage = () => ({
   implemented: IMPLEMENTED.length,
   total: TOTAL_CODES,
+  added: ADDED.length,
   note:
     `${IMPLEMENTED.length} of ${TOTAL_CODES} checks` +
     (IMPLEMENTED.length === TOTAL_CODES
       ? ", the complete set. Held to `validate.py` by the 98 mutations in `golden/validator/`."
-      : ". The rest are not implemented; this number is the gate, so it is printed rather than assumed."),
+      : ". The rest are not implemented; this number is the gate, so it is printed rather than assumed.") +
+    (ADDED.length
+      ? ` Plus ${ADDED.length} check${ADDED.length === 1 ? "" : "s"} added beyond it: ` +
+        `${ADDED.join(", ")}.`
+      : ""),
 });
 
 /** `WEIGHT_TOLERANCE` in `validate.py`. */
@@ -1306,6 +1333,8 @@ const checkCoverage = (b: CourseBundle, issues: IssueList): void => {
 // network code, and the validator holds neither.
 
 const CANVAS_COURSE_KEY = "canvas_course_id";
+const CANVAS_COURSES_KEY = "canvas_courses";
+const CANVAS_ASSIGNMENTS_KEY = "canvas_assignments";
 const TARGET_KEY = "target";
 const SHEET_ID_KEY = "sheet_id";
 const SHEET_TAB_KEY = "sheet_tab";
@@ -1529,11 +1558,146 @@ const checkLmsLinks = (b: CourseBundle, issues: IssueList): void => {
       );
     }
 
+    // The subgroups this run actually has. A mapping keyed by anything else is
+    // a typo binding a Canvas course to a cohort that does not exist, and at
+    // push time it would read as "that subgroup has no Canvas course".
+    const subgroups = groupsOf(b, run.course_version_id);
+
+    /**
+     * A `subgroup -> numeric id` mapping, checked and returned.
+     *
+     * Shared by the run's courses and each assessment's assignments, because
+     * the three ways to get it wrong are the same for both: not a mapping, an
+     * id that is not a number, and a subgroup label this run never had.
+     */
+    const readSubgroupMap = (
+      holder: Record<string, unknown>,
+      key: string,
+      where: string,
+      what: string,
+    ): Map<string, string> => {
+      const found = holder[key];
+      const out = new Map<string, string>();
+      if (found == null) return out;
+      if (typeof found !== "object" || Array.isArray(found)) {
+        issues.error(
+          "lms.malformed",
+          `extensions.lms.${key} must be a mapping of subgroup to ${what}, not ` +
+            `${typeName(found)}`,
+          where,
+        );
+        return out;
+      }
+      for (const [group, value] of Object.entries(found as Record<string, unknown>)) {
+        if (!subgroups.includes(group)) {
+          issues.error(
+            "lms.unknown_subgroup",
+            `${key} names the subgroup '${group}', which this run does not have. ` +
+              (subgroups.length ? `It has: ${subgroups.join(", ")}` : "It has no subgroups"),
+            where,
+          );
+          continue;
+        }
+        if (!/^\d+$/.test(String(value))) {
+          issues.error(
+            "lms.malformed",
+            `${key}.${group} should be the numeric ${what}, not '${value}'`,
+            where,
+          );
+          continue;
+        }
+        out.set(group, String(value));
+      }
+      return out;
+    };
+
+    const perGroupCourses = readSubgroupMap(
+      courseLink,
+      CANVAS_COURSES_KEY,
+      run.course_version_id,
+      "Canvas course id",
+    );
+
+    // One question, one answer. A run carrying both forms has two, and which
+    // a push would use is not something to settle by precedence when the cost
+    // of choosing wrong is one subgroup's marks in another cohort's course.
+    if (courseId != null && courseLink[CANVAS_COURSES_KEY] != null) {
+      issues.error(
+        "lms.both_course_forms",
+        `this run sets both ${CANVAS_COURSE_KEY} and ${CANVAS_COURSES_KEY}. Keep the ` +
+          "first when the whole run is one Canvas course, the second when each " +
+          "subgroup has its own — not both",
+        run.course_version_id,
+      );
+    }
+
+    if (perGroupCourses.size) {
+      const missing = subgroups.filter((group) => !perGroupCourses.has(group)).sort();
+      if (missing.length) {
+        issues.warn(
+          "lms.unmapped_subgroup",
+          `${missing.join(", ")} ${missing.length === 1 ? "has" : "have"} no Canvas ` +
+            `course in ${CANVAS_COURSES_KEY}, so nothing can be pushed for ` +
+            `${missing.length === 1 ? "it" : "them"}`,
+          run.course_version_id,
+        );
+      }
+    }
+
     const assessments = assessmentsOf(b, run.course_version_id);
+    // Keyed by `<course>:<assignment>`, because with a Canvas course per
+    // subgroup the same assignment NUMBER can legitimately appear twice — two
+    // shells number their assignments independently. What cannot happen twice
+    // is one column in one course.
     const seen = new Map<string, string>();
     const linked: string[] = [];
+
+    const claim = (courseKey: string, assignmentId: string, assessmentId: string): void => {
+      const key = `${courseKey}:${assignmentId}`;
+      const owner = seen.get(key);
+      if (owner !== undefined && owner !== assessmentId) {
+        issues.error(
+          "lms.duplicate_link",
+          `Canvas assignment ${assignmentId}` +
+            (courseKey === "*" ? "" : ` in course ${courseKey}`) +
+            ` is already claimed by ${owner}; two assessments cannot share one ` +
+            "gradebook column",
+          assessmentId,
+        );
+      } else {
+        seen.set(key, assessmentId);
+      }
+    };
+
     for (const assessment of assessments) {
       const found = linkage(assessment, assessment.assessment_id);
+
+      const perGroupAssignments = readSubgroupMap(
+        found,
+        CANVAS_ASSIGNMENTS_KEY,
+        assessment.assessment_id,
+        "Canvas assignment id",
+      );
+      if (perGroupAssignments.size) {
+        linked.push(assessment.assessment_id);
+        for (const [group, assignmentId] of perGroupAssignments) {
+          claim(
+            perGroupCourses.get(group) ?? String(courseId ?? "*"),
+            assignmentId,
+            assessment.assessment_id,
+          );
+        }
+        const missing = subgroups.filter((group) => !perGroupAssignments.has(group)).sort();
+        if (missing.length) {
+          issues.warn(
+            "lms.unmapped_subgroup",
+            `${assessment.assessment_id} has no Canvas assignment for ${missing.join(", ")}`,
+            assessment.assessment_id,
+          );
+        }
+        continue;
+      }
+
       const assignmentId = found[CANVAS_ASSIGNMENT_KEY];
       if (assignmentId == null) continue;
       if (!/^\d+$/.test(String(assignmentId))) {
@@ -1545,18 +1709,21 @@ const checkLmsLinks = (b: CourseBundle, issues: IssueList): void => {
         );
         continue;
       }
-      linked.push(assessment.assessment_id);
-      const owner = seen.get(String(assignmentId));
-      if (owner !== undefined) {
+      // A single assignment id under a per-subgroup run would send every
+      // cohort's marks to one column, in whichever course that id lives in.
+      if (perGroupCourses.size) {
         issues.error(
-          "lms.duplicate_link",
-          `Canvas assignment ${assignmentId} is already claimed by ${owner}; two assessments ` +
-            "cannot share one gradebook column",
+          "lms.malformed",
+          `${assessment.assessment_id} has a single ${CANVAS_ASSIGNMENT_KEY}, but this ` +
+            "run has a Canvas course per subgroup. Each course numbers its " +
+            `assignments separately, so this needs ${CANVAS_ASSIGNMENTS_KEY} keyed by ` +
+            "subgroup",
           assessment.assessment_id,
         );
-      } else {
-        seen.set(String(assignmentId), assessment.assessment_id);
+        continue;
       }
+      linked.push(assessment.assessment_id);
+      claim(String(courseId ?? "*"), String(assignmentId), assessment.assessment_id);
     }
 
     if (linked.length && linked.length < assessments.length) {
