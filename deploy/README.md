@@ -37,11 +37,11 @@ One harness process per professor. Each one:
 
 The checkout is shared and read-only: one installation, one version of the
 course model, one `npm install`. The `sample` profile and the `professor` agent
-preset are symlinked into each home from it, because a preset *is* a composition
-and carries the same trust as shell access — that belongs to the deployment, not
-to whoever can write to their own home. A professor who wants their own
-overrides has a seam for it, `$DSH_HOME/cordis.patch.yml`, which the launcher
-applies after the profile's layer.
+preset are linked into each home from it, file by file, because a preset *is* a
+composition and carries the same trust as shell access — that belongs to the
+deployment, not to whoever can write to their own home. A professor who wants
+their own overrides has a seam for it, `$DSH_HOME/cordis.patch.yml`, which the
+launcher applies after the profile's layer.
 
 ```
                  ┌──────────────┐
@@ -59,6 +59,43 @@ applies after the profile's layer.
                 shared read-only checkout
                 /srv/professor-exoskeleton
 ```
+
+### A home is mostly links, and that matters for rm and tar
+
+`/srv/dsh/<name>` looks like a self-contained directory and is not one. Three
+kinds of link point out of it into the shared checkout:
+
+- `profiles/sample/*` and `.agent-presets/professor/*` — one link per
+  composition file, written by `dsh-user`.
+- `profiles/sample/node_modules` and `.agent-presets/professor/node_modules` —
+  one link each, also `dsh-user`, and the reason the profile's plugins resolve
+  at all (see the long comment in that script).
+- `profiles/node_modules/**` — **one link per package, several hundred of
+  them**, written by the harness itself on first boot. Nobody here asks for it;
+  it is how the profile's dependency tree is materialised, and it appears the
+  first time a home is booted.
+
+None of that is a problem between professors — every link is inside one home and
+points at a read-only checkout. It matters to whatever runs *over* a home:
+
+- **Deleting.** `rm -rf /srv/dsh/<name>` is safe on Linux, which never follows a
+  symlink during recursive removal. Be more careful with anything that does:
+  `find -delete` after a `find -L`, an rsync with `--copy-links`, a file manager,
+  or a cleanup script written on Windows, where these are junctions rather than
+  symlinks and not every tool treats them the same way.
+- **Backing up.** A naive `tar` stores the links, which restores fine onto a
+  machine that still has the checkout at the same path and restores a pile of
+  dangling links anywhere else. `tar -h` / `rsync -L` dereferences instead and
+  writes a full copy of `node_modules` per professor, which is not what you
+  want either. The things actually worth keeping are `sessions/`, `storages/`,
+  `.credentials.yaml`, `.env`, and `courses/`; back those up by name and let the
+  links be rebuilt by the next boot.
+- **Measuring.** `du -sh /srv/dsh/<name>` counts the checkout through the links
+  and reports something close to the installation size. `du -sh --exclude=node_modules`
+  or `du -shx` is the number you meant.
+
+Deleting a home's links is never destructive: `dsh-user` rebuilds every one of
+them on the next start, and the harness rebuilds its own.
 
 ### Why not one process with logins in it
 
@@ -223,7 +260,9 @@ why before anyone else is told the address.
   are three Node processes and their model traffic on one box, with nothing
   arbitrating. `MemoryMax=` in the unit is the place to start if that bites.
 - **Backups are not addressed.** `/srv/dsh/<name>` holds the sessions, the
-  drafts and the private roster. It is the only copy.
+  drafts and the private roster. It is the only copy. Read *A home is mostly
+  links* before pointing a backup tool at it — what you want is a handful of
+  named directories, not the whole tree.
 - **No CI covers this.** The rest of the repository is tested; this directory is
   five configuration files and two shell scripts, and the honest statement is
   that a syntax check is all that has run.
