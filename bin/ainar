@@ -15,4 +15,22 @@
 # AINAR_WORKSPACE is not read — see README.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# The same harness home `bin/sample` uses, so that a token typed into the pane
+# is the token this CLI finds.
+#
+# The pane writes credentials through the harness's credential seam, which
+# stores them in $DSH_HOME/.credentials.yaml. `bin/sample` points DSH_HOME at
+# THIS checkout's .dsh; without the same line here, `ainar` would fall back to
+# ~/.dsh and report no token while the pane showed one saved — the two-surfaces
+# -disagree failure the connections registry exists to end.
+#
+# Only when unset, unlike `bin/sample`, which sets it unconditionally because
+# the profile it boots can only be found there. Here an exported DSH_HOME is a
+# deliberate choice about which harness home to read, and there is no profile
+# to lose by honouring it.
+if [ -z "${DSH_HOME:-}" ] && [ -d "$here/.dsh" ]; then
+  export DSH_HOME="$here/.dsh"
+fi
+
 exec node --experimental-strip-types "$here/ainar-node/bin/ainar.ts" "$@"

@@ -10,7 +10,13 @@ const usage = `Usage:
   prof-publish doctor --profile NAME [--connections FILE]
   prof-publish publish --profile NAME --input publication.json --confirm [--connections FILE]
 
-Connection path precedence: --connections, PROFESSOR_CONNECTIONS, ~/.professor/connections.json`;
+A profile name is looked up in the shared registry first — AINAR_CONNECTIONS, or
+~/.ainar/connections.json, which \`ainar connections\` owns — and then in the
+older profiles file: --connections, PROFESSOR_CONNECTIONS,
+~/.professor/connections.json.
+
+The registry holds no secrets. A connection there names the environment
+variable its token lives in; the older file may still carry a literal one.`;
 
 function parseArgs(argv: string[]): { command: string; values: Map<string, string | boolean> } {
   const command = argv[0] ?? "help";

@@ -35,6 +35,13 @@ if not defined NODE_EXE (
   exit /b 127
 )
 
+rem The same harness home bin\sample uses, so a token typed into the pane is
+rem the token this CLI finds. The pane stores credentials in
+rem %DSH_HOME%\.credentials.yaml; without this, ainar would read ~\.dsh and
+rem report no token while the pane showed one saved. Only when unset - an
+rem exported DSH_HOME is a deliberate choice about which home to read.
+if not defined DSH_HOME if exist "%~dp0..\.dsh" set "DSH_HOME=%~dp0..\.dsh"
+
 "%NODE_EXE%" --experimental-strip-types "%~dp0..\ainar-node\bin\ainar.ts" %*
 exit /b %ERRORLEVEL%
 
