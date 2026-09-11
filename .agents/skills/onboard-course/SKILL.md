@@ -109,9 +109,32 @@ that they will export a file and upload it by hand until an adapter exists. Writ
 it down anyway — a recorded gap is how it gets built.
 
 If Canvas: ask for the numeric course id (`extensions.lms.canvas_course_id`) and
-tell them the host goes in `~/.ainar/lms.toml`, outside the repository. If a sheet:
-the id between `/d/` and `/edit` (`extensions.lms.sheet_id`). Never ask for a token
-— they set `AINAR_CANVAS_TOKEN` themselves and you must not read, echo or write it.
+tell them the host goes in the connections registry, outside the repository —
+`ainar connections migrate` builds one from whatever is already on the machine,
+and `ainar connections list` shows what is in it. If a sheet: the id between
+`/d/` and `/edit` (`extensions.lms.sheet_id`).
+
+**Never ask for a token, and never accept one that is offered.** If they paste
+a credential into the chat, do not use it and do not repeat it: say that it has
+now been in a transcript and should be revoked and reissued. A token typed into
+a conversation reaches the transcript, the context window and the model
+provider — more places than the config file you just told them to clean out.
+
+There are two right places, and both keep the value away from you:
+
+- **The pane.** Integrations → Credentials has a field per connection. What is
+  typed there goes to the harness's credential store through `ctx.credentials`,
+  and no route reads it back. Point them at it; you can say the variable's name,
+  which is not a secret.
+- **Their shell.** `export AINAR_CANVAS_TOKEN=…`, which also shadows anything
+  saved in the pane — so if they have done both, the shell is what is in effect
+  and the pane's field is disabled saying so.
+
+Afterwards, `ainar connections doctor` is yours to run: it makes one read-only
+request and tells you whether the provider accepted the credential, without the
+value ever passing through you. If `ainar connections list` reports a literal
+token in a file, say so and tell them to revoke it at the provider; do not offer
+to move it for them.
 
 **The grading policy.** Narxoz policy is **midterm 1: 30, midterm 2: 30, final:
 40**. Offer it as the starting point and let them confirm or replace it. Do not

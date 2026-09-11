@@ -125,8 +125,55 @@ decisions this project made, not code it inherited.
   reaches a student through a grade waits for approval.
 * `src/approve.ts` — `stageDocuments` returns staged ids; the claim-file
   mechanism removed; a non-draftable collection fails loudly.
+* `src/inbox.ts` — an `undated` assessment reports no missing submissions.
+  Upstream counted every active student, which said a class was late for a
+  deadline nobody had set; what such work needs is a date, and the inbox asks
+  for one in a section of its own.
+* `src/inbox.ts` — each assessment also carries `criteria` and `items`, so a
+  reader can say “nothing can mark this” without guessing which of the two a
+  type ought to have. `criteria` is `outline`'s field computed `outline`'s way,
+  on purpose: the two views must not disagree about whether work is gradeable.
+  Both are extra against `golden/CSS-4008/2026-FALL/action_inbox.json`, which
+  that fixture does not notice today only because it already fails earlier, on
+  the `readiness` block this port does not produce. Whoever adds `readiness`
+  will meet these two.
+* `src/outline.ts` — each assessment entry also carries
+  `instructions_document_id`, the brief students read. The model has always
+  recorded it and no read path published it, so every view could name a piece
+  of graded work and none could open it. Extra against
+  `golden/CSS-4008/2026-FALL/course_outline.json`, and it is now the FIRST
+  difference that fixture reports — which means it hides the `placement`
+  sentence this port also rewrote (an undated assessment sits on its module's
+  week, which upstream's wording does not describe). Both are deliberate;
+  whoever reconciles one will meet the other underneath it.
 
 **New here**
+
+* `src/lms/link.ts` — the ONE writer of `extensions.lms.canvas_assignment_id`,
+  shared by `ainar lms assignment-push` and the pane's Links tab. It is
+  mirrored into `server/lms/` (with `lms/index.js`, which it imports and which
+  has no dependencies of its own) because the pane needs it too — the first
+  entry in that mirror that exists for the plugin rather than for the MCP
+  tools. The split is deliberate: the pane keeps validation of its untrusted
+  browser payload, and hands over the file search, the multi-document refusal,
+  the comment-preserving edit and the CRLF handling. Both used to hold a copy
+  of all four.
+* `src/lms/assignment.ts` — pushing the assignment
+  *definition* to Canvas, not just the marks: name, points, dates, submission
+  types and the brief as the description. Upstream has no equivalent; Canvas
+  was write-only for grades. One direction, with `base.ts`'s four verdicts
+  applied per field, so a title a colleague edited in Canvas is reported as
+  drift and left alone rather than overwritten. Only fields this model has an
+  opinion about are sent, so `grading_type` and anything else set in Canvas's
+  own UI survives our silence. A created assignment's id is written back into
+  `courses/` through `yaml`'s document API, which is what keeps the comments in
+  those hand-authored files.
+* `src/markdown.ts` — the markdown renderer, moved out of
+  `dsh-professor-pane/lib/markdown.js` when a second reader appeared: the pane
+  serves a brief over loopback and `assignment-push` sends the same brief to
+  Canvas as HTML. Two copies would have meant a brief that read one way to the
+  professor and another to the class. The pane re-exports it and keeps only its
+  own stylesheet.
 
 * `src/evidence.ts`, `src/progress.ts` roll-up, `src/roster.ts` — the roster's
   HMAC pseudonyms, base32 and private store, with the derivation pinned to
@@ -139,9 +186,29 @@ decisions this project made, not code it inherited.
 * Enrollment status: an import marks a student the export no longer lists as
   `dropped` rather than dropping the row.
 * `ainar-node/widget-assets/` — the compact week layout, the icon sprite, the
-  draft badge and the undated-assessment control. These have no upstream at all.
+  draft badge, the undated-assessment control, and the folded missing-students
+  list: two named, the rest behind an ellipsis that opens in place. These have
+  no upstream at all.
+* `action-inbox.js` reads an optional `people` map, so a host that resolved the
+  private roster can show real names. The MCP payload never carries it; only
+  `dsh-professor-pane`, serving the same document over loopback, adds it.
 * `plugins/dsh-professor-pane/` — the grading and ready views, per-tab subviews,
   the approval strip, `/api/revision` and the Students tab.
+* `plugins/dsh-professor-pane/` — the class list shows what each student
+  handed in: every answer with the question above it, the chosen option with
+  that option's text, and the files. Read straight off the bundle —
+  `submissions`, `item_responses`, `items`, `documents` — so no payload and no
+  golden fixture changes for it. A submission file is linked only when its
+  `storage_key` is repository-relative; `object://` is reported as held
+  outside the workspace rather than linked, which is the stance
+  `samples/documents.yaml` already wrote down.
+* `plugins/dsh-professor-pane/lib/markdown.js` — markdown rendered to HTML on
+  the pane's own `/file` route, so a brief or a deck opens as a document over
+  the harness instead of landing in Downloads. Markdown is what this project's
+  skills write, which made it the one format where serving the file and showing
+  the professor the document were different acts. A deliberate subset, not an
+  implementation: headings, both lists, fenced code, tables, blockquotes, rules
+  and inline spans, pinned by `test/pane-markdown.test.mjs`.
 
 **Mirrored by hand**
 
