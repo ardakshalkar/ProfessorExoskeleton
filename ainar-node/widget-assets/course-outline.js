@@ -109,6 +109,72 @@ function model(d) {
    * their own title rather than their kind, because `other` and `tool` say
    * nothing: "HW1 template repository" does.
    */
+  /**
+   * What a piece of graded work says, for the panel behind its chip.
+   *
+   * The chip has always been able to name the work and, when a brief existed as
+   * a file, to open it. Most assessments have no such file — the brief is the
+   * record's own `description` — so the chip named something the reader could
+   * not then read. This is that text, plus the facts a professor asks in the
+   * same breath: when it is due, what it is worth, what is handed in, and
+   * whether anything has been written down about how it will be marked.
+   *
+   * An empty `brief_id` is the request NOT to open anything, and it is the
+   * honest answer for work whose description nobody has written yet: a button
+   * that opens an empty sheet is worse than a label, because the reader has to
+   * press it to learn there is nothing there. The chip stays a label in that
+   * case, exactly as before.
+   *
+   * The text is split on blank lines and returned as paragraphs rather than as
+   * one string with newlines in it. The template language escapes every
+   * interpolation and has no raw construct, so a `<br>` could not be smuggled
+   * through anyway — paragraphs are how a shape survives the crossing.
+   */
+  function brief(w, a, type) {
+    const text = String(a.description == null ? '' : a.description).trim();
+    if (!text) return { brief_id: '' };
+
+    const facts = [];
+    const opens = shortDate(a.opens_on);
+    const due = shortDate(a.due_on);
+    if (opens) facts.push({ k: 'Opens', v: opens });
+    if (due) facts.push({ k: 'Due', v: due });
+    // Said once, plainly, rather than by the absence of two rows. A dateless
+    // assessment is a real state in this model and the week card already draws
+    // it; the sheet should not make the reader infer it from a gap.
+    if (!opens && !due) facts.push({ k: 'Dates', v: 'not scheduled' });
+    facts.push({ k: 'Weight', v: pct(a.weight) || 'not set' });
+    if (a.maximum_score || a.maximum_score === 0) {
+      facts.push({ k: 'Out of', v: String(a.maximum_score) });
+    }
+    const handed = (a.submission_type || []).join(', ');
+    if (handed) facts.push({ k: 'Handed in as', v: handed });
+    const outcomes = (a.outcomes || []).join(', ');
+    if (outcomes) facts.push({ k: 'Outcomes', v: outcomes });
+    // The count, not the criteria. `assessment_rubric` is the tool that answers
+    // what a rubric says, and repeating it here would be a second copy of the
+    // marking scheme to fall out of step with the first.
+    facts.push({
+      k: 'Rubric',
+      v: a.criteria
+        ? a.criteria + (a.criteria === 1 ? ' criterion' : ' criteria')
+        : 'none yet',
+    });
+
+    return {
+      // Unique within the document: one assessment appears in the week it opens
+      // AND the week it is due, and two panels sharing an id would open the
+      // first one twice.
+      brief_id: 'brief-' + w.week + '-' + (a.assessment_id || type),
+      brief_kind: titled(ASSESS_WORD[type] || type),
+      brief_title: a.title || titled(type),
+      brief_facts: facts,
+      brief_text: text.split(/\n{2,}/)
+        .map(function (p) { return p.replace(/\s+/g, ' ').trim(); })
+        .filter(Boolean),
+    };
+  }
+
   function indicators(w) {
     const main = [];
     const extra = [];
@@ -150,7 +216,7 @@ function model(d) {
       for (const a of list || []) {
         const on = shortDate(a.due_on || a.opens_on);
         const type = a.type || 'assessment';
-        main.push({
+        main.push(Object.assign(brief(w, a, type), {
           label: titled(ASSESS_WORD[type] || type),
           icon: ASSESS_ICON[type] || 'doc',
           tone: verb === 'due' ? 'due' : 'task',
@@ -166,7 +232,7 @@ function model(d) {
           view: a.viewable ? a.title : '',
           format: a.format || '',
           formats: [],
-        });
+        }));
       }
     }
     // Work that is taught this week and has no deadline at all. It reaches the
@@ -178,7 +244,7 @@ function model(d) {
     // assessments the professor meant.
     for (const a of w.undated || []) {
       const type = a.type || 'assessment';
-      main.push({
+      main.push(Object.assign(brief(w, a, type), {
         label: titled(ASSESS_WORD[type] || type),
         icon: ASSESS_ICON[type] || 'doc',
         tone: 'todo',
@@ -214,7 +280,7 @@ function model(d) {
           + ', and then just confirm what you wrote. Do not work out which week '
           + 'the dates fall in; the Course pane places them itself and shows it.',
         formats: [],
-      });
+      }));
     }
     // The deck first, then the graded work in the order the payload placed it —
     // what opens this week before what falls due in it.

@@ -95,6 +95,22 @@ const assessmentEntry = (assessment, rubrics) => {
     return {
         assessment_id: assessment.assessment_id,
         title: assessment.title,
+        // What the work actually asks for, in the professor's own words.
+        //
+        // The outline used to carry every fact ABOUT a piece of graded work —
+        // its weight, its dates, whether a rubric exists — and not one word of
+        // the work itself, on the reasonable ground that a term plan is a shape
+        // rather than a reader. But an assessment in this model usually has no
+        // `instructions_document_id`: the brief lives in the record's own
+        // `description`, and a view with nothing to open therefore had nothing
+        // to show at all. Naming the file would not have helped, because for
+        // most courses there is no file.
+        //
+        // It is plain text and stays plain text. Every interpolation in the
+        // template language is escaped and there is no raw construct, so this
+        // reaches a document as words rather than as markup — which matters,
+        // since the same payload serves the public course page.
+        description: assessment.description ?? null,
         type: assessment.type,
         module_id: assessment.module_id ?? null,
         weight: assessment.weight ?? null,
