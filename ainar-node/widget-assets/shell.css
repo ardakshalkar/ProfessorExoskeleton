@@ -313,3 +313,69 @@ ul.meet small { display: block; color: var(--muted); font-size: .72rem;
               font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mark.due { border-color: var(--accent); }
 ul.plain { margin: .2rem 0 0; padding-left: 1rem; font-size: .78rem; }
+
+/* A brief, over the plan.
+ *
+ * The chip that names a piece of graded work is a button when there is text
+ * behind it, and it has to read as one without becoming a second kind of link
+ * beside `.fmt`: the underline appears on hover and focus, the colour stays the
+ * chip's own, and the hit area is the label rather than a new control beside it.
+ */
+.itbrief { cursor: pointer; font: inherit; color: inherit; background: none;
+           border: 0; padding: 0; text-decoration: underline;
+           text-decoration-style: dotted; text-underline-offset: 2px;
+           text-decoration-color: var(--muted); }
+.itbrief:hover { text-decoration-style: solid; text-decoration-color: currentColor; }
+.itbrief:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
+                         border-radius: 2px; }
+
+/* The inline disclosure. This is the whole of the feature on the prerendered
+ * public page, which ships no script; `runtime.js` folds it away on a host that
+ * can open the sheet instead. */
+.briefdoc { margin-top: .4rem; font-size: .8rem; }
+.briefdoc[hidden] { display: none; }
+.briefdoc > summary { cursor: pointer; color: var(--muted); font-size: .74rem;
+                      padding: .1rem 0; }
+.briefdoc > summary:hover { color: var(--fg); }
+.briefdoc[open] > summary { margin-bottom: .35rem; }
+/* The kicker repeats the summary's own words, so it is for the sheet only. */
+.briefdoc > .bkind { display: none; }
+
+/* In the sheet the press has already asked the question: the summary is noise,
+ * and the panel is the document rather than a disclosure inside one. */
+.sheetbody .briefdoc { margin: 0; font-size: inherit; }
+.sheetbody .briefdoc > summary { display: none; }
+.sheetbody .briefdoc > .bkind { display: block; }
+
+.sheet { position: fixed; inset: 0; z-index: 40; display: flex;
+         align-items: center; justify-content: center; padding: 1.2rem; }
+.sheet[hidden] { display: none; }
+.sheetbg { position: absolute; inset: 0; background: rgba(0, 0, 0, .45); }
+.sheetbox { position: relative; max-width: 44rem; width: 100%;
+            max-height: 82vh; overflow-y: auto; padding: 1.1rem 1.2rem 1.3rem;
+            background: var(--card); color: var(--fg);
+            border: 1px solid var(--line); border-radius: 8px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, .25); }
+.sheetbox:focus { outline: none; }
+.sheetx { position: absolute; top: .4rem; right: .5rem; cursor: pointer;
+          font: inherit; font-size: 1.1rem; line-height: 1; padding: .2rem .4rem;
+          background: none; border: 0; color: var(--muted); }
+.sheetx:hover { color: var(--fg); }
+
+.bkind { margin: 0; font-size: .68rem; text-transform: uppercase;
+         letter-spacing: .06em; color: var(--muted); }
+.btitle { margin: .15rem 0 .7rem; font-size: 1rem; line-height: 1.3;
+          padding-right: 1.5rem; }
+
+/* The facts as rows rather than a table: a definition list survives a narrow
+ * pane, and these are read one at a time rather than compared down a column. */
+.bfacts { margin: 0 0 .9rem; padding: .5rem .6rem; background: var(--panel);
+          border: 1px solid var(--line); border-radius: 6px; font-size: .78rem; }
+.bfacts > div { display: flex; gap: .8rem; justify-content: space-between;
+                padding: .12rem 0; }
+.bfacts dt { color: var(--muted); }
+.bfacts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+
+.btext { margin: 0 0 .7rem; font-size: .84rem; line-height: 1.55;
+         overflow-wrap: anywhere; }
+.btext:last-child { margin-bottom: 0; }

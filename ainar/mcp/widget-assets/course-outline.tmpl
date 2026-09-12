@@ -78,7 +78,7 @@
 {% if w.has_items %}
 <div class="mats" data-mats>
 <div class="ind">
-{% for i in w.items %}<span class="it it-{{ i.tone }}"{% if i.name %} title="{{ i.name }}"{% endif %}><span class="itc"><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg><span class="itk">{{ i.label }}</span>{% if i.when %}<span class="itdot">·</span><span class="itw{% if i.overdue %} due{% endif %}">{{ i.when }}</span>{% endif %}{% if i.draft %}<span class="itd">draft</span>{% endif %}</span>{% if i.ask %}<span class="itc gap"><svg class="ico" aria-hidden="true"><use href="#i-clock"></use></svg>no date</span><button type="button" class="itb" data-ask="{{ i.ask }}">set date</button>{% endif %}{% if i.formats %}{% for f in i.formats %}<a class="fmt" href="{{ f.href }}"{% if f.view %} data-view="{{ f.view }}" data-format="{{ f.format }}"{% endif %} target="_blank" rel="noopener">{{ f.label }}</a>{% endfor %}{% else %}{% if i.href %}<a class="fmt" href="{{ i.href }}"{% if i.view %} data-view="{{ i.view }}" data-format="{{ i.format }}"{% endif %} target="_blank" rel="noopener">open</a>{% endif %}{% endif %}</span>{% endfor %}
+{% for i in w.items %}<span class="it it-{{ i.tone }}"{% if i.name %} title="{{ i.name }}"{% endif %}><span class="itc"><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg>{% if i.brief_id %}<span class="itk" data-briefkey="{{ i.brief_id }}">{{ i.label }}</span>{% else %}<span class="itk">{{ i.label }}</span>{% endif %}{% if i.when %}<span class="itdot">·</span><span class="itw{% if i.overdue %} due{% endif %}">{{ i.when }}</span>{% endif %}{% if i.draft %}<span class="itd">draft</span>{% endif %}</span>{% if i.ask %}<span class="itc gap"><svg class="ico" aria-hidden="true"><use href="#i-clock"></use></svg>no date</span><button type="button" class="itb" data-ask="{{ i.ask }}">set date</button>{% endif %}{% if i.formats %}{% for f in i.formats %}<a class="fmt" href="{{ f.href }}"{% if f.view %} data-view="{{ f.view }}" data-format="{{ f.format }}"{% endif %} target="_blank" rel="noopener">{{ f.label }}</a>{% endfor %}{% else %}{% if i.href %}<a class="fmt" href="{{ i.href }}"{% if i.view %} data-view="{{ i.view }}" data-format="{{ i.format }}"{% endif %} target="_blank" rel="noopener">open</a>{% endif %}{% endif %}</span>{% endfor %}
 {% if w.extras %}<button type="button" class="itc it-more" data-matbtn><svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg><span class="itk" data-matlabel>{{ w.extras_word }}</span></button>{% endif %}
 </div>
 {% if w.extras %}
@@ -86,6 +86,20 @@
 {% for i in w.extras %}<span class="itc it-x" title="{{ i.kind }} · {{ i.name }}"><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg>{% if i.href %}<a class="itk itl" href="{{ i.href }}"{% if i.view %} data-view="{{ i.view }}" data-format="{{ i.format }}"{% endif %} target="_blank" rel="noopener">{{ i.label }}</a>{% else %}<span class="itk">{{ i.label }}</span>{% endif %}{% if i.draft %}<span class="itd">draft</span>{% endif %}</span>{% endfor %}
 </div>
 {% endif %}
+{# What a piece of graded work asks for.
+
+   A `<details>` and not a hidden div, because this template has two very
+   different readers. The pane runs `runtime.js`, which turns the chip above
+   into a button and opens this in a sheet over the plan. `ainar page`
+   prerenders the SAME markup and ships no script at all, so whatever is here
+   is the whole of what a student gets — and a disclosure they can open is a
+   feature there, while a button wired to nothing would be the exact fault
+   `runtime.js` names in its own comments: a control that does nothing is worse
+   than no control.
+
+   So the no-script reading is the one written down, and the script is an
+   upgrade over it rather than a requirement for it. #}
+{% for i in w.items %}{% if i.brief_id %}<details class="briefdoc" data-briefdoc="{{ i.brief_id }}"><summary>{{ i.brief_kind }} — what this asks for</summary><p class="bkind">{{ i.brief_kind }}</p><h3 class="btitle">{{ i.brief_title }}</h3><dl class="bfacts">{% for f in i.brief_facts %}<div><dt>{{ f.k }}</dt><dd>{{ f.v }}</dd></div>{% endfor %}</dl>{% for p in i.brief_text %}<p class="btext">{{ p }}</p>{% endfor %}</details>{% endif %}{% endfor %}
 </div>
 {% endif %}
 {% if w.details %}
@@ -117,3 +131,8 @@
 {% endif %}
 
 <div class="note"><strong>Structure only.</strong> {{ placement }} Nothing here is derived from student work — for that, ask for the class grid or the gradebook. <button class="ask" data-ask="Show me the syllabus for {{ run.id }}.">syllabus</button></div>
+
+{# The sheet a brief opens into. One per document rather than one per chip:
+   only ever one is open, and sixteen weeks of dialogs would be sixteen copies
+   of the same markup waiting to disagree. `runtime.js` fills the body. #}
+<div class="sheet" data-sheet hidden><div class="sheetbg" data-sheetclose></div><div class="sheetbox" role="dialog" aria-modal="true" tabindex="-1"><button type="button" class="sheetx" data-sheetclose aria-label="Close">×</button><div class="sheetbody" data-sheetbody></div></div></div>

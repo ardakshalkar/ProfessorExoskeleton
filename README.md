@@ -139,8 +139,15 @@ them today:
 - `action_inbox.json` expects a `readiness` block — the checklist of what to
   build next — which `inbox.py` produces and this port does not. A missing
   feature, not a stale fixture.
-- `course_outline.json` pins an older wording of its `placement` note than the
-  code now emits. That one is genuinely just stale.
+- `course_outline.json` carries two fields on each assessment that `outline.py`
+  never emitted: `instructions_document_id`, which names the brief so a view
+  with a route to it can offer it, and `description`, which is the brief itself
+  for the great majority of assessments that have no document at all. Both are
+  deliberate additions, so the fixture is behind the code rather than the code
+  being wrong — but it is left failing rather than quietly rewritten, because a
+  golden file that is edited whenever it disagrees has stopped being one. (This
+  entry used to name the `placement` wording. That had already been fixed; the
+  fixture was failing on the field list and the note had not caught up.)
 
 A third fixture was added on 2026-09-08: `golden/CSS-4008/import.sql`, the 655
 lines `python -m ainar sql` wrote for the example course before Python was cut

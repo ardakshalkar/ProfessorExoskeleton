@@ -74,6 +74,77 @@ function showMaterial(url, label, format) {
   return true;
 }
 
+// A piece of graded work, opened over the plan rather than in place.
+//
+// Not the disclosure the week panel uses, and the difference is the content
+// rather than the taste: a brief is several paragraphs, and expanding one
+// inside a week card would push every later week down the page, so the
+// professor loses their place in the term in order to read one assignment. A
+// sheet leaves the plan where it is.
+//
+// The text is already in the document — the view emits a hidden panel beside
+// each chip that has one — so this moves markup it can already see rather than
+// fetching anything. `cloneNode` rather than a move, because the same brief can
+// be opened twice and a moved node would be gone the second time.
+//
+// These live outside `paint` deliberately. `paint` replaces `root.innerHTML`,
+// so anything it captured in a closure is a detached node one repaint later;
+// looking the sheet up at the moment it is used is what makes a handler
+// registered once still correct after the payload updates.
+var sheetOpener = null;
+
+function sheetNode() { return root.querySelector('[data-sheet]'); }
+
+function closeSheet() {
+  const sheet = sheetNode();
+  if (!sheet || sheet.hidden) return;
+  const body = root.querySelector('[data-sheetbody]');
+  sheet.hidden = true;
+  if (body) body.textContent = '';
+  // Back to the chip that opened it. Dropping focus to the top of the document
+  // is the failure that makes a keyboard user walk the whole term again.
+  if (sheetOpener && typeof sheetOpener.focus === 'function') sheetOpener.focus();
+  sheetOpener = null;
+}
+
+function openSheet(panel, button) {
+  const sheet = sheetNode();
+  const body = root.querySelector('[data-sheetbody]');
+  if (!sheet || !body || !panel) return;
+  body.textContent = '';
+  const copy = panel.cloneNode(true);
+  copy.hidden = false;
+  copy.removeAttribute('data-briefdoc');
+  // The panel is a `<details>` so that it works with no script at all. Inside
+  // the sheet the disclosure is beside the point — the press already asked for
+  // it — so the copy opens, and the stylesheet drops its summary.
+  copy.open = true;
+  body.appendChild(copy);
+  sheet.hidden = false;
+  sheetOpener = button;
+  const box = sheet.querySelector('.sheetbox');
+  if (box && typeof box.focus === 'function') box.focus();
+}
+
+// Escape closes it, from wherever focus happens to be — on the document rather
+// than the box, because the pane renders this in a frame and a click on the
+// backdrop moves focus out of the dialog.
+//
+// Bound ONCE for the life of the page. Everything `paint` binds is re-bound on
+// every repaint and that costs nothing, because the old nodes are discarded
+// with their listeners; the document is not, so a listener added per paint
+// would accumulate one copy per payload update and never be collected.
+// Guarded, because one caller is not a browser. `bin/prerender-widget.mjs`
+// executes these scripts against a stub host that is deliberately not a DOM —
+// it offers `document.getElementById('root')` and nothing else — so an
+// unguarded call here throws at module load, and the thing that breaks is
+// `ainar page`, which is the surface furthest from the one this feature is for.
+if (typeof document.addEventListener === 'function') {
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeSheet();
+  });
+}
+
 function state() { return read('widgetState') || {}; }
 function setState(next) {
   if (typeof api.setWidgetState === 'function') api.setWidgetState(next);
@@ -160,6 +231,46 @@ function paint() {
       button.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
       card.classList.toggle('open', !panel.hidden);
     });
+  });
+
+  // A piece of graded work, opened over the plan rather than in place.
+  //
+  // Not the disclosure the week panel uses, and the difference is the content
+  // rather than the taste: a brief is several paragraphs, and expanding one
+  // inside a week card would push every later week down the page, so the
+  // professor loses their place in the term to read one assignment. A sheet
+  // leaves the plan where it is.
+  //
+  // The text is already in the document — the template emits a hidden panel
+  // beside each chip — so this moves markup it can see rather than fetching
+  // anything. `cloneNode` rather than a move, because the same brief can be
+  // opened twice and a moved node would be gone the second time.
+  // The chip that names a piece of graded work becomes the button that opens
+  // it — but only here, where a script is running to answer the press.
+  //
+  // The template ships the label as a plain span and the brief as an open-able
+  // `<details>` beneath it, which is the whole feature on the prerendered public
+  // page. This upgrades that pair for a host that can do better: the span
+  // becomes a real button, the inline disclosure is folded away as now
+  // redundant, and the text opens over the plan instead of pushing it down.
+  //
+  // Built rather than merely bound, so the public page carries no control that
+  // does nothing — the same rule the `more` button below is written to.
+  root.querySelectorAll('[data-briefkey]').forEach(function (label) {
+    var panel = root.querySelector('[data-briefdoc="' + label.dataset.briefkey + '"]');
+    if (!panel || typeof document.createElement !== 'function') return;
+    panel.hidden = true;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'itk itbrief';
+    button.title = 'What this asks for';
+    button.textContent = label.textContent;
+    button.addEventListener('click', function () { openSheet(panel, button); });
+    label.parentNode.replaceChild(button, label);
+  });
+
+  root.querySelectorAll('[data-sheetclose]').forEach(function (node) {
+    node.addEventListener('click', closeSheet);
   });
 
   // The rest of a clipped list, behind the ellipsis standing in for it.
