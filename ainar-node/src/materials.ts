@@ -178,7 +178,7 @@ export const slideCount = (pptx: string): number => {
 };
 
 /** One document record, valid before it is written or not written at all. */
-const record = (fields: Record<string, unknown>): Record<string, unknown> => {
+export const documentRecord = (fields: Record<string, unknown>): Record<string, unknown> => {
   const parsed = Document.safeParse(fields);
   if (!parsed.success) {
     const where = parsed.error.issues
@@ -327,7 +327,7 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
     );
 
     documents.push(
-      record({
+      documentRecord({
         document_id: producer.document_id,
         title: producer.title,
         storage_key: relative(options.root, artefact).split(sep).join("/"),
@@ -366,7 +366,7 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
         const ownBytes = readFileSync(own);
         lines.push(`  ${producer.id}: ${basename(own)} (${ownBytes.length} bytes, from the deck)`);
         documents.push(
-          record({
+          documentRecord({
             document_id: producer.pdf_document_id ?? `${producer.document_id}-PDF`,
             title: producer.pdf_title ?? `${producer.title} (PDF)`,
             storage_key: relative(options.root, own).split(sep).join("/"),
@@ -405,7 +405,7 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
     const pdfBytes = readFileSync(pdf);
     lines.push(`  ${producer.id}: ${basename(pdf)} (${pdfBytes.length} bytes)`);
     documents.push(
-      record({
+      documentRecord({
         document_id: producer.pdf_document_id ?? `${producer.document_id}-PDF`,
         title: producer.pdf_title ?? `${producer.title} (PDF)`,
         storage_key: relative(options.root, pdf).split(sep).join("/"),

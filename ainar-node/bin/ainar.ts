@@ -97,6 +97,7 @@ import { SCHEMA_NAMES, jsonSchemaFor, shapeText } from "../src/schema.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
 import { LAYOUT, measureDeck } from "../src/deck.ts";
 import { buildMaterials } from "../src/materials.ts";
+import { importMaterial } from "../src/materials-import.ts";
 import {
   ID_FIELDS,
   approveDrafts,
@@ -287,6 +288,7 @@ const HELP = `ainar — the AINAR course model CLI
   page RUN [--date D] [--out DIR] [--template T] [--structure S]
 
   materials build RUN [--only ID] [--no-pdf] [--dry-run] [--materials DIR]
+  materials import RUN FILE.pptx --as DOC-ID [--module M] [--title T] [--dry-run]
 
   Producing a material and registering it, as one act. The producers a course
   declares in its materials.yaml are run, what they make is converted and
@@ -753,8 +755,9 @@ try {
     case "materials": {
       // Argument parsing and nothing else; `src/materials.ts` is where the work
       // is, on the same terms as `lms` above.
-      if (rest[0] !== "build") {
+      if (rest[0] !== "build" && rest[0] !== "import") {
         console.error("usage: materials build RUN [--only ID] [--no-pdf] [--dry-run]");
+        console.error("       materials import RUN FILE.pptx --as DOC-ID [--module M] [--title T]");
         process.exit(1);
       }
       const runId = rest[1];
@@ -764,6 +767,47 @@ try {
       // and a draft is written naming a course version nobody has.
       const bundle = forRun(runId);
       if (bundle === null) throw new Error(`no course run '${runId}' in this workspace`);
+
+      if (rest[0] === "import") {
+        const file = rest[2];
+        if (!file) throw new Error("usage: materials import RUN FILE.pptx --as DOC-ID");
+        const as = flag("as");
+        if (!as) {
+          throw new Error(
+            "name the record with --as DOC-ID. The id is the professor's to choose: " +
+              "it is what the deck will be called in the course for the rest of its life.",
+          );
+        }
+        // The course's own concepts, title and aliases, as the closed vocabulary
+        // the reader may propose from. Nothing outside this can be suggested,
+        // which is why an automatic reading is safe to offer at all.
+        const vocabulary = new Map(
+          ((bundle.concepts as any[]) ?? []).map((concept) => [
+            concept.concept_id as string,
+            [concept.title as string, ...((concept.aliases as string[]) ?? [])].filter(Boolean),
+          ]),
+        );
+        const report = importMaterial({
+          root,
+          courseVersionId: runId,
+          file,
+          documentId: as,
+          title: flag("title") ?? null,
+          moduleId: flag("module") ?? null,
+          vocabulary,
+          draftsDir: flag("drafts") ?? join(root, "work", runId),
+          dryRun: args.includes("--dry-run"),
+        });
+        for (const line of report.lines) console.log(line);
+        if (report.draft !== null) {
+          console.log("");
+          console.log(`wrote ${relative(root, report.draft).split(sep).join("/")}`);
+          console.log("Read it before approving — the outline was measured, not written:");
+          console.log(`  ainar approve work/${runId} --as <USER-ID>`);
+        }
+        break;
+      }
+
       const course = bundle.course.course_id;
       const term = runId.startsWith(`${course}-`) ? runId.slice(course.length + 1) : runId;
       const report = buildMaterials({
