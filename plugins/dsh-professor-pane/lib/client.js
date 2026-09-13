@@ -538,6 +538,11 @@ window.__ModuleLoader__.load({
    not have to guess that a blank panel means "open it elsewhere". */
 .pp-modallink{flex:none;font-size:11px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+/* The same seat serves a link and a button — "open in a tab" and "ask about
+   this" are one row of quiet affordances — so the button is stripped back to
+   the anchor's own appearance rather than given a second style to drift. */
+button.pp-modallink{cursor:pointer;font-family:inherit;background:none;border:0;padding:0}
+button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-modalframe{flex:1;min-height:0;width:100%;border:0;display:block;background:#fff}
 `;
 
@@ -3086,6 +3091,45 @@ window.__ModuleLoader__.load({
     const MEDIA = new Set(["pdf", "png", "jpg", "jpeg", "gif", "webp"]);
 
     /**
+     * How the thing in the overlay is named in a message.
+     *
+     * The identifier first, because that is the part that saves work: a model
+     * handed `DOC-0204` reads that document, while one handed a title has to
+     * go and find which of forty it was — and may pick the wrong one, which is
+     * worse than searching. The title follows in quotes so the professor can
+     * see what they attached without decoding an id.
+     *
+     * The id comes out of the address rather than from a new prop, because the
+     * address already carries exactly one and this pane put it there:
+     * `/file?doc=…` names a Document, `/brief?…&assessment=…` names the piece
+     * of graded work whose own text is being shown. Anything else — a material
+     * hosted elsewhere, some future route — has no identifier to offer and
+     * returns empty, which is the button's own condition for existing.
+     */
+    function mentionOf(url, label) {
+      let parsed;
+      try {
+        parsed = new URL(url, window.location.href);
+      } catch {
+        return "";
+      }
+      const id =
+        parsed.searchParams.get("doc") ?? parsed.searchParams.get("assessment") ?? "";
+      if (id === "") return "";
+      const title = typeof label === "string" ? label.trim() : "";
+      const named = title === "" ? id : id + ' ("' + title + '")';
+
+      // What this artefact was made from, when the record says. Both ends are
+      // named rather than one: the id identifies what is on screen, and the
+      // source is the record to change — a PDF of a deck is not editable and
+      // its builder is, so a question about "this slide" is answered in the
+      // second one. `from` is put on the address by `withMaterialLinks`, which
+      // walks `extensions.rendered_from` to the end of the chain.
+      const source = parsed.searchParams.get("from") ?? "";
+      return source === "" ? named : named + ", built from " + source;
+    }
+
+    /**
      * A deck, a paper or a handout, over the whole harness.
      *
      * Portalled to `document.body` rather than rendered in place. The pane is
@@ -3170,6 +3214,28 @@ window.__ModuleLoader__.load({
               "div",
               { className: "pp-modalhead" },
               h("div", { className: "pp-modaltitle" }, props.label),
+              // Name this in the composer, and let the professor type the
+              // question. The alternative — a button that SENDS something —
+              // would be the pane writing their sentence for them, and every
+              // question worth asking about a brief is one it cannot guess.
+              //
+              // Rendered only when the composition actually provides the
+              // draft-writing seam and this material has an identifier worth
+              // carrying. A control that does nothing is worse than no control.
+              props.mention && mentionOf(props.url, props.label)
+                ? h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-modallink",
+                      title: "Put this in the message box, then type your question",
+                      onClick: () => {
+                        if (props.mention(mentionOf(props.url, props.label))) close();
+                      },
+                    },
+                    "Ask about this ↩",
+                  )
+                : null,
               h(
                 "a",
                 {
@@ -3734,6 +3800,7 @@ window.__ModuleLoader__.load({
               url: material.url,
               label: material.label,
               format: material.format,
+              mention: props.mention,
               onClose: () => setMaterial(null),
             }),
       );
@@ -3745,7 +3812,7 @@ window.__ModuleLoader__.load({
      * `layout` for the open/close verbs, `slots` for the two seats, `sessions`
      * to resolve the session a widget's question should be asked in.
      */
-    const inject = ["slots", "layout", "sessions"];
+    const inject = ["slots", "layout", "sessions", "conversation"];
 
     /**
      * The opener.
@@ -3786,6 +3853,56 @@ window.__ModuleLoader__.load({
         Promise.resolve(session.prompt([{ type: "text", text: text }], "queue")).catch(() => {});
       };
 
+      /**
+       * Put a mention of something into the composer, and send nothing.
+       *
+       * The opposite half of `ask`, and the difference is whose sentence it is.
+       * `ask` carries a question this pane already knows how to phrase — "what
+       * should I teach this week" — and sends it. This one carries only the
+       * NAME of what the professor is looking at, into the draft, with the
+       * caret after it: the question is theirs to type, and the identifier
+       * spares the model a search for which of forty documents was meant.
+       *
+       * Appends rather than replaces. A half-typed question in the composer is
+       * work, and a button that discards it to make room for a filename would
+       * be the pane deciding it matters more than the professor's sentence.
+       *
+       * Returns whether the draft was actually written, because the caller
+       * draws a different outcome for "no" — this reaches across a plugin
+       * boundary to `ui-conversation`, and a composition without it is a real
+       * arrangement rather than a broken one.
+       */
+      const mention = (sessionId) => (text) => {
+        const scope = ctx.sessions.scope(sessionId);
+        if (scope === undefined) return false;
+        const resolver = ctx.conversation === undefined ? undefined : ctx.conversation.input;
+        const input = resolver === undefined ? undefined : resolver.for(scope);
+        if (input === undefined || typeof input.setDraft !== "function") return false;
+        // `getSnapshot()`, not a `.snapshot` property: `SnapshotStore` is the
+        // `useSyncExternalStore` shape, and reading the property that is not
+        // there yields undefined rather than throwing — which is how the first
+        // version of this silently replaced a half-typed question instead of
+        // appending to it. Guarded anyway, because this is another package's
+        // store and a read that throws must not cost the professor their draft.
+        let current = "";
+        try {
+          const state = input.state;
+          const snapshot =
+            state !== undefined && typeof state.getSnapshot === "function"
+              ? state.getSnapshot()
+              : undefined;
+          const draft = snapshot === undefined ? undefined : snapshot.draft;
+          if (typeof draft === "string") current = draft;
+        } catch {
+          current = "";
+        }
+        // One space between what was there and what arrives, and none when the
+        // draft is empty — the composer is a sentence being written, not a log.
+        const trimmed = current.replace(/\s+$/, "");
+        input.setDraft(trimmed === "" ? text : trimmed + " " + text);
+        return true;
+      };
+
       ctx.slots.inject("details", () =>
         ctx.slots.register(
           {
@@ -3798,6 +3915,7 @@ window.__ModuleLoader__.load({
               closeDetails: () => ctx.layout.closeDetails(),
               openDetails: () => ctx.layout.openDetails(),
               ask: ask(sessionId),
+              mention: mention(sessionId),
             }),
           },
           ProfessorPane,

@@ -4360,11 +4360,21 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
   // was supposed to stop happening. The harness's theme is an explicit choice
   // and need not agree with the machine's, so it is passed rather than left to
   // `prefers-color-scheme`.
-  const address = (documentId) =>
-    `${origin}${BASE}/file?doc=` +
-    encodeURIComponent(documentId) +
-    (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
-    (dark ? "&dark=1" : "");
+  const address = (documentId) => {
+    // `from` is carried on the address and nowhere else, because the only
+    // consumer is the overlay's "ask about this" button and the overlay is
+    // handed a URL, a label and a format — nothing that could look a record up.
+    // Putting it here costs one parameter and saves a second route whose whole
+    // job would be answering a question the payload already knew.
+    const source = sourceOf(documentId);
+    return (
+      `${origin}${BASE}/file?doc=` +
+      encodeURIComponent(documentId) +
+      (source ? "&from=" + encodeURIComponent(source) : "") +
+      (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
+      (dark ? "&dark=1" : "")
+    );
+  };
 
   // Every document in the workspace, indexed by the basename of its storage key
   // with the extension removed.
@@ -4379,6 +4389,8 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
   const byStem = new Map();
   /** Every document's extension, so a link can say whether it is showable. */
   const extensionOf = new Map();
+  /** `extensions.rendered_from`, one hop: the record this artefact came from. */
+  const renderedFrom = new Map();
   for (const courseId of workspace.courseIds()) {
     let loaded;
     try {
@@ -4388,6 +4400,12 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
     }
     if (loaded.bundle === null) continue;
     for (const document of loaded.bundle.documents ?? []) {
+      // Read before the storage-key guard: a source may legitimately be a
+      // record this loop skips for its own reasons, and the edge is still true.
+      const from = document.extensions?.rendered_from;
+      if (typeof from === "string" && from !== "") {
+        renderedFrom.set(document.document_id, from);
+      }
       const key = String(document.storage_key ?? "");
       if (!key || key.includes("://")) continue;
       const name = key.split(/[\\/]/).pop() ?? "";
@@ -4402,6 +4420,36 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
   }
 
   const showable = (documentId) => SHOWABLE.has(extensionOf.get(documentId) ?? "");
+
+  /**
+   * What a rendered artefact was produced from, following the chain to its end.
+   *
+   * `extensions.rendered_from` is a real edge in the record — a PDF names the
+   * deck it was converted from, and that deck names the script that built it —
+   * and this walks to the document at the end, because that is the one a
+   * professor would edit. Changing a slide means changing the builder; nobody
+   * edits a PDF.
+   *
+   * It replaces nothing: `formatsFor` still pairs siblings by filename stem,
+   * which is a convention and stays one. This is the relation the schema
+   * actually carries, and the two answer different questions — "the same thing
+   * in another format" and "the thing this was made from".
+   *
+   * Cycles end the walk rather than hanging it. A record that names itself, or
+   * two that name each other, is bad data and not worth a stack overflow; the
+   * last id reached is returned and the validator is the place that complains.
+   */
+  const sourceOf = (documentId) => {
+    const seen = new Set([documentId]);
+    let at = documentId;
+    for (;;) {
+      const next = renderedFrom.get(at);
+      if (next === undefined || seen.has(next)) break;
+      seen.add(next);
+      at = next;
+    }
+    return at === documentId ? null : at;
+  };
 
   /** The formats a document is available in, itself first. */
   const formatsFor = (documentId) => {
