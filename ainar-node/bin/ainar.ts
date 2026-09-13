@@ -96,6 +96,7 @@ import { dump } from "../src/yaml-out.ts";
 import { SCHEMA_NAMES, jsonSchemaFor, shapeText } from "../src/schema.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
 import { LAYOUT, measureDeck } from "../src/deck.ts";
+import { buildMaterials } from "../src/materials.ts";
 import {
   ID_FIELDS,
   approveDrafts,
@@ -127,6 +128,7 @@ const flag = (name: string): string | undefined => {
  */
 const BOOLEAN_FLAGS = new Set([
   "dry-run",
+  "no-pdf",
   "json",
   "verbose",
   "keep-absent",
@@ -283,6 +285,14 @@ const HELP = `ainar — the AINAR course model CLI
 
   dashboard RUN [--json] [--out PATH] [--template T]
   page RUN [--date D] [--out DIR] [--template T] [--structure S]
+
+  materials build RUN [--only ID] [--no-pdf] [--dry-run] [--materials DIR]
+
+  Producing a material and registering it, as one act. The producers a course
+  declares in its materials.yaml are run, what they make is converted and
+  described, and ONE draft is written through the same schema and emitter
+  approve uses. Nothing is written to courses/: approval stays the only way in,
+  and this narrows what reaches it to records already known to be valid.
 
   --template is appearance only: a style sheet, refused if it carries markup or
   fetches anything, and refused outright if it declares a different surface.
@@ -737,6 +747,48 @@ try {
         out(`  styled with the ${template} template — appearance only, nothing added`);
       }
       out("Open it in a browser. Students are shown by pseudonym.");
+      break;
+    }
+
+    case "materials": {
+      // Argument parsing and nothing else; `src/materials.ts` is where the work
+      // is, on the same terms as `lms` above.
+      if (rest[0] !== "build") {
+        console.error("usage: materials build RUN [--only ID] [--no-pdf] [--dry-run]");
+        process.exit(1);
+      }
+      const runId = rest[1];
+      if (!runId) throw new Error("usage: materials build RUN [--only ID] [--no-pdf]");
+      // Resolving the run proves it exists before a single script is executed:
+      // a typo in the id should not be discovered after seven decks are built
+      // and a draft is written naming a course version nobody has.
+      const bundle = forRun(runId);
+      if (bundle === null) throw new Error(`no course run '${runId}' in this workspace`);
+      const course = bundle.course.course_id;
+      const term = runId.startsWith(`${course}-`) ? runId.slice(course.length + 1) : runId;
+      const report = buildMaterials({
+        root,
+        courseVersionId: runId,
+        materialsDir:
+          flag("materials") ??
+          join(root, "courses", course, "versions", term, "materials"),
+        only: flag("only") ?? null,
+        pdf: !args.includes("--no-pdf"),
+        dryRun: args.includes("--dry-run"),
+        draftsDir: flag("drafts") ?? join(root, "work", runId),
+      });
+      for (const line of report.lines) console.log(line);
+      if (report.draft !== null) {
+        console.log("");
+        console.log(`wrote ${relative(root, report.draft).split(sep).join("/")}`);
+        console.log("Nothing is a record yet. Review it, then:");
+        console.log(`  ainar approve work/${runId} --as <USER-ID>`);
+      }
+      if (report.failed > 0) {
+        console.error("");
+        console.error(`${report.failed} producer step(s) failed; see above.`);
+        process.exit(1);
+      }
       break;
     }
 
