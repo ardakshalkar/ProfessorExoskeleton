@@ -241,21 +241,29 @@ function paint() {
   // professor loses their place in the term to read one assignment. A sheet
   // leaves the plan where it is.
   //
-  // The text is already in the document — the template emits a hidden panel
-  // beside each chip — so this moves markup it can see rather than fetching
-  // anything. `cloneNode` rather than a move, because the same brief can be
-  // opened twice and a moved node would be gone the second time.
   // The chip that names a piece of graded work becomes the button that opens
   // it — but only here, where a script is running to answer the press.
   //
   // The template ships the label as a plain span and the brief as an open-able
   // `<details>` beneath it, which is the whole feature on the prerendered public
   // page. This upgrades that pair for a host that can do better: the span
-  // becomes a real button, the inline disclosure is folded away as now
-  // redundant, and the text opens over the plan instead of pushing it down.
+  // becomes a real button and the inline disclosure is folded away.
   //
   // Built rather than merely bound, so the public page carries no control that
   // does nothing — the same rule the `more` button below is written to.
+  //
+  // Where the press LANDS depends on what the host can do, in the same order of
+  // preference a deck's link already uses:
+  //
+  //   1. `openMaterial` with a page the host serves — the overlay over the
+  //      whole window, which is where a PDF and a deck open. This is the pane,
+  //      and it is the right answer there: the widget is one frame inside one
+  //      column, so a dialog drawn in here is a dialog inside a column, which
+  //      is not what "open the homework" should look like.
+  //   2. the sheet below, drawn in this document — a host that can run a script
+  //      but serves no brief route, which is a chat client rendering the widget
+  //      in a message.
+  //   3. the `<details>`, untouched, for a host running no script at all.
   root.querySelectorAll('[data-briefkey]').forEach(function (label) {
     var panel = root.querySelector('[data-briefdoc="' + label.dataset.briefkey + '"]');
     if (!panel || typeof document.createElement !== 'function') return;
@@ -265,7 +273,18 @@ function paint() {
     button.className = 'itk itbrief';
     button.title = 'What this asks for';
     button.textContent = label.textContent;
-    button.addEventListener('click', function () { openSheet(panel, button); });
+    // Read before the swap, not inside the handler: the span is detached a line
+    // later, and a closure reaching back into a node the document no longer
+    // holds is a thing that happens to keep working rather than a thing meant.
+    var href = label.dataset.briefurl || '';
+    var name = label.dataset.briefname || label.textContent;
+    var fmt = label.dataset.brieffmt || 'html';
+    button.addEventListener('click', function () {
+      // `showMaterial` is the capability test and reports whether it took the
+      // job; only when it did not does the local sheet open.
+      if (showMaterial(href, name, fmt)) return;
+      openSheet(panel, button);
+    });
     label.parentNode.replaceChild(button, label);
   });
 

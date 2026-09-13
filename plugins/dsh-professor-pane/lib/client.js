@@ -3045,6 +3045,26 @@ window.__ModuleLoader__.load({
      * nothing opens. What the frame can be pointed at is therefore exactly the
      * set of documents `sendMaterial` is already willing to serve.
      */
+    /**
+     * The routes a frame may ask this app to open over the harness.
+     *
+     * An allowlist of exact pathnames on this app's own origin, and it is the
+     * whole of the check — a frame naming anything else gets silence rather
+     * than a frame. Two entries, and both are reads that resolve an identifier
+     * the course record already names:
+     *
+     * - `/file` serves a DOCUMENT, addressed by `document_id`.
+     * - `/brief` serves a piece of graded work's own text, addressed by run and
+     *   `assessment_id`. It joined the list when the outline's chips started
+     *   opening a brief: most assessments carry no document, so there was no
+     *   `/file` address to give them.
+     *
+     * Adding a route here is granting it the overlay, so the bar is the one
+     * `/file` already meets: same origin, a read, and addressed by an id rather
+     * than by anything resembling a path.
+     */
+    const MATERIAL_ROUTES = new Set([BASE + "/file", BASE + "/brief"]);
+
     function materialUrl(value) {
       if (typeof value !== "string" || value === "") return null;
       let url;
@@ -3054,7 +3074,7 @@ window.__ModuleLoader__.load({
         return null;
       }
       if (url.origin !== window.location.origin) return null;
-      if (url.pathname !== BASE + "/file") return null;
+      if (!MATERIAL_ROUTES.has(url.pathname)) return null;
       return url.href;
     }
 

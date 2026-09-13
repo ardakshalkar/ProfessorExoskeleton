@@ -166,6 +166,27 @@ function model(d) {
       // AND the week it is due, and two panels sharing an id would open the
       // first one twice.
       brief_id: 'brief-' + w.week + '-' + (a.assessment_id || type),
+      // Where a host that can frame a page should open this instead.
+      //
+      // Empty on every surface but the pane, and that is the capability test
+      // doing its job: the published page and a chat client have no route that
+      // serves a brief, so they keep the disclosure written into the markup.
+      // The pane supplies the address, exactly as it already does for a deck.
+      //
+      // THE DOCUMENT WINS when the assessment names one. A brief written as a
+      // file is the real thing — the sheet students are handed, several pages
+      // of it — and `description` is a paragraph summarising it for the term
+      // plan. Opening the summary while the record knows where the brief is
+      // would be showing the worse of two answers on purpose.
+      //
+      // Only when the host can actually paint it: `viewable` is false for a
+      // `.docx`, which the overlay cannot frame, and that keeps the composed
+      // page rather than opening a download.
+      brief_url: (a.viewable && safeUrl(a.url)) || safeUrl(a.brief_url) || '',
+      // Which of the two the address points at, because the host sandboxes a
+      // frame by extension: a markdown brief is rendered to HTML by `/file`,
+      // a PDF one is painted by the browser's own viewer.
+      brief_format: (a.viewable && a.url ? a.format : 'html') || 'html',
       brief_kind: titled(ASSESS_WORD[type] || type),
       brief_title: a.title || titled(type),
       brief_facts: facts,

@@ -2518,6 +2518,7 @@ const assessmentsDocument = (
     sessionId,
     workspace,
     dark,
+    withDrafts,
   );
   const all = Array.isArray(data.assessments) ? [...data.assessments] : [];
   all.sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999"));
@@ -2578,7 +2579,7 @@ const assessmentsDocument = (
  */
 const slidesDocument = (workspace, root, runId, dark, withDrafts, on, origin, sessionId) => {
   let data = outlinePayloadFor(workspace, root, runId, withDrafts, on);
-  data = withMaterialLinks(data, origin, sessionId, workspace, dark);
+  data = withMaterialLinks(data, origin, sessionId, workspace, dark, withDrafts);
 
   const found = [];
   for (const week of data.weeks ?? []) {
@@ -2661,6 +2662,7 @@ const examsDocument = (workspace, root, runId, dark, withDrafts, on, origin, ses
     sessionId,
     workspace,
     dark,
+    withDrafts,
   );
   const bundle = withDrafts
     ? null
@@ -4347,7 +4349,7 @@ const extensionOfKey = (key) => {
  * two ways, and a link in one place but not the other is what this pane looked
  * like before.
  */
-const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
+const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts) => {
   if (!origin || data === null || typeof data !== "object") return data;
 
   // `dark` travels on the address for one format only, and is inert for the
@@ -4456,12 +4458,47 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
    * view downstream keeps the "nothing to open" branch it already had rather
    * than being handed a link to a document that does not exist.
    */
+  /**
+   * Where this pane serves a piece of graded work's own text.
+   *
+   * Separate from `address`, and a separate field from `url`, because the two
+   * answer different questions: `url` is the BRIEF DOCUMENT when one exists,
+   * and this is the record's `description` rendered as a page. An assessment
+   * can have both, and the chip and its "open" link then lead to different
+   * things on purpose — the text somebody wrote in the record, and the file
+   * they attached to it.
+   *
+   * `drafts` travels on the address, because the outline it was built from was
+   * itself drafted or not and the brief must agree with the chip that opened
+   * it. The pane defaults to `+ drafts`, so without this a professor reading a
+   * proposed assessment's chip would be shown the approved text — or an error
+   * saying the assessment does not exist, which is worse, since it does.
+   */
+  const briefAddress = (runId, assessmentId) =>
+    `${origin}${BASE}/brief?run=` +
+    encodeURIComponent(runId) +
+    "&assessment=" +
+    encodeURIComponent(assessmentId) +
+    (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
+    (withDrafts ? "&drafts=1" : "") +
+    (dark ? "&dark=1" : "");
+
+  const runId = String(data?.run?.id ?? "");
+
   const linkAssessment = (assessment) => {
     if (!assessment || typeof assessment !== "object") return assessment;
+    // The record's own text, when it has any. This is what the chip opens, and
+    // it is the usual case: most assessments in this model carry no brief
+    // document at all, so without it the chip names work nobody can read.
+    const brief =
+      runId && assessment.assessment_id && String(assessment.description ?? "").trim()
+        ? briefAddress(runId, assessment.assessment_id)
+        : null;
     const documentId = assessment.instructions_document_id;
-    if (!documentId) return assessment;
+    if (!documentId) return brief ? { ...assessment, brief_url: brief } : assessment;
     return {
       ...assessment,
+      ...(brief ? { brief_url: brief } : {}),
       url: address(documentId),
       viewable: showable(documentId),
       format: extensionOf.get(documentId) ?? "",
@@ -4611,6 +4648,93 @@ const markdownPage = (title, source, dark) =>
  * here. See `MARKDOWN_EXTENSIONS` for why that is this route's job and not the
  * browser's.
  */
+/**
+ * One piece of graded work, as a page the overlay can frame.
+ *
+ * The chip in the outline used to open a sheet drawn INSIDE the widget's
+ * frame, which is the wrong size for the job: the frame is one pane of the
+ * harness, so a brief opened there is a dialog inside a column rather than
+ * over the window, and it looked nothing like the overlay a deck or a PDF
+ * opens into. This route is what lets the brief take that same overlay —
+ * `openMaterial` needs a URL, and for the great majority of assessments there
+ * is no file to point it at, so the page is composed here from the record.
+ *
+ * Markdown, and then the ordinary `markdownPage`, rather than markup of its
+ * own. A brief that HAS a document already renders through that function, and
+ * a brief that has only a description should not arrive in the same overlay
+ * looking like it came from somewhere else. It also means the description is
+ * treated exactly as every other authored text here is — rendered, not
+ * injected; `renderMarkdown` escapes what it does not recognise.
+ *
+ * Addressed by run and assessment id, never by anything resembling a path. The
+ * ids are looked up in the payload the pane already serves, so the only briefs
+ * this can print are the ones the course record names — the same rule
+ * `sendMaterial` follows, and for the same reason.
+ */
+const sendBrief = (res, workspace, root, runId, assessmentId, withDrafts, dark) => {
+  if (!runId) return sendJson(res, 200, { error: "no run chosen" });
+  if (!assessmentId) return sendJson(res, 200, { error: "no assessment named" });
+
+  let data;
+  try {
+    data = withDrafts
+      ? draftedPayload(workspace, root, "course_outline", runId, null).payload
+      : payload(workspace, "course_outline", { course_version_id: runId });
+  } catch (error) {
+    return sendErrorPage(res, String(error.message ?? error));
+  }
+
+  const found = (data.assessments ?? []).find((a) => a && a.assessment_id === assessmentId);
+  if (!found) {
+    return sendErrorPage(res, `no assessment ${assessmentId} in ${runId}`);
+  }
+
+  const text = String(found.description ?? "").trim();
+  if (!text) {
+    return sendErrorPage(
+      res,
+      `${assessmentId} has no description yet, so there is nothing to read. ` +
+        "The brief is the record's own text; write it there and it appears here.",
+    );
+  }
+
+  // The same facts the chip's sheet carried, in the same order. A definition
+  // list in markdown is a bulleted one — the renderer here is small on purpose
+  // and this is not the place to grow it a new block type.
+  const facts = [];
+  const when = [
+    found.opens_on ? `opens ${found.opens_on}` : "",
+    found.due_on ? `due ${found.due_on}` : "",
+  ].filter(Boolean);
+  facts.push(`**Dates** — ${when.length ? when.join(", ") : "not scheduled"}`);
+  facts.push(
+    `**Weight** — ${found.weight == null ? "not set" : Math.round(found.weight * 100) + "%"}`,
+  );
+  if (found.maximum_score != null) facts.push(`**Out of** — ${found.maximum_score}`);
+  const handed = (found.submission_type ?? []).join(", ");
+  if (handed) facts.push(`**Handed in as** — ${handed}`);
+  const outcomes = (found.outcomes ?? []).join(", ");
+  if (outcomes) facts.push(`**Outcomes** — ${outcomes}`);
+  facts.push(
+    `**Rubric** — ${
+      found.criteria
+        ? found.criteria + (found.criteria === 1 ? " criterion" : " criteria")
+        : "none yet"
+    }`,
+  );
+
+  const title = String(found.title ?? assessmentId);
+  const source = [
+    `# ${title}`,
+    "",
+    ...facts.map((fact) => `- ${fact}`),
+    "",
+    text,
+  ].join("\n");
+
+  return send(res, 200, "text/html; charset=utf-8", markdownPage(title, source, dark === true));
+};
+
 const sendMaterial = (res, workspace, root, documentId, dark) => {
   if (!documentId) return sendJson(res, 200, { error: "no document named" });
 
@@ -5668,6 +5792,21 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
       );
     }
 
+    // The brief a piece of graded work carries as text rather than as a file.
+    // Beside `/file` because it ends in the same overlay and obeys the same
+    // rule: addressed by an identifier the course record already names.
+    if (path === "/brief") {
+      return sendBrief(
+        res,
+        workspace,
+        root,
+        runId,
+        url.searchParams.get("assessment") ?? "",
+        url.searchParams.get("drafts") === "1",
+        url.searchParams.get("dark") === "1",
+      );
+    }
+
     if (path === "/api/approve") {
       // POST only. Everything else on this route is a read a GET can serve;
       // this one writes to `courses/`, and a side effect behind a GET is one a
@@ -5837,6 +5976,7 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
           url.searchParams.get("session") ?? "",
           workspace,
           url.searchParams.get("dark") === "1",
+          withDrafts,
         );
         const run = data?.run ?? {};
         if (run.course_id && run.term) {
