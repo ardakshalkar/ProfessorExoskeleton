@@ -4391,6 +4391,19 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
   const extensionOf = new Map();
   /** `extensions.rendered_from`, one hop: the record this artefact came from. */
   const renderedFrom = new Map();
+  /**
+   * `extensions.origin`: built in this workspace, or brought in finished.
+   *
+   * A week may hold both — a deck rendered from its markdown and somebody
+   * else's deck imported whole — and the two are different claims about what
+   * the file IS, not merely about where it sits. The pane badges this, so the
+   * professor is never guessing which of two chips is which; an artefact that
+   * declares nothing is drawn as the unfinished state it is rather than
+   * silently as "generated".
+   */
+  const originOf = new Map();
+  /** `extensions.read_by`: text, ocr or vlm — how an imported outline was got. */
+  const readByOf = new Map();
   for (const courseId of workspace.courseIds()) {
     let loaded;
     try {
@@ -4405,6 +4418,14 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
       const from = document.extensions?.rendered_from;
       if (typeof from === "string" && from !== "") {
         renderedFrom.set(document.document_id, from);
+      }
+      const origin = document.extensions?.origin;
+      if (typeof origin === "string" && origin !== "") {
+        originOf.set(document.document_id, origin);
+      }
+      const readBy = document.extensions?.read_by;
+      if (typeof readBy === "string" && readBy !== "") {
+        readByOf.set(document.document_id, readBy);
       }
       const key = String(document.storage_key ?? "");
       if (!key || key.includes("://")) continue;
@@ -4483,7 +4504,17 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
     // workspace, so an external reading keeps the tab it always opened.
     const viewable = !resource.url && showable(resource.document_id);
     const url = resource.url || address(resource.document_id);
-    return { ...resource, url, formats, viewable, format: extensionOf.get(resource.document_id) ?? "" };
+    return {
+      ...resource,
+      url,
+      formats,
+      viewable,
+      format: extensionOf.get(resource.document_id) ?? "",
+      // Empty when the record says nothing, and the view draws that as its own
+      // state rather than assuming the common case.
+      origin: originOf.get(resource.document_id) ?? "",
+      read_by: readByOf.get(resource.document_id) ?? "",
+    };
   };
 
   /**

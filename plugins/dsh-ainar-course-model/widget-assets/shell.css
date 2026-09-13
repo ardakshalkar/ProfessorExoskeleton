@@ -379,3 +379,17 @@ ul.plain { margin: .2rem 0 0; padding-left: 1rem; font-size: .78rem; }
 .btext { margin: 0 0 .7rem; font-size: .84rem; line-height: 1.55;
          overflow-wrap: anywhere; }
 .btext:last-child { margin-bottom: 0; }
+
+/* Where a deck came from, on the chip that names it.
+ *
+ * Quiet on purpose: this is a fact about the artefact, not a warning, and a
+ * week carrying one generated deck should not look like it has a problem. The
+ * two values read differently because they ARE different claims — `generated`
+ * names something this course can rebuild, `imported` names a reading of
+ * something it cannot. */
+.itorg { margin-left: .3rem; font-size: .62rem; text-transform: uppercase;
+         letter-spacing: .05em; padding: 0 .25rem; border-radius: 3px;
+         border: 1px solid var(--line); color: var(--muted); }
+.itorg.it-generated { border-color: var(--accent-line); color: var(--accent-ink);
+                      background: var(--tint); }
+.itorg.it-imported { border-color: var(--b2); color: var(--fg); }

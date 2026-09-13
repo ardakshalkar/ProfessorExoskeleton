@@ -204,6 +204,24 @@ function model(d) {
         const deck = r.kind === 'slides';
         (deck ? main : extra).push({
           label: deck ? 'Slides' : r.title,
+          // Built here, or brought in finished.
+          //
+          // Only on a deck, and only when the record says. A week may carry
+          // two of these — one rendered from its own markdown, one somebody
+          // else's imported whole — and they are different claims about what
+          // the file is: one names a source to edit, the other names a reading
+          // of something this course did not write. Two chips that both say
+          // "Slides" and nothing else is the state this replaces.
+          //
+          // Empty is drawn as empty rather than assumed to be "generated". An
+          // artefact that declares no origin has not been through the one
+          // place materials are supposed to come from, and should look like
+          // it.
+          origin: deck ? (r.origin || '') : '',
+          // How an imported outline was obtained — text, ocr or vlm. A deck
+          // read by OCR is a weaker claim than one read from its own text, and
+          // the difference should be on screen rather than guessed.
+          read_by: deck ? (r.read_by || '') : '',
           icon: RES_ICON[r.kind] || 'doc',
           tone: deck ? 'deck' : 'x',
           kind: r.kind,

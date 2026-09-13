@@ -341,6 +341,15 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
         concepts: producer.concepts,
         version: 1,
         extensions: {
+          // Where this came from, said rather than implied.
+          //
+          // A course may legitimately hold two decks for one week — one built
+          // here and one brought in finished — and the fault in the case that
+          // prompted this was never the count. It was that neither said what it
+          // was, so no reader and no surface could tell them apart. `origin` is
+          // what the pane badges; an artefact without one should look
+          // unfinished rather than normal.
+          origin: "generated",
           // The edge, written by the thing that made the file rather than
           // reconstructed later by reading seven scripts to find out.
           rendered_from: producer.source_document_id ?? null,
@@ -369,7 +378,7 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
             module_id: producer.module_id ?? null,
             concepts: producer.concepts,
             version: 1,
-            extensions: { rendered_from: producer.document_id },
+            extensions: { origin: "generated", rendered_from: producer.document_id },
           }),
         );
       }
@@ -410,7 +419,7 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
         // which is the state seven of these were registered in.
         concepts: producer.concepts,
         version: 1,
-        extensions: { rendered_from: producer.document_id },
+        extensions: { origin: "generated", rendered_from: producer.document_id },
       }),
     );
   }
