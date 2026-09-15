@@ -40,7 +40,7 @@ import { dump } from "./yaml-out.ts";
 export const DRAFT_MARKER = "-DRAFT-";
 
 /**
- * Where each collection lands, relative to `versions/<TERM>/`.
+ * Where each collection lands, relative to the course directory.
  *
  * Runtime records go to `records/`. Documents and resources go beside their
  * authored counterparts but in a separate `generated.yaml` — writing YAML back
@@ -394,9 +394,9 @@ export const isRepoKey = (storageKey: string): boolean => !storageKey.includes("
  */
 export const stageDocuments = (
   approval: Approval,
-  options: { root: string; runDir: string; issues: IssueList; dryRun?: boolean },
+  options: { root: string; courseDir: string; issues: IssueList; dryRun?: boolean },
 ): string[] => {
-  const { root, runDir, issues, dryRun = false } = options;
+  const { root, courseDir, issues, dryRun = false } = options;
   const staged: string[] = [];
   for (const document of approval.records.get("documents") ?? []) {
     const storageKey = document.storage_key as string;
@@ -415,7 +415,7 @@ export const stageDocuments = (
     let destination = source;
     const parts = relative(root, source).split(/[\\/]/);
     if (parts[0] === "work") {
-      destination = join(runDir, MATERIALS_DIR, basename(source));
+      destination = join(courseDir, MATERIALS_DIR, basename(source));
       if (existsSync(destination) && !dryRun) {
         issues.error(
           "document.collision",
@@ -567,15 +567,14 @@ const append = (path: string, collection: string, items: Record_[], header: stri
 /**
  * Append approved records to their destination, one file per collection.
  *
- * Everything approvable lands under `versions/<TERM>/`, so `runDir` is the only
- * destination there is. The `courseDir` option went with `CLAIM_FILES`: nothing
- * writes above the semester any more.
+ * Everything approvable lands in the course directory, which since the term
+ * stopped being a directory level is the only destination there is.
  */
-export const writeRecords = (runDir: string, approval: Approval): string[] => {
+export const writeRecords = (courseDir: string, approval: Approval): string[] => {
   const written: string[] = [];
   for (const [collection, items] of approval.records) {
     const file = RECORD_FILES[collection];
-    // Loud rather than `join(runDir, undefined)`, which is how a collection
+    // Loud rather than `join(courseDir, undefined)`, which is how a collection
     // added to `DRAFTABLE` and forgotten here would write to a path spelled
     // "undefined" and look like it had worked.
     if (file === undefined) {
@@ -584,7 +583,7 @@ export const writeRecords = (runDir: string, approval: Approval): string[] => {
           "Add one, or take the collection out of DRAFTABLE.",
       );
     }
-    written.push(append(join(runDir, file), collection, items, HEADER));
+    written.push(append(join(courseDir, file), collection, items, HEADER));
   }
   return written;
 };

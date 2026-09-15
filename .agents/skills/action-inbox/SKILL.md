@@ -262,7 +262,7 @@ bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
 
 ## Without the CLI
 
-Build the list by reading: due dates from `versions/<TERM>/assessments/`, compared
+Build the list by reading: due dates from `assessments/`, compared
 against today; submissions present in `records/` against the enrollment list;
 open signals from `records/signals.yaml`.
 
@@ -276,7 +276,7 @@ Never state a student's total or standing here; that needs `ainar gradebook`.
 
 The ladder is the part that survives best without the CLI, because it is
 presence rather than arithmetic: whether `outcomes.yaml` still says `TODO`,
-whether `concepts.yaml` has anything in it, whether `versions/<TERM>/`
+whether `concepts.yaml` has anything in it, whether ``
 has activities and assessments, whether any assessment carries a `weight`,
 whether `enrollments.yaml` has rows. Walk it in the same order and stop at the
 first gap — that is the next step, and it is the same answer the command gives.

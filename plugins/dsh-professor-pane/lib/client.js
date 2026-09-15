@@ -3542,7 +3542,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               ? "This workspace holds no courses."
               : "No course here has an offering the course model can read: " +
                 courses.map((course) => course.course_id).join(", ") +
-                ". A run needs versions/<TERM>/version.yaml with start_date and end_date. " +
+                ". A run needs version.yaml with start_date and end_date. " +
                 "Run `python -m ainar validate` for the specifics.",
           );
         }

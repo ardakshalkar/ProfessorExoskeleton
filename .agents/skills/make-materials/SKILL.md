@@ -48,7 +48,7 @@ bin/ainar context CSS-4008-2026-FALL --date 2026-10-05
 
 Then read, and use all of it:
 
-- **The module** in `versions/<vN>/modules.yaml` — its outcomes, its concepts,
+- **The module** in `modules.yaml` — its outcomes, its concepts,
   its estimated hours. These bound what the material may cover.
 - **Prerequisites** of each concept, from the graph in the context document.
   Material that assumes a prerequisite the class has not demonstrated is
@@ -96,6 +96,10 @@ you their own material to work from, in which case that is the source and
 looking further is a distraction; or no network is available, in which case say
 so in the report rather than pretending the survey happened.
 
+Material handed over is often handed over by being dropped in `imports/` rather
+than named in the conversation, so look there before surveying the web. Name the
+file you used.
+
 If the answer that comes back is bigger than one lecture — a different syllabus
 shape, a topic we do not cover at all — that is `/find-ideas`, not this. Report
 it and stop; adopting it is the professor's decision and `/propose-concepts`
@@ -137,7 +141,7 @@ generated_by: make-materials-skill
 ---
 ```
 
-`courses/CSS-4008/versions/2026-FALL/materials/MODULE-06-slides.md` is a worked
+`courses/CSS-4008/materials/MODULE-06-slides.md` is a worked
 example of the shape — read it before writing your first deck, along with
 `MODULE-06-slides-fig-01-split.svg` beside it and the `DOC-4411` record in
 `documents.yaml`, which are a worked example of a figure.
@@ -349,7 +353,7 @@ not a conversion of the deck — fine for reading through and checking the words
 wrong for anything presented or handed out. Say that when you hand it over:
 
 > ```bash
-> npx @marp-team/marp-cli courses/CSS-4008/versions/2026-FALL/materials/MODULE-06-slides.md --pdf --pdf-outlines -o output/CSS-4008-2026-FALL/DOC-4410-review.pdf
+> npx @marp-team/marp-cli courses/CSS-4008/materials/MODULE-06-slides.md --pdf --pdf-outlines -o output/CSS-4008-2026-FALL/DOC-4410-review.pdf
 > ```
 
 **No `pptxgenjs` or `sharp`.** Marp will write a `.pptx`, and it is worse than it
@@ -358,7 +362,7 @@ the four checks above runs — not the approval gate, not the plan match, not
 attribution, not overflow.
 
 > ```bash
-> npx @marp-team/marp-cli courses/CSS-4008/versions/2026-FALL/materials/MODULE-06-slides.md --pptx -o output/CSS-4008-2026-FALL/DOC-4410.pptx
+> npx @marp-team/marp-cli courses/CSS-4008/materials/MODULE-06-slides.md --pptx -o output/CSS-4008-2026-FALL/DOC-4410.pptx
 > ```
 
 Both need a Chromium-based browser or Firefox, which Marp drives through

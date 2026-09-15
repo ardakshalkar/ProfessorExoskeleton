@@ -31,7 +31,7 @@ import { type Drafted } from "./drafts.ts";
 import { IssueList } from "./issues.ts";
 export declare const DRAFT_MARKER = "-DRAFT-";
 /**
- * Where each collection lands, relative to `versions/<TERM>/`.
+ * Where each collection lands, relative to the course directory.
  *
  * Runtime records go to `records/`. Documents and resources go beside their
  * authored counterparts but in a separate `generated.yaml` — writing YAML back
@@ -103,7 +103,7 @@ export declare const HEADER: string;
 /**
  * Append approved records to their destination, one file per collection.
  *
- * Everything approvable lands under `versions/<TERM>/`, so `runDir` is the only
+ * Everything approvable lands in the course directory, so that is the only
  * destination there is.
  */
 export declare const writeRecords: (runDir: string, approval: Approval) => string[];

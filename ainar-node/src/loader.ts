@@ -1,9 +1,17 @@
 /**
  * Reading a course directory into a bundle. Ported from `ainar/loader.py`.
  *
- * The glob patterns are the contract with the layout and are copied across
- * verbatim — a course that loads in Python must load identically here, and a
- * pattern quietly dropped would mean a collection that is silently empty.
+ * The glob patterns are the contract with the layout, and a pattern quietly
+ * dropped would mean a collection that is silently empty.
+ *
+ * They no longer match Python's. Every pattern below used to begin
+ * `versions/<TERM>/`, because a course directory was a container of offerings
+ * and the term was a directory level. A workspace holds one run of one course,
+ * so that level said the same thing in every path it appeared in and bought
+ * nothing; `version.yaml` now sits beside `course.yaml` and still carries the
+ * term. `ainar migrate-layout` moves an old tree, and `archive/<TERM>/` at the
+ * workspace root — outside `courses/`, so outside every glob here — is where a
+ * finished offering goes.
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
@@ -23,28 +31,25 @@ const COLLECTIONS: Record<CollectionName, string[]> = {
   capabilities: ["capabilities.yaml"],
   modules: ["modules.yaml", "modules/*.yaml"],
   users: ["people/users.yaml", "people/*.yaml"],
-  versions: ["versions/*/version.yaml"],
-  enrollments: ["versions/*/enrollments.yaml"],
-  activities: ["versions/*/activities.yaml", "versions/*/activities/*.yaml"],
-  documents: ["versions/*/documents.yaml", "versions/*/documents/*.yaml", "versions/*/samples/documents*.yaml"],
-  resources: ["versions/*/resources.yaml", "versions/*/resources/*.yaml"],
-  assessments: ["versions/*/assessments.yaml", "versions/*/assessments/*.yaml"],
-  rubrics: ["versions/*/rubrics.yaml", "versions/*/rubrics/*.yaml"],
-  items: ["versions/*/items.yaml", "versions/*/items/*.yaml", "versions/*/assessments/items/*.yaml"],
-  item_models: ["versions/*/item-models.yaml", "versions/*/item-models/*.yaml"],
-  submissions: ["versions/*/samples/submissions*.yaml", "versions/*/records/submissions*.yaml"],
-  item_responses: ["versions/*/samples/item-responses*.yaml", "versions/*/records/item-responses*.yaml"],
-  evaluations: ["versions/*/samples/evaluations*.yaml", "versions/*/records/evaluations*.yaml"],
-  evidence: ["versions/*/samples/evidence*.yaml", "versions/*/records/evidence*.yaml"],
-  concept_states: ["versions/*/samples/concept-states*.yaml", "versions/*/records/concept-states*.yaml"],
-  capability_states: [
-    "versions/*/samples/capability-states*.yaml",
-    "versions/*/records/capability-states*.yaml",
-  ],
-  signals: ["versions/*/samples/signals*.yaml", "versions/*/records/signals*.yaml"],
-  interventions: ["versions/*/samples/interventions*.yaml", "versions/*/records/interventions*.yaml"],
-  events: ["versions/*/samples/events*.yaml", "versions/*/records/events*.yaml"],
-  action_items: ["versions/*/samples/action-items*.yaml", "versions/*/records/action-items*.yaml"],
+  versions: ["version.yaml"],
+  enrollments: ["enrollments.yaml"],
+  activities: ["activities.yaml", "activities/*.yaml"],
+  documents: ["documents.yaml", "documents/*.yaml", "samples/documents*.yaml"],
+  resources: ["resources.yaml", "resources/*.yaml"],
+  assessments: ["assessments.yaml", "assessments/*.yaml"],
+  rubrics: ["rubrics.yaml", "rubrics/*.yaml"],
+  items: ["items.yaml", "items/*.yaml", "assessments/items/*.yaml"],
+  item_models: ["item-models.yaml", "item-models/*.yaml"],
+  submissions: ["samples/submissions*.yaml", "records/submissions*.yaml"],
+  item_responses: ["samples/item-responses*.yaml", "records/item-responses*.yaml"],
+  evaluations: ["samples/evaluations*.yaml", "records/evaluations*.yaml"],
+  evidence: ["samples/evidence*.yaml", "records/evidence*.yaml"],
+  concept_states: ["samples/concept-states*.yaml", "records/concept-states*.yaml"],
+  capability_states: ["samples/capability-states*.yaml", "records/capability-states*.yaml"],
+  signals: ["samples/signals*.yaml", "records/signals*.yaml"],
+  interventions: ["samples/interventions*.yaml", "records/interventions*.yaml"],
+  events: ["samples/events*.yaml", "records/events*.yaml"],
+  action_items: ["samples/action-items*.yaml", "records/action-items*.yaml"],
 };
 
 const SHARED_CONCEPTS = "shared/concepts.yaml";

@@ -89,6 +89,11 @@ Note the vocabulary they use. If their course says "generalisation" where Stanfo
 says "bias-variance tradeoff", say so explicitly when you report; a professor
 should not have to work out that two names are one idea.
 
+Check `imports/` too. A syllabus or deck from another university that the
+professor has already collected is a better source than anything you will find
+by searching, and it is worth saying that you read it — half the value of this
+skill is telling them what they already had.
+
 ## 3. Search
 
 Look in this order, because the quality of what you can read drops sharply:
@@ -202,8 +207,8 @@ Do not run any of those unprompted. The report is the deliverable.
 This skill barely needs the CLI, which is why it is a reasonable first thing to
 try on a machine with nothing set up.
 
-Without `ainar context`, read `versions/<vN>/concepts.yaml`, `modules.yaml` and
-`versions/<TERM>/assessments/` directly for the comparison. Without a repository at
+Without `ainar context`, read `concepts.yaml`, `modules.yaml` and
+`assessments/` directly for the comparison. Without a repository at
 all, ask the professor for their syllabus or topic list and compare against that —
 say in the report that the comparison came from what they described rather than
 from a validated model, because the difference matters when they act on it.

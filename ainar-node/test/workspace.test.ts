@@ -19,24 +19,19 @@ import { Workspace, workspaceRootFor } from "../src/mcp/workspace.ts";
 
 const COURSE = "CSS-9001";
 
-/** A workspace holding one course with one run and `students` enrollments. */
+/** A workspace holding its one course run and `students` enrollments. */
 const scaffold = (students: number): string => {
   const root = mkdtempSync(join(tmpdir(), "ainar-ws-"));
   const course = join(root, "courses", COURSE);
-  mkdirSync(join(course, "versions", "v1"), { recursive: true });
-  mkdirSync(join(course, "versions", "2026-FALL"), { recursive: true });
+  mkdirSync(course, { recursive: true });
 
   writeFileSync(
     join(course, "course.yaml"),
     `course_id: ${COURSE}\ntitle: Cache Test\n`,
   );
   writeFileSync(
-    join(course, "versions", "v1", "version.yaml"),
-    `course_version_id: ${COURSE}-v1\ncourse_id: ${COURSE}\nversion: 1\n`,
-  );
-  writeFileSync(
-    join(course, "versions", "2026-FALL", "run.yaml"),
-    `course_version_id: ${COURSE}-2026-FALL\ncourse_version_id: ${COURSE}-v1\n` +
+    join(course, "version.yaml"),
+    `course_version_id: ${COURSE}-2026-FALL\ncourse_id: ${COURSE}\n` +
       `term: 2026-FALL\nstart_date: 2026-09-01\nend_date: 2026-12-20\n`,
   );
   writeEnrollments(root, students);
@@ -52,7 +47,7 @@ const writeEnrollments = (root: string, students: number): void => {
       `    student_id: ${id}\n`
     );
   }).join("");
-  const path = join(root, "courses", COURSE, "versions", "2026-FALL", "enrollments.yaml");
+  const path = join(root, "courses", COURSE, "enrollments.yaml");
   writeFileSync(path, `enrollments:\n${rows}`);
   // Windows mtime resolution can be coarse enough that two writes inside one
   // test share a timestamp, which would make this pass for the wrong reason.
@@ -89,7 +84,7 @@ test("an enrollment added by another process is picked up", () => {
 /** A workspace root, plus a nested path inside one of its courses. */
 const nested = (): { root: string; deep: string } => {
   const root = mkdtempSync(join(tmpdir(), "ainar-root-"));
-  const deep = join(root, "courses", COURSE, "versions", "2026-FALL");
+  const deep = join(root, "courses", COURSE, "records");
   mkdirSync(deep, { recursive: true });
   return { root, deep };
 };

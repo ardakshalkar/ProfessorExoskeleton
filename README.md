@@ -169,6 +169,10 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
       the term plan to one subgroup, and refuses a label the run does not use
 - [x] Draft/approve promotion (`ainar approve`, `--only`, `--reject`, `--dry-run`)
 - [x] `ainar new course` / `new run` scaffolding that validates as written
+- [x] One run of one course per workspace — no `versions/<TERM>/` level, with
+      `ainar migrate-layout` to move an old tree and `ainar archive-run` to
+      retire a finished term into `archive/<TERM>/`, text in full and binaries
+      by checksum
 - [ ] `readiness` in the action inbox — the checklist of what to build next,
       with its importance ordering. It exists in `inbox.py` and is not ported,
       which is one of the two golden fixtures that do not reproduce
@@ -312,6 +316,9 @@ draft arguments, unannounced results and student work quoted as examples, so
 
 ```
 courses/CSS-4008/              the example course — start here
+homework/<slug>/               starter repositories students fork
+imports/<label>/               material brought in from outside, not yet a record
+archive/<TERM>/                offerings that have finished
 shared/capabilities.yaml       capabilities, which outlive any one course
 datalayer/schema/              28 record schemas: what a course IS
 ainar-node/                    the model and the read layer, in TypeScript

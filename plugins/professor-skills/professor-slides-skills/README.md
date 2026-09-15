@@ -275,7 +275,7 @@ this machine's network and not of where you ran the command.
 ## Readings and books
 
 Not a new file. `delivery.resources` in the database,
-`versions/<TERM>/resources.yaml` in a course directory, `references:` in a flat
+`resources.yaml` in a course directory, `references:` in a flat
 file — the course model already has the right record with the right concept
 tagging, and a second list beside it would be a second thing to keep true.
 `pres context` returns the ones whose concepts overlap the module's.

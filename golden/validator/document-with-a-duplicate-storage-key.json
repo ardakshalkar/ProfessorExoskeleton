@@ -21,6 +21,6 @@
   ],
   "mutation": "document-with-a-duplicate-storage-key",
   "patch": {
-    "documents.1.storage_key": "courses/CSS-4008/versions/2026-FALL/materials/MODULE-06-slides.md"
+    "documents.1.storage_key": "courses/CSS-4008/materials/MODULE-06-slides.md"
   }
 }

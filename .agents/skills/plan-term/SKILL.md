@@ -68,7 +68,7 @@ bin/ainar stats CSS-4008
 
 You need four things before asking anything:
 
-- the run's `start_date` and `end_date`, from `versions/<TERM>/version.yaml`
+- the run's `start_date` and `end_date`, from `version.yaml`
 - the `course_version_id` every module you draft must name
 - the approved concepts, **in prerequisite order** — a term plan that teaches a
   concept before its prerequisite is the one failure here that ruins the gap
@@ -308,8 +308,8 @@ bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
 
 Tell them to edit first — move a week, change the weights, delete the meetings
 for a week they teach differently — and that `--only` and `--reject` approve a
-subset. Approved modules land in `versions/<vN>/modules/approved.yaml`; approved
-meetings land in `versions/<TERM>/activities/generated.yaml`, beside the authored
+subset. Approved modules land in `modules/approved.yaml`; approved
+meetings land in `activities/generated.yaml`, beside the authored
 schedule rather than inside it.
 
 Also give them the snippet to paste into `run.yaml`, so next term is one
@@ -332,8 +332,8 @@ is correct. It is the professor's own timetable.
 This degrades further than most, because the calendar is arithmetic and the
 concept order is a graph you can read.
 
-Read `versions/<TERM>/version.yaml` for `start_date`, `end_date` and `timezone`, and
-`versions/<vN>/concepts.yaml` for the graph. Then derive the dates by hand and do
+Read `version.yaml` for `start_date`, `end_date` and `timezone`, and
+`concepts.yaml` for the graph. Then derive the dates by hand and do
 these four checks yourself, because they are the ones that matter and all four
 are catchable by reading:
 
@@ -345,7 +345,7 @@ are catchable by reading:
 - **Weight sum.** Add the run's existing assessment weights to anything you
   propose. If it is not 1.0, propose no weights.
 
-Read `versions/<TERM>/activities.yaml` in full first — a run with meetings already
+Read `activities.yaml` in full first — a run with meetings already
 in it is being extended, and a duplicate `activity_id` is refused on load.
 
 Report all four as checked, and say plainly that the rest of `ainar validate`

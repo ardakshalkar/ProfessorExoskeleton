@@ -54,15 +54,15 @@ prerequisites, active assessments and class state.
 
 ## 2. Gather the rest
 
-- **The module** — `courses/<COURSE>/versions/<vN>/modules.yaml`: estimated
+- **The module** — `courses/<COURSE>/modules.yaml`: estimated
   hours, the full outcome and concept list.
 - **The previous module** — week − 1. You need to know what was just taught.
-- **Scheduled activities** — `versions/<TERM>/activities.yaml`, filtered by
+- **Scheduled activities** — `activities.yaml`, filtered by
   `module_id`. These are the sessions you are planning *for*; do not invent
   extra ones.
-- **Resources** — `versions/<TERM>/resources.yaml`, matched on the module's
+- **Resources** — `resources.yaml`, matched on the module's
   concepts.
-- **Class state** — `versions/<TERM>/samples/concept-states.yaml` and
+- **Class state** — `samples/concept-states.yaml` and
   `signals.yaml`. Also check `work/<RUN_ID>/` for recent drafts from
   `find-gaps`.
 

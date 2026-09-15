@@ -166,10 +166,11 @@ bin/ainar new run CSS-4201 2027-SPRING --start 2027-01-19 --end 2027-05-08
 ```
 
 Then write the stated facts into the scaffolded files: `course.yaml`,
-`versions/<TERM>/version.yaml`, `people/users.yaml`, and `outcomes.yaml` **only**
-where they dictated the wording. There is no `versions/v1/` and no `run.yaml`: one
-offering is one `versions/<TERM>/version.yaml`, and outcomes, concepts and modules
-sit at the course root carrying `course_id`.
+`version.yaml`, `people/users.yaml`, and `outcomes.yaml` **only**
+where they dictated the wording. There is no `versions/v1/`, no `run.yaml` and no
+term directory: a workspace holds one run of one course, one offering is one
+`version.yaml` beside `course.yaml`, and outcomes, concepts and modules sit at
+the course root carrying `course_id`.
 
 Every `TODO` you leave behind is deliberate and gets named in the report. Every
 `TODO` you fill in must trace to something they said in this conversation.
@@ -213,7 +214,7 @@ not.
 it by hand is transcription of a known layout rather than a reimplementation.
 
 Create `courses/<COURSE_ID>/course.yaml`, `outcomes.yaml`,
-`versions/<TERM>/version.yaml` and `people/users.yaml` yourself, following
+`version.yaml` and `people/users.yaml` yourself, following
 `references/working-without-the-cli.md`, which carries the layout and the
 identifier patterns. Keep every `TODO` you cannot fill from what
 the professor said.

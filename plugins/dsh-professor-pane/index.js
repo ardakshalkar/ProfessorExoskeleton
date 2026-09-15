@@ -319,9 +319,9 @@ const draftedPayload = (workspace, root, tool, runId, on) => {
  *
  * The button that asks the professor for a missing deadline tells the model
  * which record to edit, and the first version of that prompt guessed the file:
- * `versions/<term>/assessments/generated.yaml`, because that is where
+ * `assessments/generated.yaml`, because that is where
  * `approve` writes. It is a guess. `RECORD_GLOBS.assessments` accepts
- * `versions/*​/assessments.yaml` as well as `versions/*​/assessments/*.yaml`,
+ * `assessments.yaml` as well as `assessments/*.yaml`,
  * so a hand-authored assessment, or one an older import placed, sits somewhere
  * else — and a prompt naming the wrong file is worse than one naming none,
  * because the model will helpfully edit or create it.
@@ -343,7 +343,7 @@ const withRecordPaths = (data, root, courseId, term, entries) => {
   }
   if (!wanted.size) return data;
 
-  const base = join(root, "courses", courseId, "versions", term);
+  const base = join(root, "courses", courseId);
   const candidates = [join(base, "assessments.yaml")];
   try {
     for (const name of readdirSync(join(base, "assessments"))) {
@@ -406,7 +406,7 @@ const walkRevision = (root) => {
   let files = 0;
 
   const walk = (directory, depth) => {
-    // Deep enough for versions/<term>/<collection>/<file>.yaml with room to
+    // Deep enough for <collection>/<file>.yaml with room to
     // spare, shallow enough that a symlink loop cannot spin here forever.
     if (depth > 8) return;
     let entries;
@@ -652,7 +652,7 @@ const preferenceLayerPaths = (root, courseId, term) => {
       candidates.push({
         scope: "run",
         label: `${courseId} ${term}`,
-        path: join(root, "courses", courseId, "versions", term, "preferences.yaml"),
+        path: join(root, "courses", courseId, "preferences.yaml"),
       });
     }
   }
@@ -1433,7 +1433,7 @@ const canvasSelections = (run) => {
 
 /** The run record's own file, which is the one place `versions` may live. */
 const versionRecordPath = (root, courseId, term) =>
-  join(root, "courses", courseId, "versions", term, "version.yaml");
+  join(root, "courses", courseId, "version.yaml");
 
 /**
  * Everything the Integrations tab draws, as JSON for the browser half.
@@ -1833,8 +1833,8 @@ const writeCanvasSelection = (workspace, root, runId, selections) => {
  * The fourth writer here and the only one that edits a file other than
  * `version.yaml`, which brings two things worth stating.
  *
- * **Which file.** `RECORD_GLOBS` accepts `versions/<term>/assessments.yaml`
- * and `versions/<term>/assessments/*.yaml`, so an assessment sits wherever it
+ * **Which file.** `RECORD_GLOBS` accepts `assessments.yaml`
+ * and `assessments/*.yaml`, so an assessment sits wherever it
  * was authored or approved into. The file is found by scanning for the id as
  * a value of `assessment_id`, the way `withRecordPaths` does for the same
  * reason: guessing `generated.yaml` is right until somebody hand-authors one,
@@ -2181,7 +2181,7 @@ const sendJson = (res, status, value) =>
  * homework is titled "Homework" four times over drew four identical rows, and
  * telling the professor WHICH one carries no deadline is the only thing the
  * Deadlines section is for. The identifier is what distinguishes them, and it
- * is also the string they would grep for under `versions/<term>/assessments/`
+ * is also the string they would grep for under `assessments/`
  * or hand to `ainar` — so it is the useful half of the pair to print, not a
  * debugging leftover.
  *
@@ -3143,7 +3143,7 @@ const checklistReport = (workspace, root, runId) => {
   // present or absent, never proposed, and a "drafted" column against them
   // would be a column that can only ever read zero.
   const fixed = [
-    { label: "Instructor named", have: countOf(record.run?.instructors), hint: "versions/<term>/version.yaml" },
+    { label: "Instructor named", have: countOf(record.run?.instructors), hint: "version.yaml" },
     { label: "Students enrolled", have: enrolled, hint: "ainar roster import" },
   ];
 
@@ -3640,11 +3640,11 @@ const withStudentNames = (data) => {
  *
  * Three states, and telling them apart is most of what this view is for:
  *
- * * **loaded** — read from `versions/<term>/enrollments.yaml`, where
+ * * **loaded** — read from `enrollments.yaml`, where
  *   `ainar roster import` writes the pseudonyms, or from
- *   `versions/<term>/samples/enrollments*.yaml`. Fixtures are announced as
+ *   `samples/enrollments*.yaml`. Fixtures are announced as
  *   fixtures; a real roster is not.
- * * **refused** — an enrollments file sits under `versions/<term>/records/`,
+ * * **refused** — an enrollments file sits under `records/`,
  *   the location reserved for the rows Supabase owns, and the loader would not
  *   read it (`storage.forbidden`). Drawing an empty list here would describe a
  *   course nobody had enrolled in, which is a different and false thing.

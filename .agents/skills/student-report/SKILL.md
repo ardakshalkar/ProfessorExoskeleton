@@ -114,7 +114,7 @@ hand-over.
 
 ## Without the CLI
 
-Read `versions/<TERM>/records/` and `samples/`, filtered to that one identifier,
+Read `records/` and `samples/`, filtered to that one identifier,
 instead of `ainar student`.
 
 One distinction becomes harder and matters more. With the package, a blank

@@ -69,7 +69,7 @@ tuning](MODULE-06-slides-fig-01-split.svg)
 ```
 
 A sibling-relative link survives the move into
-`courses/<C>/versions/<TERM>/materials/` unchanged, because both directories are
+`courses/<C>/materials/` unchanged, because both directories are
 flat. An absolute or `figures/`-prefixed path does not — it breaks on approval,
 and it breaks silently, in a deck nobody opens until the lecture.
 

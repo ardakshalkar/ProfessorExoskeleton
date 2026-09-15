@@ -63,9 +63,9 @@ export interface LinkResult {
   count: number;
 }
 
-/** Every file under `versions/<TERM>/` that could hold an assessment record. */
-const candidateFiles = (root: string, courseId: string, term: string): string[] => {
-  const base = join(root, "courses", courseId, "versions", term);
+/** Every file in the course directory that could hold an assessment record. */
+const candidateFiles = (root: string, courseId: string): string[] => {
+  const base = join(root, "courses", courseId);
   const found = [join(base, "assessments.yaml")];
   try {
     for (const name of readdirSync(join(base, "assessments")).sort()) {
@@ -117,7 +117,6 @@ const recordNodes = (contents: any): any[] => {
 export const writeAssessmentLinks = (
   root: string,
   courseId: string,
-  term: string,
   links: Map<string, AssignmentLink> | Record<string, AssignmentLink>,
 ): LinkResult => {
   const wanted = links instanceof Map ? links : new Map(Object.entries(links));
@@ -125,7 +124,7 @@ export const writeAssessmentLinks = (
 
   const byFile = new Map<string, string[]>();
   const unplaced = new Set(wanted.keys());
-  for (const path of candidateFiles(root, courseId, term)) {
+  for (const path of candidateFiles(root, courseId)) {
     if (!unplaced.size) break;
     let text: string;
     try {
@@ -142,7 +141,7 @@ export const writeAssessmentLinks = (
   }
   if (unplaced.size) {
     throw new Error(
-      `No record file under courses/${courseId}/versions/${term}/ holds ` +
+      `No record file under courses/${courseId}/ holds ` +
         `${[...unplaced].sort().join(", ")}. Nothing was written.`,
     );
   }

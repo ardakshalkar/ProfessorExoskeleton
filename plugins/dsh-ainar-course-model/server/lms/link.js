@@ -51,9 +51,9 @@ import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseDocument } from "yaml";
 import { CANVAS_ASSIGNMENTS_KEY, CANVAS_ASSIGNMENT_KEY, LMS_EXTENSION } from "./index.js";
-/** Every file under `versions/<TERM>/` that could hold an assessment record. */
-const candidateFiles = (root, courseId, term) => {
-    const base = join(root, "courses", courseId, "versions", term);
+/** Every file in the course directory that could hold an assessment record. */
+const candidateFiles = (root, courseId) => {
+    const base = join(root, "courses", courseId);
     const found = [join(base, "assessments.yaml")];
     try {
         for (const name of readdirSync(join(base, "assessments")).sort()) {
@@ -102,13 +102,13 @@ const recordNodes = (contents) => {
  * professor writes by hand, and a file whose shape depends on who last touched
  * it is a file that diffs badly.
  */
-export const writeAssessmentLinks = (root, courseId, term, links) => {
+export const writeAssessmentLinks = (root, courseId, links) => {
     const wanted = links instanceof Map ? links : new Map(Object.entries(links));
     if (!wanted.size)
         return { written: [], count: 0 };
     const byFile = new Map();
     const unplaced = new Set(wanted.keys());
-    for (const path of candidateFiles(root, courseId, term)) {
+    for (const path of candidateFiles(root, courseId)) {
         if (!unplaced.size)
             break;
         let text;
@@ -128,7 +128,7 @@ export const writeAssessmentLinks = (root, courseId, term, links) => {
         }
     }
     if (unplaced.size) {
-        throw new Error(`No record file under courses/${courseId}/versions/${term}/ holds ` +
+        throw new Error(`No record file under courses/${courseId}/ holds ` +
             `${[...unplaced].sort().join(", ")}. Nothing was written.`);
     }
     const written = [];

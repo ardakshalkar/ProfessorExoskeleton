@@ -1469,7 +1469,7 @@ const runAssignment = async (
     const value: AssignmentLink = single
       ? single
       : Object.fromEntries([...created].filter(([group]) => group !== ""));
-    const recorded = writeAssessmentLinks(root, run.course_id, run.term, {
+    const recorded = writeAssessmentLinks(root, run.course_id, {
       [assessment.assessment_id]: value,
     });
     for (const file of recorded.written) deps.out(`linked: ${file}`);

@@ -22,23 +22,27 @@ Pick a folder — anywhere; `~/courses/` is fine — and inside it:
   outcomes.yaml                     what a student must demonstrate
   concepts.yaml                     knowledge structure + prerequisites
   modules.yaml                      teaching weeks
-  versions/2026-FALL/
-    version.yaml                    one semester
-    activities.yaml                 lectures, labs, seminars
-    resources.yaml                  teaching material metadata
-    enrollments.yaml                pseudonyms only
-    assessments/*.yaml              assessments with inline rubrics
-    items/*.yaml                    concept-tagged questions
-    materials/*.md                  slides, handouts
-    records/*.yaml                  the actual semester
+  version.yaml                      the one semester this workspace holds
+  activities.yaml                   lectures, labs, seminars
+  resources.yaml                    teaching material metadata
+  enrollments.yaml                  pseudonyms only
+  assessments/*.yaml                assessments with inline rubrics
+  items/*.yaml                      concept-tagged questions
+  materials/*.md                    slides, handouts
+  records/*.yaml                    the actual semester
+homework/<slug>/                    starter repositories students fork
+imports/<label>/                    material brought in from outside
 work/<RUN_ID>/                      drafts — proposals, not content
+archive/<TERM>/                     offerings that have finished
 ```
 
 Outcomes, concepts and modules sit at the **course** root and carry `course_id`,
 not `course_version_id`: an outcome outlives the term that first taught it, and
 student evidence from an earlier semester points at `LO-01`. One offering is one
-`versions/<TERM>/version.yaml` — there is no separate version record and no
-`runs/` directory. See `docs/version-run-merge.md`.
+`version.yaml` beside `course.yaml` — there is no separate version record, no
+`runs/` directory and no term directory, because a workspace holds one run of
+one course. A finished offering moves to `archive/<TERM>/` at the workspace
+root. See `docs/version-run-merge.md`.
 
 Identifiers are permanent and follow fixed patterns:
 
@@ -65,9 +69,9 @@ citation. Write the identifier.
 | Instead of | Read |
 | --- | --- |
 | `ainar context <RUN>` | `course.yaml`, the version's `outcomes/concepts/modules`, and the run's `run/activities/resources` |
-| `ainar rubric <ASSESSMENT>` | `versions/<TERM>/assessments/*.yaml` — the rubric is inline — plus any `items/*.yaml` naming that assessment |
+| `ainar rubric <ASSESSMENT>` | `assessments/*.yaml` — the rubric is inline — plus any `items/*.yaml` naming that assessment |
 | `ainar stats` | count the entries |
-| `ainar student <ID>` | `versions/<TERM>/records/*.yaml` and `samples/*.yaml`, filtered to that identifier |
+| `ainar student <ID>` | `records/*.yaml` and `samples/*.yaml`, filtered to that identifier |
 | `ainar inbox <RUN>` | assessment due dates in `assessments/`, plus whatever is missing from `records/` |
 | `ainar blueprint <RUN>` | `outcomes.yaml` for declared weights, `assessments/` for what exists, `concepts.yaml` for what is taught |
 

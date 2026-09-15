@@ -94,6 +94,7 @@ import {
 } from "../src/roster.ts";
 import { dump } from "../src/yaml-out.ts";
 import { SCHEMA_NAMES, jsonSchemaFor, shapeText } from "../src/schema.ts";
+import { archiveRun, migrateLayout } from "../src/layout.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
 import { LAYOUT, measureDeck } from "../src/deck.ts";
 import { buildMaterials } from "../src/materials.ts";
@@ -250,6 +251,8 @@ const HELP = `ainar — the AINAR course model CLI
   schema [ENTITY] [--json] [--out DIR]     what a record must look like
   new course COURSE_ID [--title T] [--credits N] [--department D]
   new run COURSE_ID TERM --start YYYY-MM-DD --end YYYY-MM-DD
+  migrate-layout [COURSE_ID…] [--dry-run]  move off versions/<TERM>/, once
+  archive-run [--force] [--dry-run]        pack the finished term into archive/
   deck fit FILE.md [--verbose]            will each slide fit on the page
 
   Enrollments hold pseudonyms only. Names, numbers and emails go to
@@ -522,9 +525,7 @@ try {
       const asked = rest[0] ?? flag("course-version") ?? flag("run");
       const bundle = asked ? forRun(asked) : onlyCourse();
       const resolvedRun = asked ?? soleRun(bundle);
-      const run = runById(bundle).get(resolvedRun) as { term: string };
       const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
-      const runDir = join(courseDir, "versions", run.term);
 
       const produced = extractEvidence(bundle, resolvedRun);
       if (produced.length === 0) {
@@ -565,7 +566,7 @@ try {
         notes: [] as string[],
       };
       out("");
-      for (const path of writeRecords(runDir, approval as never)) {
+      for (const path of writeRecords(courseDir, approval as never)) {
         out(`wrote ${relative(root, path)}`);
       }
       out(`\n${produced.length} evidence record(s) derived.`);
@@ -583,7 +584,6 @@ try {
       const resolvedRun = asked ?? soleRun(bundle);
       const run = runById(bundle).get(resolvedRun) as { term: string; timezone?: string };
       const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
-      const runDir = join(courseDir, "versions", run.term);
 
       // The same stamp helper `approve` uses, so a state derived at the same
       // moment as an approval carries the same instant in the same timezone.
@@ -628,7 +628,7 @@ try {
         skipped: [] as string[],
         notes: [] as string[],
       };
-      for (const path of writeRecords(runDir, approval as never)) {
+      for (const path of writeRecords(courseDir, approval as never)) {
         out(`wrote ${relative(root, path)}`);
       }
       out(`\n${produced.length} capability state(s) derived.`);
@@ -809,13 +809,10 @@ try {
       }
 
       const course = bundle.course.course_id;
-      const term = runId.startsWith(`${course}-`) ? runId.slice(course.length + 1) : runId;
       const report = buildMaterials({
         root,
         courseVersionId: runId,
-        materialsDir:
-          flag("materials") ??
-          join(root, "courses", course, "versions", term, "materials"),
+        materialsDir: flag("materials") ?? join(root, "courses", course, "materials"),
         only: flag("only") ?? null,
         pdf: !args.includes("--no-pdf"),
         dryRun: args.includes("--dry-run"),
@@ -1096,9 +1093,7 @@ try {
       const courseVersionId = flag("course-version") ?? flag("run");
       const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
       const resolvedRun = courseVersionId ?? soleRun(bundle);
-      const term = (runById(bundle).get(resolvedRun) as { term: string }).term;
       const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
-      const runDir = join(courseDir, "versions", term);
 
       const issues = new IssueList();
       const drafted = loadDrafts(resolve(draftsDir), issues);
@@ -1137,7 +1132,7 @@ try {
       if (approval.skipped.length) out(`\n  skipped: ${[...approval.skipped].sort().join(", ")}`);
 
       const dryRun = args.includes("--dry-run");
-      const staged = stageDocuments(approval, { root, runDir, issues, dryRun });
+      const staged = stageDocuments(approval, { root, courseDir, issues, dryRun });
 
       const merged = mergeDrafts(bundle, Object.fromEntries(approval.records));
 
@@ -1189,7 +1184,7 @@ try {
         break;
       }
 
-      for (const path of writeRecords(runDir, approval)) {
+      for (const path of writeRecords(courseDir, approval)) {
         out(`wrote ${relative(root, path).split(/[\\/]/).join("/")}`);
       }
       out(`\n${total(approval)} record(s) approved. The drafts in ${draftsDir} can now be removed.`);
@@ -1344,7 +1339,6 @@ try {
         const courseVersionId = flag("run") ?? flag("course-version");
         const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
         const resolvedRun = courseVersionId ?? soleRun(bundle);
-        const run = runById(bundle).get(resolvedRun) as { term: string };
         const courseId = (bundle.course as { course_id: string }).course_id;
 
         const salt = loadSalt(directory);
@@ -1374,18 +1368,15 @@ try {
           process.exit(1);
         }
 
-        // `versions/<term>/`, where the loader reads enrollments. Python still
-        // writes `runs/<term>/`, which is the layout from before version and run
-        // were merged — a file written there today is a file nothing loads.
+        // The course directory, where the loader reads enrollments.
         const courseDir = join(root, "courses", courseId);
-        const path = join(courseDir, "versions", run.term, "enrollments.yaml");
+        const path = join(courseDir, "enrollments.yaml");
 
         /*
-         * Two runs can share a term — a course taught to two sections is two
-         * CourseVersions with one `term` between them, and the loader globs
-         * `versions/*​/enrollments.yaml`, so both sections' rows live in this one
-         * file. Reconciling has to see only the rows belonging to the run being
-         * imported, and writing has to put the other run's rows back untouched.
+         * A course taught to two sections is two CourseVersions with one `term`
+         * between them, and they share this one file. Reconciling has to see
+         * only the rows belonging to the run being imported, and writing has to
+         * put the other run's rows back untouched.
          */
         const onDisk = readEnrollments(path);
         const mine = onDisk.filter((entry) => entry.course_version_id === resolvedRun);
@@ -1545,6 +1536,91 @@ try {
 
       console.error("usage: new course COURSE_ID  |  new run COURSE_ID TERM --start … --end …");
       process.exit(1);
+    }
+
+    /**
+     * The one-way move off `versions/<TERM>/`.
+     *
+     * Run once per workspace. `--dry-run` lists every move first, which is what
+     * anyone should do on a workspace holding a real term's records.
+     */
+    case "migrate-layout": {
+      const dryRun = args.includes("--dry-run");
+      const courseDirs = rest.length
+        ? rest.map((id) => join(root, "courses", id))
+        : discoverCourses(root);
+      if (!courseDirs.length) throw new Error("no courses found under courses/");
+
+      for (const courseDir of courseDirs) {
+        const name = relative(root, courseDir).split(/[\\/]/).join("/");
+        const result = migrateLayout(courseDir, { dryRun });
+        if (!result.moved.length && !result.left.length) {
+          out(`${name}: already flat, nothing to move`);
+          continue;
+        }
+        out(`${name}${dryRun ? " (dry run)" : ""}`);
+        for (const { from, to } of result.moved) {
+          out(
+            `  ${dryRun ? "would move" : "moved"} ` +
+              `${relative(courseDir, from).split(/[\\/]/).join("/")} -> ` +
+              `${relative(courseDir, to).split(/[\\/]/).join("/")}`,
+          );
+        }
+        for (const { path, references } of result.rewritten) {
+          out(
+            `  ${dryRun ? "would rewrite" : "rewrote"} ${references} recorded path(s) in ` +
+              `${relative(courseDir, path).split(/[\\/]/).join("/")}`,
+          );
+        }
+        // Named rather than moved or deleted: `.superseded/` and `.bak-*` files
+        // are the professor's own filing, and guessing at what they meant by
+        // them is exactly the kind of tidying nobody asked for.
+        for (const { path, why } of result.left) {
+          out(`  left alone (${why}): ${relative(courseDir, path).split(/[\\/]/).join("/")}`);
+        }
+      }
+      break;
+    }
+
+    /**
+     * Pack a finished offering away and clear the live record for the next one.
+     *
+     * Text in full, binaries as a checksum manifest — see `src/layout.ts` for
+     * why that split and not another.
+     */
+    case "archive-run": {
+      const dryRun = args.includes("--dry-run");
+      const bundle = onlyCourse();
+      const runs = bundle.versions as { course_version_id: string; term: string; status?: string }[];
+      if (runs.length !== 1) {
+        throw new Error(`this workspace holds ${runs.length} runs; it should hold one`);
+      }
+      const [run] = runs;
+      if (run.status !== "completed" && !args.includes("--force")) {
+        throw new Error(
+          `${run.course_version_id} is ${run.status ?? "not marked completed"}. ` +
+            "Set `status: completed` in version.yaml when the term is over, or pass --force.",
+        );
+      }
+      const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
+      const result = archiveRun({ root, courseDir, term: run.term, dryRun });
+
+      out(`${dryRun ? "Would archive" : "Archived"} ${run.course_version_id}`);
+      out(`  to ${relative(root, result.archiveDir).split(/[\\/]/).join("/")}`);
+      out(`  ${result.copied.length} text file(s) ${dryRun ? "would be copied" : "copied"}`);
+      if (result.manifested.length) {
+        const bytes = result.manifested.reduce((total, entry) => total + entry.bytes, 0);
+        out(
+          `  ${result.manifested.length} binary file(s) recorded by checksum, ` +
+            `not copied (${(bytes / 1024 / 1024).toFixed(1)} MB left where they are)`,
+        );
+      }
+      if (!dryRun) {
+        for (const name of result.cleared) out(`  cleared ${name}`);
+        out("\nThe course keeps its outcomes, concepts, modules and people.");
+        out("Give it the next offering with `ainar new run`.");
+      }
+      break;
     }
 
     /**

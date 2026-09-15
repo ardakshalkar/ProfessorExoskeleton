@@ -66,7 +66,7 @@ bin/ainar stats CSS-4008
 ```
 
 A course that already has concepts is being **extended**, not populated. Load
-`versions/<vN>/concepts.yaml` and read every existing concept and alias before
+`concepts.yaml` and read every existing concept and alias before
 proposing anything. The single most damaging output here is a second concept
 for something the course already names — evidence then splits across two
 identifiers and neither shows the truth.
@@ -77,6 +77,11 @@ Note the `course_version_id` you are proposing into. Every draft needs it.
 
 Read what the user pointed at, whole. A syllabus, a lecture plan, a set of
 slides, a textbook table of contents, an existing module list.
+
+If they pointed at nothing, look in `imports/` before asking. That is where
+material from outside the course is dropped — a colleague's deck, last year's
+paper, a PDF someone sent — and "use the thing I put there" is the usual reason
+it exists. Say which file you took, so a wrong guess is visible immediately.
 
 Concepts come from what the material **teaches**, not from its section
 headings. "Week 5: Evaluation" is a heading; the concepts underneath it might
@@ -234,7 +239,7 @@ bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
 Tell them they can edit the draft first — rename a concept, delete one, redraw
 an edge — and that `--only` and `--reject` approve a subset. Approval strips
 the `-DRAFT-` marker, stamps `extensions.approval` with who accepted it, and
-writes the result into `versions/<vN>/concepts/approved.yaml`, which is course
+writes the result into `concepts/approved.yaml`, which is course
 content they can edit freely from then on.
 
 Then name what comes next, because a concept map on its own teaches nobody:
@@ -248,7 +253,7 @@ the week count here.
 This skill degrades well, because its inputs are a document and a list of
 concepts, and both can be read.
 
-Read `versions/<vN>/concepts.yaml` in full — every title **and every alias** —
+Read `concepts.yaml` in full — every title **and every alias** —
 before proposing anything. Then do these two checks yourself, because they are
 the two that matter most here and both are catchable by reading:
 

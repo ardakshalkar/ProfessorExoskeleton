@@ -116,7 +116,7 @@ const drive = async (
  */
 const linkable = (): { root: string; path: string } => {
   const root = mkdtempSync(join(tmpdir(), "ainar-push-"));
-  const dir = join(root, "courses", "CSS-4008", "versions", "2026-FALL");
+  const dir = join(root, "courses", "CSS-4008");
   mkdirSync(dir, { recursive: true });
   const path = join(dir, "assessments.yaml");
   writeFileSync(

@@ -185,7 +185,7 @@ course page from a workspace with no CLI in it, and a refusal would be the wrong
 answer to a machine that has not had `pip install` run on it.
 
 Read the model directly: `courses/<C>/course.yaml`,
-`versions/<TERM>/version.yaml`, `modules.yaml`, `activities.yaml` and
+`version.yaml`, `modules.yaml`, `activities.yaml` and
 `assessments/`. Weeks, what is taught in each, meetings with their dates,
 assessments with the weights **as recorded**. Every one of those is copying a
 value out of a file, which is the safe half of what the command does.

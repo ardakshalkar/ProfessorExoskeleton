@@ -45,6 +45,11 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Agent drafts, which every skill already describes as ephemeral. Nothing here
+# is a record until `ainar approve` moves it into `courses/`, and a draft that
+# reached a commit would be a proposal wearing a decision's clothes.
+work/
+
 # Rendered decks, and the scratch directories that build them.
 #
 # `pres render` writes to `<cwd>/output` by default, so decks built from this

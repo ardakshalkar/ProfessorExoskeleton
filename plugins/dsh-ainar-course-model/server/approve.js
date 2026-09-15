@@ -34,7 +34,7 @@ import { DRAFTABLE } from "./drafts.js";
 import { dump } from "./yaml-out.js";
 export const DRAFT_MARKER = "-DRAFT-";
 /**
- * Where each collection lands, relative to `versions/<TERM>/`.
+ * Where each collection lands, relative to the course directory.
  *
  * Runtime records go to `records/`. Documents and resources go beside their
  * authored counterparts but in a separate `generated.yaml` — writing YAML back
@@ -423,7 +423,7 @@ const append = (path, collection, items, header) => {
 /**
  * Append approved records to their destination, one file per collection.
  *
- * Everything approvable lands under `versions/<TERM>/`, so `runDir` is the only
+ * Everything approvable lands in the course directory, so that is the only
  * destination there is.
  */
 export const writeRecords = (runDir, approval) => {

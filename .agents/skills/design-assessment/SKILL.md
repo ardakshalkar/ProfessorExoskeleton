@@ -302,7 +302,7 @@ Then set `instructions_document_id: DOC-DRAFT-A06-BRIEF` on the assessment, so t
 model knows which document is the brief rather than leaving the link implicit.
 
 Markdown, not `.docx` or `.pdf`: it diffs, it reviews, and it converts afterwards.
-Approval moves it into `courses/<C>/versions/<TERM>/materials/` and computes
+Approval moves it into `courses/<C>/materials/` and computes
 `size_bytes` and `checksum` from the file — never write those yourself.
 
 What the brief contains: the task, what to hand in, when, how it is marked. **The
@@ -313,15 +313,25 @@ you can give them. What it must never contain is in §6.
 ## 5. Scaffold the repository, if the work arrives as one
 
 When `delivery: github_repo`, students need something to fork. Build the starter
-repository as files on disk, under `work/<RUN_ID>/<ASSESSMENT_ID>-repo/`:
+repository as files on disk, under `homework/<slug>/` at the workspace root:
 
 ```
-work/CSS-4008-2026-FALL/ASSESSMENT-DRAFT-06-repo/
+homework/hw3-retrieval-over-a-corpus/
   README.md          the brief, or a short version of it linking to the document
   .gitignore         for the language the work is in
   src/ or notebooks/ whatever the task needs, with the parts students fill in
   tests/             only if the task is checked by tests students may run
 ```
+
+The slug is short, lowercase and says what the work is — `hw1-llm-apis-and-tokenizers`,
+`hw2-json-grant-assistant` — because it becomes the repository name students see,
+and `ASSESSMENT-DRAFT-06` means nothing to them.
+
+`homework/` is neither `work/` nor `courses/`, and that is deliberate. The
+assessment *record* is still a draft that goes through `work/<RUN_ID>/` and
+`ainar approve` like everything else; the starter repository is not a record but
+the material itself, it outlives the draft marker, and it gets adapted for the
+next offering rather than rewritten. Build it where it will live.
 
 Then **stop, and hand over the commands.** Creating a repository is an outward
 facing act — the moment it exists, it has a URL that can be found — and it belongs
@@ -329,9 +339,9 @@ to a person for the same reason `ainar approve` and `lms push --target canvas-ap
 do. Never run `gh repo create`, `git push`, `gh api`, or anything that publishes.
 
 ```bash
-cd work/CSS-4008-2026-FALL/ASSESSMENT-DRAFT-06-repo
-gh repo create narxoz-css4007/midterm-2-starter --private --source=. --push
-gh repo edit narxoz-css4007/midterm-2-starter --template
+cd homework/hw3-retrieval-over-a-corpus
+gh repo create narxoz-css4007/hw3-retrieval-over-a-corpus --private --source=. --push
+gh repo edit narxoz-css4007/hw3-retrieval-over-a-corpus --template
 ```
 
 Say plainly what those do: the first creates it and pushes, the second marks it as
@@ -339,14 +349,19 @@ a template so students get a clean history rather than a fork of your commits.
 `--private` is in there deliberately — say that going public is their decision and
 that a public starter repo is also public to next year's cohort.
 
-Once it exists, they record it on the assessment so the model knows where the work
-comes from:
+Once it exists, they record it on the assessment, both halves — where it lives on
+their machine and where it lives for students — so the model can find the files
+without being told again:
 
 ```yaml
 extensions:
   github:
-    template_repo: narxoz-css4007/midterm-2-starter
+    local_path: homework/hw3-retrieval-over-a-corpus
+    template_repo: narxoz-css4007/hw3-retrieval-over-a-corpus
 ```
+
+Write `local_path` when you scaffold, even before the repository exists — it is
+the folder you just built, and it is true whether or not anything was published.
 
 Ask them whether it needs a `LICENSE`, and do not choose one. What students may do
 with the starter code, and what they may do with their own answer afterwards, is a

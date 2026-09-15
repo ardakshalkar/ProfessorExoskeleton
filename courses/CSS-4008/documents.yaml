@@ -12,7 +12,7 @@
 documents:
   - document_id: DOC-4410
     title: Model evaluation and overfitting — slides
-    storage_key: courses/CSS-4008/versions/2026-FALL/materials/MODULE-06-slides.md
+    storage_key: courses/CSS-4008/materials/MODULE-06-slides.md
     mime_type: text/markdown
     original_filename: MODULE-06-slides.md
     course_version_id: CSS-4008-2026-FALL
@@ -115,7 +115,7 @@ documents:
   # markdown is the only kind that survives that move.
   - document_id: DOC-4411
     title: One dataset, three jobs — train, validation and test
-    storage_key: courses/CSS-4008/versions/2026-FALL/materials/MODULE-06-slides-fig-01-split.svg
+    storage_key: courses/CSS-4008/materials/MODULE-06-slides-fig-01-split.svg
     mime_type: image/svg+xml
     original_filename: MODULE-06-slides-fig-01-split.svg
     course_version_id: CSS-4008-2026-FALL

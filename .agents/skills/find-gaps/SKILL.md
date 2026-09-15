@@ -47,12 +47,12 @@ bin/ainar context CSS-4008-2026-FALL --date 2026-10-08
 
 The `learning_model.concepts` array gives you the prerequisite graph. Then read:
 
-- `versions/<TERM>/samples/evidence.yaml` — what students demonstrated, at what
+- `samples/evidence.yaml` — what students demonstrated, at what
   level, from which source.
-- `versions/<TERM>/samples/evaluations.yaml` — criterion-level results. An approved
+- `samples/evaluations.yaml` — criterion-level results. An approved
   decision is fact; a suggestion is not.
-- `versions/<TERM>/samples/concept-states.yaml` — the previous estimate, if any.
-- `versions/<TERM>/items/` and `samples/item-responses.yaml` — **your sharpest
+- `samples/concept-states.yaml` — the previous estimate, if any.
+- `items/` and `samples/item-responses.yaml` — **your sharpest
   source.** See below.
 - `work/<RUN_ID>/` — drafts from `grade-submission` that have not been approved
   yet. Weigh these lower and say so.
@@ -173,7 +173,7 @@ bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
 ```
 
 Approval strips the `-DRAFT-` marker, stamps interventions with the approver,
-and writes the records into `courses/.../versions/<TERM>/records/`.
+and writes the records into `courses/.../records/`.
 
 ## Without the CLI
 
