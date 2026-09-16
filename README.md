@@ -332,7 +332,7 @@ plugins/
   dsh-professor-brand/         this host's own mark and wordmark, not DeepSeek's
   professor-skills/            19 skills: slides, assessment, grading, publishing
   dsh-sample/                  a minimal plugin, kept as the contract example
-.agents/skills/                16 course-level skills: planning, gaps, dashboards
+skills/                        17 course-level skills: planning, gaps, dashboards
 bin/sample[.cmd]               the front door: set DSH_HOME, then exec dsh
 .dsh/profiles/sample/          how this host is composed
 deploy/                        the same host for more than one professor:

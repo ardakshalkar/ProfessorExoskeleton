@@ -193,9 +193,7 @@ test("a dashboard template is refused by the public page", () => {
   // Each set declares its surface in `templates.yaml`, so pointing `page` at a
   // dashboard's style sheet is stopped at the command rather than discovered in
   // the rendered page.
-  const dashboard = join(
-    ROOT, ".agents", "skills", "course-dashboard", "templates", "plain.css",
-  );
+  const dashboard = join(ROOT, "skills", "course-dashboard", "templates", "plain.css");
   assert.throws(
     () => loadStyle(dashboard, "course-page", ROOT),
     (error: Error) =>

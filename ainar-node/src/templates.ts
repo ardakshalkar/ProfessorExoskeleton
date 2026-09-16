@@ -49,14 +49,16 @@ export const INDEX = "templates.yaml";
 /**
  * Where a bare `--template plain` is looked for.
  *
- * `.agents/skills` is first and is this project's own layout, which upstream did
- * not have: `exo setup` unpacks the skills there, and every `templates.yaml` in
- * this workspace is under it. The two after it are upstream's, kept so a
- * workspace laid out the other way still resolves. All three are tried and the
- * failure names all three, because "no such template" without a path sends
- * someone reading source.
+ * `skills` is first and is this project's own layout, which upstream did not
+ * have: every `templates.yaml` in this workspace is under it. `.agents/skills`
+ * is where those same skills lived until 2026-09-16 and is kept so a checkout
+ * from before the move still resolves; the two after it are upstream's, kept
+ * for a workspace laid out that way. All four are tried and the failure names
+ * all four, because "no such template" without a path sends someone reading
+ * source.
  */
 export const SEARCH = [
+  "skills",
   join(".agents", "skills"),
   join(".claude", "skills"),
   join("plugin", "ainar-exoskeleton", "skills"),
@@ -228,8 +230,8 @@ const lookedIn = (root: string, surface: string): string[] =>
  * A `--template` argument as a path, whether it arrived as one or as an id.
  *
  * `--template print` is what a professor types and `--template
- * .agents/skills/course-page/templates/print.css` is what a skill passes; both
- * end up here.
+ * skills/course-page/templates/print.css` is what a skill passes; both end up
+ * here.
  */
 export const resolveTemplate = (
   value: string,
