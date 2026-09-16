@@ -50,9 +50,14 @@ export interface BeatFile {
  *
  * `PRES_BEATS_DIR` wins, for a test or an unusual layout. Then
  * `CLAUDE_PLUGIN_ROOT`, which the plugin loader sets. Then the directory two up
- * from this file, which is where it sits in the repository and in an installed
- * plugin alike — so the CLI works when it is run by hand with no plugin
- * environment at all.
+ * from this file, which is where it sat in an installed plugin — so the CLI
+ * works when it is run by hand with no plugin environment at all.
+ *
+ * Last, `skills/make-materials/beats` in the harness checkout. The beats moved
+ * there on 2026-09-16, when the harness took the planning layer over: they are
+ * craft, not plugin plumbing, and a second copy beside this file would be a
+ * second copy to drift. The two candidates above it are kept so an installed
+ * plugin that still ships its own `beats/` resolves to that instead.
  */
 export function beatsDirectory(): string | null {
   const explicit = process.env.PRES_BEATS_DIR;
@@ -66,8 +71,12 @@ export function beatsDirectory(): string | null {
 
   // src/ -> node/ -> the plugin root.
   const here = dirname(fileURLToPath(import.meta.url));
-  const candidate = join(here, "..", "..", "beats");
-  return existsSync(candidate) ? resolve(candidate) : null;
+  const beside = join(here, "..", "..", "beats");
+  if (existsSync(beside)) return resolve(beside);
+
+  // plugin root -> professor-skills/ -> plugins/ -> the checkout.
+  const harness = join(here, "..", "..", "..", "..", "..", "skills", "make-materials", "beats");
+  return existsSync(harness) ? resolve(harness) : null;
 }
 
 const cache = new Map<string, BeatFile[]>();

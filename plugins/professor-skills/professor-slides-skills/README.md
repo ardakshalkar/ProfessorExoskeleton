@@ -136,9 +136,9 @@ enforced, not suggested. Some of what falls out of that:
   the professor talking over it. Normal teaching; a hole in a handout.
 
 Two more references carry the craft no check can enforce:
-[`references/text-style.md`](references/text-style.md) on how to write the words
+[`skills/make-materials/references/text-style.md`](skills/make-materials/references/text-style.md) on how to write the words
 — assertion headlines rather than topics, sentence case, parallel lists — and
-[`references/typography.md`](references/typography.md) on which typefaces
+[`skills/make-materials/references/typography.md`](skills/make-materials/references/typography.md) on which typefaces
 survive the lecture-room machine, and why the height estimator cares which one
 you pick.
 

@@ -74,7 +74,7 @@ pres grammar --deck technical_lecture --discipline "computer science"
 
 That prints the phase spine, a default beat chain and the discipline's
 representation ladder. It is the compact form of
-`references/deck-grammars.md` — read the reference only when the reasoning is
+`skills/make-materials/references/deck-grammars.md` — read the reference only when the reasoning is
 what you need.
 
 Choose `deck_archetype`, `discipline` and `output_mode`. A course introduction is

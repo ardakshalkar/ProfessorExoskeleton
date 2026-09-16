@@ -119,6 +119,26 @@ Fill every `{{ slot }}` and delete the sections you do not need. Do not
 restructure one: the check-for-understanding slide and the "where we are" opener
 are in the template because they are the parts a deck loses first.
 
+**Before filling a deck template in, choose the teaching sequence.** A template
+is a shape; what goes in it is a decision about how the session moves. The
+planning layer moved here from `professor-slides-skills` on 2026-09-16 and is
+what stops the failure it was written against: title and three bullets, fifteen
+times, every slide individually defensible and the cognitive operation never
+changing while the material does.
+
+- `beats/` — 29 teaching beats, each two to seven slides doing one teaching job,
+  with the family and phase it belongs to. A ninety-minute lecture is normally
+  five to nine of them. Read `references/teaching-beats.md` for how to choose,
+  then read only the beats you picked.
+- `references/deck-grammars.md` — the shapes a whole deck can take.
+- `references/outline-craft.md` — how to write the arc before any beat: what the
+  session argues, not what it covers. If you cannot state the argument as a
+  claim rather than a topic, the session does not yet have a point; say so
+  instead of producing slides.
+- `references/visual-grammar.md` — what each slide's text is *for*, its role and
+  density; `references/text-style.md` for how to write it; and
+  `references/typography.md` for what the renderer sets and why.
+
 For a slide deck, plan before rendering. Resolve presentation preferences from
 `preferences/defaults.yaml`, local `.ainar/preferences.yaml`, an optional
 course `preferences.yaml`, and finally the current task. Record the resulting

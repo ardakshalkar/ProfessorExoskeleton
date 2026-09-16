@@ -81,7 +81,7 @@ pres archetypes --name roadmap     # one, with what to write
 
 The archetype is not decoration on the plan: it says what the slide is allowed
 to contain, and `pres check` reads it. Those two commands replace reading
-`references/visual-grammar.md`, which is there for the reasoning.
+`skills/make-materials/references/visual-grammar.md`, which is there for the reasoning.
 
 The ones most often got wrong: `roadmap` is the map *drawn*, with the words as
 labels on it. `question` and `activity` carry the question and **nothing else** —
@@ -160,7 +160,7 @@ tuning](MODULE-06-slides-fig-01-split.svg)
 Alt text on every one, saying what the picture *asserts* rather than captioning
 the filename. Colour never the only channel: label the lines, vary the dash, name
 the regions. `references/presentation-graphics.md` has the reasoning, and
-`references/typography.md` covers the title slide's composed picture — which is
+`skills/make-materials/references/typography.md` covers the title slide's composed picture — which is
 named in the outline's `title_slide`, not linked from the markdown.
 
 ## 5. Generate the render contract
