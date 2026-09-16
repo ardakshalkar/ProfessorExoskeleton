@@ -3,18 +3,23 @@
   "version": "0.8.0",
   "private": false,
   "type": "module",
-  "description": "The AINAR course model as native DeepSeek Harness tools: fourteen read-only reads over a course workspace.",
+  "description": "The AINAR course model as native DeepSeek Harness tools: sixteen read-only reads over a course workspace.",
   "main": "index.js",
   "files": [
     "index.js",
     "cordis.patch.yml",
     "widget-assets",
-    "server",
     "README.md"
   ],
+  "dependencies": {
+    "@ainar/core": "file:../../ainar-node"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
     }
+  },
+  "comments": {
+    "core": "The model itself is `@ainar/core` in ainar-node/, not a copy under server/. It is declared here so the dependency is stated where it is used, and it is ALSO a dependency of the project, because `dsh plugin add` forwards to pnpm and pnpm cannot resolve a file: spec whose absolute path contains a space — which this checkout's does. Node resolution finds the package from the dsh installation's node_modules either way."
   }
 }

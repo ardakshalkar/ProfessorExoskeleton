@@ -54,24 +54,24 @@ import {
   groupsOf,
   requireGroups,
   runById,
-} from "dsh-ainar-course-model/server/bundle.js";
-import { loadDrafts, mergeDrafts } from "dsh-ainar-course-model/server/drafts.js";
-import { gradebookPayload } from "dsh-ainar-course-model/server/gradebook.js";
-import { inboxPayload } from "dsh-ainar-course-model/server/inbox.js";
-import { IssueList } from "dsh-ainar-course-model/server/issues.js";
-import { YamlCourseStore } from "dsh-ainar-course-model/server/mcp/course-store.js";
-import { callTool } from "dsh-ainar-course-model/server/mcp/tools.js";
-import { BY_TOOL } from "dsh-ainar-course-model/server/mcp/widgets.js";
+} from "@ainar/core/src/bundle.ts";
+import { loadDrafts, mergeDrafts } from "@ainar/core/src/drafts.ts";
+import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
+import { inboxPayload } from "@ainar/core/src/inbox.ts";
+import { IssueList } from "@ainar/core/src/issues.ts";
+import { YamlCourseStore } from "@ainar/core/src/mcp/course-store.ts";
+import { callTool } from "@ainar/core/src/mcp/tools.ts";
+import { BY_TOOL } from "@ainar/core/src/mcp/widgets.ts";
 import {
   ToolError,
   Workspace,
   referenceDate,
   workspaceRootFor,
-} from "dsh-ainar-course-model/server/mcp/workspace.js";
-import { writeAssessmentLinks } from "dsh-ainar-course-model/server/lms/link.js";
-import { outlinePayload } from "dsh-ainar-course-model/server/outline.js";
-import { dump as dumpYaml } from "dsh-ainar-course-model/server/yaml-out.js";
-import { dashboardPayload } from "dsh-ainar-course-model/server/progress.js";
+} from "@ainar/core/src/mcp/workspace.ts";
+import { writeAssessmentLinks } from "@ainar/core/src/lms/link.ts";
+import { outlinePayload } from "@ainar/core/src/outline.ts";
+import { dump as dumpYaml } from "@ainar/core/src/yaml-out.ts";
+import { dashboardPayload } from "@ainar/core/src/progress.ts";
 // `parseDocument` alongside `parse`, for one caller: `writeCanvasSelection`
 // edits a file a professor also writes by hand, and the plain parse would hand
 // back a JS object with every comment in `version.yaml` already discarded.
@@ -845,11 +845,13 @@ const writePreferences = (root, scope, courseId, term, values) => {
 /**
  * The gradebook-target vocabulary, duplicated from `ainar/src/lms/index.ts`.
  *
- * Duplicated rather than imported for `rosterPath`'s reason: this pane reads
- * the course model through `dsh-ainar-course-model/server/**`, and that package
- * has no LMS module — its `lms-export.js` is exam formats, not gradebook
- * targets. The TypeScript `ainar/src/lms/` is not on this package's resolution
- * path and should not be put there, because everything in it can push a grade.
+ * Duplicated rather than imported, and since 2026-09-16 for one reason rather
+ * than two. The old one was reach: the pane read the model through a compiled
+ * copy that had no LMS module at all. It now reads `@ainar/core` directly, so
+ * `@ainar/core/src/lms/` IS on the resolution path — this file already imports
+ * `lms/link.ts` for the assignment-link writer. What remains is the reason that
+ * was always the real one: everything else in that module can push a grade, and
+ * a vocabulary is worth copying to keep the rest of it out of arm's reach.
  *
  * What is copied is four strings and two key names. If they drift, this tab
  * calls a supported target unsupported — a wrong sentence on a screen rather
@@ -2219,6 +2221,10 @@ const titleWithId = (row) => {
 const VIEW_SCRIPT =
   "<script>(function(){if(parent===window)return;" +
   "document.addEventListener('click',function(e){" +
+  "var p=e.target.closest&&e.target.closest('button[data-publish]');" +
+  "if(p){e.preventDefault();parent.postMessage({source:'professor-pane'," +
+  "kind:'publish',assessment:p.getAttribute('data-publish')," +
+  "label:p.getAttribute('data-label')||''},'*');return;}" +
   "var a=e.target.closest&&e.target.closest('a[data-view]');if(!a)return;" +
   "if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;" +
   "e.preventDefault();" +
@@ -4977,9 +4983,9 @@ const runApprove = (res, root, runId, approver, confirm) => {
  * an opinion about, how a created assignment's id is written back into
  * `courses/` without destroying the comments around it — live in
  * `ainar-node/src/lms/`, and a second implementation in this file would have
- * its own idea of all three. The LMS write layer is deliberately absent from
- * `dsh-ainar-course-model/server/`, which is a read-only tool surface; the CLI
- * is the seam that exists for exactly this.
+ * its own idea of all three. The LMS write layer is deliberately absent from the
+ * course model's tools, which are a read-only surface; the CLI is the seam that
+ * exists for exactly this.
  *
  * **Plan and push are one route with a flag**, and the flag is the professor's
  * press. Both make an outbound request, so both are POST — a plan that Canvas

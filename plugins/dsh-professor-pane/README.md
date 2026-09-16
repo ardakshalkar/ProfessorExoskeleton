@@ -216,8 +216,8 @@ strip spawns `ainar approve`, and for the same reason: what counts as drift,
 which fields this model has an opinion about, and how a created assignment's id
 is written back into `courses/` all live in `ainar-node/src/lms/`, and a second
 implementation in the plugin would have its own idea of all three. The LMS
-write layer is deliberately absent from `dsh-ainar-course-model/server/`, which
-is a read-only tool surface.
+write layer is deliberately absent from the course model's tools, which are a
+read-only surface.
 
 Four rules, each of which is the reason a button is shaped the way it is:
 
@@ -413,8 +413,8 @@ working directory:
 Resolved per request, so switching workspaces in the sidebar, or exporting the
 variable, needs no restart.
 
-`workspaceRootFor` is imported from `dsh-ainar-course-model/server/mcp/
-workspace.js` rather than written here, and that is the point: the course tools
+`workspaceRootFor` is imported from `@ainar/core/src/mcp/workspace.ts` rather
+than written here, and that is the point: the course tools
 resolve through the same function, so the tools and this pane cannot name
 different courses on the same screen. It was briefly a twelve-line twin, kept in
 step by hand, which is a bad trade for twelve lines — the drift would not have

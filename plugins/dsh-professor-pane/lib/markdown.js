@@ -21,7 +21,7 @@ export {
   markdownHref,
   markdownInline,
   renderMarkdown,
-} from "dsh-ainar-course-model/server/markdown.js";
+} from "@ainar/core/src/markdown.ts";
 
 /**
  * What a rendered document needs that `documentPage` does not give it.
