@@ -222,6 +222,11 @@ function model(d) {
           // read by OCR is a weaker claim than one read from its own text, and
           // the difference should be on screen rather than guessed.
           read_by: deck ? (r.read_by || '') : '',
+          // Where the host serves what was read out of this deck. Empty unless
+          // the record actually carries a plan, so the badge is a label where
+          // there is nothing to open and a control where there is — a chip
+          // never offers a page that would render empty.
+          outline_url: deck ? safeUrl(r.outline_url) || '' : '',
           icon: RES_ICON[r.kind] || 'doc',
           tone: deck ? 'deck' : 'x',
           kind: r.kind,

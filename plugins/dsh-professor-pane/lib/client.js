@@ -379,6 +379,12 @@ window.__ModuleLoader__.load({
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-segbtn[aria-pressed=true]{color:var(--dsw-alias-label-primary,#111);font-weight:600;
   border-color:var(--dsw-alias-label-primary,#111)}
+/* The repository name, typed when the assessment does not record one. Sized to
+   owner/name and no wider: it sits in a row of buttons, and a field that
+   stretched would read as the subject of the strip rather than a gap in it. */
+.pp-input{font:inherit;font-size:11px;padding:2px 8px;border-radius:20px;width:18ch;
+  background:0 0;color:var(--dsw-alias-label-primary,#111);
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 /* Names, while they are showing. The one control in the pane that changes what
    is safe to have on a projector, so it does not look like the others while it
    is engaged. */
@@ -544,6 +550,19 @@ window.__ModuleLoader__.load({
 button.pp-modallink{cursor:pointer;font-family:inherit;background:none;border:0;padding:0}
 button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-modalframe{flex:1;min-height:0;width:100%;border:0;display:block;background:#fff}
+/* The publish dialog's body. Unlike the material modal there is no frame to
+   fill, so the plan scrolls and the controls stay put above it. */
+.pp-publishbody{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;
+  padding:12px;overflow:hidden}
+.pp-publishout{flex:1;min-height:0;margin:0;overflow:auto;white-space:pre-wrap;
+  word-break:break-word;font-size:11.5px;line-height:1.5;padding:10px;border-radius:6px;
+  background:var(--dsw-alias-bg-l2,#f6f6f7);color:var(--dsw-alias-label-primary,#1a1a1a)}
+.pp-publishhint{margin:0;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+/* The repository field, sized at 18ch above for a pane four hundred pixels
+   wide. This dialog is not that, and at 18ch it clipped its own placeholder —
+   the one control whose whole job is to be typed into was the one you could
+   not read. It takes the room the row has left, within reason. */
+.pp-publishbody .pp-input{width:auto;flex:1 1 24ch;min-width:22ch;max-width:40ch}
 `;
 
     if (
@@ -3063,12 +3082,15 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      *   `assessment_id`. It joined the list when the outline's chips started
      *   opening a brief: most assessments carry no document, so there was no
      *   `/file` address to give them.
+     * - `/outline` serves what was READ out of a deck the course did not write,
+     *   addressed by `document_id`. Same shape again: a `presentation_plan` is
+     *   a record, not a file, so there is no `/file` address for it either.
      *
      * Adding a route here is granting it the overlay, so the bar is the one
      * `/file` already meets: same origin, a read, and addressed by an id rather
      * than by anything resembling a path.
      */
-    const MATERIAL_ROUTES = new Set([BASE + "/file", BASE + "/brief"]);
+    const MATERIAL_ROUTES = new Set([BASE + "/file", BASE + "/brief", BASE + "/outline"]);
 
     function materialUrl(value) {
       if (typeof value !== "string" || value === "") return null;
@@ -3271,6 +3293,133 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    /**
+     * Publishing a homework, over the whole page rather than beside the list.
+     *
+     * It began as a strip inside the pane, the way approval is, and that was
+     * wrong for the same reason it is right for approval: approval is a
+     * sentence and a button, while this is a file list, a repository name, a
+     * plan that runs to twenty lines and a decision that reaches people
+     * outside this machine. In a pane four hundred pixels wide that strip was
+     * a sliver nobody could read — which is exactly how it was reported: the
+     * button "doesn't do anything".
+     *
+     * So it borrows `MaterialModal`'s shell: the same veil, the same Escape,
+     * the same rule that a drag started inside the dialog does not dismiss it.
+     * What it does NOT borrow is the frame — the content here is this pane's
+     * own text, so it is rendered rather than loaded, and no sandbox question
+     * arises.
+     */
+    function PublishModal(props) {
+      const close = props.onClose;
+      const state = props.state;
+      React.useEffect(() => {
+        const onKey = (event) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            close();
+          }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [close]);
+
+      const busy = state.phase === "running";
+      return ReactDOM.createPortal(
+        h(
+          "div",
+          {
+            className: "pp-veil",
+            onMouseDown: (event) => {
+              if (event.target === event.currentTarget) close();
+            },
+          },
+          h(
+            "div",
+            {
+              className: "pp-modal",
+              role: "dialog",
+              "aria-modal": "true",
+              "aria-label": "Publish " + state.label,
+              onMouseDown: (event) => event.stopPropagation(),
+            },
+            h(
+              "div",
+              { className: "pp-modalhead" },
+              h("div", { className: "pp-modaltitle" }, "Publish " + state.label),
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-close",
+                  "aria-label": "Close",
+                  onClick: close,
+                },
+                "×",
+              ),
+            ),
+            h(
+              "div",
+              { className: "pp-publishbody" },
+              h(
+                "div",
+                { className: "pp-approverow" },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    disabled: busy,
+                    title: "Read GitHub and show what would change. Writes nothing.",
+                    onClick: () => props.run(false),
+                  },
+                  busy ? "Working…" : "Check what would be published",
+                ),
+                state.phase === "preview"
+                  ? h(
+                      "button",
+                      {
+                        type: "button",
+                        className: "pp-segbtn pp-danger",
+                        title:
+                          "Create the repository if it does not exist — public, so " +
+                          "students can fork it — and push the folder to it.",
+                        onClick: () => props.run(true),
+                      },
+                      "Publish to GitHub",
+                    )
+                  : null,
+                h("input", {
+                  type: "text",
+                  className: "pp-input",
+                  placeholder: "owner/name, if not recorded",
+                  value: state.repo,
+                  disabled: busy,
+                  onChange: (event) => props.setRepo(event.target.value),
+                }),
+              ),
+              state.phase === "idle"
+                ? h(
+                    "p",
+                    { className: "pp-publishhint" },
+                    "Nothing has been read or written yet. Check first; publishing " +
+                      "is the second press.",
+                  )
+                : h(
+                    "pre",
+                    {
+                      className:
+                        "pp-publishout" + (state.phase === "error" ? " pp-approveerr" : ""),
+                    },
+                    state.text,
+                  ),
+            ),
+          ),
+        ),
+        document.body,
+      );
+    }
+
     // ----------------------------------------------------------------- pane
 
     /**
@@ -3338,6 +3487,14 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       // re-fetched. Without it the pane would go on drawing the course as it was
       // before the approval it just performed.
       const [reload, setReload] = React.useState(0);
+
+      // The homework whose publish the professor is looking at, or null.
+      //
+      // Opened by a press inside the assessments frame, and held here for the
+      // reason the material overlay is: the frame it came from remounts when
+      // the theme changes, and a plan that vanished because the OS went dark
+      // would be a plan somebody re-ran against GitHub for nothing.
+      const [publishing, setPublishing] = React.useState(null);
 
       // The material the professor is reading over the page, or null.
       //
@@ -3413,6 +3570,17 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             props.ask(data.prompt);
             return;
           }
+          if (data.kind === "publish") {
+            if (typeof data.assessment !== "string" || data.assessment.trim() === "") return;
+            setPublishing({
+              assessment: data.assessment.trim(),
+              label: typeof data.label === "string" ? data.label : data.assessment,
+              phase: "idle",
+              text: "",
+              repo: "",
+            });
+            return;
+          }
           if (data.kind === "view") {
             const url = materialUrl(data.url);
             if (url === null) return;
@@ -3472,6 +3640,59 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
        * first instructor — the pane shows which id it is about to record, and
        * declines to guess when the run names none.
        */
+      /**
+       * Plan or perform a homework publish, on the server.
+       *
+       * The same route either way; `confirm` is the difference between reading
+       * GitHub and writing to it, and the professor supplies it by pressing the
+       * second button rather than the first. A repository the assessment does
+       * not name is typed here and passed through — never guessed, on either
+       * side of the wire.
+       */
+      const publishHomework = (confirm) => {
+        if (!current || !publishing) return;
+        setPublishing((state) => ({
+          ...state,
+          phase: "running",
+          text: confirm ? "Publishing…" : "Checking GitHub…",
+        }));
+        const repo = (publishing.repo || "").trim();
+        fetch(
+          scoped(
+            BASE +
+              "/api/homework/publish?run=" +
+              encodeURIComponent(current.runId) +
+              "&assessment=" +
+              encodeURIComponent(publishing.assessment) +
+              (repo ? "&repo=" + encodeURIComponent(repo) : "") +
+              (confirm ? "&confirm=1" : ""),
+            props.sessionId,
+          ),
+          { method: "POST" },
+        )
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error) {
+              setPublishing((state) => state && { ...state, phase: "error", text: result.error });
+              return;
+            }
+            setPublishing(
+              (state) =>
+                state && {
+                  ...state,
+                  phase: result.ok ? (confirm ? "done" : "preview") : "error",
+                  text: result.output || "(the command said nothing)",
+                },
+            );
+            // Publishing can write `extensions.github` back onto the record, so
+            // the frames are re-fetched for the same reason approval re-fetches.
+            if (confirm && result.ok) setReload((value) => value + 1);
+          })
+          .catch((error) =>
+            setPublishing((state) => state && { ...state, phase: "error", text: String(error) }),
+          );
+      };
+
       const approve = (confirm) => {
         if (!current) return;
         const approver = (current.instructors || [])[0];
@@ -3794,6 +4015,14 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             )
           : null,
         h("div", { className: "pp-body" }, body()),
+        publishing === null
+          ? null
+          : h(PublishModal, {
+              state: publishing,
+              run: publishHomework,
+              setRepo: (repo) => setPublishing((state) => state && { ...state, repo }),
+              onClose: () => setPublishing(null),
+            }),
         material === null
           ? null
           : h(MaterialModal, {

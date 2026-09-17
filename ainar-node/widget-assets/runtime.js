@@ -288,6 +288,20 @@ function paint() {
     label.parentNode.replaceChild(button, label);
   });
 
+  // The origin badge, where there is an outline behind it.
+  //
+  // Only ever reaches the host overlay: what it opens is a page the pane
+  // composes from the record, and a host with no such route has nothing to show
+  // — so unlike the brief there is no local sheet to fall back to. The badge
+  // stays a plain label on those surfaces because the view gives it no address.
+  root.querySelectorAll('[data-outline]').forEach(function (badge) {
+    var href = badge.dataset.outline || '';
+    var name = badge.dataset.outlinename || 'Outline';
+    badge.addEventListener('click', function () {
+      showMaterial(href, name, 'html');
+    });
+  });
+
   root.querySelectorAll('[data-sheetclose]').forEach(function (node) {
     node.addEventListener('click', closeSheet);
   });

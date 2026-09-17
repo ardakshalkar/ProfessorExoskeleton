@@ -340,14 +340,20 @@ do. Never run `gh repo create`, `git push`, `gh api`, or anything that publishes
 
 ```bash
 cd homework/hw3-retrieval-over-a-corpus
-gh repo create narxoz-css4007/hw3-retrieval-over-a-corpus --private --source=. --push
+gh repo create narxoz-css4007/hw3-retrieval-over-a-corpus --public --source=. --push
 gh repo edit narxoz-css4007/hw3-retrieval-over-a-corpus --template
 ```
 
 Say plainly what those do: the first creates it and pushes, the second marks it as
 a template so students get a clean history rather than a fork of your commits.
-`--private` is in there deliberately — say that going public is their decision and
-that a public starter repo is also public to next year's cohort.
+`--public` is what lets students fork it at all — say that it is also public to
+next year's cohort, and that `--private` creates it closed if they would rather
+open it when the cohort is told.
+
+`bin/ainar homework publish <ASSESSMENT_ID>` does the same thing from the record,
+and the professor's pane has a button for it. Both plan first and write only on
+`--confirm`, and both refuse if the starter files contain an answer key. Offer the
+command; do not run it.
 
 Once it exists, they record it on the assessment, both halves — where it lives on
 their machine and where it lives for students — so the model can find the files

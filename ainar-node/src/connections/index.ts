@@ -48,7 +48,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { type Source, credentialsPath, resolveVariable } from "./store.ts";
 
-export const TYPES = ["canvas", "sheets", "moodle", "telegram"] as const;
+export const TYPES = ["canvas", "sheets", "moodle", "telegram", "github"] as const;
 export type ConnectionType = (typeof TYPES)[number];
 
 /** Where the registry lives when nothing says otherwise. */
@@ -68,6 +68,7 @@ export const DEFAULT_TOKEN_ENV: Record<ConnectionType, string> = {
   sheets: "AINAR_SHEETS_TOKEN",
   moodle: "AINAR_MOODLE_TOKEN",
   telegram: "AINAR_TELEGRAM_BOT_TOKEN",
+  github: "AINAR_GITHUB_TOKEN",
 };
 
 /** What is wrong with a connection, and whether it can still be used. */
@@ -94,6 +95,8 @@ export interface Connection {
   chatId: string | null;
   forumId: string | null;
   keyFile: string | null;
+  /** Where a repository this connection creates would land. `github` only. */
+  owner: string | null;
   issues: Issue[];
 }
 
@@ -238,6 +241,20 @@ export const readConnection = (name: string, raw: unknown): Connection => {
     });
   }
 
+  // `owner` is where a repository this connection creates would land — a user
+  // or an organisation. It is not required: a connection with none can still
+  // push to repositories named in full on the assessment, and refusing to
+  // configure GitHub until somebody picks an owner would be a gate on the
+  // common case for the sake of the rarer one.
+  const owner = text(source.owner);
+  if (type === "github" && owner && !/^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(owner)) {
+    issues.push({
+      code: "bad_owner",
+      severity: "error",
+      message: `owner should be a GitHub user or organisation, not '${owner}'`,
+    });
+  }
+
   const keyFile = text(source.keyFile);
   if (type === "sheets" && keyFile && !existsSync(expand(keyFile))) {
     issues.push({
@@ -256,6 +273,7 @@ export const readConnection = (name: string, raw: unknown): Connection => {
     chatId,
     forumId: text(source.forumId),
     keyFile,
+    owner,
     issues,
   };
 };
@@ -323,6 +341,8 @@ export const hintFor = (connection: Connection): string =>
       "An access token from `gcloud auth print-access-token`, or set keyFile to a service-account key and share the spreadsheet with its address.",
     moodle: "Moodle → Preferences → Security keys, for a web-service token.",
     telegram: "The bot token @BotFather gave you when the bot was created.",
+    github:
+      "A fine-grained personal access token with Contents: read and write, and Administration: read and write if it must create the repository. github.com → Settings → Developer settings → Personal access tokens.",
   })[connection.type];
 
 /**

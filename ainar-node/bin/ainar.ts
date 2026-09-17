@@ -94,6 +94,14 @@ import {
 } from "../src/roster.ts";
 import { dump } from "../src/yaml-out.ts";
 import { SCHEMA_NAMES, jsonSchemaFor, shapeText } from "../src/schema.ts";
+import { findConnection, loadRegistry } from "../src/connections/index.ts";
+import {
+  type AuthMode,
+  describePlan,
+  planPublish,
+  publish,
+  resolveAuth,
+} from "../src/homework.ts";
 import { archiveRun, migrateLayout } from "../src/layout.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
 import { LAYOUT, measureDeck } from "../src/deck.ts";
@@ -251,6 +259,8 @@ const HELP = `ainar — the AINAR course model CLI
   schema [ENTITY] [--json] [--out DIR]     what a record must look like
   new course COURSE_ID [--title T] [--credits N] [--department D]
   new run COURSE_ID TERM --start YYYY-MM-DD --end YYYY-MM-DD
+  homework publish ASSESSMENT [--repo owner/name] [--private] [--confirm]
+                                           plan it; --confirm creates and pushes
   migrate-layout [COURSE_ID…] [--dry-run]  move off versions/<TERM>/, once
   archive-run [--force] [--dry-run]        pack the finished term into archive/
   deck fit FILE.md [--verbose]            will each slide fit on the page
@@ -1536,6 +1546,102 @@ try {
 
       console.error("usage: new course COURSE_ID  |  new run COURSE_ID TERM --start … --end …");
       process.exit(1);
+    }
+
+    /**
+     * Publish a homework starter repository, or say what publishing would do.
+     *
+     * A plan by default and a push only with `--confirm`, which is the same
+     * shape `approve` and `lms push` have and for the same reason: the outward
+     * facing half of this belongs to a person, and the flag is where they say
+     * so. The rules live in `src/homework.ts`; this is the seam.
+     */
+    case "homework": {
+      if (rest[0] !== "publish") {
+        console.error(
+          "usage: homework publish ASSESSMENT_ID [--repo owner/name] [--auth gh|token] " +
+            "[--private] [--confirm]",
+        );
+        process.exit(1);
+      }
+      const assessmentId = rest[1];
+      if (!assessmentId) throw new Error("usage: homework publish ASSESSMENT_ID [--repo owner/name]");
+
+      const asked = flag("course-version") ?? flag("run");
+      const bundle = asked ? forRun(asked) : onlyCourse();
+      const resolvedRun = asked ?? soleRun(bundle);
+      const assessment = (bundle.assessments as any[]).find(
+        (entry) => entry.assessment_id === assessmentId,
+      );
+      if (!assessment) throw new Error(`no assessment ${assessmentId} in this workspace`);
+
+      const forced = flag("auth");
+      if (forced && forced !== "gh" && forced !== "token") {
+        throw new Error("--auth takes gh or token");
+      }
+      const registry = loadRegistry(flag("connections"));
+      const auth = resolveAuth({
+        connection: findConnection(registry, { name: flag("connection"), type: "github" }),
+        force: (forced as AuthMode | null) ?? null,
+      });
+      if (!auth.github) {
+        console.error(auth.refusal ?? "No way to reach GitHub.");
+        process.exit(1);
+      }
+      for (const note of auth.notes) out(`note: ${note}`);
+
+      // The whole run's items, not the assessment's own. `safety.ts` says a
+      // wider set only makes the scan stricter, and a starter repository that
+      // quotes another assessment's answer is no less published for it.
+      const items = (bundle.items as any[]).filter(
+        (item) => item.course_version_id === resolvedRun || item.course_version_id === undefined,
+      );
+      const shared = {
+        root,
+        assessment,
+        items,
+        github: auth.github,
+        repo: flag("repo"),
+        // Public is the default because a template students cannot see cannot
+        // be forked. `--private` is the way back, for work being staged before
+        // a cohort is told about it.
+        visibility: (args.includes("--private") ? "private" : "public") as "private" | "public",
+      };
+
+      if (!args.includes("--confirm")) {
+        const plan = await planPublish(shared);
+        out(`Publishing ${assessmentId} would do this, and has done nothing:`);
+        for (const line of describePlan(plan)) out(`  ${line}`);
+        // Non-zero on a refusal, the way `approve` is: a caller that offers a
+        // "publish now" button off the back of this must not offer it for a
+        // plan that cannot run, and "did it refuse" is not something a reader
+        // of the text should have to work out by looking for a word in it.
+        if (plan.refusals.length) process.exit(1);
+        out("\nRun it again with --confirm to publish.");
+        break;
+      }
+
+      const result = await publish({ ...shared, message: flag("message") });
+      if (result.plan.refusals.length) {
+        for (const line of describePlan(result.plan)) console.error(`  ${line}`);
+        process.exit(1);
+      }
+      for (const line of result.output) out(line);
+      if (result.created) out(`\nCreated ${result.plan.repo}, private.`);
+      if (result.url) out(result.url);
+      if (result.created) {
+        out(
+          "\nIt is private. Making it public, and marking it a template so students " +
+            "get a clean history, are both yours:\n" +
+            `  gh repo edit ${result.plan.repo} --template\n` +
+            `  gh repo edit ${result.plan.repo} --visibility public`,
+        );
+      }
+      out(
+        `\nRecord it on the assessment, if it is not there yet:\n` +
+          `  extensions.github.template_repo: ${result.plan.repo}`,
+      );
+      break;
     }
 
     /**

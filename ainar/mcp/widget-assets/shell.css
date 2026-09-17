@@ -393,3 +393,10 @@ ul.plain { margin: .2rem 0 0; padding-left: 1rem; font-size: .78rem; }
 .itorg.it-generated { border-color: var(--accent-line); color: var(--accent-ink);
                       background: var(--tint); }
 .itorg.it-imported { border-color: var(--b2); color: var(--fg); }
+/* The badge is a control only where there is an outline to open. It keeps the
+   label's appearance — this is still a fact about the artefact, not a button
+   competing with the chip's own — and gains a pointer and an underline on
+   hover, which is the whole of the difference. */
+button.itorgb { cursor: pointer; font-family: inherit; }
+button.itorgb:hover { text-decoration: underline; }
+button.itorgb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

@@ -2234,6 +2234,77 @@ const VIEW_SCRIPT =
   "});})();<\/script>";
 
 /**
+ * The press that offers to publish a homework's starter repository.
+ *
+ * Only for work that arrives as one — `submission_type` includes `code_repo`.
+ * A quiz has no repository to publish and a button offering to make it one
+ * would be a question the professor has to answer every time they read the
+ * list.
+ *
+ * It carries the identifier and nothing else. What the repository is called,
+ * whether it exists, and what would change are all answered by the server when
+ * the press arrives, because a frame that has been open since this morning is
+ * not a reliable witness to any of them.
+ */
+const isRepoWork = (assessment) => {
+  const kinds = assessment.submission_type;
+  return Array.isArray(kinds)
+    ? kinds.includes("code_repo")
+    : String(kinds ?? "").includes("code_repo");
+};
+
+/**
+ * Where the starter repository is, so the list answers "is this published".
+ *
+ * The record's answer, not GitHub's, and the difference is worth being exact
+ * about: this says a repository was written down, which is what makes the
+ * publish button able to run at all. Whether it exists, and whether it matches
+ * the folder, is what pressing the button reports — one network call, when
+ * somebody asks, rather than one per row every time this list is drawn.
+ *
+ * Amber when nothing is recorded, in the same colour the pane uses for a
+ * missing brief and a missing weight. Work students fork and cannot start
+ * without is a hole in the same sense.
+ */
+const repoChip = (assessment) => {
+  const repo = assessment.github?.template_repo;
+  if (!repo) return '<span class="todo">not published</span>';
+  return (
+    '<a class="chip-link" href="https://github.com/' +
+    escapeText(repo) +
+    '" target="_blank" rel="noopener">' +
+    escapeText(repo) +
+    "</a>"
+  );
+};
+
+const publishButton = (assessment) => {
+  if (!isRepoWork(assessment)) return "";
+  // Two words for two situations, because they are different acts. Work with no
+  // repository is being put somewhere for the first time — a URL that did not
+  // exist will exist, and students will be sent to it. Work that has one is
+  // being brought up to date, and the thing at the other end is a repository
+  // people may already have forked. A single "publish" read as pending on a
+  // homework that has been on GitHub since September, which is what prompted
+  // this. The ellipsis is the usual promise that a strip opens rather than
+  // something happening on the press.
+  const recorded = Boolean(assessment.github?.template_repo);
+  return (
+    '<button class="chip-link" type="button" data-publish="' +
+    escapeText(assessment.assessment_id ?? "") +
+    '" data-label="' +
+    escapeText(assessment.title ?? assessment.assessment_id ?? "") +
+    '" title="' +
+    (recorded
+      ? "Check what differs from GitHub, and push it if you want to."
+      : "Create the repository and push the folder to it.") +
+    '">' +
+    (recorded ? "update…" : "publish…") +
+    "</button>"
+  );
+};
+
+/**
  * A failure on a `/view/` path, as a page rather than as JSON.
  *
  * The `/view/` routes answer an iframe, and an iframe handed
@@ -2563,6 +2634,7 @@ const assessmentsDocument = (
               // read before finding the one you meant.
               "<br>" +
               briefChip(row) +
+              (isRepoWork(row) ? "<br>" + repoChip(row) + publishButton(row) : "") +
               "</span></div>"
             );
           })
@@ -4410,6 +4482,14 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
   const originOf = new Map();
   /** `extensions.read_by`: text, ocr or vlm — how an imported outline was got. */
   const readByOf = new Map();
+  /**
+   * Documents carrying a `presentation_plan` — an outline somebody can read.
+   *
+   * Only these get an outline address. A deck with no plan has nothing to show,
+   * and offering to open one would be the pane promising a page that renders
+   * empty — the fault this whole line of work has been correcting.
+   */
+  const hasPlan = new Set();
   for (const courseId of workspace.courseIds()) {
     let loaded;
     try {
@@ -4432,6 +4512,10 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
       const readBy = document.extensions?.read_by;
       if (typeof readBy === "string" && readBy !== "") {
         readByOf.set(document.document_id, readBy);
+      }
+      const plan = document.presentation_plan;
+      if (plan && Array.isArray(plan.slides) && plan.slides.length > 0) {
+        hasPlan.add(document.document_id);
       }
       const key = String(document.storage_key ?? "");
       if (!key || key.includes("://")) continue;
@@ -4520,6 +4604,12 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
       // state rather than assuming the common case.
       origin: originOf.get(resource.document_id) ?? "",
       read_by: readByOf.get(resource.document_id) ?? "",
+      // Empty unless there is an outline to open. The badge is a label when
+      // this is empty and a control when it is not, so a chip never offers to
+      // show something that is not there.
+      outline_url: hasPlan.has(resource.document_id)
+        ? outlineAddress(resource.document_id)
+        : "",
     };
   };
 
@@ -4566,6 +4656,13 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
     encodeURIComponent(assessmentId) +
     (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
     (withDrafts ? "&drafts=1" : "") +
+    (dark ? "&dark=1" : "");
+
+  /** Where this pane serves what was read out of a deck. */
+  const outlineAddress = (documentId) =>
+    `${origin}${BASE}/outline?doc=` +
+    encodeURIComponent(documentId) +
+    (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
     (dark ? "&dark=1" : "");
 
   const runId = String(data?.run?.id ?? "");
@@ -4820,6 +4917,92 @@ const sendBrief = (res, workspace, root, runId, assessmentId, withDrafts, dark) 
   return send(res, 200, "text/html; charset=utf-8", markdownPage(title, source, dark === true));
 };
 
+/**
+ * What was READ out of a deck, as a page the overlay can frame.
+ *
+ * The companion to `sendBrief`, and the same trade: `openMaterial` needs a URL,
+ * and a `presentation_plan` is a record rather than a file, so the page is
+ * composed here.
+ *
+ * It exists for one case in particular. A deck this course did not write is
+ * registered by `ainar materials import`, which reads its slide text and
+ * proposes what it teaches — and a proposal nobody can look at is a proposal
+ * nobody can correct. The professor should be able to see the outline that was
+ * extracted, how it was obtained, and which slides yielded nothing, WITHOUT
+ * opening the .pptx and counting by hand.
+ *
+ * The caveats lead rather than trail. An outline read from slide text is a
+ * different kind of claim from one somebody wrote, and a page that shows it
+ * without saying so invites being read as authored.
+ */
+const sendOutline = (res, workspace, root, documentId, dark) => {
+  if (!documentId) return sendJson(res, 200, { error: "no document named" });
+
+  let found = null;
+  for (const courseId of workspace.courseIds()) {
+    let loaded;
+    try {
+      loaded = workspace.load(courseId);
+    } catch {
+      continue;
+    }
+    if (loaded.bundle === null) continue;
+    found = (loaded.bundle.documents ?? []).find((d) => d.document_id === documentId) ?? found;
+    if (found) break;
+  }
+  if (!found) return sendErrorPage(res, `no document ${documentId} in this workspace`);
+
+  const plan = found.presentation_plan;
+  if (!plan || !Array.isArray(plan.slides) || plan.slides.length === 0) {
+    return sendErrorPage(
+      res,
+      `${documentId} carries no presentation plan, so there is no outline to show.`,
+    );
+  }
+
+  const origin = String(found.extensions?.origin ?? "");
+  const readBy = String(found.extensions?.read_by ?? "");
+  const silent = plan.slides.filter((s) => (s.concepts ?? []).length === 0).length;
+
+  const source = [`# ${found.title ?? documentId}`, ""];
+  if (origin === "imported") {
+    source.push(
+      "**This outline was read, not written.** " +
+        (readBy === "text"
+          ? "It comes from the slide text and the speaker notes of a deck this course did not author. "
+          : readBy
+            ? `It was obtained by ${readBy}. `
+            : "") +
+        "Each title is that slide's first line of text that is not running chrome, " +
+        "and no slide type was inferred. The concepts are a proposal against this " +
+        "course's own set — nothing here can name a concept the course does not have.",
+      "",
+    );
+  }
+
+  source.push(`- **Slides** — ${plan.slides.length}`);
+  if (silent > 0) {
+    source.push(
+      `- **Matched no concept** — ${silent}. A text scan finds what is named; a slide ` +
+        "that shows rather than names carries nothing it can see.",
+    );
+  }
+  const union = [...new Set(plan.slides.flatMap((s) => s.concepts ?? []))];
+  source.push(`- **Concepts across the deck** — ${union.length ? union.join(", ") : "none"}`);
+  source.push("");
+
+  for (const slide of plan.slides) {
+    const concepts = (slide.concepts ?? []).join(", ");
+    source.push(
+      `${slide.number}. **${slide.title ?? "(untitled)"}**` +
+        (concepts ? ` — ${concepts}` : " — *nothing matched*"),
+    );
+  }
+
+  const title = String(found.title ?? documentId);
+  return send(res, 200, "text/html; charset=utf-8", markdownPage(title, source.join("\n"), dark === true));
+};
+
 const sendMaterial = (res, workspace, root, documentId, dark) => {
   if (!documentId) return sendJson(res, 200, { error: "no document named" });
 
@@ -4969,6 +5152,63 @@ const runApprove = (res, root, runId, approver, confirm) => {
         confirmed: confirm,
         exitCode: code,
         command: `bin/ainar approve work/${runId} --as ${approver}${confirm ? "" : " --dry-run"}`,
+        output: [stdout, stderr].filter(Boolean).join("\n").trim(),
+      });
+    },
+  );
+};
+
+/**
+ * Publish a homework starter repository, by spawning the CLI.
+ *
+ * Spawned for the reason `runApprove` gives, and one more that is particular to
+ * this: in token mode the credential is resolved inside that process and put in
+ * the environment of a `git` child. Keeping it there means the pane — which is
+ * a web server with routes an untrusted frame can reach — never holds a GitHub
+ * token in a variable of its own.
+ *
+ * **Plan and publish are one route with a flag.** Both reach GitHub, so both
+ * are POST; only `confirm` creates or pushes anything. The button press IS the
+ * flag, which is the whole of why a skill may not do this and a professor may.
+ */
+const runHomeworkPublish = (res, root, runId, assessmentId, repo, confirm) => {
+  if (!assessmentId) {
+    return sendJson(res, 200, { error: "No assessment chosen." });
+  }
+  if (!existsSync(AINAR_CLI)) {
+    return sendJson(res, 200, {
+      error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.`,
+    });
+  }
+
+  const args = [
+    "--experimental-strip-types",
+    AINAR_CLI,
+    "homework",
+    "publish",
+    assessmentId,
+    "--root",
+    root,
+    "--course-version",
+    runId,
+  ];
+  if (repo) args.push("--repo", repo);
+  if (confirm) args.push("--confirm");
+
+  execFile(
+    process.execPath,
+    args,
+    { cwd: root, timeout: 300000, maxBuffer: 4 * 1024 * 1024 },
+    (error, stdout, stderr) => {
+      const code = error && typeof error.code === "number" ? error.code : error ? 1 : 0;
+      sendJson(res, 200, {
+        ok: code === 0,
+        confirmed: confirm,
+        exitCode: code,
+        command:
+          `bin/ainar homework publish ${assessmentId}` +
+          (repo ? ` --repo ${repo}` : "") +
+          (confirm ? " --confirm" : ""),
         output: [stdout, stderr].filter(Boolean).join("\n").trim(),
       });
     },
@@ -5877,6 +6117,17 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
       );
     }
 
+    // What was read out of a deck, for a deck this course did not write.
+    if (path === "/outline") {
+      return sendOutline(
+        res,
+        workspace,
+        root,
+        url.searchParams.get("doc") ?? "",
+        url.searchParams.get("dark") === "1",
+      );
+    }
+
     // The brief a piece of graded work carries as text rather than as a file.
     // Beside `/file` because it ends in the same overlay and obeys the same
     // rule: addressed by an identifier the course record already names.
@@ -5889,6 +6140,24 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
         url.searchParams.get("assessment") ?? "",
         url.searchParams.get("drafts") === "1",
         url.searchParams.get("dark") === "1",
+      );
+    }
+
+    if (path === "/api/homework/publish") {
+      // POST for the same reason approve is: it reaches GitHub either way, and
+      // a request a prefetch or a refresh can fire is not one anybody decided
+      // to make.
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "publish is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return runHomeworkPublish(
+        res,
+        root,
+        runId,
+        url.searchParams.get("assessment") ?? "",
+        url.searchParams.get("repo") ?? "",
+        url.searchParams.get("confirm") === "1",
       );
     }
 

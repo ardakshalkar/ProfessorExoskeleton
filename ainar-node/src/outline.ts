@@ -161,6 +161,14 @@ const assessmentEntry = (assessment: any, rubrics: Map<string, any>): Record<str
     due_on: dateOf(assessment.due_at),
     outcomes: assessment.outcomes,
     submission_type: assessment.submission_type,
+    // Where the starter repository lives, as the record has it — and only as
+    // the record has it. Whether that repository exists on GitHub, and whether
+    // it matches the folder, are questions with a network call behind them, and
+    // a list that answered them would make one per row every time it is drawn.
+    // So this says what was written down, and `homework publish` says what is
+    // true, which is the same division `instructions_document_id` already has:
+    // the payload names the thing, the view that can reach it goes and looks.
+    github: assessment.extensions?.github ?? null,
     rubric_id: assessment.rubric_id ?? null,
     // Whether a rubric exists, not what it says.
     criteria: rubric ? (rubric.criteria ?? []).length : 0,
