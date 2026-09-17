@@ -31,11 +31,21 @@
  * pane switches between are already written. `dsh-ainar-course-model` ships
  * four widget documents — `course-outline`, `class-progress`, `gradebook`,
  * `action-inbox` — assembled from `widget-assets/`, and DSH renders none of
- * them, because `presentationMeta` is the MCP-app contract and DSH has no
- * renderer for it. They are, in that plugin's own words, "inert, not broken".
- * Serving each one as a document at a URL and pointing an iframe at it makes
- * them live again without a second copy of four hundred lines of view code
- * that a professor would eventually see disagree with itself.
+ * them. They are, in that plugin's own words, "inert, not broken".
+ *
+ * Not because DSH cannot render a tool's own view. It can: `dsh-client-ui-tool`
+ * exposes a `tool.call.toolview` slot where the package owning a tool registers
+ * a view for it by wire name. What DSH has no place for is the *metadata* —
+ * `presentationMeta` is the MCP-app contract, and the render intents a tool may
+ * return are a closed set (`generic`, `terminal`, `diff`, `search`, `read`,
+ * `web`), none of which carries a document.
+ *
+ * So the native route exists and is the wrong shape for what we have. It wants
+ * a component in the client runtime; we have four hundred lines of view code
+ * already written against a plain HTML document, which the MCP hosts still
+ * read. Serving each one as a document at a URL and pointing an iframe at it
+ * keeps that copy the only one — the alternative is a second, in React, that a
+ * professor would eventually see disagree with itself.
  */
 
 // `execFile` is here for one route only — `/api/approve`, which spawns this
