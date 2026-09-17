@@ -66,38 +66,33 @@ const detailsWithoutSession = {
   note: "details column no longer needs a session",
 };
 
-/**
- * The browser tab's title.
+/*
+ * The served index.html's <title> used to be patched here, and is not any more.
  *
- * `plugins/dsh-professor-brand/` replaces the sidebar mark, the sidebar
- * wordmark and the conversation hero mark through UI slots, which is the
- * supported route and needs no patch. The title is the one piece of the brand
- * with no slot at all: `ui-brand-official`'s own README says so — "the browser
- * title is independent; `DSH_CLIENT_TITLE` selects title text at BUILD time
- * rather than through a UI slot" — and this project consumes a published
- * bundle rather than building the frontend, so that build-time variable is not
- * a lever it has.
+ * It moved to `plugins/dsh-professor-brand/` on 2026-09-17, as a
+ * `ctx.webServer.tapIndex` transform. The webserver documents that hook as "the
+ * escape hatch for markup no IndexInjection row expresses", `renderIndex`
+ * applies it to every index response, and `dsh-host-frontend-static` routes
+ * every index response through `renderIndex` — so this was a supported
+ * extension point the whole time, reached through a plugin, which is exactly
+ * the order of preference the note at the top of this file asks for.
  *
- * Which leaves the shipped `index.html`, one `<title>` in it, and this file.
- * The result is that every surface says the same name; without it the tab
- * still reads "DeepSeek Harness" beside a sidebar that does not.
+ * The replacement is also better than what it replaced: a tap can match
+ * `<title>` by pattern, where a patch has to match the shipped string exactly
+ * and breaks on any upstream retitling.
+ *
+ * It did NOT remove the need for `sessionBrowserTitle` below. That one is a
+ * constant inside a React component the renderer mounts itself, and no hook
+ * reaches it.
  */
-const browserTitle = {
-  package: "@deepseek-ai/dsh-web-frontend",
-  file: "dist/index.html",
-  find: "<title>DeepSeek Harness</title>",
-  replace: "<title>Professor's Exoskeleton</title><!-- PATCHED (patches/apply.mjs) -->",
-  marker: "PATCHED (patches/apply.mjs)",
-  note: "browser tab title is this host's own",
-};
 
 /**
  * The browser tab's title once a session is open.
  *
- * `browserTitle` above covers the document the server sends, which is what the
- * tab reads until React mounts. It is not the whole story: `ui-renderer`'s
- * `DocumentTitle` then takes the tab over for the rest of the session's life
- * and composes it from its OWN hardcoded constant —
+ * The `tapIndex` transform in `dsh-professor-brand` covers the document the
+ * server sends, which is what the tab reads until React mounts. It is not the
+ * whole story: `ui-renderer`'s `DocumentTitle` then takes the tab over for the
+ * rest of the session's life and composes it from its OWN hardcoded constant —
  *
  *     const productTitle = "DeepSeek Harness";
  *     document.title = title === void 0 ? productTitle : `${title} — ${productTitle}`;
@@ -107,9 +102,9 @@ const browserTitle = {
  * the moment a conversation was open. That is the state in which anybody
  * actually uses the thing, and it is the state a screenshot catches.
  *
- * Both patches are needed, and neither is redundant: this constant is also the
+ * Both halves are needed, and neither is redundant: this constant is also the
  * title restored on unmount, while the served HTML is what shows before any of
- * this JavaScript has run.
+ * this JavaScript has run. Only this half has to be a patch.
  */
 const sessionBrowserTitle = {
   package: "@deepseek-ai/dsh-client-ui-renderer",
@@ -121,7 +116,7 @@ const sessionBrowserTitle = {
   note: "session tab titles carry this host's name, not DeepSeek's",
 };
 
-const PATCHES = [detailsWithoutSession, browserTitle, sessionBrowserTitle];
+const PATCHES = [detailsWithoutSession, sessionBrowserTitle];
 
 let changed = 0;
 let already = 0;
