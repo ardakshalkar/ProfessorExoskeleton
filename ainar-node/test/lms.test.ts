@@ -49,7 +49,7 @@ import { draftSubmissionId, submissionsFromApi, submissionsFromExport } from "..
  * without one ever leaving this process.
  */
 
-const ROOT = resolve(process.cwd(), "..");
+const ROOT = resolve(process.cwd(), "..", "workspace");
 const RUN = "CSS-4008-2026-FALL";
 
 const EXPORT = `Student,ID,SIS User ID,SIS Login ID,Section,Foundations Quiz (90201),Model Evaluation Assignment (90218),Current Score,Final Score

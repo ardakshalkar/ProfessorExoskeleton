@@ -44,7 +44,7 @@ route.
 
 It bridges the Tools capability only. Resources are deferred, and everything
 this server puts behind Resources is the widgets — the per-tool views under
-`ainar/mcp/widget-assets/`. Over the bridge they are not degraded, they are
+`vendor/ainar/mcp/widget-assets/`. Over the bridge they are not degraded, they are
 absent, and neither end says so. `defineTool` has `presentationMeta` to carry
 them; the bridge has nowhere to put them.
 
@@ -76,7 +76,7 @@ resolved a different major version of Zod than the source it mirrored.
 
 Both copies were checked against each other before the second was deleted: the
 same 94 validator codes, and identical issue lists on all 98 mutations in
-`golden/validator/`. It was a faithful translation. It was also a second one,
+`workspace/golden/validator/`. It was a faithful translation. It was also a second one,
 and nothing checked that it stayed faithful.
 
 Node strips types on import, so the source is imported directly and there is no

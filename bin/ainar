@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # `ainar` — the AINAR course model CLI, in TypeScript, run straight from source.
 #
-#   bin/ainar validate CSS-4008
+#   bin/ainar validate CSS-4008 --root workspace
 #   bin/ainar inbox CSS-4008-2026-FALL --root /path/to/workspace
+#   cd workspace && ../bin/ainar validate CSS-4008
 #
 # No build step: Node strips the type annotations and runs the .ts files. That
 # is how the upstream project runs it too (`npm run ainar` in ainar-node), so
@@ -13,6 +14,12 @@
 #
 # The workspace is `--root <path>`, or the directory you are standing in.
 # AINAR_WORKSPACE is not read — see README.
+#
+# This checkout's own example course is under `workspace/`, and the repository
+# root is not a workspace, so running this from the root without `--root` finds
+# no courses — exactly as it would in any other folder that has no `courses/`
+# in it. That was not true before 2026-09-17, when the example course sat at the
+# root; a script written then and not passing `--root` will now come up empty.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 

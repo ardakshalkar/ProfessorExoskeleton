@@ -8,7 +8,7 @@
  * reports 94 of 94, and `tests/test_validate.py` fails if `validate.py` grows a
  * code this file has not.
  *
- * **Every check is verified against `golden/validator/`**, a corpus that breaks
+ * **Every check is verified against `workspace/golden/validator/`**, a corpus that breaks
  * the example course one way at a time and records what `validate.py` said. That
  * is the whole safety argument: 98 mutations, one per failure mode, and message
  * text is part of the contract — the fixtures compare it exactly. A check with no
@@ -167,7 +167,7 @@ export const TOTAL_CODES = 94;
  * Separate from `IMPLEMENTED` on purpose, and the separation is the point.
  * `IMPLEMENTED` is not a list of what this file happens to check — it is the
  * claim that the port lost nothing, and the 98 mutations in
- * `golden/validator/` are what hold it there. Folding a new check into it
+ * `workspace/golden/validator/` are what hold it there. Folding a new check into it
  * would turn "94 of 94" from a guarantee into a tautology: a number that
  * counts itself and can never be short.
  *
@@ -189,7 +189,7 @@ export const coverage = () => ({
   note:
     `${IMPLEMENTED.length} of ${TOTAL_CODES} checks` +
     (IMPLEMENTED.length === TOTAL_CODES
-      ? ", the complete set. Held to `validate.py` by the 98 mutations in `golden/validator/`."
+      ? ", the complete set. Held to `validate.py` by the 98 mutations in `workspace/golden/validator/`."
       : ". The rest are not implemented; this number is the gate, so it is printed rather than assumed.") +
     (ADDED.length
       ? ` Plus ${ADDED.length} check${ADDED.length === 1 ? "" : "s"} added beyond it: ` +

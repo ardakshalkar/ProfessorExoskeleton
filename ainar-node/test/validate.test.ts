@@ -1,5 +1,5 @@
 /**
- * The two things `golden/validator/` structurally cannot check.
+ * The two things `workspace/golden/validator/` structurally cannot check.
  *
  * The corpus is the real oracle for the validator: 98 mutations, each breaking
  * the example course one way, each recording what `validate.py` said. It covers

@@ -356,7 +356,7 @@ export const dashboardPayload = (
      *
      * A subgroup's numbers must not be readable as the class's, so a narrowed
      * payload says so. An unnarrowed one stays byte-identical to what
-     * `progress.py` emits, which is what `golden/` compares — a key that is
+     * `progress.py` emits, which is what `workspace/golden/` compares — a key that is
      * always there, even as `[]`, is a parity break for every caller that
      * never asked about subgroups.
      */

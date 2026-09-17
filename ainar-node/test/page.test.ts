@@ -30,7 +30,15 @@ import { TemplateRefusal, loadStructure, loadStyle } from "../src/templates.ts";
  * the network or the HTML parser from a payload value.
  */
 
-const ROOT = resolve(process.cwd(), "..");
+// Two roots, because this file asks two different questions of two different
+// trees. A course is read from a WORKSPACE — the directory holding `courses/`
+// and `shared/` — and a template is looked up under the REPOSITORY, because
+// `templates.yaml` ships beside the skill that owns it. They were the same path
+// until 2026-09-17, when the sample workspace moved into `workspace/`, and
+// collapsing them back would make `publishable` publish from the repository or
+// `loadStyle` search a course folder for skills.
+const REPO = resolve(process.cwd(), "..");
+const ROOT = join(REPO, "workspace");
 const RUN = "CSS-4008-2026-FALL";
 
 const bundle = () => {
@@ -176,7 +184,7 @@ test("a style sheet carrying markup is refused", () => {
     const dir = scratch();
     writeFileSync(join(dir, "bad.css"), `body { color: red } /* ${needle} */`);
     assert.throws(
-      () => loadStyle(join(dir, "bad.css"), "course-page", ROOT),
+      () => loadStyle(join(dir, "bad.css"), "course-page", REPO),
       TemplateRefusal,
       `${needle} should be refused`,
     );
@@ -186,23 +194,23 @@ test("a style sheet carrying markup is refused", () => {
 test("a remote asset is refused", () => {
   const dir = scratch();
   writeFileSync(join(dir, "remote.css"), "body { background: url(https://example.com/x.png) }");
-  assert.throws(() => loadStyle(join(dir, "remote.css"), "course-page", ROOT), TemplateRefusal);
+  assert.throws(() => loadStyle(join(dir, "remote.css"), "course-page", REPO), TemplateRefusal);
 });
 
 test("a dashboard template is refused by the public page", () => {
   // Each set declares its surface in `templates.yaml`, so pointing `page` at a
   // dashboard's style sheet is stopped at the command rather than discovered in
   // the rendered page.
-  const dashboard = join(ROOT, "skills", "course-dashboard", "templates", "plain.css");
+  const dashboard = join(REPO, "skills", "course-dashboard", "templates", "plain.css");
   assert.throws(
-    () => loadStyle(dashboard, "course-page", ROOT),
+    () => loadStyle(dashboard, "course-page", REPO),
     (error: Error) =>
       error instanceof TemplateRefusal && /template for course-dashboard/.test(error.message),
   );
 });
 
 test("a template can be chosen by id alone", () => {
-  const [css, name] = loadStyle("plain", "course-page", ROOT);
+  const [css, name] = loadStyle("plain", "course-page", REPO);
   assert.equal(name, "plain");
   assert.ok(css.length, "the chosen template should have some CSS in it");
 });
@@ -212,7 +220,7 @@ test("a structure that could run or fetch something is refused", () => {
     const dir = scratch();
     writeFileSync(join(dir, "bad.tmpl"), `<section>${bad}</section>`);
     assert.throws(
-      () => loadStructure(join(dir, "bad.tmpl"), "course-page", ROOT),
+      () => loadStructure(join(dir, "bad.tmpl"), "course-page", REPO),
       TemplateRefusal,
       `${bad} should be refused`,
     );
@@ -221,7 +229,7 @@ test("a structure that could run or fetch something is refused", () => {
 
 test("a template that is not there names where it looked", () => {
   assert.throws(
-    () => loadStyle("no-such-template", "course-page", ROOT),
+    () => loadStyle("no-such-template", "course-page", REPO),
     (error: Error) => error instanceof TemplateRefusal && /Looked in:/.test(error.message),
   );
 });

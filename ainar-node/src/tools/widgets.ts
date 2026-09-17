@@ -2,7 +2,8 @@
  * Inline UI for the tools. Ported from `ainar/mcp/widgets.py`.
  *
  * "Ported" overstates it, and that is the interesting part. The CSS and the
- * JavaScript are not here — they are plain files in `ainar/mcp/widget-assets/`,
+ * JavaScript are not here — they are plain files in
+ * `vendor/ainar/mcp/widget-assets/`,
  * and this module reads the same bytes the Python server reads. What was ported
  * is the assembly and the metadata, which is about eighty lines; the four
  * hundred lines of view code exist once.
@@ -37,11 +38,12 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  */
 const CANDIDATES = [
   // Running the TypeScript in place: node/src/tools → repo root. This is the
-  // one that hits in a checkout, so `ainar/mcp/widget-assets/` is the copy the
-  // server actually reads and the two below are for layouts where it is absent.
-  "../../../ainar/mcp/widget-assets",
+  // one that hits in a checkout, so `vendor/ainar/mcp/widget-assets/` is the
+  // copy the server actually reads and the two below are for layouts where it
+  // is absent.
+  "../../../vendor/ainar/mcp/widget-assets",
   // Running the compiled output: node/dist/src/tools → repo root.
-  "../../../../ainar/mcp/widget-assets",
+  "../../../../vendor/ainar/mcp/widget-assets",
   // Inside either bundle, two directories above the compiled `tools/`. There is
   // no Python there to own the assets, so each builder copies them in — and
   // "two above" lands somewhere different in each, because the two bundles nest
@@ -64,7 +66,7 @@ const findAssets = (): string => {
   throw new Error(
     "the widget assets are missing. Looked in:\n" +
       CANDIDATES.map((c) => `  ${resolve(HERE, c)}`).join("\n") +
-      "\nThey are shared with the Python server and live in ainar/mcp/widget-assets/.",
+      "\nThey are shared with the Python server and live in vendor/ainar/mcp/widget-assets/.",
   );
 };
 

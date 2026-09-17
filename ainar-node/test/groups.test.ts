@@ -237,7 +237,7 @@ test("a run with no subgroups says so rather than listing nothing", () => {
 /**
  * An unnarrowed payload must not gain a key.
  *
- * `golden/` compares these payloads against what the Python modules emit, key
+ * `workspace/golden/` compares these payloads against what the Python modules emit, key
  * for key, and a `groups: []` that is always present is a parity break for
  * every caller that never asked about subgroups. Absence is the whole run;
  * the key appears only when it is a real filter.

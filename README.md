@@ -22,7 +22,7 @@ Three moves, and the third is the point.
 
 **Model.** A course is records, not prose — outcomes, concepts and the
 prerequisites between them, modules, assessments, rubrics, items, evidence.
-Twenty-eight schemas in [`datalayer/schema/`](datalayer/schema/). Once a course
+Twenty-eight schemas in [`vendor/datalayer/schema/`](vendor/datalayer/schema/). Once a course
 is data, questions like *"which outcome does nothing assess?"* stop being
 essay questions.
 
@@ -59,7 +59,7 @@ items do not add up to the criterion maximum, because an example where nothing
 is wrong teaches you nothing about what the validator is for.
 
 Those 94 referential checks are held to the original Python implementation by
-98 mutation fixtures in [`golden/validator/`](golden/validator/) — each one
+98 mutation fixtures in [`workspace/golden/validator/`](workspace/golden/validator/) — each one
 breaks the course in a specific way and pins the exact diagnostic. The same
 data drives the rest of the read commands:
 
@@ -149,7 +149,7 @@ them today:
   entry used to name the `placement` wording. That had already been fixed; the
   fixture was failing on the field list and the note had not caught up.)
 
-A third fixture was added on 2026-09-08: `golden/CSS-4008/import.sql`, the 655
+A third fixture was added on 2026-09-08: `workspace/golden/CSS-4008/import.sql`, the 655
 lines `python -m ainar sql` wrote for the example course before Python was cut
 loose. `test/sqlgen.test.ts` compares the port's output against it line by line
 and names the only difference it is allowed to have.
@@ -265,11 +265,11 @@ cd ainar-node && npm test   # the model, the read layer, roster, approve, decks
 
 The second is the one that matters: 188 tests over 19 suites, and none of them
 skipped, because the example course below is checked in. Remove
-`courses/CSS-4008/` and eleven of them have nothing to run against.
+`workspace/courses/CSS-4008/` and eleven of them have nothing to run against.
 
 ## The example course
 
-[`courses/CSS-4008/`](courses/CSS-4008/) is a filled-in course to read and
+[`workspace/courses/CSS-4008/`](workspace/courses/CSS-4008/) is a filled-in course to read and
 break: *Artificial Intelligence*, 5 credits, offered `2026-FALL` — four
 outcomes, ten concepts with prerequisite edges, nine modules, four assessments
 with rubrics and items, and three enrolled students carrying recorded evidence.
@@ -277,11 +277,11 @@ with rubrics and items, and three enrolled students carrying recorded evidence.
 It is deliberately small enough to hold in your head and complete enough that
 every read command returns something. The expected output for each of those
 commands is checked in beside it under
-[`golden/CSS-4008/`](golden/CSS-4008/), which is what makes it a fixture and
+[`workspace/golden/CSS-4008/`](workspace/golden/CSS-4008/), which is what makes it a fixture and
 not just a demo.
 
 The two capabilities its outcomes reference sit in
-[`shared/capabilities.yaml`](shared/capabilities.yaml) rather than inside the
+[`workspace/shared/capabilities.yaml`](workspace/shared/capabilities.yaml) rather than inside the
 course, because a student accumulates evidence for a capability across several
 courses — which is what lets a capability map be built instead of a transcript.
 Remove that file and `validate` reports nine dangling references, which is the
@@ -314,18 +314,27 @@ draft arguments, unannounced results and student work quoted as examples, so
 
 ## Layout
 
+The repository root holds the product. Everything a *course* is made of lives
+one level down, in `workspace/`, because that is a workspace and this is not —
+see **The workspace is not the repository** below.
+
 ```
-courses/CSS-4008/              the example course — start here
-homework/<slug>/               starter repositories students fork
-imports/<label>/               material brought in from outside, not yet a record
-archive/<TERM>/                offerings that have finished
-shared/capabilities.yaml       capabilities, which outlive any one course
-datalayer/schema/              28 record schemas: what a course IS
 ainar-node/                    the model and the read layer, in TypeScript
   src/                         validate, gradebook, roster, approve, decks
+  src/tools/                   the 16 read-only tools, and their widgets
+  src/mcp/                     protocol only: stdio, HTTP, OAuth
   bin/ainar.ts                 the `ainar` CLI
   test/                        19 suites
-golden/                        expected output, and 98 validator mutations
+workspace/                     a course workspace, which is what the tools read
+  courses/CSS-4008/            the example course — start here
+  homework/<slug>/             starter repositories students fork
+  imports/<label>/             material brought in from outside, not yet a record
+  archive/<TERM>/              offerings that have finished
+  shared/capabilities.yaml     capabilities, which outlive any one course
+  golden/                      expected output, and 98 validator mutations
+vendor/                        taken from elsewhere, kept as source — PROVENANCE.md
+  datalayer/schema/            28 record schemas: what a course IS
+  ainar/mcp/widget-assets/     the widget documents, shared with the Python server
 plugins/
   dsh-ainar-course-model/      the model as a harness plugin + MCP server
   dsh-professor-pane/          the UI for clicking through a course
@@ -341,10 +350,34 @@ deploy/                        the same host for more than one professor:
                                proxy, because the harness has no login of its own
 ```
 
-Everything under `plugins/` is source: edit it here. Three of the four began as
-copies from sibling checkouts and one still has a generated twin —
-`dsh-ainar-course-model/server/` is `ainar-node/src/` one build stage later, and
-a change to one is copied to the other by hand.
+### The workspace is not the repository
+
+A **workspace** is any directory holding a `courses/` directory, and the code
+finds one by walking up from wherever you are standing
+([`workspaceRootFor`](ainar-node/src/workspace.ts)). A professor's workspace is
+their own course folder, somewhere else entirely. `workspace/` here is a filled-in
+example, and the repository root is deliberately *not* one — it is the product,
+and a product that is also a course teaches the wrong lesson about which is
+which.
+
+The practical consequence: from the repository root, say where the course is.
+
+```bash
+bin/ainar stats --root workspace
+cd workspace && ../bin/ainar stats     # or just stand in it
+```
+
+Without `--root`, `ainar` reads the directory you are standing in and finds no
+courses there — which is the same thing it does in any other folder that is not
+a workspace. Until 2026-09-17 the repository root happened to be a workspace, so
+this was never needed here.
+
+### Everything under `plugins/` is source
+
+Edit it here. Three of the four began as copies from sibling checkouts; none has
+a generated twin any more — `dsh-ainar-course-model/server/` was 8,396 lines of
+compiled JavaScript kept in step with `ainar-node/src/` by hand, and it was
+deleted on 2026-09-16 in favour of importing `@ainar/core`.
 [`PROVENANCE.md`](PROVENANCE.md) records where each tree came from and what this
 project has changed since.
 

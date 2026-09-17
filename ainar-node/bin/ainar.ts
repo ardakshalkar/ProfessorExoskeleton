@@ -14,7 +14,7 @@
  * made it defensible was that the disagreement was *measured*: both gates were
  * run over the same drafts and the trees they wrote compared, the emitters were
  * compared scalar by scalar, and the refusal is the same width — all 94 checks,
- * held there by the 98 mutations in `golden/validator/`. It still prints its
+ * held there by the 98 mutations in `workspace/golden/validator/`. It still prints its
  * coverage on every run, because that number is the gate and a reader should not
  * have to trust it.
  *

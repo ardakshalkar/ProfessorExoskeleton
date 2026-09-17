@@ -19,7 +19,11 @@ import { BY_TOOL, BY_URI, MIME, TEMPLATE_KEY, WIDGETS } from "../src/tools/widge
 import { TOOLS, WITHHELD, callTool } from "../src/tools/index.ts";
 import { Workspace } from "../src/workspace.ts";
 
-const ROOT = join(import.meta.dirname, "..", "..");
+// The repository, and the sample workspace inside it. Separate since 2026-09-17:
+// the assets are a repository file this test reads directly, the course is a
+// workspace the tools are pointed at.
+const REPO = join(import.meta.dirname, "..", "..");
+const ROOT = join(REPO, "workspace");
 const RUN = "CSS-4008-2026-FALL";
 
 test("the assets were found, and there are four of them", () => {
@@ -140,7 +144,7 @@ test("adding resources did not add a write verb", () => {
  */
 const engine = (): { tmpl: (s: string, m: unknown) => string } => {
   const source = readFileSync(
-    join(ROOT, "ainar", "mcp", "widget-assets", "template.js"),
+    join(REPO, "vendor", "ainar", "mcp", "widget-assets", "template.js"),
     "utf8",
   );
   const esc = `function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){

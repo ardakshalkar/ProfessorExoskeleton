@@ -1,10 +1,11 @@
 # What this repository does NOT hold.
 #
-# It used to exclude every vendored tree — `ainar-node/`, `ainar/`, `golden/`,
-# `.agents/skills/`, `datalayer/` and three of the four plugins — on the ground
-# that they were copies rather than source. That meant a fresh clone was not a
-# working host: it needed `python -m exo setup` and a manual copy of two sibling
-# checkouts, and the harness could not start until both had run.
+# It used to exclude every vendored tree — `ainar-node/`, `vendor/ainar/`,
+# `workspace/golden/`, `.agents/skills/`, `vendor/datalayer/` and three of the
+# four plugins — on the ground that they were copies rather than source. That
+# meant a fresh clone was not a working host: it needed `python -m exo setup`
+# and a manual copy of two sibling checkouts, and the harness could not start
+# until both had run.
 #
 # They are all tracked now, and as of 2026-09-08 they are not copies either:
 # nothing outside this repository writes into it, and `PROVENANCE.md` records
@@ -35,9 +36,10 @@ dist/
 # Per-machine telemetry id, written by dsh at boot.
 .dsh/.anonymous-user-id
 
-# Python bytecode. There is no Python in this repository — `ainar/` is carried
-# for its widget assets alone — so anything matching these got here by someone
-# running an interpreter over a sibling checkout from inside this directory.
+# Python bytecode. There is no Python in this repository — `vendor/ainar/` is
+# carried for its widget assets alone — so anything matching these got here by
+# someone running an interpreter over a sibling checkout from inside this
+# directory.
 __pycache__/
 *.py[cod]
 

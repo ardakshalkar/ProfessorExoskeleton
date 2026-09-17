@@ -1,5 +1,5 @@
 /**
- * Check the validator port against `golden/validator/`.
+ * Check the validator port against `workspace/golden/validator/`.
  *
  * Each fixture is the example course broken one way, and what `validate.py`
  * said about it. The mutation is data, so the same break is applied here rather

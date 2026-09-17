@@ -13,12 +13,12 @@ import { Json, buildScript, literal, rowId, schemaSql, upsert, uuid5 } from "../
  * does not define.
  *
  * The last test is the parity check, and it is the reason this file exists at
- * all. `golden/CSS-4008/import.sql` was produced by `python -m ainar sql` before
+ * all. `workspace/golden/CSS-4008/import.sql` was produced by `python -m ainar sql` before
  * Python was cut loose, so it is a record of what the implementation this port
  * replaces actually emitted.
  */
 
-const ROOT = resolve(process.cwd(), "..");
+const ROOT = resolve(process.cwd(), "..", "workspace");
 
 const course = () => {
   const dir = discoverCourses(ROOT).find((path) => path.endsWith("CSS-4008"))!;

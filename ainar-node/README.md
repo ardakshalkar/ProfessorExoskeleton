@@ -37,7 +37,7 @@ nothing imports across the two trees.
 | `src/workspace.ts` | `ainar/mcp/tools.py` | course loading, cached per process |
 | `bin/server.ts` | `ainar/mcp/server.py` | local stdio MCP on the official SDK |
 | `bin/http-server.ts` | — | remote Streamable HTTP MCP over PostgreSQL read models |
-| `bin/golden-check.ts` | — | compares the port against `golden/` |
+| `bin/golden-check.ts` | — | compares the port against `workspace/golden/` |
 
 ### `src/mcp/` is protocol, and only protocol
 
@@ -79,7 +79,7 @@ compares the trees byte for byte, and `tests/test_yaml_parity.py` holds
 `src/yaml-out.ts` to PyYAML's output scalar by scalar. It prints its validator
 coverage on every run, because the refusal is what makes it a gate — since
 Phase 4 that is all 94 of `validate.py`'s checks, held there by the 98
-mutations in `golden/validator/`.
+mutations in `workspace/golden/validator/`.
 
 The line that has not moved: **grades, pseudonyms and anything a student can see
 stay Python's** — `lms`, `roster` and `notion push` are refused by name.

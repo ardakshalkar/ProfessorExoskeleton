@@ -125,6 +125,7 @@ const DEFAULTS_YAML = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "..",
+  "vendor",
   "datalayer",
   "preferences",
   "defaults.yaml",

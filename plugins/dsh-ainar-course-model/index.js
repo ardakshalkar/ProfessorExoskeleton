@@ -8,7 +8,7 @@
  *
  * This exists because that bridge carries Tools and nothing else. Our server
  * also serves `resources/list` and `resources/read`, and everything behind them
- * is the widgets: `ainar/mcp/widget-assets/` rendered per tool, bound by
+ * is the widgets: `vendor/ainar/mcp/widget-assets/` rendered per tool, bound by
  * `BY_TOOL`. Over the MCP client they are simply absent — not broken, not
  * degraded, absent — and the loss is silent at both ends.
  *
