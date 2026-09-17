@@ -330,9 +330,10 @@ plugins/
   dsh-ainar-course-model/      the model as a harness plugin + MCP server
   dsh-professor-pane/          the UI for clicking through a course
   dsh-professor-brand/         this host's own mark and wordmark, not DeepSeek's
+  professor-course-skills/     20 course-level skills: planning, gaps, dashboards
   professor-skills/            19 skills: slides, assessment, grading, publishing
   dsh-sample/                  a minimal plugin, kept as the contract example
-skills/                        17 course-level skills: planning, gaps, dashboards
+.claude-plugin/marketplace.json  the same seven skill trees, for the second host
 bin/sample[.cmd]               the front door: set DSH_HOME, then exec dsh
 .dsh/profiles/sample/          how this host is composed
 deploy/                        the same host for more than one professor:
@@ -346,6 +347,17 @@ copies from sibling checkouts and one still has a generated twin —
 a change to one is copied to the other by hand.
 [`PROVENANCE.md`](PROVENANCE.md) records where each tree came from and what this
 project has changed since.
+
+The seven skill trees are read by two hosts and copied by neither. The harness
+names them as absolute roots in
+[`agent.cordis.yml`](.dsh/.agent-presets/professor/agent.cordis.yml), anchored to
+that file. Claude Code gets the same seven from
+[`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json): a
+marketplace added from a local directory loads a relative-path plugin **in
+place**, so it reads these files rather than a cached copy, and an edit here is
+live in both hosts at once. Add it with `claude plugin marketplace add .` — and
+note that a host reading skills from anywhere else, such as `~/.claude/skills`,
+is holding a copy that nothing updates.
 
 ## Writing a plugin against this
 
