@@ -44,6 +44,43 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  * any other; it simply has no turns in it yet. The pane already resolves its
  * workspace without one (see its `resolveWorkspace`), which is why this is a
  * one-condition change rather than a rework.
+ *
+ * ## There is no slot to do this with instead. Checked on 2026-09-17.
+ *
+ * `ui-layout`'s README says AppFrame "declares `sidebar`, `conversation`,
+ * `details`, and `conversation.empty`". The fourth one does not exist. The
+ * bundle in that same package, at the same 0.1.1-rc.2 this project pins,
+ * declares:
+ *
+ *     sidebar         single  root
+ *     conversation    single  session-maybe
+ *     details         single  session
+ *     shell.overlay   list    root
+ *
+ * and `conversation.empty` appears in no shipped bundle at all. It is a bug in
+ * their README, and it is a convincing one — a start-screen slot in the
+ * conversation column is exactly what this patch would otherwise not need.
+ *
+ * Every seat that needs no session, across layout and conversation both:
+ *
+ *     sidebar                        single   taken by the sidebar
+ *     conversation.hero.brand.mark   single   taken by dsh-professor-brand
+ *     conversation.hero.workspace    single   taken by the workspace picker
+ *     conversation.hero.agentPreset  single   taken by the preset chooser
+ *     shell.overlay                  list     free
+ *
+ * The only free one is the wrong shape: AppFrame renders `shell.overlay` into
+ * `<div className={overlayLayer} data-shell-overlay>`, a floating layer over the
+ * three columns rather than a column. The other four are `single` and taking one
+ * evicts something a professor uses.
+ *
+ * Nor can the column be opened from `ctx.layout`. The gate sits ABOVE the
+ * geometry — `computeColumns(..., detailsSession === void 0 ? 0 : panels.details)`
+ * zeroes the width whatever the store holds — so there is no action to call.
+ *
+ * So this stays a patch until a shipped version grows a root-scoped seat in the
+ * conversation column. Re-checking costs a look at that declaration table; the
+ * README is not evidence.
  */
 const detailsWithoutSession = {
   package: "@deepseek-ai/dsh-client-ui-layout",
