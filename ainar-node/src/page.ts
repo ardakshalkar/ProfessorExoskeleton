@@ -40,7 +40,7 @@
 import { copyFileSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { type CourseBundle } from "./bundle.ts";
-import { BY_TOOL, stylesheet } from "./mcp/widgets.ts";
+import { BY_TOOL, stylesheet } from "./tools/widgets.ts";
 import { refusal, scan } from "./safety.ts";
 
 /**

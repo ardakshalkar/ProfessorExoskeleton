@@ -15,7 +15,7 @@ import { test } from "node:test";
 import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { Workspace, workspaceRootFor } from "../src/mcp/workspace.ts";
+import { Workspace, workspaceRootFor } from "../src/workspace.ts";
 
 const COURSE = "CSS-9001";
 

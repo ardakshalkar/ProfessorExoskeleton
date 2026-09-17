@@ -1,7 +1,7 @@
 # The widget documents
 
 Plain files, read by **two** servers: `ainar/mcp/widgets.py` and
-`node/src/mcp/widgets.ts`. Neither owns them.
+`node/src/tools/widgets.ts`. Neither owns them.
 
 That is the only reason this directory exists. A widget is about three hundred
 lines of CSS and JavaScript, and the alternative was those lines living inside a

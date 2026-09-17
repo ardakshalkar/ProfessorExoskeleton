@@ -19,10 +19,10 @@
 import { statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
-import type { LoadResult } from "../loader.ts";
-import type { CourseBundle } from "../bundle.ts";
-import { assessmentsOf, runById } from "../bundle.ts";
-import { type CourseStore, YamlCourseStore } from "./course-store.ts";
+import type { LoadResult } from "./loader.ts";
+import type { CourseBundle } from "./bundle.ts";
+import { assessmentsOf, runById } from "./bundle.ts";
+import { type CourseStore, YamlCourseStore } from "./store/course.ts";
 
 /**
  * The newest mtime anywhere under `directory`, in milliseconds, or 0 if it is

@@ -7,11 +7,11 @@ import {
   ListToolsRequestSchema,
   ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { TOOLS, callTool } from "./tools.ts";
+import { TOOLS, callTool } from "../tools/index.ts";
 import type { TelegramPublisher } from "../integrations/telegram.ts";
 import { TELEGRAM_TOOL, callTelegramTool } from "./telegram-tool.ts";
-import { BY_TOOL, BY_URI, WIDGETS } from "./widgets.ts";
-import type { Workspace } from "./workspace.ts";
+import { BY_TOOL, BY_URI, WIDGETS } from "../tools/widgets.ts";
+import type { Workspace } from "../workspace.ts";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 
 export type WorkspaceProvider =

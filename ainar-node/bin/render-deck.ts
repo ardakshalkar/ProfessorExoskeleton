@@ -54,7 +54,7 @@ import {
   type Block,
   type Plan,
 } from "../src/deck.ts";
-import { Workspace } from "../src/mcp/workspace.ts";
+import { Workspace } from "../src/workspace.ts";
 
 const require = createRequire(import.meta.url);
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));

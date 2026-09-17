@@ -3,7 +3,7 @@ import { test } from "node:test";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import { PostgresTelegramPublisher } from "../src/integrations/telegram.ts";
 import { callTelegramTool } from "../src/mcp/telegram-tool.ts";
-import type { SqlPool } from "../src/mcp/postgres-course-store.ts";
+import type { SqlPool } from "../src/store/postgres.ts";
 
 const identity = { issuer: "https://auth.example.edu", subject: "professor-123" };
 

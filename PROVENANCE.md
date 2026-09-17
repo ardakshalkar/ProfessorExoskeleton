@@ -57,12 +57,20 @@ took the current one.
 
 **The widget assets exist twice**, in `ainar/mcp/widget-assets/` and
 `ainar-node/widget-assets/`, and a third time under
-`plugins/dsh-ainar-course-model/widget-assets/`. `src/mcp/widgets.ts` searches
-several locations and finds the copy inside `ainar-node`;
-`test/widgets.test.ts` opens `ainar/mcp/widget-assets/template.js` by a
-hardcoded path. One copy satisfies the code and the other satisfies its test;
-deleting either breaks one of them. The `ainar/` directory exists for no other
-reason.
+`plugins/dsh-ainar-course-model/widget-assets/`, and all three are byte for byte
+the same.
+
+Only one of them is read in this checkout. `src/tools/widgets.ts` tries three
+locations and the first hits: `ainar/mcp/widget-assets/`, which is also the copy
+`test/widgets.test.ts` opens by a hardcoded path. So `ainar/` earns its place —
+it is the live one, and the `ainar/` directory exists for no other reason — and
+the other two are reached only in bundle layouts this checkout cannot build,
+where the builders in ProfessorHarness copy the assets in beside the compiled
+core. Until one of those builders can be run from here, editing a widget means
+editing three files and remembering to.
+
+This paragraph said the opposite until 2026-09-17 — that the copy inside
+`ainar-node` was the live one. Replaying the candidate list is what settled it.
 
 **`golden/` is a fixture corpus, not a library.** `postgres-course-store`'s tests
 open `golden/CSS-4008/bundle.json` by a path relative to the repository root, so
@@ -223,10 +231,12 @@ decisions this project made, not code it inherited.
   implementation: headings, both lists, fenced code, tables, blockquotes, rules
   and inline spans, pinned by `test/pane-markdown.test.mjs`.
 
-**Mirrored by hand**
+**No longer mirrored by hand**
 
-`plugins/dsh-ainar-course-model/server/` is the same code as `ainar-node/src`,
-one build stage later. Upstream a Python script produced it; here the changes are
-copied across by hand, minus `roster.ts`, which has no place in a read-only tool
-surface. The `.d.ts` files beside them are not maintained — nothing in this
-project typechecks against them.
+`plugins/dsh-ainar-course-model/server/` used to be the same code as
+`ainar-node/src`, one build stage later — upstream a Python script produced it,
+here the changes were copied across by hand. It was deleted on 2026-09-16 and
+the plugin imports `@ainar/core` instead, so there is one copy of the model and
+no build stage between them. Nothing under `plugins/` mirrors `ainar-node/src`
+any more; the widget assets above are the only thing in this repository still
+kept in step by hand.

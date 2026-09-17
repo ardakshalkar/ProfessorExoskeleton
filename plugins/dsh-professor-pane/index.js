@@ -69,15 +69,15 @@ import { loadDrafts, mergeDrafts } from "@ainar/core/src/drafts.ts";
 import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { inboxPayload } from "@ainar/core/src/inbox.ts";
 import { IssueList } from "@ainar/core/src/issues.ts";
-import { YamlCourseStore } from "@ainar/core/src/mcp/course-store.ts";
-import { callTool } from "@ainar/core/src/mcp/tools.ts";
-import { BY_TOOL } from "@ainar/core/src/mcp/widgets.ts";
+import { YamlCourseStore } from "@ainar/core/src/store/course.ts";
+import { callTool } from "@ainar/core/src/tools/index.ts";
+import { BY_TOOL } from "@ainar/core/src/tools/widgets.ts";
 import {
   ToolError,
   Workspace,
   referenceDate,
   workspaceRootFor,
-} from "@ainar/core/src/mcp/workspace.ts";
+} from "@ainar/core/src/workspace.ts";
 import { writeAssessmentLinks } from "@ainar/core/src/lms/link.ts";
 import { outlinePayload } from "@ainar/core/src/outline.ts";
 import { dump as dumpYaml } from "@ainar/core/src/yaml-out.ts";

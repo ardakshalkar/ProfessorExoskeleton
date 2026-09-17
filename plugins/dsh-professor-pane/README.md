@@ -413,7 +413,7 @@ working directory:
 Resolved per request, so switching workspaces in the sidebar, or exporting the
 variable, needs no restart.
 
-`workspaceRootFor` is imported from `@ainar/core/src/mcp/workspace.ts` rather
+`workspaceRootFor` is imported from `@ainar/core/src/workspace.ts` rather
 than written here, and that is the point: the course tools
 resolve through the same function, so the tools and this pane cannot name
 different courses on the same screen. It was briefly a twelve-line twin, kept in

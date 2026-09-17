@@ -116,7 +116,7 @@ import {
   total,
   writeRecords,
 } from "../src/approve.ts";
-import { Workspace } from "../src/mcp/workspace.ts";
+import { Workspace } from "../src/workspace.ts";
 
 
 

@@ -36,17 +36,19 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * because the third time is inside a `.mcpb` on someone else's machine.
  */
 const CANDIDATES = [
-  // Running the TypeScript in place: node/src/mcp → repo root.
+  // Running the TypeScript in place: node/src/tools → repo root. This is the
+  // one that hits in a checkout, so `ainar/mcp/widget-assets/` is the copy the
+  // server actually reads and the two below are for layouts where it is absent.
   "../../../ainar/mcp/widget-assets",
-  // Running the compiled output: node/dist/src/mcp → repo root.
+  // Running the compiled output: node/dist/src/tools → repo root.
   "../../../../ainar/mcp/widget-assets",
-  // Inside either bundle, two directories above the compiled `mcp/`. There is
+  // Inside either bundle, two directories above the compiled `tools/`. There is
   // no Python there to own the assets, so each builder copies them in — and
   // "two above" lands somewhere different in each, because the two bundles nest
   // the core to different depths:
   //
-  //   .mcpb   `build_mcpb.py` copies node/dist    → server/src/mcp → server/
-  //   dsh     `dsh.py` copies node/dist/src       → server/mcp     → <bundle>/
+  //   .mcpb   `build_mcpb.py` copies node/dist    → server/src/tools → server/
+  //   dsh     `dsh.py` copies node/dist/src       → server/tools     → <bundle>/
   //
   // Both builders put the assets where their own arithmetic lands. Reading this
   // line as "beside the server" and copying them under it is how the dsh bundle

@@ -7,8 +7,8 @@ import {
   loadPostgresCourseStoreForIdentity,
   type SqlClient,
   type SqlPool,
-} from "../src/mcp/postgres-course-store.ts";
-import { Workspace } from "../src/mcp/workspace.ts";
+} from "../src/store/postgres.ts";
+import { Workspace } from "../src/workspace.ts";
 
 const payload = JSON.parse(
   readFileSync(resolve(process.cwd(), "..", "golden", "CSS-4008", "bundle.json"), "utf8"),

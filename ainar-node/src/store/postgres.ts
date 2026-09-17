@@ -4,7 +4,7 @@ import { COLLECTION_NAMES, COLLECTION_SCHEMAS, type CourseBundle } from "../bund
 import { IssueList } from "../issues.ts";
 import type { LoadResult } from "../loader.ts";
 import { Course } from "../model/academic.ts";
-import { LoadedCourseStore } from "./course-store.ts";
+import { LoadedCourseStore } from "./course.ts";
 
 export interface SqlQueryResult<Row> {
   rows: Row[];

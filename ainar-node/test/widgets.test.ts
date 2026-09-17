@@ -15,9 +15,9 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BY_TOOL, BY_URI, MIME, TEMPLATE_KEY, WIDGETS } from "../src/mcp/widgets.ts";
-import { TOOLS, WITHHELD, callTool } from "../src/mcp/tools.ts";
-import { Workspace } from "../src/mcp/workspace.ts";
+import { BY_TOOL, BY_URI, MIME, TEMPLATE_KEY, WIDGETS } from "../src/tools/widgets.ts";
+import { TOOLS, WITHHELD, callTool } from "../src/tools/index.ts";
+import { Workspace } from "../src/workspace.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const RUN = "CSS-4008-2026-FALL";

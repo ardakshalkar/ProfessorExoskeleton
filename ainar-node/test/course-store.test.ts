@@ -1,8 +1,8 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import type { LoadResult } from "../src/loader.ts";
-import type { CourseStore } from "../src/mcp/course-store.ts";
-import { Workspace } from "../src/mcp/workspace.ts";
+import type { CourseStore } from "../src/store/course.ts";
+import { Workspace } from "../src/workspace.ts";
 
 const COURSE = "CSS-9900";
 const RUN = `${COURSE}-2026-FALL`;

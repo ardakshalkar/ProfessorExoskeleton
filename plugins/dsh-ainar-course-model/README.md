@@ -57,7 +57,7 @@ remains authoritative and a divergence would surface here first.
 
 Every tool reads. None writes, approves, pushes a grade, or touches a
 credential — there is no tool here that could, which is a property of the list
-in `ainar-node/src/mcp/tools.ts` rather than a promise made by this bundle.
+in `ainar-node/src/tools/index.ts` rather than a promise made by this bundle.
 
 Approval stays where it always is: a person running `ainar approve`.
 

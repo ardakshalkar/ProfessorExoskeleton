@@ -2,8 +2,8 @@
 
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { TelegramPublisher } from "../integrations/telegram.ts";
-import type { OAuthIdentity } from "./postgres-course-store.ts";
-import type { ToolResult } from "./tools.ts";
+import type { OAuthIdentity } from "../store/postgres.ts";
+import type { ToolResult } from "../tools/index.ts";
 
 export const TELEGRAM_TOOL = {
   name: "publish_telegram",

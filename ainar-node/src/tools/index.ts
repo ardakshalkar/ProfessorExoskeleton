@@ -34,7 +34,7 @@ import {
   type WorkspaceOrigin,
   referenceDate,
   requireRunId,
-} from "./workspace.ts";
+} from "../workspace.ts";
 import { BY_TOOL } from "./widgets.ts";
 
 export const WITHHELD: Record<string, string> = {

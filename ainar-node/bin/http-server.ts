@@ -9,7 +9,7 @@ import { bearerMatches, isLoopbackHost } from "../src/mcp/http-auth.ts";
 import {
   loadPostgresCourseStore,
   loadPostgresCourseStoreForIdentity,
-} from "../src/mcp/postgres-course-store.ts";
+} from "../src/store/postgres.ts";
 import {
   bearerToken,
   JwtAccessTokenVerifier,
@@ -18,7 +18,7 @@ import {
   protectedResourceMetadata,
 } from "../src/mcp/oauth.ts";
 import { createAinarMcpServer } from "../src/mcp/server.ts";
-import { Workspace } from "../src/mcp/workspace.ts";
+import { Workspace } from "../src/workspace.ts";
 
 const required = (name: string): string => {
   const value = (process.env[name] ?? "").trim();

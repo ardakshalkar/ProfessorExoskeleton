@@ -37,9 +37,9 @@
 // declaration referenced above. See `dsh-tools.d.ts` for why that is a
 // declaration rather than a devDependency.
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { TOOLS } from "@ainar/core/src/mcp/tools.ts";
-import { BY_TOOL } from "@ainar/core/src/mcp/widgets.ts";
-import { ToolError, Workspace, workspaceRootFor } from "@ainar/core/src/mcp/workspace.ts";
+import { TOOLS } from "@ainar/core/src/tools/index.ts";
+import { BY_TOOL } from "@ainar/core/src/tools/widgets.ts";
+import { ToolError, Workspace, workspaceRootFor } from "@ainar/core/src/workspace.ts";
 export const name = "ainar-course-model";
 /**
  * Cordis waits for the tool registry before calling `apply`, so the plugin

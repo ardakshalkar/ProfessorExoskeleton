@@ -11,9 +11,9 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { statSync } from "node:fs";
 import { createAinarMcpServer } from "../src/mcp/server.ts";
-import { TOOLS } from "../src/mcp/tools.ts";
-import { WIDGETS } from "../src/mcp/widgets.ts";
-import { Workspace } from "../src/mcp/workspace.ts";
+import { TOOLS } from "../src/tools/index.ts";
+import { WIDGETS } from "../src/tools/widgets.ts";
+import { Workspace } from "../src/workspace.ts";
 
 const resolveWorkspace = (): string => {
   const value = (process.env.AINAR_WORKSPACE ?? "").trim();
