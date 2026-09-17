@@ -219,6 +219,19 @@ test("a template can be chosen by id alone", () => {
   assert.ok(css.length, "the chosen template should have some CSS in it");
 });
 
+test("a template is found from a workspace that is not this checkout", () => {
+  // The case every professor is in and no test was: `ainar page` passes the
+  // WORKSPACE root, which is their course folder and holds no skills. A lookup
+  // that searched only that root found a template exactly when the workspace
+  // happened to be this checkout — true here until 2026-09-17 and true nowhere
+  // else, which is why it went unnoticed. An empty directory stands in for a
+  // real workspace: if this passes, the installation fallback is doing it.
+  const elsewhere = scratch();
+  const [css, name] = loadStyle("plain", "course-page", elsewhere);
+  assert.equal(name, "plain");
+  assert.ok(css.length, "the shipped template should be reachable from any workspace");
+});
+
 test("a structure that could run or fetch something is refused", () => {
   for (const bad of ["<script>x</script>", "<img src=x>", "{{{raw}}}", "<iframe></iframe>"]) {
     const dir = scratch();

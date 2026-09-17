@@ -231,9 +231,41 @@ export const get = (set: TemplateSet, templateId: string): Template => {
   return refuse(`${join(set.directory, INDEX)} lists no template '${templateId}'. It has: ${known}`);
 };
 
-/** Every directory a bare template id is looked for in, in order. */
-const lookedIn = (root: string, surface: string): string[] =>
-  SEARCH.map((relative) => join(root, relative, surface, "templates"));
+/**
+ * This checkout, from this file rather than from where anybody is standing.
+ *
+ * `src/templates.ts` → `ainar-node/` → the repository, which is the same
+ * arithmetic `bin/golden-check.ts` does.
+ */
+const INSTALLATION = resolve(import.meta.dirname, "..", "..");
+
+/**
+ * Every directory a bare template id is looked for in, in order.
+ *
+ * **Two roots, and the second is the one that makes this work.** A template is a
+ * repository file: it ships beside the skill that owns it, under `SEARCH[0]`.
+ * The workspace is the professor's course folder. Those are different trees, and
+ * searching only the workspace means finding a template exactly when the
+ * professor's workspace happens to be this checkout — which is nobody's, in
+ * production, and stopped being true here on 2026-09-17 when the sample course
+ * moved into `workspace/`.
+ *
+ * That is why adding `plugins/professor-course-skills/skills` to `SEARCH` fixed
+ * the tests and not `ainar page --template plain`: the tests resolve against the
+ * repository, and the command resolved against the workspace, and until that day
+ * the two were one directory so nothing showed the difference.
+ *
+ * The workspace still goes first, so a professor who keeps their own templates
+ * beside their courses outranks the shipped ones. The installation is the
+ * fallback, and it is skipped when the two are the same directory so that the
+ * refusal does not print every path twice.
+ */
+const lookedIn = (root: string, surface: string): string[] => {
+  const roots = resolve(root) === INSTALLATION ? [root] : [root, INSTALLATION];
+  return roots.flatMap((base) =>
+    SEARCH.map((relative) => join(base, relative, surface, "templates")),
+  );
+};
 
 /**
  * A `--template` argument as a path, whether it arrived as one or as an id.
