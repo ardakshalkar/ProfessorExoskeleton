@@ -1,5 +1,5 @@
 /**
- * The fourteen portable read-only tools. Ported from `ainar/mcp/tools.py`.
+ * The sixteen portable read-only tools. Ported from `ainar/mcp/tools.py`.
  *
  * What is **not** here is the point of the file. `approve`, `lms push`,
  * `roster whois` and the rest are absent by construction, not disabled by a

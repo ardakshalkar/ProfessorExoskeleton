@@ -1,6 +1,6 @@
 # AINAR course model — DeepSeek Harness bundle
 
-Fourteen read-only tools over a course workspace, registered natively rather
+Sixteen read-only tools over a course workspace, registered natively rather
 than bridged over MCP.
 
 ```bash

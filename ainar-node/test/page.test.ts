@@ -17,7 +17,7 @@ import {
   renderStatic,
   studentWork,
 } from "../src/page.ts";
-import { TemplateRefusal, loadStructure, loadStyle } from "../src/templates.ts";
+import { SEARCH, TemplateRefusal, loadStructure, loadStyle } from "../src/templates.ts";
 
 /**
  * `tests/test_page.py` and `tests/test_templates.py`, reduced to the assertions
@@ -201,7 +201,11 @@ test("a dashboard template is refused by the public page", () => {
   // Each set declares its surface in `templates.yaml`, so pointing `page` at a
   // dashboard's style sheet is stopped at the command rather than discovered in
   // the rendered page.
-  const dashboard = join(REPO, "skills", "course-dashboard", "templates", "plain.css");
+  // Located through `SEARCH` rather than spelled out, so that moving the skills
+  // again moves this with them: the assertion is about the surface mismatch,
+  // not about where the file sits. Resolved against REPO, not ROOT: the skills
+  // are a repository tree, and ROOT is the sample workspace.
+  const dashboard = join(REPO, SEARCH[0]!, "course-dashboard", "templates", "plain.css");
   assert.throws(
     () => loadStyle(dashboard, "course-page", REPO),
     (error: Error) =>

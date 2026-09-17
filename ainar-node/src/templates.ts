@@ -49,15 +49,24 @@ export const INDEX = "templates.yaml";
 /**
  * Where a bare `--template plain` is looked for.
  *
- * `skills` is first and is this project's own layout, which upstream did not
- * have: every `templates.yaml` in this workspace is under it. `.agents/skills`
- * is where those same skills lived until 2026-09-16 and is kept so a checkout
- * from before the move still resolves; the two after it are upstream's, kept
- * for a workspace laid out that way. All four are tried and the failure names
- * all four, because "no such template" without a path sends someone reading
- * source.
+ * `plugins/professor-course-skills/skills` is first and is where the skills
+ * this command loads templates for actually live: it was added on 2026-09-17,
+ * because cd68c12 ("One root for this host's skills") had moved them there the
+ * day before and left every root in this list naming somewhere that no longer
+ * existed — `ainar page --template plain` and `ainar dashboard --template
+ * plain` both failed to resolve a template that was sitting in the checkout.
+ * The two surfaces reached from here, `course-page` and `course-dashboard`,
+ * are both under it.
+ *
+ * `skills` is next and was this project's own layout until that move.
+ * `.agents/skills` is where those same skills lived until 2026-09-16; the two
+ * after it are upstream's, kept for a workspace laid out that way. The older
+ * four are kept rather than replaced so a checkout from before either move
+ * still resolves. All five are tried and the failure names all five, because
+ * "no such template" without a path sends someone reading source.
  */
 export const SEARCH = [
+  join("plugins", "professor-course-skills", "skills"),
   "skills",
   join(".agents", "skills"),
   join(".claude", "skills"),

@@ -33,7 +33,7 @@ nothing imports across the two trees.
 | `src/blueprint.ts` | `ainar/blueprint.py` | `blueprintPayload`, `outcomeGradeShare` |
 | `src/gradebook.ts` | `ainar/gradebook.py` | `gradeRows`, `gradebookPayload` — the four refusals |
 | `src/report.ts` | `ainar/report.py` | `syllabusMarkdown`, `alignmentMarkdown` |
-| `src/tools/index.ts` | `ainar/mcp/tools.py` | the fourteen tools, and `WITHHELD` |
+| `src/tools/index.ts` | `ainar/mcp/tools.py` | the sixteen tools, and `WITHHELD` |
 | `src/workspace.ts` | `ainar/mcp/tools.py` | course loading, cached per process |
 | `bin/server.ts` | `ainar/mcp/server.py` | local stdio MCP on the official SDK |
 | `bin/http-server.ts` | — | remote Streamable HTTP MCP over PostgreSQL read models |
