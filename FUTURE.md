@@ -13,11 +13,17 @@ issues. Each says where the thing stands today, what finished would look like,
 and a first step small enough to start on.
 
 Ordering at the end, under [Sequencing](#sequencing). That section matters more
-than any single aspect above it.
+than any single aspect above it. The same thirteen aspects are cut into work
+items in [`BACKLOG.md`](BACKLOG.md), which is where they get prioritised.
 
 ---
 
 ## 1. Interface: two modes, not one column
+
+> Worked out at length in
+> [`plugins/dsh-professor-pane/COURSE-MODE.md`](plugins/dsh-professor-pane/COURSE-MODE.md):
+> what the column shows today and judges about it, the outline as the spine,
+> the four overlays, and the wall that keeps marks out of the student page.
 
 **Where it stands.** The harness is chat-first. `dsh-professor-pane` is the
 right column — three hundred pixels — with six buttons and, under most of them,
