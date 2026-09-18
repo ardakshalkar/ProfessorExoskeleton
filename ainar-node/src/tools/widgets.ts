@@ -41,6 +41,14 @@ const CANDIDATES = [
   // one that hits in a checkout, so `vendor/ainar/mcp/widget-assets/` is the
   // copy the server actually reads and the two below are for layouts where it
   // is absent.
+  //
+  // It also hits when this module is reached through `node_modules/@ainar/core`,
+  // which is a link to `ainar-node/`: Node resolves the link before it computes
+  // `import.meta.url`, so `HERE` is the real directory and this path lands back
+  // in the repository. That is why the plugin loading the model over npm reads
+  // the same bytes a direct import does, and why the copies that used to sit
+  // under `ainar-node/` and the plugin were deleted on 2026-09-17 — nothing
+  // could reach either one. See PROVENANCE.md.
   "../../../vendor/ainar/mcp/widget-assets",
   // Running the compiled output: node/dist/src/tools → repo root.
   "../../../../vendor/ainar/mcp/widget-assets",
@@ -55,6 +63,11 @@ const CANDIDATES = [
   // Both builders put the assets where their own arithmetic lands. Reading this
   // line as "beside the server" and copying them under it is how the dsh bundle
   // once shipped with no reachable assets at all.
+  //
+  // Nothing in this repository satisfies this line any more, and that is the
+  // point of it: it is the contract a bundle builder has to meet. A builder
+  // that forgets now fails with the error below, naming all three paths, rather
+  // than finding a copy somebody committed here and rendering last year's view.
   "../../widget-assets",
 ];
 

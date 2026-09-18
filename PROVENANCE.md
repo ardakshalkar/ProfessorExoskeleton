@@ -53,21 +53,43 @@ from there and are now source like the rest; the thin originals remain in
 is shared boilerplate and the copies beside them were a layout behind, so each
 took the current one.
 
-### Two copies that are not accidents
+### The widget assets are in one place now
 
-**The widget assets exist twice**, in `vendor/ainar/mcp/widget-assets/` and
-`ainar-node/widget-assets/`, and a third time under
-`plugins/dsh-ainar-course-model/widget-assets/`, and all three are byte for byte
-the same.
+**There is one copy**, `vendor/ainar/mcp/widget-assets/`. There were three until
+2026-09-17, and the other two were deleted that day because nothing could reach
+them.
 
-Only one of them is read in this checkout. `src/tools/widgets.ts` tries three
-locations and the first hits: `vendor/ainar/mcp/widget-assets/`, which is also
-the copy `test/widgets.test.ts` opens by a hardcoded path. So `vendor/ainar/`
-earns its place — it is the live one, and that directory exists for no other
-reason — and the other two are reached only in bundle layouts this checkout
-cannot build, where the builders in ProfessorHarness copy the assets in beside
-the compiled core. Until one of those builders can be run from here, editing a
-widget means editing three files and remembering to.
+`src/tools/widgets.ts` tries three locations and the first hits: the vendored
+one, which is also the copy `test/widgets.test.ts` opens by a hardcoded path. So
+`vendor/ainar/` earns its place — it is the live one, and that directory exists
+for no other reason.
+
+The paragraph that stood here said the other two were "reached only in bundle
+layouts this checkout cannot build" and left them alone on that basis. Resolving
+the candidate list against the real paths is what settled it, and the answer was
+narrower than the guess:
+
+* **`plugins/dsh-ainar-course-model/widget-assets/`** was reachable while that
+  bundle carried its own compiled core under `server/` — `server/tools/` is two
+  directories under the plugin root, which is what the third candidate names.
+  `server/` was deleted on 2026-09-16 and `index.js` imports `@ainar/core`
+  instead, so nothing has resolved relative to that directory since.
+* **`ainar-node/widget-assets/`** is the third candidate seen from the core
+  itself, and it fires only where `vendor/` is absent beside it. That is a
+  `.mcpb` or a dsh bundle, whose builders **copy** the assets in — they do not
+  read a copy committed here, so it was never an input to them either.
+
+Two things make the answer hold rather than merely look right. `node_modules/@ainar/core`
+is a junction to `ainar-node/`, and Node resolves symlinks before it computes
+`import.meta.url`, so the plugin reaching the model through npm lands on the
+same real directory a direct import does and takes the same first candidate. And
+`@ainar/core` is `private: true`, so there is no layout in which this plugin is
+installed beside a real copy of the model rather than a link to this one.
+
+The third candidate stays in `widgets.ts`. It costs one line, it is the contract
+a bundle builder has to satisfy, and a builder that forgets to copy now fails
+with a message naming all three paths instead of quietly rendering a copy that
+was committed a year ago.
 
 This paragraph said the opposite until 2026-09-17 — that the copy inside
 `ainar-node` was the live one. Replaying the candidate list is what settled it.
@@ -213,10 +235,11 @@ decisions this project made, not code it inherited.
   have is refused rather than answered with an empty class.
 * Enrollment status: an import marks a student the export no longer lists as
   `dropped` rather than dropping the row.
-* `ainar-node/widget-assets/` — the compact week layout, the icon sprite, the
-  draft badge, the undated-assessment control, and the folded missing-students
-  list: two named, the rest behind an ellipsis that opens in place. These have
-  no upstream at all.
+* `vendor/ainar/mcp/widget-assets/` — the compact week layout, the icon sprite,
+  the draft badge, the undated-assessment control, the per-week gap chips, and
+  the folded missing-students list: two named, the rest behind an ellipsis that
+  opens in place. These have no upstream at all. (Written against
+  `ainar-node/widget-assets/` while that copy existed; it is the same bytes.)
 * `action-inbox.js` reads an optional `people` map, so a host that resolved the
   private roster can show real names. The MCP payload never carries it; only
   `dsh-professor-pane`, serving the same document over loopback, adds it.

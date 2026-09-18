@@ -21,6 +21,23 @@ they are one copy, in files an editor will highlight and a linter will read.
 | `gradebook.js` | `function view(d)` for the gradebook |
 | `action-inbox.js` | `function view(d)` for the inbox |
 
+## This is the only copy, and it was not always
+
+`widgets.ts` tries three paths and this directory is the first, so it wins
+everywhere this repository runs — a checkout, the plugin reaching the model
+through `node_modules/@ainar/core` (a link to `ainar-node/`, and Node resolves
+the link before it works out where it is), and the container, whose Dockerfile
+copies the whole tree.
+
+Copies also sat under `ainar-node/` and `plugins/dsh-ainar-course-model/` until
+2026-09-17, when resolving the candidate list against the real paths showed
+nothing could reach either one. Editing a widget meant editing three files and
+remembering to, which is a cost with no payer. `PROVENANCE.md` has the argument.
+
+The third candidate — the assets beside a compiled core — is still in
+`widgets.ts`, because that is what a `.mcpb` or dsh bundle looks like. Those
+builders **copy** these files in. Do not commit their output back here.
+
 ## How a document is assembled
 
 Both servers concatenate the same things in the same order:
