@@ -3262,7 +3262,18 @@ const checklistReport = (workspace, root, runId) => {
       // for it, and it is the difference between a deck that exists and a deck
       // somebody meant to make.
       unlocated: all.filter((resource) => !resource.url && !resource.document_id).length,
-      state: recorded > 0 ? "done" : all.length > 0 ? "draft" : "todo",
+      // Whether a week is still missing its deck is the model's answer, not a
+      // second one taken here. `outline` puts a `deck` gap on a week with a
+      // meeting and no slides, and the same gap is what the week view draws —
+      // so this column and the chip on week nine cannot disagree, which is the
+      // failure a checklist beside a plan exists to avoid. What stays local is
+      // the record/draft split: two payloads, which the model sees one of.
+      state:
+        recorded > 0
+          ? "done"
+          : (week.gaps ?? []).some((gap) => gap.kind === "deck")
+            ? "todo"
+            : "draft",
     };
   });
 
@@ -6358,7 +6369,15 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
         // table and a policy note between the professor and what they opened
         // this tab for. The widget keeps both by default — a chat client has no
         // tabs to move them to — so the pane has to ask.
-        data = { ...data, sections: { assessments: false, grading: false, header: false } };
+        //
+        // `gaps` is the one asked for rather than kept, and the asymmetry is
+        // deliberate: every other section defaults to shown, while the gaps
+        // default to hidden because the surface that says nothing is `ainar
+        // page`. This is a professor's view, so it asks.
+        data = {
+          ...data,
+          sections: { assessments: false, grading: false, header: false, gaps: true },
+        };
       }
       if (view === "tasks") {
         // Where each dateless assessment lives, so the widget's "set dates"

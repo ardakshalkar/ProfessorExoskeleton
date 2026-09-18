@@ -205,6 +205,97 @@ const grading = (assessments: any[]): Record<string, unknown> => {
   };
 };
 
+/** The four questions, in the order a week is read. */
+const GAP_KINDS = ["module", "deck", "deadline", "weight"] as const;
+
+/**
+ * What is missing from one week, asked of the week rather than of the course.
+ *
+ * These are the four questions a course still being built raises — is a module
+ * named, is there a deck, is the graded work dated, is it weighted — and they
+ * were answered until now in a checklist of the pane's own, which meant the
+ * professor read the answer in one view and saw the week it was about in
+ * another. The answer belongs on the week.
+ *
+ * They ride on this payload because they are facts about the **course** and
+ * never figures derived from student work: "no deck is registered for week
+ * nine" says nothing about anybody in the class, so it does not cross the wall
+ * this document is on the public side of. Whether a surface *draws* them is a
+ * separate decision and not this function's — `ainar page` does not, and a
+ * professor's view asks for them with `sections.gaps`.
+ *
+ * Three rules worth keeping:
+ *
+ * - **A week with no meeting is not missing a deck.** There is no class to
+ *   write one for, and counting it would report "nothing is scheduled here"
+ *   twice, once as an unplanned week and once as an absent deck.
+ * - **An identifier is named, never counted.** A gap a professor cannot act on
+ *   is a number; `ids` is what makes it a piece of work with a name.
+ * - **Nothing here is a judgement.** Every one of the four is the professor's
+ *   own to close, and the note says so in the words `grading` already uses.
+ */
+const weekGaps = (week: Record<string, any>): Record<string, unknown>[] => {
+  const gaps: Record<string, unknown>[] = [];
+
+  if (!week.planned) {
+    gaps.push({
+      kind: "module",
+      ids: [],
+      note:
+        "No module names this week. Unplanned is not the same as nothing " +
+        "being taught, and only the professor can say which this is.",
+    });
+  }
+
+  const meetings = week.meetings as any[];
+  if (meetings.length) {
+    const decks = meetings.filter((activity) =>
+      (activity.resources as any[]).some((resource) => resource.kind === "slides"),
+    );
+    if (!decks.length) {
+      gaps.push({
+        kind: "deck",
+        ids: meetings.map((activity) => activity.activity_id),
+        note:
+          `${meetings.length} meeting${meetings.length === 1 ? "" : "s"} this week, and no ` +
+          `slides are registered against ${meetings.length === 1 ? "it" : "any of them"}.`,
+      });
+    }
+  }
+
+  const undated = (week.undated as any[]).map((a) => a.assessment_id as string);
+  if (undated.length) {
+    gaps.push({
+      kind: "deadline",
+      ids: undated,
+      note:
+        `${undated.join(", ")} ${undated.length === 1 ? "carries" : "carry"} no deadline. ` +
+        "A deadline is the professor's to set.",
+    });
+  }
+
+  // An assessment that opens and falls due in the same week is one piece of
+  // work, not two, and a list naming it twice would read as two faults.
+  const graded = new Map<string, any>();
+  for (const assessment of [...week.opens, ...week.due, ...week.undated] as any[]) {
+    graded.set(assessment.assessment_id, assessment);
+  }
+  const unweighted = [...graded.values()]
+    .filter((assessment) => assessment.weight === null || assessment.weight === undefined)
+    .map((assessment) => assessment.assessment_id as string);
+  if (unweighted.length) {
+    gaps.push({
+      kind: "weight",
+      ids: unweighted,
+      note:
+        `${unweighted.join(", ")} ${unweighted.length === 1 ? "carries" : "carry"} no weight. ` +
+        "The weight is the professor's to set.",
+    });
+  }
+
+  return gaps;
+};
+
 export const outlinePayload = (
   b: CourseBundle,
   courseVersionId: string,
@@ -337,7 +428,21 @@ export const outlinePayload = (
     if ((sourceOutline.get(number) ?? []).length) {
       week.source_outline = sourceOutline.get(number);
     }
+    // Computed from the week rather than passed the records again, so a gap and
+    // the thing it is about cannot disagree about what is in this week.
+    week.gaps = weekGaps(week);
     weeks.push(week);
+  }
+
+  const gapTotals: Record<string, number> = {
+    // Weeks holding at least one of the four, which is the figure a strip
+    // prints. Not the sum of the columns beside it: one week can carry three.
+    weeks: weeks.filter((week) => (week.gaps as unknown[]).length > 0).length,
+  };
+  for (const kind of GAP_KINDS) {
+    gapTotals[kind] = weeks.filter((week) =>
+      (week.gaps as Record<string, unknown>[]).some((gap) => gap.kind === kind),
+    ).length;
   }
 
   return {
@@ -390,6 +495,10 @@ export const outlinePayload = (
       modules: modules.length,
       meetings: activities.length,
       assessments: assessments.length,
+      // How many weeks each of the four questions is open on. A surface drawing
+      // the gaps needs the tally without counting the weeks itself, because a
+      // view that counted would be deriving a figure no command produced.
+      gaps: gapTotals,
     },
     placement: PLACEMENT,
   };

@@ -126,6 +126,16 @@ small.flag [data-rest][hidden] { display: none; }
  * the second line with nothing to mark. */
 .wk-name small .ico { margin-top: .16rem; }
 .wk-name .unplanned { color: var(--muted); font-weight: 400; }
+/* What the week is still waiting for. Dashed and flag-coloured, which is the
+ * shape this page already gives a real thing with something missing around it
+ * — `.it-todo` is the same border on a piece of work with no deadline. No new
+ * colour: the note in the `title` carries the detail, the chip carries only
+ * that there is one. Its own line rather than beside the meeting, because at
+ * three hundred pixels the meeting's time and two chips do not share a row. */
+.wk-name small.wkgaps { flex-wrap: wrap; gap: .25rem; }
+.wkgap { border: 1px dashed var(--flag-line); border-radius: 999px;
+         padding: .02rem .4rem; font-size: .64rem; letter-spacing: .01em;
+         color: var(--flag); white-space: nowrap; }
 .wk-body { min-width: 0; margin-top: .4rem; }
 /* The details control: a circle, because it opens rather than acts. */
 .dots { flex: none; align-self: flex-start; cursor: pointer; font: inherit;

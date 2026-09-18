@@ -9,7 +9,7 @@ and offers a picker when the workspace holds more than one offering.
 
 | Button | What it draws | Where it comes from |
 | --- | --- | --- |
-| Course outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines. Every piece of graded work carries a link to the brief students read, or says it has none | `course_outline` |
+| Course outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines. Every piece of graded work carries a link to the brief students read, or says it has none — and every week says what it is still waiting for | `course_outline` |
 | Students | The class list by subgroup, named or pseudonymous, with each student's marks so far, and under each row what they actually handed in | the enrollments, `gradebook` for the marks, and the run's submissions and item responses |
 | Progress · Concepts | Concepts in teaching order against students by pseudonym, with the mean proportion of marks earned on evidence tagged with each | `class_progress` |
 | Progress · Gradebook | One score per student per assessment, from approved decisions only, with the rows that must not be exported and the reason for each | `gradebook` |
@@ -420,6 +420,38 @@ different courses on the same screen. It was briefly a twelve-line twin, kept in
 step by hand, which is a bad trade for twelve lines — the drift would not have
 been an error but a wrong number.
 
+## What a week is still waiting for
+
+The four questions the Checklist asks of the course, asked of each week and
+drawn on it: a dashed amber chip under the week's title saying `no deck`, `no
+deadline` or `no weight`, with the model's own sentence behind it, and a tally
+in the strip at the top — *14 weeks need something*.
+
+The chips come from `weeks[].gaps` on the outline payload, computed in
+`ainar-node/src/outline.ts`. The view neither counts nor decides: a gap names
+the records it is about, and the rule that a week with no meeting is **not**
+missing a deck lives with the model, beside the placement rules it belongs
+with. The Checklist's Slides column now reads the same field rather than
+answering the question a second time, so the chip on week nine and the row
+about week nine cannot disagree — which is the failure a checklist beside a
+plan exists to avoid.
+
+Two of the four are not chips, because they are already on the week in plainer
+words. A week with no module says **Unplanned** in its own header, and a piece
+of work with no deadline already carries `no date` and the button that starts
+the conversation which sets one. The tally counts all four, so it can read
+higher than the chips on screen: six unplanned weeks and eight without a deck
+is fourteen weeks waiting on something, and all fourteen say so.
+
+**The public page draws none of it.** `sections.gaps` is the one section flag
+that is opt-*in* — every other defaults to shown, because a surface that says
+nothing is a chat client with nowhere else to put it, while a surface that says
+nothing is also `ainar page`. What the professor has not written yet is a fact
+about the course and not about anybody in the class, which is what lets it ride
+on a shared payload at all; it is still nobody's business on a page written for
+students. `page.test.ts` pins that, and `widgets.test.ts` pins the other half —
+that a view which asks does get them.
+
 ## The Checklist
 
 Under **Tasks**, beside Pending and Ready. It answers the four questions a
@@ -435,7 +467,11 @@ professor asks them together:
 
 Two things it does not do.
 
-**It computes no figure of its own.** The weights are `course_outline`'s own
+**It computes no figure of its own**, and since the weeks began drawing their
+own gaps it does not decide one either: whether a week is still missing its
+deck is `weeks[].gaps`, so the Slides column and the chip on that week are one
+answer read twice. What stays here is the record/draft split, which needs two
+payloads the model only ever sees one of. The weights are `course_outline`'s own
 `grading` section — `total_weight`, `unweighted`, `complete`, and the sentence
 the model writes when something is wrong, which names the assessments at fault
 in a way a percentage cannot. The counts are the payload's `totals`. This is

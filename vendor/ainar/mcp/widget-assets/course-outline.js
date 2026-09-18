@@ -73,6 +73,10 @@ function model(d) {
   // `assignment` is the model's word; `homework` is the professor's, and it is
   // the one on the record titles (HW1) and on the folder the work lives in.
   const ASSESS_WORD = { assignment: 'homework', oral_defense: 'defense' };
+  // What a gap is called on a chip three hundred pixels wide. The kinds are
+  // `outline.ts`'s; `module` has no entry because the week header already says
+  // Unplanned and this row never draws it.
+  const GAP_WORD = { deck: 'no deck', deadline: 'no deadline', weight: 'no weight' };
 
   /** `quiz` as `Quiz`. The enum is the record's spelling, not the reader's. */
   function titled(word) {
@@ -332,6 +336,32 @@ function model(d) {
     return { items: main, extras: extra, extras_count: extra.length };
   }
 
+  // Which sections this surface wants, defaulting to all of them.
+  //
+  // The standalone widget is the whole course page and must keep every section:
+  // a chat client drawing `course_outline` has no tabs to put the rest behind,
+  // so a payload that says nothing gets everything. The professor's pane does
+  // have tabs, and once Assessments and Grading policy became two of them the
+  // week view was showing their contents above the weeks — a table and a policy
+  // note between the professor and the thing they opened the tab for.
+  //
+  // `!== false` rather than a truthiness test, so a payload that omits the key
+  // and one that sets it to null both mean "all", and only an explicit `false`
+  // takes a section away.
+  const sections = d.sections || {};
+
+  // The gaps are the exception, and they are opt-IN.
+  //
+  // Every other section defaults to shown because a surface that says nothing
+  // is a chat client that has nowhere else to put it. The gaps default to
+  // hidden because a surface that says nothing is also `ainar page` — the
+  // public course page — and "no slides are registered for week nine" is a
+  // fact about the professor's own preparation. It is true, it is not a secret,
+  // and it is nobody's business on a page written for students. So only a view
+  // that asks by name draws them, and forgetting to ask is the harmless way
+  // round.
+  const showGaps = sections.gaps === true;
+
   const weeks = (d.weeks || []).map(function (w) {
     const ind = indicators(w);
     return {
@@ -346,6 +376,25 @@ function model(d) {
       ends_on: w.ends_on ? w.ends_on.slice(5) : '',
       is_current: w.week === d.current_week,
       planned: w.planned,
+      // What this week is still missing, as the model reported it.
+      //
+      // `module` is dropped rather than drawn, because the line this sits under
+      // already says **Unplanned** in as many words, and a week captioned
+      // "Unplanned · no module" reads as two faults where there is one. The
+      // payload keeps it — the tally at the top of the page counts it, and a
+      // surface that wanted the four in one list has them.
+      //
+      // The word on the chip is chosen here and the sentence behind it is the
+      // model's own, which is the same division every figure on this page
+      // follows: the view decides how it reads, the payload decides what is
+      // true.
+      gaps: showGaps
+        ? (w.gaps || [])
+            .filter(function (g) { return g.kind !== 'module'; })
+            .map(function (g) {
+              return { kind: g.kind, label: GAP_WORD[g.kind] || g.kind, note: g.note };
+            })
+        : [],
       // The compact header: a 38px marker carrying the week number and the
       // month-and-day it starts, then the module's own title beside it. The
       // old layout gave the left column ninety of the pane's three hundred
@@ -494,19 +543,15 @@ function model(d) {
     return { id: a.assessment_id, title: a.title, note: 'no dates' };
   }));
 
-  // Which sections this surface wants, defaulting to all of them.
+  // How many weeks are waiting on something, from the count the payload made.
   //
-  // The standalone widget is the whole course page and must keep every section:
-  // a chat client drawing `course_outline` has no tabs to put the rest behind,
-  // so a payload that says nothing gets everything. The professor's pane does
-  // have tabs, and once Assessments and Grading policy became two of them the
-  // week view was showing their contents above the weeks — a table and a policy
-  // note between the professor and the thing they opened the tab for.
-  //
-  // `!== false` rather than a truthiness test, so a payload that omits the key
-  // and one that sets it to null both mean "all", and only an explicit `false`
-  // takes a section away.
-  const sections = d.sections || {};
+  // `totals.gaps.weeks` is weeks-with-at-least-one and not the sum of the four
+  // columns beside it, because one week can carry three of them. Reading the
+  // figure off the payload rather than counting the rows above is the same rule
+  // every other number on this page follows, and here it is load-bearing: the
+  // row above drops the `module` gap, so a count taken from it would report a
+  // course with six unplanned weeks as having none.
+  const gapWeeks = ((d.totals || {}).gaps || {}).weeks;
 
   return {
     // The pane's run picker already names the course and the term, so the
@@ -530,6 +575,11 @@ function model(d) {
       description: run.description,
     },
     totals: d.totals || {},
+    // Empty unless this surface asked for the gaps and there are some, which is
+    // what lets the strip say nothing at all on a course with none.
+    gaps_word: showGaps && gapWeeks
+      ? (gapWeeks === 1 ? '1 week needs something' : gapWeeks + ' weeks need something')
+      : '',
     total_weight: pct(grading.total_weight),
     grading_note: grading.note,
     assessments: (d.assessments || []).map(function (a) {

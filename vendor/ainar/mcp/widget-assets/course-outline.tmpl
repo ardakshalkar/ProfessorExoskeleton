@@ -12,7 +12,14 @@
      * an unplanned week says it is unplanned, rather than rendering as empty;
      * a weight nobody set says so, rather than printing 0%;
      * the closing note says the page carries nothing derived from student work.
-   `tests/test_page.py` and `tests/test_mcp_widgets.py` assert all three. #}
+   `tests/test_page.py` and `tests/test_mcp_widgets.py` assert all three.
+
+   A fourth, newer and of a different kind: the gap chips on a week and the
+   tally in the strip are drawn only where `sections.gaps` is true, and the view
+   hands this template an empty list everywhere else. They say what the
+   professor has not written yet, which is a fact about the course and not about
+   anyone in the class — but a student page has no business carrying it, and a
+   student page is what this same file renders under `ainar page`. #}
 
 {# The glyphs the week indicators draw from. One sprite for the document, so a
    sixteen-week page carries nine shapes rather than a hundred copies of them.
@@ -42,7 +49,7 @@
 <p class="lede">{{ run.description }}</p>
 {% endif %}
 {% endif %}
-<p class="strip">{{ totals.weeks }} weeks · {{ totals.weeks_planned }} with a module · {{ totals.meetings }} meetings · {{ totals.assessments }} assessments · weights total {% if total_weight %}<span class="{% if weights_short %}flag{% endif %}">{{ total_weight }}</span>{% else %}<span class="flag">weight not set</span>{% endif %}</p>
+<p class="strip">{{ totals.weeks }} weeks · {{ totals.weeks_planned }} with a module · {{ totals.meetings }} meetings · {{ totals.assessments }} assessments · weights total {% if total_weight %}<span class="{% if weights_short %}flag{% endif %}">{{ total_weight }}</span>{% else %}<span class="flag">weight not set</span>{% endif %}{% if gaps_word %} · <span class="flag">{{ gaps_word }}</span>{% endif %}</p>
 
 {% if show_assessments %}
 <h2>Assessment</h2>
@@ -60,7 +67,7 @@
 <h2>Week by week</h2>
 {% for w in weeks %}
 <div class="wk {{ w.classes }}">
-<div class="wk-hd"><div class="wk-mark"><b>{{ w.week_label }}</b><small>{{ w.mark }}</small></div><div class="wk-name">{% if w.title %}<b>{{ w.title }}</b>{% else %}<b class="unplanned">Unplanned</b>{% endif %}{% if w.is_current %}<span class="now">now</span>{% endif %}{% if w.subtitle %}<small><svg class="ico" aria-hidden="true"><use href="#i-meet"></use></svg><span>{{ w.subtitle }}</span></small>{% endif %}</div>{% if w.is_current %}<button class="ask" data-ask="For week {{ w.week }} of {{ run.id }}, what should I teach and what should I revisit first?">Prepare →</button>{% endif %}{% if w.details %}<button type="button" class="dots" data-wkbtn aria-label="Week {{ w.week }} details" title="Week details">···</button>{% endif %}</div>
+<div class="wk-hd"><div class="wk-mark"><b>{{ w.week_label }}</b><small>{{ w.mark }}</small></div><div class="wk-name">{% if w.title %}<b>{{ w.title }}</b>{% else %}<b class="unplanned">Unplanned</b>{% endif %}{% if w.is_current %}<span class="now">now</span>{% endif %}{% if w.subtitle %}<small><svg class="ico" aria-hidden="true"><use href="#i-meet"></use></svg><span>{{ w.subtitle }}</span></small>{% endif %}{% if w.gaps %}<small class="wkgaps">{% for g in w.gaps %}<span class="wkgap" title="{{ g.note }}">{{ g.label }}</span>{% endfor %}</small>{% endif %}</div>{% if w.is_current %}<button class="ask" data-ask="For week {{ w.week }} of {{ run.id }}, what should I teach and what should I revisit first?">Prepare →</button>{% endif %}{% if w.details %}<button type="button" class="dots" data-wkbtn aria-label="Week {{ w.week }} details" title="Week details">···</button>{% endif %}</div>
 <div class="wk-body">
 {% if w.planned %}
 {% for t in w.topics %}

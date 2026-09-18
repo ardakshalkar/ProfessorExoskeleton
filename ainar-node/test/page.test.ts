@@ -90,6 +90,25 @@ test("the page carries no score", () => {
   }
 });
 
+test("the page says nothing about what the professor has not written yet", () => {
+  // `weeks[].gaps` rides on this payload because it is a fact about the course
+  // rather than about anyone in the class, which is what lets it share the
+  // document the pane and a chat client draw. It is still not student-facing:
+  // "no slides are registered for week nine" is the professor's preparation,
+  // and a course page that published it would be reporting on its author.
+  //
+  // The guard is the default. `course-outline.js` draws a gap only where
+  // `sections.gaps` is true, and this page sends no `sections` at all — so the
+  // failure being pinned is somebody changing that opt-in to an opt-out and
+  // taking the public page with them.
+  // The chip's class, not its name: the style sheet ships whole and carries a
+  // `.wkgap` rule on every page, which is nothing and draws nothing.
+  const html = page();
+  assert.equal(html.includes('class="wkgap"'), false, "the page carries a gap chip");
+  assert.equal(html.includes("need something"), false, "the page carries the gap tally");
+  assert.equal(html.includes("no slides are registered"), false, "the page carries a gap note");
+});
+
 test("the prerendered page carries the markup and no script", () => {
   const html = page();
   assert.equal(html.includes("<script"), false, "a prerendered page needs no script at all");
