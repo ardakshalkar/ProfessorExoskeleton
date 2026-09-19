@@ -73,3 +73,9 @@ output/
 # names real people on a real machine, which is a fact about that machine and
 # not about this project. `deploy/users.conf.example` is the tracked one.
 deploy/users.conf
+
+# The course-mode prototype's output. `prototype/build.mjs` writes it from
+# `proto.html` and the example course, so it is derived twice over: 240KB that
+# would change whenever the course does, for a page anybody can regenerate in
+# under a second. The two sources beside it are tracked.
+plugins/dsh-professor-pane/prototype/course-mode-prototype.html
