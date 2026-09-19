@@ -12,14 +12,18 @@
  * derived bytes that would churn on every course edit. Run this, open the file
  * it names, and edit `proto.html` to change the design.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+// The pane's own renderer and its style, so a brief reads here exactly as it
+// reads in the harness. Not a second markdown implementation.
+import { MARKDOWN_STYLE, renderMarkdown } from "../lib/markdown.js";
 import { Workspace } from "../../../ainar-node/src/workspace.ts";
 import { outlinePayload } from "../../../ainar-node/src/outline.ts";
 import { gradebookPayload } from "../../../ainar-node/src/gradebook.ts";
 import { dashboardPayload } from "../../../ainar-node/src/progress.ts";
 import { inboxPayload } from "../../../ainar-node/src/inbox.ts";
 import { BY_TOOL } from "../../../ainar-node/src/tools/widgets.ts";
+import { officeAt } from "../../../ainar-node/src/materials.ts";
 
 const HERE = import.meta.dirname;
 const REPO = join(HERE, "..", "..", "..");
@@ -135,6 +139,58 @@ const proposed = {
   },
 };
 
+// ----------------------------------------------------------------- materials
+//
+// What a material chip opens. The harness serves these from `/file` and frames
+// them over the page; this page has no server, so the ones it can carry are
+// embedded and the rest say what would happen.
+//
+// The division is the harness's own `SHOWABLE`/`CONVERTIBLE` split, read here
+// rather than restated: markdown is rendered to HTML and served as HTML, an SVG
+// and a PDF are framed as they are, and a `.pptx` or `.docx` is rendered to PDF
+// by LibreOffice when the machine has one. What cannot be embedded is a key
+// with a scheme — `object://` is student work or a dataset in object storage,
+// and `sendMaterial` refuses those too.
+
+const MARKDOWN = new Set(["md", "markdown"]);
+const INLINE = new Set(["svg", "html", "txt", "csv", "json"]);
+const CONVERTIBLE = new Set(["pptx", "ppt", "docx", "doc", "odp", "odt", "rtf"]);
+
+const extensionOf = (key) => {
+  const name = String(key ?? "").split(/[\\/]/).pop() ?? "";
+  const dot = name.lastIndexOf(".");
+  return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
+};
+
+const materials = {};
+for (const document of bundle.documents ?? []) {
+  const key = String(document.storage_key ?? "");
+  const extension = extensionOf(key);
+  const entry = { title: document.title ?? document.document_id, extension: extension };
+
+  if (!key || key.includes("://")) {
+    entry.held = "outside the workspace, in object storage — sendMaterial refuses a key with " +
+      "a scheme, and a dead link would be worse than none";
+  } else if (!existsSync(join(ROOT, key))) {
+    entry.held = "recorded in documents.yaml and not on disk";
+  } else if (MARKDOWN.has(extension)) {
+    // The pane's own renderer and its own style sheet, not a second copy of
+    // either. The renderer is a deliberate subset, and its failure mode is a
+    // line that reads as its own source rather than a page that breaks.
+    entry.html = MARKDOWN_STYLE +
+      '<div class="md">' + renderMarkdown(readFileSync(join(ROOT, key), "utf8")) + "</div>";
+  } else if (INLINE.has(extension)) {
+    entry.html = extension === "svg"
+      ? readFileSync(join(ROOT, key), "utf8")
+      : "<pre>" + readFileSync(join(ROOT, key), "utf8")
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</pre>";
+  } else if (CONVERTIBLE.has(extension)) {
+    entry.converts = true;
+  }
+  materials[document.document_id] = entry;
+}
+
+
 // ---------------------------------------------------------------- the payload
 
 // --------------------------------------------------------------------- todos
@@ -212,6 +268,8 @@ const data = {
   outcomes: outline.outcomes,
   placement: outline.placement,
   enrolled,
+  materials,
+  office: officeAt() !== null,
   students,
   // Said on the payload rather than assumed by the view, so the banner the page
   // draws when names are showing is telling the truth about where they came

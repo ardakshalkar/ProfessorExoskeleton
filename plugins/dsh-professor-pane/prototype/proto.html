@@ -309,6 +309,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
                      font: inherit; font-size: 13.5px; padding: 9px 11px; color: var(--ink);
                      background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; }
 .composer textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* A material fills the panel the way the deck does in the harness. */
+.matframe { flex: 1; min-height: 0; width: 100%; border: 0; display: block; background: #fff; }
+.matnote { padding: 26px 24px; max-width: 70ch; }
+.matnote b { display: block; font-size: 14px; margin-bottom: 8px; }
+.matnote p { margin: 0; color: var(--muted); font-size: 13px; }
 .ctx { border: 1px dashed var(--accent-line); border-radius: 9px; padding: 9px 11px;
        background: var(--accent-tint); font-size: 11.5px; color: var(--accent-ink);
        overflow-x: auto; }
@@ -372,7 +377,7 @@ const STRUCTURES = {
       '{% if w.first %}',
       '<div class="th">Lecture</div><div class="th">Assessment</div><div class="th">Quiz</div>',
       '{% endif %}',
-      '<div class="wkhead {{ w.classes }}" data-pick="week" data-id="{{ w.week }}">',
+      '<div class="wkhead {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
       '  <b>{{ w.label }}</b><span class="k mono">{{ w.dates }}</span>',
       '  {% if w.title %}<h3>{{ w.title }}</h3>{% else %}<h3 class="none">Unplanned</h3>{% endif %}',
       '  {% if w.is_now %}<span class="pill now">this week</span>{% endif %}',
@@ -380,23 +385,23 @@ const STRUCTURES = {
       '  {% for g in w.gaps_other %}<button class="chip gap" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}">{{ g.label }}</button>{% endfor %}',
       '</div>',
       '{% if w.concepts %}<div class="wkconcepts">{% for c in w.concepts %}<span class="chip concept">{{ c }}</span>{% endfor %}</div>{% endif %}',
-      '<div class="cell" data-col="Lecture">',
+      '<div class="cell" data-col="Lecture" data-week="{{ w.week }}">',
       '  {% for m in w.lecture %}<div class="meeting">',
       '    <button class="chip meet" data-pick="meeting" data-id="{{ m.id }}"><span class="k mono">{{ m.on }}</span>{{ m.label }}</button>',
-      '    {% for r in m.materials %}<button class="chip {{ r.tone }}" data-pick="{{ r.pick }}" data-id="{{ r.id }}"><span class="k mono">{{ r.kind }}</span>{{ r.label }}</button>{% endfor %}',
+      '    {% for r in m.materials %}<button class="chip {{ r.tone }}" data-pick="{{ r.pick }}" data-id="{{ r.id }}" data-doc="{{ r.doc }}" title="open it over the course"><span class="k mono">{{ r.kind }}</span>{{ r.label }}</button>{% endfor %}',
       '  </div>{% endfor %}',
       '  {% if w.no_deck %}<button class="chip gap" data-pick="gap" data-id="deck" title="{{ w.deck_note }}">no deck</button>{% endif %}',
       '  {% if w.no_lecture %}<span class="dash">—</span>{% endif %}',
       '</div>',
-      '<div class="cell" data-col="Assessment">{% for a in w.assessment %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% endfor %}{% if w.no_assessment %}<span class="dash">—</span>{% endif %}</div>',
-      '<div class="cell" data-col="Quiz">{% for a in w.quiz %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% endfor %}{% if w.no_quiz %}<span class="dash">—</span>{% endif %}</div>',
+      '<div class="cell" data-col="Assessment" data-week="{{ w.week }}">{% for a in w.assessment %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% endfor %}{% if w.no_assessment %}<span class="dash">—</span>{% endif %}</div>',
+      '<div class="cell" data-col="Quiz" data-week="{{ w.week }}">{% for a in w.quiz %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% endfor %}{% if w.no_quiz %}<span class="dash">—</span>{% endif %}</div>',
     ].join('\n'),
   },
   spine: {
     name: 'Spine',
     suits: 'the default — everything a week holds, in the order a week is read',
     tmpl: [
-      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}">',
+      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
       '  <div class="wk-n"><b>{{ w.label }}</b><span>{{ w.mark }}</span></div>',
       '  <div class="wk-body">',
       '    <div class="wk-head">',
@@ -426,7 +431,7 @@ const STRUCTURES = {
     name: 'One line',
     suits: 'sixteen weeks on one screen — title and state, nothing else',
     tmpl: [
-      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}">',
+      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
       '  <div class="wk-n"><b>{{ w.label }}</b></div>',
       '  <div class="wk-body"><div class="wk-head">',
       '    {% if w.title %}<h3>{{ w.title }}</h3>{% else %}<h3 class="none">Unplanned</h3>{% endif %}',
@@ -441,7 +446,7 @@ const STRUCTURES = {
     name: 'Teaching first',
     suits: 'what is taught and what is handed in; materials fold away',
     tmpl: [
-      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}">',
+      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
       '  <div class="wk-n"><b>{{ w.label }}</b><span>{{ w.mark }}</span></div>',
       '  <div class="wk-body">',
       '    <div class="wk-head">',
@@ -563,6 +568,9 @@ function weekModel(week, mode, selected) {
       const deck = r.kind === 'slides';
       return {
         id: r.resource_id,
+        // The document is what `/file` serves; the resource is what the week
+        // names. A chip needs both — one to open, one to put in the packet.
+        doc: r.document_id || '',
         label: deck ? 'Slides' : r.title,
         // The deck's chip says Slides and is tinted as the deck; a kind label
         // beside it would read "deck Slides". Every other kind needs the word,
@@ -772,13 +780,25 @@ function Spine(props) {
   const onClick = useCallback(function (e) {
     const el = e.target.closest('[data-pick]');
     if (!el || !ref.current.contains(el)) return;
+    // Which week the press was in. `data-week` first, because a structure may
+    // lay a week out as SIBLINGS rather than as a card — the term table puts
+    // the heading and the three cells in one grid, so a cell is not inside the
+    // thing carrying the week number and `closest('[data-pick=week]')` finds
+    // nothing. That bailed out of every chip press in the table silently.
+    const holder = el.closest('[data-week]');
     const card = el.closest('[data-pick="week"]');
+    const number = holder ? holder.dataset.week : (card ? card.dataset.id : el.dataset.id);
     const week = DATA.weeks.filter(function (w) {
-      return String(w.week) === (card ? card.dataset.id : el.dataset.id);
+      return String(w.week) === String(number);
     })[0];
     if (!week) return;
-    props.onSelect({ kind: el.dataset.pick, id: el.dataset.id, week: week, view: props.view });
-  }, [props.view, props.onSelect]);
+    props.onSelect({ kind: el.dataset.pick, id: el.dataset.id, doc: el.dataset.doc || '',
+                     week: week, view: props.view });
+    // A material opens on the press, the way it does in the harness: the chip
+    // IS the link. It still selects, so the packet under it is about the thing
+    // now on screen rather than about whatever was pressed before it.
+    if (el.dataset.doc) props.onOpen(el.dataset.doc);
+  }, [props.view, props.onSelect, props.onOpen]);
 
   if (html.error) return null;
   // The structure says how its own children are laid out; the chrome does not
@@ -1010,6 +1030,86 @@ function Students(props) {
       })));
 }
 
+/**
+ * A material, over the page.
+ *
+ * The same veil the chat overlay uses, which is `MaterialModal`'s own geometry
+ * in `lib/client.js` — because in the harness this IS MaterialModal. A deck is
+ * 4:3 and a brief is a page; neither belongs in a column, which is the whole
+ * argument for opening it over everything instead.
+ *
+ * What the panel can show is what the harness can frame. Markdown arrives
+ * rendered, by the pane's own renderer and style. An SVG and a PDF are framed
+ * as they are. A `.pptx` or `.docx` is rendered to PDF by LibreOffice first,
+ * and this page says whether the machine that BUILT it had one. Anything with
+ * a scheme in its storage key is object storage — student work, a dataset —
+ * and says so rather than offering a link that would fail.
+ */
+function MaterialModal(props) {
+  const close = props.onClose;
+  const box = useRef(null);
+  const material = DATA.materials[props.documentId] || {};
+
+  useEffect(function () {
+    const onKey = function (e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    window.addEventListener('keydown', onKey, true);
+    const previous = document.activeElement;
+    if (box.current) box.current.focus();
+    return function () {
+      window.removeEventListener('keydown', onKey, true);
+      if (previous && previous.focus) previous.focus();
+    };
+  }, [close]);
+
+  let body;
+  if (material.html) {
+    // Framed rather than inlined, for the reason the harness frames it: a
+    // brief may be a file downloaded from anywhere, and its markup has no
+    // business inheriting this page's styles or reaching this page's DOM.
+    body = h('iframe', { className: 'matframe', title: material.title,
+                         sandbox: 'allow-same-origin', srcDoc: material.html });
+  } else if (material.held) {
+    body = h('div', { className: 'matnote' },
+      h('b', null, 'Held ' + material.held + '.'),
+      h('p', null, 'The model decides this, not the view: ' +
+        'versions/<TERM>/samples/documents.yaml says in as many words that the bytes of student ' +
+        'work live in object storage and never in the repository. A dead link that returned a ' +
+        'sentence about object storage would be worse than no link at all.'));
+  } else if (material.converts) {
+    body = h('div', { className: 'matnote' },
+      h('b', null, 'A .' + material.extension + ', rendered to PDF to be read.'),
+      h('p', null, DATA.office
+        ? 'The machine this page was built on has LibreOffice, so in the harness this opens ' +
+          'here as a PDF — converted once, cached by the source file’s size and mtime, and ' +
+          'framed without a sandbox because the browser’s PDF viewer is a document of its ' +
+          'own. The bytes are not embedded in this page, which is why you are reading this ' +
+          'instead of the deck.'
+        : 'The machine this page was built on has no LibreOffice, so in the harness this would ' +
+          'keep the tab it has always opened. The offer is a capability, not a flag: where ' +
+          'there is no converter there is no control.'));
+  } else {
+    body = h('div', { className: 'matnote' },
+      h('b', null, 'Nothing to frame.'),
+      h('p', null, 'A .' + (material.extension || 'file') + ' is not on the showable list and ' +
+        'is not one LibreOffice renders, so the harness keeps the tab it always opened.'));
+  }
+
+  return ReactDOM.createPortal(
+    h('div', { className: 'veil',
+               onMouseDown: function (e) { if (e.target === e.currentTarget) close(); } },
+      h('div', { className: 'modal', role: 'dialog', 'aria-modal': 'true', tabIndex: -1, ref: box,
+                 'aria-label': material.title || props.documentId,
+                 onMouseDown: function (e) { e.stopPropagation(); } },
+        h('header', null,
+          h('b', null, material.title || props.documentId),
+          h('span', { className: 'where mono' },
+            material.extension ? '.' + material.extension : ''),
+          h('button', { className: 'ghost', type: 'button', onClick: close }, 'Back to the course'),
+          h('button', { className: 'x', type: 'button', onClick: close, 'aria-label': 'Close' }, '×')),
+        body)),
+    document.body);
+}
+
 /** A fixture name for a pseudonym, or nothing. Never used in a packet. */
 function nameOf(studentId) {
   const found = DATA.students.filter(function (s) { return s.student_id === studentId; })[0];
@@ -1055,6 +1155,7 @@ function App() {
   const [error, setError] = useState(null);
   const [sel, setSel] = useState(null);
   const [asking, setAsking] = useState(false);
+  const [opened, setOpened] = useState(null);
   // Pseudonyms by default here, which is the opposite of the harness's own
   // default — this page can be shared, and the harness runs on one machine.
   const [names, setNames] = useState(false);
@@ -1111,7 +1212,7 @@ function App() {
   else if (view === 'assessment') body = h(Assessments, { only: 'other', onSelect: setSel });
   else if (view === 'quiz') body = h(Assessments, { only: 'quiz', onSelect: setSel });
   else body = h(Spine, { structure: draft, mode: OUTLINE_MODE[view], view: view,
-                         onSelect: setSel, onError: setError,
+                         onSelect: setSel, onError: setError, onOpen: setOpened,
                          layout: STRUCTURES[structureId].layout,
                          selected: sel && sel.week ? sel.week.week : null });
 
@@ -1186,7 +1287,10 @@ function App() {
       : null,
     h(Explainer, { mode: mode, section: section, view: view }),
     sel ? h(Inspector, { sel: sel, packet: packet, onAsk: function () { setAsking(true); },
+                         onOpen: sel.doc ? function () { setOpened(sel.doc); } : null,
                          onClose: function () { setSel(null); } }) : null,
+    opened ? h(MaterialModal, { key: opened, documentId: opened,
+                                onClose: function () { setOpened(null); } }) : null,
     // Keyed on what it was opened over, so pressing Ask on a different week
     // opens a turn about that week rather than reusing the last one.
     asking ? h(ChatOverlay, { key: sel ? sel.kind + ':' + sel.id : 'run', sel: sel, packet: packet,
@@ -1211,7 +1315,9 @@ function Inspector(props) {
         ' — this is what the press would carry into the turn'),
       h('pre', { className: 'packet mono' }, JSON.stringify(props.packet, null, 1))),
     h('div', { className: 'verbs' },
-      h('button', { className: 'ghost', type: 'button' }, 'Open'),
+      h('button', { className: 'ghost', type: 'button', disabled: !props.onOpen,
+                    onClick: props.onOpen || undefined },
+        props.onOpen ? 'Open' : 'Open — nothing to read here'),
       h('button', { className: 'primary', type: 'button', onClick: props.onAsk }, 'Ask →'),
       h('button', { className: 'ghost', type: 'button', disabled: !drafted },
         drafted ? 'Approve' : 'Approve — nothing drafted here'),

@@ -128,8 +128,14 @@ const inside = (dir: string, candidate: string): string => {
  * reported and the build continues without the PDF: a deck that built is worth
  * having, and refusing the whole run over a format nobody asked for would be
  * the tool deciding the professor's priorities.
+ *
+ * Exported because `dsh-professor-pane` asks the same question for a different
+ * reason — whether it may offer to open a `.pptx` in the overlay, which it can
+ * only do by converting one first. Two probes with two lists of install paths
+ * would disagree about whether this machine has a converter, and the pane would
+ * offer a control that then failed.
  */
-const officeAt = (): string | null => {
+export const officeAt = (): string | null => {
   const candidates = [
     process.env.SOFFICE ?? "",
     "C:/Program Files/LibreOffice/program/soffice.exe",

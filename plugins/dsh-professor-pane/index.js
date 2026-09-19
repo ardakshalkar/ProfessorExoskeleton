@@ -51,10 +51,10 @@
 // `execFile` is here for one route only — `/api/approve`, which spawns this
 // checkout's TypeScript `ainar` rather than reimplementing the approval gate.
 // See `runApprove`. Nothing else in this file starts a process.
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -66,6 +66,7 @@ import {
   runById,
 } from "@ainar/core/src/bundle.ts";
 import { loadDrafts, mergeDrafts } from "@ainar/core/src/drafts.ts";
+import { officeAt } from "@ainar/core/src/materials.ts";
 import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { inboxPayload } from "@ainar/core/src/inbox.ts";
 import { IssueList } from "@ainar/core/src/issues.ts";
@@ -4421,6 +4422,84 @@ const SHOWABLE = new Set([
   "markdown",
 ]);
 
+/**
+ * The formats that become showable by being converted, and the machinery for it.
+ *
+ * A `.pptx` and a `.docx` are downloads in every browser this runs in, which is
+ * why they are not in `SHOWABLE` and why the overlay has always sent them to a
+ * tab. That is still true of the bytes on disk. What changed is that this
+ * project already converts them: `ainar materials` builds a deck and renders a
+ * PDF beside it through LibreOffice, and `officeAt` is how it finds the binary.
+ *
+ * So the rule is narrower than "open a pptx". It is: **when this machine has a
+ * converter, the pane may offer the PDF of a document it cannot frame.** The
+ * professor presses the material and reads it over the harness; what they are
+ * shown is a rendering, and the overlay's own "Open in a tab" still reaches the
+ * original.
+ *
+ * Three properties worth keeping:
+ *
+ * - **A capability, not a flag.** `officeAt()` is probed per request. Where
+ *   there is no LibreOffice the link behaves exactly as it did yesterday — a
+ *   tab — rather than becoming a control that opens a blank panel. This is the
+ *   same shape `runtime.js` uses for `openMaterial`: the host offers it or it
+ *   does not, and the view has one code path.
+ * - **The conversion is cached by content.** The key is the document id and the
+ *   source file's size and mtime, so editing a deck invalidates it and opening
+ *   the same deck twice spawns LibreOffice once. The cache is under the
+ *   system temp directory and never inside the workspace, because a converted
+ *   PDF is not a course record and `courses/` is not a build output.
+ * - **A failure is reported, not swallowed.** The exit code AND the appearance
+ *   of the output file are both checked. `render-deck.ts` fixed exactly this
+ *   bug on 2026-09-06 in the other converter, where a non-zero exit produced a
+ *   silent success and a missing file.
+ */
+const CONVERTIBLE = new Set(["pptx", "ppt", "docx", "doc", "odp", "odt", "rtf"]);
+
+/** Where converted PDFs live. Not the workspace: this is derived, not recorded. */
+const CONVERT_CACHE = join(tmpdir(), "professor-pane-pdf");
+
+/**
+ * The PDF of an office document, converted once and kept.
+ *
+ * Returns the path, or throws with what LibreOffice said. Sixty seconds is
+ * generous for a deck and short enough that a wedged soffice does not hold a
+ * request open until the professor reloads.
+ */
+const convertedPdf = (documentId, source) => {
+  const office = officeAt();
+  if (!office) throw new Error("no LibreOffice on this machine to render it with");
+
+  const stamp = statSync(source);
+  const key = createHash("sha256")
+    .update([documentId, source, stamp.size, stamp.mtimeMs].join("\0"))
+    .digest("hex")
+    .slice(0, 16);
+  const outDir = join(CONVERT_CACHE, key);
+  const target = join(outDir, basename(source).replace(/\.[^.]+$/, "") + ".pdf");
+  if (existsSync(target)) return target;
+
+  mkdirSync(outDir, { recursive: true });
+  const run = spawnSync(
+    office,
+    ["--headless", "--convert-to", "pdf", "--outdir", outDir, source],
+    { encoding: "utf-8", timeout: 60_000 },
+  );
+  if (run.error) throw new Error(`${basename(office)} would not run: ${run.error.message}`);
+  if (run.status !== 0) {
+    throw new Error(
+      `${basename(office)} exited ${run.status}: ` +
+        (String(run.stderr || run.stdout || "").trim().split("\n").pop() || "no reason given"),
+    );
+  }
+  // Exit zero and no file is a real outcome: LibreOffice reports a format it
+  // cannot read this way. Checking the code alone is the bug this avoids.
+  if (!existsSync(target)) {
+    throw new Error(`${basename(office)} exited 0 but wrote no PDF for ${basename(source)}`);
+  }
+  return target;
+};
+
 /** A storage key's extension, lowercased, or `""`. */
 const extensionOfKey = (key) => {
   const name = String(key ?? "").split(/[\\/]/).pop() ?? "";
@@ -4460,6 +4539,15 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
   // was supposed to stop happening. The harness's theme is an explicit choice
   // and need not agree with the machine's, so it is passed rather than left to
   // `prefers-color-scheme`.
+  // Whether this machine can render a `.pptx` into something a frame will
+  // paint. Probed ONCE per payload rather than per document — it is a fact
+  // about the machine, and thirty documents would otherwise stat the same six
+  // paths thirty times — and never cached across requests, so installing
+  // LibreOffice takes effect on the next reload rather than the next restart.
+  const canRender = officeAt() !== null;
+  const renderable = (documentId) =>
+    canRender && CONVERTIBLE.has(extensionOf.get(documentId) ?? "");
+
   const address = (documentId) => {
     // `from` is carried on the address and nowhere else, because the only
     // consumer is the overlay's "ask about this" button and the overlay is
@@ -4472,7 +4560,8 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
       encodeURIComponent(documentId) +
       (source ? "&from=" + encodeURIComponent(source) : "") +
       (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
-      (dark ? "&dark=1" : "")
+      (dark ? "&dark=1" : "") +
+      (renderable(documentId) ? "&as=pdf" : "")
     );
   };
 
@@ -4552,7 +4641,14 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
     }
   }
 
-  const showable = (documentId) => SHOWABLE.has(extensionOf.get(documentId) ?? "");
+  // Showable as it is, or showable once rendered. The second half is why a
+  // deck now opens over the harness instead of landing in Downloads.
+  const showable = (documentId) =>
+    SHOWABLE.has(extensionOf.get(documentId) ?? "") || renderable(documentId);
+
+  /** What `/file` will actually send, which is not always what is on disk. */
+  const servedFormat = (documentId) =>
+    renderable(documentId) ? "pdf" : (extensionOf.get(documentId) ?? "");
 
   /**
    * What a rendered artefact was produced from, following the chain to its end.
@@ -4598,10 +4694,14 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
         .map((entry) => ({
           label: entry.extension.toUpperCase(),
           url: address(entry.id),
-          viewable: SHOWABLE.has(entry.extension),
+          viewable: showable(entry.id),
           // The extension travels with the link because the overlay sandboxes
           // a document and does not sandbox a PDF. See MEDIA in `client.js`.
-          format: entry.extension,
+          //
+          // What is served, not what is stored: a `.pptx` this machine can
+          // render arrives as a PDF, and a frame told it is a `.pptx` would
+          // sandbox the browser's own PDF viewer and paint nothing.
+          format: servedFormat(entry.id),
         }));
     }
     return [];
@@ -4621,7 +4721,7 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
       url,
       formats,
       viewable,
-      format: extensionOf.get(resource.document_id) ?? "",
+      format: servedFormat(resource.document_id),
       // Empty when the record says nothing, and the view draws that as its own
       // state rather than assuming the common case.
       origin: originOf.get(resource.document_id) ?? "",
@@ -5025,7 +5125,7 @@ const sendOutline = (res, workspace, root, documentId, dark) => {
   return send(res, 200, "text/html; charset=utf-8", markdownPage(title, source.join("\n"), dark === true));
 };
 
-const sendMaterial = (res, workspace, root, documentId, dark) => {
+const sendMaterial = (res, workspace, root, documentId, dark, asPdf) => {
   if (!documentId) return sendJson(res, 200, { error: "no document named" });
 
   let found = null;
@@ -5062,12 +5162,38 @@ const sendMaterial = (res, workspace, root, documentId, dark) => {
     return sendJson(res, 200, { error: `${key} is recorded but not on disk` });
   }
 
-  const extension = (key.split(".").pop() ?? "").toLowerCase();
+  let extension = (key.split(".").pop() ?? "").toLowerCase();
+
+  // The professor asked to read a deck rather than download it, and this
+  // machine has something that can render one. The original is untouched and
+  // the overlay's "Open in a tab" still reaches it; what is served here is a
+  // rendering, which is the only form of a .pptx a browser will paint.
+  if (asPdf && CONVERTIBLE.has(extension)) {
+    try {
+      const pdf = convertedPdf(documentId, full);
+      body = readFileSync(pdf);
+      extension = "pdf";
+    } catch (error) {
+      // Said in words, in the panel, rather than as a blank frame. A professor
+      // who sees "no LibreOffice on this machine" can act on it; one who sees
+      // an empty box cannot tell that from a broken deck.
+      return sendJson(res, 200, {
+        error: `${documentId} could not be rendered for reading — ${String(error.message || error)}. ` +
+          "It still opens in a tab, which is what the browser does with it.",
+      });
+    }
+  }
 
   // Markdown becomes a page. The name it downloads under becomes `.html` with
   // it, because a file whose bytes are HTML and whose name ends `.md` is a
   // file the professor's editor opens as source.
   let name = basename(full);
+  // A rendering downloads as a PDF, for the reason markdown downloads as HTML
+  // below: a file whose bytes are one thing and whose name says another is a
+  // file the professor's machine opens with the wrong application.
+  if (asPdf && extension === "pdf" && !/\.pdf$/i.test(name)) {
+    name = name.replace(/\.[^.]+$/, "") + ".pdf";
+  }
   if (MARKDOWN_EXTENSIONS.has(extension)) {
     body = Buffer.from(
       markdownPage(String(found.title ?? name), body.toString("utf8"), dark === true),
@@ -6136,6 +6262,9 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
         root,
         url.searchParams.get("doc") ?? "",
         url.searchParams.get("dark") === "1",
+        // Affirmative only, like `names=1` on the inbox: a URL replayed without
+        // it serves the file itself, which is what every caller got before.
+        url.searchParams.get("as") === "pdf",
       );
     }
 
