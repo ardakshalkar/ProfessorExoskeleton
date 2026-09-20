@@ -183,11 +183,52 @@ const extensionOf = (key) => {
   return dot <= 0 ? "" : name.slice(dot + 1).toLowerCase();
 };
 
+/**
+ * The same stem pairing the pane does, for the same reason.
+ *
+ * A deck is registered twice — `MODULE-DRAFT-01-slides.pptx` and the
+ * `.pdf` rendered from it are two Documents, and as far as the schema is
+ * concerned they are unrelated. `withMaterialLinks` pairs them by the stem of
+ * their storage key so one meeting shows one deck with two formats instead of
+ * two chips both called "Slides", and the prototype was not doing it at all:
+ * it walked a meeting's resources, and a resource points at the pptx only. The
+ * PDF beside it has no resource pointing at it and so appeared nowhere.
+ *
+ * It is a convention and the draft that registered the PDFs says so: rename one
+ * half and the pairing quietly stops. Worth having anyway, because the
+ * alternative is a professor guessing which of two identical chips is which.
+ */
+const byStem = new Map();
+for (const document of bundle.documents ?? []) {
+  const key = String(document.storage_key ?? "");
+  if (!key || key.includes("://")) continue;
+  const name = key.split(/[\\/]/).pop() ?? "";
+  const dot = name.lastIndexOf(".");
+  if (dot <= 0) continue;
+  const stem = name.slice(0, dot);
+  if (!byStem.has(stem)) byStem.set(stem, []);
+  byStem.get(stem).push({ id: document.document_id, extension: name.slice(dot + 1).toLowerCase() });
+}
+
+/** Every format one document also exists in, itself first. Empty unless two. */
+const formatsOf = (documentId) => {
+  for (const group of byStem.values()) {
+    if (!group.some((entry) => entry.id === documentId)) continue;
+    const shown = group.filter((entry) => ["pptx", "pdf", "docx"].includes(entry.extension));
+    if (shown.length < 2) return [];
+    return shown
+      .sort((a, b) => (a.id === documentId ? -1 : b.id === documentId ? 1 : 0))
+      .map((entry) => ({ label: entry.extension.toUpperCase(), doc: entry.id }));
+  }
+  return [];
+};
+
 const materials = {};
 for (const document of bundle.documents ?? []) {
   const key = String(document.storage_key ?? "");
   const extension = extensionOf(key);
-  const entry = { title: document.title ?? document.document_id, extension: extension };
+  const entry = { title: document.title ?? document.document_id, extension: extension,
+                  formats: formatsOf(document.document_id) };
 
   if (!key || key.includes("://")) {
     entry.held = "outside the workspace, in object storage — sendMaterial refuses a key with " +

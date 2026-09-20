@@ -167,6 +167,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chip.draftc { border-color: var(--draft-line); background: var(--draft-tint); color: var(--draft); }
 .chip.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
 .chip.concept { border-color: transparent; background: var(--sunk); color: var(--muted); font-size: 11.5px; }
+/* Another format of the deck beside it, the way `.fmt` reads in the pane: a
+   small hard label, not a second thing called Slides. */
+.chip.fmt { border-color: var(--accent-line); color: var(--accent-ink); font-size: 10.5px;
+            letter-spacing: .04em; font-weight: 600; padding: 2px 7px; }
 .ev { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
 .ev b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
 .ev .none-yet { font-style: italic; }
@@ -571,9 +575,20 @@ function weekModel(week, mode, selected) {
   // is the shape the model already has rather than a flattening of it — and it
   // answers "what am I teaching on Tuesday, and with what" in one cell.
   const lecture = week.meetings.map(function (m) {
-    const materials = (m.resources || []).map(function (r) {
+    const materials = [];
+    (m.resources || []).forEach(function (r) {
       const deck = r.kind === 'slides';
-      return {
+      // The formats this document also exists in. A deck is registered twice —
+      // the .pptx and the .pdf rendered from it — and only the .pptx has a
+      // resource pointing at it, so without this the PDF beside every lecture
+      // deck appeared nowhere on the page. One chip per format, the deck's own
+      // first, which is what the pane draws.
+      const formats = (DATA.materials[r.document_id] || {}).formats || [];
+      formats.slice(1).forEach(function (f) {
+        materials.push({ id: r.resource_id + ':' + f.doc, doc: f.doc, label: f.label,
+                         kind: '', tone: 'fmt', pick: 'resource' });
+      });
+      materials.push({
         id: r.resource_id,
         // The document is what `/file` serves; the resource is what the week
         // names. A chip needs both — one to open, one to put in the packet.
@@ -585,10 +600,12 @@ function weekModel(week, mode, selected) {
         kind: deck ? '' : (READING_WORD[r.kind] || r.kind),
         tone: deck ? 'deck' : '',
         pick: deck ? 'deck' : 'resource',
-      };
+      });
     });
-    // Slides first: it is the one a professor opens minutes before the class.
-    materials.sort(function (a, b) { return (a.tone === 'deck' ? 0 : 1) - (b.tone === 'deck' ? 0 : 1); });
+    // Slides first, then its other formats, then everything else: the deck is
+    // the one a professor opens minutes before the class.
+    const rank = function (x) { return x.tone === 'deck' ? 0 : x.tone === 'fmt' ? 1 : 2; };
+    materials.sort(function (a, b) { return rank(a) - rank(b); });
     return { id: m.activity_id, on: shortDate(m.on),
              label: m.type + (m.location ? ' · ' + m.location : ''),
              materials: materials };
