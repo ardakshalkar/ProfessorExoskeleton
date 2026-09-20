@@ -253,6 +253,57 @@ for (const document of bundle.documents ?? []) {
 }
 
 
+// -------------------------------------------------------------------- briefs
+//
+// What a piece of graded work asks for, which is the other half of "press it
+// and read it" and the half that matters more: 2 of this course's 21
+// assessments have a brief DOCUMENT, 12 carry the brief in the record's own
+// `description`, and 7 have neither. A chip that names work nobody can read is
+// the state `sendBrief` exists to end.
+//
+// Composed the way `sendBrief` composes it — the title, the same six facts in
+// the same order, then the text, through the same renderer — so a brief reads
+// here as it reads in the harness. The facts are restated rather than imported
+// because they are eleven lines inside an HTTP handler; if a third surface ever
+// needs them, that is the moment to lift them out rather than now.
+
+const briefs = {};
+for (const a of outline.assessments) {
+  const text = String(a.description ?? "").trim();
+  const doc = a.instructions_document_id ?? "";
+  if (!text && !doc) {
+    // Drawn as `no brief` in the same amber a missing weight gets. Work a
+    // student cannot start is a hole worth showing, not a field to leave blank.
+    briefs[a.assessment_id] = { title: a.title ?? a.assessment_id, none: true };
+    continue;
+  }
+
+  const when = [a.opens_on ? `opens ${a.opens_on}` : "", a.due_on ? `due ${a.due_on}` : ""]
+    .filter(Boolean);
+  const facts = [
+    `**Dates** — ${when.length ? when.join(", ") : "not scheduled"}`,
+    `**Weight** — ${a.weight == null ? "not set" : Math.round(a.weight * 100) + "%"}`,
+  ];
+  if (a.maximum_score != null) facts.push(`**Out of** — ${a.maximum_score}`);
+  const handed = (a.submission_type ?? []).join(", ");
+  if (handed) facts.push(`**Handed in as** — ${handed}`);
+  const outcomes = (a.outcomes ?? []).join(", ");
+  if (outcomes) facts.push(`**Outcomes** — ${outcomes}`);
+  facts.push(
+    `**Rubric** — ${a.criteria ? a.criteria + (a.criteria === 1 ? " criterion" : " criteria") : "none yet"}`,
+  );
+
+  const title = String(a.title ?? a.assessment_id);
+  const source = [`# ${title}`, "", ...facts.map((f) => `- ${f}`), "", text].join("\n");
+  briefs[a.assessment_id] = {
+    title,
+    // Empty when the brief lives only in a document; the modal then offers that.
+    html: text ? MARKDOWN_STYLE + '<div class="md">' + renderMarkdown(source) + "</div>" : "",
+    doc,
+  };
+}
+
+
 // ---------------------------------------------------------------- the payload
 
 // --------------------------------------------------------------------- todos
@@ -331,6 +382,7 @@ const data = {
   placement: outline.placement,
   enrolled,
   materials,
+  briefs,
   office: officeAt() !== null,
   students,
   // Said on the payload rather than assumed by the view, so the banner the page

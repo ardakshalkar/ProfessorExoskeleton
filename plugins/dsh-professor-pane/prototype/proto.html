@@ -404,8 +404,8 @@ const STRUCTURES = {
       '  {% if w.no_deck %}<button class="chip gap" data-pick="gap" data-id="deck" title="{{ w.deck_note }}">no deck</button>{% endif %}',
       '  {% if w.no_lecture %}<span class="dash">—</span>{% endif %}',
       '</div>',
-      '<div class="cell" data-col="Assessment" data-week="{{ w.week }}">{% for a in w.assessment %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% endfor %}{% if w.no_assessment %}<span class="dash">—</span>{% endif %}</div>',
-      '<div class="cell" data-col="Quiz" data-week="{{ w.week }}">{% for a in w.quiz %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% endfor %}{% if w.no_quiz %}<span class="dash">—</span>{% endif %}</div>',
+      '<div class="cell" data-col="Assessment" data-week="{{ w.week }}">{% for a in w.assessment %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}" data-brief="{{ a.brief }}" title="open the brief"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% if a.no_brief %}<span class="chip gap">no brief</span>{% endif %}{% endfor %}{% if w.no_assessment %}<span class="dash">—</span>{% endif %}</div>',
+      '<div class="cell" data-col="Quiz" data-week="{{ w.week }}">{% for a in w.quiz %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}" data-brief="{{ a.brief }}" title="open the brief"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% if a.no_brief %}<span class="chip gap">no brief</span>{% endif %}{% endfor %}{% if w.no_quiz %}<span class="dash">—</span>{% endif %}</div>',
     ].join('\n'),
   },
   spine: {
@@ -620,9 +620,17 @@ function weekModel(week, mode, selected) {
     const source = week.due.concat(week.opens, week.undated).filter(function (x) {
       return x.assessment_id === a.id;
     })[0];
+    const brief = DATA.briefs[a.id] || {};
     (source && source.type === 'quiz' ? quiz : assessment).push(
-      Object.assign({}, a, { weight: source && source.weight != null
-        ? Math.round(source.weight * 100) + '%' : '' }));
+      Object.assign({}, a, {
+        weight: source && source.weight != null ? Math.round(source.weight * 100) + '%' : '',
+        // The brief students read, as the chip's own press. Empty when there is
+        // none, and the week then draws `no brief` beside the work in the same
+        // amber a missing weight gets — the pane's own rule, because graded
+        // work a student cannot start is a hole worth seeing.
+        brief: brief.none ? '' : a.id,
+        no_brief: Boolean(brief.none),
+      }));
   });
 
   return {
@@ -818,10 +826,11 @@ function Spine(props) {
     if (!week) return;
     props.onSelect({ kind: el.dataset.pick, id: el.dataset.id, doc: el.dataset.doc || '',
                      week: week, view: props.view });
-    // A material opens on the press, the way it does in the harness: the chip
-    // IS the link. It still selects, so the packet under it is about the thing
-    // now on screen rather than about whatever was pressed before it.
-    if (el.dataset.doc) props.onOpen(el.dataset.doc);
+    // A material or a brief opens on the press, the way it does in the harness:
+    // the chip IS the link. It still selects, so the packet under it is about
+    // the thing now on screen rather than whatever was pressed before it.
+    if (el.dataset.doc) props.onOpen({ kind: 'doc', id: el.dataset.doc });
+    else if (el.dataset.brief) props.onOpen({ kind: 'brief', id: el.dataset.brief });
   }, [props.view, props.onSelect, props.onOpen]);
 
   if (html.error) return null;
@@ -965,9 +974,21 @@ function Assessments(props) {
           h('td', { className: 'num mono' }, props.only === 'quiz'
             ? (seen.items || 0)
             : (seen.submissions_received || 0) + ' of ' + (seen.enrolled || DATA.enrolled)),
-          h('td', null, a.instructions_document_id
-            ? h('span', { className: 'chip' }, 'open')
-            : h('span', { className: 'chip gap' }, 'no brief')));
+          // `open` where there is something to read, and `no brief` in the
+          // same amber a missing weight gets. The brief is usually the
+          // record's own description rather than a document — twelve of this
+          // course's twenty-one assessments are that way — so keying this on
+          // `instructions_document_id` alone said "no brief" about work whose
+          // brief was written.
+          h('td', null, (DATA.briefs[a.assessment_id] || {}).none
+            ? h('span', { className: 'chip gap' }, 'no brief')
+            : h('button', {
+                className: 'chip', type: 'button',
+                onClick: function (e) {
+                  e.stopPropagation();
+                  props.onOpenBrief(a.assessment_id);
+                },
+              }, 'open')));
       }))),
     h('p', { className: 'foot' }, props.only === 'quiz'
       ? rows.length + ' quiz, with its items — the answer key is deliberately not reachable ' +
@@ -1074,7 +1095,14 @@ function Students(props) {
 function MaterialModal(props) {
   const close = props.onClose;
   const box = useRef(null);
-  const material = DATA.materials[props.documentId] || {};
+  // Two things open here and they are the same act: a material is a file the
+  // course registered, a brief is the record's own text about a piece of work.
+  // `sendMaterial` and `sendBrief` are two routes for the same reason — one
+  // serves bytes, the other composes a page — and both land in this panel.
+  const brief = props.what.kind === 'brief' ? (DATA.briefs[props.what.id] || {}) : null;
+  const material = brief
+    ? (brief.doc ? DATA.materials[brief.doc] || {} : {})
+    : (DATA.materials[props.what.id] || {});
 
   useEffect(function () {
     const onKey = function (e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
@@ -1088,7 +1116,17 @@ function MaterialModal(props) {
   }, [close]);
 
   let body;
-  if (material.html) {
+  if (brief && brief.none) {
+    body = h('div', { className: 'matnote' },
+      h('b', null, 'No brief.'),
+      h('p', null, 'This piece of graded work carries neither a brief document nor a ' +
+        'description, so there is nothing for a student to read and nothing for this panel to ' +
+        'show. The brief is the record’s own text — write it there and it appears here, ' +
+        'which is what sendBrief says when it refuses.'));
+  } else if (brief && brief.html) {
+    body = h('iframe', { className: 'matframe', title: brief.title,
+                         sandbox: 'allow-same-origin', srcDoc: brief.html });
+  } else if (material.html) {
     // Framed rather than inlined, for the reason the harness frames it: a
     // brief may be a file downloaded from anywhere, and its markup has no
     // business inheriting this page's styles or reaching this page's DOM.
@@ -1124,12 +1162,20 @@ function MaterialModal(props) {
     h('div', { className: 'veil',
                onMouseDown: function (e) { if (e.target === e.currentTarget) close(); } },
       h('div', { className: 'modal', role: 'dialog', 'aria-modal': 'true', tabIndex: -1, ref: box,
-                 'aria-label': material.title || props.documentId,
+                 'aria-label': (brief ? brief.title : material.title) || props.what.id,
                  onMouseDown: function (e) { e.stopPropagation(); } },
         h('header', null,
-          h('b', null, material.title || props.documentId),
+          h('b', null, (brief ? brief.title : material.title) || props.what.id),
           h('span', { className: 'where mono' },
-            material.extension ? '.' + material.extension : ''),
+            // Where what is ON SCREEN came from, not what else exists. An
+            // assessment can have both a description and an attached document
+            // — HW1 does — and a header naming the document above the record's
+            // own text would be crediting the wrong one.
+            brief
+              ? (brief.html
+                  ? 'brief · the record’s own text' + (brief.doc ? ' · also ' + brief.doc : '')
+                  : 'brief · ' + brief.doc)
+              : (material.extension ? '.' + material.extension : '')),
           h('button', { className: 'ghost', type: 'button', onClick: close }, 'Back to the course'),
           h('button', { className: 'x', type: 'button', onClick: close, 'aria-label': 'Close' }, '×')),
         body)),
@@ -1249,8 +1295,10 @@ function App() {
   if (section === 'students') body = h(Students, { onSelect: setSel, names: names });
   else if (section === 'todos') body = h(Todos, { onSelect: setSel, names: names });
   else if (view === 'lectures') body = h(Lectures, { onSelect: setSel });
-  else if (view === 'assessment') body = h(Assessments, { only: 'other', onSelect: setSel });
-  else if (view === 'quiz') body = h(Assessments, { only: 'quiz', onSelect: setSel });
+  else if (view === 'assessment') body = h(Assessments, { only: 'other', onSelect: setSel,
+    onOpenBrief: function (id) { setOpened({ kind: 'brief', id: id }); } });
+  else if (view === 'quiz') body = h(Assessments, { only: 'quiz', onSelect: setSel,
+    onOpenBrief: function (id) { setOpened({ kind: 'brief', id: id }); } });
   else body = h(Spine, { structure: draft, mode: OUTLINE_MODE[view], view: view,
                          onSelect: setSel, onError: setError, onOpen: setOpened,
                          layout: STRUCTURES[structureId].layout,
@@ -1327,9 +1375,13 @@ function App() {
       : null,
     h(Explainer, { mode: mode, section: section, view: view }),
     sel ? h(Inspector, { sel: sel, packet: packet, onAsk: function () { setAsking(true); },
-                         onOpen: sel.doc ? function () { setOpened(sel.doc); } : null,
+                         onOpen: sel.doc
+                           ? function () { setOpened({ kind: 'doc', id: sel.doc }); }
+                           : (sel.kind === 'work' && !(DATA.briefs[sel.id] || {}).none
+                               ? function () { setOpened({ kind: 'brief', id: sel.id }); }
+                               : null),
                          onClose: function () { setSel(null); } }) : null,
-    opened ? h(MaterialModal, { key: opened, documentId: opened,
+    opened ? h(MaterialModal, { key: opened.kind + ':' + opened.id, what: opened,
                                 onClose: function () { setOpened(null); } }) : null,
     // Keyed on what it was opened over, so pressing Ask on a different week
     // opens a turn about that week rather than reusing the last one.
