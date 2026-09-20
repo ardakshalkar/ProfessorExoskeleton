@@ -27,7 +27,23 @@ import { officeAt } from "../../../ainar-node/src/materials.ts";
 
 const HERE = import.meta.dirname;
 const REPO = join(HERE, "..", "..", "..");
-const ROOT = join(REPO, "workspace");
+
+/**
+ * Which course to draw, and from where.
+ *
+ * The example course is the default because it is the one this repository can
+ * promise is there. A real course is pointed at with the environment, the way
+ * `AINAR_WORKSPACE` points the tools at one:
+ *
+ *   PROTO_WORKSPACE="/path/to/AI Course 2026 v1" PROTO_RUN=CSS-4007-2026-FALL \
+ *     node --experimental-strip-types plugins/dsh-professor-pane/prototype/build.mjs
+ *
+ * Point it at the folder that CONTAINS `courses/`, not at a course. The output
+ * then holds that course's records — pseudonymous, but a real class's marks and
+ * gaps — so it is written beside the builder and is gitignored, and publishing
+ * it anywhere is a decision for the person who ran this rather than a default.
+ */
+const ROOT = process.env.PROTO_WORKSPACE || join(REPO, "workspace");
 const RUN = process.env.PROTO_RUN ?? "CSS-4008-2026-FALL";
 /** Pinned, so the prototype reads the same whatever day it is built. */
 const ON = "2026-10-15";
@@ -61,6 +77,11 @@ const enrolled = (bundle.enrollments ?? []).filter(
  * there is no roster in this workspace to read. They are Almaty-plausible
  * because the run's timezone is `Asia/Almaty` and a name list of Smiths would
  * lay out differently from the one this course will actually carry.
+ *
+ * Keyed by the EXAMPLE course's pseudonyms, so a real course gets none of them
+ * and its class list stays pseudonymous — which is the right answer twice over:
+ * inventing a name for a real student would be worse than showing none, and
+ * the roster that holds their actual name is not this builder's to read.
  *
  * The identifier stays under every name, for the reason `dsh-professor-pane`
  * keeps it there: it is what `whois`, the gradebook and a bug report all use.
@@ -273,8 +294,10 @@ const data = {
   students,
   // Said on the payload rather than assumed by the view, so the banner the page
   // draws when names are showing is telling the truth about where they came
-  // from. A real harness would set this false and resolve from the roster.
-  names_are_fixture: true,
+  // from. False on a course whose pseudonyms match no fixture: there are then
+  // no names to warn about, and a banner claiming otherwise would be the page
+  // lying about its own contents.
+  names_are_fixture: students.some((s) => s.name !== null),
   todos,
   inbox: {
     assessments: (inbox.assessments ?? []).map((a) => ({

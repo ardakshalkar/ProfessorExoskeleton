@@ -194,9 +194,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Lectures, Assessment, Quiz, Students and Todos: lists rather than a spine,
    because each reads down a different axis from the week. */
 .listing { margin: 16px 20px 210px; }
+.listing .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px;
+                   background: var(--surface); }
 .listing table { width: 100%; border-collapse: collapse; background: var(--surface);
-                 border: 1px solid var(--line); border-radius: 12px; overflow: clip;
                  font-size: 13px; }
+/* The student column stays put while the assessments scroll past it. Without
+   it a row of twenty-one marks is a row of numbers belonging to nobody. */
+.listing tbody td:first-child, .listing thead th:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--surface); }
+.listing thead th:first-child { background: var(--sunk); }
+.listing tbody tr:hover td:first-child { background: var(--sunk); }
 .listing th { text-align: left; background: var(--sunk); color: var(--muted);
               font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
               font-weight: 500; padding: 9px 12px; border-bottom: 1px solid var(--line);
@@ -886,7 +893,7 @@ function Lectures(props) {
     });
   });
   return h('div', { className: 'listing' },
-    h('table', null,
+    h(Scroll, { min: 760 },
       h('thead', null, h('tr', null,
         h('th', null, 'Wk'), h('th', null, 'When'), h('th', null, 'Type'),
         h('th', null, 'Where'), h('th', null, 'Module'), h('th', null, 'Slides'))),
@@ -916,7 +923,7 @@ function Assessments(props) {
   const inboxBy = {};
   DATA.inbox.assessments.forEach(function (a) { inboxBy[a.assessment_id] = a; });
   return h('div', { className: 'listing' },
-    h('table', null,
+    h(Scroll, { min: 860 },
       h('thead', null, h('tr', null,
         h('th', null, 'Assessment'), h('th', null, 'Type'), h('th', { className: 'num' }, 'Weight'),
         h('th', null, 'Opens'), h('th', null, 'Due'), h('th', { className: 'num' }, 'Criteria'),
@@ -968,7 +975,9 @@ function weekOf(assessmentId) {
 function Students(props) {
   const marks = DATA.students.length ? DATA.students[0].marks : [];
   return h('div', { className: 'listing' },
-    h('table', null,
+    // Wide by construction: one column per assessment, and a real course has
+    // twenty-one of them. It scrolls; the page does not.
+    h(Scroll, { min: 320 + 130 * (marks.length + 2) },
       h('thead', null, h('tr', null,
         h('th', null, 'Student'),
         h('th', null, 'Concepts with evidence'),
@@ -1108,6 +1117,20 @@ function MaterialModal(props) {
           h('button', { className: 'x', type: 'button', onClick: close, 'aria-label': 'Close' }, '×')),
         body)),
     document.body);
+}
+
+/**
+ * A table in its own scroll box.
+ *
+ * Twenty-one assessments and a concept column is twenty-four columns, which is
+ * what a real course turned out to have — the example has seven. Past that the
+ * columns crush rather than the page scrolling, and the fix is the rule every
+ * wide table on a responsive page needs: the TABLE scrolls sideways inside its
+ * own container, and the page body never does.
+ */
+function Scroll(props) {
+  return h('div', { className: 'scroll' },
+    h('table', { style: props.min ? { minWidth: props.min + 'px' } : null }, props.children));
 }
 
 /** A fixture name for a pseudonym, or nothing. Never used in a packet. */
