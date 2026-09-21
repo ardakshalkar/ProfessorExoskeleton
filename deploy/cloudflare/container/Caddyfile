@@ -1,0 +1,38 @@
+# The only route to the harness inside this container.
+#
+# deploy/cloudflare/Caddyfile.example is the same idea on a Linux server, where
+# Caddy listens on loopback and a Tunnel reaches it. Here the listener has to be
+# non-loopback, because a Cloudflare Container is reached from the Worker on its
+# published port — so :8080 is deliberate and is the one place in this
+# deployment where that is true.
+#
+# What makes it safe is the same thing that makes it safe there: the harness
+# itself is on 127.0.0.1 and nothing but this process can speak to it, and the
+# only thing that can speak to *this* process is the Worker, which refuses any
+# request that has not passed Cloudflare Access. deploy/README.md's fence table
+# is the measurement behind the two header_up lines — rewrite both or neither,
+# and a proxy that forwards them unchanged gets 403 on everything.
+
+{
+	# No TLS here. The hop from the Worker to the container is inside
+	# Cloudflare's network, and terminating TLS at the edge is the point of
+	# putting a Worker in front.
+	auto_https off
+}
+
+:8080 {
+	reverse_proxy 127.0.0.1:3101 {
+		# The harness accepts its privileged APIs — settings, credentials,
+		# agent-preset reads, llm.discoverModels — only for a loopback
+		# authority, and checks Host and Origin together.
+		header_up Host 127.0.0.1:3101
+		header_up Origin http://127.0.0.1:3101
+
+		# Kept for anything downstream that wants to know the real name. It
+		# is informational: nothing in the harness reads it.
+		header_up X-Forwarded-Host {host}
+
+		# WebSockets carry the session updates the UI redraws from. Caddy
+		# upgrades them without configuration; this is a note, not a knob.
+	}
+}

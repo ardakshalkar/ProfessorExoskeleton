@@ -2,6 +2,8 @@
 
 The DHS web app runs as a long-lived Node process with a writable course workspace and shell tools. Keep it on a Linux server as described in [`../README.md`](../README.md). Cloudflare Tunnel provides the public route; Cloudflare Access restricts who can open it. This is a single-professor starting configuration, not a multi-tenant deployment.
 
+There is a second arrangement in this directory, [`CONTAINERS.md`](CONTAINERS.md), which runs the harness *inside* Cloudflare as a Container image rather than on a server you keep. It handles more than one professor, by Durable Object rather than by Unix account. It also puts the course workspace on object storage through FUSE, which is the reason to read its final section before choosing it: this file's arrangement remains the conservative one.
+
 ## Required inputs
 
 - A Linux server or VM where `dsh@<user>` can run and where `cloudflared` can connect to Cloudflare.

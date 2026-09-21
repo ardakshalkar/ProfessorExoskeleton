@@ -1,0 +1,41 @@
+# Build context for deploy/cloudflare/container/Dockerfile.
+#
+# Later rules win, so the order below is load-bearing: broad excludes first,
+# then the two things inside .dsh that the image genuinely needs, then the one
+# directory that must stay out even though it sits under them.
+
+# ── installed for THIS platform ─────────────────────────────────────────────
+# The image runs its own `npm install` for linux/amd64 before the wildcard copy.
+# Copying a Windows tree over it replaces working binaries with ones that cannot
+# execute — and does it silently, because the paths all still exist.
+node_modules/
+**/node_modules/
+
+# ── the professor's own home ────────────────────────────────────────────────
+# .dsh holds .credentials.yaml, the key the Models page writes, and every
+# session transcript on this machine. An image is distributed to Cloudflare's
+# network and started for every professor, so none of that may be in it.
+.dsh/**
+
+# Except the composition, which is not state and which deploy/dsh-user mirrors
+# out of the checkout on every boot. Leave these out and the harness boots
+# without the professor preset — the standard coding agent answers instead, and
+# nothing reports it as wrong.
+!.dsh/profiles/sample/**
+!.dsh/.agent-presets/**
+
+# But not the link farm the harness writes into the profile on first boot. It is
+# rebuilt per container, it is several hundred entries, and on Windows these are
+# junctions that do not survive a copy into a Linux image as anything useful.
+.dsh/profiles/node_modules/
+
+# ── the API key, by the other route it can live at ──────────────────────────
+.env
+.env.local
+
+# ── not needed to run ───────────────────────────────────────────────────────
+.git/
+.gitattributes
+workspace/
+*.log
+.DS_Store

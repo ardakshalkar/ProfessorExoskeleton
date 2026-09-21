@@ -1,0 +1,73 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "professor-exoskeleton",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-08-28",
+	"compatibility_flags": ["nodejs_compat"],
+
+	"observability": { "enabled": true },
+
+	// NO workers.dev route. The Worker refuses a request without a valid Access
+	// token, so a workers.dev hostname would answer 401 rather than hand out a
+	// shell — but an Access application is attached to a hostname, and leaving a
+	// second hostname alive means one more thing that has to keep being
+	// configured correctly forever. Delete the surface instead.
+	"workers_dev": false,
+
+	// EDIT: the hostname the Access application protects.
+	"routes": [
+		{ "pattern": "professor.prof-exo.com", "custom_domain": true }
+	],
+
+	"containers": [
+		{
+			"class_name": "ProfessorHarness",
+			"image": "../container/Dockerfile",
+
+			// The image carries the checkout, so the build context is the
+			// repository root — three levels up from this file.
+			"image_build_context": "../../..",
+
+			// 1/2 vCPU, 4 GiB memory, 8 GB disk. The image is the checkout plus
+			// roughly 150 MB of node_modules, so it fits with room; memory is
+			// the number to watch, because an OOM here is not a slow request but
+			// a restart, and a restart is a fresh disk. Move up to standard-2 if
+			// batch grading a full class pushes it.
+			"instance_type": "standard-1",
+
+			// One instance per professor. Raise it to the number of people who
+			// will ever sign in at once, and no higher: each running instance is
+			// billed for the whole time it is awake.
+			"max_instances": 5
+		}
+	],
+
+	"durable_objects": {
+		"bindings": [
+			{ "class_name": "ProfessorHarness", "name": "PROFESSOR_HARNESS" }
+		]
+	},
+
+	"migrations": [
+		{ "tag": "v1", "new_sqlite_classes": ["ProfessorHarness"] }
+	],
+
+	"vars": {
+		// EDIT: your Zero Trust team domain, without a scheme.
+		"ACCESS_TEAM_DOMAIN": "morning-bar-3c02.cloudflareaccess.com",
+
+		// EDIT: the Access application's AUD tag. Application-specific: a token
+		// minted for a different application in the same team is refused.
+		"ACCESS_AUD": "e62e6b715f8cc6bad5a23542b013e70fda06c8a01e3c5765ac108d99eb79a8b2",
+
+		// EDIT: the R2 bucket holding every professor's durable home, and the
+		// account it belongs to.
+		"R2_BUCKET_NAME": "professor-exoskeleton-homes",
+		"R2_ACCOUNT_ID": "80f1087510bab58f52d15de7f470fb61"
+	}
+
+	// AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are R2 API token credentials
+	// and are NOT vars. Set them with:
+	//   wrangler secret put AWS_ACCESS_KEY_ID
+	//   wrangler secret put AWS_SECRET_ACCESS_KEY
+}
