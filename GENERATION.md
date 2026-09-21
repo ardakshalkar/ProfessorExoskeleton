@@ -290,6 +290,39 @@ evaluation sitting in the same `work/<RUN>/` is reported as *left alone* and
 stays a proposal — enforced by the `collections` argument, not by anybody's care,
 and pinned by `test/publish.test.ts`.
 
+**The minor change, which is the commonest one.** A material that is already a
+record cannot be re-approved — `approve.collision` refuses the identifier — so
+for a long time the only sanctioned way to fix a word was a new `Document` with
+`supersedes` set, which nothing in the code reads. What actually happens is that
+the professor edits the file in place, and until 2026-09-21 nothing noticed:
+`validate` checks a checksum's *format* and never compares it to the file.
+
+`src/freshness.ts` closes that. Every publication compares each repository-held
+material against its recorded checksum and sorts what it finds:
+
+```
+  changed     a source edited since it was recorded        -> re-stamp, version + 1
+  rebuilt     a rendering regenerated after its source     -> re-stamp, version + 1
+  drifted     a rendering edited on its own                -> re-stamp, and say so
+  stale       a rendering whose source changed and which   -> HELD BACK from the
+              was not rebuilt                                 page, and the source
+                                                              is NOT re-stamped
+  unstamped   no checksum was ever recorded                -> stamp it, no version
+```
+
+Two rules in there were found by running it rather than by thinking about it.
+**A source with a stale rendering is not re-stamped**, because re-stamping it
+would make the rendering stop looking stale and the next publication would copy
+a PDF of the old text having warned exactly once. And **a rendering counts as
+rebuilt when its own bytes moved**, because without that the first rule
+deadlocks: the source is never recorded, so the rendering is stale forever.
+
+The write goes through `setRecordFields` rather than the YAML document API, and
+that is measured too: re-emitting a parsed document re-wraps scalars and re-pads
+flow sequences, so stamping two checksums rewrote twenty-four lines of a
+professor's file. The line-level writer changes the lines it means to and parses
+the result to prove it landed.
+
 Two consequences worth knowing:
 
 - **Publishing twice publishes twice.** `approve` never removes a draft, so a

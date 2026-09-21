@@ -300,6 +300,15 @@ leaving the harness, running `ainar approve`, and coming back. The publishing
 press now promotes the drafted **documents and resources** the publication needs
 and then publishes, which is the one press this pane was missing.
 
+**And it notices what you edited.** A material changed in place since it was
+recorded — the commonest change there is, and the one that used to need a new
+identifier nobody wanted to write — appears in the plan as *DOC-4410 changed
+since it was recorded*, and the publishing press brings the record back into
+line with the file. A rendering whose source changed and which nobody rebuilt is
+held back rather than published as a picture of the old text, and keeps being
+reported until it is rebuilt. `ainar-node/src/freshness.ts` has the two rules
+that were found by running it.
+
 What it does not promote, and cannot be made to: a drafted evaluation, signal or
 intervention. Those come back in the plan as `left alone`, and `ainar approve`
 remains the professor's. See `runPublish` in `index.js`, and

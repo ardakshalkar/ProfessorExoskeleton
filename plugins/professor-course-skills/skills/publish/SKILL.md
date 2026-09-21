@@ -91,6 +91,28 @@ accepted the materials and the command refuses rather than guessing.
 Read the whole output back. The promotion lines are a change to the course
 record and the professor should see them, not just the "published" line.
 
+## 3a. When the professor has just edited something
+
+A fixed typo needs no new identifier and no `supersedes`. They edit the file
+where it lives and publish again; the plan says what changed and the publishing
+run brings the record up to date with the file.
+
+What to read back to them, because these three are theirs to act on:
+
+- **`X changed since it was recorded`** — expected, and it is what they just
+  did. The publishing run records it and the version goes up by one.
+- **`Y was rendered from X, which changed — held back`** — the deck was edited
+  and its PDF was not rebuilt, so the PDF is *not* published. Give them the
+  rebuild command — `bin/ainar materials build <RUN>` for a course that
+  declares its own producers — and say that publishing again sends both.
+- **`X is NOT re-stamped`** — the same situation, said from the record's side.
+  Not an error and not something to work around. The warning is deliberate and
+  will keep coming back until the rendering is rebuilt.
+
+Never fix a stale rendering by editing the record, deleting the document, or
+pointing `storage_key` somewhere else. The file is out of date; the record is
+telling the truth about it.
+
 ## 4. Report what cannot be undone
 
 - A **Telegram** message is sent. Nothing recalls it.

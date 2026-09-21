@@ -135,6 +135,13 @@ import {
   sendAnnouncement,
 } from "../src/publish.ts";
 import { FetchTransport } from "../src/lms/http.ts";
+import {
+  describeFreshness,
+  freshness,
+  heldBackForStaleness,
+  nothingChanged,
+  restamp,
+} from "../src/freshness.ts";
 import { Workspace } from "../src/workspace.ts";
 
 
@@ -496,6 +503,11 @@ const buildCoursePage = (runId: string): string[] => {
   const lines: string[] = [];
   const say = (line: string): void => void lines.push(line);
   const bundle = forRun(runId);
+  // A rendering whose source has changed is a picture of the old text, and the
+  // page is where that would reach a student. Held back with the reason rather
+  // than published as though it matched — `freshness.ts` says why it is not
+  // rebuilt here instead.
+  const holdBack = heldBackForStaleness(freshness(bundle, runId, root));
   const on = onDate(runId);
   const payload = outlinePayload(bundle, runId, on, {
     groups: runGroups(runId),
@@ -506,7 +518,7 @@ const buildCoursePage = (runId: string): string[] => {
   const [style, template] = loadStyle(flag("template"), "course-page", root);
   const [markupTemplate, structureName] = loadStructure(flag("structure"), "course-page", root);
 
-  const { published, heldBack, tally } = publishable(bundle, runId, root);
+  const { published, heldBack, tally } = publishable(bundle, runId, root, holdBack);
   const scanned = scanOrRefuse(published, bundle);
   const materials = scanned.safe;
   const withheld = [...heldBack, ...scanned.heldBack];
@@ -1148,8 +1160,15 @@ try {
         allTabs: false,
       });
 
+      // Has anything been edited since it was recorded? Asked once, for every
+      // target, because a changed brief matters to Canvas the way a changed
+      // deck matters to the page — and because the answer is the same question
+      // the professor is really asking when they press Publish a second time.
+      const found = freshness(bundle, runId, root);
+      const stale = heldBackForStaleness(found);
+
       if (target === "page") {
-        const plan = pagePlan(bundle, runId, root);
+        const plan = pagePlan(bundle, runId, root, stale);
         const site = resolve(flag("out") ?? join(root, "dist", "pages", runId));
         actions.push(`write ${within(root, site)} — static HTML, no script`);
         for (const material of plan.publishing) {
@@ -1207,6 +1226,15 @@ try {
 
       if (!confirm) {
         for (const line of publishPlan({ target, pending, actions, refusals })) out(line);
+
+        if (!nothingChanged(found)) {
+          out("");
+          out("Changed since it was last recorded:");
+          for (const line of describeFreshness(found)) out(`  ${line}`);
+          if (found.stale.length) {
+            out(`  rebuild those with \`ainar materials build ${runId}\`, then publish again`);
+          }
+        }
 
         // The two targets whose plan is a question for somebody else's server
         // are asked here rather than described, because "what would change in
@@ -1280,6 +1308,26 @@ try {
           for (const error of outcome.errors) console.error(`    ${error}`);
           console.error("\nnothing was published: the materials did not pass the gate");
           process.exit(1);
+        }
+        out("");
+      }
+
+      // The bytes on disk are what is about to be published, so the record is
+      // made to describe them before anything is sent. This is the half that
+      // used to be nobody's job: a professor who fixed a word in an approved
+      // deck had a record still describing the text before the fix, and
+      // nothing anywhere said so.
+      if (!nothingChanged(found)) {
+        const stamped = restamp(root, courseId, found);
+        for (const line of describeFreshness(found)) out(line);
+        for (const path of stamped.written) {
+          out(`re-stamped ${within(root, path)} — ${stamped.count} record(s)`);
+        }
+        for (const id of stamped.deferred) {
+          out(
+            `${id} is NOT re-stamped: something rendered from it is stale, and recording ` +
+              "the change would make that rendering look current. Rebuild it, then publish again.",
+          );
         }
         out("");
       }

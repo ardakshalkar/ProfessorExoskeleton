@@ -180,8 +180,13 @@ export interface PagePlan {
  * though the file were already where it will be, which is the one thing a
  * preview must not do.
  */
-export const pagePlan = (bundle: CourseBundle, courseVersionId: string, root: string): PagePlan => {
-  const { published, heldBack, tally } = publishable(bundle, courseVersionId, root);
+export const pagePlan = (
+  bundle: CourseBundle,
+  courseVersionId: string,
+  root: string,
+  holdBack?: Map<string, string>,
+): PagePlan => {
+  const { published, heldBack, tally } = publishable(bundle, courseVersionId, root, holdBack);
   return {
     publishing: published.map((material) => ({
       documentId: material.documentId,

@@ -180,6 +180,36 @@ Four things it can publish:
 Before anything is copied to a public page it is scanned for answers, and a file
 that carries one is refused. There is no flag to turn that off.
 
+## Fix a typo and publish again
+
+You do not need a new id, a new version number, or any of the machinery. Open
+the file where it lives, fix the word, save, and press Publish again.
+
+```
+  you edit week-07-slides.md
+        |
+        v
+  the plan says       "DOC-4410 changed since it was recorded"
+        |             and, if a PDF was rendered from it:
+        |             "DOC-4499 was rendered from it — held back"
+        v
+  you press publish   the record is brought up to date with the file,
+                      and version 1 becomes version 2
+```
+
+Two things it will not do, both on purpose:
+
+- **It will not publish a PDF made from the old text.** If you changed the
+  slides but have not rebuilt the PDF, the PDF is held back and the page goes
+  out without it. Rebuild it and publish again, and both go.
+- **It will not quietly forget.** Until you rebuild that PDF, every publication
+  keeps telling you. The change to the slides is not written into the record
+  either, because recording it would make the old PDF look current.
+
+The old version of the file is not lost — materials live in git, so `git show`
+has it. What the record gains is a version number that says how many times you
+have changed this.
+
 ## Announce something
 
 ```

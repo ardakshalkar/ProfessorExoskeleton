@@ -208,6 +208,10 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
       `--confirm` that promotes the materials the publication needs and
       publishes. The same command behind the pane's Publish button and the
       `/publish` skill, so the three cannot disagree about what a press does
+- [x] A material edited in place is noticed rather than silently published: the
+      record is brought back into line with the file and its version goes up,
+      and a rendering whose source changed is held back instead of going out as
+      a picture of the old text
 - [x] `ainar new course` / `new run` scaffolding that validates as written
 - [x] One run of one course per workspace — no `versions/<TERM>/` level, with
       `ainar migrate-layout` to move an old tree and `ainar archive-run` to
