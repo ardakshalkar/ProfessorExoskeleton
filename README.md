@@ -36,6 +36,26 @@ one identifier at a time if you like. This is the whole design: the system may
 propose anything and decide nothing. A grade suggestion is a suggestion until a
 human agrees with it.
 
+The instructor should not have to *type* that, though, and since 2026-09-21 they
+do not. `ainar publish` — and the Publish button in the pane, which spawns it —
+runs the same gate over the **documents and resources** a publication needs and
+then publishes, so a deck drafted an hour ago reaches the students' page in one
+press that shows what it would promote before it promotes anything. The line
+moved to where the decision actually is: pressing *publish the course page*
+having read what would go on it **is** the act of standing behind a deck, and
+says nothing about whether a suggested score is right. So a judgement about a
+student — an evaluation, a signal, an intervention — is still `ainar approve`,
+still the instructor's, and is reported as *left alone* when a publication walks
+past it in the same directory.
+
+Everything that produces a file a person opens — a deck, an exam paper, the
+students' page — runs through those three moves in the same order.
+[`GENERATION.md`](GENERATION.md) traces that one shape and then each pipeline
+against it, including where a stage is missing.
+[`PIPELINES.md`](PIPELINES.md) is the same thing in plain terms, one page: what
+happens between your sentence and the thing you wanted, and the two decisions
+that stay yours.
+
 ## What works today
 
 The read layer is real and covered by tests. From a checkout with an example
@@ -72,7 +92,7 @@ node --experimental-strip-types ainar-node/bin/ainar.ts gradebook CSS-4008-2026-
 
 `ainar --help` lists the rest: `context`, `stats`, `pending`, `rubric`,
 `student`, `class-progress`, `calibration`, `blueprint`, `schema`, `new
-course`, `new run`, `roster`, `approve`, `deck fit`.
+course`, `new run`, `roster`, `approve`, `publish`, `deck fit`.
 
 ### The write layer
 
@@ -93,6 +113,22 @@ The two HTML surfaces are deliberate opposites, and the wall between them is
 the design: `dashboard` draws marks and is private; `page` draws the plan, is
 the only output written for a public URL, and copies a material file only after
 an answer-key scan that has no override.
+
+`page` builds the site; `publish` is what puts something in front of a class,
+and it is the one command that also promotes:
+
+```bash
+bin/ainar publish page CSS-4008-2026-FALL             # the plan: writes nothing
+bin/ainar publish page CSS-4008-2026-FALL --confirm   # promote the materials, then build
+bin/ainar publish telegram CSS-4008-2026-FALL --message-file note.txt
+bin/ainar publish canvas ASSESSMENT-04 --run CSS-4008-2026-FALL
+```
+
+Four targets, one grammar, two presses each. The plan names the drafted
+documents it would promote, what would then be published, and what it would
+hold back; `--confirm` does both. What it may promote is documents and
+resources — a drafted evaluation in the same directory is reported as left
+alone, because publishing a deck is not a decision about anybody's mark.
 
 `lms` is the last one and the only thing here that reaches a third party:
 
@@ -168,6 +204,10 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
 - [x] Subgroups — `--group` narrows the gradebook, class progress, the inbox and
       the term plan to one subgroup, and refuses a label the run does not use
 - [x] Draft/approve promotion (`ainar approve`, `--only`, `--reject`, `--dry-run`)
+- [x] `ainar publish {page,telegram,homework,canvas}` — the plan, then one
+      `--confirm` that promotes the materials the publication needs and
+      publishes. The same command behind the pane's Publish button and the
+      `/publish` skill, so the three cannot disagree about what a press does
 - [x] `ainar new course` / `new run` scaffolding that validates as written
 - [x] One run of one course per workspace — no `versions/<TERM>/` level, with
       `ainar migrate-layout` to move an old tree and `ainar archive-run` to

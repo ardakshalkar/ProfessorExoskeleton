@@ -26,6 +26,10 @@ writes: records
 > - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
 >   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
 >   student can see, is the one place a human enters. Show the command instead.
+>   **`ainar publish … --confirm` is not a way round that** — it promotes the
+>   materials a publication needs, which makes it the same act performed from a
+>   different direction. Only `/publish` runs it, and only on the professor's
+>   explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
 > - Before reporting anything: `bin/ainar validate <COURSE> --drafts

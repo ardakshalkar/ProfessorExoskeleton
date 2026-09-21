@@ -74,7 +74,7 @@ import { prerender } from "./prerender-widget.mjs";
 import { alignmentMarkdown, syllabusMarkdown } from "../src/report.ts";
 import { coverage, validate } from "../src/validate.ts";
 import { IssueList, describe } from "../src/issues.ts";
-import { DRAFTABLE, draftFiles, loadDrafts, mergeDrafts } from "../src/drafts.ts";
+import { DRAFTABLE, draftFiles, mergeDrafts } from "../src/drafts.ts";
 import {
   dominantMisconception,
   emptyResult,
@@ -94,7 +94,13 @@ import {
 } from "../src/roster.ts";
 import { dump } from "../src/yaml-out.ts";
 import { SCHEMA_NAMES, jsonSchemaFor, shapeText } from "../src/schema.ts";
-import { findConnection, loadRegistry } from "../src/connections/index.ts";
+import {
+  explainMissing,
+  findConnection,
+  loadRegistry,
+  tokenFor,
+  tokenPresent,
+} from "../src/connections/index.ts";
 import {
   type AuthMode,
   describePlan,
@@ -108,14 +114,27 @@ import { LAYOUT, measureDeck } from "../src/deck.ts";
 import { buildMaterials } from "../src/materials.ts";
 import { importMaterial } from "../src/materials-import.ts";
 import {
-  ID_FIELDS,
-  approveDrafts,
   floatPaths,
   decidedAt,
-  stageDocuments,
-  total,
+  runApproval,
   writeRecords,
 } from "../src/approve.ts";
+import {
+  MATERIAL_COLLECTIONS,
+  // `TARGETS` is taken by the gradebook targets above, and these are a
+  // different list of a different kind of thing.
+  TARGETS as PUBLISH_TARGETS,
+  type Target,
+  announcementText,
+  checkAnnouncement,
+  pagePlan,
+  outstanding,
+  pendingMaterials,
+  publishPlan,
+  readChannel,
+  sendAnnouncement,
+} from "../src/publish.ts";
+import { FetchTransport } from "../src/lms/http.ts";
 import { Workspace } from "../src/workspace.ts";
 
 
@@ -156,6 +175,10 @@ const BOOLEAN_FLAGS = new Set([
   "no-comments",
   "comments",
   "confirm",
+  // `homework publish` and `publish homework`. It takes no value, and left out
+  // of this list it swallows whatever follows it — so `--private` written
+  // before the assessment id loses the assessment id.
+  "private",
   "quiet",
   "overwrite-drift",
   "summary",
@@ -261,6 +284,20 @@ const HELP = `ainar — the AINAR course model CLI
   new run COURSE_ID TERM --start YYYY-MM-DD --end YYYY-MM-DD
   homework publish ASSESSMENT [--repo owner/name] [--private] [--confirm]
                                            plan it; --confirm creates and pushes
+
+  Publishing, with the gate folded in. Each of these reads and prints a plan;
+  --confirm promotes the drafted DOCUMENTS AND RESOURCES the publication needs
+  — never an evaluation, which is \`approve\` and is yours — and then publishes:
+
+  publish page RUN [--as USER] [--out DIR] [--template T] [--structure S]
+  publish telegram RUN --message TEXT | --message-file PATH [--chat-id C]
+  publish homework ASSESSMENT --run RUN [--repo owner/name] [--private]
+  publish canvas ASSESSMENT --run RUN [--group G] [--overwrite-drift]
+
+  The approver recorded against a promoted material is --as, or the run's first
+  instructor. A draft the record already holds is left alone rather than
+  promoted twice, so publishing the same run again publishes rather than
+  colliding.
   migrate-layout [COURSE_ID…] [--dry-run]  move off versions/<TERM>/, once
   archive-run [--force] [--dry-run]        pack the finished term into archive/
   deck fit FILE.md [--verbose]            will each slide fit on the page
@@ -442,6 +479,171 @@ const readEnrollments = (path: string): Enrollment[] => {
     throw new Error(`${path} holds no \`enrollments:\` list; refusing to overwrite it`);
   }
   return entries as Enrollment[];
+};
+
+/**
+ * Write the students' page, and say what went on it.
+ *
+ * Ported from `cmd_page` in `ainar/commands/page.py`. The public surface, and
+ * deliberately the opposite of `dashboard`: it draws the plan, and it is the
+ * only output here written to be hosted where students can read it.
+ *
+ * A function rather than a case body because `publish page` performs the same
+ * build after promoting the materials it needs, and a second copy of it would
+ * be a second answer to "what may a student be shown".
+ */
+const buildCoursePage = (runId: string): string[] => {
+  const lines: string[] = [];
+  const say = (line: string): void => void lines.push(line);
+  const bundle = forRun(runId);
+  const on = onDate(runId);
+  const payload = outlinePayload(bundle, runId, on, {
+    groups: runGroups(runId),
+  }) as Record<string, any>;
+
+  // Before anything is written: a template that cannot be read, or that is a
+  // dashboard's, should stop the command rather than half a site.
+  const [style, template] = loadStyle(flag("template"), "course-page", root);
+  const [markupTemplate, structureName] = loadStructure(flag("structure"), "course-page", root);
+
+  const { published, heldBack, tally } = publishable(bundle, runId, root);
+  const scanned = scanOrRefuse(published, bundle);
+  const materials = scanned.safe;
+  const withheld = [...heldBack, ...scanned.heldBack];
+  linkMaterials(payload, materials);
+
+  const site = resolve(flag("out") ?? join(root, "dist", "pages", runId));
+  copyMaterials(site, materials);
+
+  const title = `${(bundle.course as any).course_id} — ${(bundle.course as any).title}`;
+  const document = renderPage(payload, title, style, markupTemplate || undefined);
+  const { markup, problems } = prerender(document, "course_outline");
+  if (problems.length) {
+    // Python fell back to shipping the payload and the view for the browser to
+    // run. There is no such fallback here: the prerenderer runs in this very
+    // process, so a failure is the view failing, and a page nobody can read is
+    // worse than no page.
+    throw new Error(
+      `the course outline view did not render, so there is no page to write:\n  ` +
+        problems.join("\n  "),
+    );
+  }
+
+  const index = join(site, "index.html");
+  writeFileSync(index, renderStatic(markup, payload, title, style), { encoding: "utf-8" });
+
+  say(`wrote ${within(root, index)}`);
+  say("  static HTML, no script");
+  if (template) {
+    say(`  styled with the ${template} template — appearance only, nothing added`);
+  }
+  if (structureName) {
+    say(`  arranged by the ${structureName} structure — the same view, same payload`);
+  }
+  say(`  the week marked 'this week' is the one containing ${on}`);
+  for (const material of materials) {
+    say(`  published ${href(material)} — ${material.title}`);
+  }
+  for (const reason of withheld) say(`  held back ${reason}`);
+  for (const [reason, count] of Object.entries(tally)) {
+    if (count) say(`  ${count} document(s) not published: ${reason}`);
+  }
+  if (scanned.unchecked.length) {
+    say(`  the answer-key scan could not cover ${scanned.unchecked.length} recorded answer(s):`);
+    for (const entry of scanned.unchecked) say(`    ${entry}`);
+  }
+  say("Student-safe: the outline carries no enrollment, submission or score.");
+  return lines;
+};
+
+/**
+ * Plan or perform a homework starter repository, and return an exit code.
+ *
+ * A function for `buildCoursePage`'s reason: `publish homework` promotes the
+ * brief first and then does exactly this, and the refusals here — a repository
+ * nobody named, an answer key inside the folder — are the ones that must still
+ * hold when the caller is a button.
+ */
+const publishHomework = async (
+  assessmentId: string,
+  confirm: boolean,
+  say: (line: string) => void,
+): Promise<number> => {
+  const asked = flag("course-version") ?? flag("run");
+  const bundle = asked ? forRun(asked) : onlyCourse();
+  const resolvedRun = asked ?? soleRun(bundle);
+  const assessment = (bundle.assessments as any[]).find(
+    (entry) => entry.assessment_id === assessmentId,
+  );
+  if (!assessment) throw new Error(`no assessment ${assessmentId} in this workspace`);
+
+  const forced = flag("auth");
+  if (forced && forced !== "gh" && forced !== "token") {
+    throw new Error("--auth takes gh or token");
+  }
+  const registry = loadRegistry(flag("connections"));
+  const auth = resolveAuth({
+    connection: findConnection(registry, { name: flag("connection"), type: "github" }),
+    force: (forced as AuthMode | null) ?? null,
+  });
+  if (!auth.github) {
+    console.error(auth.refusal ?? "No way to reach GitHub.");
+    return 1;
+  }
+  for (const note of auth.notes) say(`note: ${note}`);
+
+  // The whole run's items, not the assessment's own. `safety.ts` says a wider
+  // set only makes the scan stricter, and a starter repository that quotes
+  // another assessment's answer is no less published for it.
+  const items = (bundle.items as any[]).filter(
+    (item) => item.course_version_id === resolvedRun || item.course_version_id === undefined,
+  );
+  const shared = {
+    root,
+    assessment,
+    items,
+    github: auth.github,
+    repo: flag("repo"),
+    // Public is the default because a template students cannot see cannot be
+    // forked. `--private` is the way back, for work being staged before a
+    // cohort is told about it.
+    visibility: (args.includes("--private") ? "private" : "public") as "private" | "public",
+  };
+
+  if (!confirm) {
+    const plan = await planPublish(shared);
+    say(`Publishing ${assessmentId} would do this, and has done nothing:`);
+    for (const line of describePlan(plan)) say(`  ${line}`);
+    // Non-zero on a refusal, the way `approve` is: a caller that offers a
+    // "publish now" button off the back of this must not offer it for a plan
+    // that cannot run, and "did it refuse" is not something a reader of the
+    // text should have to work out by looking for a word in it.
+    if (plan.refusals.length) return 1;
+    say("\nRun it again with --confirm to publish.");
+    return 0;
+  }
+
+  const result = await publish({ ...shared, message: flag("message") });
+  if (result.plan.refusals.length) {
+    for (const line of describePlan(result.plan)) console.error(`  ${line}`);
+    return 1;
+  }
+  for (const line of result.output) say(line);
+  if (result.created) say(`\nCreated ${result.plan.repo}, private.`);
+  if (result.url) say(result.url);
+  if (result.created) {
+    say(
+      "\nIt is private. Making it public, and marking it a template so students " +
+        "get a clean history, are both yours:\n" +
+        `  gh repo edit ${result.plan.repo} --template\n` +
+        `  gh repo edit ${result.plan.repo} --visibility public`,
+    );
+  }
+  say(
+    `\nRecord it on the assessment, if it is not there yet:\n` +
+      `  extensions.github.template_repo: ${result.plan.repo}`,
+  );
+  return 0;
 };
 
 try {
@@ -844,72 +1046,272 @@ try {
     }
 
     case "page": {
-      // Ported from `cmd_page` in `ainar/commands/page.py`. The public surface,
-      // and deliberately the opposite one: it draws the plan, and it is the only
-      // output here written to be hosted where students can read it.
-      const runId = rest[0]!;
-      const bundle = forRun(runId);
-      const on = onDate(runId);
-      const payload = outlinePayload(bundle, runId, on, {
-        groups: runGroups(runId),
-      }) as Record<string, any>;
+      for (const line of buildCoursePage(rest[0]!)) out(line);
+      break;
+    }
 
-      // Before anything is written: a template that cannot be read, or that is a
-      // dashboard's, should stop the command rather than half a site.
-      const [style, template] = loadStyle(flag("template"), "course-page", root);
-      const [markupTemplate, structureName] = loadStructure(
-        flag("structure"),
-        "course-page",
-        root,
-      );
+    /**
+     * Publishing, with the gate folded in.
+     *
+     * Four targets, one grammar: the command with no `--confirm` reads and
+     * prints a plan and writes nothing anywhere; the same command with
+     * `--confirm` promotes the drafted **materials** the publication needs and
+     * then performs it. `src/publish.ts` says why those two halves belong in
+     * one press and why the promotion stops at documents and resources.
+     *
+     * Nothing new is implemented here. The page is `buildCoursePage`, the
+     * starter repository is `publishHomework`, Canvas is `runLms`, and the
+     * promotion is `runApproval` — the same call `ainar approve` makes. This
+     * case is the argument parsing, the order, and the refusal to go on when
+     * the first half failed.
+     */
+    case "publish": {
+      const target = (rest[0] ?? "") as Target;
+      if (!PUBLISH_TARGETS.includes(target)) {
+        console.error(
+          "usage: publish {page|homework|canvas|telegram} … [--confirm]\n" +
+            "  publish page RUN [--as USER] [--out DIR] [--template T] [--structure S]\n" +
+            "  publish homework ASSESSMENT [--run RUN] [--repo owner/name] [--private]\n" +
+            "  publish canvas ASSESSMENT --run RUN [--group G] [--overwrite-drift]\n" +
+            "  publish telegram RUN --message TEXT | --message-file PATH [--chat-id C]\n\n" +
+            "Without --confirm each of these reads and prints what it would do.\n" +
+            "With it, the drafted documents and resources the publication needs are\n" +
+            "promoted first — never an evaluation, which is `ainar approve` and yours.",
+        );
+        process.exit(1);
+      }
 
-      const { published, heldBack, tally } = publishable(bundle, runId, root);
-      const scanned = scanOrRefuse(published, bundle);
-      const materials = scanned.safe;
-      const withheld = [...heldBack, ...scanned.heldBack];
-      linkMaterials(payload, materials);
+      const confirm = args.includes("--confirm");
+      const named = target === "page" || target === "telegram" ? rest[1] : (flag("run") ?? flag("course-version"));
+      const bundle = named ? forRun(named) : onlyCourse();
+      const runId = named ?? soleRun(bundle);
+      const run = runById(bundle).get(runId) as any;
+      const courseId = (bundle.course as { course_id: string }).course_id;
+      const courseDir = join(root, "courses", courseId);
+      const draftsDir = resolve(flag("drafts") ?? join(root, "work", runId));
 
-      const site = resolve(flag("out") ?? join(root, "dist", "pages", runId));
-      copyMaterials(site, materials);
+      // Half of the plan, and the half that is the same whatever the target is.
+      // A drafts directory that is not there is not an error: a course whose
+      // materials are all recorded publishes with nothing to promote.
+      const pending = existsSync(draftsDir)
+        ? pendingMaterials(draftsDir, bundle)
+        : { promotions: [], leftAlone: new Map<string, number>(), errors: [] };
+      if (pending.errors.length) {
+        console.error(`the drafts in ${within(root, draftsDir)} do not load, so nothing is published:`);
+        for (const error of pending.errors) console.error(`    ${error}`);
+        process.exit(1);
+      }
 
-      const title = `${(bundle.course as any).course_id} — ${(bundle.course as any).title}`;
-      const document = renderPage(payload, title, style, markupTemplate || undefined);
-      const { markup, problems } = prerender(document, "course_outline");
-      if (problems.length) {
-        // Python fell back to shipping the payload and the view for the browser
-        // to run. There is no such fallback here: the prerenderer runs in this
-        // very process, so a failure is the view failing, and a page nobody can
-        // read is worse than no page.
-        throw new Error(
-          `the course outline view did not render, so there is no page to write:\n  ` +
-            problems.join("\n  "),
+      // The other half: what this particular target would do, and what it
+      // would refuse. Computed before anything is promoted, because a plan a
+      // professor cannot read is a plan they will press past.
+      const actions: string[] = [];
+      const refusals: string[] = [];
+      let announcement: ReturnType<typeof checkAnnouncement> | null = null;
+      let channelId = "";
+      let telegramToken = "";
+
+      /**
+       * A complete `LmsArgs`, because a partial one is how a default nobody
+       * chose reaches Canvas. Every field the assignment path reads is named
+       * here even where the answer is "nothing was asked for".
+       */
+      const assignmentArgs = (subcommand: string, write: boolean) => ({
+        subcommand,
+        run: runId,
+        assessment: rest[1] ?? null,
+        target: "canvas-csv",
+        by: "sis-id" as const,
+        source: null,
+        column: null,
+        out: null,
+        tab: null,
+        sheet: null,
+        canvasUrl: flag("canvas-url") ?? null,
+        canvasCourse: null,
+        canvasAssignment: null,
+        group: flag("group") ?? null,
+        connection: flag("connection") ?? null,
+        connections: flag("connections") ?? null,
+        rosterDir: flag("roster-dir") ?? null,
+        syncDir: flag("sync-dir") ?? null,
+        allowPartial: false,
+        withNames: false,
+        noComments: false,
+        comments: false,
+        confirm: write,
+        dryRun: false,
+        quiet: false,
+        json: false,
+        overwriteDrift: write && args.includes("--overwrite-drift"),
+        summary: false,
+        allTabs: false,
+      });
+
+      if (target === "page") {
+        const plan = pagePlan(bundle, runId, root);
+        const site = resolve(flag("out") ?? join(root, "dist", "pages", runId));
+        actions.push(`write ${within(root, site)} — static HTML, no script`);
+        for (const material of plan.publishing) {
+          actions.push(`copy ${material.filename} — ${material.title}`);
+        }
+        for (const reason of plan.heldBack) actions.push(`hold back ${reason}`);
+        for (const [reason, count] of Object.entries(plan.tally)) {
+          if (count) actions.push(`${count} document(s) not published: ${reason}`);
+        }
+      }
+
+      if (target === "telegram") {
+        const registry = loadRegistry(flag("connections"));
+        const connection = findConnection(registry, { name: flag("connection"), type: "telegram" });
+        announcement = checkAnnouncement(
+          announcementText(flag("message"), flag("message-file")),
+          bundle.items as unknown[],
+        );
+        refusals.push(...announcement.refusals);
+        channelId =
+          flag("chat-id") ?? (run?.extensions?.telegram?.chat_id as string) ?? connection?.chatId ?? "";
+        if (!connection) {
+          refusals.push(explainMissing(registry, "telegram"));
+        } else if (!tokenPresent(connection)) {
+          refusals.push(
+            `${connection.tokenEnv} holds nothing, so the bot cannot authenticate. ` +
+              "The pane's Integrations · Credentials writes it, or export it in the shell.",
+          );
+        } else {
+          telegramToken = tokenFor(connection);
+        }
+        if (!channelId) {
+          refusals.push(
+            "no channel: give the telegram connection a --chat-id, or put one on the run " +
+              "as extensions.telegram.chat_id",
+          );
+        }
+        actions.push(`send ${announcement.text.length} character(s) to ${channelId || "(no channel)"}`);
+        for (const warning of announcement.warnings) actions.push(`warning: ${warning}`);
+      }
+
+      if (target === "homework" || target === "canvas") {
+        const assessmentId = rest[1];
+        if (!assessmentId) throw new Error(`usage: publish ${target} ASSESSMENT_ID`);
+        const assessment = (bundle.assessments as any[]).find(
+          (entry) => entry.assessment_id === assessmentId,
+        );
+        if (!assessment) throw new Error(`no assessment ${assessmentId} in this workspace`);
+        actions.push(
+          target === "homework"
+            ? `plan and push the starter repository for ${assessmentId} — GitHub answers first`
+            : `send ${assessmentId}'s definition to Canvas — the plan below is Canvas's own answer`,
         );
       }
 
-      const index = join(site, "index.html");
-      writeFileSync(index, renderStatic(markup, payload, title, style), { encoding: "utf-8" });
+      if (!confirm) {
+        for (const line of publishPlan({ target, pending, actions, refusals })) out(line);
 
-      out(`wrote ${within(root, index)}`);
-      out("  static HTML, no script");
-      if (template) {
-        out(`  styled with the ${template} template — appearance only, nothing added`);
+        // The two targets whose plan is a question for somebody else's server
+        // are asked here rather than described, because "what would change in
+        // Canvas" is not knowable from this side of the wire.
+        if (target === "homework") {
+          out("");
+          const code = await publishHomework(rest[1]!, false, out);
+          if (code) process.exit(code);
+        }
+        if (target === "canvas") {
+          out("");
+          const code = await runLms(assignmentArgs("assignment-plan", false), bundle, root, {
+            out: (line: string) => out(line),
+          });
+          if (code) process.exit(code);
+        }
+        if (target === "telegram" && telegramToken && channelId) {
+          const channel = await readChannel(telegramToken, channelId, new FetchTransport());
+          out("");
+          out(`Telegram: ${channel.title ?? "(the bot can see it, and it has no title)"} — ${channelId}`);
+          out("");
+          out(announcement!.text);
+        }
+
+        out("");
+        out(
+          refusals.length
+            ? "Nothing was published, and this plan cannot run until the refusals above are fixed."
+            : "Nothing was published. Run it again with --confirm to promote and publish.",
+        );
+        if (refusals.length) process.exit(1);
+        break;
       }
-      if (structureName) {
-        out(`  arranged by the ${structureName} structure — the same view, same payload`);
+
+      if (refusals.length) {
+        console.error("refusing to publish:");
+        for (const refusal of refusals) console.error(`    ${refusal}`);
+        process.exit(1);
       }
-      out(`  the week marked 'this week' is the one containing ${on}`);
-      for (const material of materials) {
-        out(`  published ${href(material)} — ${material.title}`);
+
+      // The gate, over materials only, and the same one `ainar approve` runs.
+      // A draft the record already holds is rejected rather than re-promoted,
+      // which is what makes pressing Publish a second time publish a second
+      // time instead of reporting a collision.
+      const todo = outstanding(pending);
+      if (todo.length) {
+        const approver = flag("as") ?? (run?.instructors ?? [])[0];
+        if (!approver) {
+          console.error(
+            "This run names no instructor, so there is no id to record as having " +
+              "accepted the materials. Pass --as USER-ID, or add one to `instructors`.",
+          );
+          process.exit(1);
+        }
+        const outcome = runApproval({
+          bundle,
+          draftsDir,
+          courseDir,
+          root,
+          approver,
+          timezone: run?.timezone,
+          collections: MATERIAL_COLLECTIONS,
+          reject: new Set(
+            pending.promotions
+              .filter((entry) => entry.recordedAs !== null)
+              .map((entry) => entry.draftId),
+          ),
+        });
+        for (const line of outcome.lines) out(line);
+        if (!outcome.ok) {
+          for (const error of outcome.errors) console.error(`    ${error}`);
+          console.error("\nnothing was published: the materials did not pass the gate");
+          process.exit(1);
+        }
+        out("");
       }
-      for (const reason of withheld) out(`  held back ${reason}`);
-      for (const [reason, count] of Object.entries(tally)) {
-        if (count) out(`  ${count} document(s) not published: ${reason}`);
+
+      // Re-read, deliberately. The records written a moment ago are what the
+      // publication is about, and the bundle in hand predates them — a page
+      // built from it would leave out the very deck this command just promoted.
+      const published = named ? forRun(named) : onlyCourse();
+
+      if (target === "page") {
+        for (const line of buildCoursePage(runId)) out(line);
       }
-      if (scanned.unchecked.length) {
-        out(`  the answer-key scan could not cover ${scanned.unchecked.length} recorded answer(s):`);
-        for (const entry of scanned.unchecked) out(`    ${entry}`);
+      if (target === "homework") {
+        const code = await publishHomework(rest[1]!, true, out);
+        if (code) process.exit(code);
       }
-      out("Student-safe: the outline carries no enrollment, submission or score.");
+      if (target === "canvas") {
+        const code = await runLms(assignmentArgs("assignment-push", true), published, root, {
+          out: (line: string) => out(line),
+        });
+        if (code) process.exit(code);
+      }
+      if (target === "telegram") {
+        const messageId = await sendAnnouncement(
+          telegramToken,
+          channelId,
+          announcement!.text,
+          new FetchTransport(),
+        );
+        out(`sent message ${messageId} to ${channelId}`);
+        out("A Telegram message cannot be recalled by this command, or by any other.");
+      }
       break;
     }
 
@@ -1105,99 +1507,31 @@ try {
       const resolvedRun = courseVersionId ?? soleRun(bundle);
       const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
 
-      const issues = new IssueList();
-      const drafted = loadDrafts(resolve(draftsDir), issues);
-      if (issues.errors.length) {
-        for (const issue of issues.errors) console.error(`    ${describe(issue)}`);
-        console.error("\nthe drafts do not load cleanly; nothing was approved");
-        process.exit(1);
-      }
-
-      const stamp = decidedAt((runById(bundle).get(resolvedRun) as { timezone?: string }).timezone);
-      const approval = approveDrafts(bundle, drafted, {
+      // The order of operations is `runApproval`'s, not this file's, because
+      // `ainar publish` performs the same gate over the materials a publication
+      // needs and two copies of that order is how a record validates and is
+      // still wrong. What stays here is argument parsing and the exit code.
+      const dryRun = args.includes("--dry-run");
+      const outcome = runApproval({
+        bundle,
+        draftsDir: resolve(draftsDir),
+        courseDir,
+        root,
         approver,
-        decidedAt: stamp,
-        issues,
+        timezone: (runById(bundle).get(resolvedRun) as { timezone?: string }).timezone,
         only: flag("only") ? new Set(flag("only")!.split(",")) : undefined,
         reject: flag("reject") ? new Set(flag("reject")!.split(",")) : undefined,
+        dryRun,
       });
 
-      if (total(approval) === 0 && !issues.errors.length) {
-        out("nothing to approve");
-        break;
-      }
-
-      out(`Approving as ${approver} at ${stamp}\n`);
-      for (const [collection, items] of approval.records) {
-        const field = ID_FIELDS[collection]!;
-        out(`  ${collection}:`);
-        for (const item of items) {
-          const promotedId = item[field] as string;
-          const original =
-            [...approval.idMap.entries()].find(([, value]) => value === promotedId)?.[0] ?? promotedId;
-          out(`    ${original}  ->  ${promotedId}`);
-        }
-      }
-      for (const note of approval.notes) out(`\n  note: ${note}`);
-      if (approval.skipped.length) out(`\n  skipped: ${[...approval.skipped].sort().join(", ")}`);
-
-      const dryRun = args.includes("--dry-run");
-      const staged = stageDocuments(approval, { root, courseDir, issues, dryRun });
-
-      const merged = mergeDrafts(bundle, Object.fromEntries(approval.records));
-
-      // A dry run rewrites every staged `storage_key` to its destination but
-      // copies nothing, so the validator then reports each of those materials as
-      // a missing file. That is the rehearsal's own shadow, not a fault in the
-      // drafts: the same approval run for real copies the file first and passes.
-      //
-      // Only that one code, and only for the documents `stageDocuments` said it
-      // would move, is dropped. A document whose SOURCE is missing never enters
-      // that list, so it still fails here — which is the case a preview exists
-      // to catch.
-      const found = validate(merged, { root });
-      const stagedIds = new Set(staged);
-      issues.extend(
-        dryRun
-          ? found.items.filter(
-              (issue) =>
-                !(
-                  issue.code === "document.missing_file" &&
-                  issue.location != null &&
-                  stagedIds.has(issue.location)
-                ),
-            )
-          : found,
-      );
-      if (issues.errors.length) {
-        console.error("\nvalidation of the approved records failed; nothing was written");
-        for (const issue of issues.errors) console.error(`    ${describe(issue)}`);
+      for (const line of outcome.lines) out(line);
+      if (!outcome.ok) {
+        for (const error of outcome.errors) console.error(`    ${error}`);
         process.exit(1);
       }
-
-      // Printed on every run rather than left to be discovered. The refusal *is*
-      // the gate, so its width is the one number that says how much this gate is
-      // worth — and it was two thirds short until Phase 4 finished.
-      const { implemented, total: allChecks } = coverage();
-      out(
-        `\nchecked against ${implemented} of ${allChecks} validator checks` +
-          (implemented === allChecks ? "" : " — `python -m ainar validate` is the complete set"),
-      );
-
-      if (dryRun) {
-        out(
-          "\ndry run — nothing written" +
-            (staged.length
-              ? `, and ${staged.length} material(s) not copied. The real run copies them first.`
-              : ""),
-        );
-        break;
+      if (outcome.written.length) {
+        out(`The drafts in ${draftsDir} can now be removed.`);
       }
-
-      for (const path of writeRecords(courseDir, approval)) {
-        out(`wrote ${relative(root, path).split(/[\\/]/).join("/")}`);
-      }
-      out(`\n${total(approval)} record(s) approved. The drafts in ${draftsDir} can now be removed.`);
       break;
     }
 
@@ -1566,81 +1900,8 @@ try {
       }
       const assessmentId = rest[1];
       if (!assessmentId) throw new Error("usage: homework publish ASSESSMENT_ID [--repo owner/name]");
-
-      const asked = flag("course-version") ?? flag("run");
-      const bundle = asked ? forRun(asked) : onlyCourse();
-      const resolvedRun = asked ?? soleRun(bundle);
-      const assessment = (bundle.assessments as any[]).find(
-        (entry) => entry.assessment_id === assessmentId,
-      );
-      if (!assessment) throw new Error(`no assessment ${assessmentId} in this workspace`);
-
-      const forced = flag("auth");
-      if (forced && forced !== "gh" && forced !== "token") {
-        throw new Error("--auth takes gh or token");
-      }
-      const registry = loadRegistry(flag("connections"));
-      const auth = resolveAuth({
-        connection: findConnection(registry, { name: flag("connection"), type: "github" }),
-        force: (forced as AuthMode | null) ?? null,
-      });
-      if (!auth.github) {
-        console.error(auth.refusal ?? "No way to reach GitHub.");
-        process.exit(1);
-      }
-      for (const note of auth.notes) out(`note: ${note}`);
-
-      // The whole run's items, not the assessment's own. `safety.ts` says a
-      // wider set only makes the scan stricter, and a starter repository that
-      // quotes another assessment's answer is no less published for it.
-      const items = (bundle.items as any[]).filter(
-        (item) => item.course_version_id === resolvedRun || item.course_version_id === undefined,
-      );
-      const shared = {
-        root,
-        assessment,
-        items,
-        github: auth.github,
-        repo: flag("repo"),
-        // Public is the default because a template students cannot see cannot
-        // be forked. `--private` is the way back, for work being staged before
-        // a cohort is told about it.
-        visibility: (args.includes("--private") ? "private" : "public") as "private" | "public",
-      };
-
-      if (!args.includes("--confirm")) {
-        const plan = await planPublish(shared);
-        out(`Publishing ${assessmentId} would do this, and has done nothing:`);
-        for (const line of describePlan(plan)) out(`  ${line}`);
-        // Non-zero on a refusal, the way `approve` is: a caller that offers a
-        // "publish now" button off the back of this must not offer it for a
-        // plan that cannot run, and "did it refuse" is not something a reader
-        // of the text should have to work out by looking for a word in it.
-        if (plan.refusals.length) process.exit(1);
-        out("\nRun it again with --confirm to publish.");
-        break;
-      }
-
-      const result = await publish({ ...shared, message: flag("message") });
-      if (result.plan.refusals.length) {
-        for (const line of describePlan(result.plan)) console.error(`  ${line}`);
-        process.exit(1);
-      }
-      for (const line of result.output) out(line);
-      if (result.created) out(`\nCreated ${result.plan.repo}, private.`);
-      if (result.url) out(result.url);
-      if (result.created) {
-        out(
-          "\nIt is private. Making it public, and marking it a template so students " +
-            "get a clean history, are both yours:\n" +
-            `  gh repo edit ${result.plan.repo} --template\n` +
-            `  gh repo edit ${result.plan.repo} --visibility public`,
-        );
-      }
-      out(
-        `\nRecord it on the assessment, if it is not there yet:\n` +
-          `  extensions.github.template_repo: ${result.plan.repo}`,
-      );
+      const code = await publishHomework(assessmentId, args.includes("--confirm"), out);
+      if (code) process.exit(code);
       break;
     }
 

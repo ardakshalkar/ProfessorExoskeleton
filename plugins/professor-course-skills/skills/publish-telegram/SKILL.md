@@ -1,6 +1,6 @@
 ---
 name: publish-telegram
-description: Prepare and, with the professor's explicit instruction, publish student-safe course announcements to the Telegram channel configured for a course run; also answer whether an assignment has a recorded deadline. Use when the user asks to announce, post, send or publish course information to Telegram, configure a course Telegram channel, or asks whether an assignment has a deadline. Building the course page students read is /course-page; promoting drafts into the course record is `ainar approve`, which the professor runs.
+description: Prepare and, with the professor's explicit instruction, publish student-safe course announcements to the Telegram channel configured for a course run; also answer whether an assignment has a recorded deadline. Use when the user asks to announce, post, send or publish course information to Telegram, configure a course Telegram channel, or asks whether an assignment has a deadline. Building the course page students read is /course-page; sending an announcement from a workspace with the CLI, or publishing anything else students see, is /publish; promoting a grade into the course record is `ainar approve`, which the professor runs.
 stage: teach
 requires: [assessments]
 produces: []
@@ -20,6 +20,10 @@ writes: none
 > - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
 >   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
 >   student can see, is the one place a human enters. Show the command instead.
+>   **`ainar publish … --confirm` is not a way round that** — it promotes the
+>   materials a publication needs, which makes it the same act performed from a
+>   different direction. Only `/publish` runs it, and only on the professor's
+>   explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
 > - Before reporting anything: `bin/ainar validate <COURSE> --drafts
@@ -82,6 +86,22 @@ student names, pseudonyms, grades or internal approval commentary. If the
 requested text contains any of those, refuse to publish it and explain what must
 be removed.
 
+## Two ways to send it, and which one is here
+
+There are two, and the difference is which machine holds the bot token.
+
+**On a workspace with the CLI**, `/publish` sends it —
+`bin/ainar publish telegram <RUN> --message-file <FILE>` for the plan, the same
+with `--confirm` to send — and the token comes from the professor's own
+connections registry. The composition rules on this page still govern what the
+message says; that skill runs the send and reports what came back. Prefer it
+when the CLI is there: it is the professor's own channel, on their own machine,
+and it shows the channel's name before anything is sent.
+
+**On the shared backend**, the `publish_telegram` tool is the only path, because
+the token is the backend's and never this process's. That is the rest of this
+section.
+
 ## Publish through the backend
 
 Call `publish_telegram` first with `confirm: false` when the configured target is
@@ -127,6 +147,11 @@ local script.
 
 `references/working-without-the-cli.md` carries the file layout and identifier
 patterns. Read it before relying on files directly.
+
+With the CLI but no backend, publication is available after all — see *Two ways
+to send it*. What stays unavailable everywhere is putting a bot token into a
+local script of your own; the registry holds the name of the variable, and
+`ainar publish` reads it.
 
 ## Rules
 

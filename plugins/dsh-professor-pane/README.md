@@ -270,6 +270,47 @@ Unticking everything **removes** the key rather than writing an empty list, and
 takes the emptied `lms:` and `extensions:` with it — so a run that was never
 wired to Canvas reads exactly as it did before the tab was opened.
 
+## The Publish button
+
+Beside the course title in the header, on every tab, whenever the pane has an
+offering to be about. It is there rather than in the six buttons because every
+other control in this header chooses what to **look at**, and this is the only
+thing in the pane whose result somebody outside this machine ever sees.
+
+One dialog, four targets — **Course page**, **Telegram**, **Homework repo**,
+**Canvas brief** — over the whole pane rather than beside the list, the shape
+the homework publish already had and for its reason: a plan runs to twenty
+lines and a three-hundred-pixel column turned it into a sliver reported as "the
+button doesn't do anything".
+
+Two presses per target, and the first is the one worth naming. It runs
+`ainar publish <target>` with no `--confirm`, which reads and writes nothing —
+not to `courses/`, not to GitHub, not to a channel — and prints two halves:
+**what it would promote** and **what it would then publish**. Only then does the
+red button appear, and it says what it will do rather than "Publish": *Promote
+and write the page*, *Send to the channel*, *Publish to GitHub*, *Send to
+Canvas*. Editing anything — the target, the assessment, a word of an
+announcement — throws the plan away, so the red button can never send something
+other than what was read.
+
+**The first half is the step that used to be a terminal.** A deck drafted an
+hour ago was a `Document` under `work/` with `-DRAFT-` in its id, which
+`ainar page` deliberately would not publish; getting it onto the page meant
+leaving the harness, running `ainar approve`, and coming back. The publishing
+press now promotes the drafted **documents and resources** the publication needs
+and then publishes, which is the one press this pane was missing.
+
+What it does not promote, and cannot be made to: a drafted evaluation, signal or
+intervention. Those come back in the plan as `left alone`, and `ainar approve`
+remains the professor's. See `runPublish` in `index.js`, and
+`ainar-node/src/publish.ts` for why the line is drawn at artefacts.
+
+The announcement box is the only thing in the pane a professor composes rather
+than picks, and it is sent as typed: the command composes nothing, and the plan
+shows the channel's own name — from Telegram, not from the record — before
+anything can be sent, because a chat id is unreadable and a message sent to last
+term's channel cannot be recalled.
+
 ## Record, and record + drafts
 
 A second control sits on the right of the segmented row: **Record** and
@@ -346,6 +387,7 @@ lines, not before.
 | `POST /professor-pane/api/credentials?run=` | store one credential; body is `{ref, value}`, an empty value clears it. Write-only: the response carries presence, never a value |
 | `POST /professor-pane/api/canvas/catalogue?run=` | ask Canvas for this course's sections and student groups |
 | `POST /professor-pane/api/canvas/selection?run=` | write `extensions.lms.canvas_sections`; body is `{selections}` |
+| `POST /professor-pane/api/publish?run=` | plan or perform one publication; body is `{target, assessment, repo, group, message, approver, confirm}`. Without `confirm` it reads and writes nothing |
 | `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/` and `work/`, for the pane's refresh poll |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
@@ -357,24 +399,35 @@ headers rather than payload fields, because the payload goes into a widget
 document shared with two other hosts and has no place to print them.
 
 Every view behind them is a read — `callTool` is read-only by construction —
-and four routes are not:
+and five routes are not:
 
 * `POST /api/approve` spawns the CLI rather than reimplementing the gate.
+* `POST /api/publish` spawns `ainar publish`, which runs that same gate over the
+  materials a publication needs and then publishes.
 * `POST /api/preferences` writes a preference layer.
 * `POST /api/canvas/selection` writes `extensions.lms.canvas_sections`.
 * `POST /api/canvas/catalogue` writes nothing here, but is the one route that
   reaches off this machine.
 
-**None of them is an approval path**, which is the property that matters.
-`AGENTS.md` says there is one and the professor runs it: `/api/approve` IS that
-command, run as it would be run in a terminal, `--dry-run` until a preview has
-been read. A preference is not a claim about a student — it is how the professor
-wants the skills to behave. And a Canvas section id is a fact about the
-professor's own LMS that only they know: no skill drafts it and no agent can
+**None of them is an approval path for a judgement**, which is the property that
+matters. `AGENTS.md` says there is one and the professor runs it: `/api/approve`
+IS that command, run as it would be run in a terminal, `--dry-run` until a
+preview has been read. A preference is not a claim about a student — it is how
+the professor wants the skills to behave. And a Canvas section id is a fact about
+the professor's own LMS that only they know: no skill drafts it and no agent can
 propose it, so it has no drafted half for `ainar approve` to promote, and
-refusing it would only mean the fact stays settable by hand-editing YAML. A pane
-that could accept a *grade* on its own would be the second path, and there is
-still no route that does.
+refusing it would only mean the fact stays settable by hand-editing YAML.
+
+`/api/publish` is the case that tests that sentence, so it is worth being exact.
+It *does* promote drafts, which reads like the gate moving into the pane. What it
+may promote is `MATERIAL_COLLECTIONS` — documents and resources — and that is
+enforced inside `ainar publish`, so no argument this route could send would widen
+it; an `Evaluation` in the same drafts directory comes back reported as left
+alone. The distinction is the one the whole pane is built on: pressing *publish
+the course page* having read what would go on it is the decision to stand behind
+a deck, and says nothing about whether a suggested score is right. A pane that
+could accept a *grade* on its own would be the second path, and there is still no
+route that does.
 
 Every write goes through the model's own emitter or the comment-preserving
 parser, because a professor also edits these files by hand and a file the pane

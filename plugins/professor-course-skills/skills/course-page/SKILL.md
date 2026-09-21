@@ -20,6 +20,10 @@ writes: site
 > - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
 >   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
 >   student can see, is the one place a human enters. Show the command instead.
+>   **`ainar publish … --confirm` is not a way round that** — it promotes the
+>   materials a publication needs, which makes it the same act performed from a
+>   different direction. Only `/publish` runs it, and only on the professor's
+>   explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
 > - Before reporting anything: `bin/ainar validate <COURSE> --drafts
@@ -113,8 +117,10 @@ that travel and the frame to start from.
 The report's lines are the professor's decisions waiting to be made:
 
 - **`a draft under work/, not approved material`** — the file is a proposal.
-  Publishing it would make it look approved. Tell them it exists and that
-  `ainar approve` is what changes that. Never move a file to make it publishable.
+  Publishing it would make it look approved. Tell them it exists, and that
+  either `ainar approve` or `/publish` — which promotes the materials a
+  publication needs as its second press — is what changes that. Never move a
+  file to make it publishable.
 - **`is not a file in this repository`** — a `Document` names a path that is not
   there. That is a modelling error worth reporting; it is not yours to fix by
   pointing the record somewhere else.
@@ -152,10 +158,15 @@ Open `index.html` and read it as a student would:
 
 ## 5. Stop before publishing
 
-**Publishing is the professor's act, and no agent performs it.** A page a student
-can read is the same kind of act as a grade a student can see, which is why
-`ainar lms push --target canvas-api`, `gh repo create` and `ainar notion push`
-are all theirs. Prepare the files, print the commands, say what each will do:
+**Publishing is a decision, and this skill does not make it.** Building the page
+and putting it in front of a class are two acts, and this one is the first.
+When the professor asks for the second, hand over to `/publish`, which runs
+`bin/ainar publish page <RUN>` — the plan first, and the publishing run only on
+an explicit instruction in that request. A grade a student can see is a
+different thing again: `ainar lms push --target canvas-api` stays theirs.
+
+Hosting is still the professor's own: prepare the files, print the commands, say
+what each will do:
 
 ```bash
 git push origin main
@@ -234,8 +245,9 @@ patterns.
   no override and you must not route around it.
 - **Only approved material, only what the repository holds.** A draft under
   `work/` published looks exactly like a handout.
-- **You do not publish.** Not `git push`, not enabling Pages, not `gh api`. Print
-  the command, say what it does, stop.
+- **You do not publish here.** Not `git push`, not enabling Pages, not `gh api`.
+  Print the command, say what it does, stop. Putting the page in front of the
+  class is `/publish`, on the professor's explicit instruction in that request.
 - **Say what is incomplete.** A hollow grading section, an unplanned half of the
   term, a material that does not exist — report it rather than making the page
   look finished.

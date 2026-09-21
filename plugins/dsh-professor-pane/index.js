@@ -7,10 +7,15 @@
  * by construction, plus the preference and record files, read with
  * `readFileSync`.
  *
- * Four exceptions, and each one's own header argues for itself:
+ * Five exceptions, and each one's own header argues for itself:
  *
  * * `/api/approve` spawns this checkout's `ainar approve` rather than
  *   reimplementing the approval gate. The gate stays where `AGENTS.md` puts it.
+ * * `/api/publish` spawns `ainar publish`, which runs that same gate over the
+ *   DOCUMENTS AND RESOURCES a publication needs and then publishes. It is the
+ *   reason a professor no longer leaves this window to put a deck in front of
+ *   a class; see `runPublish`, and `ainar-node/src/publish.ts` for why the
+ *   promotion stops where it does.
  * * `/api/preferences` writes a preference layer. A preference is how the
  *   professor wants the skills to behave, not a claim about a student, so there
  *   is nothing in it for `approve` to gate.
@@ -26,6 +31,16 @@
  * a judgement about a student, and nothing here can push a grade.** A pane that
  * could approve one would be a second approval path, and `AGENTS.md` says there
  * is one and the professor runs it.
+ *
+ * `/api/publish` is the case that tests that sentence, so it is worth being
+ * exact about. It promotes drafts, which reads like the gate moving into the
+ * pane; what it may promote is `MATERIAL_COLLECTIONS` — documents and
+ * resources, the artefacts — enforced in `ainar publish` and not here, so no
+ * argument this route could send would widen it. An `Evaluation` in the same
+ * drafts directory is reported as left alone and stays a proposal. The
+ * distinction is not squeamishness: pressing *publish the course page* having
+ * read what would go on it IS the decision to stand behind a deck, and says
+ * nothing whatever about whether a suggested score is right.
  *
  * Why HTTP rather than a service the browser half calls: four of the views this
  * pane switches between are already written. `dsh-ainar-course-model` ships
@@ -48,9 +63,10 @@
  * professor would eventually see disagree with itself.
  */
 
-// `execFile` is here for one route only — `/api/approve`, which spawns this
-// checkout's TypeScript `ainar` rather than reimplementing the approval gate.
-// See `runApprove`. Nothing else in this file starts a process.
+// `execFile` is here for the write routes only — `/api/approve`, `/api/publish`
+// and the two that reach a third party — each of which spawns this checkout's
+// TypeScript `ainar` rather than reimplementing what it does. See `runApprove`
+// and `runPublish`. Nothing else in this file starts a process.
 import { execFile, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -5307,40 +5323,72 @@ const runApprove = (res, root, runId, approver, confirm) => {
 };
 
 /**
- * Publish a homework starter repository, by spawning the CLI.
+ * Publish, by spawning the CLI — the one button that also promotes.
  *
- * Spawned for the reason `runApprove` gives, and one more that is particular to
- * this: in token mode the credential is resolved inside that process and put in
- * the environment of a `git` child. Keeping it there means the pane — which is
- * a web server with routes an untrusted frame can reach — never holds a GitHub
- * token in a variable of its own.
+ * Spawned for `runApprove`'s reason, and the reason is stronger here than
+ * anywhere else on this route table: this command performs the GATE and then a
+ * publication, and the order it does them in — load, promote, stage, validate,
+ * write, publish — is `runApproval` in `ainar-node/src/approve.ts`. A second
+ * copy of that order living in a web server is exactly the failure that file's
+ * header describes.
  *
- * **Plan and publish are one route with a flag.** Both reach GitHub, so both
- * are POST; only `confirm` creates or pushes anything. The button press IS the
- * flag, which is the whole of why a skill may not do this and a professor may.
+ * **What it may promote is not this route's decision either.** `ainar publish`
+ * hands `runApproval` the list `MATERIAL_COLLECTIONS`, so a drafted evaluation
+ * in the same directory is left alone whatever is asked for here. There is
+ * still no route in this pane that can settle a judgement about a student, and
+ * `--confirm` on this one does not become one: it promotes a deck, a brief or a
+ * reading, and publishes.
+ *
+ * **Plan and publish are one route with a flag**, the shape the two buttons
+ * beside it already use. Without `confirm` the CLI reads, prints and writes
+ * nothing — including nothing in `courses/`.
  */
-const runHomeworkPublish = (res, root, runId, assessmentId, repo, confirm) => {
-  if (!assessmentId) {
-    return sendJson(res, 200, { error: "No assessment chosen." });
+const runPublish = (res, root, runId, target, body) => {
+  const TARGETS = ["page", "homework", "canvas", "telegram"];
+  if (!TARGETS.includes(target)) {
+    return sendJson(res, 200, { error: `${target} is not something this can publish.` });
   }
   if (!existsSync(AINAR_CLI)) {
     return sendJson(res, 200, {
-      error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.`,
+      error:
+        `The TypeScript ainar CLI is not at ${AINAR_CLI}. This pane will not ` +
+        "fall back to the Python `ainar` on PATH — install or restore " +
+        "ainar-node/ instead.",
     });
   }
 
-  const args = [
-    "--experimental-strip-types",
-    AINAR_CLI,
-    "homework",
-    "publish",
-    assessmentId,
-    "--root",
-    root,
-    "--course-version",
-    runId,
-  ];
+  const confirm = body.confirm === true;
+  const assessment = String(body.assessment ?? "").trim();
+  const message = String(body.message ?? "");
+  const repo = String(body.repo ?? "").trim();
+  const group = String(body.group ?? "").trim();
+  const approver = String(body.approver ?? "").trim();
+
+  const identifier = /^[A-Za-z0-9_.:@+/-]{1,200}$/;
+  if ((target === "homework" || target === "canvas") && !identifier.test(assessment)) {
+    return sendJson(res, 200, { error: "No assessment chosen." });
+  }
+  if (repo && !identifier.test(repo)) {
+    return sendJson(res, 200, { error: `${repo} is not a repository name.` });
+  }
+  if (group && !identifier.test(group)) {
+    return sendJson(res, 200, { error: `${group} is not a subgroup label.` });
+  }
+  if (target === "telegram" && !message.trim()) {
+    return sendJson(res, 200, { error: "There is nothing to announce." });
+  }
+
+  const args = ["--experimental-strip-types", AINAR_CLI, "publish", target];
+  if (target === "page" || target === "telegram") args.push(runId);
+  else args.push(assessment, "--run", runId);
+  args.push("--root", root);
+  if (approver) args.push("--as", approver);
   if (repo) args.push("--repo", repo);
+  if (group) args.push("--group", group);
+  // The message goes in argv rather than a temporary file, deliberately: a file
+  // would outlive the request, and what a professor is about to tell a class is
+  // not something this server should leave on disk.
+  if (target === "telegram") args.push("--message", message);
   if (confirm) args.push("--confirm");
 
   execFile(
@@ -5353,9 +5401,15 @@ const runHomeworkPublish = (res, root, runId, assessmentId, repo, confirm) => {
         ok: code === 0,
         confirmed: confirm,
         exitCode: code,
+        // The message is not echoed back into the command line shown on screen:
+        // it is already in the box the professor typed it into, and repeating
+        // it as a shell argument makes a ten-line announcement unreadable.
         command:
-          `bin/ainar homework publish ${assessmentId}` +
+          `bin/ainar publish ${target} ` +
+          (target === "page" || target === "telegram" ? runId : `${assessment} --run ${runId}`) +
           (repo ? ` --repo ${repo}` : "") +
+          (group ? ` --group ${group}` : "") +
+          (target === "telegram" ? " --message …" : "") +
           (confirm ? " --confirm" : ""),
         output: [stdout, stderr].filter(Boolean).join("\n").trim(),
       });
@@ -6294,22 +6348,34 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
       );
     }
 
-    if (path === "/api/homework/publish") {
-      // POST for the same reason approve is: it reaches GitHub either way, and
-      // a request a prefetch or a refresh can fire is not one anybody decided
-      // to make.
+    // `/api/homework/publish` was here and is gone. It spawned
+    // `ainar homework publish`, which `/api/publish` with `target: homework`
+    // now does — plus the promotion of the brief, which is the half that used
+    // to send the professor to a terminal. Two publishing routes in one web
+    // server, one of them narrower, is how a button ends up doing less than
+    // the button beside it for reasons nobody can see. `git log -S` has it.
+    if (path === "/api/publish") {
+      // POST only, for `/api/approve`'s reason and one of its own: with
+      // `confirm` this both writes to `courses/` and puts something in front of
+      // students, and neither is a thing a prefetch should be able to start.
       if (req.method !== "POST") {
         return sendJson(res, 405, { error: "publish is POST only" });
       }
       if (!runId) return sendJson(res, 200, { error: "No run chosen." });
-      return runHomeworkPublish(
-        res,
-        root,
-        runId,
-        url.searchParams.get("assessment") ?? "",
-        url.searchParams.get("repo") ?? "",
-        url.searchParams.get("confirm") === "1",
-      );
+      return readBody(req)
+        .then((raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          if (!body || typeof body !== "object" || Array.isArray(body)) {
+            return sendJson(res, 200, { error: "The request body must be an object." });
+          }
+          return runPublish(res, root, runId, String(body.target ?? ""), body);
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
     if (path === "/api/approve") {

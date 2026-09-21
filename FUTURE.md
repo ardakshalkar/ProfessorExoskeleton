@@ -178,10 +178,19 @@ criterion, with the disagreements listed rather than averaged away. A confidence
 number never checked against a human is decoration.
 
 **The line.** Nothing in any interface may approve a judgement about a student or
-push a grade. `ainar approve` is the one approval path and the professor runs it.
-Facts only the professor knows — LMS ids, section mappings — have no drafted half
-and are fair game for a UI to write. This is not a roadmap item; it is the
-constraint every roadmap item is checked against.
+push a grade. `ainar approve` is the one approval path for one of those and the
+professor runs it. Facts only the professor knows — LMS ids, section mappings —
+have no drafted half and are fair game for a UI to write. This is not a roadmap
+item; it is the constraint every roadmap item is checked against.
+
+Since 2026-09-21 the line is stated at the collection rather than at the command,
+because `ainar publish` promotes the **documents and resources** a publication
+needs and a button in the pane presses it. That was the right place to move to: a
+professor who has read what would go on the students' page and pressed *publish*
+has decided about a deck, which is the decision the gate is for. They have
+decided nothing about a mark, so an evaluation, a signal and an intervention
+still go through `approve` — and a publication that walks past one reports it as
+left alone rather than quietly taking it along.
 
 **First step.** An agreement report over already-approved evaluations. The data
 is sitting there.

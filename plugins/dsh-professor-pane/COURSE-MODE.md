@@ -135,6 +135,14 @@ a concept, a hole — carries the same three affordances and never a fourth.
   the way `POST /api/approve` already does, `--dry-run` until a preview has been
   read.
 
+  Since 2026-09-21 there is a fourth on the header rather than on the spine, and
+  it is the one that made the third rarer: **Publish** runs
+  `ainar publish <target>`, which performs that same gate over the documents and
+  resources one publication needs and then publishes. On the spine it would be a
+  week-level affordance — *put week seven in front of the class* — and the
+  argument for building it as chrome first is that a publication is about the
+  run, not about a week.
+
 The deadline button that exists today is the pattern, and it is already better
 than it looks: it does not write the date, it hands the model *which file holds
 that assessment id*, found by scanning rather than guessed. Course mode
