@@ -111,7 +111,7 @@ import {
 import { archiveRun, migrateLayout } from "../src/layout.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
 import { LAYOUT, measureDeck } from "../src/deck.ts";
-import { buildMaterials } from "../src/materials.ts";
+import { buildMaterials, producerFor, readProducers } from "../src/materials.ts";
 import { importMaterial } from "../src/materials-import.ts";
 import {
   floatPaths,
@@ -198,6 +198,9 @@ const BOOLEAN_FLAGS = new Set([
   // `publish telegram --edit`: correct the last announcement rather than
   // posting a second one.
   "edit",
+  // `publish … --rebuild`: run the producers behind the stale renderings
+  // before publishing, rather than naming them and holding them back.
+  "rebuild",
   "quiet",
   "overwrite-drift",
   "summary",
@@ -310,14 +313,27 @@ const HELP = `ainar — the AINAR course model CLI
   — never an evaluation, which is \`approve\` and is yours — and then publishes:
 
   publish page RUN [--as USER] [--out DIR] [--template T] [--structure S]
-  publish telegram RUN --message TEXT | --message-file PATH [--chat-id C]
+  publish telegram RUN --message TEXT | --message-file PATH [--chat-id C] [--edit]
   publish homework ASSESSMENT --run RUN [--repo owner/name] [--private]
   publish canvas ASSESSMENT --run RUN [--group G] [--overwrite-drift]
+  publish update RUN                       everywhere it has already gone
+  …any of them with --rebuild             run a stale rendering's producer first
 
   The approver recorded against a promoted material is --as, or the run's first
   instructor. A draft the record already holds is left alone rather than
   promoted twice, so publishing the same run again publishes rather than
   colliding.
+
+  A material edited in place is noticed: the record is brought back into line
+  with the file and its version goes up, and a rendering whose source changed
+  is held back rather than published as a picture of the old text. --rebuild
+  runs the producer the course declares for it in materials.yaml and publishes
+  what it makes. --edit corrects the last announcement in the channel instead
+  of posting a second one. update revisits every destination this run has
+  already been published to, and never a new one.
+
+  impact DOC-ID says what one material is and what changing it would drag —
+  the read to do before a small edit, and the one /revise starts with.
   migrate-layout [COURSE_ID…] [--dry-run]  move off versions/<TERM>/, once
   archive-run [--force] [--dry-run]        pack the finished term into archive/
   deck fit FILE.md [--verbose]            will each slide fit on the page
@@ -582,6 +598,51 @@ const buildCoursePage = (runId: string): { lines: string[]; published: string[] 
   // the ledger, and "what went out" is exactly this list rather than a second
   // guess at it.
   return { lines, published: materials.map((material) => material.documentId) };
+};
+
+/**
+ * Which producer rebuilds each stale rendering, and what to say when none does.
+ *
+ * The join nothing could make before: `freshness` knows `DOC-4499` is a
+ * picture of old text, `materials.yaml` is keyed by producer id, and the
+ * professor was left to work out which of their seven build scripts made that
+ * PDF. Both halves are now read together, so the plan either names the command
+ * or says plainly why there is not one.
+ */
+const rebuildable = (
+  found: ReturnType<typeof freshness>,
+  courseId: string,
+): { stale: string; producer: string | null; documentId: string }[] => {
+  const producers = readProducers(
+    flag("materials") ?? join(root, "courses", courseId, "materials"),
+  );
+  return found.stale.map((entry) => ({
+    stale: entry.storageKey,
+    documentId: entry.documentId,
+    producer: producers ? (producerFor(producers, entry.documentId)?.id ?? null) : null,
+  }));
+};
+
+/** The plan's advice about stale renderings, in the professor's own commands. */
+const rebuildPlan = (found: ReturnType<typeof freshness>, courseId: string): string[] => {
+  if (!found.stale.length) return [];
+  const entries = rebuildable(found, courseId);
+  const named = entries.filter((entry) => entry.producer !== null);
+  const lines: string[] = [];
+  if (named.length) {
+    lines.push(
+      `--confirm --rebuild would run ${named.map((entry) => entry.producer).join(", ")} first, ` +
+        "and publish what they make",
+    );
+  }
+  for (const entry of entries) {
+    if (entry.producer !== null) continue;
+    lines.push(
+      `${entry.documentId} has no producer in materials.yaml, so nothing here can rebuild it — ` +
+        "rebuild it however it was made, then publish again",
+    );
+  }
+  return lines;
 };
 
 /**
@@ -1352,9 +1413,7 @@ try {
           out("");
           out("Changed since it was last recorded:");
           for (const line of describeFreshness(found)) out(`  ${line}`);
-          if (found.stale.length) {
-            out(`  rebuild those with \`ainar materials build ${runId}\`, then publish again`);
-          }
+          for (const line of rebuildPlan(found, courseId)) out(`  ${line}`);
         }
 
         // The two targets whose plan is a question for somebody else's server
@@ -1433,14 +1492,53 @@ try {
         out("");
       }
 
+      // Rebuilding, before anything is stamped or sent.
+      //
+      // Opt-in rather than automatic, and the reason is what a producer IS: a
+      // script this course wrote, possibly Python, possibly followed by
+      // LibreOffice. Running somebody's build scripts as a silent side effect
+      // of the word "publish" is a surprising amount of machinery for a press
+      // that was about putting a page up. The plan names the flag; the flag
+      // runs them.
+      let rebuilt = found;
+      if (args.includes("--rebuild") && found.stale.length) {
+        const materialsDir = flag("materials") ?? join(root, "courses", courseId, "materials");
+        const jobs = rebuildable(found, courseId);
+        for (const job of jobs) {
+          if (job.producer === null) {
+            out(`${job.documentId}: no producer declares it, so it is still the old text`);
+            continue;
+          }
+          const report = buildMaterials({
+            root,
+            courseVersionId: runId,
+            materialsDir,
+            only: job.producer,
+            pdf: !args.includes("--no-pdf"),
+            dryRun: false,
+            draftsDir,
+          });
+          for (const line of report.lines) out(`  ${line}`);
+          if (report.failed) {
+            console.error(`${job.producer} failed, so ${job.documentId} is still the old text.`);
+          }
+        }
+        // Read again: the producers rewrote files in place, which is what
+        // turns `stale` into `rebuilt` and lets both halves be recorded
+        // together. Without this the run would stamp the pre-rebuild state.
+        rebuilt = freshness(named ? forRun(named) : onlyCourse(), runId, root);
+        out("");
+      }
+      const settled = rebuilt;
+
       // The bytes on disk are what is about to be published, so the record is
       // made to describe them before anything is sent. This is the half that
       // used to be nobody's job: a professor who fixed a word in an approved
       // deck had a record still describing the text before the fix, and
       // nothing anywhere said so.
-      if (!nothingChanged(found)) {
-        const stamped = restamp(root, courseId, found);
-        for (const line of describeFreshness(found)) out(line);
+      if (!nothingChanged(settled)) {
+        const stamped = restamp(root, courseId, settled);
+        for (const line of describeFreshness(settled)) out(line);
         for (const path of stamped.written) {
           out(`re-stamped ${within(root, path)} — ${stamped.count} record(s)`);
         }
@@ -1457,6 +1555,14 @@ try {
       // publication is about, and the bundle in hand predates them — a page
       // built from it would leave out the very deck this command just promoted.
       const published = named ? forRun(named) : onlyCourse();
+
+      // And the checksums are read again with it. `checksums` above was taken
+      // before the producers ran, so writing the ledger from it recorded the
+      // OLD bytes as the ones that went out — and the next plan then reported
+      // the rebuild as a change that had happened since, about a file this
+      // very run had rebuilt and published. What went out is what is on disk
+      // at the moment it goes.
+      const sentChecksums = materialChecksums(fingerprints(published, runId, root));
 
       /**
        * One publication, performed and noted.
@@ -1558,9 +1664,9 @@ try {
             // materials of the run as they stood, which is what a later "has
             // anything changed" is asked about.
             materials: Object.fromEntries(
-              (job.target === "page" ? sent : [...checksums.keys()])
-                .filter((id) => checksums.has(id))
-                .map((id) => [id, checksums.get(id)!]),
+              (job.target === "page" ? sent : [...sentChecksums.keys()])
+                .filter((id) => sentChecksums.has(id))
+                .map((id) => [id, sentChecksums.get(id)!]),
             ),
             ...(payload ? { payload } : {}),
           });

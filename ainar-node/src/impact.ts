@@ -146,28 +146,41 @@ export const impact = (options: {
           ? "matches"
           : "changed";
 
-  // Everything sharing this file's stem is the same material in another
-  // format. Which of them is the source is decided by extension, not by
-  // guessing: nobody hand-writes a .pdf.
+  // Which documents are this one's renderings, and which one is its source.
+  //
+  // The record first: `extensions.rendered_from` is written by whatever made
+  // the file, and where it is present nothing else is consulted. The stem of
+  // the storage key is the fallback for a course whose materials were made
+  // before anything wrote that edge — `week-07-slides.md`, `.pptx` and `.pdf`
+  // are one deck in three formats, and `week-06-notes.txt` beside
+  // `MODULE-06-slides.md` is the case the convention cannot see at all.
   const stem = stemOf(storageKey);
-  const siblings = prints.filter(
-    (entry) => entry.documentId !== documentId && stemOf(entry.storageKey) === stem,
-  );
-  const thisIsSource = SOURCE_FORMATS.has(extensionOf(storageKey));
-  const renderings = thisIsSource
-    ? siblings
-        .filter((entry) => DERIVED_FORMATS.has(extensionOf(entry.storageKey)))
-        .map((entry) => ({
-          documentId: entry.documentId,
-          storageKey: entry.storageKey,
-          // Stale exactly when this source has moved and the rendering has
-          // not — the rule `freshness.ts` arrived at and for its reasons.
-          stale: fileState === "changed" && entry.recorded === entry.actual,
-        }))
+  const siblings = prints.filter((entry) => entry.documentId !== documentId);
+  const declaredRenderings = siblings.filter((entry) => entry.renderedFrom === documentId);
+  const stemRenderings = SOURCE_FORMATS.has(extensionOf(storageKey))
+    ? siblings.filter(
+        (entry) =>
+          entry.renderedFrom === null &&
+          stemOf(entry.storageKey) === stem &&
+          DERIVED_FORMATS.has(extensionOf(entry.storageKey)),
+      )
     : [];
-  const renderedFrom = DERIVED_FORMATS.has(extensionOf(storageKey))
-    ? (siblings.find((entry) => SOURCE_FORMATS.has(extensionOf(entry.storageKey)))?.documentId ?? null)
-    : null;
+  const renderings = [...declaredRenderings, ...stemRenderings].map((entry) => ({
+    documentId: entry.documentId,
+    storageKey: entry.storageKey,
+    // Stale exactly when this source has moved and the rendering has not —
+    // the rule `freshness.ts` arrived at, and for its reasons.
+    stale: fileState === "changed" && entry.recorded === entry.actual,
+  }));
+
+  const renderedFrom =
+    print?.renderedFrom ??
+    (DERIVED_FORMATS.has(extensionOf(storageKey))
+      ? (siblings.find(
+          (entry) =>
+            stemOf(entry.storageKey) === stem && SOURCE_FORMATS.has(extensionOf(entry.storageKey)),
+        )?.documentId ?? null)
+      : null);
 
   const publishedTo: Impact["publishedTo"] = [];
   for (const entry of Object.values(publications)) {
@@ -199,7 +212,8 @@ export const impact = (options: {
     if (!rendering.stale) continue;
     next.push(
       `rebuild ${rendering.storageKey} (${rendering.documentId}) — it is a picture of the old text, ` +
-        "and publishing holds it back until it is rebuilt",
+        "and publishing holds it back until it is. `publish … --confirm --rebuild` runs the " +
+        "producer the course declares for it",
     );
   }
   if (publishedTo.some((entry) => entry.behind)) {

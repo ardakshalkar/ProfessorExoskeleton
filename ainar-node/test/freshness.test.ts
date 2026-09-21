@@ -237,3 +237,60 @@ test("a record no file holds is a refusal that writes nothing", () => {
   );
   assert.equal(readFileSync(path, "utf-8"), before);
 });
+
+// ------------------------------------------- the edge the record declares
+
+/** A rendering whose source is declared rather than guessed from the filename. */
+const withDeclaredRendering = (root: string): void => {
+  const path = join(root, "courses", COURSE, "documents.yaml");
+  writeFileSync(
+    path,
+    readFileSync(path, "utf-8").replace(
+      "  - document_id: DOC-4411",
+      "  - document_id: DOC-4498\n" +
+        "    title: Model evaluation — handout notes\n" +
+        `    storage_key: courses/${COURSE}/materials/week-06-notes.txt\n` +
+        "    mime_type: text/plain\n" +
+        `    course_version_id: ${RUN}\n` +
+        "    extensions:\n" +
+        "      origin: generated\n" +
+        "      rendered_from: DOC-4410\n\n" +
+        "  - document_id: DOC-4411",
+    ),
+    "utf-8",
+  );
+  edit(root, `courses/${COURSE}/materials/week-06-notes.txt`, "notes from the original text");
+};
+
+test("a declared rendered_from is used where the filenames do not match", () => {
+  const root = workspace();
+  withDeclaredRendering(root);
+  stampEverything(root);
+  edit(root, SLIDES, "# Cross-validation\n\nThe corrected text.\n");
+
+  // `week-06-notes.txt` shares no stem with `MODULE-06-slides.md`, so the
+  // convention could never have paired them. The record says so instead.
+  const found = freshness(load(root), RUN, root);
+  assert.deepEqual(
+    found.stale.map((entry) => [entry.documentId, entry.from]),
+    [["DOC-4498", "DOC-4410"]],
+  );
+  assert.deepEqual([...deferredSources(found)], ["DOC-4410"]);
+});
+
+test("a declared rendering rebuilt is recorded with its source, not held back", () => {
+  const root = workspace();
+  withDeclaredRendering(root);
+  stampEverything(root);
+  edit(root, SLIDES, "# Cross-validation\n\nThe corrected text.\n");
+  edit(root, `courses/${COURSE}/materials/week-06-notes.txt`, "notes from the corrected text");
+
+  const found = freshness(load(root), RUN, root);
+  assert.equal(found.stale.length, 0);
+  assert.deepEqual(
+    found.rebuilt.map((print) => print.documentId),
+    ["DOC-4498"],
+  );
+  restamp(root, COURSE, found);
+  assert.equal(nothingChanged(freshness(load(root), RUN, root)), true);
+});

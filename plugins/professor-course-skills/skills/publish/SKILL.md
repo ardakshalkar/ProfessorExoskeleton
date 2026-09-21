@@ -110,9 +110,11 @@ What to read back to them, because these three are theirs to act on:
 - **`X changed since it was recorded`** — expected, and it is what they just
   did. The publishing run records it and the version goes up by one.
 - **`Y was rendered from X, which changed — held back`** — the deck was edited
-  and its PDF was not rebuilt, so the PDF is *not* published. Give them the
-  rebuild command — `bin/ainar materials build <RUN>` for a course that
-  declares its own producers — and say that publishing again sends both.
+  and its PDF was not rebuilt, so the PDF is *not* published. The plan says
+  which producer would rebuild it; adding `--rebuild` to the confirming run
+  runs that producer and publishes the result in the same press. Where the plan
+  says no producer declares it, the rebuild is the professor's to do however
+  that file is made, and publishing again sends both.
 - **`X is NOT re-stamped`** — the same situation, said from the record's side.
   Not an error and not something to work around. The warning is deliberate and
   will keep coming back until the rendering is rebuilt.

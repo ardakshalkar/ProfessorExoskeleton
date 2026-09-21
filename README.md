@@ -217,6 +217,9 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
       published Tuesday, and these three have changed since* rather than
       describing every publication as the first — in the ledger that already
       holds what was sent to the gradebook, outside the repository
+- [x] `publish … --rebuild` runs the producer a course declares for a stale
+      rendering, so a corrected deck and the PDF beside it go out in one press.
+      Opt-in, because a producer is the course's own build script
 - [x] `ainar impact DOC-ID` — what a material is, whether the file still matches
       the record, what was rendered from it, what points at it, where it has
       been published and whether that copy is behind. The read a one-word edit

@@ -174,8 +174,14 @@ export const officeAt = (): string | null => {
  * better absent than filled with sixteen empty strings.
  */
 export const slideCount = (pptx: string): number => {
+  // A producer may make something that is not a deck — a handout, a dataset, a
+  // notes file — and `unzip -Z1` on one prints a paragraph about not finding a
+  // central directory, on a channel this does not control, before returning
+  // the zero it would have returned anyway. The extension is the cheap check
+  // that keeps that noise out of a build report where it reads as a failure.
+  if (!/\.pptx$/i.test(pptx)) return 0;
   try {
-    return execFileSync("unzip", ["-Z1", pptx], { encoding: "utf-8" })
+    return execFileSync("unzip", ["-Z1", pptx], { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] })
       .split("\n")
       .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name)).length;
   } catch {
@@ -197,6 +203,36 @@ export const documentRecord = (fields: Record<string, unknown>): Record<string, 
   }
   return fields;
 };
+
+/**
+ * The producers a course declares, or null when it declares none.
+ *
+ * Null rather than an empty list, and rather than a throw: a course with no
+ * manifest is the ordinary case for one whose decks were written by hand, and
+ * the caller's answer to "which producer rebuilds this" is then *none of them*
+ * rather than "the manifest is broken".
+ */
+export const readProducers = (materialsDir: string): Producer[] | null => {
+  const manifestPath = join(materialsDir, MANIFEST);
+  if (!existsSync(manifestPath)) return null;
+  return Manifest.parse(parse(readFileSync(manifestPath, "utf-8"))).producers;
+};
+
+/**
+ * Which producer makes a given document, if the course declares one.
+ *
+ * The lookup a rebuild needs and the one `buildMaterials` cannot do for
+ * itself: freshness knows `DOC-4499` is a picture of old text, the manifest is
+ * keyed by producer id, and nothing joined the two. Both halves of a producer
+ * are matched — a deck and the PDF beside it are one producer, and it is the
+ * PDF that usually goes stale.
+ */
+export const producerFor = (producers: Producer[], documentId: string): Producer | null =>
+  producers.find(
+    (producer) =>
+      producer.document_id === documentId ||
+      (producer.pdf_document_id ?? `${producer.document_id}-PDF`) === documentId,
+  ) ?? null;
 
 export type BuildOptions = {
   readonly root: string;

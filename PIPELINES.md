@@ -249,7 +249,18 @@ Two things it will not do, both on purpose:
 
 - **It will not publish a PDF made from the old text.** If you changed the
   slides but have not rebuilt the PDF, the PDF is held back and the page goes
-  out without it. Rebuild it and publish again, and both go.
+  out without it. Add `--rebuild` and it runs the producer your course declares
+  for that file — from `materials.yaml`, the list of what builds what — and
+  publishes the result in the same press:
+
+  ```bash
+  bin/ainar publish page CSS-4008-2026-FALL --confirm --rebuild
+  ```
+
+  It is not automatic, because a producer is a build script of yours and
+  sometimes LibreOffice after it; running those as a silent side effect of
+  "publish" is more machinery than the word implies. The plan names the
+  producer it would run, or says plainly that nothing declares one.
 - **It will not quietly forget.** Until you rebuild that PDF, every publication
   keeps telling you. The change to the slides is not written into the record
   either, because recording it would make the old PDF look current.

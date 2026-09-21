@@ -164,3 +164,35 @@ function currentChecksum(root: string): string {
   const parsed = readFileSync(join(root, "courses", COURSE, "documents.yaml"), "utf-8");
   return /checksum: (sha256:[0-9a-f]+)/.exec(parsed)![1]!;
 }
+
+// ------------------------------------------------------- naming the rebuild
+
+test("a declared source beats the filename convention", () => {
+  const root = workspace();
+  const path = join(root, "courses", COURSE, "documents.yaml");
+  writeFileSync(
+    path,
+    readFileSync(path, "utf-8").replace(
+      "  - document_id: DOC-4411",
+      "  - document_id: DOC-4498\n" +
+        "    title: Model evaluation — handout notes\n" +
+        `    storage_key: courses/${COURSE}/materials/week-06-notes.txt\n` +
+        "    mime_type: text/plain\n" +
+        `    course_version_id: ${RUN}\n` +
+        "    extensions:\n" +
+        "      origin: generated\n" +
+        "      rendered_from: DOC-4410\n\n" +
+        "  - document_id: DOC-4411",
+    ),
+    "utf-8",
+  );
+  writeFileSync(join(root, "courses", COURSE, "materials", "week-06-notes.txt"), "notes", "utf-8");
+  stamped(root);
+
+  // Nothing about the two filenames pairs them; the record says it.
+  assert.equal(look(root, "DOC-4498").renderedFrom, "DOC-4410");
+  assert.deepEqual(
+    look(root, "DOC-4410").renderings.map((entry) => entry.documentId),
+    ["DOC-4498"],
+  );
+});

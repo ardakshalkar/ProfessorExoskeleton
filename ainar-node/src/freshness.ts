@@ -37,16 +37,20 @@
  * that says how many times this material has been through the professor's
  * hands, which is the thing nobody could see before.
  *
- * ## What this deliberately does not do
+ * ## What this does not do itself
  *
- * It does not re-render. A changed `.md` makes its `.pptx` and `.pdf` stale and
- * this says so and names the command, but it will not run one: the two
- * renderers in this project write to different places — `render-deck` to
- * `output/<RUN>/` and `materials build` to the course's own `materials/` — and
- * only the second lands where the record points. Rebuilding automatically means
- * choosing between them per document, which is a decision this file does not
- * have the information to make. Until it can, a stale rendering is **held back
- * from publication** rather than published as though it matched.
+ * It does not re-render, and it does not decide whether to. What it produces is
+ * the finding — this rendering is a picture of old text — and a stale rendering
+ * is **held back from publication** rather than published as though it matched.
+ *
+ * Rebuilding is `ainar publish --rebuild`, which runs the producer the course
+ * declares for that document in its own `materials.yaml` and writes the file
+ * where the record already points. It is opt-in rather than automatic because a
+ * producer is a script the course wrote, sometimes followed by LibreOffice, and
+ * running somebody's build scripts as a silent side effect of the word
+ * "publish" is a surprising amount of machinery for a press that was about
+ * putting a page up. A course that declares no producer for a stale rendering
+ * is told exactly that, rather than left with a command that cannot help.
  */
 
 import { createHash } from "node:crypto";
@@ -74,6 +78,16 @@ export interface Fingerprint {
   derived: boolean;
   /** The version the record currently claims, so a bump is from the right number. */
   version: number;
+  /**
+   * The document this one was rendered from, as the record itself declares it.
+   *
+   * `extensions.rendered_from` is written by `ainar materials build` — by the
+   * thing that made the file, rather than reconstructed later by reading seven
+   * scripts to find out. Where it is present it is the truth and the stem
+   * convention is not consulted; `materials.ts` says in as many words that it
+   * exists to replace that guess.
+   */
+  renderedFrom: string | null;
 }
 
 export interface Stale {
@@ -154,6 +168,7 @@ export const fingerprints = (
       continue;
     }
 
+    const declared = (document.extensions ?? {}).rendered_from;
     prints.push({
       documentId: document.document_id as string,
       title: (document.title as string) ?? "(untitled)",
@@ -161,8 +176,9 @@ export const fingerprints = (
       recorded: typeof document.checksum === "string" ? document.checksum : null,
       actual: digest(contents),
       size: contents.length,
-      derived: DERIVED_FORMATS.has(extensionOf(key)),
+      derived: DERIVED_FORMATS.has(extensionOf(key)) || typeof declared === "string",
       version: Number.isFinite(Number(document.version)) ? Number(document.version) : 1,
+      renderedFrom: typeof declared === "string" ? declared : null,
     });
   }
   return prints;
@@ -186,15 +202,25 @@ export const freshness = (
   }
 
   // A rendering is stale when the thing it was rendered FROM changed, whatever
-  // its own bytes say. The pairing is the stem of the storage key —
-  // `week-07-slides.md`, `.pptx` and `.pdf` are one deck in three formats —
+  // its own bytes say. WHICH document that is comes from the record when the
+  // record says — `extensions.rendered_from`, written by whatever made the
+  // file — and from the stem of the storage key when it does not:
+  // `week-07-slides.md`, `.pptx` and `.pdf` are one deck in three formats,
   // which is the convention the pane already uses to put a PDF chip on a deck.
+  // The declared edge wins, because a course may name a source that shares no
+  // filename with what it produces.
+  const changedIds = new Set(found.changed.map((print) => print.documentId));
   const changedStems = new Map<string, string>();
   for (const print of found.changed) {
     if (SOURCE_FORMATS.has(extensionOf(print.storageKey))) {
       changedStems.set(stemOf(print.storageKey), print.documentId);
     }
   }
+  /** The source this rendering came from, declared or conventional. */
+  const sourceOf = (print: Fingerprint): string | undefined =>
+    print.renderedFrom !== null
+      ? (changedIds.has(print.renderedFrom) ? print.renderedFrom : undefined)
+      : changedStems.get(stemOf(print.storageKey));
   // Whether a rendering's own bytes moved is what separates the two cases, and
   // getting this wrong deadlocks the whole thing — which is how it was found.
   // A source with a stale rendering is not re-stamped (see `deferredSources`),
@@ -215,7 +241,7 @@ export const freshness = (
   const editedIds = new Set(edited.map((print) => print.documentId));
   for (const print of prints) {
     if (!print.derived) continue;
-    const from = changedStems.get(stemOf(print.storageKey));
+    const from = sourceOf(print);
     if (!from) continue;
     if (editedIds.has(print.documentId)) continue;
     found.stale.push({
@@ -226,8 +252,7 @@ export const freshness = (
     });
   }
   for (const print of edited) {
-    const from = changedStems.get(stemOf(print.storageKey));
-    (from ? found.rebuilt : found.drifted).push(print);
+    (sourceOf(print) ? found.rebuilt : found.drifted).push(print);
   }
 
   return found;

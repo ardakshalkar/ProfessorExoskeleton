@@ -310,6 +310,24 @@ material against its recorded checksum and sorts what it finds:
   unstamped   no checksum was ever recorded                -> stamp it, no version
 ```
 
+`--rebuild` closes the loop. `materials.yaml` already declares what produces
+what — a producer carries `document_id`, `source_document_id` and `produces`,
+and writes its artefact under the course's own `materials/`, which is where a
+recorded `storage_key` points. What was missing was the join: freshness knew
+`DOC-4499` was stale and the manifest is keyed by producer id, so the professor
+was left to work out which of their seven scripts made that PDF. `producerFor`
+is that lookup, matching both halves of a producer because it is usually the
+PDF that goes stale. A course declaring no producer for the file is told so
+rather than handed a command that cannot help.
+
+The same commit takes `extensions.rendered_from` seriously. `materials.ts` had
+already said the stem convention is what that field exists to replace, and it
+is written by whatever made the file rather than reconstructed later — so where
+it is present it decides, and the stem is the fallback for materials made
+before anything wrote it. That is not pedantry: `week-06-notes.txt` built from
+`MODULE-06-slides.md` shares no stem with its source, and the convention cannot
+see that pair at all.
+
 Two rules in there were found by running it rather than by thinking about it.
 **A source with a stale rendering is not re-stamped**, because re-stamping it
 would make the rendering stop looking stale and the next publication would copy
