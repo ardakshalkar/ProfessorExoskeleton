@@ -16,7 +16,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "docx": "^9.7.1",
     "jose": "^6.2.9",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.23.0",
     "yaml": "^2.6.0",
     "zod": "^3.24.0",

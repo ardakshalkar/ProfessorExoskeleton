@@ -1,7 +1,9 @@
 # Backlog
 
 [`FUTURE.md`](FUTURE.md) argues the direction. This is the same thirteen aspects
-cut into work items, so they can be ordered, cut, or handed to somebody.
+cut into work items, so they can be ordered, cut, or handed to somebody — plus
+`E14`, which arrived after that document was written and has no section in it
+yet.
 
 Nothing here is scheduled. The ranks are a proposal to argue with, not a plan.
 
@@ -305,6 +307,59 @@ is worth building.
 - [ ] **STU-3** Consent and data-boundary note — the boundary does not have to
       exist today because nothing leaves the machine, and that stops being true
       the moment this does. `M` · depends: STU-1
+
+## E14 · Quizzes can be multi-variant — no `FUTURE.md` section yet
+
+> **Rank: unranked, and deliberately outside the order below.** Written down
+> because this gap sits between two halves that each already look as though they
+> handle it, which is how a gap survives a review.
+>
+> The record already has the question family: `ItemModel` carries
+> `scenario_variables`, `difficulty_features` and `allowed_item_types`, every
+> `AssessmentItem` can name an `item_model_id`, and
+> [`workspace/courses/CSS-4008/item-models/`](workspace/courses/CSS-4008/item-models/)
+> has a worked one. The prose skills already have a variant policy —
+> `design-exam` §5 specifies families and variants, `make-exam` §6 forbids
+> generating them by paraphrase, and its `references/quality-checks.md` lists
+> what makes two of them equivalent.
+>
+> Everything *between* those two halves is missing. Nothing instantiates a model
+> into items — `scenario_variables` is stored, exported, written to SQL and read
+> by no code. Nothing in the model says which variant a student sat.
+> `bin/exam-paper.ts` prints exactly one paper per assessment, and
+> `ainar score-items` compares a response to exactly one key. So a professor can
+> today *describe* a four-variant quiz in the record and still print one paper
+> from it.
+
+- [ ] **VAR-1** Decide what a variant IS in the record: a sibling assessment, a
+      `variant` field on `AssessmentItem`, or a grouping over the existing
+      `item_model_id`. Everything below changes shape with the answer, and
+      guessing it is how a schema acquires two ways to say the same thing.
+      `decision` · blocks: VAR-2 … VAR-6
+- [ ] **VAR-2** Instantiate an `ItemModel` into items: bind the scenario
+      variables, apply one `difficulty_features` profile, emit numbered items as
+      drafts through the same schema `ainar approve` reads. `M` · depends: VAR-1
+- [ ] **VAR-3** Variant identity on the paper and on the submission, so a script
+      can be marked against the key it was actually sat under. Without this the
+      rest of the epic is a way to print papers nobody can grade. `M` ·
+      depends: VAR-1
+- [ ] **VAR-4** `exam-paper.ts --variants N` — N student papers per assessment,
+      each carrying its variant where a marker will look for it, and still
+      carrying no key. `S` · depends: VAR-3
+- [ ] **VAR-5** `score-items` against a per-variant key, including the
+      misconception tally, which is only meaningful per variant. `M` ·
+      depends: VAR-3
+- [ ] **VAR-6** An equivalence report rather than a promise: per variant, the
+      concepts, cognitive levels, marks and item types it covers, with the
+      differences listed rather than averaged. `make-exam` asks a person to
+      assert equivalence; most of what it asks is computable from the record.
+      `M` · depends: VAR-2
+- [ ] **VAR-7** Feed `bin/export-exam-lms.ts` from the record. It requires
+      `correctOptions` on every choice question and `exam-paper.ts` strips the
+      key on purpose, so nothing in this repository produces JSON it will accept
+      — the only files with that field are its own tests. Either a keyed export
+      that is explicitly not the student paper, or say in the README that the
+      exporter is fed by hand. `S` · depends: —
 
 ---
 
