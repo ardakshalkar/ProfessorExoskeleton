@@ -263,6 +263,12 @@ moves the file there.
 If the material replaces an earlier version, set `supersedes` to the document
 it replaces rather than overwriting it.
 
+**A correction is not a replacement.** Fixing a word, a figure or a slide in
+something that already exists is `/revise`: the file is edited in place, no new
+identifier is written, and the record catches up when it is published. Reach
+for `supersedes` only when this genuinely is a different material standing in
+for an old one — a rewritten handout, not a corrected one.
+
 ## 5. Check it
 
 ```bash

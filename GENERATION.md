@@ -365,6 +365,24 @@ using the id the ledger kept — never the default, because a second announcemen
 is the ordinary case and silently rewriting the first would destroy something
 students had read.
 
+**The small change, and the read it starts with.** Everything above answers
+*what follows an edit*; `src/impact.ts` answers *what am I about to edit* — one
+document's file, whether it is a draft or a record, whether the file still
+matches the record, what was rendered from it, what points at it, and where it
+has already gone. `ainar impact DOC-4410` prints that and nothing else: it
+writes nothing, reaches nothing, and recommends rather than performs. Its
+`What follows` lines are assembled from the same facts as the report above
+them, which is the property worth keeping — an agent reads those lines out, so
+a step that appears when the report does not justify it is a wrong instruction
+rather than a cosmetic bug.
+
+That read is the routing this needed. Before it, *fix this word on slide 4* had
+no cheaper answer than re-running `make-materials`, because the four facts
+required to do less were in four places; the skill that now owns the decision
+is `/revise`, and its table is four rows: the content of a material (edit the
+file), a field of a record (no file exists, so say which line), an item (both),
+and something that is not a revision at all.
+
 Two consequences worth knowing:
 
 - **Publishing twice publishes twice.** `approve` never removes a draft, so a

@@ -92,7 +92,7 @@ node --experimental-strip-types ainar-node/bin/ainar.ts gradebook CSS-4008-2026-
 
 `ainar --help` lists the rest: `context`, `stats`, `pending`, `rubric`,
 `student`, `class-progress`, `calibration`, `blueprint`, `schema`, `new
-course`, `new run`, `roster`, `approve`, `publish`, `deck fit`.
+course`, `new run`, `roster`, `approve`, `publish`, `impact`, `deck fit`.
 
 ### The write layer
 
@@ -217,6 +217,10 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
       published Tuesday, and these three have changed since* rather than
       describing every publication as the first — in the ledger that already
       holds what was sent to the gradebook, outside the repository
+- [x] `ainar impact DOC-ID` — what a material is, whether the file still matches
+      the record, what was rendered from it, what points at it, where it has
+      been published and whether that copy is behind. The read a one-word edit
+      starts with, and the `/revise` skill's decision procedure
 - [x] `publish update RUN` revisits every destination that run has already been
       published to and never a new one; a failure on one is reported and the
       rest still go. `publish telegram --edit` corrects the announcement in the

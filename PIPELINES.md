@@ -194,6 +194,40 @@ the course, in `~/.ainar/sync/`, beside the one that already remembers what was
 sent to the gradebook — it is what **this machine** sent, not a fact about the
 course, so it does not belong in the files you commit.
 
+## Change one small thing
+
+"Fix this word on slide 4" used to have no cheap answer: the only reliable move
+was to regenerate the whole deck, which threw away everything you had edited by
+hand. Now the first step is a question:
+
+```bash
+bin/ainar impact DOC-4410
+```
+
+```
+DOC-4410  Model evaluation and overfitting — slides
+  state       a record, version 2
+  file        courses/CSS-4008/materials/MODULE-06-slides.md — matches the record
+  used by     RES-441 — slides
+              ACT-0601 — Choosing a metric that means something on 2026-10-05
+  published   dist/pages/CSS-4008-2026-FALL, 2026-09-19 — BEHIND what is on disk
+
+What follows:
+  edit the file in place — a new identifier is not needed, and neither is `supersedes`
+  rebuild MODULE-06-slides.pdf (DOC-4499) — it is a picture of the old text
+  `ainar publish update CSS-4008-2026-FALL` — 1 place(s) have the old version
+```
+
+It writes nothing. It answers the four things a one-word edit actually raises:
+which file, is it a draft or a record, what was built from it, and where has it
+already gone. Then you edit that one line — and the *What follows* list is the
+rest, in order.
+
+Asking in chat, `/revise` is the same procedure: it works out whether you mean
+a **material** (a file to edit), a **field** (a deadline, a weight — a record
+with no file), or something that is not a revision at all, and it makes the
+smallest edit rather than rebuilding around it.
+
 ## Fix a typo and publish again
 
 You do not need a new id, a new version number, or any of the machinery. Open

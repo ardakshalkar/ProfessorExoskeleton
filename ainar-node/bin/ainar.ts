@@ -150,6 +150,7 @@ import {
   restamp,
 } from "../src/freshness.ts";
 import { Ledger } from "../src/lms/ledger.ts";
+import { describeImpact, impact } from "../src/impact.ts";
 import { Workspace } from "../src/workspace.ts";
 
 
@@ -288,6 +289,7 @@ const HELP = `ainar — the AINAR course model CLI
   calibration RUN
   blueprint RUN
   approve DRAFTS --as USER [--only IDS] [--reject IDS] [--dry-run]
+  impact DOC-ID [--run RUN]   what a material is, and what changing it drags
 
   roster import FILE.csv [--run RUN] [--id-column C] [--name-column C]
                          [--email-column C] [--group-column C]
@@ -1082,6 +1084,38 @@ try {
 
     case "page": {
       for (const line of buildCoursePage(rest[0]!).lines) out(line);
+      break;
+    }
+
+    /**
+     * What one material is, and what changing it would drag behind it.
+     *
+     * The read a small change starts with. `src/impact.ts` says why it exists:
+     * "fix this word on slide 4" used to have no cheaper answer than
+     * regenerating the deck, because the four facts needed to do less than
+     * that were in four places. This is a read and nothing else — it writes
+     * nothing, reaches nothing, and recommends rather than performs.
+     */
+    case "impact": {
+      const documentId = rest[0];
+      if (!documentId) {
+        console.error("usage: impact DOC-ID [--run RUN]");
+        process.exit(1);
+      }
+      const asked = flag("run") ?? flag("course-version");
+      const bundle = asked ? forRun(asked) : onlyCourse();
+      const runId = asked ?? soleRun(bundle);
+      const found = impact({
+        bundle,
+        courseVersionId: runId,
+        root,
+        documentId,
+        publications: Ledger.load(runId, flag("sync-dir")).publications,
+      });
+      if (!found) {
+        throw new Error(`no document ${documentId} in ${runId}`);
+      }
+      for (const line of describeImpact(found)) out(line);
       break;
     }
 
