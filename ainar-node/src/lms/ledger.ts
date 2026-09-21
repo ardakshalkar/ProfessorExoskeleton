@@ -120,10 +120,26 @@ export interface Publication {
   where: string;
   /** When, in the run's own timezone — the stamp `approve` uses. */
   at: string;
-  /** What the far end gave back: a Telegram message id, a repository URL. */
+  /** What the far end gave back, for a person to read: `message 4471`. */
   reference: string | null;
+  /**
+   * The same thing for a machine: `4471`, `owner/name`.
+   *
+   * Two fields rather than one because the alternative is parsing a sentence
+   * this file wrote — and the first thing that needs the handle is editing a
+   * Telegram message in place, where getting the id wrong means editing
+   * somebody else's post or none at all.
+   */
+  handle: string | null;
   /** `document_id` to the checksum that went out, for the materials that did. */
   materials: Record<string, string>;
+  /**
+   * A checksum of the payload, for a target whose content is text rather than
+   * files. An announcement has no source in the record — it is what the
+   * professor typed — so this is the only way a later plan can say whether it
+   * has changed.
+   */
+  payload?: string;
 }
 
 /** One run's sync state: gradebook values prepared, plus whatever else it holds. */

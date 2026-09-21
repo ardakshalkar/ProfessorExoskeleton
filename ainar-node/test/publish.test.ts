@@ -18,8 +18,13 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import {
   MATERIAL_COLLECTIONS,
+  UPDATABLE,
+  announcementDigest,
   checkAnnouncement,
   describePublication,
+  destinations,
+  editAnnouncement,
+  isUpdate,
   outstanding,
   pendingMaterials,
   publishPlan,
@@ -257,6 +262,72 @@ test("the ledger carries publications beside the gradebook, and older files stil
   assert.equal(older.lastPublication("page", RUN), null);
 });
 
+// ------------------------------------------------------------- the fan-out
+
+const sent = (where: string, at: string) => ({
+  where,
+  at,
+  reference: null,
+  handle: null,
+  materials: {},
+});
+
+test("an update revisits what was published, oldest first", () => {
+  const { updating, skipped } = destinations(
+    {
+      [`page|${RUN}`]: sent("dist/pages", "2026-09-19T14:00:00+05:00"),
+      "canvas|ASSESSMENT-01": sent("Canvas course 90210", "2026-09-10T09:00:00+05:00"),
+      "homework|ASSESSMENT-03": sent("owner/hw3", "2026-09-14T09:00:00+05:00"),
+    },
+    RUN,
+  );
+
+  assert.deepEqual(
+    updating.map((entry) => `${entry.target}:${entry.scope}`),
+    ["canvas:ASSESSMENT-01", "homework:ASSESSMENT-03", `page:${RUN}`],
+  );
+  assert.deepEqual(skipped, []);
+});
+
+test("an announcement is not updated, because nothing can re-derive it", () => {
+  const { updating, skipped } = destinations(
+    {
+      [`telegram|${RUN}`]: sent("@css4008", "2026-09-12T09:00:00+05:00"),
+      [`page|${RUN}`]: sent("dist/pages", "2026-09-19T14:00:00+05:00"),
+    },
+    RUN,
+  );
+  assert.deepEqual(
+    updating.map((entry) => entry.target),
+    ["page"],
+  );
+  assert.deepEqual(
+    skipped.map((entry) => entry.target),
+    ["telegram"],
+  );
+});
+
+test("a run with nothing published has nothing to update", () => {
+  assert.deepEqual(destinations({}, RUN), { updating: [], skipped: [] });
+});
+
+test("another run's page is not this run's to update", () => {
+  const { updating } = destinations(
+    { "page|CSS-4008-2027-SPRING": sent("dist/pages", "2027-02-01T09:00:00+05:00") },
+    RUN,
+  );
+  assert.deepEqual(updating, []);
+});
+
+test("update is a mode and every other target is a place", () => {
+  assert.equal(isUpdate("update"), true);
+  for (const target of ["page", "telegram", "homework", "canvas"] as const) {
+    assert.equal(isUpdate(target), false);
+  }
+  // Telegram must stay out of the automatic set: see `UPDATABLE`.
+  assert.equal(UPDATABLE.includes("telegram"), false);
+});
+
 // --------------------------------------------------------------- telegram
 
 const ITEMS = [
@@ -285,4 +356,61 @@ test("an ordinary announcement passes, and an empty one does not", () => {
 test("more than Telegram accepts is refused here rather than by Telegram", () => {
   const checked = checkAnnouncement("a".repeat(4097), ITEMS);
   assert.match(checked.refusals.join(" "), /4097 characters/);
+});
+
+/** A transport that answers whatever the test says, and remembers the call. */
+const answering = (body: unknown, status = 200) => {
+  const calls: { url: string; body: unknown }[] = [];
+  return {
+    calls,
+    transport: {
+      async request(_method: string, url: string, options: { body?: Uint8Array | null }) {
+        calls.push({
+          url,
+          body: options.body ? JSON.parse(new TextDecoder().decode(options.body)) : null,
+        });
+        return { status, body: JSON.stringify(body), headers: {} };
+      },
+    },
+  };
+};
+
+test("a correction edits the message in place rather than posting a second one", async () => {
+  const { calls, transport } = answering({ ok: true, result: { message_id: 4471 } });
+  const outcome = await editAnnouncement("TOKEN", "@css4008", "4471", "The corrected text", transport);
+
+  assert.equal(outcome, "edited");
+  assert.match(calls[0]!.url, /editMessageText$/);
+  assert.deepEqual(calls[0]!.body, {
+    chat_id: "@css4008",
+    message_id: 4471,
+    text: "The corrected text",
+    disable_web_page_preview: true,
+  });
+});
+
+test("an edit that changes nothing is a no-op and not an error", async () => {
+  const { transport } = answering(
+    { ok: false, description: "Bad Request: message is not modified" },
+    400,
+  );
+  assert.equal(
+    await editAnnouncement("TOKEN", "@css4008", "4471", "same", transport),
+    "unchanged",
+  );
+});
+
+test("an edit Telegram refuses says what to do instead", async () => {
+  const { transport } = answering({ ok: false, description: "message to edit not found" }, 400);
+  await assert.rejects(
+    () => editAnnouncement("TOKEN", "@css4008", "9999", "text", transport),
+    /message to edit not found[\s\S]*correction as a new message/,
+  );
+});
+
+test("the digest of an announcement is what the ledger keeps, not the words", () => {
+  const digest = announcementDigest("  Homework 3 is open.  ");
+  assert.match(digest, /^sha256:[0-9a-f]{64}$/);
+  assert.equal(digest, announcementDigest("Homework 3 is open."), "trimmed before hashing");
+  assert.notEqual(digest, announcementDigest("Homework 4 is open."));
 });

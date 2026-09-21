@@ -224,6 +224,37 @@ The old version of the file is not lost — materials live in git, so `git show`
 has it. What the record gains is a version number that says how many times you
 have changed this.
 
+### One press for everywhere it already went
+
+You do not have to remember which four places last Tuesday's deck reached.
+
+```bash
+bin/ainar publish update CSS-4008-2026-FALL
+```
+
+It lists every destination this run has **already** been published to, oldest
+first, and `--confirm` revisits them all — the page, the Canvas briefs, the
+homework repositories. It never publishes anywhere for the first time: that is
+still one press per place, because deciding that students see a thing at all is
+a different decision from replacing something they have already read.
+
+If one destination fails — a Canvas course that is not configured, say — the
+others still go, each one is reported, and the ledger records which succeeded.
+Running it again retries only what is behind.
+
+**An announcement is the exception, and it cannot be otherwise.** A page can be
+rebuilt from the course; the words you typed into Telegram cannot. So `update`
+names it and skips it. What you can do is correct it:
+
+```bash
+bin/ainar publish telegram CSS-4008-2026-FALL --message-file fixed.txt --edit --confirm
+```
+
+That edits the message students are already looking at, rather than posting a
+second one underneath. It is never the default — your second announcement of
+the week is a second announcement, and a command that silently rewrote the
+first would destroy something people had read.
+
 ## Announce something
 
 ```

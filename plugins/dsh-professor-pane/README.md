@@ -277,11 +277,19 @@ offering to be about. It is there rather than in the six buttons because every
 other control in this header chooses what to **look at**, and this is the only
 thing in the pane whose result somebody outside this machine ever sees.
 
-One dialog, four targets — **Course page**, **Telegram**, **Homework repo**,
-**Canvas brief** — over the whole pane rather than beside the list, the shape
-the homework publish already had and for its reason: a plan runs to twenty
-lines and a three-hundred-pixel column turned it into a sliver reported as "the
-button doesn't do anything".
+One dialog, five buttons — **Course page**, **Telegram**, **Homework repo**,
+**Canvas brief**, and **Update everywhere** — over the whole pane rather than
+beside the list, the shape the homework publish already had and for its reason:
+a plan runs to twenty lines and a three-hundred-pixel column turned it into a
+sliver reported as "the button doesn't do anything".
+
+**Update everywhere** is the fifth and it is a mode rather than a place: every
+destination this run has already been published to, and no new ones. It is the
+answer to having edited one deck and not remembering which four places it
+reached. An announcement is listed there and skipped, because nothing can
+re-derive the words you typed — under the announcement box there is a checkbox
+that corrects the last message in the channel instead of posting a second one,
+off by default and deliberately so.
 
 Two presses per target, and the first is the one worth naming. It runs
 `ainar publish <target>` with no `--confirm`, which reads and writes nothing —

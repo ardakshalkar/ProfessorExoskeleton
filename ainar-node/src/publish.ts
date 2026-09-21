@@ -30,6 +30,7 @@
  * the only way one of those becomes a record, and the professor runs it.
  */
 
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { promoteIdentifier } from "./approve.ts";
 import type { CourseBundle } from "./bundle.ts";
@@ -41,8 +42,32 @@ import { IssueList, describe } from "./issues.ts";
 import { publishable } from "./page.ts";
 import { describeLeak, scan } from "./safety.ts";
 
-export const TARGETS = ["page", "homework", "canvas", "telegram"] as const;
+export const TARGETS = ["page", "homework", "canvas", "telegram", "update"] as const;
 export type Target = (typeof TARGETS)[number];
+
+/**
+ * `update` is a mode, not a fifth place to publish.
+ *
+ * It means *every destination this run has already been sent to*, which is a
+ * set the ledger holds and nothing else does. That is deliberately narrower
+ * than "everywhere this course could publish": a first publication is a
+ * decision about whether students see a thing at all, and it stays one press
+ * per target. Re-sending something they have already been given is the act
+ * that should be one press, because the alternative is remembering which four
+ * places last Tuesday's deck went to.
+ */
+export const isUpdate = (target: Target): boolean => target === "update";
+
+/**
+ * The targets an update can regenerate on its own.
+ *
+ * Telegram is not among them and cannot be: an announcement is what the
+ * professor typed, and there is nothing in the record to re-derive it from. A
+ * page, a Canvas brief and a starter repository are all built from the course,
+ * so re-sending them is a question the machine can answer. Correcting an
+ * announcement is `publish telegram --edit`, with the new words supplied.
+ */
+export const UPDATABLE: readonly Target[] = ["page", "canvas", "homework"];
 
 /**
  * The only draft collections a publication may promote on the professor's
@@ -56,7 +81,45 @@ export const describeTarget = (target: Target): string =>
     homework: "a homework starter repository on GitHub",
     canvas: "an assessment's definition in Canvas",
     telegram: "a course announcement on Telegram",
+    update: "everywhere this run has already been published",
   })[target];
+
+/** One destination an update would revisit, read out of the ledger. */
+export interface Destination {
+  target: Target;
+  /** The run, or the assessment, depending on the target. */
+  scope: string;
+  where: string;
+  at: string;
+}
+
+/**
+ * What an update would revisit, oldest first.
+ *
+ * Oldest first because that is the order they fell behind in, and a professor
+ * reading a list of four wants to see the one from three weeks ago at the top.
+ * A destination whose target cannot be regenerated — an announcement — is
+ * skipped here and named by the caller, rather than silently dropped.
+ */
+export const destinations = (
+  publications: Record<string, Publication>,
+  runId: string,
+): { updating: Destination[]; skipped: Destination[] } => {
+  const updating: Destination[] = [];
+  const skipped: Destination[] = [];
+  for (const [key, entry] of Object.entries(publications)) {
+    const [target, scope] = key.split("|") as [Target, string];
+    if (!TARGETS.includes(target)) continue;
+    // A page and an announcement are scoped to the run; a repository and a
+    // Canvas brief to an assessment of it. Another run's entries live in
+    // another file, so the only filter needed is the run-scoped one.
+    if ((target === "page" || target === "telegram") && scope !== runId) continue;
+    const found = { target, scope, where: entry.where, at: entry.at };
+    (UPDATABLE.includes(target) ? updating : skipped).push(found);
+  }
+  const byDate = (left: Destination, right: Destination) => left.at.localeCompare(right.at);
+  return { updating: updating.sort(byDate), skipped: skipped.sort(byDate) };
+};
 
 // --------------------------------------------------------------------------
 // What a publication would promote
@@ -257,6 +320,17 @@ export const materialChecksums = (prints: Fingerprint[]): Map<string, string> =>
 
 export const TELEGRAM_LIMIT = 4096;
 
+/**
+ * A checksum of an announcement's text.
+ *
+ * The ledger keeps one so a later plan can say whether the words have changed
+ * since they were sent. It is a digest and not the text: the ledger is not the
+ * place to keep a copy of what students were told, and the question it has to
+ * answer is only "the same, or not".
+ */
+export const announcementDigest = (text: string): string =>
+  "sha256:" + createHash("sha256").update(text.trim()).digest("hex");
+
 export interface Announcement {
   text: string;
   refusals: string[];
@@ -340,6 +414,52 @@ export const readChannel = async (
   }
   const chat = payload.result ?? {};
   return { chatId, title: chat.title ?? chat.username ?? null };
+};
+
+/**
+ * Correct a message already in the channel, rather than posting a second one.
+ *
+ * The Bot API lets a bot edit its own post, and the ledger has kept the id
+ * since publications were recorded, so a typo in an announcement can be fixed
+ * where students will actually see it — an erratum posted underneath is read
+ * by whoever happens to scroll.
+ *
+ * It is never the default. A professor sending their second announcement of
+ * the week means a second announcement, and a command that silently rewrote
+ * the first would destroy something students had already read. `--edit` is how
+ * they say they meant the other thing.
+ *
+ * Telegram refuses an edit whose text is identical, and that refusal is passed
+ * through as a plain no-op rather than an error: nothing needed changing.
+ */
+export const editAnnouncement = async (
+  token: string,
+  chatId: string,
+  messageId: string,
+  text: string,
+  transport: Transport,
+): Promise<"edited" | "unchanged"> => {
+  const body = new TextEncoder().encode(
+    JSON.stringify({
+      chat_id: chatId,
+      message_id: Number(messageId),
+      text,
+      disable_web_page_preview: true,
+    }),
+  );
+  const response = await transport.request(
+    "POST",
+    `https://api.telegram.org/bot${token}/editMessageText`,
+    { headers: { "Content-Type": "application/json", Accept: "application/json" }, body },
+  );
+  const payload = json(response) ?? {};
+  if (payload.ok === true) return "edited";
+  const description = String(payload.description ?? response.status);
+  if (/message is not modified/i.test(description)) return "unchanged";
+  throw new TransportError(
+    `Telegram would not edit message ${messageId}: ${description}. ` +
+      "It may be too old, or deleted. Sending a correction as a new message is the way back.",
+  );
 };
 
 /** Send one plain-text message. The only thing in this file that reaches a student. */

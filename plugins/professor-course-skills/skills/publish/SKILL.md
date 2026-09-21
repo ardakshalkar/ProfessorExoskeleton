@@ -50,6 +50,7 @@ bin/ainar publish page CSS-4008-2026-FALL --confirm       # promote, then publis
 | `telegram RUN --message TEXT` | one plain-text post to the run's channel. It cannot be recalled |
 | `homework ASSESSMENT --run RUN` | the starter repository on GitHub, public so it can be forked |
 | `canvas ASSESSMENT --run RUN` | the assessment's title, points, dates and brief. Never the marks |
+| `update RUN` | every destination this run has already been sent to, and no new ones |
 
 ## 1. Run the plan, always
 
@@ -119,6 +120,18 @@ What to read back to them, because these three are theirs to act on:
 Never fix a stale rendering by editing the record, deleting the document, or
 pointing `storage_key` somewhere else. The file is out of date; the record is
 telling the truth about it.
+
+**After an edit that has already gone out somewhere, offer `update`.** It
+revisits every destination the run has been published to and nothing else, so
+it is the right answer to "I fixed the deck, where had it got to?" — and the
+plan lists them, so read that list before confirming. It never reaches a place
+for the first time; a new destination is still one press of its own.
+
+**Correcting an announcement is `--edit`, and only when they say so.** It edits
+the message students are already looking at. Use it when the professor asks to
+fix or correct what was posted; use a new message when they are announcing
+something. If in doubt, ask which — the two are not recoverable from each
+other.
 
 ## 4. Report what cannot be undone
 

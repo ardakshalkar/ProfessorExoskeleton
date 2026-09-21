@@ -3363,6 +3363,13 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         label: "Canvas brief",
         hint: "One assessment's definition — title, points, dates, the brief. Never the marks",
       },
+      {
+        id: "update",
+        label: "Update everywhere",
+        hint:
+          "Every destination this run has already been published to, and no new ones. " +
+          "An announcement is not among them: it cannot be re-derived, only corrected",
+      },
     ];
 
     /**
@@ -3377,6 +3384,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       telegram: "Send to the channel",
       homework: "Publish to GitHub",
       canvas: "Send to Canvas",
+      update: "Update every destination",
     };
 
     function PublishModal(props) {
@@ -3487,6 +3495,21 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                       state.message.length +
                         " / 4096 characters. This is sent as typed — the command composes nothing.",
                     ),
+                    // Off by default, and that is the safeguard rather than a
+                    // preference: a second announcement is the ordinary case,
+                    // and a press that silently rewrote the first would
+                    // destroy something students had already read.
+                    h(
+                      "label",
+                      { className: "pp-publishcount" },
+                      h("input", {
+                        type: "checkbox",
+                        checked: state.edit === true,
+                        disabled: busy,
+                        onChange: (event) => props.setField("edit", event.target.checked),
+                      }),
+                      " correct the last announcement instead of posting a new one",
+                    ),
                   )
                 : null,
               h(
@@ -3516,7 +3539,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                           "resources only — and publish.",
                         onClick: () => props.run(true),
                       },
-                      CONFIRM_LABEL[state.target],
+                      state.target === "telegram" && state.edit
+                    ? "Correct the message in the channel"
+                    : CONFIRM_LABEL[state.target],
                     )
                   : null,
                 state.target === "homework"
@@ -3655,6 +3680,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           repo: "",
           group: "",
           message: "",
+          edit: false,
           phase: "idle",
           text: "",
           ...(extra || {}),
@@ -3837,6 +3863,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             repo: (publishing.repo || "").trim(),
             group: (publishing.group || "").trim(),
             message: publishing.message || "",
+            edit: publishing.edit === true,
             approver: (current.instructors || [])[0] || "",
             confirm,
           }),

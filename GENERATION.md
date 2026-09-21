@@ -346,6 +346,25 @@ the spec sent and the id returned, per assessment per course, and that is the
 entry `assignment-plan` reads to tell a change from drift. A second copy would
 be a second answer to "what did we send".
 
+**One press for everywhere it already went.** `publish update RUN` reads the
+ledger's destinations for the run and revisits each — the page, the Canvas
+briefs, the starter repositories — oldest first, which is the order they fell
+behind in. It never publishes anywhere for the first time: that set is what has
+already been sent, so an update cannot surprise a class with something they were
+never given. A destination that fails is reported and the loop goes on, because
+a fan-out that stopped at the first failure would leave some destinations
+current, some not, and no list of which. `runAssignment` throws rather than
+returning a code when a run names no Canvas course, so the loop catches throws
+too — a single publication re-throws, since there is nothing to carry on to.
+
+Telegram is excluded from that set by `UPDATABLE` and named in the plan rather
+than dropped: a page is derived from the course and an announcement is what the
+professor typed, so there is nothing to re-derive it from. What exists instead
+is `publish telegram --edit`, which edits the message already in the channel
+using the id the ledger kept — never the default, because a second announcement
+is the ordinary case and silently rewriting the first would destroy something
+students had read.
+
 Two consequences worth knowing:
 
 - **Publishing twice publishes twice.** `approve` never removes a draft, so a

@@ -5344,7 +5344,7 @@ const runApprove = (res, root, runId, approver, confirm) => {
  * nothing — including nothing in `courses/`.
  */
 const runPublish = (res, root, runId, target, body) => {
-  const TARGETS = ["page", "homework", "canvas", "telegram"];
+  const TARGETS = ["page", "homework", "canvas", "telegram", "update"];
   if (!TARGETS.includes(target)) {
     return sendJson(res, 200, { error: `${target} is not something this can publish.` });
   }
@@ -5379,7 +5379,7 @@ const runPublish = (res, root, runId, target, body) => {
   }
 
   const args = ["--experimental-strip-types", AINAR_CLI, "publish", target];
-  if (target === "page" || target === "telegram") args.push(runId);
+  if (target === "page" || target === "telegram" || target === "update") args.push(runId);
   else args.push(assessment, "--run", runId);
   args.push("--root", root);
   if (approver) args.push("--as", approver);
@@ -5389,6 +5389,11 @@ const runPublish = (res, root, runId, target, body) => {
   // would outlive the request, and what a professor is about to tell a class is
   // not something this server should leave on disk.
   if (target === "telegram") args.push("--message", message);
+  // Correcting the last announcement rather than posting a second one. Never
+  // the default, here or in the CLI: a professor sending their second
+  // announcement of the week means a second announcement, and a press that
+  // silently rewrote the first would destroy something students had read.
+  if (target === "telegram" && body.edit === true) args.push("--edit");
   if (confirm) args.push("--confirm");
 
   execFile(
@@ -5406,10 +5411,13 @@ const runPublish = (res, root, runId, target, body) => {
         // it as a shell argument makes a ten-line announcement unreadable.
         command:
           `bin/ainar publish ${target} ` +
-          (target === "page" || target === "telegram" ? runId : `${assessment} --run ${runId}`) +
+          (target === "page" || target === "telegram" || target === "update"
+            ? runId
+            : `${assessment} --run ${runId}`) +
           (repo ? ` --repo ${repo}` : "") +
           (group ? ` --group ${group}` : "") +
           (target === "telegram" ? " --message …" : "") +
+          (target === "telegram" && body.edit === true ? " --edit" : "") +
           (confirm ? " --confirm" : ""),
         output: [stdout, stderr].filter(Boolean).join("\n").trim(),
       });

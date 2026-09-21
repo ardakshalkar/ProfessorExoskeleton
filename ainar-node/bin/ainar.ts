@@ -125,9 +125,13 @@ import {
   // different list of a different kind of thing.
   TARGETS as PUBLISH_TARGETS,
   type Target,
+  announcementDigest,
   announcementText,
   checkAnnouncement,
   describePublication,
+  destinations,
+  editAnnouncement,
+  isUpdate,
   materialChecksums,
   pagePlan,
   outstanding,
@@ -190,6 +194,9 @@ const BOOLEAN_FLAGS = new Set([
   // of this list it swallows whatever follows it — so `--private` written
   // before the assessment id loses the assessment id.
   "private",
+  // `publish telegram --edit`: correct the last announcement rather than
+  // posting a second one.
+  "edit",
   "quiet",
   "overwrite-drift",
   "summary",
@@ -1097,20 +1104,28 @@ try {
       const target = (rest[0] ?? "") as Target;
       if (!PUBLISH_TARGETS.includes(target)) {
         console.error(
-          "usage: publish {page|homework|canvas|telegram} … [--confirm]\n" +
+          "usage: publish {page|homework|canvas|telegram|update} … [--confirm]\n" +
             "  publish page RUN [--as USER] [--out DIR] [--template T] [--structure S]\n" +
             "  publish homework ASSESSMENT [--run RUN] [--repo owner/name] [--private]\n" +
             "  publish canvas ASSESSMENT --run RUN [--group G] [--overwrite-drift]\n" +
-            "  publish telegram RUN --message TEXT | --message-file PATH [--chat-id C]\n\n" +
+            "  publish telegram RUN --message TEXT | --message-file PATH [--chat-id C] [--edit]\n" +
+            "  publish update RUN\n\n" +
             "Without --confirm each of these reads and prints what it would do.\n" +
             "With it, the drafted documents and resources the publication needs are\n" +
-            "promoted first — never an evaluation, which is `ainar approve` and yours.",
+            "promoted first — never an evaluation, which is `ainar approve` and yours.\n\n" +
+            "`update` revisits every destination this run has already been published to,\n" +
+            "which the ledger knows and nothing else does. It never publishes anywhere\n" +
+            "for the first time. `telegram --edit` corrects the last announcement in the\n" +
+            "channel instead of posting a second one.",
         );
         process.exit(1);
       }
 
       const confirm = args.includes("--confirm");
-      const named = target === "page" || target === "telegram" ? rest[1] : (flag("run") ?? flag("course-version"));
+      const named =
+        target === "page" || target === "telegram" || target === "update"
+          ? rest[1]
+          : (flag("run") ?? flag("course-version"));
       const bundle = named ? forRun(named) : onlyCourse();
       const runId = named ?? soleRun(bundle);
       const run = runById(bundle).get(runId) as any;
@@ -1144,10 +1159,10 @@ try {
        * chose reaches Canvas. Every field the assignment path reads is named
        * here even where the answer is "nothing was asked for".
        */
-      const assignmentArgs = (subcommand: string, write: boolean) => ({
+      const assignmentArgs = (subcommand: string, write: boolean, assessment = rest[1] ?? null) => ({
         subcommand,
         run: runId,
-        assessment: rest[1] ?? null,
+        assessment,
         target: "canvas-csv",
         by: "sis-id" as const,
         source: null,
@@ -1192,7 +1207,8 @@ try {
       const ledger = Ledger.load(runId, flag("sync-dir"));
       // The scope of a publication: a page and an announcement are the run's,
       // a repository and a Canvas brief are one assessment's.
-      const scope = target === "page" || target === "telegram" ? runId : (rest[1] ?? "");
+      const scope =
+        target === "page" || target === "telegram" || target === "update" ? runId : (rest[1] ?? "");
       // Canvas keeps its history in `assignments` rather than in
       // `publications` — the spec it sent and the id Canvas returned, per
       // course — so the previous state is read from there and never written
@@ -1203,10 +1219,32 @@ try {
           where: `Canvas course ${entryKey.slice(scope.length + 1)}`,
           at: entry.at,
           reference: `assignment ${entry.canvas_assignment_id}`,
+          handle: entry.canvas_assignment_id,
           materials: {},
         }))
         .sort((left, right) => right.at.localeCompare(left.at))[0];
       const last = target === "canvas" ? (canvasLast ?? null) : ledger.lastPublication(target, scope);
+
+      const fanOut = destinations(ledger.publications, runId);
+
+      if (target === "update") {
+        if (!fanOut.updating.length) {
+          refusals.push(
+            "nothing has been published from this machine for this run yet, so there is " +
+              "nothing to update. Publish to a target once and this revisits it afterwards.",
+          );
+        }
+        for (const entry of fanOut.updating) {
+          const what = entry.target === "page" ? "" : ` (${entry.scope})`;
+          actions.push(`${entry.target}${what} — ${entry.where}, last sent ${entry.at}`);
+        }
+        for (const entry of fanOut.skipped) {
+          actions.push(
+            `NOT ${entry.target} — ${entry.where}. An announcement is what you typed, ` +
+              "and nothing in the record can re-derive it: `publish telegram … --edit`",
+          );
+        }
+      }
 
       if (target === "page") {
         const plan = pagePlan(bundle, runId, root, stale);
@@ -1268,8 +1306,13 @@ try {
       if (!confirm) {
         for (const line of publishPlan({ target, pending, actions, refusals })) out(line);
 
-        out("");
-        for (const line of describePublication(last, checksums, titles)) out(line);
+        // Not for an update: its own list already says when each destination
+        // was last sent, and "nothing has been published here before" about a
+        // mode rather than a place is a sentence about nothing.
+        if (!isUpdate(target)) {
+          out("");
+          for (const line of describePublication(last, checksums, titles)) out(line);
+        }
 
         if (!nothingChanged(found)) {
           out("");
@@ -1381,66 +1424,148 @@ try {
       // built from it would leave out the very deck this command just promoted.
       const published = named ? forRun(named) : onlyCourse();
 
-      let where = "";
-      let reference: string | null = null;
-      let sent: string[] = [];
+      /**
+       * One publication, performed and noted.
+       *
+       * A loop rather than a chain of `if`s because `update` runs several in a
+       * row, and the alternative is the same four blocks written twice. Each
+       * job reports its own outcome and the loop goes on: a fan-out that
+       * stopped at the first failure would leave the professor with some
+       * destinations current and some not, and no list of which.
+       */
+      const perform = async (job: { target: Target; scope: string }): Promise<number> => {
+        let where = "";
+        let reference: string | null = null;
+        let handle: string | null = null;
+        let sent: string[] = [];
+        let payload: string | undefined;
 
-      if (target === "page") {
-        const built = buildCoursePage(runId);
-        for (const line of built.lines) out(line);
-        where = within(root, resolve(flag("out") ?? join(root, "dist", "pages", runId)));
-        sent = built.published;
+        if (job.target === "page") {
+          const built = buildCoursePage(runId);
+          for (const line of built.lines) out(line);
+          where = within(root, resolve(flag("out") ?? join(root, "dist", "pages", runId)));
+          sent = built.published;
+        }
+        if (job.target === "homework") {
+          const result = await publishHomework(job.scope, true, out);
+          if (result.code) return result.code;
+          where = result.repo ?? "GitHub";
+          reference = result.url;
+          handle = result.repo;
+        }
+        if (job.target === "canvas") {
+          const code = await runLms(
+            assignmentArgs("assignment-push", true, job.scope),
+            published,
+            root,
+            { out: (line: string) => out(line) },
+          );
+          if (code) return code;
+          // Not recorded as a publication: `lms/ledger.ts` already writes an
+          // `assignments` entry per assessment per Canvas course, carrying the
+          // spec it sent and the id Canvas returned. That is the same fact, and
+          // it is the one `assignment-plan` reads to tell a change from drift.
+          // A second copy here would be a second answer to "what did we send".
+          where = "";
+        }
+        if (job.target === "telegram") {
+          const previous = ledger.lastPublication("telegram", job.scope);
+          const correcting = args.includes("--edit");
+          if (correcting && !previous?.handle) {
+            console.error(
+              "--edit corrects the last announcement, and this machine has not sent one " +
+                "to this run. Send it as a new message instead.",
+            );
+            return 1;
+          }
+          if (correcting) {
+            const result = await editAnnouncement(
+              telegramToken,
+              channelId,
+              previous!.handle!,
+              announcement!.text,
+              new FetchTransport(),
+            );
+            out(
+              result === "edited"
+                ? `edited message ${previous!.handle} in ${channelId} — students now read the new text`
+                : `message ${previous!.handle} already says exactly that; nothing was sent`,
+            );
+            where = channelId;
+            handle = previous!.handle;
+            reference = `message ${previous!.handle}`;
+          } else {
+            const messageId = await sendAnnouncement(
+              telegramToken,
+              channelId,
+              announcement!.text,
+              new FetchTransport(),
+            );
+            out(`sent message ${messageId} to ${channelId}`);
+            out("A Telegram message cannot be recalled by this command, or by any other.");
+            where = channelId;
+            handle = String(messageId);
+            reference = `message ${messageId}`;
+          }
+          payload = announcementDigest(announcement!.text);
+        }
+
+        // Written last, and only for a publication that came back. The ledger
+        // is what the NEXT plan reads to say "last published Tuesday, and
+        // these three have changed since" instead of describing every
+        // publication as though it were the first.
+        if (where) {
+          ledger.recordPublication(job.target, job.scope, {
+            where,
+            at: decidedAt(run?.timezone),
+            reference,
+            handle,
+            // For a page, the materials it actually copied; for the rest, the
+            // materials of the run as they stood, which is what a later "has
+            // anything changed" is asked about.
+            materials: Object.fromEntries(
+              (job.target === "page" ? sent : [...checksums.keys()])
+                .filter((id) => checksums.has(id))
+                .map((id) => [id, checksums.get(id)!]),
+            ),
+            ...(payload ? { payload } : {}),
+          });
+        }
+        return 0;
+      };
+
+      const jobs = isUpdate(target)
+        ? fanOut.updating.map((entry) => ({ target: entry.target, scope: entry.scope }))
+        : [{ target, scope }];
+
+      let failures = 0;
+      for (const job of jobs) {
+        if (jobs.length > 1) out(`--- ${job.target}${job.target === "page" ? "" : ` ${job.scope}`}`);
+        // A throw is caught per job for the same reason a non-zero code is
+        // tolerated: `runAssignment` throws when a run names no Canvas course,
+        // and one misconfigured destination must not stop the three that are
+        // fine. A single publication re-throws, because there is nothing to
+        // carry on to and the stack is worth seeing.
+        try {
+          const code = await perform(job);
+          if (code) {
+            failures += 1;
+            console.error(`${job.target} ${job.scope} did not go out (exit ${code}).`);
+          }
+        } catch (error) {
+          if (jobs.length === 1) throw error;
+          failures += 1;
+          console.error(`${job.target} ${job.scope} did not go out: ${(error as Error).message}`);
+        }
       }
-      if (target === "homework") {
-        const result = await publishHomework(rest[1]!, true, out);
-        if (result.code) process.exit(result.code);
-        where = result.repo ?? "GitHub";
-        reference = result.url;
-      }
-      if (target === "canvas") {
-        const code = await runLms(assignmentArgs("assignment-push", true), published, root, {
-          out: (line: string) => out(line),
-        });
-        if (code) process.exit(code);
-        // Not recorded as a publication: `lms/ledger.ts` already writes an
-        // `assignments` entry per assessment per Canvas course, carrying the
-        // spec it sent and the id Canvas returned. That is the same fact, and
-        // it is the one `assignment-plan` reads to tell a change from drift.
-        // A second copy here would be a second answer to "what did we send".
-        where = "";
-      }
-      if (target === "telegram") {
-        const messageId = await sendAnnouncement(
-          telegramToken,
-          channelId,
-          announcement!.text,
-          new FetchTransport(),
+
+      out(`noted in ${within(root, ledger.save())}`);
+      if (failures) {
+        console.error(
+          `\n${failures} of ${jobs.length} destination(s) did not go out. The rest did, and ` +
+            "the ledger records which — running this again retries only what is behind.",
         );
-        out(`sent message ${messageId} to ${channelId}`);
-        out("A Telegram message cannot be recalled by this command, or by any other.");
-        where = channelId;
-        reference = `message ${messageId}`;
-      }
-
-      // Written last, and only for a publication that came back. The ledger is
-      // what the NEXT plan reads to say "last published Tuesday, and these
-      // three have changed since" instead of describing every publication as
-      // though it were the first.
-      if (where) {
-        ledger.recordPublication(target, scope, {
-          where,
-          at: decidedAt(run?.timezone),
-          reference,
-          // For a page, the materials it actually copied; for the rest, the
-          // materials of the run as they stood, which is what a later "has
-          // anything changed" is asked about.
-          materials: Object.fromEntries(
-            (target === "page" ? sent : [...checksums.keys()])
-              .filter((id) => checksums.has(id))
-              .map((id) => [id, checksums.get(id)!]),
-          ),
-        });
-        out(`noted in ${within(root, ledger.save())}`);
+        process.exit(1);
       }
       break;
     }

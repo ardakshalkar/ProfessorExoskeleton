@@ -122,6 +122,7 @@ bin/ainar publish page CSS-4008-2026-FALL             # the plan: writes nothing
 bin/ainar publish page CSS-4008-2026-FALL --confirm   # promote the materials, then build
 bin/ainar publish telegram CSS-4008-2026-FALL --message-file note.txt
 bin/ainar publish canvas ASSESSMENT-04 --run CSS-4008-2026-FALL
+bin/ainar publish update CSS-4008-2026-FALL           # everywhere it already went
 ```
 
 Four targets, one grammar, two presses each. The plan names the drafted
@@ -216,6 +217,10 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
       published Tuesday, and these three have changed since* rather than
       describing every publication as the first — in the ledger that already
       holds what was sent to the gradebook, outside the repository
+- [x] `publish update RUN` revisits every destination that run has already been
+      published to and never a new one; a failure on one is reported and the
+      rest still go. `publish telegram --edit` corrects the announcement in the
+      channel instead of posting a second one
 - [x] `ainar new course` / `new run` scaffolding that validates as written
 - [x] One run of one course per workspace — no `versions/<TERM>/` level, with
       `ainar migrate-layout` to move an old tree and `ainar archive-run` to
