@@ -309,6 +309,13 @@ held back rather than published as a picture of the old text, and keeps being
 reported until it is rebuilt. `ainar-node/src/freshness.ts` has the two rules
 that were found by running it.
 
+**And it knows whether this is the first time.** The plan opens with
+`Last published … to …` and the materials that have moved since, or says that
+nothing has been published here before. That memory is the run's sync ledger in
+`~/.ainar/sync/`, which is where `lms push` already keeps what it sent — the
+pane reads none of it directly; it is in the CLI's output, like everything else
+in this dialog.
+
 What it does not promote, and cannot be made to: a drafted evaluation, signal or
 intervention. Those come back in the plan as `left alone`, and `ainar approve`
 remains the professor's. See `runPublish` in `index.js`, and

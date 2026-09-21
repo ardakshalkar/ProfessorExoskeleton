@@ -30,6 +30,11 @@ const SAMPLE = fileURLToPath(new URL("../workspace", import.meta.url));
 const RUN = "CSS-4008-2026-FALL";
 const COURSE = "CSS-4008";
 
+// The publish ledger lives outside the workspace — `~/.ainar/sync/` — so a
+// test that publishes would otherwise write into the professor's own. The CLI
+// this route spawns inherits the environment, and `syncDir` reads this.
+process.env.AINAR_SYNC_DIR = mkdtempSync(join(tmpdir(), "pane-publish-sync-"));
+
 /** A workspace of its own, with one drafted deck and one drafted grade in it. */
 const workspace = () => {
   const root = mkdtempSync(join(tmpdir(), "pane-publish-"));

@@ -77,6 +77,13 @@ Name the target, the run, and the three things they cannot see from the command
 line: what would be promoted, what would be held back, and who it reaches.
 For Telegram, show the message exactly as it will be sent, on its own.
 
+**Say whether this is a first publication or an update.** The plan's
+`Last published …` line answers it, and the difference matters to them: a first
+publication is a decision about whether students see this at all, while an
+update is a decision about replacing something they may already have read. If
+it lists what has changed since, read that list — it is the shortest honest
+answer to "what am I actually sending".
+
 Then stop. Wait for the verb.
 
 ## 3. Publish

@@ -212,6 +212,10 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
       record is brought back into line with the file and its version goes up,
       and a rendering whose source changed is held back instead of going out as
       a picture of the old text
+- [x] A publication remembers where it went. The second plan says *last
+      published Tuesday, and these three have changed since* rather than
+      describing every publication as the first — in the ledger that already
+      holds what was sent to the gradebook, outside the repository
 - [x] `ainar new course` / `new run` scaffolding that validates as written
 - [x] One run of one course per workspace — no `versions/<TERM>/` level, with
       `ainar migrate-layout` to move an old tree and `ainar archive-run` to

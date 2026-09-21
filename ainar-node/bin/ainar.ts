@@ -127,6 +127,8 @@ import {
   type Target,
   announcementText,
   checkAnnouncement,
+  describePublication,
+  materialChecksums,
   pagePlan,
   outstanding,
   pendingMaterials,
@@ -137,11 +139,13 @@ import {
 import { FetchTransport } from "../src/lms/http.ts";
 import {
   describeFreshness,
+  fingerprints,
   freshness,
   heldBackForStaleness,
   nothingChanged,
   restamp,
 } from "../src/freshness.ts";
+import { Ledger } from "../src/lms/ledger.ts";
 import { Workspace } from "../src/workspace.ts";
 
 
@@ -499,7 +503,7 @@ const readEnrollments = (path: string): Enrollment[] => {
  * build after promoting the materials it needs, and a second copy of it would
  * be a second answer to "what may a student be shown".
  */
-const buildCoursePage = (runId: string): string[] => {
+const buildCoursePage = (runId: string): { lines: string[]; published: string[] } => {
   const lines: string[] = [];
   const say = (line: string): void => void lines.push(line);
   const bundle = forRun(runId);
@@ -565,7 +569,10 @@ const buildCoursePage = (runId: string): string[] => {
     for (const entry of scanned.unchecked) say(`    ${entry}`);
   }
   say("Student-safe: the outline carries no enrollment, submission or score.");
-  return lines;
+  // The identifiers as well as the prose: `publish` writes what went out into
+  // the ledger, and "what went out" is exactly this list rather than a second
+  // guess at it.
+  return { lines, published: materials.map((material) => material.documentId) };
 };
 
 /**
@@ -576,11 +583,20 @@ const buildCoursePage = (runId: string): string[] => {
  * nobody named, an answer key inside the folder — are the ones that must still
  * hold when the caller is a button.
  */
+interface HomeworkOutcome {
+  /** Non-zero when it refused; the caller exits with it. */
+  code: number;
+  /** `owner/name`, once GitHub has been asked. */
+  repo: string | null;
+  /** The repository's URL, when a push returned one. */
+  url: string | null;
+}
+
 const publishHomework = async (
   assessmentId: string,
   confirm: boolean,
   say: (line: string) => void,
-): Promise<number> => {
+): Promise<HomeworkOutcome> => {
   const asked = flag("course-version") ?? flag("run");
   const bundle = asked ? forRun(asked) : onlyCourse();
   const resolvedRun = asked ?? soleRun(bundle);
@@ -600,7 +616,7 @@ const publishHomework = async (
   });
   if (!auth.github) {
     console.error(auth.refusal ?? "No way to reach GitHub.");
-    return 1;
+    return { code: 1, repo: null, url: null };
   }
   for (const note of auth.notes) say(`note: ${note}`);
 
@@ -630,15 +646,15 @@ const publishHomework = async (
     // "publish now" button off the back of this must not offer it for a plan
     // that cannot run, and "did it refuse" is not something a reader of the
     // text should have to work out by looking for a word in it.
-    if (plan.refusals.length) return 1;
+    if (plan.refusals.length) return { code: 1, repo: plan.repo ?? null, url: null };
     say("\nRun it again with --confirm to publish.");
-    return 0;
+    return { code: 0, repo: plan.repo ?? null, url: null };
   }
 
   const result = await publish({ ...shared, message: flag("message") });
   if (result.plan.refusals.length) {
     for (const line of describePlan(result.plan)) console.error(`  ${line}`);
-    return 1;
+    return { code: 1, repo: result.plan.repo ?? null, url: null };
   }
   for (const line of result.output) say(line);
   if (result.created) say(`\nCreated ${result.plan.repo}, private.`);
@@ -655,7 +671,7 @@ const publishHomework = async (
     `\nRecord it on the assessment, if it is not there yet:\n` +
       `  extensions.github.template_repo: ${result.plan.repo}`,
   );
-  return 0;
+  return { code: 0, repo: result.plan.repo ?? null, url: result.url ?? null };
 };
 
 try {
@@ -1058,7 +1074,7 @@ try {
     }
 
     case "page": {
-      for (const line of buildCoursePage(rest[0]!)) out(line);
+      for (const line of buildCoursePage(rest[0]!).lines) out(line);
       break;
     }
 
@@ -1167,6 +1183,31 @@ try {
       const found = freshness(bundle, runId, root);
       const stale = heldBackForStaleness(found);
 
+      // And has it been sent before? The record cannot say — it holds what the
+      // course IS, not what left the machine — so this is the ledger's, beside
+      // the one `lms push` keeps, in the same file for the same run.
+      const prints = fingerprints(bundle, runId, root);
+      const checksums = materialChecksums(prints);
+      const titles = new Map(prints.map((print) => [print.documentId, print.title]));
+      const ledger = Ledger.load(runId, flag("sync-dir"));
+      // The scope of a publication: a page and an announcement are the run's,
+      // a repository and a Canvas brief are one assessment's.
+      const scope = target === "page" || target === "telegram" ? runId : (rest[1] ?? "");
+      // Canvas keeps its history in `assignments` rather than in
+      // `publications` — the spec it sent and the id Canvas returned, per
+      // course — so the previous state is read from there and never written
+      // twice. The newest of them is the one to describe.
+      const canvasLast = Object.entries(ledger.assignments)
+        .filter(([entryKey]) => entryKey.startsWith(`${scope}|`))
+        .map(([entryKey, entry]) => ({
+          where: `Canvas course ${entryKey.slice(scope.length + 1)}`,
+          at: entry.at,
+          reference: `assignment ${entry.canvas_assignment_id}`,
+          materials: {},
+        }))
+        .sort((left, right) => right.at.localeCompare(left.at))[0];
+      const last = target === "canvas" ? (canvasLast ?? null) : ledger.lastPublication(target, scope);
+
       if (target === "page") {
         const plan = pagePlan(bundle, runId, root, stale);
         const site = resolve(flag("out") ?? join(root, "dist", "pages", runId));
@@ -1227,6 +1268,9 @@ try {
       if (!confirm) {
         for (const line of publishPlan({ target, pending, actions, refusals })) out(line);
 
+        out("");
+        for (const line of describePublication(last, checksums, titles)) out(line);
+
         if (!nothingChanged(found)) {
           out("");
           out("Changed since it was last recorded:");
@@ -1241,7 +1285,7 @@ try {
         // Canvas" is not knowable from this side of the wire.
         if (target === "homework") {
           out("");
-          const code = await publishHomework(rest[1]!, false, out);
+          const { code } = await publishHomework(rest[1]!, false, out);
           if (code) process.exit(code);
         }
         if (target === "canvas") {
@@ -1337,18 +1381,33 @@ try {
       // built from it would leave out the very deck this command just promoted.
       const published = named ? forRun(named) : onlyCourse();
 
+      let where = "";
+      let reference: string | null = null;
+      let sent: string[] = [];
+
       if (target === "page") {
-        for (const line of buildCoursePage(runId)) out(line);
+        const built = buildCoursePage(runId);
+        for (const line of built.lines) out(line);
+        where = within(root, resolve(flag("out") ?? join(root, "dist", "pages", runId)));
+        sent = built.published;
       }
       if (target === "homework") {
-        const code = await publishHomework(rest[1]!, true, out);
-        if (code) process.exit(code);
+        const result = await publishHomework(rest[1]!, true, out);
+        if (result.code) process.exit(result.code);
+        where = result.repo ?? "GitHub";
+        reference = result.url;
       }
       if (target === "canvas") {
         const code = await runLms(assignmentArgs("assignment-push", true), published, root, {
           out: (line: string) => out(line),
         });
         if (code) process.exit(code);
+        // Not recorded as a publication: `lms/ledger.ts` already writes an
+        // `assignments` entry per assessment per Canvas course, carrying the
+        // spec it sent and the id Canvas returned. That is the same fact, and
+        // it is the one `assignment-plan` reads to tell a change from drift.
+        // A second copy here would be a second answer to "what did we send".
+        where = "";
       }
       if (target === "telegram") {
         const messageId = await sendAnnouncement(
@@ -1359,6 +1418,29 @@ try {
         );
         out(`sent message ${messageId} to ${channelId}`);
         out("A Telegram message cannot be recalled by this command, or by any other.");
+        where = channelId;
+        reference = `message ${messageId}`;
+      }
+
+      // Written last, and only for a publication that came back. The ledger is
+      // what the NEXT plan reads to say "last published Tuesday, and these
+      // three have changed since" instead of describing every publication as
+      // though it were the first.
+      if (where) {
+        ledger.recordPublication(target, scope, {
+          where,
+          at: decidedAt(run?.timezone),
+          reference,
+          // For a page, the materials it actually copied; for the rest, the
+          // materials of the run as they stood, which is what a later "has
+          // anything changed" is asked about.
+          materials: Object.fromEntries(
+            (target === "page" ? sent : [...checksums.keys()])
+              .filter((id) => checksums.has(id))
+              .map((id) => [id, checksums.get(id)!]),
+          ),
+        });
+        out(`noted in ${within(root, ledger.save())}`);
       }
       break;
     }
@@ -1948,7 +2030,7 @@ try {
       }
       const assessmentId = rest[1];
       if (!assessmentId) throw new Error("usage: homework publish ASSESSMENT_ID [--repo owner/name]");
-      const code = await publishHomework(assessmentId, args.includes("--confirm"), out);
+      const { code } = await publishHomework(assessmentId, args.includes("--confirm"), out);
       if (code) process.exit(code);
       break;
     }

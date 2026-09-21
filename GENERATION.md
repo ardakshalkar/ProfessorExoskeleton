@@ -323,6 +323,29 @@ flow sequences, so stamping two checksums rewrote twenty-four lines of a
 professor's file. The line-level writer changes the lines it means to and parses
 the result to prove it landed.
 
+**And what was sent, which the record cannot hold.** The record says what the
+course *is*; it has no field for what left the machine, when, or to which
+channel — so a page rebuilt from an unchanged record is indistinguishable from
+a page nobody ever built. `Ledger` in `src/lms/ledger.ts` gained a fifth
+section, `publications`, beside the gradebook values and the Canvas assignment
+specs it already keeps for the same run in the same file. One entry per
+destination — the last, not a history — carrying where it went, when, what came
+back, and the checksum of every material that went with it:
+
+```
+  Last published 2026-09-19T14:02:00+05:00 to dist/pages/CSS-4008-2026-FALL.
+    1 thing(s) have changed since:
+      DOC-4410 changed since then — Model evaluation and overfitting — slides
+```
+
+Checksum against checksum, so the answer names the files rather than saying
+that something moved. It is outside the repository for the reason the rest of
+that file is: this is what **one machine** sent, not a fact about the course.
+Canvas is the exception and writes nothing new — `assignments` already records
+the spec sent and the id returned, per assessment per course, and that is the
+entry `assignment-plan` reads to tell a change from drift. A second copy would
+be a second answer to "what did we send".
+
 Two consequences worth knowing:
 
 - **Publishing twice publishes twice.** `approve` never removes a draft, so a

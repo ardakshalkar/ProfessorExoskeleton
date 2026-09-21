@@ -180,6 +180,20 @@ Four things it can publish:
 Before anything is copied to a public page it is scanned for answers, and a file
 that carries one is refused. There is no flag to turn that off.
 
+**It remembers where things went.** The second time you publish something, the
+plan does not pretend to be the first:
+
+```
+Last published 2026-09-19T14:02:00+05:00 to dist/pages/CSS-4008-2026-FALL.
+  1 thing(s) have changed since:
+    DOC-4410 changed since then — Model evaluation and overfitting — slides
+```
+
+So *publish* and *update* stop being the same word. That memory lives outside
+the course, in `~/.ainar/sync/`, beside the one that already remembers what was
+sent to the gradebook — it is what **this machine** sent, not a fact about the
+course, so it does not belong in the files you commit.
+
 ## Fix a typo and publish again
 
 You do not need a new id, a new version number, or any of the machinery. Open

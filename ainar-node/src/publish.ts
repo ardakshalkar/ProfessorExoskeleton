@@ -34,6 +34,8 @@ import { readFileSync } from "node:fs";
 import { promoteIdentifier } from "./approve.ts";
 import type { CourseBundle } from "./bundle.ts";
 import { type Drafted, loadDrafts } from "./drafts.ts";
+import type { Fingerprint } from "./freshness.ts";
+import type { Publication } from "./lms/ledger.ts";
 import { type Transport, TransportError, json } from "./lms/http.ts";
 import { IssueList, describe } from "./issues.ts";
 import { publishable } from "./page.ts";
@@ -197,6 +199,57 @@ export const pagePlan = (
     tally,
   };
 };
+
+// --------------------------------------------------------------------------
+// What was sent last time
+// --------------------------------------------------------------------------
+
+/**
+ * The previous publication, described — and what has moved since it.
+ *
+ * This is the difference between *publish* and *update*, and it is a question
+ * nothing in the workspace could answer before: the record says what the course
+ * is, never what was sent or when. A page rebuilt from an unchanged record
+ * looks exactly like a page nobody ever built.
+ *
+ * The comparison is checksum against checksum — what went out, against what is
+ * on disk now — so the answer names the three files that moved rather than
+ * saying that something did. A material added since the last publication counts
+ * as moved; one removed from the course is reported as gone, because a page
+ * still carrying it is the version students are reading.
+ */
+export const describePublication = (
+  last: Publication | null,
+  now: Map<string, string>,
+  titles: Map<string, string>,
+): string[] => {
+  if (last === null) return ["Nothing has been published here before."];
+
+  const lines = [`Last published ${last.at} to ${last.where}.`];
+  if (last.reference) lines.push(`  it came back as ${last.reference}`);
+
+  const moved: string[] = [];
+  for (const [id, checksum] of now) {
+    const before = last.materials[id];
+    if (before === undefined) moved.push(`${id} is new since then — ${titles.get(id) ?? ""}`.trim());
+    else if (before !== checksum) moved.push(`${id} changed since then — ${titles.get(id) ?? ""}`.trim());
+  }
+  for (const id of Object.keys(last.materials)) {
+    if (!now.has(id)) moved.push(`${id} was published then and is not in the course now`);
+  }
+
+  if (!moved.length) {
+    lines.push("  nothing has changed since; publishing again sends the same thing");
+    return lines;
+  }
+  lines.push(`  ${moved.length} thing(s) have changed since:`);
+  for (const line of moved.sort()) lines.push(`    ${line}`);
+  return lines;
+};
+
+/** The materials as they are now, for the ledger and for the comparison above. */
+export const materialChecksums = (prints: Fingerprint[]): Map<string, string> =>
+  new Map(prints.map((print) => [print.documentId, print.actual]));
 
 // --------------------------------------------------------------------------
 // Telegram

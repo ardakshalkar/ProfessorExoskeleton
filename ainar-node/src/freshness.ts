@@ -125,16 +125,21 @@ const digest = (contents: Buffer): string => "sha256:" + createHash("sha256").up
  * to read; a key pointing at a file that is not there is already reported by
  * whoever is about to publish it, and is skipped rather than reported twice.
  */
-export const freshness = (
+/**
+ * Every repository-held material of a run, as it is on disk right now.
+ *
+ * Exported because two questions need it and they are different questions:
+ * `freshness` asks whether the RECORD still describes the file, and the publish
+ * ledger asks whether the file has moved since it was last SENT somewhere.
+ * Computing the digests twice would be the same walk done twice and, worse, two
+ * places that could disagree about what a checksum of a material is.
+ */
+export const fingerprints = (
   bundle: CourseBundle,
   courseVersionId: string,
   root: string,
-): Freshness => {
-  const found: Freshness = { changed: [], drifted: [], rebuilt: [], stale: [], unstamped: [] };
+): Fingerprint[] => {
   const prints: Fingerprint[] = [];
-  /** Renderings whose own bytes moved. Which of two things that means is decided below. */
-  const edited: Fingerprint[] = [];
-
   for (const document of bundle.documents as any[]) {
     if (document.course_version_id !== courseVersionId) continue;
     const key = document.storage_key as string;
@@ -149,21 +154,35 @@ export const freshness = (
       continue;
     }
 
-    const recorded = typeof document.checksum === "string" ? document.checksum : null;
-    const print: Fingerprint = {
+    prints.push({
       documentId: document.document_id as string,
       title: (document.title as string) ?? "(untitled)",
       storageKey: key,
-      recorded,
+      recorded: typeof document.checksum === "string" ? document.checksum : null,
       actual: digest(contents),
       size: contents.length,
       derived: DERIVED_FORMATS.has(extensionOf(key)),
       version: Number.isFinite(Number(document.version)) ? Number(document.version) : 1,
-    };
-    prints.push(print);
+    });
+  }
+  return prints;
+};
 
-    if (recorded === null) found.unstamped.push(print);
-    else if (recorded !== print.actual) (print.derived ? edited : found.changed).push(print);
+export const freshness = (
+  bundle: CourseBundle,
+  courseVersionId: string,
+  root: string,
+): Freshness => {
+  const found: Freshness = { changed: [], drifted: [], rebuilt: [], stale: [], unstamped: [] };
+  const prints = fingerprints(bundle, courseVersionId, root);
+  /** Renderings whose own bytes moved. Which of two things that means is decided below. */
+  const edited: Fingerprint[] = [];
+
+  for (const print of prints) {
+    if (print.recorded === null) found.unstamped.push(print);
+    else if (print.recorded !== print.actual) {
+      (print.derived ? edited : found.changed).push(print);
+    }
   }
 
   // A rendering is stale when the thing it was rendered FROM changed, whatever
