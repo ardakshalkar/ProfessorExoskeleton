@@ -40,18 +40,20 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 /**
- * 2 added `content`, 3 added `pushed`, 4 added `assignments`. Older files load
- * unchanged, and a file written by 4 is read by 3 with the assignment half
- * ignored — which costs one spurious `drift` report on the first push after a
- * downgrade, and loses nothing.
+ * 2 added `content`, 3 added `pushed`, 4 added `assignments`, 5 added
+ * `publications`. Older files load unchanged, and a file written by 5 is read
+ * by 4 with the publication half ignored — which costs a publication being
+ * described as the first one after a downgrade, and loses nothing.
  */
-export const STORE_VERSION = 4;
+export const STORE_VERSION = 5;
 
 const HEADER_NOTE =
-  "Prepared gradebook values, written by `ainar lms push`, and the Notion " +
-  "content last seen by `ainar notion pull`. 'prepared' means a file was " +
-  "produced — not that anyone uploaded it. Outside the repository on purpose: " +
-  "the gradebook half holds values that belong to the LMS and the SIS.";
+  "One course run's state outside this workspace: gradebook values prepared by " +
+  "`ainar lms push`, the Notion content last seen by `ainar notion pull`, and " +
+  "what `ainar publish` last sent where. 'prepared' means a file was produced — " +
+  "not that anyone uploaded it. Outside the repository on purpose: the gradebook " +
+  "half holds values that belong to the LMS and the SIS, and the publication " +
+  "half is what THIS machine sent rather than a fact about the course.";
 
 export const syncDir = (explicit?: string | null): string => {
   if (explicit) return resolve(explicit);
@@ -95,6 +97,51 @@ export interface AssignmentEntry {
   at: string;
 }
 
+/**
+ * What `ainar publish` last sent to one destination.
+ *
+ * The question it answers is the one a professor asks with their hand on the
+ * button: *have I already published this, and has anything changed since?*
+ * Nothing in the workspace could answer it. The record says what the course IS;
+ * it does not say what was sent, when, or to which channel — and a course page
+ * rebuilt from an unchanged record is indistinguishable from one never built.
+ *
+ * `materials` is the half that makes "since then" possible: the checksum of
+ * every file that went out, so the next plan can name the three that moved
+ * instead of saying that something did. It is checksums and not bytes, so this
+ * file stays small and holds no course content.
+ *
+ * Last-per-destination rather than a history, the way `assignments` is. A log
+ * of every publication is a different feature and would want pruning; what the
+ * plan needs is the previous state, and that is one entry.
+ */
+export interface Publication {
+  /** Where it went, in the words the plan prints: a path, a channel, a repository. */
+  where: string;
+  /** When, in the run's own timezone — the stamp `approve` uses. */
+  at: string;
+  /** What the far end gave back, for a person to read: `message 4471`. */
+  reference: string | null;
+  /**
+   * The same thing for a machine: `4471`, `owner/name`.
+   *
+   * Two fields rather than one because the alternative is parsing a sentence
+   * this file wrote — and the first thing that needs the handle is editing a
+   * Telegram message in place, where getting the id wrong means editing
+   * somebody else's post or none at all.
+   */
+  handle: string | null;
+  /** `document_id` to the checksum that went out, for the materials that did. */
+  materials: Record<string, string>;
+  /**
+   * A checksum of the payload, for a target whose content is text rather than
+   * files. An announcement has no source in the record — it is what the
+   * professor typed — so this is the only way a later plan can say whether it
+   * has changed.
+   */
+  payload?: string;
+}
+
 /** One run's sync state: gradebook values prepared, plus whatever else it holds. */
 export class Ledger {
   path: string;
@@ -102,6 +149,7 @@ export class Ledger {
   content: Record<string, unknown> = {};
   pushed: Record<string, unknown> = {};
   assignments: Record<string, AssignmentEntry> = {};
+  publications: Record<string, Publication> = {};
 
   constructor(path: string) {
     this.path = path;
@@ -120,6 +168,7 @@ export class Ledger {
     ledger.content = payload.content ?? {};
     ledger.pushed = payload.pushed ?? {};
     ledger.assignments = payload.assignments ?? {};
+    ledger.publications = payload.publications ?? {};
     return ledger;
   }
 
@@ -193,6 +242,26 @@ export class Ledger {
     };
   }
 
+  /**
+   * What was last sent to one destination, or null if nothing ever was.
+   *
+   * `scope` is what the target publishes: the run, for a page or an
+   * announcement, and the assessment for a repository. Keyed together because
+   * one run publishes one page and many homework repositories.
+   */
+  lastPublication(target: string, scope: string): Publication | null {
+    return this.publications[`${target}|${scope}`] ?? null;
+  }
+
+  /** Note what a publication sent, after it came back. */
+  recordPublication(
+    target: string,
+    scope: string,
+    entry: Publication,
+  ): void {
+    this.publications[`${target}|${scope}`] = entry;
+  }
+
   save(): string {
     mkdirSync(dirname(this.path), { recursive: true });
     const payload = {
@@ -201,6 +270,7 @@ export class Ledger {
       content: this.content,
       entries: this.entries,
       assignments: this.assignments,
+      publications: this.publications,
       pushed: this.pushed,
     };
     writeFileSync(this.path, sortedJson(payload) + "\n", { encoding: "utf-8" });

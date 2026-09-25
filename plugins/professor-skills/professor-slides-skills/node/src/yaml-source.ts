@@ -23,9 +23,9 @@ const COLLECTIONS: Record<string, string[]> = {
   concepts: ["concepts.yaml", "concepts/*.yaml"],
   concept_edges: ["concept-edges.yaml"],
   modules: ["modules.yaml", "modules/*.yaml"],
-  versions: ["versions/*/version.yaml"],
-  activities: ["versions/*/activities.yaml", "versions/*/activities/*.yaml"],
-  resources: ["versions/*/resources.yaml", "versions/*/resources/*.yaml"],
+  versions: ["version.yaml"],
+  activities: ["activities.yaml", "activities/*.yaml"],
+  resources: ["resources.yaml", "resources/*.yaml"],
 };
 
 const isDirectory = (path: string): boolean => {
@@ -118,7 +118,7 @@ export function readCourseDirectory(courseDirectory: string): DirectoryRead {
             collected.push(...document);
           } else if (document && typeof document === "object") {
             const record = document as Record<string, unknown>;
-            // `versions/*/version.yaml` is one record per file; every other
+            // `version.yaml` is one record per file; every other
             // file wraps its rows in a key named after the collection.
             const wrapped = record[name];
             if (Array.isArray(wrapped)) collected.push(...wrapped);

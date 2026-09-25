@@ -19,6 +19,7 @@ import {
   CONTENT_WIDTH,
   LAYOUT,
   checkContract,
+  checkSlides,
   columnWidths,
   creditFor,
   measureDeck,
@@ -26,6 +27,7 @@ import {
   slideTitle,
   splitSlides,
   textHeight,
+  type Block,
   type Plan,
 } from "../src/deck.ts";
 
@@ -248,4 +250,64 @@ test("the fit check and the renderer measure with one set of numbers", () => {
   assert.ok(!/const height = textHeight\(/.test(source), "render-deck computes a height itself");
   assert.ok(!/const SLIDE_W = 13\.33/.test(source), "render-deck carries its own page width");
   assert.ok(source.includes("blockHeight"), "render-deck should call the shared measurement");
+});
+
+// --- what the contract cannot see -------------------------------------------
+// Ported from `professor-slides-skills/node/src/check.ts` on 2026-09-16. Each
+// of these fires on a deck the contract calls perfectly well-formed, which is
+// the only reason they are worth carrying.
+
+const oneSlide = (markdown: string): Block[][] => splitSlides(markdown).map(parseBlocks);
+
+test("a picture with no alt text stops the render", () => {
+  const problems = checkSlides(oneSlide("## Figure\n\n![](chart.svg)"), null);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]!.severity, "error");
+  assert.match(problems[0]!.message, /has no alt text/);
+});
+
+test("a figure in a subdirectory stops the render", () => {
+  // It breaks silently: the deck builds on the machine that has the folder and
+  // is missing a picture on the one that does not.
+  const problems = checkSlides(oneSlide("## Figure\n\n![a chart](figs/chart.svg)"), null);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]!.severity, "error");
+  assert.match(problems[0]!.message, /is not a sibling path/);
+});
+
+test("a credited sibling figure raises nothing", () => {
+  assert.deepEqual(checkSlides(oneSlide("## Figure\n\n![a chart](chart.svg)"), null), []);
+});
+
+test("emphasis inside a list is a warning, not a refusal", () => {
+  // The renderer keeps the bullet and drops the emphasis. The deck is still
+  // written; what must not happen is that nobody is told.
+  const problems = checkSlides(oneSlide("## Points\n\n- a **bold** word\n- plain"), null);
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]!.severity, "warning");
+  assert.match(problems[0]!.message, /1 list item\(s\) use bold or code/);
+});
+
+test("a planned visual that the deck does not carry is named", () => {
+  const problems = checkSlides(oneSlide("## Figure\n\nJust prose."), {
+    slides: [{ number: 1, title: "Figure", required_visual: "the split of the dataset" }],
+  });
+  assert.equal(problems.length, 1);
+  assert.equal(problems[0]!.severity, "warning");
+  assert.match(problems[0]!.message, /planned with a visual \("the split of the dataset"\)/);
+});
+
+test("a planned visual the deck does carry raises nothing", () => {
+  assert.deepEqual(
+    checkSlides(oneSlide("## Figure\n\n![the split](split.svg)"), {
+      slides: [{ number: 1, title: "Figure", required_visual: "the split of the dataset" }],
+    }),
+    [],
+  );
+});
+
+test("the deck this repository ships passes all four", () => {
+  // The fixture course is what every skill's example points at. If it cannot
+  // pass its own checks, the examples teach the wrong thing.
+  assert.deepEqual(checkSlides(slides, null), []);
 });

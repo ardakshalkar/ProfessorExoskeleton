@@ -1,0 +1,84 @@
+# One professor's harness, as a systemd template unit.
+#
+#   cp deploy/dsh@.service /etc/systemd/system/dsh@.service
+#   # edit the two paths marked EDIT below
+#   systemctl daemon-reload
+#   systemctl enable --now dsh@ardak
+#   journalctl -u dsh@ardak -f
+#
+# The instance name after the @ is the professor: it is the OS account, the DSH
+# home under $DSH_ROOT, and the name in deploy/users.conf, all at once. One
+# template serves everyone; there is no per-person unit file to drift.
+#
+# Why a service per person rather than one multi-tenant process: the harness has
+# no concept of a user. Its sessions, workspace registry, settings and
+# credential store all hang off a single DSH_HOME, and its agent carries bash.
+# The process boundary — a separate Unix account, a separate home, a separate
+# key — is the only place tenancy can actually be enforced, so that is where it
+# is enforced. deploy/README.md argues this at length.
+
+[Unit]
+Description=Professor Exoskeleton harness for %i
+Documentation=file:/srv/professor-exoskeleton/deploy/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=%i
+Group=%i
+
+# EDIT: where this checkout lives on this machine.
+Environment=EXO_HOME=/srv/professor-exoskeleton
+Environment=DSH_ROOT=/srv/dsh
+Environment=USERS_CONF=/srv/professor-exoskeleton/deploy/users.conf
+
+# EDIT: the same two paths again. systemd does not expand Environment= inside
+# ExecStart or WorkingDirectory, so these are spelled out rather than composed.
+WorkingDirectory=/srv/dsh/%i/courses
+ExecStart=/srv/professor-exoskeleton/deploy/dsh-user %i
+
+# dsh takes the invoking directory as a session's default workspace root, which
+# is why WorkingDirectory is the professor's own course folder and not the
+# checkout. A session opened anywhere else comes from the sidebar.
+
+Restart=on-failure
+RestartSec=5s
+
+# A port collision is EADDRINUSE at bind, which throws out of activation and
+# exits. Without this, two units sharing a port would restart-loop against each
+# other forever; with it, the loser gives up and says so in the journal.
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Node's default descriptor ceiling is low for a process holding a WebSocket
+# per open tab plus whatever the agent's tools have open.
+LimitNOFILE=16384
+
+# ── containment ─────────────────────────────────────────────────────────────
+#
+# Modest on purpose. This service exists to run a professor's shell commands on
+# their own files, so most of systemd's sandboxing vocabulary would break the
+# product rather than protect it. What is here is what does not.
+#
+# NoNewPrivileges is the one that earns its place: the agent may run bash, and
+# this denies it sudo even if the account has it. Remove it only if a professor
+# genuinely needs privileged commands from inside a session, and think about
+# what that means first.
+NoNewPrivileges=yes
+
+# /usr, /boot and /etc read-only. /srv — the checkout, the homes, the courses —
+# stays writable, so nothing the harness legitimately does is affected.
+ProtectSystem=full
+
+# Other people's homes under /home are not this professor's business. Their own
+# tree is under /srv/dsh and is untouched by this.
+ProtectHome=read-only
+
+# If something breaks in a way that smells like the filesystem, these three are
+# the first to remove, in this order: ProtectHome, ProtectSystem,
+# NoNewPrivileges. Do not remove User=%i. That is not hardening; it is the
+# tenancy boundary itself.
+
+[Install]
+WantedBy=multi-user.target

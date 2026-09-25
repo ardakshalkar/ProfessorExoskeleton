@@ -1,0 +1,412 @@
+/* The host paints the ground behind the frame, so --bg stays transparent and
+   anything needing a real colour behind text uses --panel or --on-fg. An
+   inverted control cannot use --bg: transparent text on black is invisible. */
+:root {
+  --bg: transparent; --fg: #1a1a1a; --on-fg: #ffffff;
+  --muted: #6b6b6b; --line: #e3e3e6;
+  --panel: #fafafa; --accent: #2f6b3c; --flag: #a4362f;
+  --b1: #f4c7c3; --b2: #f8ddb8; --b3: #f2ecc0; --b4: #cfe3c4; --b5: #a8d5a2;
+  --none: #f6f6f6; --none-fg: #9a9a9a;
+  --card: #ffffff; --tint: #f1faf3; --accent-line: #bfe0c8; --accent-ink: #24592f;
+  --flag-tint: #fdf1f0; --flag-line: #f0c4c0;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e8e8e8; --on-fg: #16181c;
+    --muted: #9a9a9a; --line: #2e3239; --panel: #1c1f24;
+    --accent: #7fc98d; --flag: #e08c85;
+    --b1: #6b3a37; --b2: #6d5730; --b3: #5f5c2c; --b4: #3f5a38; --b5: #2f6b3c;
+    --none: #1e2126; --none-fg: #6b6b6b;
+    --card: #1c1f24; --tint: #1b2a1e; --accent-line: #3f6b48; --accent-ink: #9ad9a7;
+    --flag-tint: #2c1d1c; --flag-line: #6b3a37;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+h1 { font-size: 1.05rem; margin: 0 0 .15rem; font-weight: 600; }
+h2 { font-size: .85rem; margin: 1.25rem 0 .4rem; font-weight: 600;
+     text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.sub { color: var(--muted); font-size: .8rem; margin: 0 0 .9rem; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+th, td { text-align: left; padding: .35rem .5rem; border-bottom: 1px solid var(--line);
+         white-space: nowrap; }
+th { font-weight: 600; color: var(--muted); font-size: .74rem;
+     text-transform: uppercase; letter-spacing: .03em; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+td.name { white-space: normal; min-width: 11rem; }
+td.name small { display: block; color: var(--muted); font-size: .7rem;
+                font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* The identifier line stays monospaced; the missing-students line does not,
+   because with a roster behind it that line holds people's names and a
+   proportional face is what names are set in. */
+td.name small.flag { font-family: inherit; }
+.cell { text-align: center; font-variant-numeric: tabular-nums; }
+.b1 { background: var(--b1); } .b2 { background: var(--b2); }
+.b3 { background: var(--b3); } .b4 { background: var(--b4); }
+.b5 { background: var(--b5); }
+.nil { background: var(--none); color: var(--none-fg); }
+.legend { display: flex; flex-wrap: wrap; gap: .6rem; margin: .6rem 0 0;
+          font-size: .72rem; color: var(--muted); align-items: center; }
+.legend span { display: inline-flex; align-items: center; gap: .3rem; }
+.swatch { width: .8rem; height: .8rem; border: 1px solid var(--line);
+          border-radius: 2px; display: inline-block; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+        padding: .55rem .7rem; margin: .8rem 0 0; font-size: .76rem;
+        color: var(--muted); }
+.note strong { color: var(--fg); }
+.flag { color: var(--flag); }
+ul.blocked { margin: .2rem 0 0; padding-left: 1rem; font-size: .72rem;
+             color: var(--flag); white-space: normal; }
+.tabs { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0 0 .7rem; }
+button {
+  font: inherit; font-size: .76rem; padding: .25rem .6rem; cursor: pointer;
+  background: var(--panel); color: var(--fg); border: 1px solid var(--line);
+  border-radius: 999px;
+}
+button[aria-pressed="true"] { background: var(--fg); color: var(--on-fg);
+  border-color: var(--fg); }
+button.ask { border-style: dashed; color: var(--muted); }
+/* The ellipsis that opens a folded list. Not a pill: it sits inside a running
+   line of text, and the shared button chrome would put a bordered capsule in
+   the middle of a sentence. It inherits the colour of the line it ends. */
+button.rest { font: inherit; font-size: inherit; color: inherit; padding: 0 .2rem;
+              background: none; border: 0; border-radius: 0; }
+button.rest:hover { text-decoration: underline; }
+/* The tail opens underneath rather than alongside, which is what keeps the
+   control it opened from being pushed along the line. `[hidden]` has to be
+   restated: any `display` of our own outranks the browser's default rule. */
+small.flag [data-rest] { display: block; }
+small.flag [data-rest][hidden] { display: none; }
+.sev-high { color: var(--flag); font-weight: 600; }
+.empty { color: var(--muted); font-size: .8rem; padding: .5rem 0; }
+
+/* The course outline. A week is one row: when it is on the left, what happens
+   in it on the right. The only colour that carries meaning here is the one on
+   an unplanned week — everything else is layout, because a week nobody has
+   planned is the single thing on this page a reader must not skim past. */
+.lede { margin: 0 0 .8rem; font-size: .82rem; color: var(--muted); }
+.strip { margin: 0 0 .4rem; font-size: .76rem; color: var(--muted);
+         font-variant-numeric: tabular-nums; }
+/* One week, as a card.
+ *
+ * The shape is the mockup's: a white card on the page's own ground, the week
+ * number large in a narrow left column, the module title beside it, one line of
+ * topic chips, a hairline, and a row of chips for what the week offers. The
+ * current week is tinted and carries a bar down its left edge — the only colour
+ * on the page that is not carried by an artefact.
+ *
+ * Everything is sized for a three-hundred-pixel column, so the chips wrap
+ * rather than scroll. The mockup is fourteen hundred wide and the same rules
+ * fill it without changing: nothing here is a fixed width except the number. */
+.wk { position: relative; margin: 0 0 .55rem; padding: .6rem .7rem;
+      background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.wk.current { background: var(--tint); border-color: var(--accent-line); }
+/* An inset shadow rather than a left border, so the tinted card keeps its
+ * corner radius and the text does not shift three pixels on the current week. */
+.wk.current::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+                      width: 4px; border-radius: 10px 0 0 10px; background: var(--accent); }
+.wk-hd { display: flex; gap: .55rem; align-items: flex-start; }
+.wk-mark { flex: none; width: 2.5rem; text-align: center; padding-top: .1rem; }
+.wk-mark b { display: block; font-size: 1.45rem; line-height: 1; font-weight: 700;
+             letter-spacing: -.02em; }
+.wk-mark small { display: block; margin-top: .15rem; color: var(--muted);
+                 font-size: .66rem; font-variant-numeric: tabular-nums; }
+.wk.current .wk-mark b { color: var(--accent); }
+.wk-name { flex: 1 1 auto; min-width: 0; }
+.wk-name b { font-size: .92rem; line-height: 1.25; }
+.wk-name small { display: flex; align-items: flex-start; gap: .3rem; margin-top: .15rem;
+                 color: var(--muted); font-size: .7rem;
+                 font-variant-numeric: tabular-nums; }
+/* Aligned to the first line rather than to the middle of a wrapped block: at
+ * three hundred pixels this line wraps, and a centred glyph then floats beside
+ * the second line with nothing to mark. */
+.wk-name small .ico { margin-top: .16rem; }
+.wk-name .unplanned { color: var(--muted); font-weight: 400; }
+/* What the week is still waiting for. Dashed and flag-coloured, which is the
+ * shape this page already gives a real thing with something missing around it
+ * — `.it-todo` is the same border on a piece of work with no deadline. No new
+ * colour: the note in the `title` carries the detail, the chip carries only
+ * that there is one. Its own line rather than beside the meeting, because at
+ * three hundred pixels the meeting's time and two chips do not share a row. */
+.wk-name small.wkgaps { flex-wrap: wrap; gap: .25rem; }
+.wkgap { border: 1px dashed var(--flag-line); border-radius: 999px;
+         padding: .02rem .4rem; font-size: .64rem; letter-spacing: .01em;
+         color: var(--flag); white-space: nowrap; }
+.wk-body { min-width: 0; margin-top: .4rem; }
+/* The details control: a circle, because it opens rather than acts. */
+.dots { flex: none; align-self: flex-start; cursor: pointer; font: inherit;
+        font-size: .8rem; line-height: 1; letter-spacing: .04em;
+        width: 1.55rem; height: 1.55rem; padding: 0; border-radius: 999px;
+        border: 1px solid var(--line); background: var(--card);
+        color: var(--muted); }
+.dots:hover { color: var(--fg); border-color: currentColor; }
+.wk.open .dots { background: var(--fg); color: var(--on-fg); border-color: var(--fg); }
+/* What the card had no room for. Rows rather than chips, because these are
+ * facts to read once and not controls to press. */
+.wk-more { margin-top: .45rem; padding-top: .45rem; border-top: 1px solid var(--line); }
+.wk-more .row { display: flex; gap: .6rem; justify-content: space-between;
+                padding: .22rem 0; font-size: .72rem; border-bottom: none; }
+.wk-more .k { min-width: 0; overflow-wrap: anywhere; color: var(--fg); }
+.wk-more .v { color: var(--muted); white-space: nowrap; }
+.wk-more .prep { margin: .3rem 0 0; font-size: .72rem; color: var(--muted);
+                 font-style: italic; }
+.wk-hd .ask { flex: none; align-self: flex-start; border-style: solid;
+              border-color: var(--accent-line); border-radius: 7px;
+              background: var(--card); color: var(--accent-ink);
+              font-size: .7rem; font-weight: 600; padding: .2rem .5rem; }
+.wk-hd .ask:hover { background: var(--accent); color: var(--on-fg);
+                    border-color: var(--accent); }
+.wk.past .wk-name b { color: var(--muted); }
+.wk.gap .wk-body { opacity: .85; }
+.now { display: inline-block; margin-left: .35rem; vertical-align: .08em;
+       font-size: .62rem; font-weight: 600; letter-spacing: .04em;
+       background: var(--accent); color: var(--on-fg); border-radius: 999px;
+       padding: .1rem .45rem; }
+
+/* What the week offers, above a hairline.
+ *
+ * Each item is a GROUP of chips, not one chip holding nested boxes: the deck's
+ * PPTX and PDF sit beside "Slides" rather than inside it. A box within a box
+ * survives at fourteen hundred pixels and turns to mush at three hundred.
+ *
+ * Colour carries one meaning each: green is prepared, red has a deadline, grey
+ * is everything else. There is no fourth. */
+.sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ico { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor;
+       stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.mats { margin-top: .45rem; padding-top: .45rem; border-top: 1px solid var(--line); }
+.ind { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+.it { display: inline-flex; flex-wrap: wrap; gap: .25rem; align-items: center;
+      max-width: 100%; }
+/* The chip itself, and the one shape every control on this row borrows. */
+.itc { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem;
+       border: 1px solid var(--line); border-radius: 7px; padding: .2rem .45rem;
+       color: var(--fg); background: var(--card); max-width: 100%; }
+.itc .ico { color: var(--muted); }
+.itk { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.itl { color: inherit; text-decoration: none; }
+.itl:hover { text-decoration: underline; }
+.itdot { color: var(--muted); }
+.itw { white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--muted); }
+/* The deck: the one artefact opened minutes before the class. */
+.it-deck .itc { border-color: var(--accent-line); background: var(--tint);
+                color: var(--accent-ink); font-weight: 600; }
+.it-deck .itc .ico { color: var(--accent); }
+/* Graded work. `due` is the week it lands, and the only red on the row. */
+.it-due .itc { border-color: var(--flag-line); background: var(--flag-tint);
+               color: var(--flag); }
+.it-due .itc .ico, .it-due .itw { color: var(--flag); }
+.it-task .itc .ico { color: var(--fg); }
+/* Work with no deadline: dashed, because the item is real and the schedule
+ * around it is not. */
+.it-todo .itc { border-style: dashed; border-color: var(--flag-line); color: var(--flag); }
+.it-todo .itc .ico { color: var(--flag); }
+.itc.gap { border-style: dashed; border-color: var(--flag-line); color: var(--flag); }
+.itc.gap .ico { color: var(--flag); }
+.itb { cursor: pointer; font: inherit; font-size: .68rem; padding: .2rem .45rem;
+       border: 1px solid var(--flag); border-radius: 7px;
+       background: var(--flag); color: var(--on-fg); }
+.itb:hover { filter: brightness(1.08); }
+/* A format the deck also exists in: its own chip, beside the deck's. */
+.fmt { flex: none; padding: .2rem .45rem; border: 1px solid var(--accent-line);
+       border-radius: 7px; font-size: .66rem; letter-spacing: .03em;
+       font-weight: 600; text-decoration: none; color: var(--accent-ink);
+       background: var(--card); }
+.fmt:hover { background: var(--accent); color: var(--on-fg); border-color: var(--accent); }
+/* Everything else, behind a count that says what it counted. */
+.it-more { cursor: pointer; font: inherit; font-size: .72rem; color: var(--muted); }
+.it-more:hover { color: var(--fg); }
+.it-x { border-style: dashed; color: var(--muted); background: none; }
+.it-x .itk { max-width: 14rem; }
+.matlist { display: none; margin-top: .3rem; }
+.mats[data-open] .matlist { display: flex; }
+/* A proposal nobody has accepted, marked on the item rather than only in the
+ * banner above the frame. The banner says the VIEW includes drafts; this says
+ * WHICH one is a draft, which is the question a professor actually has. */
+.itd { border: 1px solid currentColor; border-radius: 3px; padding: 0 .2rem;
+       font-size: .58rem; letter-spacing: .03em; color: var(--flag); }
+
+/* Concept and outcome chips: one line by default.
+ *
+ * A module with twelve concepts used to grow a week block to six lines of
+ * chips, which pushed the meeting — the thing the professor came for — off the
+ * bottom of a 360px pane. The row clips to one line and a button opens it; the
+ * button is added by script only when the row actually overflows, so a module
+ * with two concepts shows no control at all, and it says how many are hidden
+ * rather than the bare word "more". */
+.chips { display: flex; align-items: flex-start; gap: .3rem; }
+.chiprow { display: flex; flex-wrap: wrap; gap: .3rem; overflow: hidden; flex: 1;
+           min-width: 0; max-height: 1.65rem; }
+.chips[data-open] .chiprow { max-height: none; }
+.more { flex: none; padding: .2rem .45rem; cursor: pointer;
+        border: 1px solid var(--line); border-radius: 7px; font: inherit;
+        font-size: .72rem; background: var(--card); color: var(--muted); }
+.more:hover { color: var(--fg); }
+.chip { display: inline-block; padding: .2rem .45rem; border: 1px solid var(--line);
+        border-radius: 7px; font-size: .72rem; background: var(--card); color: var(--fg); }
+.chip.lo { border-style: dashed; color: var(--muted); }
+.chip.res { border-style: dotted; color: var(--muted); }
+
+.topic b { font-size: .84rem; }
+.topic small { color: var(--muted); font-size: .7rem; margin-left: .35rem;
+               font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.source-topic { padding: .35rem .45rem; border-left: 3px solid var(--line);
+                background: var(--panel); }
+.source-topic b { font-size: .84rem; }
+.source-topic p { margin: .2rem 0 0; color: var(--muted); font-size: .76rem; }
+.source-topic small { display: block; margin-top: .2rem; color: var(--muted);
+                      font-size: .7rem; }
+/* Concept and outcome chips: one line by default.
+ *
+ * A module with twelve concepts used to grow a week block to six lines of
+ * chips, which pushed the meeting — the thing the professor came for — off the
+ * bottom of a 360px pane. The row clips to one line and a `more` button opens
+ * it; the button is added by script only when the row actually overflows, so a
+ * module with two concepts shows no control at all. */
+.chips { display: flex; align-items: flex-start; gap: .25rem; }
+.chiprow { display: flex; flex-wrap: wrap; gap: 0; overflow: hidden; flex: 1;
+           min-width: 0; max-height: 1.5rem; }
+.chips[data-open] .chiprow { max-height: none; }
+.more { flex: none; margin-top: .25rem; padding: .05rem .4rem; cursor: pointer;
+        border: 1px solid var(--line); border-radius: 999px; font: inherit;
+        font-size: .7rem; background: var(--panel); color: var(--muted); }
+.more:hover { color: var(--fg); }
+.chip { display: inline-block; margin: .25rem .25rem 0 0; padding: .05rem .4rem;
+        border: 1px solid var(--line); border-radius: 999px; font-size: .7rem;
+        background: var(--panel); color: var(--fg); }
+.chip.lo { border-style: dashed; color: var(--muted); }
+.chip.res { border-style: dotted; color: var(--muted); }
+
+/* The deck, and the formats it exists in.
+ *
+ * On its own line and never folded away: it is the one material a professor
+ * opens minutes before the class, and the readings and repositories behind it
+ * are not. The format buttons are text rather than glyphs — `PPTX` and `PDF`
+ * are already the words people use for these files, and a two-colour icon at
+ * 10px reads as a smudge. */
+.deck { display: flex; align-items: center; gap: .3rem; margin: .3rem 0 0;
+        flex-wrap: wrap; }
+.deckname { font-size: .78rem; }
+.fmt { flex: none; padding: 0 .3rem; border: 1px solid var(--line);
+       border-radius: 3px; font-size: .6rem; letter-spacing: .04em;
+       font-weight: 600; text-decoration: none; color: var(--muted);
+       background: var(--bg); }
+.fmt:hover { color: var(--on-fg); background: var(--fg); border-color: var(--fg); }
+.it-deck .fmt { color: var(--accent); border-color: var(--accent); }
+.it-deck .fmt:hover { color: var(--on-fg); background: var(--accent); }
+
+/* Everything else the meeting uses, behind one press. */
+.more-mats { margin: .3rem 0 0; }
+.matbtn { padding: .05rem .4rem; cursor: pointer; border: 1px solid var(--line);
+          border-radius: 999px; font: inherit; font-size: .68rem;
+          background: var(--panel); color: var(--muted); }
+.matbtn:hover { color: var(--fg); }
+.matlist { display: none; }
+.more-mats[data-open] .matlist { display: block; }
+ul.meet { list-style: none; margin: .4rem 0 0; padding: 0; }
+ul.meet li { margin: 0 0 .35rem; font-size: .8rem; }
+ul.meet small { display: block; color: var(--muted); font-size: .72rem;
+                font-variant-numeric: tabular-nums; }
+.kind { display: inline-block; font-size: .68rem; text-transform: uppercase;
+        letter-spacing: .04em; color: var(--muted); border: 1px solid var(--line);
+        border-radius: 3px; padding: 0 .25rem; margin-right: .3rem; }
+.prep { display: block; color: var(--muted); font-size: .72rem; font-style: italic; }
+.marks { margin-top: .4rem; }
+.mark { display: inline-block; margin: .2rem .3rem 0 0; padding: .2rem .45rem;
+        border-radius: 4px; font-size: .74rem; background: var(--panel);
+        border: 1px solid var(--line); }
+.mark small { display: block; color: var(--muted); font-size: .68rem;
+              font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mark.due { border-color: var(--accent); }
+ul.plain { margin: .2rem 0 0; padding-left: 1rem; font-size: .78rem; }
+
+/* A brief, over the plan.
+ *
+ * The chip that names a piece of graded work is a button when there is text
+ * behind it, and it has to read as one without becoming a second kind of link
+ * beside `.fmt`: the underline appears on hover and focus, the colour stays the
+ * chip's own, and the hit area is the label rather than a new control beside it.
+ */
+.itbrief { cursor: pointer; font: inherit; color: inherit; background: none;
+           border: 0; padding: 0; text-decoration: underline;
+           text-decoration-style: dotted; text-underline-offset: 2px;
+           text-decoration-color: var(--muted); }
+.itbrief:hover { text-decoration-style: solid; text-decoration-color: currentColor; }
+.itbrief:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
+                         border-radius: 2px; }
+
+/* The inline disclosure. This is the whole of the feature on the prerendered
+ * public page, which ships no script; `runtime.js` folds it away on a host that
+ * can open the sheet instead. */
+.briefdoc { margin-top: .4rem; font-size: .8rem; }
+.briefdoc[hidden] { display: none; }
+.briefdoc > summary { cursor: pointer; color: var(--muted); font-size: .74rem;
+                      padding: .1rem 0; }
+.briefdoc > summary:hover { color: var(--fg); }
+.briefdoc[open] > summary { margin-bottom: .35rem; }
+/* The kicker repeats the summary's own words, so it is for the sheet only. */
+.briefdoc > .bkind { display: none; }
+
+/* In the sheet the press has already asked the question: the summary is noise,
+ * and the panel is the document rather than a disclosure inside one. */
+.sheetbody .briefdoc { margin: 0; font-size: inherit; }
+.sheetbody .briefdoc > summary { display: none; }
+.sheetbody .briefdoc > .bkind { display: block; }
+
+.sheet { position: fixed; inset: 0; z-index: 40; display: flex;
+         align-items: center; justify-content: center; padding: 1.2rem; }
+.sheet[hidden] { display: none; }
+.sheetbg { position: absolute; inset: 0; background: rgba(0, 0, 0, .45); }
+.sheetbox { position: relative; max-width: 44rem; width: 100%;
+            max-height: 82vh; overflow-y: auto; padding: 1.1rem 1.2rem 1.3rem;
+            background: var(--card); color: var(--fg);
+            border: 1px solid var(--line); border-radius: 8px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, .25); }
+.sheetbox:focus { outline: none; }
+.sheetx { position: absolute; top: .4rem; right: .5rem; cursor: pointer;
+          font: inherit; font-size: 1.1rem; line-height: 1; padding: .2rem .4rem;
+          background: none; border: 0; color: var(--muted); }
+.sheetx:hover { color: var(--fg); }
+
+.bkind { margin: 0; font-size: .68rem; text-transform: uppercase;
+         letter-spacing: .06em; color: var(--muted); }
+.btitle { margin: .15rem 0 .7rem; font-size: 1rem; line-height: 1.3;
+          padding-right: 1.5rem; }
+
+/* The facts as rows rather than a table: a definition list survives a narrow
+ * pane, and these are read one at a time rather than compared down a column. */
+.bfacts { margin: 0 0 .9rem; padding: .5rem .6rem; background: var(--panel);
+          border: 1px solid var(--line); border-radius: 6px; font-size: .78rem; }
+.bfacts > div { display: flex; gap: .8rem; justify-content: space-between;
+                padding: .12rem 0; }
+.bfacts dt { color: var(--muted); }
+.bfacts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+
+.btext { margin: 0 0 .7rem; font-size: .84rem; line-height: 1.55;
+         overflow-wrap: anywhere; }
+.btext:last-child { margin-bottom: 0; }
+
+/* Where a deck came from, on the chip that names it.
+ *
+ * Quiet on purpose: this is a fact about the artefact, not a warning, and a
+ * week carrying one generated deck should not look like it has a problem. The
+ * two values read differently because they ARE different claims — `generated`
+ * names something this course can rebuild, `imported` names a reading of
+ * something it cannot. */
+.itorg { margin-left: .3rem; font-size: .62rem; text-transform: uppercase;
+         letter-spacing: .05em; padding: 0 .25rem; border-radius: 3px;
+         border: 1px solid var(--line); color: var(--muted); }
+.itorg.it-generated { border-color: var(--accent-line); color: var(--accent-ink);
+                      background: var(--tint); }
+.itorg.it-imported { border-color: var(--b2); color: var(--fg); }
+/* The badge is a control only where there is an outline to open. It keeps the
+   label's appearance — this is still a fact about the artefact, not a button
+   competing with the chip's own — and gains a pointer and an underline on
+   hover, which is the whole of the difference. */
+button.itorgb { cursor: pointer; font-family: inherit; }
+button.itorgb:hover { text-decoration: underline; }
+button.itorgb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

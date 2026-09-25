@@ -351,6 +351,15 @@ window.__ModuleLoader__.load({
 .pp-titlerow{display:flex;align-items:baseline;gap:8px;min-width:0}
 .pp-title{font-size:13px;font-weight:600;flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* The one control in the header that changes something outside this machine.
+   An outline rather than a fill: it opens a dialog and publishes nothing by
+   itself, so it should not look like the red button two presses further in. */
+.pp-publishbtn{flex:none;font:inherit;font-size:11px;line-height:1;cursor:pointer;
+  padding:4px 9px;border-radius:20px;color:var(--dsw-alias-label-secondary,#444);
+  background:var(--dsw-alias-fill-l2,transparent);
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-publishbtn:hover{color:var(--dsw-alias-label-primary,#111);
+  border-color:var(--dsw-alias-label-tertiary,#9a9a9a)}
 .pp-close{flex:none;background:0 0;border:0;cursor:pointer;padding:2px 4px;border-radius:6px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);font-size:14px;line-height:1}
 .pp-close:hover{color:var(--dsw-alias-label-secondary,#444)}
@@ -379,6 +388,12 @@ window.__ModuleLoader__.load({
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-segbtn[aria-pressed=true]{color:var(--dsw-alias-label-primary,#111);font-weight:600;
   border-color:var(--dsw-alias-label-primary,#111)}
+/* The repository name, typed when the assessment does not record one. Sized to
+   owner/name and no wider: it sits in a row of buttons, and a field that
+   stretched would read as the subject of the strip rather than a gap in it. */
+.pp-input{font:inherit;font-size:11px;padding:2px 8px;border-radius:20px;width:18ch;
+  background:0 0;color:var(--dsw-alias-label-primary,#111);
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 /* Names, while they are showing. The one control in the pane that changes what
    is safe to have on a projector, so it does not look like the others while it
    is engaged. */
@@ -538,7 +553,34 @@ window.__ModuleLoader__.load({
    not have to guess that a blank panel means "open it elsewhere". */
 .pp-modallink{flex:none;font-size:11px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+/* The same seat serves a link and a button — "open in a tab" and "ask about
+   this" are one row of quiet affordances — so the button is stripped back to
+   the anchor's own appearance rather than given a second style to drift. */
+button.pp-modallink{cursor:pointer;font-family:inherit;background:none;border:0;padding:0}
+button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-modalframe{flex:1;min-height:0;width:100%;border:0;display:block;background:#fff}
+/* The publish dialog's body. Unlike the material modal there is no frame to
+   fill, so the plan scrolls and the controls stay put above it. */
+.pp-publishbody{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;
+  padding:12px;overflow:hidden}
+.pp-publishout{flex:1;min-height:0;margin:0;overflow:auto;white-space:pre-wrap;
+  word-break:break-word;font-size:11.5px;line-height:1.5;padding:10px;border-radius:6px;
+  background:var(--dsw-alias-bg-l2,#f6f6f7);color:var(--dsw-alias-label-primary,#1a1a1a)}
+.pp-publishhint{margin:0;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+/* The repository field, sized at 18ch above for a pane four hundred pixels
+   wide. This dialog is not that, and at 18ch it clipped its own placeholder —
+   the one control whose whole job is to be typed into was the one you could
+   not read. It takes the room the row has left, within reason. */
+.pp-publishbody .pp-input{width:auto;flex:1 1 24ch;min-width:22ch;max-width:40ch}
+/* The announcement box. A Telegram post is several lines and is the only thing
+   in this pane a professor composes rather than picks, so it gets the room a
+   paragraph needs and the monospace the plan below it uses — what is typed
+   here is what is sent, character for character. */
+.pp-publishtext{font:inherit;font-size:11.5px;line-height:1.5;padding:8px 10px;
+  border-radius:6px;resize:vertical;min-height:84px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);
+  background:var(--dsw-alias-bg-l1,#fff);color:var(--dsw-alias-label-primary,#1a1a1a)}
+.pp-publishcount{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 `;
 
     if (
@@ -3045,6 +3087,29 @@ window.__ModuleLoader__.load({
      * nothing opens. What the frame can be pointed at is therefore exactly the
      * set of documents `sendMaterial` is already willing to serve.
      */
+    /**
+     * The routes a frame may ask this app to open over the harness.
+     *
+     * An allowlist of exact pathnames on this app's own origin, and it is the
+     * whole of the check — a frame naming anything else gets silence rather
+     * than a frame. Two entries, and both are reads that resolve an identifier
+     * the course record already names:
+     *
+     * - `/file` serves a DOCUMENT, addressed by `document_id`.
+     * - `/brief` serves a piece of graded work's own text, addressed by run and
+     *   `assessment_id`. It joined the list when the outline's chips started
+     *   opening a brief: most assessments carry no document, so there was no
+     *   `/file` address to give them.
+     * - `/outline` serves what was READ out of a deck the course did not write,
+     *   addressed by `document_id`. Same shape again: a `presentation_plan` is
+     *   a record, not a file, so there is no `/file` address for it either.
+     *
+     * Adding a route here is granting it the overlay, so the bar is the one
+     * `/file` already meets: same origin, a read, and addressed by an id rather
+     * than by anything resembling a path.
+     */
+    const MATERIAL_ROUTES = new Set([BASE + "/file", BASE + "/brief", BASE + "/outline"]);
+
     function materialUrl(value) {
       if (typeof value !== "string" || value === "") return null;
       let url;
@@ -3054,7 +3119,7 @@ window.__ModuleLoader__.load({
         return null;
       }
       if (url.origin !== window.location.origin) return null;
-      if (url.pathname !== BASE + "/file") return null;
+      if (!MATERIAL_ROUTES.has(url.pathname)) return null;
       return url.href;
     }
 
@@ -3064,6 +3129,45 @@ window.__ModuleLoader__.load({
      * viewer; nothing in either format can run anyway.
      */
     const MEDIA = new Set(["pdf", "png", "jpg", "jpeg", "gif", "webp"]);
+
+    /**
+     * How the thing in the overlay is named in a message.
+     *
+     * The identifier first, because that is the part that saves work: a model
+     * handed `DOC-0204` reads that document, while one handed a title has to
+     * go and find which of forty it was — and may pick the wrong one, which is
+     * worse than searching. The title follows in quotes so the professor can
+     * see what they attached without decoding an id.
+     *
+     * The id comes out of the address rather than from a new prop, because the
+     * address already carries exactly one and this pane put it there:
+     * `/file?doc=…` names a Document, `/brief?…&assessment=…` names the piece
+     * of graded work whose own text is being shown. Anything else — a material
+     * hosted elsewhere, some future route — has no identifier to offer and
+     * returns empty, which is the button's own condition for existing.
+     */
+    function mentionOf(url, label) {
+      let parsed;
+      try {
+        parsed = new URL(url, window.location.href);
+      } catch {
+        return "";
+      }
+      const id =
+        parsed.searchParams.get("doc") ?? parsed.searchParams.get("assessment") ?? "";
+      if (id === "") return "";
+      const title = typeof label === "string" ? label.trim() : "";
+      const named = title === "" ? id : id + ' ("' + title + '")';
+
+      // What this artefact was made from, when the record says. Both ends are
+      // named rather than one: the id identifies what is on screen, and the
+      // source is the record to change — a PDF of a deck is not editable and
+      // its builder is, so a question about "this slide" is answered in the
+      // second one. `from` is put on the address by `withMaterialLinks`, which
+      // walks `extensions.rendered_from` to the end of the chain.
+      const source = parsed.searchParams.get("from") ?? "";
+      return source === "" ? named : named + ", built from " + source;
+    }
 
     /**
      * A deck, a paper or a handout, over the whole harness.
@@ -3150,6 +3254,28 @@ window.__ModuleLoader__.load({
               "div",
               { className: "pp-modalhead" },
               h("div", { className: "pp-modaltitle" }, props.label),
+              // Name this in the composer, and let the professor type the
+              // question. The alternative — a button that SENDS something —
+              // would be the pane writing their sentence for them, and every
+              // question worth asking about a brief is one it cannot guess.
+              //
+              // Rendered only when the composition actually provides the
+              // draft-writing seam and this material has an identifier worth
+              // carrying. A control that does nothing is worse than no control.
+              props.mention && mentionOf(props.url, props.label)
+                ? h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-modallink",
+                      title: "Put this in the message box, then type your question",
+                      onClick: () => {
+                        if (props.mention(mentionOf(props.url, props.label))) close();
+                      },
+                    },
+                    "Ask about this ↩",
+                  )
+                : null,
               h(
                 "a",
                 {
@@ -3179,6 +3305,285 @@ window.__ModuleLoader__.load({
               sandbox: MEDIA.has(props.format) ? undefined : "allow-same-origin",
               title: props.label,
             }),
+          ),
+        ),
+        document.body,
+      );
+    }
+
+    /**
+     * The four places a course reaches an audience, and one dialog for them.
+     *
+     * It began as the homework publish alone, over the whole page rather than
+     * beside the list, and that shape was right for a reason that turns out to
+     * be general: approval is a sentence and a button, while publishing is a
+     * file list, a repository name, an announcement somebody types, a plan that
+     * runs to twenty lines, and a decision that reaches people outside this
+     * machine. In a pane four hundred pixels wide that was a sliver nobody
+     * could read — which is exactly how it was reported: the button "doesn't do
+     * anything".
+     *
+     * It borrows `MaterialModal`'s shell: the same veil, the same Escape, the
+     * same rule that a drag started inside the dialog does not dismiss it. What
+     * it does NOT borrow is the frame — the content here is this pane's own
+     * text, so it is rendered rather than loaded, and no sandbox question
+     * arises.
+     *
+     * **Two presses, per target, always.** The first reads and prints; the
+     * second is the only one that writes anything, and it does not exist until
+     * the first has come back. Changing the target, the assessment or the
+     * message throws the plan away, so the red button can never send something
+     * other than what was read — the rule `Send to Canvas` already holds.
+     *
+     * **The first press is also what promotes.** `ainar publish` runs the gate
+     * over the drafted documents and resources the publication needs, so the
+     * plan's first lines are *would promote DOC-DRAFT-9001*. That is the whole
+     * of why there is no separate approval step in front of a publication any
+     * more, and the plan says it in the professor's own terms rather than
+     * leaving it to be inferred from a command they did not run.
+     */
+    const PUBLISH_TARGETS = [
+      {
+        id: "page",
+        label: "Course page",
+        hint: "The week plan students read, with the approved materials beside it, written to dist/pages/",
+      },
+      {
+        id: "telegram",
+        label: "Telegram",
+        hint: "One plain-text announcement to the run's channel. It cannot be recalled",
+      },
+      {
+        id: "homework",
+        label: "Homework repo",
+        hint: "The starter repository on GitHub, for one assessment",
+      },
+      {
+        id: "canvas",
+        label: "Canvas brief",
+        hint: "One assessment's definition — title, points, dates, the brief. Never the marks",
+      },
+      {
+        id: "update",
+        label: "Update everywhere",
+        hint:
+          "Every destination this run has already been published to, and no new ones. " +
+          "An announcement is not among them: it cannot be re-derived, only corrected",
+      },
+    ];
+
+    /**
+     * What the second press says it will do, per target.
+     *
+     * Named after the thing that happens rather than the button that happens
+     * it. "Publish" twice in a row tells a professor nothing about whether the
+     * next click writes a folder or posts to a channel of a hundred students.
+     */
+    const CONFIRM_LABEL = {
+      page: "Promote and write the page",
+      telegram: "Send to the channel",
+      homework: "Publish to GitHub",
+      canvas: "Send to Canvas",
+      update: "Update every destination",
+    };
+
+    function PublishModal(props) {
+      const close = props.onClose;
+      const state = props.state;
+      React.useEffect(() => {
+        const onKey = (event) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            close();
+          }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [close]);
+
+      const busy = state.phase === "running";
+      const needsAssessment = state.target === "homework" || state.target === "canvas";
+      return ReactDOM.createPortal(
+        h(
+          "div",
+          {
+            className: "pp-veil",
+            onMouseDown: (event) => {
+              if (event.target === event.currentTarget) close();
+            },
+          },
+          h(
+            "div",
+            {
+              className: "pp-modal",
+              role: "dialog",
+              "aria-modal": "true",
+              "aria-label": "Publish " + state.label,
+              onMouseDown: (event) => event.stopPropagation(),
+            },
+            h(
+              "div",
+              { className: "pp-modalhead" },
+              h(
+                "div",
+                { className: "pp-modaltitle" },
+                state.label ? "Publish " + state.label : "Publish",
+              ),
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-close",
+                  "aria-label": "Close",
+                  onClick: close,
+                },
+                "×",
+              ),
+            ),
+            h(
+              "div",
+              { className: "pp-publishbody" },
+              // Which of the four. Radio-shaped rather than four dialogs,
+              // because "put this in front of the class" is one intention and
+              // the professor should not have to know which menu it is under.
+              h(
+                "div",
+                { className: "pp-approverow" },
+                PUBLISH_TARGETS.map((entry) =>
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-segbtn",
+                      "aria-pressed": state.target === entry.id,
+                      title: entry.hint,
+                      disabled: busy,
+                      onClick: () => props.setTarget(entry.id),
+                      key: entry.id,
+                    },
+                    entry.label,
+                  ),
+                ),
+              ),
+              needsAssessment
+                ? h("input", {
+                    type: "text",
+                    className: "pp-input",
+                    placeholder: "ASSESSMENT-04",
+                    value: state.assessment,
+                    disabled: busy,
+                    "aria-label": "Assessment id",
+                    onChange: (event) => props.setField("assessment", event.target.value),
+                  })
+                : null,
+              state.target === "telegram"
+                ? h(
+                    React.Fragment,
+                    null,
+                    h("textarea", {
+                      className: "pp-publishtext",
+                      placeholder:
+                        "Homework 3 is open. It is due Friday at 18:00 and counts for 10%.",
+                      value: state.message,
+                      disabled: busy,
+                      "aria-label": "The announcement, exactly as students will read it",
+                      onChange: (event) => props.setField("message", event.target.value),
+                    }),
+                    h(
+                      "p",
+                      { className: "pp-publishcount" },
+                      state.message.length +
+                        " / 4096 characters. This is sent as typed — the command composes nothing.",
+                    ),
+                    // Off by default, and that is the safeguard rather than a
+                    // preference: a second announcement is the ordinary case,
+                    // and a press that silently rewrote the first would
+                    // destroy something students had already read.
+                    h(
+                      "label",
+                      { className: "pp-publishcount" },
+                      h("input", {
+                        type: "checkbox",
+                        checked: state.edit === true,
+                        disabled: busy,
+                        onChange: (event) => props.setField("edit", event.target.checked),
+                      }),
+                      " correct the last announcement instead of posting a new one",
+                    ),
+                  )
+                : null,
+              h(
+                "div",
+                { className: "pp-approverow" },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    disabled: busy,
+                    title:
+                      "Show what would be promoted and what would then be published. " +
+                      "Writes nothing, here or anywhere else.",
+                    onClick: () => props.run(false),
+                  },
+                  busy ? "Working…" : "Check what would be published",
+                ),
+                state.phase === "preview"
+                  ? h(
+                      "button",
+                      {
+                        type: "button",
+                        className: "pp-segbtn pp-danger",
+                        title:
+                          "Promote the drafted materials this needs — documents and " +
+                          "resources only — and publish.",
+                        onClick: () => props.run(true),
+                      },
+                      state.target === "telegram" && state.edit
+                    ? "Correct the message in the channel"
+                    : CONFIRM_LABEL[state.target],
+                    )
+                  : null,
+                state.target === "homework"
+                  ? h("input", {
+                      type: "text",
+                      className: "pp-input",
+                      placeholder: "owner/name, if not recorded",
+                      value: state.repo,
+                      disabled: busy,
+                      "aria-label": "Repository",
+                      onChange: (event) => props.setField("repo", event.target.value),
+                    })
+                  : null,
+                state.target === "canvas"
+                  ? h("input", {
+                      type: "text",
+                      className: "pp-input",
+                      placeholder: "every subgroup",
+                      value: state.group,
+                      disabled: busy,
+                      "aria-label": "Subgroup",
+                      onChange: (event) => props.setField("group", event.target.value),
+                    })
+                  : null,
+              ),
+              state.phase === "idle"
+                ? h(
+                    "p",
+                    { className: "pp-publishhint" },
+                    "Nothing has been read or written yet. Check first; publishing is the " +
+                      "second press, and it is the press that also promotes the drafted " +
+                      "materials — never a grade.",
+                  )
+                : h(
+                    "pre",
+                    {
+                      className:
+                        "pp-publishout" + (state.phase === "error" ? " pp-approveerr" : ""),
+                    },
+                    state.text,
+                  ),
+            ),
           ),
         ),
         document.body,
@@ -3252,6 +3657,48 @@ window.__ModuleLoader__.load({
       // re-fetched. Without it the pane would go on drawing the course as it was
       // before the approval it just performed.
       const [reload, setReload] = React.useState(0);
+
+      // The publication the professor is looking at, or null.
+      //
+      // Opened by the Publish button in the header, or by a press inside the
+      // assessments frame, and held here for the reason the material overlay
+      // is: the frame it came from remounts when the theme changes, and a plan
+      // that vanished because the OS went dark would be a plan somebody re-ran
+      // against GitHub for nothing.
+      //
+      // `phase` is idle | running | preview | done | error, the approval
+      // strip's states and for its reason: only `preview` offers the writing
+      // button, so a plan read before the message was edited cannot be sent.
+      const [publishing, setPublishing] = React.useState(null);
+
+      /** A fresh dialog for one target, with whatever is already known filled in. */
+      const openPublish = (target, extra) =>
+        setPublishing({
+          target,
+          assessment: "",
+          label: "",
+          repo: "",
+          group: "",
+          message: "",
+          edit: false,
+          phase: "idle",
+          text: "",
+          ...(extra || {}),
+        });
+
+      /**
+       * Editing any input throws the plan away.
+       *
+       * The rule `Send to Canvas` established: the red button may only ever
+       * send what the plan above it described. Changing the target, the
+       * assessment, the repository or a word of the announcement means the
+       * plan on screen is about something else, so it goes back to `idle` and
+       * the writing button disappears until the professor reads a new one.
+       */
+      const setPublishField = (field, value) =>
+        setPublishing((state) =>
+          state === null ? state : { ...state, [field]: value, phase: "idle", text: "" },
+        );
 
       // The material the professor is reading over the page, or null.
       //
@@ -3327,6 +3774,14 @@ window.__ModuleLoader__.load({
             props.ask(data.prompt);
             return;
           }
+          if (data.kind === "publish") {
+            if (typeof data.assessment !== "string" || data.assessment.trim() === "") return;
+            openPublish("homework", {
+              assessment: data.assessment.trim(),
+              label: typeof data.label === "string" ? data.label : data.assessment,
+            });
+            return;
+          }
           if (data.kind === "view") {
             const url = materialUrl(data.url);
             if (url === null) return;
@@ -3380,11 +3835,72 @@ window.__ModuleLoader__.load({
       }, [current ? current.runId : null]);
 
       /**
+       * Plan or perform a publication, on the server.
+       *
+       * The same route either way; `confirm` is the difference between reading
+       * and writing, and the professor supplies it by pressing the second
+       * button rather than the first. What is typed here — a repository the
+       * assessment does not name, a subgroup, the announcement itself — is
+       * passed through and never guessed, on either side of the wire.
+       *
+       * The approver is the run's first instructor, for `approve`'s reason:
+       * promoting a material records who accepted it, and this pane will not
+       * invent an identity to put in that field.
+       */
+      const runPublish = (confirm) => {
+        if (!current || !publishing) return;
+        setPublishing((state) => ({
+          ...state,
+          phase: "running",
+          text: confirm ? "Publishing…" : "Reading…",
+        }));
+        fetch(scoped(BASE + "/api/publish?run=" + encodeURIComponent(current.runId), props.sessionId), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            target: publishing.target,
+            assessment: (publishing.assessment || "").trim(),
+            repo: (publishing.repo || "").trim(),
+            group: (publishing.group || "").trim(),
+            message: publishing.message || "",
+            edit: publishing.edit === true,
+            approver: (current.instructors || [])[0] || "",
+            confirm,
+          }),
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error) {
+              setPublishing((state) => state && { ...state, phase: "error", text: result.error });
+              return;
+            }
+            setPublishing(
+              (state) =>
+                state && {
+                  ...state,
+                  phase: result.ok ? (confirm ? "done" : "preview") : "error",
+                  text: result.output || "(the command said nothing)",
+                },
+            );
+            // Publishing can write `extensions.github` back onto the record, so
+            // the frames are re-fetched for the same reason approval re-fetches.
+            if (confirm && result.ok) setReload((value) => value + 1);
+          })
+          .catch((error) =>
+            setPublishing((state) => state && { ...state, phase: "error", text: String(error) }),
+          );
+      };
+
+      /**
        * Run `ainar approve` on the server, previewing unless `confirm`.
        *
        * The request is a POST because it may write. The approver is the run's
        * first instructor — the pane shows which id it is about to record, and
        * declines to guess when the run names none.
+       *
+       * This is the whole-drafts-directory gate and stays what it always was:
+       * the only way an evaluation, a signal or an intervention becomes a
+       * record. `runPublish` above promotes materials and only materials.
        */
       const approve = (confirm) => {
         if (!current) return;
@@ -3456,7 +3972,7 @@ window.__ModuleLoader__.load({
               ? "This workspace holds no courses."
               : "No course here has an offering the course model can read: " +
                 courses.map((course) => course.course_id).join(", ") +
-                ". A run needs versions/<TERM>/version.yaml with start_date and end_date. " +
+                ". A run needs version.yaml with start_date and end_date. " +
                 "Run `python -m ainar validate` for the specifics.",
           );
         }
@@ -3525,6 +4041,30 @@ window.__ModuleLoader__.load({
             "div",
             { className: "pp-titlerow" },
             h("div", { className: "pp-title" }, current ? current.title : "Course"),
+            // Publishing is not a tab and not a sub-view, and putting it here
+            // is the argument: every other control in this header chooses what
+            // to LOOK at, and this one is the only thing in the pane a person
+            // outside this machine ever sees the result of. It sits beside the
+            // title because it belongs to the run rather than to whichever
+            // view happens to be open — a professor deciding to put the week
+            // in front of the class should not first have to be on the right
+            // tab. Absent with no offering, since there would be nothing to
+            // publish and no id to record as having promoted it.
+            current
+              ? h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-publishbtn",
+                    title:
+                      "The course page, an announcement, a homework repository or a " +
+                      "Canvas brief. Reads and shows a plan first; the drafted materials " +
+                      "it needs are promoted by the second press.",
+                    onClick: () => openPublish("page"),
+                  },
+                  "Publish",
+                )
+              : null,
             h(
               "button",
               {
@@ -3708,12 +4248,22 @@ window.__ModuleLoader__.load({
             )
           : null,
         h("div", { className: "pp-body" }, body()),
+        publishing === null
+          ? null
+          : h(PublishModal, {
+              state: publishing,
+              run: runPublish,
+              setTarget: (target) => setPublishField("target", target),
+              setField: setPublishField,
+              onClose: () => setPublishing(null),
+            }),
         material === null
           ? null
           : h(MaterialModal, {
               url: material.url,
               label: material.label,
               format: material.format,
+              mention: props.mention,
               onClose: () => setMaterial(null),
             }),
       );
@@ -3725,7 +4275,7 @@ window.__ModuleLoader__.load({
      * `layout` for the open/close verbs, `slots` for the two seats, `sessions`
      * to resolve the session a widget's question should be asked in.
      */
-    const inject = ["slots", "layout", "sessions"];
+    const inject = ["slots", "layout", "sessions", "conversation"];
 
     /**
      * The opener.
@@ -3766,6 +4316,56 @@ window.__ModuleLoader__.load({
         Promise.resolve(session.prompt([{ type: "text", text: text }], "queue")).catch(() => {});
       };
 
+      /**
+       * Put a mention of something into the composer, and send nothing.
+       *
+       * The opposite half of `ask`, and the difference is whose sentence it is.
+       * `ask` carries a question this pane already knows how to phrase — "what
+       * should I teach this week" — and sends it. This one carries only the
+       * NAME of what the professor is looking at, into the draft, with the
+       * caret after it: the question is theirs to type, and the identifier
+       * spares the model a search for which of forty documents was meant.
+       *
+       * Appends rather than replaces. A half-typed question in the composer is
+       * work, and a button that discards it to make room for a filename would
+       * be the pane deciding it matters more than the professor's sentence.
+       *
+       * Returns whether the draft was actually written, because the caller
+       * draws a different outcome for "no" — this reaches across a plugin
+       * boundary to `ui-conversation`, and a composition without it is a real
+       * arrangement rather than a broken one.
+       */
+      const mention = (sessionId) => (text) => {
+        const scope = ctx.sessions.scope(sessionId);
+        if (scope === undefined) return false;
+        const resolver = ctx.conversation === undefined ? undefined : ctx.conversation.input;
+        const input = resolver === undefined ? undefined : resolver.for(scope);
+        if (input === undefined || typeof input.setDraft !== "function") return false;
+        // `getSnapshot()`, not a `.snapshot` property: `SnapshotStore` is the
+        // `useSyncExternalStore` shape, and reading the property that is not
+        // there yields undefined rather than throwing — which is how the first
+        // version of this silently replaced a half-typed question instead of
+        // appending to it. Guarded anyway, because this is another package's
+        // store and a read that throws must not cost the professor their draft.
+        let current = "";
+        try {
+          const state = input.state;
+          const snapshot =
+            state !== undefined && typeof state.getSnapshot === "function"
+              ? state.getSnapshot()
+              : undefined;
+          const draft = snapshot === undefined ? undefined : snapshot.draft;
+          if (typeof draft === "string") current = draft;
+        } catch {
+          current = "";
+        }
+        // One space between what was there and what arrives, and none when the
+        // draft is empty — the composer is a sentence being written, not a log.
+        const trimmed = current.replace(/\s+$/, "");
+        input.setDraft(trimmed === "" ? text : trimmed + " " + text);
+        return true;
+      };
+
       ctx.slots.inject("details", () =>
         ctx.slots.register(
           {
@@ -3778,6 +4378,7 @@ window.__ModuleLoader__.load({
               closeDetails: () => ctx.layout.closeDetails(),
               openDetails: () => ctx.layout.openDetails(),
               ask: ask(sessionId),
+              mention: mention(sessionId),
             }),
           },
           ProfessorPane,

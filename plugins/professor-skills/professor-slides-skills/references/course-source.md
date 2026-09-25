@@ -101,9 +101,9 @@ courses/<COURSE_ID>/
   concepts.yaml            concepts/*.yaml
   concept-edges.yaml
   modules.yaml             modules/*.yaml
-  versions/<TERM>/version.yaml
-  versions/<TERM>/activities.yaml
-  versions/<TERM>/resources.yaml
+  version.yaml
+  activities.yaml
+  resources.yaml
 ```
 
 Nothing else is read. Submissions, evaluations, evidence and concept states are
@@ -163,7 +163,7 @@ There is no separate list of books, and that is deliberate: the course model
 already has the right record with the right concept tagging, and a second list
 beside it would be a second thing to keep true.
 
-`delivery.resources` in the database, `versions/<TERM>/resources.yaml` in a
+`delivery.resources` in the database, `resources.yaml` in a
 course directory, `references:` in a flat file. Each entry has a `kind`
 (`reading`, `textbook_chapter`, `link`, `video`, `slides`, `notebook`,
 `dataset`), a `url` or `document_id`, `concepts`, and optionally a `locator`

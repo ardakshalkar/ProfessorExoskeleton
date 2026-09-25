@@ -47,28 +47,38 @@ other's wordmark during HMR.
 The browser tab title. `ui-brand-official`'s own README is explicit that
 `DSH_CLIENT_TITLE` selects it at **build** time rather than through a slot, and
 this project consumes a published frontend bundle rather than building one — so
-that variable is not a lever here. It is patched by
-[`patches/apply.mjs`](../../patches/apply.mjs) instead, which is that file's
-stated purpose: behaviour hard-coded in a bundle, patched loudly, reapplied
-after every install.
+that variable is not a lever here.
 
-It takes **two** patches, and finding that out took restarting the harness and
+It takes **two** pieces, and finding that out took restarting the harness and
 looking at the tab:
 
-| patch | covers |
-| --- | --- |
-| `dsh-web-frontend`, `dist/index.html` | the served document — the tab until React mounts |
-| `dsh-client-ui-renderer`, `lib/client.js` | `DocumentTitle`'s own `productTitle` constant |
+| what | covers | how |
+| --- | --- | --- |
+| the served `index.html` | the tab until React mounts | `index.js` — `ctx.webServer.tapIndex` |
+| `ui-renderer`'s `productTitle` | the tab for the rest of the session | a patch in [`patches/apply.mjs`](../../patches/apply.mjs) |
 
-Patching only the first left the tab reading "Professor's Exoskeleton" on the
+Covering only the first left the tab reading "Professor's Exoskeleton" on the
 start screen and `<session title> — DeepSeek Harness` the moment a conversation
 was open, because `ui-renderer` takes the title over from then on and composes
 it from a constant of its own. The open-conversation case is the one anybody
 actually looks at, and the one a screenshot catches.
 
-Neither patch is redundant: the renderer's constant is also what the title is
+Neither is redundant: the renderer's constant is also what the title is
 restored to on unmount, and the served HTML is what shows before any of that
 JavaScript has run.
+
+Only the second has to be a patch. The first was one until 2026-09-17, and did
+not need to be: `dsh-host-frontend-static` routes every index response through
+the webserver's `renderIndex`, which applies the raw `tapIndex` transforms —
+"the escape hatch for markup no `IndexInjection` row expresses", in its own
+words. That is a supported extension point reached from a plugin, which is what
+`patches/apply.mjs` asks callers to prefer over a patch. The tap also matches
+`<title>` by pattern where the patch had to match the shipped string exactly, so
+it survives an upstream retitling instead of failing on one.
+
+The second has no such hook. `productTitle` is a constant inside `DocumentTitle`,
+and `ui-renderer` renders that component directly rather than through a slot —
+there is nothing to occupy and nothing to inject.
 
 ## Turning it off
 
@@ -80,5 +90,11 @@ Override the row from the profile's patch layer:
 ```
 
 The shipped brand comes back on its own, because `ui-brand-official` was never
-unmounted. The tab title does not — that is the patch, and `npm run patch`
-governs it.
+unmounted, and so does the served document's title: disabling the row disposes
+the fiber, and the fiber owns the `tapIndex` disposer.
+
+What does **not** come back is the title once a session is open. That half is a
+patch in the renderer's bundle, which `npm run patch` governs and this row does
+not — so a disabled brand row leaves the start screen saying "DeepSeek Harness"
+and an open conversation still saying "Professor's Exoskeleton". Revert the
+patch too if you want the shipped name everywhere.

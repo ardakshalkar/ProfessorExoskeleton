@@ -40,7 +40,7 @@
 import { copyFileSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { type CourseBundle } from "./bundle.ts";
-import { BY_TOOL, stylesheet } from "./mcp/widgets.ts";
+import { BY_TOOL, stylesheet } from "./tools/widgets.ts";
 import { refusal, scan } from "./safety.ts";
 
 /**
@@ -193,11 +193,19 @@ export interface Publishable {
  * Three returns: what to publish, what was held back for a reason worth acting
  * on, and a tally of the reasons that are simply how the model works. A brief in
  * object storage is not a problem to report every build.
+ *
+ * `holdBack` is the caller's own refusals, as `documentId -> reason`, joined to
+ * this list rather than computed here. `freshness.ts` fills it with the
+ * renderings whose source has changed — a `.pdf` of last week's text is a file
+ * this repository holds and may not hand to a student, but deciding that needs
+ * a checksum comparison over the whole run, which is a different question from
+ * the one this function answers.
  */
 export const publishable = (
   bundle: CourseBundle,
   courseVersionId: string,
   root: string,
+  holdBack?: Map<string, string>,
 ): Publishable => {
   const published: Material[] = [];
   const heldBack: string[] = [];
@@ -218,6 +226,12 @@ export const publishable = (
     }
     if (key.startsWith("work/")) {
       heldBack.push(`${document.document_id}: a draft under work/, not approved material`);
+      continue;
+    }
+
+    const refused = holdBack?.get(document.document_id as string);
+    if (refused) {
+      heldBack.push(`${document.document_id}: ${refused}`);
       continue;
     }
 

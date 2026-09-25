@@ -49,14 +49,25 @@ export const INDEX = "templates.yaml";
 /**
  * Where a bare `--template plain` is looked for.
  *
- * `.agents/skills` is first and is this project's own layout, which upstream did
- * not have: `exo setup` unpacks the skills there, and every `templates.yaml` in
- * this workspace is under it. The two after it are upstream's, kept so a
- * workspace laid out the other way still resolves. All three are tried and the
- * failure names all three, because "no such template" without a path sends
- * someone reading source.
+ * `plugins/professor-course-skills/skills` is first and is where the skills
+ * this command loads templates for actually live: it was added on 2026-09-17,
+ * because cd68c12 ("One root for this host's skills") had moved them there the
+ * day before and left every root in this list naming somewhere that no longer
+ * existed — `ainar page --template plain` and `ainar dashboard --template
+ * plain` both failed to resolve a template that was sitting in the checkout.
+ * The two surfaces reached from here, `course-page` and `course-dashboard`,
+ * are both under it.
+ *
+ * `skills` is next and was this project's own layout until that move.
+ * `.agents/skills` is where those same skills lived until 2026-09-16; the two
+ * after it are upstream's, kept for a workspace laid out that way. The older
+ * four are kept rather than replaced so a checkout from before either move
+ * still resolves. All five are tried and the failure names all five, because
+ * "no such template" without a path sends someone reading source.
  */
 export const SEARCH = [
+  join("plugins", "professor-course-skills", "skills"),
+  "skills",
   join(".agents", "skills"),
   join(".claude", "skills"),
   join("plugin", "ainar-exoskeleton", "skills"),
@@ -220,16 +231,48 @@ export const get = (set: TemplateSet, templateId: string): Template => {
   return refuse(`${join(set.directory, INDEX)} lists no template '${templateId}'. It has: ${known}`);
 };
 
-/** Every directory a bare template id is looked for in, in order. */
-const lookedIn = (root: string, surface: string): string[] =>
-  SEARCH.map((relative) => join(root, relative, surface, "templates"));
+/**
+ * This checkout, from this file rather than from where anybody is standing.
+ *
+ * `src/templates.ts` → `ainar-node/` → the repository, which is the same
+ * arithmetic `bin/golden-check.ts` does.
+ */
+const INSTALLATION = resolve(import.meta.dirname, "..", "..");
+
+/**
+ * Every directory a bare template id is looked for in, in order.
+ *
+ * **Two roots, and the second is the one that makes this work.** A template is a
+ * repository file: it ships beside the skill that owns it, under `SEARCH[0]`.
+ * The workspace is the professor's course folder. Those are different trees, and
+ * searching only the workspace means finding a template exactly when the
+ * professor's workspace happens to be this checkout — which is nobody's, in
+ * production, and stopped being true here on 2026-09-17 when the sample course
+ * moved into `workspace/`.
+ *
+ * That is why adding `plugins/professor-course-skills/skills` to `SEARCH` fixed
+ * the tests and not `ainar page --template plain`: the tests resolve against the
+ * repository, and the command resolved against the workspace, and until that day
+ * the two were one directory so nothing showed the difference.
+ *
+ * The workspace still goes first, so a professor who keeps their own templates
+ * beside their courses outranks the shipped ones. The installation is the
+ * fallback, and it is skipped when the two are the same directory so that the
+ * refusal does not print every path twice.
+ */
+const lookedIn = (root: string, surface: string): string[] => {
+  const roots = resolve(root) === INSTALLATION ? [root] : [root, INSTALLATION];
+  return roots.flatMap((base) =>
+    SEARCH.map((relative) => join(base, relative, surface, "templates")),
+  );
+};
 
 /**
  * A `--template` argument as a path, whether it arrived as one or as an id.
  *
  * `--template print` is what a professor types and `--template
- * .agents/skills/course-page/templates/print.css` is what a skill passes; both
- * end up here.
+ * skills/course-page/templates/print.css` is what a skill passes; both end up
+ * here.
  */
 export const resolveTemplate = (
   value: string,

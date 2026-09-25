@@ -1,0 +1,71 @@
+{
+  "name": "professor-exoskeleton",
+  "owner": {
+    "name": "Ardak Shalkarbayuly"
+  },
+  "plugins": [
+    {
+      "name": "professor-course-skills",
+      "source": "./plugins/professor-course-skills",
+      "description": "This host's own course-level skills: onboarding, concept maps, term planning, assessment design, gap analysis, grading, dashboards and reporting, written against the AINAR record layer.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Ardak Shalkarbayuly"
+      }
+    },
+    {
+      "name": "professor-assignment-skills",
+      "source": "./plugins/professor-skills/professor-assignment-skills",
+      "description": "Create aligned homework, labs, seminars, and practice sessions at selectable depth from course context.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Ardak Shalkarbayuly"
+      }
+    },
+    {
+      "name": "professor-course-design-skills",
+      "source": "./plugins/professor-skills/professor-course-design-skills",
+      "description": "Design and review aligned courses at selectable depth using the Professor DataLayer course structure.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Ardak Shalkarbayuly"
+      }
+    },
+    {
+      "name": "professor-exam-skills",
+      "source": "./plugins/professor-skills/professor-exam-skills",
+      "description": "Create aligned exams, questions, marking guides, rubrics, and equivalent variants at the depth the request needs.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Ardak Shalkarbayuly"
+      }
+    },
+    {
+      "name": "professor-lms-publishing-skills",
+      "source": "./plugins/professor-skills/professor-lms-publishing-skills",
+      "description": "Preview and explicitly publish professor-approved content to Canvas, Moodle, or Telegram.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Ardak Shalkarbayuly"
+      }
+    },
+    {
+      "name": "professor-slides-skills",
+      "source": "./plugins/professor-skills/professor-slides-skills",
+      "description": "Plan, write and render course presentations at the depth the request needs — fast, standard or deep — from a Supabase course database, a YAML course directory, or a single flat course file.",
+      "version": "0.2.0",
+      "author": {
+        "name": "Ardak Shalkarbayuly"
+      }
+    },
+    {
+      "name": "professor-student-assessment-skills",
+      "source": "./plugins/professor-skills/professor-student-assessment-skills",
+      "description": "Draft evidence-cited grading suggestions, moderate decisions, and prepare feedback without auto-approving grades.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Ardak Shalkarbayuly"
+      }
+    }
+  ]
+}

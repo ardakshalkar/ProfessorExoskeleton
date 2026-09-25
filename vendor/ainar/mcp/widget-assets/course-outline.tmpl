@@ -1,0 +1,145 @@
+{# The structure of the course outline: the public page a student reads, and the
+   same view a model draws beside its own answer in a chat reply. There is one
+   copy of it, which is this file.
+
+   The language is in `template.js`: escaped `{{ paths }}`, `{% if %}`,
+   `{% for %}`, and nothing else. No expressions, no filters, no arithmetic —
+   every figure here comes from the payload `ainar/outline.py` produced, and
+   every string was formatted by `model()` in `course-outline.js`. A template
+   that could compute could compute a figure nobody asked a command for.
+
+   Three things in here are not decoration and must survive an edit:
+     * an unplanned week says it is unplanned, rather than rendering as empty;
+     * a weight nobody set says so, rather than printing 0%;
+     * the closing note says the page carries nothing derived from student work.
+   `tests/test_page.py` and `tests/test_mcp_widgets.py` assert all three.
+
+   A fourth, newer and of a different kind: the gap chips on a week and the
+   tally in the strip are drawn only where `sections.gaps` is true, and the view
+   hands this template an empty list everywhere else. They say what the
+   professor has not written yet, which is a fact about the course and not about
+   anyone in the class — but a student page has no business carrying it, and a
+   student page is what this same file renders under `ainar page`. #}
+
+{# The glyphs the week indicators draw from. One sprite for the document, so a
+   sixteen-week page carries nine shapes rather than a hundred copies of them.
+   Every symbol is stroked in `currentColor` and carries no fill, which is what
+   lets one file serve the light and dark palettes and lets a chip tint its own
+   icon by setting `color`. Names are the `icon` values `course-outline.js`
+   chooses from its kind tables; a kind with no entry falls back to `doc`. #}
+<svg class="sprite" aria-hidden="true" focusable="false" width="0" height="0"><defs>
+<symbol id="i-slides" viewBox="0 0 16 16"><rect x="1.6" y="2.4" width="12.8" height="8.6" rx="1.4"/><path d="M8 11v2.6M5.6 13.6h4.8"/></symbol>
+<symbol id="i-quiz" viewBox="0 0 16 16"><path d="M5.8 2.6H3.9a1.3 1.3 0 0 0-1.3 1.3v9.2a1.3 1.3 0 0 0 1.3 1.3h8.2a1.3 1.3 0 0 0 1.3-1.3V3.9a1.3 1.3 0 0 0-1.3-1.3h-1.9"/><rect x="5.8" y="1.3" width="4.4" height="2.6" rx=".9"/><path d="M5.6 9.4l1.6 1.6 3.4-3.6"/></symbol>
+<symbol id="i-doc" viewBox="0 0 16 16"><path d="M9.2 1.6H4.6a1.3 1.3 0 0 0-1.3 1.3v10.2a1.3 1.3 0 0 0 1.3 1.3h6.8a1.3 1.3 0 0 0 1.3-1.3V5z"/><path d="M9.2 1.6V5h3.5"/><path d="M5.9 8.6h4.2M5.9 11.1h4.2"/></symbol>
+<symbol id="i-book" viewBox="0 0 16 16"><path d="M2.2 2.6h3.9A1.9 1.9 0 0 1 8 4.5v9.3a1.7 1.7 0 0 0-1.4-.9H2.2z"/><path d="M13.8 2.6H9.9A1.9 1.9 0 0 0 8 4.5v9.3a1.7 1.7 0 0 1 1.4-.9h4.4z"/></symbol>
+<symbol id="i-code" viewBox="0 0 16 16"><path d="M5.4 5.4L2.6 8l2.8 2.6M10.6 5.4L13.4 8l-2.8 2.6M9.3 3.4l-2.6 9.2"/></symbol>
+<symbol id="i-tool" viewBox="0 0 16 16"><path d="M10.6 1.9a4 4 0 0 0-4.2 5.3l-4.3 4.3a1.6 1.6 0 0 0 2.3 2.3l4.3-4.3a4 4 0 0 0 5.3-4.2l-2.2 2.2-2.1-.5-.5-2.1z"/></symbol>
+<symbol id="i-data" viewBox="0 0 16 16"><ellipse cx="8" cy="3.7" rx="5" ry="2.1"/><path d="M3 3.7v8.6c0 1.1 2.2 2 5 2s5-.9 5-2V3.7"/><path d="M3 8c0 1.2 2.2 2.1 5 2.1s5-.9 5-2.1"/></symbol>
+<symbol id="i-play" viewBox="0 0 16 16"><rect x="1.6" y="2.6" width="12.8" height="10.8" rx="1.4"/><path d="M6.6 5.9l4 2.1-4 2.1z"/></symbol>
+<symbol id="i-link" viewBox="0 0 16 16"><path d="M6.8 9.2a2.6 2.6 0 0 0 3.9.3l2-2a2.6 2.6 0 0 0-3.7-3.7l-1.1 1.1"/><path d="M9.2 6.8a2.6 2.6 0 0 0-3.9-.3l-2 2a2.6 2.6 0 0 0 3.7 3.7l1.1-1.1"/></symbol>
+<symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 4.4V8l2.4 1.6"/></symbol>
+<symbol id="i-meet" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.7 5.5l4 2.5-4 2.5z"/></symbol>
+<symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.6v8.8M3.6 8h8.8"/></symbol>
+</defs></svg>
+
+{% if show_header %}
+<h1>{{ run.course_id }} — {{ run.title }}</h1>
+<p class="sub">{{ run.term }} · {{ run.start_date }} – {{ run.end_date }} · {{ run.instructors }} · {{ run.id }}</p>
+{% if run.description %}
+<p class="lede">{{ run.description }}</p>
+{% endif %}
+{% endif %}
+<p class="strip">{{ totals.weeks }} weeks · {{ totals.weeks_planned }} with a module · {{ totals.meetings }} meetings · {{ totals.assessments }} assessments · weights total {% if total_weight %}<span class="{% if weights_short %}flag{% endif %}">{{ total_weight }}</span>{% else %}<span class="flag">weight not set</span>{% endif %}{% if gaps_word %} · <span class="flag">{{ gaps_word }}</span>{% endif %}</p>
+
+{% if show_assessments %}
+<h2>Assessment</h2>
+<div class="scroll"><table><thead><tr><th>Assessment</th><th>Type</th><th class="n">Weight</th><th class="n">Due</th><th>Outcomes</th></tr></thead><tbody>
+{% for a in assessments %}
+<tr><td class="name">{{ a.title }}<small>{{ a.assessment_id }} · {{ a.criteria }} criteria</small></td><td>{{ a.type }}</td><td class="n">{% if a.weight %}{{ a.weight }}{% else %}<span class="flag">weight not set</span>{% endif %}</td><td class="n">{% if a.due_on %}{{ a.due_on }}{% else %}—{% endif %}</td><td>{{ a.outcomes }}</td></tr>
+{% endfor %}
+</tbody></table></div>
+{% endif %}
+
+{% if show_grading_note %}
+<div class="note"><strong class="flag">The grading policy.</strong> {{ grading_note }}</div>
+{% endif %}
+
+<h2>Week by week</h2>
+{% for w in weeks %}
+<div class="wk {{ w.classes }}">
+<div class="wk-hd"><div class="wk-mark"><b>{{ w.week_label }}</b><small>{{ w.mark }}</small></div><div class="wk-name">{% if w.title %}<b>{{ w.title }}</b>{% else %}<b class="unplanned">Unplanned</b>{% endif %}{% if w.is_current %}<span class="now">now</span>{% endif %}{% if w.subtitle %}<small><svg class="ico" aria-hidden="true"><use href="#i-meet"></use></svg><span>{{ w.subtitle }}</span></small>{% endif %}{% if w.gaps %}<small class="wkgaps">{% for g in w.gaps %}<span class="wkgap" title="{{ g.note }}">{{ g.label }}</span>{% endfor %}</small>{% endif %}</div>{% if w.is_current %}<button class="ask" data-ask="For week {{ w.week }} of {{ run.id }}, what should I teach and what should I revisit first?">Prepare →</button>{% endif %}{% if w.details %}<button type="button" class="dots" data-wkbtn aria-label="Week {{ w.week }} details" title="Week details">···</button>{% endif %}</div>
+<div class="wk-body">
+{% if w.planned %}
+{% for t in w.topics %}
+<div class="topic"><div class="chips" data-chips><div class="chiprow">{% for c in t.concepts %}<span class="chip concept" title="{{ c.id }}">{{ c.label }}</span>{% endfor %}{% for o in t.outcomes %}<span class="chip lo" title="{{ o.id }}">{{ o.label }}</span>{% endfor %}</div><button type="button" class="more" data-more hidden>more</button></div></div>
+{% endfor %}
+{% else %}
+{% if w.source_topics %}
+{% for s in w.source_topics %}
+<div class="source-topic"><span class="kind">source outline</span> <b>{{ s.title }}</b>{% if s.description %}<p>{{ s.description }}</p>{% endif %}<small>{{ s.source_title }} · {{ s.document_id }} · not yet in the formal course model</small></div>
+{% endfor %}
+{% else %}
+<p class="empty">No module names this week, and no source outline does either. Unplanned, which is not the same as nothing being taught.</p>
+{% endif %}
+{% endif %}
+{% if w.has_items %}
+<div class="mats" data-mats>
+<div class="ind">
+{% for i in w.items %}<span class="it it-{{ i.tone }}"{% if i.name %} title="{{ i.name }}"{% endif %}><span class="itc"><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg>{% if i.brief_id %}<span class="itk" data-briefkey="{{ i.brief_id }}" data-briefurl="{{ i.brief_url }}" data-brieffmt="{{ i.brief_format }}" data-briefname="{{ i.brief_title }}">{{ i.label }}</span>{% else %}<span class="itk">{{ i.label }}</span>{% endif %}{% if i.when %}<span class="itdot">·</span><span class="itw{% if i.overdue %} due{% endif %}">{{ i.when }}</span>{% endif %}{% if i.origin %}{% if i.outline_url %}<button type="button" class="itorg itorgb it-{{ i.origin }}" data-outline="{{ i.outline_url }}" data-outlinename="{{ i.name }}" title="{{ i.origin }}{% if i.read_by %} · read by {{ i.read_by }}{% endif %} — see what was read">{{ i.origin }}</button>{% else %}<span class="itorg it-{{ i.origin }}" title="{{ i.origin }}{% if i.read_by %} · read by {{ i.read_by }}{% endif %}">{{ i.origin }}</span>{% endif %}{% endif %}{% if i.draft %}<span class="itd">draft</span>{% endif %}</span>{% if i.ask %}<span class="itc gap"><svg class="ico" aria-hidden="true"><use href="#i-clock"></use></svg>no date</span><button type="button" class="itb" data-ask="{{ i.ask }}">set date</button>{% endif %}{% if i.formats %}{% for f in i.formats %}<a class="fmt" href="{{ f.href }}"{% if f.view %} data-view="{{ f.view }}" data-format="{{ f.format }}"{% endif %} target="_blank" rel="noopener">{{ f.label }}</a>{% endfor %}{% else %}{% if i.href %}<a class="fmt" href="{{ i.href }}"{% if i.view %} data-view="{{ i.view }}" data-format="{{ i.format }}"{% endif %} target="_blank" rel="noopener">open</a>{% endif %}{% endif %}</span>{% endfor %}
+{% if w.extras %}<button type="button" class="itc it-more" data-matbtn><svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg><span class="itk" data-matlabel>{{ w.extras_word }}</span></button>{% endif %}
+</div>
+{% if w.extras %}
+<div class="ind matlist">
+{% for i in w.extras %}<span class="itc it-x" title="{{ i.kind }} · {{ i.name }}"><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg>{% if i.href %}<a class="itk itl" href="{{ i.href }}"{% if i.view %} data-view="{{ i.view }}" data-format="{{ i.format }}"{% endif %} target="_blank" rel="noopener">{{ i.label }}</a>{% else %}<span class="itk">{{ i.label }}</span>{% endif %}{% if i.draft %}<span class="itd">draft</span>{% endif %}</span>{% endfor %}
+</div>
+{% endif %}
+{# What a piece of graded work asks for.
+
+   A `<details>` and not a hidden div, because this template has two very
+   different readers. The pane runs `runtime.js`, which turns the chip above
+   into a button and opens this in a sheet over the plan. `ainar page`
+   prerenders the SAME markup and ships no script at all, so whatever is here
+   is the whole of what a student gets — and a disclosure they can open is a
+   feature there, while a button wired to nothing would be the exact fault
+   `runtime.js` names in its own comments: a control that does nothing is worse
+   than no control.
+
+   So the no-script reading is the one written down, and the script is an
+   upgrade over it rather than a requirement for it. #}
+{% for i in w.items %}{% if i.brief_id %}<details class="briefdoc" data-briefdoc="{{ i.brief_id }}"><summary>{{ i.brief_kind }} — what this asks for</summary><p class="bkind">{{ i.brief_kind }}</p><h3 class="btitle">{{ i.brief_title }}</h3><dl class="bfacts">{% for f in i.brief_facts %}<div><dt>{{ f.k }}</dt><dd>{{ f.v }}</dd></div>{% endfor %}</dl>{% for p in i.brief_text %}<p class="btext">{{ p }}</p>{% endfor %}</details>{% endif %}{% endfor %}
+</div>
+{% endif %}
+{% if w.details %}
+<div class="wk-more" data-wkpanel hidden>
+{% for d in w.details %}<div class="row"><span class="k">{{ d.k }}</span><span class="v">{{ d.v }}</span></div>{% endfor %}
+{% for p in w.prep %}<p class="prep">{{ p }}</p>{% endfor %}
+</div>
+{% endif %}
+</div>
+</div>
+{% endfor %}
+
+{% if materials %}
+<h2>Required materials</h2>
+<ul class="plain">
+{% for m in materials %}
+<li>{% if m.href %}<a href="{{ m.href }}"{% if m.view %} data-view="{{ m.view }}" data-format="{{ m.format }}"{% endif %} target="_blank" rel="noopener">{{ m.title }}</a>{% else %}{{ m.title }}{% endif %} <span class="kind">{{ m.kind }}</span></li>
+{% endfor %}
+</ul>
+{% endif %}
+
+{% if stranded %}
+<h2>On no week of this run</h2>
+<ul class="blocked">
+{% for s in stranded %}
+<li>{{ s.id }} {{ s.title }} — {{ s.note }}</li>
+{% endfor %}
+</ul>
+{% endif %}
+
+<div class="note"><strong>Structure only.</strong> {{ placement }} Nothing here is derived from student work — for that, ask for the class grid or the gradebook. <button class="ask" data-ask="Show me the syllabus for {{ run.id }}.">syllabus</button></div>
+
+{# The sheet a brief opens into. One per document rather than one per chip:
+   only ever one is open, and sixteen weeks of dialogs would be sixteen copies
+   of the same markup waiting to disagree. `runtime.js` fills the body. #}
+<div class="sheet" data-sheet hidden><div class="sheetbg" data-sheetclose></div><div class="sheetbox" role="dialog" aria-modal="true" tabindex="-1"><button type="button" class="sheetx" data-sheetclose aria-label="Close">×</button><div class="sheetbody" data-sheetbody></div></div></div>

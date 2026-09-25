@@ -1,0 +1,7 @@
+{
+  "name": "professor-course-skills",
+  "description": "This host's own course-level skills: onboarding, concept maps, term planning, assessment design, gap analysis, grading, dashboards and reporting, written against the AINAR record layer.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "author": { "name": "Ardak Shalkarbayuly" }
+}

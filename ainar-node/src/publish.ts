@@ -1,0 +1,551 @@
+/**
+ * Publishing: the one grammar, and the promotion it carries with it.
+ *
+ * Four things in this project reach an audience — the students' page, a
+ * homework starter repository, an assessment's definition in Canvas, and a
+ * Telegram announcement. They were four commands with four shapes, and each one
+ * was preceded by a step the professor had to remember and perform somewhere
+ * else: `ainar approve`, in a terminal, before the deck they had just drafted
+ * could appear on the page at all.
+ *
+ * That step has not been removed. It has been **folded in**: `ainar publish`
+ * runs the same gate, in the same order of operations (`runApproval` in
+ * `approve.ts`), and then publishes. Two presses rather than two programs — a
+ * plan that names what it would promote and what it would then publish, and a
+ * `--confirm` that does both.
+ *
+ * ## What may be promoted this way, and what may never be
+ *
+ * `MATERIAL_COLLECTIONS` is the whole of the answer, and it is enforced in code
+ * rather than asserted in prose: `runApproval` is handed that list, so a drafted
+ * evaluation sitting in the same `work/<RUN>/` directory is not promoted, is not
+ * validated against, and is named in the plan as left alone.
+ *
+ * The reason the line falls exactly there: a `Document` or a `Resource` is an
+ * artefact — a deck, a handout, a brief. Publishing one IS the act of standing
+ * behind it, and a professor who pressed *publish the course page* having read
+ * what would go on it has made the decision the gate exists to capture. An
+ * `Evaluation` is a judgement about a person, and nothing about pressing
+ * *publish* says whether a suggested score is right. `ainar approve` remains
+ * the only way one of those becomes a record, and the professor runs it.
+ */
+
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { promoteIdentifier } from "./approve.ts";
+import type { CourseBundle } from "./bundle.ts";
+import { type Drafted, loadDrafts } from "./drafts.ts";
+import type { Fingerprint } from "./freshness.ts";
+import type { Publication } from "./lms/ledger.ts";
+import { type Transport, TransportError, json } from "./lms/http.ts";
+import { IssueList, describe } from "./issues.ts";
+import { publishable } from "./page.ts";
+import { describeLeak, scan } from "./safety.ts";
+
+export const TARGETS = ["page", "homework", "canvas", "telegram", "update"] as const;
+export type Target = (typeof TARGETS)[number];
+
+/**
+ * `update` is a mode, not a fifth place to publish.
+ *
+ * It means *every destination this run has already been sent to*, which is a
+ * set the ledger holds and nothing else does. That is deliberately narrower
+ * than "everywhere this course could publish": a first publication is a
+ * decision about whether students see a thing at all, and it stays one press
+ * per target. Re-sending something they have already been given is the act
+ * that should be one press, because the alternative is remembering which four
+ * places last Tuesday's deck went to.
+ */
+export const isUpdate = (target: Target): boolean => target === "update";
+
+/**
+ * The targets an update can regenerate on its own.
+ *
+ * Telegram is not among them and cannot be: an announcement is what the
+ * professor typed, and there is nothing in the record to re-derive it from. A
+ * page, a Canvas brief and a starter repository are all built from the course,
+ * so re-sending them is a question the machine can answer. Correcting an
+ * announcement is `publish telegram --edit`, with the new words supplied.
+ */
+export const UPDATABLE: readonly Target[] = ["page", "canvas", "homework"];
+
+/**
+ * The only draft collections a publication may promote on the professor's
+ * behalf. See this file's header for why the line is here and not elsewhere.
+ */
+export const MATERIAL_COLLECTIONS = ["documents", "resources"] as const;
+
+export const describeTarget = (target: Target): string =>
+  ({
+    page: "the students' course page",
+    homework: "a homework starter repository on GitHub",
+    canvas: "an assessment's definition in Canvas",
+    telegram: "a course announcement on Telegram",
+    update: "everywhere this run has already been published",
+  })[target];
+
+/** One destination an update would revisit, read out of the ledger. */
+export interface Destination {
+  target: Target;
+  /** The run, or the assessment, depending on the target. */
+  scope: string;
+  where: string;
+  at: string;
+}
+
+/**
+ * What an update would revisit, oldest first.
+ *
+ * Oldest first because that is the order they fell behind in, and a professor
+ * reading a list of four wants to see the one from three weeks ago at the top.
+ * A destination whose target cannot be regenerated — an announcement — is
+ * skipped here and named by the caller, rather than silently dropped.
+ */
+export const destinations = (
+  publications: Record<string, Publication>,
+  runId: string,
+): { updating: Destination[]; skipped: Destination[] } => {
+  const updating: Destination[] = [];
+  const skipped: Destination[] = [];
+  for (const [key, entry] of Object.entries(publications)) {
+    const [target, scope] = key.split("|") as [Target, string];
+    if (!TARGETS.includes(target)) continue;
+    // A page and an announcement are scoped to the run; a repository and a
+    // Canvas brief to an assessment of it. Another run's entries live in
+    // another file, so the only filter needed is the run-scoped one.
+    if ((target === "page" || target === "telegram") && scope !== runId) continue;
+    const found = { target, scope, where: entry.where, at: entry.at };
+    (UPDATABLE.includes(target) ? updating : skipped).push(found);
+  }
+  const byDate = (left: Destination, right: Destination) => left.at.localeCompare(right.at);
+  return { updating: updating.sort(byDate), skipped: skipped.sort(byDate) };
+};
+
+// --------------------------------------------------------------------------
+// What a publication would promote
+// --------------------------------------------------------------------------
+
+export interface Promotion {
+  collection: string;
+  draftId: string;
+  title: string;
+  /**
+   * The record this draft has already become, if it has.
+   *
+   * `ainar approve` leaves the drafts where they are and prints that they can
+   * now be removed, which is fine for a command a professor runs once and then
+   * tidies up after. It is not fine for a button: the second press would find
+   * the same draft, promote it to an identifier the record already holds, and
+   * refuse with `approve.collision` — four errors about a deck that is
+   * published and correct. So a draft whose promoted identifier is already in
+   * the course is reported here and rejected from the approval, and pressing
+   * Publish twice publishes twice.
+   */
+  recordedAs: string | null;
+}
+
+export interface Pending {
+  /** Material drafts this publication would promote. */
+  promotions: Promotion[];
+  /** Everything else in the drafts directory, by collection, left alone. */
+  leftAlone: Map<string, number>;
+  /** The drafts did not load. Publishing does not proceed past this. */
+  errors: string[];
+}
+
+/** The promotions that still have something to do. */
+export const outstanding = (pending: Pending): Promotion[] =>
+  pending.promotions.filter((entry) => entry.recordedAs === null);
+
+const TITLE_FIELDS = ["title", "name", "label"];
+
+const titleOf = (record: Record<string, unknown>): string => {
+  for (const field of TITLE_FIELDS) {
+    const value = record[field];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "(untitled)";
+};
+
+/**
+ * Read `work/<RUN>/` and say what a publication would promote out of it.
+ *
+ * This is the plan's first half and it writes nothing. It loads the drafts the
+ * same way the gate does, so a directory that will not load fails here — in the
+ * preview, where a professor is reading — rather than half way through a push
+ * to GitHub.
+ */
+export const pendingMaterials = (draftsDir: string, bundle?: CourseBundle): Pending => {
+  const issues = new IssueList();
+  const loaded = loadDrafts(draftsDir, issues) as Drafted;
+  if (issues.errors.length) {
+    return {
+      promotions: [],
+      leftAlone: new Map(),
+      errors: issues.errors.map((issue) => describe(issue)),
+    };
+  }
+
+  const already = new Set<string>();
+  for (const collection of MATERIAL_COLLECTIONS) {
+    const field = collection === "documents" ? "document_id" : "resource_id";
+    for (const record of ((bundle ?? {}) as Record<string, unknown>)[collection] as
+      | Record<string, unknown>[]
+      | undefined ?? []) {
+      const value = record[field];
+      if (typeof value === "string") already.add(value);
+    }
+  }
+
+  const drafted = loaded as unknown as Record<string, Record<string, unknown>[]>;
+  const allowed = new Set<string>(MATERIAL_COLLECTIONS);
+  const promotions: Promotion[] = [];
+  const leftAlone = new Map<string, number>();
+  for (const [collection, records] of Object.entries(drafted)) {
+    if (!records || !records.length) continue;
+    if (!allowed.has(collection)) {
+      leftAlone.set(collection, records.length);
+      continue;
+    }
+    const idField = collection === "documents" ? "document_id" : "resource_id";
+    for (const record of records) {
+      const draftId = String(record[idField] ?? "(no id)");
+      const promoted = promoteIdentifier(draftId);
+      promotions.push({
+        collection,
+        draftId,
+        title: titleOf(record),
+        recordedAs: already.has(promoted) ? promoted : null,
+      });
+    }
+  }
+  return { promotions, leftAlone, errors: [] };
+};
+
+// --------------------------------------------------------------------------
+// What the page would carry
+// --------------------------------------------------------------------------
+
+export interface PagePlan {
+  /** Materials that would be copied beside the page. */
+  publishing: { documentId: string; title: string; filename: string }[];
+  /** Materials that would not, and why — the model's own sentences. */
+  heldBack: string[];
+  /** Whole categories excluded by rule: student work, object storage. */
+  tally: Record<string, number>;
+}
+
+/**
+ * The page's own half of the plan, computed over the record as it stands.
+ *
+ * Deliberately NOT over the merge. A promotion moves a material out of `work/`,
+ * so what it would publish is a question about the record after promoting, and
+ * the honest way to answer it before promoting is to name the promotions
+ * separately — which `pendingMaterials` does. A merged answer would read as
+ * though the file were already where it will be, which is the one thing a
+ * preview must not do.
+ */
+export const pagePlan = (
+  bundle: CourseBundle,
+  courseVersionId: string,
+  root: string,
+  holdBack?: Map<string, string>,
+): PagePlan => {
+  const { published, heldBack, tally } = publishable(bundle, courseVersionId, root, holdBack);
+  return {
+    publishing: published.map((material) => ({
+      documentId: material.documentId,
+      title: material.title,
+      filename: material.filename,
+    })),
+    heldBack,
+    tally,
+  };
+};
+
+// --------------------------------------------------------------------------
+// What was sent last time
+// --------------------------------------------------------------------------
+
+/**
+ * The previous publication, described — and what has moved since it.
+ *
+ * This is the difference between *publish* and *update*, and it is a question
+ * nothing in the workspace could answer before: the record says what the course
+ * is, never what was sent or when. A page rebuilt from an unchanged record
+ * looks exactly like a page nobody ever built.
+ *
+ * The comparison is checksum against checksum — what went out, against what is
+ * on disk now — so the answer names the three files that moved rather than
+ * saying that something did. A material added since the last publication counts
+ * as moved; one removed from the course is reported as gone, because a page
+ * still carrying it is the version students are reading.
+ */
+export const describePublication = (
+  last: Publication | null,
+  now: Map<string, string>,
+  titles: Map<string, string>,
+): string[] => {
+  if (last === null) return ["Nothing has been published here before."];
+
+  const lines = [`Last published ${last.at} to ${last.where}.`];
+  if (last.reference) lines.push(`  it came back as ${last.reference}`);
+
+  const moved: string[] = [];
+  for (const [id, checksum] of now) {
+    const before = last.materials[id];
+    if (before === undefined) moved.push(`${id} is new since then — ${titles.get(id) ?? ""}`.trim());
+    else if (before !== checksum) moved.push(`${id} changed since then — ${titles.get(id) ?? ""}`.trim());
+  }
+  for (const id of Object.keys(last.materials)) {
+    if (!now.has(id)) moved.push(`${id} was published then and is not in the course now`);
+  }
+
+  if (!moved.length) {
+    lines.push("  nothing has changed since; publishing again sends the same thing");
+    return lines;
+  }
+  lines.push(`  ${moved.length} thing(s) have changed since:`);
+  for (const line of moved.sort()) lines.push(`    ${line}`);
+  return lines;
+};
+
+/** The materials as they are now, for the ledger and for the comparison above. */
+export const materialChecksums = (prints: Fingerprint[]): Map<string, string> =>
+  new Map(prints.map((print) => [print.documentId, print.actual]));
+
+// --------------------------------------------------------------------------
+// Telegram
+// --------------------------------------------------------------------------
+
+export const TELEGRAM_LIMIT = 4096;
+
+/**
+ * A checksum of an announcement's text.
+ *
+ * The ledger keeps one so a later plan can say whether the words have changed
+ * since they were sent. It is a digest and not the text: the ledger is not the
+ * place to keep a copy of what students were told, and the question it has to
+ * answer is only "the same, or not".
+ */
+export const announcementDigest = (text: string): string =>
+  "sha256:" + createHash("sha256").update(text.trim()).digest("hex");
+
+export interface Announcement {
+  text: string;
+  refusals: string[];
+  warnings: string[];
+}
+
+/**
+ * An announcement, checked before anybody can press send.
+ *
+ * Three refusals, each of them a thing that cannot be taken back once a channel
+ * of students has seen it:
+ *
+ * * **an answer.** The same scan `ainar page` runs over every file it copies,
+ *   run over the message text. It is given the run's whole item set rather than
+ *   one assessment's, which `safety.ts` says only makes it stricter.
+ * * **a student's identifier.** An announcement is the one surface where every
+ *   reader is a different student, so `STUDENT-…` in the text is refused
+ *   outright. A real name the professor typed is beyond what this can detect,
+ *   which is why the message is theirs to read before sending.
+ * * **nothing, or more than Telegram accepts.** Length is checked here rather
+ *   than discovered as a 400 from the Bot API.
+ */
+export const checkAnnouncement = (text: string, items: unknown[]): Announcement => {
+  const refusals: string[] = [];
+  const warnings: string[] = [];
+  const trimmed = text.trim();
+
+  if (!trimmed) refusals.push("the message is empty");
+  if (trimmed.length > TELEGRAM_LIMIT) {
+    refusals.push(
+      `the message is ${trimmed.length} characters and Telegram accepts ${TELEGRAM_LIMIT}`,
+    );
+  }
+
+  const result = scan(trimmed, items as never[]);
+  for (const leak of result.leaks) refusals.push(`it carries an answer — ${describeLeak(leak)}`);
+  if (result.unchecked.length) {
+    warnings.push(
+      `the answer scan could not cover ${result.unchecked.length} recorded answer(s): ` +
+        result.unchecked.join(", "),
+    );
+  }
+
+  const student = /STUDENT-[A-Za-z0-9]+/.exec(trimmed);
+  if (student) {
+    refusals.push(`it names ${student[0]}, and an announcement goes to everybody in the channel`);
+  }
+
+  return { text: trimmed, refusals, warnings };
+};
+
+export interface Channel {
+  chatId: string;
+  /** What the Bot API calls the chat, when it answered. */
+  title: string | null;
+}
+
+/**
+ * Ask Telegram what the channel is, without posting to it.
+ *
+ * `getChat` is the preview: it proves the token works and that the bot can see
+ * the chat, and it says which chat by name — the fact a professor about to
+ * announce something needs, because a chat id is unreadable and a message sent
+ * to last term's channel cannot be recalled.
+ */
+export const readChannel = async (
+  token: string,
+  chatId: string,
+  transport: Transport,
+): Promise<Channel> => {
+  const response = await transport.request(
+    "GET",
+    `https://api.telegram.org/bot${token}/getChat?chat_id=${encodeURIComponent(chatId)}`,
+    { headers: { Accept: "application/json" } },
+  );
+  const payload = json(response) ?? {};
+  if (response.status < 200 || response.status >= 300 || payload.ok !== true) {
+    throw new TransportError(
+      `Telegram refused to describe ${chatId}: ${payload.description ?? response.status}`,
+    );
+  }
+  const chat = payload.result ?? {};
+  return { chatId, title: chat.title ?? chat.username ?? null };
+};
+
+/**
+ * Correct a message already in the channel, rather than posting a second one.
+ *
+ * The Bot API lets a bot edit its own post, and the ledger has kept the id
+ * since publications were recorded, so a typo in an announcement can be fixed
+ * where students will actually see it — an erratum posted underneath is read
+ * by whoever happens to scroll.
+ *
+ * It is never the default. A professor sending their second announcement of
+ * the week means a second announcement, and a command that silently rewrote
+ * the first would destroy something students had already read. `--edit` is how
+ * they say they meant the other thing.
+ *
+ * Telegram refuses an edit whose text is identical, and that refusal is passed
+ * through as a plain no-op rather than an error: nothing needed changing.
+ */
+export const editAnnouncement = async (
+  token: string,
+  chatId: string,
+  messageId: string,
+  text: string,
+  transport: Transport,
+): Promise<"edited" | "unchanged"> => {
+  const body = new TextEncoder().encode(
+    JSON.stringify({
+      chat_id: chatId,
+      message_id: Number(messageId),
+      text,
+      disable_web_page_preview: true,
+    }),
+  );
+  const response = await transport.request(
+    "POST",
+    `https://api.telegram.org/bot${token}/editMessageText`,
+    { headers: { "Content-Type": "application/json", Accept: "application/json" }, body },
+  );
+  const payload = json(response) ?? {};
+  if (payload.ok === true) return "edited";
+  const description = String(payload.description ?? response.status);
+  if (/message is not modified/i.test(description)) return "unchanged";
+  throw new TransportError(
+    `Telegram would not edit message ${messageId}: ${description}. ` +
+      "It may be too old, or deleted. Sending a correction as a new message is the way back.",
+  );
+};
+
+/** Send one plain-text message. The only thing in this file that reaches a student. */
+export const sendAnnouncement = async (
+  token: string,
+  chatId: string,
+  text: string,
+  transport: Transport,
+): Promise<number> => {
+  const body = new TextEncoder().encode(
+    JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+  );
+  const response = await transport.request("POST", `https://api.telegram.org/bot${token}/sendMessage`, {
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body,
+  });
+  const payload = json(response) ?? {};
+  if (response.status < 200 || response.status >= 300 || payload.ok !== true) {
+    throw new TransportError(`Telegram rejected the message: ${payload.description ?? response.status}`);
+  }
+  return Number(payload.result?.message_id ?? 0);
+};
+
+/**
+ * The message text, from a file or from the argument.
+ *
+ * A file, because a shell eats newlines and an announcement is several lines;
+ * the argument, because one line is the common case. Never composed here: what
+ * students are told is the professor's own words, and a command that could
+ * write them would be a command that could get them wrong.
+ */
+export const announcementText = (message: string | undefined, file: string | undefined): string => {
+  if (message && file) throw new Error("--message and --message-file are alternatives; pass one");
+  if (file) return readFileSync(file, "utf-8");
+  if (message) return message;
+  throw new Error("nothing to announce: pass --message TEXT or --message-file PATH");
+};
+
+// --------------------------------------------------------------------------
+// Plan text
+// --------------------------------------------------------------------------
+
+/**
+ * The plan every target prints before it does anything.
+ *
+ * One shape for all four, because the professor's question is the same each
+ * time and a different layout per target is how a line gets skimmed: what would
+ * be promoted, what would then happen, and what would not.
+ */
+export const publishPlan = (options: {
+  target: Target;
+  pending: Pending;
+  actions: string[];
+  refusals: string[];
+}): string[] => {
+  const { target, pending, actions, refusals } = options;
+  const lines: string[] = [];
+
+  const todo = outstanding(pending);
+  if (todo.length) {
+    lines.push(`Would promote ${todo.length} drafted material(s) first:`);
+    for (const promotion of todo) {
+      lines.push(`  ${promotion.draftId}  ${promotion.title}`);
+    }
+  } else {
+    lines.push("Nothing drafted to promote — the record already holds what this publishes.");
+  }
+
+  for (const promotion of pending.promotions) {
+    if (promotion.recordedAs === null) continue;
+    lines.push(`  ${promotion.draftId} is already ${promotion.recordedAs} in the course — left as it is`);
+  }
+
+  for (const [collection, count] of pending.leftAlone) {
+    lines.push(`  left alone: ${count} draft(s) in ${collection}, which publishing does not promote`);
+  }
+
+  lines.push("");
+  lines.push(`Would then publish ${describeTarget(target)}:`);
+  for (const action of actions) lines.push(`  ${action}`);
+
+  if (refusals.length) {
+    lines.push("");
+    lines.push("It would refuse:");
+    for (const refusal of refusals) lines.push(`  ${refusal}`);
+  }
+
+  return lines;
+};

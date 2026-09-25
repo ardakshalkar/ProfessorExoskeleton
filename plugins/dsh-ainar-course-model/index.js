@@ -8,7 +8,7 @@
  *
  * This exists because that bridge carries Tools and nothing else. Our server
  * also serves `resources/list` and `resources/read`, and everything behind them
- * is the widgets: `ainar/mcp/widget-assets/` rendered per tool, bound by
+ * is the widgets: `vendor/ainar/mcp/widget-assets/` rendered per tool, bound by
  * `BY_TOOL`. Over the MCP client they are simply absent — not broken, not
  * degraded, absent — and the loss is silent at both ends.
  *
@@ -37,9 +37,9 @@
 // declaration referenced above. See `dsh-tools.d.ts` for why that is a
 // declaration rather than a devDependency.
 import { defineTool } from "@deepseek-ai/dsh-tools";
-import { TOOLS } from "./server/mcp/tools.js";
-import { BY_TOOL } from "./server/mcp/widgets.js";
-import { ToolError, Workspace, workspaceRootFor } from "./server/mcp/workspace.js";
+import { TOOLS } from "@ainar/core/src/tools/index.ts";
+import { BY_TOOL } from "@ainar/core/src/tools/widgets.ts";
+import { ToolError, Workspace, workspaceRootFor } from "@ainar/core/src/workspace.ts";
 export const name = "ainar-course-model";
 /**
  * Cordis waits for the tool registry before calling `apply`, so the plugin

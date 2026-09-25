@@ -43,6 +43,7 @@ import { fileURLToPath } from "node:url";
 import { documentById } from "../src/bundle.ts";
 import {
   checkContract,
+  checkSlides,
   columnWidths,
   creditFor,
   parseBlocks,
@@ -53,7 +54,7 @@ import {
   type Block,
   type Plan,
 } from "../src/deck.ts";
-import { Workspace } from "../src/mcp/workspace.ts";
+import { Workspace } from "../src/workspace.ts";
 
 const require = createRequire(import.meta.url);
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
@@ -474,6 +475,21 @@ async function main(): Promise<void> {
     );
   }
 
+  // What the contract cannot see — alt text, figure paths, emphasis that will
+  // not survive, a planned visual that is absent. Errors stop the render for the
+  // same reason the contract does: the file looks finished either way.
+  const slideProblems = checkSlides(slides, plan);
+  const failures = slideProblems.filter((problem) => problem.severity === "error");
+  if (failures.length) {
+    console.error(`${documentId} is not renderable.\n`);
+    for (const problem of failures) console.error(`  ${problem.message}`);
+    console.error(
+      "\nNothing here fills in alt text or moves a figure to make a deck build. What the\n" +
+      "slide should say, and where its picture belongs, are the professor's to decide.",
+    );
+    process.exit(1);
+  }
+
   const outDir = resolve(flag("out") ?? join(root, "output", courseVersionId));
   if (outDir === resolve(root, "courses") || outDir.startsWith(resolve(root, "courses") + sep)) {
     throw new Error("refusing to write a rendered binary inside courses/");
@@ -507,6 +523,7 @@ async function main(): Promise<void> {
     else console.warn(`the .pptx is written, the PDF is not. ${result.error}`);
   }
 
+  for (const problem of slideProblems) console.warn(`  ${problem.message}`);
   for (const warning of warnings) console.warn(`  ${warning}`);
 }
 

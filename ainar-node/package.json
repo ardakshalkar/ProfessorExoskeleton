@@ -5,10 +5,10 @@
   "type": "module",
   "description": "The AINAR canonical model, loader and read paths. Ported from ainar/ — see docs/node-migration.md.",
   "scripts": {
-    "golden": "node --experimental-strip-types bin/golden-check.ts",
+    "golden": "node --experimental-strip-types bin/golden-check.ts ../workspace",
     "test": "node --experimental-strip-types --test \"test/*.test.ts\"",
     "check": "npm run test && npm run golden && npm run validator",
-    "validator": "node --experimental-strip-types bin/validator-check.ts",
+    "validator": "node --experimental-strip-types bin/validator-check.ts ../workspace",
     "ainar": "node --experimental-strip-types bin/ainar.ts",
     "mcp:http": "node --experimental-strip-types bin/http-server.ts",
     "render-deck": "node --experimental-strip-types bin/render-deck.ts",
@@ -16,7 +16,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "docx": "^9.7.1",
     "jose": "^6.2.9",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.23.0",
     "yaml": "^2.6.0",
     "zod": "^3.24.0",

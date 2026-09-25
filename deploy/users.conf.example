@@ -1,0 +1,25 @@
+# Which professor's harness listens on which loopback port.
+#
+#   cp deploy/users.conf.example deploy/users.conf
+#
+# One line per person: an account name, whitespace, a port. Blank lines and
+# lines starting with # are ignored. `deploy/users.conf` is not tracked — it
+# names the actual people on an actual machine, and that is a deployment fact
+# rather than a property of this project.
+#
+# The name is the OS account, which is also the systemd instance (`dsh@ardak`)
+# and the DSH home ($DSH_ROOT/ardak/.dsh). It need NOT be the name the identity
+# provider returns; the Caddyfile's map block is where those two are reconciled,
+# and keeping that reconciliation in one place is why it is not done here.
+#
+# The ports are loopback-only and never reachable from outside the machine.
+# They are separate anyway, one per person, because they are how the proxy tells
+# two professors apart after it has decided which one is asking.
+#
+# 3080 is deliberately absent: that is what `bin/sample` binds for a single
+# local user, and a deployment that reused it would have the shared-laptop
+# harness and a professor's fighting over one socket.
+
+# ardak    3101
+# aigerim  3102
+# nurlan   3103

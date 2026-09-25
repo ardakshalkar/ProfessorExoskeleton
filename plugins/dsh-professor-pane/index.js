@@ -7,10 +7,15 @@
  * by construction, plus the preference and record files, read with
  * `readFileSync`.
  *
- * Four exceptions, and each one's own header argues for itself:
+ * Five exceptions, and each one's own header argues for itself:
  *
  * * `/api/approve` spawns this checkout's `ainar approve` rather than
  *   reimplementing the approval gate. The gate stays where `AGENTS.md` puts it.
+ * * `/api/publish` spawns `ainar publish`, which runs that same gate over the
+ *   DOCUMENTS AND RESOURCES a publication needs and then publishes. It is the
+ *   reason a professor no longer leaves this window to put a deck in front of
+ *   a class; see `runPublish`, and `ainar-node/src/publish.ts` for why the
+ *   promotion stops where it does.
  * * `/api/preferences` writes a preference layer. A preference is how the
  *   professor wants the skills to behave, not a claim about a student, so there
  *   is nothing in it for `approve` to gate.
@@ -27,24 +32,45 @@
  * could approve one would be a second approval path, and `AGENTS.md` says there
  * is one and the professor runs it.
  *
+ * `/api/publish` is the case that tests that sentence, so it is worth being
+ * exact about. It promotes drafts, which reads like the gate moving into the
+ * pane; what it may promote is `MATERIAL_COLLECTIONS` — documents and
+ * resources, the artefacts — enforced in `ainar publish` and not here, so no
+ * argument this route could send would widen it. An `Evaluation` in the same
+ * drafts directory is reported as left alone and stays a proposal. The
+ * distinction is not squeamishness: pressing *publish the course page* having
+ * read what would go on it IS the decision to stand behind a deck, and says
+ * nothing whatever about whether a suggested score is right.
+ *
  * Why HTTP rather than a service the browser half calls: four of the views this
  * pane switches between are already written. `dsh-ainar-course-model` ships
  * four widget documents — `course-outline`, `class-progress`, `gradebook`,
  * `action-inbox` — assembled from `widget-assets/`, and DSH renders none of
- * them, because `presentationMeta` is the MCP-app contract and DSH has no
- * renderer for it. They are, in that plugin's own words, "inert, not broken".
- * Serving each one as a document at a URL and pointing an iframe at it makes
- * them live again without a second copy of four hundred lines of view code
- * that a professor would eventually see disagree with itself.
+ * them. They are, in that plugin's own words, "inert, not broken".
+ *
+ * Not because DSH cannot render a tool's own view. It can: `dsh-client-ui-tool`
+ * exposes a `tool.call.toolview` slot where the package owning a tool registers
+ * a view for it by wire name. What DSH has no place for is the *metadata* —
+ * `presentationMeta` is the MCP-app contract, and the render intents a tool may
+ * return are a closed set (`generic`, `terminal`, `diff`, `search`, `read`,
+ * `web`), none of which carries a document.
+ *
+ * So the native route exists and is the wrong shape for what we have. It wants
+ * a component in the client runtime; we have four hundred lines of view code
+ * already written against a plain HTML document, which the MCP hosts still
+ * read. Serving each one as a document at a URL and pointing an iframe at it
+ * keeps that copy the only one — the alternative is a second, in React, that a
+ * professor would eventually see disagree with itself.
  */
 
-// `execFile` is here for one route only — `/api/approve`, which spawns this
-// checkout's TypeScript `ainar` rather than reimplementing the approval gate.
-// See `runApprove`. Nothing else in this file starts a process.
-import { execFile } from "node:child_process";
+// `execFile` is here for the write routes only — `/api/approve`, `/api/publish`
+// and the two that reach a third party — each of which spawns this checkout's
+// TypeScript `ainar` rather than reimplementing what it does. See `runApprove`
+// and `runPublish`. Nothing else in this file starts a process.
+import { execFile, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -54,24 +80,25 @@ import {
   groupsOf,
   requireGroups,
   runById,
-} from "dsh-ainar-course-model/server/bundle.js";
-import { loadDrafts, mergeDrafts } from "dsh-ainar-course-model/server/drafts.js";
-import { gradebookPayload } from "dsh-ainar-course-model/server/gradebook.js";
-import { inboxPayload } from "dsh-ainar-course-model/server/inbox.js";
-import { IssueList } from "dsh-ainar-course-model/server/issues.js";
-import { YamlCourseStore } from "dsh-ainar-course-model/server/mcp/course-store.js";
-import { callTool } from "dsh-ainar-course-model/server/mcp/tools.js";
-import { BY_TOOL } from "dsh-ainar-course-model/server/mcp/widgets.js";
+} from "@ainar/core/src/bundle.ts";
+import { loadDrafts, mergeDrafts } from "@ainar/core/src/drafts.ts";
+import { officeAt } from "@ainar/core/src/materials.ts";
+import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
+import { inboxPayload } from "@ainar/core/src/inbox.ts";
+import { IssueList } from "@ainar/core/src/issues.ts";
+import { YamlCourseStore } from "@ainar/core/src/store/course.ts";
+import { callTool } from "@ainar/core/src/tools/index.ts";
+import { BY_TOOL } from "@ainar/core/src/tools/widgets.ts";
 import {
   ToolError,
   Workspace,
   referenceDate,
   workspaceRootFor,
-} from "dsh-ainar-course-model/server/mcp/workspace.js";
-import { writeAssessmentLinks } from "dsh-ainar-course-model/server/lms/link.js";
-import { outlinePayload } from "dsh-ainar-course-model/server/outline.js";
-import { dump as dumpYaml } from "dsh-ainar-course-model/server/yaml-out.js";
-import { dashboardPayload } from "dsh-ainar-course-model/server/progress.js";
+} from "@ainar/core/src/workspace.ts";
+import { writeAssessmentLinks } from "@ainar/core/src/lms/link.ts";
+import { outlinePayload } from "@ainar/core/src/outline.ts";
+import { dump as dumpYaml } from "@ainar/core/src/yaml-out.ts";
+import { dashboardPayload } from "@ainar/core/src/progress.ts";
 // `parseDocument` alongside `parse`, for one caller: `writeCanvasSelection`
 // edits a file a professor also writes by hand, and the plain parse would hand
 // back a JS object with every comment in `version.yaml` already discarded.
@@ -115,6 +142,7 @@ const DEFAULTS_YAML = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "..",
+  "vendor",
   "datalayer",
   "preferences",
   "defaults.yaml",
@@ -319,9 +347,9 @@ const draftedPayload = (workspace, root, tool, runId, on) => {
  *
  * The button that asks the professor for a missing deadline tells the model
  * which record to edit, and the first version of that prompt guessed the file:
- * `versions/<term>/assessments/generated.yaml`, because that is where
+ * `assessments/generated.yaml`, because that is where
  * `approve` writes. It is a guess. `RECORD_GLOBS.assessments` accepts
- * `versions/*​/assessments.yaml` as well as `versions/*​/assessments/*.yaml`,
+ * `assessments.yaml` as well as `assessments/*.yaml`,
  * so a hand-authored assessment, or one an older import placed, sits somewhere
  * else — and a prompt naming the wrong file is worse than one naming none,
  * because the model will helpfully edit or create it.
@@ -343,7 +371,7 @@ const withRecordPaths = (data, root, courseId, term, entries) => {
   }
   if (!wanted.size) return data;
 
-  const base = join(root, "courses", courseId, "versions", term);
+  const base = join(root, "courses", courseId);
   const candidates = [join(base, "assessments.yaml")];
   try {
     for (const name of readdirSync(join(base, "assessments"))) {
@@ -406,7 +434,7 @@ const walkRevision = (root) => {
   let files = 0;
 
   const walk = (directory, depth) => {
-    // Deep enough for versions/<term>/<collection>/<file>.yaml with room to
+    // Deep enough for <collection>/<file>.yaml with room to
     // spare, shallow enough that a symlink loop cannot spin here forever.
     if (depth > 8) return;
     let entries;
@@ -652,7 +680,7 @@ const preferenceLayerPaths = (root, courseId, term) => {
       candidates.push({
         scope: "run",
         label: `${courseId} ${term}`,
-        path: join(root, "courses", courseId, "versions", term, "preferences.yaml"),
+        path: join(root, "courses", courseId, "preferences.yaml"),
       });
     }
   }
@@ -845,11 +873,13 @@ const writePreferences = (root, scope, courseId, term, values) => {
 /**
  * The gradebook-target vocabulary, duplicated from `ainar/src/lms/index.ts`.
  *
- * Duplicated rather than imported for `rosterPath`'s reason: this pane reads
- * the course model through `dsh-ainar-course-model/server/**`, and that package
- * has no LMS module — its `lms-export.js` is exam formats, not gradebook
- * targets. The TypeScript `ainar/src/lms/` is not on this package's resolution
- * path and should not be put there, because everything in it can push a grade.
+ * Duplicated rather than imported, and since 2026-09-16 for one reason rather
+ * than two. The old one was reach: the pane read the model through a compiled
+ * copy that had no LMS module at all. It now reads `@ainar/core` directly, so
+ * `@ainar/core/src/lms/` IS on the resolution path — this file already imports
+ * `lms/link.ts` for the assignment-link writer. What remains is the reason that
+ * was always the real one: everything else in that module can push a grade, and
+ * a vocabulary is worth copying to keep the rest of it out of arm's reach.
  *
  * What is copied is four strings and two key names. If they drift, this tab
  * calls a supported target unsupported — a wrong sentence on a screen rather
@@ -1433,7 +1463,7 @@ const canvasSelections = (run) => {
 
 /** The run record's own file, which is the one place `versions` may live. */
 const versionRecordPath = (root, courseId, term) =>
-  join(root, "courses", courseId, "versions", term, "version.yaml");
+  join(root, "courses", courseId, "version.yaml");
 
 /**
  * Everything the Integrations tab draws, as JSON for the browser half.
@@ -1833,8 +1863,8 @@ const writeCanvasSelection = (workspace, root, runId, selections) => {
  * The fourth writer here and the only one that edits a file other than
  * `version.yaml`, which brings two things worth stating.
  *
- * **Which file.** `RECORD_GLOBS` accepts `versions/<term>/assessments.yaml`
- * and `versions/<term>/assessments/*.yaml`, so an assessment sits wherever it
+ * **Which file.** `RECORD_GLOBS` accepts `assessments.yaml`
+ * and `assessments/*.yaml`, so an assessment sits wherever it
  * was authored or approved into. The file is found by scanning for the id as
  * a value of `assessment_id`, the way `withRecordPaths` does for the same
  * reason: guessing `generated.yaml` is right until somebody hand-authors one,
@@ -2181,7 +2211,7 @@ const sendJson = (res, status, value) =>
  * homework is titled "Homework" four times over drew four identical rows, and
  * telling the professor WHICH one carries no deadline is the only thing the
  * Deadlines section is for. The identifier is what distinguishes them, and it
- * is also the string they would grep for under `versions/<term>/assessments/`
+ * is also the string they would grep for under `assessments/`
  * or hand to `ainar` — so it is the useful half of the pair to print, not a
  * debugging leftover.
  *
@@ -2219,6 +2249,10 @@ const titleWithId = (row) => {
 const VIEW_SCRIPT =
   "<script>(function(){if(parent===window)return;" +
   "document.addEventListener('click',function(e){" +
+  "var p=e.target.closest&&e.target.closest('button[data-publish]');" +
+  "if(p){e.preventDefault();parent.postMessage({source:'professor-pane'," +
+  "kind:'publish',assessment:p.getAttribute('data-publish')," +
+  "label:p.getAttribute('data-label')||''},'*');return;}" +
   "var a=e.target.closest&&e.target.closest('a[data-view]');if(!a)return;" +
   "if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;" +
   "e.preventDefault();" +
@@ -2226,6 +2260,77 @@ const VIEW_SCRIPT =
   "url:a.getAttribute('href'),label:a.getAttribute('data-view')," +
   "format:a.getAttribute('data-format')},'*');" +
   "});})();<\/script>";
+
+/**
+ * The press that offers to publish a homework's starter repository.
+ *
+ * Only for work that arrives as one — `submission_type` includes `code_repo`.
+ * A quiz has no repository to publish and a button offering to make it one
+ * would be a question the professor has to answer every time they read the
+ * list.
+ *
+ * It carries the identifier and nothing else. What the repository is called,
+ * whether it exists, and what would change are all answered by the server when
+ * the press arrives, because a frame that has been open since this morning is
+ * not a reliable witness to any of them.
+ */
+const isRepoWork = (assessment) => {
+  const kinds = assessment.submission_type;
+  return Array.isArray(kinds)
+    ? kinds.includes("code_repo")
+    : String(kinds ?? "").includes("code_repo");
+};
+
+/**
+ * Where the starter repository is, so the list answers "is this published".
+ *
+ * The record's answer, not GitHub's, and the difference is worth being exact
+ * about: this says a repository was written down, which is what makes the
+ * publish button able to run at all. Whether it exists, and whether it matches
+ * the folder, is what pressing the button reports — one network call, when
+ * somebody asks, rather than one per row every time this list is drawn.
+ *
+ * Amber when nothing is recorded, in the same colour the pane uses for a
+ * missing brief and a missing weight. Work students fork and cannot start
+ * without is a hole in the same sense.
+ */
+const repoChip = (assessment) => {
+  const repo = assessment.github?.template_repo;
+  if (!repo) return '<span class="todo">not published</span>';
+  return (
+    '<a class="chip-link" href="https://github.com/' +
+    escapeText(repo) +
+    '" target="_blank" rel="noopener">' +
+    escapeText(repo) +
+    "</a>"
+  );
+};
+
+const publishButton = (assessment) => {
+  if (!isRepoWork(assessment)) return "";
+  // Two words for two situations, because they are different acts. Work with no
+  // repository is being put somewhere for the first time — a URL that did not
+  // exist will exist, and students will be sent to it. Work that has one is
+  // being brought up to date, and the thing at the other end is a repository
+  // people may already have forked. A single "publish" read as pending on a
+  // homework that has been on GitHub since September, which is what prompted
+  // this. The ellipsis is the usual promise that a strip opens rather than
+  // something happening on the press.
+  const recorded = Boolean(assessment.github?.template_repo);
+  return (
+    '<button class="chip-link" type="button" data-publish="' +
+    escapeText(assessment.assessment_id ?? "") +
+    '" data-label="' +
+    escapeText(assessment.title ?? assessment.assessment_id ?? "") +
+    '" title="' +
+    (recorded
+      ? "Check what differs from GitHub, and push it if you want to."
+      : "Create the repository and push the folder to it.") +
+    '">' +
+    (recorded ? "update…" : "publish…") +
+    "</button>"
+  );
+};
 
 /**
  * A failure on a `/view/` path, as a page rather than as JSON.
@@ -2518,6 +2623,7 @@ const assessmentsDocument = (
     sessionId,
     workspace,
     dark,
+    withDrafts,
   );
   const all = Array.isArray(data.assessments) ? [...data.assessments] : [];
   all.sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999"));
@@ -2556,6 +2662,7 @@ const assessmentsDocument = (
               // read before finding the one you meant.
               "<br>" +
               briefChip(row) +
+              (isRepoWork(row) ? "<br>" + repoChip(row) + publishButton(row) : "") +
               "</span></div>"
             );
           })
@@ -2578,7 +2685,7 @@ const assessmentsDocument = (
  */
 const slidesDocument = (workspace, root, runId, dark, withDrafts, on, origin, sessionId) => {
   let data = outlinePayloadFor(workspace, root, runId, withDrafts, on);
-  data = withMaterialLinks(data, origin, sessionId, workspace, dark);
+  data = withMaterialLinks(data, origin, sessionId, workspace, dark, withDrafts);
 
   const found = [];
   for (const week of data.weeks ?? []) {
@@ -2661,6 +2768,7 @@ const examsDocument = (workspace, root, runId, dark, withDrafts, on, origin, ses
     sessionId,
     workspace,
     dark,
+    withDrafts,
   );
   const bundle = withDrafts
     ? null
@@ -3141,7 +3249,7 @@ const checklistReport = (workspace, root, runId) => {
   // present or absent, never proposed, and a "drafted" column against them
   // would be a column that can only ever read zero.
   const fixed = [
-    { label: "Instructor named", have: countOf(record.run?.instructors), hint: "versions/<term>/version.yaml" },
+    { label: "Instructor named", have: countOf(record.run?.instructors), hint: "version.yaml" },
     { label: "Students enrolled", have: enrolled, hint: "ainar roster import" },
   ];
 
@@ -3171,7 +3279,18 @@ const checklistReport = (workspace, root, runId) => {
       // for it, and it is the difference between a deck that exists and a deck
       // somebody meant to make.
       unlocated: all.filter((resource) => !resource.url && !resource.document_id).length,
-      state: recorded > 0 ? "done" : all.length > 0 ? "draft" : "todo",
+      // Whether a week is still missing its deck is the model's answer, not a
+      // second one taken here. `outline` puts a `deck` gap on a week with a
+      // meeting and no slides, and the same gap is what the week view draws —
+      // so this column and the chip on week nine cannot disagree, which is the
+      // failure a checklist beside a plan exists to avoid. What stays local is
+      // the record/draft split: two payloads, which the model sees one of.
+      state:
+        recorded > 0
+          ? "done"
+          : (week.gaps ?? []).some((gap) => gap.kind === "deck")
+            ? "todo"
+            : "draft",
     };
   });
 
@@ -3638,11 +3757,11 @@ const withStudentNames = (data) => {
  *
  * Three states, and telling them apart is most of what this view is for:
  *
- * * **loaded** — read from `versions/<term>/enrollments.yaml`, where
+ * * **loaded** — read from `enrollments.yaml`, where
  *   `ainar roster import` writes the pseudonyms, or from
- *   `versions/<term>/samples/enrollments*.yaml`. Fixtures are announced as
+ *   `samples/enrollments*.yaml`. Fixtures are announced as
  *   fixtures; a real roster is not.
- * * **refused** — an enrollments file sits under `versions/<term>/records/`,
+ * * **refused** — an enrollments file sits under `records/`,
  *   the location reserved for the rows Supabase owns, and the loader would not
  *   read it (`storage.forbidden`). Drawing an empty list here would describe a
  *   course nobody had enrolled in, which is a different and false thing.
@@ -4319,6 +4438,84 @@ const SHOWABLE = new Set([
   "markdown",
 ]);
 
+/**
+ * The formats that become showable by being converted, and the machinery for it.
+ *
+ * A `.pptx` and a `.docx` are downloads in every browser this runs in, which is
+ * why they are not in `SHOWABLE` and why the overlay has always sent them to a
+ * tab. That is still true of the bytes on disk. What changed is that this
+ * project already converts them: `ainar materials` builds a deck and renders a
+ * PDF beside it through LibreOffice, and `officeAt` is how it finds the binary.
+ *
+ * So the rule is narrower than "open a pptx". It is: **when this machine has a
+ * converter, the pane may offer the PDF of a document it cannot frame.** The
+ * professor presses the material and reads it over the harness; what they are
+ * shown is a rendering, and the overlay's own "Open in a tab" still reaches the
+ * original.
+ *
+ * Three properties worth keeping:
+ *
+ * - **A capability, not a flag.** `officeAt()` is probed per request. Where
+ *   there is no LibreOffice the link behaves exactly as it did yesterday — a
+ *   tab — rather than becoming a control that opens a blank panel. This is the
+ *   same shape `runtime.js` uses for `openMaterial`: the host offers it or it
+ *   does not, and the view has one code path.
+ * - **The conversion is cached by content.** The key is the document id and the
+ *   source file's size and mtime, so editing a deck invalidates it and opening
+ *   the same deck twice spawns LibreOffice once. The cache is under the
+ *   system temp directory and never inside the workspace, because a converted
+ *   PDF is not a course record and `courses/` is not a build output.
+ * - **A failure is reported, not swallowed.** The exit code AND the appearance
+ *   of the output file are both checked. `render-deck.ts` fixed exactly this
+ *   bug on 2026-09-06 in the other converter, where a non-zero exit produced a
+ *   silent success and a missing file.
+ */
+const CONVERTIBLE = new Set(["pptx", "ppt", "docx", "doc", "odp", "odt", "rtf"]);
+
+/** Where converted PDFs live. Not the workspace: this is derived, not recorded. */
+const CONVERT_CACHE = join(tmpdir(), "professor-pane-pdf");
+
+/**
+ * The PDF of an office document, converted once and kept.
+ *
+ * Returns the path, or throws with what LibreOffice said. Sixty seconds is
+ * generous for a deck and short enough that a wedged soffice does not hold a
+ * request open until the professor reloads.
+ */
+const convertedPdf = (documentId, source) => {
+  const office = officeAt();
+  if (!office) throw new Error("no LibreOffice on this machine to render it with");
+
+  const stamp = statSync(source);
+  const key = createHash("sha256")
+    .update([documentId, source, stamp.size, stamp.mtimeMs].join("\0"))
+    .digest("hex")
+    .slice(0, 16);
+  const outDir = join(CONVERT_CACHE, key);
+  const target = join(outDir, basename(source).replace(/\.[^.]+$/, "") + ".pdf");
+  if (existsSync(target)) return target;
+
+  mkdirSync(outDir, { recursive: true });
+  const run = spawnSync(
+    office,
+    ["--headless", "--convert-to", "pdf", "--outdir", outDir, source],
+    { encoding: "utf-8", timeout: 60_000 },
+  );
+  if (run.error) throw new Error(`${basename(office)} would not run: ${run.error.message}`);
+  if (run.status !== 0) {
+    throw new Error(
+      `${basename(office)} exited ${run.status}: ` +
+        (String(run.stderr || run.stdout || "").trim().split("\n").pop() || "no reason given"),
+    );
+  }
+  // Exit zero and no file is a real outcome: LibreOffice reports a format it
+  // cannot read this way. Checking the code alone is the bug this avoids.
+  if (!existsSync(target)) {
+    throw new Error(`${basename(office)} exited 0 but wrote no PDF for ${basename(source)}`);
+  }
+  return target;
+};
+
 /** A storage key's extension, lowercased, or `""`. */
 const extensionOfKey = (key) => {
   const name = String(key ?? "").split(/[\\/]/).pop() ?? "";
@@ -4347,7 +4544,7 @@ const extensionOfKey = (key) => {
  * two ways, and a link in one place but not the other is what this pane looked
  * like before.
  */
-const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
+const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts) => {
   if (!origin || data === null || typeof data !== "object") return data;
 
   // `dark` travels on the address for one format only, and is inert for the
@@ -4358,11 +4555,31 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
   // was supposed to stop happening. The harness's theme is an explicit choice
   // and need not agree with the machine's, so it is passed rather than left to
   // `prefers-color-scheme`.
-  const address = (documentId) =>
-    `${origin}${BASE}/file?doc=` +
-    encodeURIComponent(documentId) +
-    (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
-    (dark ? "&dark=1" : "");
+  // Whether this machine can render a `.pptx` into something a frame will
+  // paint. Probed ONCE per payload rather than per document — it is a fact
+  // about the machine, and thirty documents would otherwise stat the same six
+  // paths thirty times — and never cached across requests, so installing
+  // LibreOffice takes effect on the next reload rather than the next restart.
+  const canRender = officeAt() !== null;
+  const renderable = (documentId) =>
+    canRender && CONVERTIBLE.has(extensionOf.get(documentId) ?? "");
+
+  const address = (documentId) => {
+    // `from` is carried on the address and nowhere else, because the only
+    // consumer is the overlay's "ask about this" button and the overlay is
+    // handed a URL, a label and a format — nothing that could look a record up.
+    // Putting it here costs one parameter and saves a second route whose whole
+    // job would be answering a question the payload already knew.
+    const source = sourceOf(documentId);
+    return (
+      `${origin}${BASE}/file?doc=` +
+      encodeURIComponent(documentId) +
+      (source ? "&from=" + encodeURIComponent(source) : "") +
+      (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
+      (dark ? "&dark=1" : "") +
+      (renderable(documentId) ? "&as=pdf" : "")
+    );
+  };
 
   // Every document in the workspace, indexed by the basename of its storage key
   // with the extension removed.
@@ -4377,6 +4594,29 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
   const byStem = new Map();
   /** Every document's extension, so a link can say whether it is showable. */
   const extensionOf = new Map();
+  /** `extensions.rendered_from`, one hop: the record this artefact came from. */
+  const renderedFrom = new Map();
+  /**
+   * `extensions.origin`: built in this workspace, or brought in finished.
+   *
+   * A week may hold both — a deck rendered from its markdown and somebody
+   * else's deck imported whole — and the two are different claims about what
+   * the file IS, not merely about where it sits. The pane badges this, so the
+   * professor is never guessing which of two chips is which; an artefact that
+   * declares nothing is drawn as the unfinished state it is rather than
+   * silently as "generated".
+   */
+  const originOf = new Map();
+  /** `extensions.read_by`: text, ocr or vlm — how an imported outline was got. */
+  const readByOf = new Map();
+  /**
+   * Documents carrying a `presentation_plan` — an outline somebody can read.
+   *
+   * Only these get an outline address. A deck with no plan has nothing to show,
+   * and offering to open one would be the pane promising a page that renders
+   * empty — the fault this whole line of work has been correcting.
+   */
+  const hasPlan = new Set();
   for (const courseId of workspace.courseIds()) {
     let loaded;
     try {
@@ -4386,6 +4626,24 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
     }
     if (loaded.bundle === null) continue;
     for (const document of loaded.bundle.documents ?? []) {
+      // Read before the storage-key guard: a source may legitimately be a
+      // record this loop skips for its own reasons, and the edge is still true.
+      const from = document.extensions?.rendered_from;
+      if (typeof from === "string" && from !== "") {
+        renderedFrom.set(document.document_id, from);
+      }
+      const origin = document.extensions?.origin;
+      if (typeof origin === "string" && origin !== "") {
+        originOf.set(document.document_id, origin);
+      }
+      const readBy = document.extensions?.read_by;
+      if (typeof readBy === "string" && readBy !== "") {
+        readByOf.set(document.document_id, readBy);
+      }
+      const plan = document.presentation_plan;
+      if (plan && Array.isArray(plan.slides) && plan.slides.length > 0) {
+        hasPlan.add(document.document_id);
+      }
       const key = String(document.storage_key ?? "");
       if (!key || key.includes("://")) continue;
       const name = key.split(/[\\/]/).pop() ?? "";
@@ -4399,7 +4657,44 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
     }
   }
 
-  const showable = (documentId) => SHOWABLE.has(extensionOf.get(documentId) ?? "");
+  // Showable as it is, or showable once rendered. The second half is why a
+  // deck now opens over the harness instead of landing in Downloads.
+  const showable = (documentId) =>
+    SHOWABLE.has(extensionOf.get(documentId) ?? "") || renderable(documentId);
+
+  /** What `/file` will actually send, which is not always what is on disk. */
+  const servedFormat = (documentId) =>
+    renderable(documentId) ? "pdf" : (extensionOf.get(documentId) ?? "");
+
+  /**
+   * What a rendered artefact was produced from, following the chain to its end.
+   *
+   * `extensions.rendered_from` is a real edge in the record — a PDF names the
+   * deck it was converted from, and that deck names the script that built it —
+   * and this walks to the document at the end, because that is the one a
+   * professor would edit. Changing a slide means changing the builder; nobody
+   * edits a PDF.
+   *
+   * It replaces nothing: `formatsFor` still pairs siblings by filename stem,
+   * which is a convention and stays one. This is the relation the schema
+   * actually carries, and the two answer different questions — "the same thing
+   * in another format" and "the thing this was made from".
+   *
+   * Cycles end the walk rather than hanging it. A record that names itself, or
+   * two that name each other, is bad data and not worth a stack overflow; the
+   * last id reached is returned and the validator is the place that complains.
+   */
+  const sourceOf = (documentId) => {
+    const seen = new Set([documentId]);
+    let at = documentId;
+    for (;;) {
+      const next = renderedFrom.get(at);
+      if (next === undefined || seen.has(next)) break;
+      seen.add(next);
+      at = next;
+    }
+    return at === documentId ? null : at;
+  };
 
   /** The formats a document is available in, itself first. */
   const formatsFor = (documentId) => {
@@ -4415,10 +4710,14 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
         .map((entry) => ({
           label: entry.extension.toUpperCase(),
           url: address(entry.id),
-          viewable: SHOWABLE.has(entry.extension),
+          viewable: showable(entry.id),
           // The extension travels with the link because the overlay sandboxes
           // a document and does not sandbox a PDF. See MEDIA in `client.js`.
-          format: entry.extension,
+          //
+          // What is served, not what is stored: a `.pptx` this machine can
+          // render arrives as a PDF, and a frame told it is a `.pptx` would
+          // sandbox the browser's own PDF viewer and paint nothing.
+          format: servedFormat(entry.id),
         }));
     }
     return [];
@@ -4433,7 +4732,23 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
     // workspace, so an external reading keeps the tab it always opened.
     const viewable = !resource.url && showable(resource.document_id);
     const url = resource.url || address(resource.document_id);
-    return { ...resource, url, formats, viewable, format: extensionOf.get(resource.document_id) ?? "" };
+    return {
+      ...resource,
+      url,
+      formats,
+      viewable,
+      format: servedFormat(resource.document_id),
+      // Empty when the record says nothing, and the view draws that as its own
+      // state rather than assuming the common case.
+      origin: originOf.get(resource.document_id) ?? "",
+      read_by: readByOf.get(resource.document_id) ?? "",
+      // Empty unless there is an outline to open. The badge is a label when
+      // this is empty and a control when it is not, so a chip never offers to
+      // show something that is not there.
+      outline_url: hasPlan.has(resource.document_id)
+        ? outlineAddress(resource.document_id)
+        : "",
+    };
   };
 
   /**
@@ -4456,12 +4771,54 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark) => {
    * view downstream keeps the "nothing to open" branch it already had rather
    * than being handed a link to a document that does not exist.
    */
+  /**
+   * Where this pane serves a piece of graded work's own text.
+   *
+   * Separate from `address`, and a separate field from `url`, because the two
+   * answer different questions: `url` is the BRIEF DOCUMENT when one exists,
+   * and this is the record's `description` rendered as a page. An assessment
+   * can have both, and the chip and its "open" link then lead to different
+   * things on purpose — the text somebody wrote in the record, and the file
+   * they attached to it.
+   *
+   * `drafts` travels on the address, because the outline it was built from was
+   * itself drafted or not and the brief must agree with the chip that opened
+   * it. The pane defaults to `+ drafts`, so without this a professor reading a
+   * proposed assessment's chip would be shown the approved text — or an error
+   * saying the assessment does not exist, which is worse, since it does.
+   */
+  const briefAddress = (runId, assessmentId) =>
+    `${origin}${BASE}/brief?run=` +
+    encodeURIComponent(runId) +
+    "&assessment=" +
+    encodeURIComponent(assessmentId) +
+    (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
+    (withDrafts ? "&drafts=1" : "") +
+    (dark ? "&dark=1" : "");
+
+  /** Where this pane serves what was read out of a deck. */
+  const outlineAddress = (documentId) =>
+    `${origin}${BASE}/outline?doc=` +
+    encodeURIComponent(documentId) +
+    (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
+    (dark ? "&dark=1" : "");
+
+  const runId = String(data?.run?.id ?? "");
+
   const linkAssessment = (assessment) => {
     if (!assessment || typeof assessment !== "object") return assessment;
+    // The record's own text, when it has any. This is what the chip opens, and
+    // it is the usual case: most assessments in this model carry no brief
+    // document at all, so without it the chip names work nobody can read.
+    const brief =
+      runId && assessment.assessment_id && String(assessment.description ?? "").trim()
+        ? briefAddress(runId, assessment.assessment_id)
+        : null;
     const documentId = assessment.instructions_document_id;
-    if (!documentId) return assessment;
+    if (!documentId) return brief ? { ...assessment, brief_url: brief } : assessment;
     return {
       ...assessment,
+      ...(brief ? { brief_url: brief } : {}),
       url: address(documentId),
       viewable: showable(documentId),
       format: extensionOf.get(documentId) ?? "",
@@ -4611,7 +4968,180 @@ const markdownPage = (title, source, dark) =>
  * here. See `MARKDOWN_EXTENSIONS` for why that is this route's job and not the
  * browser's.
  */
-const sendMaterial = (res, workspace, root, documentId, dark) => {
+/**
+ * One piece of graded work, as a page the overlay can frame.
+ *
+ * The chip in the outline used to open a sheet drawn INSIDE the widget's
+ * frame, which is the wrong size for the job: the frame is one pane of the
+ * harness, so a brief opened there is a dialog inside a column rather than
+ * over the window, and it looked nothing like the overlay a deck or a PDF
+ * opens into. This route is what lets the brief take that same overlay —
+ * `openMaterial` needs a URL, and for the great majority of assessments there
+ * is no file to point it at, so the page is composed here from the record.
+ *
+ * Markdown, and then the ordinary `markdownPage`, rather than markup of its
+ * own. A brief that HAS a document already renders through that function, and
+ * a brief that has only a description should not arrive in the same overlay
+ * looking like it came from somewhere else. It also means the description is
+ * treated exactly as every other authored text here is — rendered, not
+ * injected; `renderMarkdown` escapes what it does not recognise.
+ *
+ * Addressed by run and assessment id, never by anything resembling a path. The
+ * ids are looked up in the payload the pane already serves, so the only briefs
+ * this can print are the ones the course record names — the same rule
+ * `sendMaterial` follows, and for the same reason.
+ */
+const sendBrief = (res, workspace, root, runId, assessmentId, withDrafts, dark) => {
+  if (!runId) return sendJson(res, 200, { error: "no run chosen" });
+  if (!assessmentId) return sendJson(res, 200, { error: "no assessment named" });
+
+  let data;
+  try {
+    data = withDrafts
+      ? draftedPayload(workspace, root, "course_outline", runId, null).payload
+      : payload(workspace, "course_outline", { course_version_id: runId });
+  } catch (error) {
+    return sendErrorPage(res, String(error.message ?? error));
+  }
+
+  const found = (data.assessments ?? []).find((a) => a && a.assessment_id === assessmentId);
+  if (!found) {
+    return sendErrorPage(res, `no assessment ${assessmentId} in ${runId}`);
+  }
+
+  const text = String(found.description ?? "").trim();
+  if (!text) {
+    return sendErrorPage(
+      res,
+      `${assessmentId} has no description yet, so there is nothing to read. ` +
+        "The brief is the record's own text; write it there and it appears here.",
+    );
+  }
+
+  // The same facts the chip's sheet carried, in the same order. A definition
+  // list in markdown is a bulleted one — the renderer here is small on purpose
+  // and this is not the place to grow it a new block type.
+  const facts = [];
+  const when = [
+    found.opens_on ? `opens ${found.opens_on}` : "",
+    found.due_on ? `due ${found.due_on}` : "",
+  ].filter(Boolean);
+  facts.push(`**Dates** — ${when.length ? when.join(", ") : "not scheduled"}`);
+  facts.push(
+    `**Weight** — ${found.weight == null ? "not set" : Math.round(found.weight * 100) + "%"}`,
+  );
+  if (found.maximum_score != null) facts.push(`**Out of** — ${found.maximum_score}`);
+  const handed = (found.submission_type ?? []).join(", ");
+  if (handed) facts.push(`**Handed in as** — ${handed}`);
+  const outcomes = (found.outcomes ?? []).join(", ");
+  if (outcomes) facts.push(`**Outcomes** — ${outcomes}`);
+  facts.push(
+    `**Rubric** — ${
+      found.criteria
+        ? found.criteria + (found.criteria === 1 ? " criterion" : " criteria")
+        : "none yet"
+    }`,
+  );
+
+  const title = String(found.title ?? assessmentId);
+  const source = [
+    `# ${title}`,
+    "",
+    ...facts.map((fact) => `- ${fact}`),
+    "",
+    text,
+  ].join("\n");
+
+  return send(res, 200, "text/html; charset=utf-8", markdownPage(title, source, dark === true));
+};
+
+/**
+ * What was READ out of a deck, as a page the overlay can frame.
+ *
+ * The companion to `sendBrief`, and the same trade: `openMaterial` needs a URL,
+ * and a `presentation_plan` is a record rather than a file, so the page is
+ * composed here.
+ *
+ * It exists for one case in particular. A deck this course did not write is
+ * registered by `ainar materials import`, which reads its slide text and
+ * proposes what it teaches — and a proposal nobody can look at is a proposal
+ * nobody can correct. The professor should be able to see the outline that was
+ * extracted, how it was obtained, and which slides yielded nothing, WITHOUT
+ * opening the .pptx and counting by hand.
+ *
+ * The caveats lead rather than trail. An outline read from slide text is a
+ * different kind of claim from one somebody wrote, and a page that shows it
+ * without saying so invites being read as authored.
+ */
+const sendOutline = (res, workspace, root, documentId, dark) => {
+  if (!documentId) return sendJson(res, 200, { error: "no document named" });
+
+  let found = null;
+  for (const courseId of workspace.courseIds()) {
+    let loaded;
+    try {
+      loaded = workspace.load(courseId);
+    } catch {
+      continue;
+    }
+    if (loaded.bundle === null) continue;
+    found = (loaded.bundle.documents ?? []).find((d) => d.document_id === documentId) ?? found;
+    if (found) break;
+  }
+  if (!found) return sendErrorPage(res, `no document ${documentId} in this workspace`);
+
+  const plan = found.presentation_plan;
+  if (!plan || !Array.isArray(plan.slides) || plan.slides.length === 0) {
+    return sendErrorPage(
+      res,
+      `${documentId} carries no presentation plan, so there is no outline to show.`,
+    );
+  }
+
+  const origin = String(found.extensions?.origin ?? "");
+  const readBy = String(found.extensions?.read_by ?? "");
+  const silent = plan.slides.filter((s) => (s.concepts ?? []).length === 0).length;
+
+  const source = [`# ${found.title ?? documentId}`, ""];
+  if (origin === "imported") {
+    source.push(
+      "**This outline was read, not written.** " +
+        (readBy === "text"
+          ? "It comes from the slide text and the speaker notes of a deck this course did not author. "
+          : readBy
+            ? `It was obtained by ${readBy}. `
+            : "") +
+        "Each title is that slide's first line of text that is not running chrome, " +
+        "and no slide type was inferred. The concepts are a proposal against this " +
+        "course's own set — nothing here can name a concept the course does not have.",
+      "",
+    );
+  }
+
+  source.push(`- **Slides** — ${plan.slides.length}`);
+  if (silent > 0) {
+    source.push(
+      `- **Matched no concept** — ${silent}. A text scan finds what is named; a slide ` +
+        "that shows rather than names carries nothing it can see.",
+    );
+  }
+  const union = [...new Set(plan.slides.flatMap((s) => s.concepts ?? []))];
+  source.push(`- **Concepts across the deck** — ${union.length ? union.join(", ") : "none"}`);
+  source.push("");
+
+  for (const slide of plan.slides) {
+    const concepts = (slide.concepts ?? []).join(", ");
+    source.push(
+      `${slide.number}. **${slide.title ?? "(untitled)"}**` +
+        (concepts ? ` — ${concepts}` : " — *nothing matched*"),
+    );
+  }
+
+  const title = String(found.title ?? documentId);
+  return send(res, 200, "text/html; charset=utf-8", markdownPage(title, source.join("\n"), dark === true));
+};
+
+const sendMaterial = (res, workspace, root, documentId, dark, asPdf) => {
   if (!documentId) return sendJson(res, 200, { error: "no document named" });
 
   let found = null;
@@ -4648,12 +5178,38 @@ const sendMaterial = (res, workspace, root, documentId, dark) => {
     return sendJson(res, 200, { error: `${key} is recorded but not on disk` });
   }
 
-  const extension = (key.split(".").pop() ?? "").toLowerCase();
+  let extension = (key.split(".").pop() ?? "").toLowerCase();
+
+  // The professor asked to read a deck rather than download it, and this
+  // machine has something that can render one. The original is untouched and
+  // the overlay's "Open in a tab" still reaches it; what is served here is a
+  // rendering, which is the only form of a .pptx a browser will paint.
+  if (asPdf && CONVERTIBLE.has(extension)) {
+    try {
+      const pdf = convertedPdf(documentId, full);
+      body = readFileSync(pdf);
+      extension = "pdf";
+    } catch (error) {
+      // Said in words, in the panel, rather than as a blank frame. A professor
+      // who sees "no LibreOffice on this machine" can act on it; one who sees
+      // an empty box cannot tell that from a broken deck.
+      return sendJson(res, 200, {
+        error: `${documentId} could not be rendered for reading — ${String(error.message || error)}. ` +
+          "It still opens in a tab, which is what the browser does with it.",
+      });
+    }
+  }
 
   // Markdown becomes a page. The name it downloads under becomes `.html` with
   // it, because a file whose bytes are HTML and whose name ends `.md` is a
   // file the professor's editor opens as source.
   let name = basename(full);
+  // A rendering downloads as a PDF, for the reason markdown downloads as HTML
+  // below: a file whose bytes are one thing and whose name says another is a
+  // file the professor's machine opens with the wrong application.
+  if (asPdf && extension === "pdf" && !/\.pdf$/i.test(name)) {
+    name = name.replace(/\.[^.]+$/, "") + ".pdf";
+  }
   if (MARKDOWN_EXTENSIONS.has(extension)) {
     body = Buffer.from(
       markdownPage(String(found.title ?? name), body.toString("utf8"), dark === true),
@@ -4767,6 +5323,109 @@ const runApprove = (res, root, runId, approver, confirm) => {
 };
 
 /**
+ * Publish, by spawning the CLI — the one button that also promotes.
+ *
+ * Spawned for `runApprove`'s reason, and the reason is stronger here than
+ * anywhere else on this route table: this command performs the GATE and then a
+ * publication, and the order it does them in — load, promote, stage, validate,
+ * write, publish — is `runApproval` in `ainar-node/src/approve.ts`. A second
+ * copy of that order living in a web server is exactly the failure that file's
+ * header describes.
+ *
+ * **What it may promote is not this route's decision either.** `ainar publish`
+ * hands `runApproval` the list `MATERIAL_COLLECTIONS`, so a drafted evaluation
+ * in the same directory is left alone whatever is asked for here. There is
+ * still no route in this pane that can settle a judgement about a student, and
+ * `--confirm` on this one does not become one: it promotes a deck, a brief or a
+ * reading, and publishes.
+ *
+ * **Plan and publish are one route with a flag**, the shape the two buttons
+ * beside it already use. Without `confirm` the CLI reads, prints and writes
+ * nothing — including nothing in `courses/`.
+ */
+const runPublish = (res, root, runId, target, body) => {
+  const TARGETS = ["page", "homework", "canvas", "telegram", "update"];
+  if (!TARGETS.includes(target)) {
+    return sendJson(res, 200, { error: `${target} is not something this can publish.` });
+  }
+  if (!existsSync(AINAR_CLI)) {
+    return sendJson(res, 200, {
+      error:
+        `The TypeScript ainar CLI is not at ${AINAR_CLI}. This pane will not ` +
+        "fall back to the Python `ainar` on PATH — install or restore " +
+        "ainar-node/ instead.",
+    });
+  }
+
+  const confirm = body.confirm === true;
+  const assessment = String(body.assessment ?? "").trim();
+  const message = String(body.message ?? "");
+  const repo = String(body.repo ?? "").trim();
+  const group = String(body.group ?? "").trim();
+  const approver = String(body.approver ?? "").trim();
+
+  const identifier = /^[A-Za-z0-9_.:@+/-]{1,200}$/;
+  if ((target === "homework" || target === "canvas") && !identifier.test(assessment)) {
+    return sendJson(res, 200, { error: "No assessment chosen." });
+  }
+  if (repo && !identifier.test(repo)) {
+    return sendJson(res, 200, { error: `${repo} is not a repository name.` });
+  }
+  if (group && !identifier.test(group)) {
+    return sendJson(res, 200, { error: `${group} is not a subgroup label.` });
+  }
+  if (target === "telegram" && !message.trim()) {
+    return sendJson(res, 200, { error: "There is nothing to announce." });
+  }
+
+  const args = ["--experimental-strip-types", AINAR_CLI, "publish", target];
+  if (target === "page" || target === "telegram" || target === "update") args.push(runId);
+  else args.push(assessment, "--run", runId);
+  args.push("--root", root);
+  if (approver) args.push("--as", approver);
+  if (repo) args.push("--repo", repo);
+  if (group) args.push("--group", group);
+  // The message goes in argv rather than a temporary file, deliberately: a file
+  // would outlive the request, and what a professor is about to tell a class is
+  // not something this server should leave on disk.
+  if (target === "telegram") args.push("--message", message);
+  // Correcting the last announcement rather than posting a second one. Never
+  // the default, here or in the CLI: a professor sending their second
+  // announcement of the week means a second announcement, and a press that
+  // silently rewrote the first would destroy something students had read.
+  if (target === "telegram" && body.edit === true) args.push("--edit");
+  if (confirm) args.push("--confirm");
+
+  execFile(
+    process.execPath,
+    args,
+    { cwd: root, timeout: 300000, maxBuffer: 4 * 1024 * 1024 },
+    (error, stdout, stderr) => {
+      const code = error && typeof error.code === "number" ? error.code : error ? 1 : 0;
+      sendJson(res, 200, {
+        ok: code === 0,
+        confirmed: confirm,
+        exitCode: code,
+        // The message is not echoed back into the command line shown on screen:
+        // it is already in the box the professor typed it into, and repeating
+        // it as a shell argument makes a ten-line announcement unreadable.
+        command:
+          `bin/ainar publish ${target} ` +
+          (target === "page" || target === "telegram" || target === "update"
+            ? runId
+            : `${assessment} --run ${runId}`) +
+          (repo ? ` --repo ${repo}` : "") +
+          (group ? ` --group ${group}` : "") +
+          (target === "telegram" ? " --message …" : "") +
+          (target === "telegram" && body.edit === true ? " --edit" : "") +
+          (confirm ? " --confirm" : ""),
+        output: [stdout, stderr].filter(Boolean).join("\n").trim(),
+      });
+    },
+  );
+};
+
+/**
  * Send an assessment's DEFINITION to Canvas, by spawning the CLI.
  *
  * Spawned rather than reimplemented, for the reason `runApprove` gives: the
@@ -4774,9 +5433,9 @@ const runApprove = (res, root, runId, approver, confirm) => {
  * an opinion about, how a created assignment's id is written back into
  * `courses/` without destroying the comments around it — live in
  * `ainar-node/src/lms/`, and a second implementation in this file would have
- * its own idea of all three. The LMS write layer is deliberately absent from
- * `dsh-ainar-course-model/server/`, which is a read-only tool surface; the CLI
- * is the seam that exists for exactly this.
+ * its own idea of all three. The LMS write layer is deliberately absent from the
+ * course model's tools, which are a read-only surface; the CLI is the seam that
+ * exists for exactly this.
  *
  * **Plan and push are one route with a flag**, and the flag is the professor's
  * press. Both make an outbound request, so both are POST — a plan that Canvas
@@ -5665,7 +6324,66 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
         root,
         url.searchParams.get("doc") ?? "",
         url.searchParams.get("dark") === "1",
+        // Affirmative only, like `names=1` on the inbox: a URL replayed without
+        // it serves the file itself, which is what every caller got before.
+        url.searchParams.get("as") === "pdf",
       );
+    }
+
+    // What was read out of a deck, for a deck this course did not write.
+    if (path === "/outline") {
+      return sendOutline(
+        res,
+        workspace,
+        root,
+        url.searchParams.get("doc") ?? "",
+        url.searchParams.get("dark") === "1",
+      );
+    }
+
+    // The brief a piece of graded work carries as text rather than as a file.
+    // Beside `/file` because it ends in the same overlay and obeys the same
+    // rule: addressed by an identifier the course record already names.
+    if (path === "/brief") {
+      return sendBrief(
+        res,
+        workspace,
+        root,
+        runId,
+        url.searchParams.get("assessment") ?? "",
+        url.searchParams.get("drafts") === "1",
+        url.searchParams.get("dark") === "1",
+      );
+    }
+
+    // `/api/homework/publish` was here and is gone. It spawned
+    // `ainar homework publish`, which `/api/publish` with `target: homework`
+    // now does — plus the promotion of the brief, which is the half that used
+    // to send the professor to a terminal. Two publishing routes in one web
+    // server, one of them narrower, is how a button ends up doing less than
+    // the button beside it for reasons nobody can see. `git log -S` has it.
+    if (path === "/api/publish") {
+      // POST only, for `/api/approve`'s reason and one of its own: with
+      // `confirm` this both writes to `courses/` and puts something in front of
+      // students, and neither is a thing a prefetch should be able to start.
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "publish is POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then((raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          if (!body || typeof body !== "object" || Array.isArray(body)) {
+            return sendJson(res, 200, { error: "The request body must be an object." });
+          }
+          return runPublish(res, root, runId, String(body.target ?? ""), body);
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
     if (path === "/api/approve") {
@@ -5837,6 +6555,7 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
           url.searchParams.get("session") ?? "",
           workspace,
           url.searchParams.get("dark") === "1",
+          withDrafts,
         );
         const run = data?.run ?? {};
         if (run.course_id && run.term) {
@@ -5853,7 +6572,15 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
         // table and a policy note between the professor and what they opened
         // this tab for. The widget keeps both by default — a chat client has no
         // tabs to move them to — so the pane has to ask.
-        data = { ...data, sections: { assessments: false, grading: false, header: false } };
+        //
+        // `gaps` is the one asked for rather than kept, and the asymmetry is
+        // deliberate: every other section defaults to shown, while the gaps
+        // default to hidden because the surface that says nothing is `ainar
+        // page`. This is a professor's view, so it asks.
+        data = {
+          ...data,
+          sections: { assessments: false, grading: false, header: false, gaps: true },
+        };
       }
       if (view === "tasks") {
         // Where each dateless assessment lives, so the widget's "set dates"

@@ -18,9 +18,11 @@
  * CLI, and one that skips is merely unhelpful.
  *
  * **The layout is the post-merge one:** outcomes, concepts and modules belong to
- * the *course* and carry `course_id`; `versions/<TERM>/version.yaml` is one
- * offering. There is no `runs/` directory and no version number — a
- * `CourseVersion` *is* the term.
+ * the *course* and carry `course_id`; `version.yaml` beside them is the one
+ * offering this workspace holds. There is no `runs/` directory, no version
+ * number and no term directory — a `CourseVersion` *is* the term, a workspace
+ * is one run of one course, and a finished offering goes to `archive/<TERM>/`
+ * at the workspace root rather than staying beside the live one.
  */
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -180,7 +182,7 @@ export interface NewRunOptions {
 export const newRun = (options: NewRunOptions): Written[] => {
   const written: Written[] = [];
   const courseVersionId = `${options.courseId}-${options.term}`;
-  const runDir = join(options.root, "courses", options.courseId, "versions", options.term);
+  const courseDir = join(options.root, "courses", options.courseId);
   const values = {
     course_id: options.courseId,
     course_version_id: courseVersionId,
@@ -188,10 +190,10 @@ export const newRun = (options: NewRunOptions): Written[] => {
     start: options.start,
     end: options.end,
   };
-  writeIfAbsent(join(runDir, "version.yaml"), fill(VERSION_TEMPLATE, values), written);
-  writeIfAbsent(join(runDir, "assessments.yaml"), fill(ASSESSMENTS_TEMPLATE, values), written);
-  writeIfAbsent(join(runDir, "activities.yaml"), ACTIVITIES_TEMPLATE, written);
-  writeIfAbsent(join(runDir, "resources.yaml"), "resources: []\n", written);
-  writeIfAbsent(join(runDir, "enrollments.yaml"), "enrollments: []\n", written);
+  writeIfAbsent(join(courseDir, "version.yaml"), fill(VERSION_TEMPLATE, values), written);
+  writeIfAbsent(join(courseDir, "assessments.yaml"), fill(ASSESSMENTS_TEMPLATE, values), written);
+  writeIfAbsent(join(courseDir, "activities.yaml"), ACTIVITIES_TEMPLATE, written);
+  writeIfAbsent(join(courseDir, "resources.yaml"), "resources: []\n", written);
+  writeIfAbsent(join(courseDir, "enrollments.yaml"), "enrollments: []\n", written);
   return written;
 };

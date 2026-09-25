@@ -1,0 +1,12 @@
+# Local origin for one professor's DHS instance.
+# Cloudflare Access must protect the entire public hostname and the Tunnel
+# route must enable "Protect with Access" before it points here.
+# This listener is reachable only from the same machine.
+http://127.0.0.1:8080 {
+    reverse_proxy 127.0.0.1:3101 {
+        # DHS accepts its privileged APIs only for a loopback authority.
+        header_up Host 127.0.0.1:3101
+        header_up Origin http://127.0.0.1:3101
+        header_up X-Forwarded-Host {host}
+    }
+}

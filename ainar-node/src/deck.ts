@@ -27,6 +27,8 @@ export type PlannedSlide = {
   title: string;
   minutes?: number | null;
   purpose?: string | null;
+  /** `SlideSpecification.required_visual`: a picture the plan asked this slide to carry. */
+  required_visual?: string | null;
 };
 
 export type Plan = {
@@ -192,6 +194,79 @@ export function checkContract(slides: Block[][], plan: Plan): string[] {
   if (plan.max_slides && slides.length > plan.max_slides) {
     problems.push(`${slides.length} slides, but the plan allows ${plan.max_slides}`);
   }
+  return problems;
+}
+
+/** A problem with a deck, and whether it stops the render or is only said. */
+export type Problem = { severity: "error" | "warning"; message: string };
+
+/**
+ * What the contract cannot see: the slides themselves.
+ *
+ * `checkContract` compares a plan against a deck. These four look at the deck
+ * alone, and each is a mistake made in `professor-slides-skills` before the
+ * check existed — ported here on 2026-09-16, when that plugin's checks moved
+ * into the harness. The fifth check there, "the plan records a figure no slide
+ * links", did not come with them: its plan carries a `figures` map and this one
+ * does not, because a figure's licence lives in the `Document` record instead.
+ *
+ * Errors stop the render. Warnings are said and the deck is still written,
+ * because the file is what was asked for and a surprise is worse than a flaw
+ * that was named.
+ */
+export function checkSlides(slides: Block[][], plan: Plan | null): Problem[] {
+  const problems: Problem[] = [];
+  const error = (message: string): void => void problems.push({ severity: "error", message });
+  const warning = (message: string): void => void problems.push({ severity: "warning", message });
+
+  for (const [index, blocks] of slides.entries()) {
+    const number = index + 1;
+
+    for (const block of blocks) {
+      if (block.kind === "list") {
+        // pptxgenjs cannot write a bulleted line that also carries mixed runs,
+        // so the renderer keeps the bullet and drops the emphasis. Saying so is
+        // the difference between a decision and a surprise.
+        const emphasised = block.items.filter((item) => /\*\*[^*]+\*\*|`[^`]+`/.test(item));
+        if (emphasised.length) {
+          warning(
+            `slide ${number}: ${emphasised.length} list item(s) use bold or code, which renders as ` +
+            "plain text — a bulleted line cannot carry both a bullet and mixed formatting. Move the " +
+            "emphasis into a paragraph, or accept the plain rendering.",
+          );
+        }
+        continue;
+      }
+      if (block.kind !== "image") continue;
+
+      if (!block.alt.trim()) {
+        error(
+          `slide ${number}: ${block.src} has no alt text. Slides are read by people who cannot see them.`,
+        );
+      }
+      if (block.src.includes("/") || block.src.includes("\\")) {
+        error(
+          `slide ${number}: ${block.src} is not a sibling path. Figures live flat beside the deck; ` +
+          "a subdirectory link breaks silently in a deck nobody opens until the lecture.",
+        );
+      }
+    }
+  }
+
+  // A visual the plan asked for and the deck does not have. A warning rather
+  // than an error: the professor may have decided against it, and this cannot
+  // tell that apart from forgetting.
+  for (const spec of plan?.slides ?? []) {
+    if (!spec.required_visual) continue;
+    const blocks = slides[spec.number - 1] ?? [];
+    if (!blocks.some((block) => block.kind === "image")) {
+      warning(
+        `slide ${spec.number} was planned with a visual ("${spec.required_visual}") and has none. ` +
+        "Either draw it, record the prompt that would produce it, or take the requirement off the plan.",
+      );
+    }
+  }
+
   return problems;
 }
 

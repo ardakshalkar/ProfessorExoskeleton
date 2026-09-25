@@ -15,11 +15,17 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { BY_TOOL, BY_URI, MIME, TEMPLATE_KEY, WIDGETS } from "../src/mcp/widgets.ts";
-import { TOOLS, WITHHELD, callTool } from "../src/mcp/tools.ts";
-import { Workspace } from "../src/mcp/workspace.ts";
+// @ts-ignore -- plain .mjs so `node prerender-widget.mjs` still needs no flags
+import { prerender } from "../bin/prerender-widget.mjs";
+import { BY_TOOL, BY_URI, MIME, TEMPLATE_KEY, WIDGETS } from "../src/tools/widgets.ts";
+import { TOOLS, WITHHELD, callTool } from "../src/tools/index.ts";
+import { Workspace } from "../src/workspace.ts";
 
-const ROOT = join(import.meta.dirname, "..", "..");
+// The repository, and the sample workspace inside it. Separate since 2026-09-17:
+// the assets are a repository file this test reads directly, the course is a
+// workspace the tools are pointed at.
+const REPO = join(import.meta.dirname, "..", "..");
+const ROOT = join(REPO, "workspace");
 const RUN = "CSS-4008-2026-FALL";
 
 test("the assets were found, and there are four of them", () => {
@@ -107,6 +113,41 @@ test("a widget tool returns structuredContent for the component to render", (t) 
   }
 });
 
+test("the outline draws its gaps only for a surface that asks", (t) => {
+  if (!existsSync(join(ROOT, "courses", "CSS-4008"))) {
+    t.skip("no example course in this checkout");
+    return;
+  }
+  // The document as a host serves it: the payload on `window.openai`, then the
+  // widget's own script. Executed rather than read, because whether the chips
+  // render is a property of the view running and not of its source.
+  const served = (payload: unknown): string => {
+    const document =
+      `<script>window.openai = { toolOutput: ${JSON.stringify(payload).replace(/</g, "\\u003c")} };</script>\n` +
+      BY_TOOL.get("course_outline")!.html();
+    const { markup, problems } = prerender(document, "course_outline");
+    assert.deepEqual(problems, [], "the view did not render");
+    return markup as string;
+  };
+
+  const data = callTool(workspace(), "course_outline", { course_version_id: RUN })
+    .structuredContent as Record<string, unknown>;
+
+  // The sample course teaches nine weeks and has a deck for one of them, so
+  // there is something to find; a fixture with nothing missing would pass this
+  // test by drawing nothing twice.
+  assert.ok(
+    (data.weeks as Record<string, any>[]).some((week) => week.gaps.length > 0),
+    "the example course has no gap to draw",
+  );
+
+  assert.equal(served(data).includes("wkgap"), false, "a payload that did not ask got chips");
+  assert.ok(
+    served({ ...data, sections: { gaps: true } }).includes("wkgap"),
+    "a payload that asked got none",
+  );
+});
+
 test("a markdown tool returns text alone, and no template", (t) => {
   if (!existsSync(join(ROOT, "courses", "CSS-4008"))) {
     t.skip("no example course in this checkout");
@@ -140,7 +181,7 @@ test("adding resources did not add a write verb", () => {
  */
 const engine = (): { tmpl: (s: string, m: unknown) => string } => {
   const source = readFileSync(
-    join(ROOT, "ainar", "mcp", "widget-assets", "template.js"),
+    join(REPO, "vendor", "ainar", "mcp", "widget-assets", "template.js"),
     "utf8",
   );
   const esc = `function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){

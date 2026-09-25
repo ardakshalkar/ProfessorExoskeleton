@@ -308,7 +308,7 @@ test("only the two state collections lack an id field, as in Python", () => {
 // -------------------------------------------------------------- timestamps
 
 test("a storage key with a scheme is not a repository path", () => {
-  assert.ok(isRepoKey("courses/CSS-4008/versions/2026-FALL/materials/x.md"));
+  assert.ok(isRepoKey("courses/CSS-4008/materials/x.md"));
   assert.ok(!isRepoKey("object://bucket/x.md"));
 });
 

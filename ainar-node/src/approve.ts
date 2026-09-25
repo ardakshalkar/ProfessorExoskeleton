@@ -33,14 +33,15 @@ import { parse } from "yaml";
 import { z } from "zod";
 import type { CourseBundle } from "./bundle.ts";
 import { allRubrics, criterionById } from "./bundle.ts";
-import { DRAFTABLE, type DraftCollection, type Drafted } from "./drafts.ts";
-import { IssueList } from "./issues.ts";
+import { DRAFTABLE, type DraftCollection, type Drafted, loadDrafts, mergeDrafts } from "./drafts.ts";
+import { IssueList, describe } from "./issues.ts";
+import { coverage, validate } from "./validate.ts";
 import { dump } from "./yaml-out.ts";
 
 export const DRAFT_MARKER = "-DRAFT-";
 
 /**
- * Where each collection lands, relative to `versions/<TERM>/`.
+ * Where each collection lands, relative to the course directory.
  *
  * Runtime records go to `records/`. Documents and resources go beside their
  * authored counterparts but in a separate `generated.yaml` — writing YAML back
@@ -394,9 +395,9 @@ export const isRepoKey = (storageKey: string): boolean => !storageKey.includes("
  */
 export const stageDocuments = (
   approval: Approval,
-  options: { root: string; runDir: string; issues: IssueList; dryRun?: boolean },
+  options: { root: string; courseDir: string; issues: IssueList; dryRun?: boolean },
 ): string[] => {
-  const { root, runDir, issues, dryRun = false } = options;
+  const { root, courseDir, issues, dryRun = false } = options;
   const staged: string[] = [];
   for (const document of approval.records.get("documents") ?? []) {
     const storageKey = document.storage_key as string;
@@ -415,7 +416,7 @@ export const stageDocuments = (
     let destination = source;
     const parts = relative(root, source).split(/[\\/]/);
     if (parts[0] === "work") {
-      destination = join(runDir, MATERIALS_DIR, basename(source));
+      destination = join(courseDir, MATERIALS_DIR, basename(source));
       if (existsSync(destination) && !dryRun) {
         issues.error(
           "document.collision",
@@ -567,15 +568,14 @@ const append = (path: string, collection: string, items: Record_[], header: stri
 /**
  * Append approved records to their destination, one file per collection.
  *
- * Everything approvable lands under `versions/<TERM>/`, so `runDir` is the only
- * destination there is. The `courseDir` option went with `CLAIM_FILES`: nothing
- * writes above the semester any more.
+ * Everything approvable lands in the course directory, which since the term
+ * stopped being a directory level is the only destination there is.
  */
-export const writeRecords = (runDir: string, approval: Approval): string[] => {
+export const writeRecords = (courseDir: string, approval: Approval): string[] => {
   const written: string[] = [];
   for (const [collection, items] of approval.records) {
     const file = RECORD_FILES[collection];
-    // Loud rather than `join(runDir, undefined)`, which is how a collection
+    // Loud rather than `join(courseDir, undefined)`, which is how a collection
     // added to `DRAFTABLE` and forgotten here would write to a path spelled
     // "undefined" and look like it had worked.
     if (file === undefined) {
@@ -584,7 +584,194 @@ export const writeRecords = (runDir: string, approval: Approval): string[] => {
           "Add one, or take the collection out of DRAFTABLE.",
       );
     }
-    written.push(append(join(runDir, file), collection, items, HEADER));
+    written.push(append(join(courseDir, file), collection, items, HEADER));
   }
   return written;
+};
+
+// --------------------------------------------------------------------------
+// The gate, as one call
+// --------------------------------------------------------------------------
+
+/**
+ * Load drafts, approve them, stage their materials, validate the merge, write.
+ *
+ * **This exists so that there is one order of operations and not two.** The
+ * sequence used to live only in `bin/ainar.ts`'s `approve` case, which was fine
+ * while approval had exactly one caller. It has three now — the CLI, the pane's
+ * button, and `ainar publish`, which promotes the materials a publication needs
+ * — and the failure mode of copying the order into each of them is not a
+ * crash: it is a course record that validates and is still wrong, because one
+ * copy validated before staging or wrote before validating.
+ *
+ * The order is the gate:
+ *
+ * 1. the drafts load, or nothing happens at all;
+ * 2. identifiers are promoted and decisions stamped (`approveDrafts`);
+ * 3. materials move out of `work/` and gain size and checksum;
+ * 4. the MERGED bundle is validated — the record as it would be, not the
+ *    drafts on their own;
+ * 5. only then is anything written.
+ *
+ * `collections` is the one addition, and it is the whole of what makes
+ * `ainar publish` safe: given `["documents", "resources"]`, a drafted
+ * evaluation sitting in the same directory is not promoted, not validated
+ * against, and named in `leftAlone` so the caller can say so. A judgement about
+ * a student is promoted by `ainar approve` and by nothing else.
+ */
+export interface ApprovalOutcome {
+  /** False when the drafts did not load, or the merge did not validate. */
+  ok: boolean;
+  approval: Approval;
+  /** The documents whose material moved, or would have moved under `dryRun`. */
+  staged: string[];
+  /** What happened, in the order it happened. The CLI prints these verbatim. */
+  lines: string[];
+  /** Why it refused. Empty when `ok`. */
+  errors: string[];
+  /** Files written. Empty under `dryRun`. */
+  written: string[];
+  /** Draft collections this call was not allowed to promote, and their counts. */
+  leftAlone: Map<string, number>;
+}
+
+export const runApproval = (options: {
+  bundle: CourseBundle;
+  draftsDir: string;
+  courseDir: string;
+  root: string;
+  approver: string;
+  timezone?: string;
+  only?: Set<string>;
+  reject?: Set<string>;
+  collections?: readonly string[];
+  dryRun?: boolean;
+  now?: Date;
+}): ApprovalOutcome => {
+  const { bundle, courseDir, root, approver, only, reject, dryRun = false } = options;
+  const draftsDir = resolve(options.draftsDir);
+  const lines: string[] = [];
+  const leftAlone = new Map<string, number>();
+  const issues = new IssueList();
+
+  const empty = (): Approval => ({ records: new Map(), idMap: new Map(), skipped: [], notes: [] });
+  const refused = (approval: Approval, staged: string[] = []): ApprovalOutcome => ({
+    ok: false,
+    approval,
+    staged,
+    lines,
+    errors: issues.errors.map((issue) => describe(issue)),
+    written: [],
+    leftAlone,
+  });
+
+  const loaded = loadDrafts(draftsDir, issues);
+  if (issues.errors.length) {
+    lines.push("the drafts do not load cleanly; nothing was approved");
+    return refused(empty());
+  }
+
+  // The restriction, applied before anything is promoted rather than after —
+  // a collection this call may not write is a collection it does not reason
+  // about at all.
+  let drafted = loaded;
+  if (options.collections) {
+    const allowed = new Set(options.collections);
+    const kept: Record<string, unknown[]> = {};
+    for (const [collection, records] of Object.entries(loaded)) {
+      const entries = records as unknown[];
+      if (allowed.has(collection)) kept[collection] = entries;
+      else if (entries.length) leftAlone.set(collection, entries.length);
+    }
+    drafted = kept as Drafted;
+  }
+
+  const stamp = decidedAt(options.timezone, options.now ?? new Date());
+  const approval = approveDrafts(bundle, drafted, {
+    approver,
+    decidedAt: stamp,
+    issues,
+    only,
+    reject,
+  });
+
+  if (total(approval) === 0 && !issues.errors.length) {
+    lines.push("nothing to approve");
+    for (const [collection, count] of leftAlone) {
+      lines.push(`  ${count} draft(s) in ${collection} left alone — this command does not promote them`);
+    }
+    return { ok: true, approval, staged: [], lines, errors: [], written: [], leftAlone };
+  }
+
+  lines.push(`Approving as ${approver} at ${stamp}\n`);
+  for (const [collection, items] of approval.records) {
+    const field = ID_FIELDS[collection]!;
+    lines.push(`  ${collection}:`);
+    for (const item of items) {
+      const promotedId = item[field] as string;
+      const original =
+        [...approval.idMap.entries()].find(([, value]) => value === promotedId)?.[0] ?? promotedId;
+      lines.push(`    ${original}  ->  ${promotedId}`);
+    }
+  }
+  for (const [collection, count] of leftAlone) {
+    lines.push(`\n  left alone: ${count} draft(s) in ${collection} — this command does not promote them`);
+  }
+  for (const note of approval.notes) lines.push(`\n  note: ${note}`);
+  if (approval.skipped.length) lines.push(`\n  skipped: ${[...approval.skipped].sort().join(", ")}`);
+
+  const staged = stageDocuments(approval, { root, courseDir, issues, dryRun });
+  const merged = mergeDrafts(bundle, Object.fromEntries(approval.records));
+
+  // A dry run rewrites every staged `storage_key` to its destination but copies
+  // nothing, so the validator then reports each of those materials as a missing
+  // file. That is the rehearsal's own shadow, not a fault in the drafts: the
+  // same approval run for real copies the file first and passes.
+  //
+  // Only that one code, and only for the documents `stageDocuments` said it
+  // would move, is dropped. A document whose SOURCE is missing never enters that
+  // list, so it still fails here — which is the case a preview exists to catch.
+  const found = validate(merged, { root });
+  const stagedIds = new Set(staged);
+  issues.extend(
+    dryRun
+      ? found.items.filter(
+          (issue) =>
+            !(
+              issue.code === "document.missing_file" &&
+              issue.location != null &&
+              stagedIds.has(issue.location)
+            ),
+        )
+      : found,
+  );
+  if (issues.errors.length) {
+    lines.push("\nvalidation of the approved records failed; nothing was written");
+    return refused(approval, staged);
+  }
+
+  // Printed on every run rather than left to be discovered. The refusal *is* the
+  // gate, so its width is the one number that says how much this gate is worth.
+  const { implemented, total: allChecks } = coverage();
+  lines.push(
+    `\nchecked against ${implemented} of ${allChecks} validator checks` +
+      (implemented === allChecks ? "" : " — `python -m ainar validate` is the complete set"),
+  );
+
+  if (dryRun) {
+    lines.push(
+      "\ndry run — nothing written" +
+        (staged.length
+          ? `, and ${staged.length} material(s) not copied. The real run copies them first.`
+          : ""),
+    );
+    return { ok: true, approval, staged, lines, errors: [], written: [], leftAlone };
+  }
+
+  const written = writeRecords(courseDir, approval);
+  for (const path of written) {
+    lines.push(`wrote ${relative(root, path).split(/[\/]/).join("/")}`);
+  }
+  lines.push(`\n${total(approval)} record(s) approved.`);
+  return { ok: true, approval, staged, lines, errors: [], written, leftAlone };
 };

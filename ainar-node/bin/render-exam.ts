@@ -32,6 +32,19 @@ type ExamQuestion = {
 
 type ExamInput = {
   title?: string;
+  /**
+   * The line under the title: course, marks, weight, date — whatever the paper
+   * has to state before question 1. One string rather than named fields,
+   * because what belongs there differs per institution and a schema of
+   * `course`/`marks`/`date` would be a guess at somebody else's registry.
+   */
+  subtitle?: string;
+  /**
+   * Ruled fields the candidate fills in, e.g. `["Name", "Group"]`. Without
+   * these a paper cannot be collected, which is why an empty list is a
+   * deliberate choice rather than the default.
+   */
+  candidateFields?: string[];
   questions: ExamQuestion[];
 };
 
@@ -121,7 +134,10 @@ function validateExam(value: unknown): ExamInput {
 
 function questionHeading(question: ExamQuestion): string {
   const name = question.title ? ` - ${question.title}` : "";
-  const marks = question.marks === undefined ? "" : ` (${question.marks} marks)`;
+  // "1 marks" is on every paper a student is handed, so the plural is worth the
+  // line. `marks` is a score and may be fractional; only exactly 1 is singular.
+  const marks =
+    question.marks === undefined ? "" : ` (${question.marks} mark${question.marks === 1 ? "" : "s"})`;
   return `Question ${question.number}${name}${marks}`;
 }
 
@@ -150,6 +166,22 @@ async function renderDocx(exam: ExamInput, output: string, answers: AnswerLayout
     pageChildren.push(new Paragraph({
       heading: HeadingLevel.TITLE,
       children: [new TextRun({ text: exam.title, bold: true })],
+      spacing: { after: exam.subtitle || exam.candidateFields?.length ? 80 : 240 },
+    }));
+  }
+  if (exam.subtitle) {
+    pageChildren.push(new Paragraph({
+      children: [new TextRun({ text: exam.subtitle, size: 20 })],
+      spacing: { after: exam.candidateFields?.length ? 120 : 240 },
+    }));
+  }
+  if (exam.candidateFields?.length) {
+    pageChildren.push(new Paragraph({
+      children: [
+        new TextRun({
+          text: exam.candidateFields.map((field) => `${field}: ______________________`).join("    "),
+        }),
+      ],
       spacing: { after: 240 },
     }));
   }
@@ -412,7 +444,20 @@ async function renderPdf(exam: ExamInput, output: string, answers: AnswerLayout)
 
   newPage();
   if (exam.title) {
-    drawWrapped(exam.title, bold, titleSize, ink, 0, 14);
+    drawWrapped(exam.title, bold, titleSize, ink, 0, exam.subtitle ? 6 : 14);
+  }
+  if (exam.subtitle) {
+    drawWrapped(exam.subtitle, regular, bodySize, headingInk, 0, exam.candidateFields?.length ? 10 : 14);
+  }
+  if (exam.candidateFields?.length) {
+    drawWrapped(
+      exam.candidateFields.map((field) => `${field}: ______________________`).join("    "),
+      regular,
+      bodySize,
+      ink,
+      0,
+      14,
+    );
   }
   for (const question of exam.questions) drawQuestion(question, answers === "under-question");
 

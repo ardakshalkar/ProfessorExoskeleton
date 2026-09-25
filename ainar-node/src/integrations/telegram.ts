@@ -4,7 +4,7 @@ import {
   type OAuthIdentity,
   type SqlPool,
   withIdentityClient,
-} from "../mcp/postgres-course-store.ts";
+} from "../store/postgres.ts";
 
 export interface TelegramChannel {
   chatId: string;

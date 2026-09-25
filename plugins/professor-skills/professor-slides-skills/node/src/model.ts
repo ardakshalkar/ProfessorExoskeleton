@@ -61,7 +61,7 @@ export interface Activity {
  * A reading, a book chapter, a course page — the material a deck is grounded
  * in.
  *
- * This is `delivery.resources` / `versions/<TERM>/resources.yaml` unchanged.
+ * This is `delivery.resources` / `resources.yaml` unchanged.
  * Nothing new was defined for references because the course model already had
  * the right record, with the right concept tagging, and a second list of books
  * beside it would be a second thing to keep true.

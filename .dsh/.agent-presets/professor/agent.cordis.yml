@@ -181,17 +181,18 @@
 - id: skill-filesystem
   name: '@deepseek-ai/dsh-skill-filesystem'
   config:
-    # Every teaching skill this host has, named absolutely: the AINAR set under
-    # `.agents/skills`, plus the six presentation and grading plugins under
+    # Every teaching skill this host has, named absolutely: this host's own set
+    # under `skills/`, plus the six presentation and grading plugins under
     # `plugins/professor-skills/`. Both trees are source in this repository —
     # see PROVENANCE.md for where they were originally taken from.
     #
-    # The default roots would find the first at `<projectRoot>/.agents/skills`,
-    # but the project root is the SESSION's workspace — and the professor's
-    # workspace is a course folder, not this checkout. Relying on the default
-    # meant the skills appeared only when the workspace happened to be this
-    # directory, and vanished silently otherwise: no error, just a `/` menu with
-    # nothing teaching-related in it.
+    # The sixteen AINAR skills lived under `.agents/skills` until 2026-09-16 and
+    # are now in `skills/` with the rest. `.agents/skills` was a default root the
+    # loader would find at `<projectRoot>/.agents/skills`, and the project root
+    # is the SESSION's workspace — the professor's workspace is a course folder,
+    # not this checkout — so the default never fired anyway and the path was
+    # already named absolutely here. One root fewer, and no name moved: nothing
+    # in `skills/` and nothing in the six plugins shared a name.
     #
     # The ProfessorSkills roots are each plugin's own `skills/` directory rather
     # than one flattened tree, because a skill there reads resources from its
@@ -203,13 +204,20 @@
     # ORDER IS LOAD-BEARING. Every entry here carries the same provider rank
     # (`CUSTOM_RANK`, 300), so a name two roots both define is decided by
     # position: earlier wins, and `dsh-skill` hides the loser with nothing but a
-    # log line. ProfessorSkills is listed first because it is the chosen winner
-    # of the three shared names — `grade-batch`, `grade-submission` and
-    # `publish-telegram`. The AINAR copies of those three are absent from
-    # `.agents/skills` entirely, which is what makes the outcome hold even in
-    # the one case this ordering does not cover: a session whose workspace IS
-    # this checkout, where `.agents/skills` is also found as a default root at
-    # the higher `PROJECT_AGENTS_RANK` and would otherwise take the name back.
+    # log line. This host's own root is listed first because it is the chosen
+    # winner of the three shared names — `grade-batch`, `grade-submission` and
+    # `publish-telegram`. Until 2026-09-17 it did not define them: the AINAR
+    # copies of those three existed only in `~/.claude/skills`, unbacked by any
+    # repository, so standing first took no name off ProfessorSkills. They were
+    # rescued into this root on that date, and now it does take those three —
+    # deliberately. The AINAR versions are 184, 173 and 140 lines against
+    # ProfessorSkills' 27, 32 and 22, and they are written against the record
+    # layer this host actually has. To hand any of them back, move that one
+    # skill out of this root rather than reordering the list.
+    # The case this ordering never covered —
+    # a session whose workspace IS this checkout, where a default root at the
+    # higher `PROJECT_AGENTS_RANK` could take a name back — went away with
+    # `.agents/skills` itself.
     #
     # Anchored to THIS FILE, and to nothing else.
     #
@@ -231,20 +239,30 @@
     #
     # Three levels up is the project root: .dsh/.agent-presets/professor/ -> .
     customSkillDirs:
-      # This host's own skills, written here rather than taken from anywhere.
-      # It is first because it is the root whose names should win: everything
-      # below it began as a copy from ProfessorSkills or AINAR, and this is
-      # where a skill that overrides one of theirs belongs. All of it is source
-      # now — see PROVENANCE.md — so the ordering is a choice about precedence
-      # rather than a defence against a build step.
-      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../skills/', baseUrl))"
+      # This host's skills: `ainar-records`, written here, the sixteen
+      # course-level skills that came from AINAR and moved out of
+      # `.agents/skills` on 2026-09-16, and the three rescued from
+      # `~/.claude/skills` on 2026-09-17. It is first because it is the root
+      # whose names should win, and where a skill that overrides a plugin's
+      # belongs. All of it is source now — see PROVENANCE.md — so the ordering
+      # is a choice about precedence rather than a defence against a build step.
+      #
+      # It sits under `plugins/` as of 2026-09-17, as its own plugin rather than
+      # a bare directory at the root. Nothing about this host changed; the
+      # second host did. Claude Code has no cwd-independent way to load a plain
+      # directory of skills — `.claude/skills` is scoped to the session's
+      # workspace, which for a professor is a course folder and not this
+      # checkout, the same trap `.agents/skills` fell into — but it will load a
+      # plugin from a local marketplace IN PLACE, reading these very files. So
+      # the seven roots below are now also the seven plugins in
+      # `.claude-plugin/marketplace.json`, and neither host holds a copy.
+      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-course-skills/skills/', baseUrl))"
       - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-assignment-skills/skills/', baseUrl))"
       - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-course-design-skills/skills/', baseUrl))"
       - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-exam-skills/skills/', baseUrl))"
       - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-lms-publishing-skills/skills/', baseUrl))"
       - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-slides-skills/skills/', baseUrl))"
       - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../plugins/professor-skills/professor-student-assessment-skills/skills/', baseUrl))"
-      - !!js "process.getBuiltinModule('node:url').fileURLToPath(new URL('../../../.agents/skills/', baseUrl))"
 
 - id: tool-skill
   name: '@deepseek-ai/dsh-tool-skill'

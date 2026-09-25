@@ -30,7 +30,7 @@ presentation:
   duration_minutes: "{{ from the scheduled meeting }}"
   max_slides: "{{ see the note beside each style below }}"
 
-  # The deck grammar. See references/deck-grammars.md.
+  # The deck grammar. See skills/make-materials/references/deck-grammars.md.
   deck_archetype: seminar
   # Which representation ladder applies — history climbs artifact → observation
   # → comparison → context; physics climbs phenomenon → schematic → model →

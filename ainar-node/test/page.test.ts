@@ -17,7 +17,7 @@ import {
   renderStatic,
   studentWork,
 } from "../src/page.ts";
-import { TemplateRefusal, loadStructure, loadStyle } from "../src/templates.ts";
+import { SEARCH, TemplateRefusal, loadStructure, loadStyle } from "../src/templates.ts";
 
 /**
  * `tests/test_page.py` and `tests/test_templates.py`, reduced to the assertions
@@ -30,7 +30,15 @@ import { TemplateRefusal, loadStructure, loadStyle } from "../src/templates.ts";
  * the network or the HTML parser from a payload value.
  */
 
-const ROOT = resolve(process.cwd(), "..");
+// Two roots, because this file asks two different questions of two different
+// trees. A course is read from a WORKSPACE — the directory holding `courses/`
+// and `shared/` — and a template is looked up under the REPOSITORY, because
+// `templates.yaml` ships beside the skill that owns it. They were the same path
+// until 2026-09-17, when the sample workspace moved into `workspace/`, and
+// collapsing them back would make `publishable` publish from the repository or
+// `loadStyle` search a course folder for skills.
+const REPO = resolve(process.cwd(), "..");
+const ROOT = join(REPO, "workspace");
 const RUN = "CSS-4008-2026-FALL";
 
 const bundle = () => {
@@ -80,6 +88,25 @@ test("the page carries no score", () => {
   ]) {
     assert.equal(html.includes(field), false, `the page mentions ${field}`);
   }
+});
+
+test("the page says nothing about what the professor has not written yet", () => {
+  // `weeks[].gaps` rides on this payload because it is a fact about the course
+  // rather than about anyone in the class, which is what lets it share the
+  // document the pane and a chat client draw. It is still not student-facing:
+  // "no slides are registered for week nine" is the professor's preparation,
+  // and a course page that published it would be reporting on its author.
+  //
+  // The guard is the default. `course-outline.js` draws a gap only where
+  // `sections.gaps` is true, and this page sends no `sections` at all — so the
+  // failure being pinned is somebody changing that opt-in to an opt-out and
+  // taking the public page with them.
+  // The chip's class, not its name: the style sheet ships whole and carries a
+  // `.wkgap` rule on every page, which is nothing and draws nothing.
+  const html = page();
+  assert.equal(html.includes('class="wkgap"'), false, "the page carries a gap chip");
+  assert.equal(html.includes("need something"), false, "the page carries the gap tally");
+  assert.equal(html.includes("no slides are registered"), false, "the page carries a gap note");
 });
 
 test("the prerendered page carries the markup and no script", () => {
@@ -176,7 +203,7 @@ test("a style sheet carrying markup is refused", () => {
     const dir = scratch();
     writeFileSync(join(dir, "bad.css"), `body { color: red } /* ${needle} */`);
     assert.throws(
-      () => loadStyle(join(dir, "bad.css"), "course-page", ROOT),
+      () => loadStyle(join(dir, "bad.css"), "course-page", REPO),
       TemplateRefusal,
       `${needle} should be refused`,
     );
@@ -186,27 +213,42 @@ test("a style sheet carrying markup is refused", () => {
 test("a remote asset is refused", () => {
   const dir = scratch();
   writeFileSync(join(dir, "remote.css"), "body { background: url(https://example.com/x.png) }");
-  assert.throws(() => loadStyle(join(dir, "remote.css"), "course-page", ROOT), TemplateRefusal);
+  assert.throws(() => loadStyle(join(dir, "remote.css"), "course-page", REPO), TemplateRefusal);
 });
 
 test("a dashboard template is refused by the public page", () => {
   // Each set declares its surface in `templates.yaml`, so pointing `page` at a
   // dashboard's style sheet is stopped at the command rather than discovered in
   // the rendered page.
-  const dashboard = join(
-    ROOT, ".agents", "skills", "course-dashboard", "templates", "plain.css",
-  );
+  // Located through `SEARCH` rather than spelled out, so that moving the skills
+  // again moves this with them: the assertion is about the surface mismatch,
+  // not about where the file sits. Resolved against REPO, not ROOT: the skills
+  // are a repository tree, and ROOT is the sample workspace.
+  const dashboard = join(REPO, SEARCH[0]!, "course-dashboard", "templates", "plain.css");
   assert.throws(
-    () => loadStyle(dashboard, "course-page", ROOT),
+    () => loadStyle(dashboard, "course-page", REPO),
     (error: Error) =>
       error instanceof TemplateRefusal && /template for course-dashboard/.test(error.message),
   );
 });
 
 test("a template can be chosen by id alone", () => {
-  const [css, name] = loadStyle("plain", "course-page", ROOT);
+  const [css, name] = loadStyle("plain", "course-page", REPO);
   assert.equal(name, "plain");
   assert.ok(css.length, "the chosen template should have some CSS in it");
+});
+
+test("a template is found from a workspace that is not this checkout", () => {
+  // The case every professor is in and no test was: `ainar page` passes the
+  // WORKSPACE root, which is their course folder and holds no skills. A lookup
+  // that searched only that root found a template exactly when the workspace
+  // happened to be this checkout — true here until 2026-09-17 and true nowhere
+  // else, which is why it went unnoticed. An empty directory stands in for a
+  // real workspace: if this passes, the installation fallback is doing it.
+  const elsewhere = scratch();
+  const [css, name] = loadStyle("plain", "course-page", elsewhere);
+  assert.equal(name, "plain");
+  assert.ok(css.length, "the shipped template should be reachable from any workspace");
 });
 
 test("a structure that could run or fetch something is refused", () => {
@@ -214,7 +256,7 @@ test("a structure that could run or fetch something is refused", () => {
     const dir = scratch();
     writeFileSync(join(dir, "bad.tmpl"), `<section>${bad}</section>`);
     assert.throws(
-      () => loadStructure(join(dir, "bad.tmpl"), "course-page", ROOT),
+      () => loadStructure(join(dir, "bad.tmpl"), "course-page", REPO),
       TemplateRefusal,
       `${bad} should be refused`,
     );
@@ -223,7 +265,7 @@ test("a structure that could run or fetch something is refused", () => {
 
 test("a template that is not there names where it looked", () => {
   assert.throws(
-    () => loadStyle("no-such-template", "course-page", ROOT),
+    () => loadStyle("no-such-template", "course-page", REPO),
     (error: Error) => error instanceof TemplateRefusal && /Looked in:/.test(error.message),
   );
 });

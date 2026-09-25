@@ -1,0 +1,97 @@
+# The assessment used as the worked example in samples/.
+
+assessment_id: ASSESSMENT-04
+course_version_id: CSS-4008-2026-FALL
+title: Model Evaluation Assignment
+type: assignment
+description: >-
+  Train two models on the teaching dataset, diagnose whether either overfits,
+  and defend the evaluation procedure used.
+module_id: MODULE-06
+maximum_score: 100
+weight: 0.20
+opens_at: 2026-10-07T12:00:00+05:00
+due_at: 2026-10-15T23:59:00+05:00
+outcomes: [LO-02, LO-04]
+submission_type: [pdf, notebook, oral_defense]
+delivery: canvas_upload
+settings:
+  anonymous_grading: true
+  allow_late_submission: false
+  ai_review:
+    enabled: true
+    require_professor_approval: true
+rubric:
+  rubric_id: RUBRIC-04
+  title: Model evaluation rubric
+  criteria:
+    - criterion_id: CRIT-04-01
+      rubric_id: RUBRIC-04
+      title: Method selection
+      maximum_score: 25
+      outcome_id: LO-04
+      capability_id: CAP-AI-EXPERIMENT
+      concepts: [CONCEPT-EXPERIMENT-DESIGN]
+      levels:
+        - score: 25
+          label: strong
+          description: Method is appropriate and clearly justified.
+        - score: 15
+          label: adequate
+          description: Method is appropriate but justification is incomplete.
+        - score: 5
+          label: weak
+          description: Method is selected without sufficient reasoning.
+
+    - criterion_id: CRIT-04-02
+      rubric_id: RUBRIC-04
+      title: Evaluation design
+      description: Is the measurement procedure capable of answering the question?
+      maximum_score: 25
+      outcome_id: LO-02
+      capability_id: CAP-AI-EXPERIMENT
+      concepts: [CONCEPT-MODEL-EVALUATION, CONCEPT-TRAIN-TEST-SPLIT]
+      levels:
+        - score: 25
+          label: strong
+          description: Held-out data used correctly, metric fits the task.
+        - score: 15
+          label: adequate
+          description: Evaluation is sound but the metric choice is unexamined.
+        - score: 5
+          label: weak
+          description: Performance measured on data the model has seen.
+
+    - criterion_id: CRIT-04-03
+      rubric_id: RUBRIC-04
+      title: Diagnosis of overfitting
+      maximum_score: 25
+      outcome_id: LO-02
+      concepts: [CONCEPT-OVERFITTING, CONCEPT-REGULARIZATION]
+      levels:
+        - score: 25
+          label: strong
+          description: Overfitting identified with evidence and a remedy proposed.
+        - score: 15
+          label: adequate
+          description: Gap between train and test noted but not explained.
+        - score: 5
+          label: weak
+          description: Overfitting not considered.
+
+    - criterion_id: CRIT-04-04
+      rubric_id: RUBRIC-04
+      title: Reporting and reproducibility
+      maximum_score: 25
+      outcome_id: LO-04
+      concepts: [CONCEPT-EXPERIMENT-DESIGN]
+      levels:
+        - score: 25
+          label: strong
+          description: Another student could reproduce the result from the report.
+        - score: 15
+          label: adequate
+          description: Report is clear but omits some settings.
+        - score: 5
+          label: weak
+          description: Results reported without procedure.

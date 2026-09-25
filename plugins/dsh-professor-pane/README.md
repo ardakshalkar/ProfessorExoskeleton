@@ -9,7 +9,7 @@ and offers a picker when the workspace holds more than one offering.
 
 | Button | What it draws | Where it comes from |
 | --- | --- | --- |
-| Course outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines. Every piece of graded work carries a link to the brief students read, or says it has none | `course_outline` |
+| Course outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines. Every piece of graded work carries a link to the brief students read, or says it has none — and every week says what it is still waiting for | `course_outline` |
 | Students | The class list by subgroup, named or pseudonymous, with each student's marks so far, and under each row what they actually handed in | the enrollments, `gradebook` for the marks, and the run's submissions and item responses |
 | Progress · Concepts | Concepts in teaching order against students by pseudonym, with the mean proportion of marks earned on evidence tagged with each | `class_progress` |
 | Progress · Gradebook | One score per student per assessment, from approved decisions only, with the rows that must not be exported and the reason for each | `gradebook` |
@@ -216,8 +216,8 @@ strip spawns `ainar approve`, and for the same reason: what counts as drift,
 which fields this model has an opinion about, and how a created assignment's id
 is written back into `courses/` all live in `ainar-node/src/lms/`, and a second
 implementation in the plugin would have its own idea of all three. The LMS
-write layer is deliberately absent from `dsh-ainar-course-model/server/`, which
-is a read-only tool surface.
+write layer is deliberately absent from the course model's tools, which are a
+read-only surface.
 
 Four rules, each of which is the reason a button is shaped the way it is:
 
@@ -269,6 +269,71 @@ is ordinary. `group` absent means the whole run.
 Unticking everything **removes** the key rather than writing an empty list, and
 takes the emptied `lms:` and `extensions:` with it — so a run that was never
 wired to Canvas reads exactly as it did before the tab was opened.
+
+## The Publish button
+
+Beside the course title in the header, on every tab, whenever the pane has an
+offering to be about. It is there rather than in the six buttons because every
+other control in this header chooses what to **look at**, and this is the only
+thing in the pane whose result somebody outside this machine ever sees.
+
+One dialog, five buttons — **Course page**, **Telegram**, **Homework repo**,
+**Canvas brief**, and **Update everywhere** — over the whole pane rather than
+beside the list, the shape the homework publish already had and for its reason:
+a plan runs to twenty lines and a three-hundred-pixel column turned it into a
+sliver reported as "the button doesn't do anything".
+
+**Update everywhere** is the fifth and it is a mode rather than a place: every
+destination this run has already been published to, and no new ones. It is the
+answer to having edited one deck and not remembering which four places it
+reached. An announcement is listed there and skipped, because nothing can
+re-derive the words you typed — under the announcement box there is a checkbox
+that corrects the last message in the channel instead of posting a second one,
+off by default and deliberately so.
+
+Two presses per target, and the first is the one worth naming. It runs
+`ainar publish <target>` with no `--confirm`, which reads and writes nothing —
+not to `courses/`, not to GitHub, not to a channel — and prints two halves:
+**what it would promote** and **what it would then publish**. Only then does the
+red button appear, and it says what it will do rather than "Publish": *Promote
+and write the page*, *Send to the channel*, *Publish to GitHub*, *Send to
+Canvas*. Editing anything — the target, the assessment, a word of an
+announcement — throws the plan away, so the red button can never send something
+other than what was read.
+
+**The first half is the step that used to be a terminal.** A deck drafted an
+hour ago was a `Document` under `work/` with `-DRAFT-` in its id, which
+`ainar page` deliberately would not publish; getting it onto the page meant
+leaving the harness, running `ainar approve`, and coming back. The publishing
+press now promotes the drafted **documents and resources** the publication needs
+and then publishes, which is the one press this pane was missing.
+
+**And it notices what you edited.** A material changed in place since it was
+recorded — the commonest change there is, and the one that used to need a new
+identifier nobody wanted to write — appears in the plan as *DOC-4410 changed
+since it was recorded*, and the publishing press brings the record back into
+line with the file. A rendering whose source changed and which nobody rebuilt is
+held back rather than published as a picture of the old text, and keeps being
+reported until it is rebuilt. `ainar-node/src/freshness.ts` has the two rules
+that were found by running it.
+
+**And it knows whether this is the first time.** The plan opens with
+`Last published … to …` and the materials that have moved since, or says that
+nothing has been published here before. That memory is the run's sync ledger in
+`~/.ainar/sync/`, which is where `lms push` already keeps what it sent — the
+pane reads none of it directly; it is in the CLI's output, like everything else
+in this dialog.
+
+What it does not promote, and cannot be made to: a drafted evaluation, signal or
+intervention. Those come back in the plan as `left alone`, and `ainar approve`
+remains the professor's. See `runPublish` in `index.js`, and
+`ainar-node/src/publish.ts` for why the line is drawn at artefacts.
+
+The announcement box is the only thing in the pane a professor composes rather
+than picks, and it is sent as typed: the command composes nothing, and the plan
+shows the channel's own name — from Telegram, not from the record — before
+anything can be sent, because a chat id is unreadable and a message sent to last
+term's channel cannot be recalled.
 
 ## Record, and record + drafts
 
@@ -346,6 +411,7 @@ lines, not before.
 | `POST /professor-pane/api/credentials?run=` | store one credential; body is `{ref, value}`, an empty value clears it. Write-only: the response carries presence, never a value |
 | `POST /professor-pane/api/canvas/catalogue?run=` | ask Canvas for this course's sections and student groups |
 | `POST /professor-pane/api/canvas/selection?run=` | write `extensions.lms.canvas_sections`; body is `{selections}` |
+| `POST /professor-pane/api/publish?run=` | plan or perform one publication; body is `{target, assessment, repo, group, message, approver, confirm}`. Without `confirm` it reads and writes nothing |
 | `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/` and `work/`, for the pane's refresh poll |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
@@ -357,24 +423,35 @@ headers rather than payload fields, because the payload goes into a widget
 document shared with two other hosts and has no place to print them.
 
 Every view behind them is a read — `callTool` is read-only by construction —
-and four routes are not:
+and five routes are not:
 
 * `POST /api/approve` spawns the CLI rather than reimplementing the gate.
+* `POST /api/publish` spawns `ainar publish`, which runs that same gate over the
+  materials a publication needs and then publishes.
 * `POST /api/preferences` writes a preference layer.
 * `POST /api/canvas/selection` writes `extensions.lms.canvas_sections`.
 * `POST /api/canvas/catalogue` writes nothing here, but is the one route that
   reaches off this machine.
 
-**None of them is an approval path**, which is the property that matters.
-`AGENTS.md` says there is one and the professor runs it: `/api/approve` IS that
-command, run as it would be run in a terminal, `--dry-run` until a preview has
-been read. A preference is not a claim about a student — it is how the professor
-wants the skills to behave. And a Canvas section id is a fact about the
-professor's own LMS that only they know: no skill drafts it and no agent can
+**None of them is an approval path for a judgement**, which is the property that
+matters. `AGENTS.md` says there is one and the professor runs it: `/api/approve`
+IS that command, run as it would be run in a terminal, `--dry-run` until a
+preview has been read. A preference is not a claim about a student — it is how
+the professor wants the skills to behave. And a Canvas section id is a fact about
+the professor's own LMS that only they know: no skill drafts it and no agent can
 propose it, so it has no drafted half for `ainar approve` to promote, and
-refusing it would only mean the fact stays settable by hand-editing YAML. A pane
-that could accept a *grade* on its own would be the second path, and there is
-still no route that does.
+refusing it would only mean the fact stays settable by hand-editing YAML.
+
+`/api/publish` is the case that tests that sentence, so it is worth being exact.
+It *does* promote drafts, which reads like the gate moving into the pane. What it
+may promote is `MATERIAL_COLLECTIONS` — documents and resources — and that is
+enforced inside `ainar publish`, so no argument this route could send would widen
+it; an `Evaluation` in the same drafts directory comes back reported as left
+alone. The distinction is the one the whole pane is built on: pressing *publish
+the course page* having read what would go on it is the decision to stand behind
+a deck, and says nothing about whether a suggested score is right. A pane that
+could accept a *grade* on its own would be the second path, and there is still no
+route that does.
 
 Every write goes through the model's own emitter or the comment-preserving
 parser, because a professor also edits these files by hand and a file the pane
@@ -413,12 +490,44 @@ working directory:
 Resolved per request, so switching workspaces in the sidebar, or exporting the
 variable, needs no restart.
 
-`workspaceRootFor` is imported from `dsh-ainar-course-model/server/mcp/
-workspace.js` rather than written here, and that is the point: the course tools
+`workspaceRootFor` is imported from `@ainar/core/src/workspace.ts` rather
+than written here, and that is the point: the course tools
 resolve through the same function, so the tools and this pane cannot name
 different courses on the same screen. It was briefly a twelve-line twin, kept in
 step by hand, which is a bad trade for twelve lines — the drift would not have
 been an error but a wrong number.
+
+## What a week is still waiting for
+
+The four questions the Checklist asks of the course, asked of each week and
+drawn on it: a dashed amber chip under the week's title saying `no deck`, `no
+deadline` or `no weight`, with the model's own sentence behind it, and a tally
+in the strip at the top — *14 weeks need something*.
+
+The chips come from `weeks[].gaps` on the outline payload, computed in
+`ainar-node/src/outline.ts`. The view neither counts nor decides: a gap names
+the records it is about, and the rule that a week with no meeting is **not**
+missing a deck lives with the model, beside the placement rules it belongs
+with. The Checklist's Slides column now reads the same field rather than
+answering the question a second time, so the chip on week nine and the row
+about week nine cannot disagree — which is the failure a checklist beside a
+plan exists to avoid.
+
+Two of the four are not chips, because they are already on the week in plainer
+words. A week with no module says **Unplanned** in its own header, and a piece
+of work with no deadline already carries `no date` and the button that starts
+the conversation which sets one. The tally counts all four, so it can read
+higher than the chips on screen: six unplanned weeks and eight without a deck
+is fourteen weeks waiting on something, and all fourteen say so.
+
+**The public page draws none of it.** `sections.gaps` is the one section flag
+that is opt-*in* — every other defaults to shown, because a surface that says
+nothing is a chat client with nowhere else to put it, while a surface that says
+nothing is also `ainar page`. What the professor has not written yet is a fact
+about the course and not about anybody in the class, which is what lets it ride
+on a shared payload at all; it is still nobody's business on a page written for
+students. `page.test.ts` pins that, and `widgets.test.ts` pins the other half —
+that a view which asks does get them.
 
 ## The Checklist
 
@@ -435,7 +544,11 @@ professor asks them together:
 
 Two things it does not do.
 
-**It computes no figure of its own.** The weights are `course_outline`'s own
+**It computes no figure of its own**, and since the weeks began drawing their
+own gaps it does not decide one either: whether a week is still missing its
+deck is `weeks[].gaps`, so the Slides column and the chip on that week are one
+answer read twice. What stays here is the record/draft split, which needs two
+payloads the model only ever sees one of. The weights are `course_outline`'s own
 `grading` section — `total_weight`, `unweighted`, `complete`, and the sentence
 the model writes when something is wrong, which names the assessments at fault
 in a way a percentage cannot. The counts are the payload's `totals`. This is

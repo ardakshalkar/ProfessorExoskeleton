@@ -28,7 +28,7 @@ work/course-design/<COURSE_ID>/
   concept-edges.yaml             only when non-prerequisite edges are needed
   capabilities.yaml              only when programme capabilities are supplied
   modules.yaml
-  versions/<TERM>/
+  
     version.yaml                 only when real term dates are known
     activities.yaml              only when scheduled events are requested
     assessments.yaml             only when assessment records are requested

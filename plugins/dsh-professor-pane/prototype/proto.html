@@ -1,0 +1,1622 @@
+<title>Course Mode</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;450;500;600&display=swap">
+<style>
+:root {
+  --ground:#f3f4f0; --surface:#ffffff; --sunk:#eceee8; --ink:#171b18; --muted:#616a62;
+  --line:#dadfd6; --rule:#e8ebe4;
+  --accent:#2f6b3c; --accent-ink:#245231; --accent-line:#bcd8c2; --accent-tint:#eef5ef;
+  --flag:#a4362f; --flag-line:#f0c4c0; --flag-tint:#fdf1f0;
+  --draft:#2f5b8a; --draft-line:#bdd0e4; --draft-tint:#eef3f9;
+  --on-fg:#ffffff;
+  /* The appearance half. A preset sets only these four, the way a template's
+     style sheet may set only appearance — see the Appearance picker. */
+  --card-pad:12px; --card-gap:8px; --title:14.5px; --chip:12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:#101310; --surface:#191d1a; --sunk:#141815; --ink:#e6eae4; --muted:#96a096;
+    --line:#2b312c; --rule:#222722;
+    --accent:#7fc98d; --accent-ink:#a6dcaf; --accent-line:#33513a; --accent-tint:#18231a;
+    --flag:#e08c85; --flag-line:#6b3a37; --flag-tint:#2a1c1b;
+    --draft:#8fb6de; --draft-line:#37506b; --draft-tint:#171f27;
+    --on-fg:#0d100d;
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#101310; --surface:#191d1a; --sunk:#141815; --ink:#e6eae4; --muted:#96a096;
+  --line:#2b312c; --rule:#222722;
+  --accent:#7fc98d; --accent-ink:#a6dcaf; --accent-line:#33513a; --accent-tint:#18231a;
+  --flag:#e08c85; --flag-line:#6b3a37; --flag-tint:#2a1c1b;
+  --draft:#8fb6de; --draft-line:#37506b; --draft-tint:#171f27;
+  --on-fg:#0d100d;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--ground); color: var(--ink); margin: 0;
+       font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+       font-size: 14px; line-height: 1.5; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30;
+          background: var(--surface); border-bottom: 1px solid var(--line);
+          display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 20px; }
+.brand { display: flex; align-items: baseline; gap: 9px; margin-right: auto; min-width: 0; }
+.brand b { font-weight: 600; font-size: 14px; white-space: nowrap; }
+.brand span { font-size: 11.5px; color: var(--muted); white-space: nowrap;
+              overflow: hidden; text-overflow: ellipsis; }
+.seg { display: inline-flex; background: var(--sunk); border-radius: 8px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: none; border-radius: 6px; padding: 4px 11px;
+              font-size: 12.5px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink);
+                                   font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.seg button:focus-visible, .ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ghost { border: 1px solid var(--line); background: var(--surface); border-radius: 8px;
+         padding: 5px 11px; font-size: 12.5px; }
+.ghost:hover { border-color: var(--accent-line); color: var(--accent-ink); }
+.ghost[aria-pressed="true"] { border-color: var(--accent); color: var(--accent-ink);
+                              background: var(--accent-tint); }
+.primary { border: 1px solid var(--accent); background: var(--accent); color: var(--on-fg);
+           border-radius: 8px; padding: 5px 12px; font-size: 12.5px; font-weight: 500; }
+.primary[disabled] { opacity: .4; cursor: not-allowed; }
+
+.strip { position: sticky; top: calc(51px + env(safe-area-inset-top, 0px)); z-index: 20;
+         background: var(--ground); border-bottom: 1px solid var(--rule);
+         display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 9px 20px; }
+.hint { font-size: 11.5px; color: var(--muted); }
+.tally { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; font-variant-numeric: tabular-nums; }
+.tally span { font-size: 11px; border-radius: 999px; padding: 2px 9px;
+              border: 1px dashed var(--flag-line); color: var(--flag); }
+.tally span.zero { border-style: solid; border-color: var(--line); color: var(--muted); }
+.banner { margin: 14px 20px 0; max-width: 1140px; padding: 9px 13px; border-radius: 9px;
+          font-size: 12.5px; background: var(--draft-tint); color: var(--muted);
+          border: 1px solid var(--draft-line); }
+.banner b { color: var(--draft); font-weight: 500; }
+
+.spine { padding: 16px 20px 210px; display: flex; flex-direction: column; gap: 10px;
+         max-width: 1180px; }
+
+/* The term table. A structure declares the layout its children expect — this
+   one puts every week into ONE grid, which is the only way the columns line up
+   from week 1 to week 16. The week's heading and its concepts span the full
+   row; the three cells sit under the headers. Lecture takes the wide track,
+   because it carries the class AND everything the class uses. */
+/* A meeting and its own materials, as one block: the deck and the readings are
+   the meeting's `resources` in the record, so nesting them is the shape the
+   model already has rather than a flattening of it. */
+.meeting { display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
+           padding-left: 9px; border-left: 2px solid var(--rule); }
+.meeting + .meeting { margin-top: 3px; }
+.spine.grid3 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
+               gap: 0; max-width: none; margin: 16px 20px 210px; padding: 0;
+               background: var(--surface); border: 1px solid var(--line);
+               border-radius: 12px;
+               /* `clip`, not `hidden`: hidden makes this a scroll container, and
+                  the sticky column headers then offset by their `top` INSIDE it
+                  — landing below the first week instead of above it. `clip`
+                  still clips to the radius and leaves the viewport as the
+                  scrollport the headers stick to. */
+               overflow: clip; }
+.spine.grid3 .th { position: sticky; top: calc(92px + env(safe-area-inset-top, 0px)); z-index: 10;
+                   background: var(--sunk); color: var(--muted); padding: 8px 12px;
+                   font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+                   border-bottom: 1px solid var(--line); }
+.wkhead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+          padding: 14px 12px 4px; border-top: 1px solid var(--line); cursor: pointer; }
+.wkhead:hover { background: var(--sunk); }
+.wkhead b { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums;
+            letter-spacing: -.02em; }
+.wkhead h3 { margin: 0; font-size: var(--title); font-weight: 600; }
+.wkhead h3.none { color: var(--muted); font-weight: 450; }
+.wkhead.now { background: var(--accent-tint); }
+.wkhead.now b { color: var(--accent); }
+.wkhead.sel { box-shadow: inset 3px 0 0 var(--accent); }
+.wkconcepts { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px;
+              padding: 2px 12px 10px; }
+.cell { padding: 9px 12px 15px; display: flex; flex-direction: column; gap: 5px;
+        align-items: flex-start; border-left: 1px solid var(--rule); font-size: var(--chip);
+        min-width: 0; }
+.cell > * { max-width: 100%; }
+.dash { color: var(--muted); opacity: .5; }
+/* Columns do not fit a phone. The cells stack and each says which column it
+   was, from the name the structure gave it — so the fallback is the template's
+   own word rather than one this style sheet invented. */
+@media (max-width: 900px) {
+  .spine.grid3 { grid-template-columns: 1fr; }
+  .spine.grid3 .th { display: none; }
+  .cell { border-left: 0; padding: 4px 12px; flex-direction: row; flex-wrap: wrap;
+          align-items: baseline; gap: 6px; }
+  .cell::before { content: attr(data-col); color: var(--muted); font-size: 10.5px;
+                  letter-spacing: .06em; text-transform: uppercase; flex: 0 0 74px; }
+  .cell:last-of-type { padding-bottom: 14px; }
+}
+.wk { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      display: grid; grid-template-columns: 58px 1fr; overflow: hidden; cursor: pointer; }
+.wk:hover { border-color: var(--accent-line); }
+.wk.sel { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.wk.now { background: var(--accent-tint); }
+.wk.quiet { opacity: .6; }
+.wk.stranded { border-style: dashed; cursor: default; }
+.wk-n { border-right: 1px solid var(--rule); padding: var(--card-pad) 0; text-align: center;
+        display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.wk-n b { font-size: 21px; font-weight: 600; letter-spacing: -.02em; line-height: 1;
+          font-variant-numeric: tabular-nums; }
+.wk.now .wk-n b { color: var(--accent); }
+.wk-n span { font-size: 10px; color: var(--muted); }
+.wk-body { padding: var(--card-pad) 14px; min-width: 0; display: flex; flex-direction: column;
+           gap: var(--card-gap); }
+.wk-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.wk-head h3 { margin: 0; font-size: var(--title); font-weight: 600; }
+.wk-head h3.none { color: var(--muted); font-weight: 450; }
+.pill { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; border-radius: 999px;
+        padding: 2px 8px; font-weight: 500; }
+.pill.now { background: var(--accent); color: var(--on-fg); }
+.pill.draft { background: var(--draft-tint); color: var(--draft); border: 1px solid var(--draft-line); }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: var(--chip);
+        border: 1px solid var(--line); background: var(--surface); border-radius: 7px;
+        padding: 3px 9px; max-width: 100%; text-align: left; }
+.chip .k { color: var(--muted); font-size: 11px; }
+.chip.meet { background: var(--sunk); border-color: transparent; }
+.chip.deck { border-color: var(--accent-line); background: var(--accent-tint);
+             color: var(--accent-ink); font-weight: 500; }
+.chip.work { border-color: var(--flag-line); color: var(--flag); background: var(--flag-tint); }
+.chip.gap { border-style: dashed; border-color: var(--flag-line); color: var(--flag); background: none; }
+.chip.draftc { border-color: var(--draft-line); background: var(--draft-tint); color: var(--draft); }
+.chip.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.chip.concept { border-color: transparent; background: var(--sunk); color: var(--muted); font-size: 11.5px; }
+/* Another format of the deck beside it, the way `.fmt` reads in the pane: a
+   small hard label, not a second thing called Slides. */
+.chip.fmt { border-color: var(--accent-line); color: var(--accent-ink); font-size: 10.5px;
+            letter-spacing: .04em; font-weight: 600; padding: 2px 7px; }
+.ev { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+.ev b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+.ev .none-yet { font-style: italic; }
+.bar { height: 5px; border-radius: 3px; background: var(--sunk); width: 76px; overflow: hidden;
+       display: inline-block; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.ready { font-size: 11.5px; color: var(--accent); }
+.none-yet { font-size: 12px; color: var(--muted); font-style: italic; }
+
+/* ------------------------------------------------------------- the workshop */
+.shop { border-top: 1px solid var(--line); background: var(--surface);
+        padding: 14px 20px 18px; display: flex; flex-direction: column; gap: 12px; }
+.shop .lineup { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.shop label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+              color: var(--muted); margin-right: 8px; }
+.shop textarea { width: 100%; min-height: 190px; resize: vertical; font-size: 12px;
+                 line-height: 1.55; font-family: "IBM Plex Mono", ui-monospace, monospace;
+                 background: var(--sunk); color: var(--ink); border: 1px solid var(--line);
+                 border-radius: 10px; padding: 11px 13px; }
+.shop textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.err { font-size: 12px; color: var(--flag); background: var(--flag-tint);
+       border: 1px solid var(--flag-line); border-radius: 8px; padding: 8px 11px; }
+.ok { font-size: 12px; color: var(--muted); }
+
+/* Lectures, Assessment, Quiz, Students and Todos: lists rather than a spine,
+   because each reads down a different axis from the week. */
+.listing { margin: 16px 20px 210px; }
+.listing .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px;
+                   background: var(--surface); }
+.listing table { width: 100%; border-collapse: collapse; background: var(--surface);
+                 font-size: 13px; }
+/* The student column stays put while the assessments scroll past it. Without
+   it a row of twenty-one marks is a row of numbers belonging to nobody. */
+.listing tbody td:first-child, .listing thead th:first-child {
+  position: sticky; left: 0; z-index: 1; background: var(--surface); }
+.listing thead th:first-child { background: var(--sunk); }
+.listing tbody tr:hover td:first-child { background: var(--sunk); }
+.listing th { text-align: left; background: var(--sunk); color: var(--muted);
+              font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+              font-weight: 500; padding: 9px 12px; border-bottom: 1px solid var(--line);
+              vertical-align: bottom; }
+.listing th small { display: block; font-size: 9.5px; letter-spacing: 0; text-transform: none;
+                    color: var(--muted); font-weight: 400; max-width: 11ch; overflow: hidden;
+                    text-overflow: ellipsis; white-space: nowrap; }
+.listing td { padding: 9px 12px; border-top: 1px solid var(--rule); vertical-align: top; }
+.listing tbody tr { cursor: pointer; }
+.listing tbody tr:hover { background: var(--sunk); }
+.listing td small { display: block; color: var(--muted); font-size: 11px; }
+.listing .num { text-align: right; font-variant-numeric: tabular-nums; }
+.listing .foot { color: var(--muted); font-size: 12px; margin: 12px 2px 0; max-width: 80ch; }
+.listing .blocked p { color: var(--muted); font-size: 11.5px; margin: 6px 2px 0;
+                      max-width: 90ch; border-left: 2px solid var(--flag-line);
+                      padding-left: 10px; }
+.seg button[disabled] { opacity: .45; cursor: not-allowed; }
+/* Names are showing. Amber, full width, and above the table rather than beside
+   it — the point is that it is impossible to have missed. */
+.rule { margin: 0; padding: 9px 20px; font-size: 12px; color: var(--flag);
+        background: var(--flag-tint); border-bottom: 1px solid var(--flag-line);
+        border-top: 1px solid var(--flag-line); }
+.rule b { font-weight: 600; }
+.banner.student { background: var(--accent-tint); border-color: var(--accent-line); }
+.banner.student b { color: var(--accent-ink); }
+.seg.sub { background: none; padding: 0; gap: 0; }
+.seg.sub button { border: 1px solid transparent; }
+.seg.sub button[aria-pressed="true"] { background: var(--accent-tint); color: var(--accent-ink);
+                                       border-color: var(--accent-line); box-shadow: none; }
+
+.todos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column;
+         gap: 6px; }
+.todo { display: flex; align-items: flex-start; gap: 12px; padding: 11px 13px; cursor: pointer;
+        background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.todo:hover { border-color: var(--accent-line); }
+.todo .body { flex: 1; min-width: 0; }
+.todo .body b { display: block; font-size: 13.5px; font-weight: 500; }
+.todo .body small { display: block; color: var(--muted); font-size: 11.5px; }
+.todo .when { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+/* Severity is form as well as colour: the rail is what you scan, the word is
+   what you read when you have stopped. */
+.pri { flex: none; font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
+       border-radius: 4px; padding: 2px 7px; font-weight: 600; }
+.pri.high, .pri.urgent { background: var(--flag-tint); color: var(--flag);
+                         border: 1px solid var(--flag-line); }
+.pri.medium { background: var(--sunk); color: var(--ink); border: 1px solid var(--line); }
+.pri.low { background: none; color: var(--muted); border: 1px solid var(--line); }
+.todo.high, .todo.urgent { box-shadow: inset 3px 0 0 var(--flag); }
+
+.inspect { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface);
+           border-top: 1px solid var(--line);
+           padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+           display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.inspect .what { min-width: 0; flex: 1 1 320px; }
+.inspect .what p { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
+.packet { font-size: 11.5px; background: var(--sunk); border-radius: 8px; padding: 9px 11px;
+          overflow-x: auto; white-space: pre; margin: 0; }
+.verbs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.chatmode { display: flex; align-items: stretch; min-height: 70vh; }
+.convo { flex: 1 1 auto; min-width: 0; padding: 26px 20px 60px; display: flex;
+         flex-direction: column; gap: 18px; }
+.convo .turn { max-width: 640px; }
+.who { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+       margin-bottom: 5px; }
+.said { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+        padding: 12px 14px; font-size: 13.5px; }
+.said.me { background: var(--sunk); border-color: transparent; }
+.said p { margin: 0 0 9px; } .said p:last-child { margin: 0; }
+.pane { flex: 0 0 300px; border-left: 1px solid var(--line); background: var(--surface);
+        display: flex; flex-direction: column; }
+.pane-tabs { display: flex; gap: 2px; padding: 8px 8px 0; flex-wrap: wrap; }
+.pane-tabs button { border: 0; background: none; font-size: 11.5px; padding: 4px 7px;
+                    border-radius: 6px; color: var(--muted); }
+.pane-tabs button[aria-pressed="true"] { background: var(--sunk); color: var(--ink); font-weight: 500; }
+.pane-sub { display: flex; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--rule);
+            font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+.pane-sub b { color: var(--ink); font-weight: 500; }
+.pane iframe { border: 0; width: 100%; flex: 1 1 auto; min-height: 620px; }
+@media (max-width: 760px) {
+  .chatmode { flex-direction: column; }
+  .pane { flex: 1 1 auto; border-left: 0; border-top: 1px solid var(--line); }
+}
+
+/* Chat opens OVER the course, and borrows the geometry MaterialModal already
+   uses to open a deck over the harness: a veil inset from the edges so the week
+   you pressed stays visible around it, Escape, the backdrop, or the ×. The page
+   is not replaced and not navigated away from — the conversation is a thing you
+   open on top of what you were looking at, and close again. */
+.veil { position: fixed; inset: 0; z-index: 4000; display: flex; flex-direction: column;
+        padding: 24px clamp(16px, 4vw, 64px) 28px;
+        padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+        padding-top: calc(24px + env(safe-area-inset-top, 0px));
+        background: rgba(12, 16, 13, .52); }
+.modal { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+         border-radius: 12px; background: var(--surface); border: 1px solid var(--line);
+         box-shadow: 0 18px 60px rgba(0,0,0,.35); }
+.modal:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.modal > header { flex: none; display: flex; align-items: center; gap: 10px;
+                  padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--rule); }
+.modal > header b { font-size: 13px; font-weight: 600; }
+.modal > header .where { font-size: 11.5px; color: var(--muted); margin-right: auto;
+                         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.modal .body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 18px;
+               display: flex; flex-direction: column; gap: 14px; }
+.modal .body > * { width: 100%; max-width: 660px; margin-inline: auto; }
+.composer { flex: none; border-top: 1px solid var(--rule); padding: 12px;
+            display: flex; gap: 8px; align-items: flex-end; }
+.composer textarea { flex: 1; min-height: 40px; max-height: 140px; resize: vertical;
+                     font: inherit; font-size: 13.5px; padding: 9px 11px; color: var(--ink);
+                     background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; }
+.composer textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* A material fills the panel the way the deck does in the harness. */
+.matframe { flex: 1; min-height: 0; width: 100%; border: 0; display: block; background: #fff; }
+.matnote { padding: 26px 24px; max-width: 70ch; }
+.matnote b { display: block; font-size: 14px; margin-bottom: 8px; }
+.matnote p { margin: 0; color: var(--muted); font-size: 13px; }
+.ctx { border: 1px dashed var(--accent-line); border-radius: 9px; padding: 9px 11px;
+       background: var(--accent-tint); font-size: 11.5px; color: var(--accent-ink);
+       overflow-x: auto; }
+.ctx b { display: block; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+         margin-bottom: 5px; color: var(--accent); }
+.x { border: 0; background: none; font-size: 18px; line-height: 1; color: var(--muted);
+     padding: 2px 6px; border-radius: 6px; }
+.x:hover { background: var(--sunk); color: var(--ink); }
+
+.legend { max-width: 1180px; padding: 4px 20px 26px; }
+.legend h2 { font-size: 15px; margin: 20px 0 6px; font-weight: 600; }
+.legend p { margin: 0 0 8px; color: var(--muted); font-size: 13px; max-width: 76ch; }
+.legend code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+               background: var(--sunk); border-radius: 4px; padding: .1em .35em; }
+</style>
+
+<div id="root"></div>
+
+<script id="course-data" type="application/json">__COURSE_DATA__</script>
+<script id="pane-doc" type="text/plain" data-doc="__PANE_DOC__"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script>
+// ---------------------------------------------------------------------------
+// The template language, as shipped.
+//
+// `esc` first, then vendor/ainar/mcp/widget-assets/template.js verbatim — the
+// same two things every widget document concatenates, and the same way
+// test/widgets.test.ts loads the interpreter. Escaped `{{ paths }}`, `{% if %}`,
+// `{% for %}`, and no way to ask for raw output: `{{{` is a parse error. A
+// structure a professor edits therefore cannot introduce markup, and cannot
+// compute a figure no command produced.
+// ---------------------------------------------------------------------------
+function esc(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+__TEMPLATE_JS__
+
+const h = React.createElement;
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+const DATA = JSON.parse(document.getElementById('course-data').textContent);
+const PANE_DOC = document.getElementById('pane-doc').dataset.doc;
+
+// ---------------------------------------------------------------------------
+// STRUCTURES — the arrangement half, exactly as `templates.yaml` offers it for
+// `ainar page --structure`. Each is a `.tmpl` over one week's view-model, and
+// each is editable below the spine. A click is wired the way `runtime.js` wires
+// a widget's buttons: `data-pick` and `data-id` on the element, one delegated
+// listener on the container. No handler crosses the template boundary.
+// ---------------------------------------------------------------------------
+const STRUCTURES = {
+  table: {
+    name: 'Term table',
+    layout: 'grid3',
+    suits: 'the whole term on one screen — the class, what is handed in, and the quiz',
+    tmpl: [
+      '{% if w.first %}',
+      '<div class="th">Lecture</div><div class="th">Assessment</div><div class="th">Quiz</div>',
+      '{% endif %}',
+      '<div class="wkhead {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
+      '  <b>{{ w.label }}</b><span class="k mono">{{ w.dates }}</span>',
+      '  {% if w.title %}<h3>{{ w.title }}</h3>{% else %}<h3 class="none">Unplanned</h3>{% endif %}',
+      '  {% if w.is_now %}<span class="pill now">this week</span>{% endif %}',
+      '  {% if w.proposed %}<span class="pill draft">proposed</span>{% endif %}',
+      '  {% for g in w.gaps_other %}<button class="chip gap" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}">{{ g.label }}</button>{% endfor %}',
+      '</div>',
+      '{% if w.concepts %}<div class="wkconcepts">{% for c in w.concepts %}<span class="chip concept">{{ c }}</span>{% endfor %}</div>{% endif %}',
+      '<div class="cell" data-col="Lecture" data-week="{{ w.week }}">',
+      '  {% for m in w.lecture %}<div class="meeting">',
+      '    <button class="chip meet" data-pick="meeting" data-id="{{ m.id }}"><span class="k mono">{{ m.on }}</span>{{ m.label }}</button>',
+      '    {% for r in m.materials %}<button class="chip {{ r.tone }}" data-pick="{{ r.pick }}" data-id="{{ r.id }}" data-doc="{{ r.doc }}" title="open it over the course"><span class="k mono">{{ r.kind }}</span>{{ r.label }}</button>{% endfor %}',
+      '  </div>{% endfor %}',
+      '  {% if w.no_deck %}<button class="chip gap" data-pick="gap" data-id="deck" title="{{ w.deck_note }}">no deck</button>{% endif %}',
+      '  {% if w.no_lecture %}<span class="dash">—</span>{% endif %}',
+      '</div>',
+      '<div class="cell" data-col="Assessment" data-week="{{ w.week }}">{% for a in w.assessment %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}" data-brief="{{ a.brief }}" title="open the brief"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% if a.no_brief %}<span class="chip gap">no brief</span>{% endif %}{% endfor %}{% if w.no_assessment %}<span class="dash">—</span>{% endif %}</div>',
+      '<div class="cell" data-col="Quiz" data-week="{{ w.week }}">{% for a in w.quiz %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}" data-brief="{{ a.brief }}" title="open the brief"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% if a.no_brief %}<span class="chip gap">no brief</span>{% endif %}{% endfor %}{% if w.no_quiz %}<span class="dash">—</span>{% endif %}</div>',
+    ].join('\n'),
+  },
+  spine: {
+    name: 'Spine',
+    suits: 'the default — everything a week holds, in the order a week is read',
+    tmpl: [
+      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
+      '  <div class="wk-n"><b>{{ w.label }}</b><span>{{ w.mark }}</span></div>',
+      '  <div class="wk-body">',
+      '    <div class="wk-head">',
+      '      {% if w.title %}<h3>{{ w.title }}</h3>{% else %}<h3 class="none">Unplanned</h3>{% endif %}',
+      '      {% if w.is_now %}<span class="pill now">this week</span>{% endif %}',
+      '      {% if w.proposed %}<span class="pill draft">proposed</span>{% endif %}',
+      '      {% if w.ready %}<span class="ready">nothing outstanding</span>{% endif %}',
+      '    </div>',
+      '    {% if w.meetings %}<div class="row">',
+      '      {% for m in w.meetings %}<button class="chip meet" data-pick="meeting" data-id="{{ m.id }}"><span class="k mono">{{ m.on }}</span>{{ m.label }}</button>{% endfor %}',
+      '      {% for d in w.decks %}<button class="chip {{ d.tone }}" data-pick="deck" data-id="{{ d.id }}">{{ d.label }}</button>{% endfor %}',
+      '    </div>{% endif %}',
+      '    {% if w.work %}<div class="row">',
+      '      {% for a in w.work %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}</button>{% endfor %}',
+      '    </div>{% endif %}',
+      '    {% if w.gaps %}<div class="row">',
+      '      {% for g in w.gaps %}<button class="chip gap" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}">{{ g.label }}</button>{% endfor %}',
+      '    </div>{% endif %}',
+      '    {% if w.concepts %}<div class="row">',
+      '      {% for c in w.concepts %}<span class="chip concept">{{ c }}</span>{% endfor %}',
+      '    </div>{% endif %}',
+      '  </div>',
+      '</div>',
+    ].join('\n'),
+  },
+  compact: {
+    name: 'One line',
+    suits: 'sixteen weeks on one screen — title and state, nothing else',
+    tmpl: [
+      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
+      '  <div class="wk-n"><b>{{ w.label }}</b></div>',
+      '  <div class="wk-body"><div class="wk-head">',
+      '    {% if w.title %}<h3>{{ w.title }}</h3>{% else %}<h3 class="none">Unplanned</h3>{% endif %}',
+      '    <span class="k mono">{{ w.mark }}</span>',
+      '    {% for g in w.gaps %}<button class="chip gap" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}">{{ g.label }}</button>{% endfor %}',
+      '    {% if w.ready %}<span class="ready">ready</span>{% endif %}',
+      '  </div></div>',
+      '</div>',
+    ].join('\n'),
+  },
+  teaching: {
+    name: 'Teaching first',
+    suits: 'what is taught and what is handed in; materials fold away',
+    tmpl: [
+      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
+      '  <div class="wk-n"><b>{{ w.label }}</b><span>{{ w.mark }}</span></div>',
+      '  <div class="wk-body">',
+      '    <div class="wk-head">',
+      '      {% if w.title %}<h3>{{ w.title }}</h3>{% else %}<h3 class="none">Unplanned</h3>{% endif %}',
+      '      {% if w.is_now %}<span class="pill now">this week</span>{% endif %}',
+      '    </div>',
+      '    {% if w.concepts %}<div class="row">{% for c in w.concepts %}<span class="chip concept">{{ c }}</span>{% endfor %}</div>{% endif %}',
+      '    {% if w.work %}<div class="row">{% for a in w.work %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}</button>{% endfor %}</div>{% endif %}',
+      '    {% if w.gaps %}<div class="row">{% for g in w.gaps %}<button class="chip gap" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}">{{ g.label }}</button>{% endfor %}</div>{% endif %}',
+      '  </div>',
+      '</div>',
+    ].join('\n'),
+  },
+};
+
+// ---------------------------------------------------------------------------
+// APPEARANCE — the other half. Variables only, and checked for markup the way
+// `templates.ts` checks a style sheet: a `<` in one is refused rather than
+// escaped, because the text is embedded inside a <style> element.
+// ---------------------------------------------------------------------------
+const APPEARANCE = {
+  plain:     { name: 'Plain',     css: '--card-pad:12px; --card-gap:8px; --title:14.5px; --chip:12px;' },
+  dense:     { name: 'Dense',     css: '--card-pad:7px; --card-gap:5px; --title:13px; --chip:11px;' },
+  projector: { name: 'Projector', css: '--card-pad:18px; --card-gap:12px; --title:19px; --chip:14px;' },
+};
+const MARKUP = /[<>]|@import|url\s*\(/i;
+
+// Three sections, and the outline's five ways of being read. The split is the
+// professor's own question rather than the model's shape: what is the course,
+// how is the class doing, and what is waiting for me.
+const SECTIONS = [
+  { id: 'outline', label: 'Course outline', hint: 'what the course is' },
+  { id: 'students', label: "Students' progress", hint: 'how the class is doing' },
+  { id: 'todos', label: 'Todos', hint: 'what is waiting for you' },
+];
+const OUTLINE_VIEWS = [
+  { id: 'student', label: 'Student view', hint: 'the record only — what a student may be shown' },
+  { id: 'prof', label: 'Professor view', hint: 'with drafts and with what is missing' },
+  { id: 'lectures', label: 'Lectures', hint: 'every meeting of the term, and what it uses' },
+  { id: 'assessment', label: 'Assessment', hint: 'graded work, its weight and its rubric' },
+  { id: 'quiz', label: 'Quiz', hint: 'the quizzes alone, with their items' },
+];
+/** Which halves of a week the two table views ask for. */
+const OUTLINE_MODE = {
+  student: { gaps: false, drafts: false },
+  prof: { gaps: true, drafts: true },
+};
+const GAP_WORD = { module: 'no module', deck: 'no deck', deadline: 'no deadline', weight: 'no weight' };
+
+// The three enums the columns are cut along, from `src/model/common.ts`. A week
+// is sorted into them rather than into categories invented for the table, so a
+// course using `field_work` or `oral_defense` lands somewhere real instead of
+// disappearing.
+//
+// ActivityType  lecture · lab · seminar · discussion · reading · exercise ·
+//               project_work · field_work · review · other
+// ResourceKind  slides · reading · dataset · notebook · video · link ·
+//               textbook_chapter · tool · other
+// AssessmentType assignment · quiz · exam · project · presentation ·
+//               oral_defense · participation · other
+const READING_WORD = { textbook_chapter: 'chapter', reading: 'reading', video: 'video',
+                       link: 'link', dataset: 'data', notebook: 'notebook', tool: 'tool',
+                       other: 'file' };
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function shortDate(value) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
+  return m ? MONTHS[Number(m[2]) - 1] + ' ' + Number(m[3]) : '';
+}
+function remember(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+function recall(k, d) { try { return localStorage.getItem(k) || d; } catch (e) { return d; } }
+
+// ---------------------------------------------------------------------------
+// The view-model: what each value SAYS. The structure decides where it goes.
+// This is the same split `course-outline.js` and `course-outline.tmpl` have,
+// and it is what keeps a professor's own structure from being able to compute.
+// ---------------------------------------------------------------------------
+function weekModel(week, mode, selected) {
+  const proposedModule = mode.drafts ? DATA.proposed.modules[week.week] : null;
+  const proposedDeck = mode.drafts ? DATA.proposed.decks[week.week] : null;
+  const proposedWork = mode.drafts ? DATA.proposed.assessments[week.week] : null;
+  const title = week.modules.map(function (m) { return m.title; }).join(' · ');
+
+  const decks = [];
+  week.meetings.forEach(function (m) {
+    (m.resources || []).forEach(function (r) {
+      if (r.kind === 'slides') decks.push({ id: r.resource_id, label: 'Slides', tone: 'deck' });
+    });
+  });
+  if (proposedDeck) decks.push({ id: proposedDeck.resource_id, label: 'Slides · proposed', tone: 'draftc' });
+
+  const work = [];
+  week.due.forEach(function (a) {
+    work.push({ id: a.assessment_id, title: a.title, when: 'due ' + shortDate(a.due_on), tone: 'work' });
+  });
+  week.opens.forEach(function (a) {
+    work.push({ id: a.assessment_id, title: a.title, when: 'opens ' + shortDate(a.opens_on), tone: 'work' });
+  });
+  week.undated.forEach(function (a) {
+    work.push({ id: a.assessment_id, title: a.title, when: 'no date', tone: 'gap' });
+  });
+  if (proposedWork) {
+    work.push({ id: proposedWork.assessment_id, title: proposedWork.title + ' · proposed',
+                when: 'no date', tone: 'draftc' });
+  }
+
+  // The three columns of the term table. The class is one column whatever type
+  // of meeting it was, because a week whose only session is a lab should not
+  // read as a week with no class; a resource is the deck or it is something to
+  // read, and either way it belongs to the meeting that set it; and graded work
+  // is the quiz or it is everything else the `AssessmentType` enum holds.
+  // Nothing falls between them, which is what a closed enum is for.
+  // The class, with what it uses inside it. A deck and a reading are the
+  // meeting's own `resources` in the record, so nesting them under the meeting
+  // is the shape the model already has rather than a flattening of it — and it
+  // answers "what am I teaching on Tuesday, and with what" in one cell.
+  const lecture = week.meetings.map(function (m) {
+    const materials = [];
+    (m.resources || []).forEach(function (r) {
+      const deck = r.kind === 'slides';
+      // The formats this document also exists in. A deck is registered twice —
+      // the .pptx and the .pdf rendered from it — and only the .pptx has a
+      // resource pointing at it, so without this the PDF beside every lecture
+      // deck appeared nowhere on the page. One chip per format, the deck's own
+      // first, which is what the pane draws.
+      const formats = (DATA.materials[r.document_id] || {}).formats || [];
+      formats.slice(1).forEach(function (f) {
+        materials.push({ id: r.resource_id + ':' + f.doc, doc: f.doc, label: f.label,
+                         kind: '', tone: 'fmt', pick: 'resource' });
+      });
+      materials.push({
+        id: r.resource_id,
+        // The document is what `/file` serves; the resource is what the week
+        // names. A chip needs both — one to open, one to put in the packet.
+        doc: r.document_id || '',
+        label: deck ? 'Slides' : r.title,
+        // The deck's chip says Slides and is tinted as the deck; a kind label
+        // beside it would read "deck Slides". Every other kind needs the word,
+        // because "Student performance dataset" does not say it is a dataset.
+        kind: deck ? '' : (READING_WORD[r.kind] || r.kind),
+        tone: deck ? 'deck' : '',
+        pick: deck ? 'deck' : 'resource',
+      });
+    });
+    // Slides first, then its other formats, then everything else: the deck is
+    // the one a professor opens minutes before the class.
+    const rank = function (x) { return x.tone === 'deck' ? 0 : x.tone === 'fmt' ? 1 : 2; };
+    materials.sort(function (a, b) { return rank(a) - rank(b); });
+    return { id: m.activity_id, on: shortDate(m.on),
+             label: m.type + (m.location ? ' · ' + m.location : ''),
+             materials: materials };
+  });
+
+  // Graded work, split the way the professor asked for it: the quiz has a
+  // column of its own because it is the recurring one, and everything else the
+  // `AssessmentType` enum holds — assignment, project, exam, presentation,
+  // defence, participation — shares the other.
+  const assessment = [], quiz = [];
+  work.forEach(function (a) {
+    const source = week.due.concat(week.opens, week.undated).filter(function (x) {
+      return x.assessment_id === a.id;
+    })[0];
+    const brief = DATA.briefs[a.id] || {};
+    (source && source.type === 'quiz' ? quiz : assessment).push(
+      Object.assign({}, a, {
+        weight: source && source.weight != null ? Math.round(source.weight * 100) + '%' : '',
+        // The brief students read, as the chip's own press. Empty when there is
+        // none, and the week then draws `no brief` beside the work in the same
+        // amber a missing weight gets — the pane's own rule, because graded
+        // work a student cannot start is a hole worth seeing.
+        brief: brief.none ? '' : a.id,
+        no_brief: Boolean(brief.none),
+      }));
+  });
+
+  return {
+    week: week.week,
+    first: week.week === DATA.weeks[0].week,
+    label: week.week < 10 ? '0' + week.week : String(week.week),
+    mark: shortDate(week.starts_on),
+    dates: shortDate(week.starts_on) + ' – ' + shortDate(week.ends_on),
+    // The three columns are facts about the week in either view. What the
+    // student view drops is not a column — it is the gaps and the drafts, which
+    // are the professor's own working state and not the course.
+    lecture: lecture,
+    assessment: assessment,
+    quiz: quiz,
+    // The template language has no `not`, and an empty list is falsey, so the
+    // em dash a column draws when it holds nothing is a value rather than a
+    // condition. Same reason `course-outline.js` carries `weights_short`.
+    no_lecture: !lecture.length,
+    no_assessment: !assessment.length,
+    no_quiz: !quiz.length,
+    // Once per week, not once per meeting: the model's rule is that a week
+    // which meets and registers no slides has one deck gap, and a lecture and
+    // a lab both saying "no deck" would report it twice.
+    no_deck: !decks.length && week.meetings.length > 0,
+    deck_note: (week.gaps.filter(function (g) { return g.kind === 'deck'; })[0] || {}).note || '',
+    // Every gap except the one the Slides column already draws. A week that is
+    // missing its deck says so once, in the column whose subject it is.
+    gaps_other: mode.gaps
+      ? week.gaps.filter(function (g) { return g.kind !== 'deck'; })
+          .map(function (g) { return { kind: g.kind, label: GAP_WORD[g.kind], note: g.note }; })
+      : [],
+    title: title || (proposedModule ? proposedModule.title : ''),
+    proposed: Boolean(proposedModule && !title),
+    is_now: week.week === DATA.current_week,
+    ready: mode.gaps && week.gaps.length === 0,
+    // Selection is a value on the model rather than a class the chrome reaches
+    // in and adds, so a structure that renders the card differently still shows
+    // what is selected without knowing that selection exists.
+    classes: (week.week === DATA.current_week ? 'now ' : '') +
+             (selected === week.week ? 'sel ' : '') +
+             (mode.gaps && week.gaps.length === 0 ? 'quiet' : ''),
+    meetings: week.meetings.map(function (m) {
+      return { id: m.activity_id, on: shortDate(m.on),
+               label: m.type + (m.location ? ' · ' + m.location : '') };
+    }),
+    decks: decks,
+    work: work,
+    gaps: mode.gaps
+      ? week.gaps.map(function (g) { return { kind: g.kind, label: GAP_WORD[g.kind], note: g.note }; })
+      : [],
+    // Every concept the week's module names, not the first four. On a card at
+    // three hundred pixels that had to fold; on a full-width page the line of
+    // concepts IS the week's claim about what it teaches, and a fold would hide
+    // the half a professor is checking.
+    concepts: week.modules.reduce(function (all, m) {
+      return all.concat(m.concepts.map(function (c) { return c.title || c.id; }));
+    }, []),
+  };
+}
+
+// --------------------------------------------------------------- the packet
+function packetFor(sel) {
+  if (!sel) return null;
+  const week = sel.week;
+  if (sel.kind === 'student') {
+    return { run: DATA.run.id, view: 'students', student_id: sel.id,
+             concepts_without_evidence: sel.student.concepts.filter(function (c) {
+               return c.proportion === null;
+             }).length,
+             signals: sel.student.signals.map(function (s) { return s.signal_id; }) };
+  }
+  if (sel.kind === 'todo') {
+    return Object.assign({ run: DATA.run.id, view: 'todos', todo: sel.todo.kind },
+      sel.todo.kind === 'gap' ? { gap: sel.todo.id, weeks: sel.todo.weeks }
+        : { id: sel.todo.id });
+  }
+  if (!week) return { run: DATA.run.id, view: sel.view || 'outline' };
+  const base = { run: DATA.run.id, view: 'outline', shown: sel.view, week: week.week };
+  if (sel.kind === 'week') {
+    return Object.assign(base, {
+      module_id: (week.modules[0] || {}).module_id || null,
+      planned: week.planned,
+      gaps: week.gaps.map(function (g) { return g.kind; }),
+    });
+  }
+  if (sel.kind === 'gap') {
+    const gap = week.gaps.filter(function (g) { return g.kind === sel.id; })[0] || {};
+    return Object.assign(base, { gap: sel.id, ids: gap.ids || [] });
+  }
+  if (sel.kind === 'meeting') return Object.assign(base, { activity_id: sel.id });
+  if (sel.kind === 'work') return Object.assign(base, { assessment_id: sel.id });
+  if (sel.kind === 'deck') return Object.assign(base, { resource_id: sel.id, kind: 'slides' });
+  if (sel.kind === 'resource') return Object.assign(base, { resource_id: sel.id });
+  return base;
+}
+
+function promptFor(sel) {
+  if (!sel) return 'What needs me first on this course?';
+  if (sel.kind === 'student') {
+    return 'What is ' + sel.id + ' struggling with, and what does it depend on? ' +
+      'Use recorded evidence only.';
+  }
+  if (sel.kind === 'todo') {
+    if (sel.todo.kind === 'approve') return 'Show me the suggested grades for ' + sel.id +
+      ' with their evidence, worst confidence first. Do not approve anything.';
+    if (sel.todo.kind === 'signal') return 'Tell me what is behind ' + sel.id + ' before I act on it.';
+    if (sel.todo.kind === 'gap') return sel.todo.title + ' — ' + sel.todo.detail +
+      '. What should I do about it first?';
+    return 'Take me through: ' + sel.todo.title;
+  }
+  if (!sel.week) return 'Tell me about ' + sel.id + '.';
+  const w = sel.week.week;
+  const title = (sel.week.modules[0] || {}).title || 'this week';
+  if (sel.kind === 'gap') {
+    if (sel.id === 'deck') return 'Week ' + w + ' has no deck. Draft the slides for ' + title + ' with /make-materials.';
+    if (sel.id === 'deadline') {
+      const g = sel.week.gaps.filter(function (x) { return x.kind === 'deadline'; })[0] || { ids: [] };
+      return 'Ask me the open and due dates for ' + g.ids.join(', ') +
+        ' before running anything — those dates exist only in my head.';
+    }
+    if (sel.id === 'weight') return 'What should the unweighted work in week ' + w + ' be worth?';
+    return 'Week ' + w + ' has no module. What should it teach, given the weeks either side?';
+  }
+  if (sel.kind === 'work') return 'Show me ' + sel.id + ' and how it is going.';
+  if (sel.kind === 'meeting') return 'Prepare ' + sel.id + '.';
+  if (sel.kind === 'deck') return 'What was read out of this deck?';
+  if (sel.kind === 'resource') return 'Is ' + sel.id + ' still the right thing to set for week ' + w + '?';
+  return 'For week ' + w + ', what should I teach and what should I revisit first?';
+}
+
+function replyFor(sel) {
+  if (sel && sel.kind === 'student') {
+    const gaps = sel.student.concepts.filter(function (c) { return c.proportion === null; });
+    return ['Recorded evidence only, so this is narrower than it looks: ' +
+            (sel.student.concepts.length - gaps.length) + ' of ' + sel.student.concepts.length +
+            ' concepts have any at all.',
+            gaps.length
+              ? 'Nothing has been observed on ' + gaps.slice(0, 2).map(function (c) { return c.title; })
+                .join(' or ') + ', which is an absence of evidence rather than a gap in what they know.'
+              : 'Every concept has been observed at least once.',
+            'I can draft a report for them, but nothing here is a judgement until you approve one.'];
+  }
+  if (sel && sel.kind === 'todo' && sel.todo.kind === 'approve') {
+    return ['I can lay the suggestions out with the evidence each one cites and its confidence.',
+            'I cannot approve them, and there is no route from this page that could: ' +
+            'ainar approve is a command you run.'];
+  }
+  if (sel && sel.kind === 'gap' && sel.id === 'deck') {
+    const concepts = ((sel.week.modules[0] || {}).concepts || [])
+      .slice(0, 2).map(function (c) { return c.title; }).join(' and ');
+    return ['I have the week, its module and what is missing from it, so there is nothing to look up first.',
+            'MODULE-' + sel.week.week + ' introduces ' + (concepts || 'this week’s concepts') +
+            '. Eighteen slides against those, written to work/' + DATA.run.id + '/ as a draft resource.',
+            'Nothing joins the course until you run ainar approve.'];
+  }
+  if (sel && sel.kind === 'gap' && sel.id === 'deadline') {
+    return ['Skipping the usual validate-and-inbox opening on purpose: nothing on disk can answer this.',
+            'Once you tell me, I will set opens_at and due_at on the record and confirm what I wrote.'];
+  }
+  return ['The turn opens with the packet above, so I am not spending three tool calls working out what you are looking at.',
+          'Say the word and I will start.'];
+}
+
+// ------------------------------------------------------------------- spine
+function Spine(props) {
+  const ref = useRef(null);
+  const html = useMemo(function () {
+    try {
+      return { markup: DATA.weeks.map(function (week) {
+        return tmpl(props.structure, { w: weekModel(week, props.mode, props.selected) });
+      }).join('\n'), error: null };
+    } catch (e) {
+      return { markup: '', error: e.message };
+    }
+  }, [props.structure, props.mode, props.selected]);
+
+  useEffect(function () { props.onError(html.error); }, [html.error]);
+
+  const onClick = useCallback(function (e) {
+    const el = e.target.closest('[data-pick]');
+    if (!el || !ref.current.contains(el)) return;
+    // Which week the press was in. `data-week` first, because a structure may
+    // lay a week out as SIBLINGS rather than as a card — the term table puts
+    // the heading and the three cells in one grid, so a cell is not inside the
+    // thing carrying the week number and `closest('[data-pick=week]')` finds
+    // nothing. That bailed out of every chip press in the table silently.
+    const holder = el.closest('[data-week]');
+    const card = el.closest('[data-pick="week"]');
+    const number = holder ? holder.dataset.week : (card ? card.dataset.id : el.dataset.id);
+    const week = DATA.weeks.filter(function (w) {
+      return String(w.week) === String(number);
+    })[0];
+    if (!week) return;
+    props.onSelect({ kind: el.dataset.pick, id: el.dataset.id, doc: el.dataset.doc || '',
+                     week: week, view: props.view });
+    // A material or a brief opens on the press, the way it does in the harness:
+    // the chip IS the link. It still selects, so the packet under it is about
+    // the thing now on screen rather than whatever was pressed before it.
+    if (el.dataset.doc) props.onOpen({ kind: 'doc', id: el.dataset.doc });
+    else if (el.dataset.brief) props.onOpen({ kind: 'brief', id: el.dataset.brief });
+  }, [props.view, props.onSelect, props.onOpen]);
+
+  if (html.error) return null;
+  // The structure says how its own children are laid out; the chrome does not
+  // guess. A structure with no `layout` gets the stacked column.
+  return h('div', { className: 'spine ' + (props.layout || ''), ref: ref, onClick: onClick,
+                    dangerouslySetInnerHTML: { __html: html.markup } });
+}
+
+// ---------------------------------------------------------------- workshop
+function Workshop(props) {
+  return h('div', { className: 'shop' },
+    h('div', { className: 'lineup' },
+      h('div', null,
+        h('label', null, 'Structure'),
+        h('span', { className: 'seg' }, Object.keys(STRUCTURES).map(function (id) {
+          return h('button', { key: id, type: 'button', title: STRUCTURES[id].suits,
+                               'aria-pressed': props.structureId === id,
+                               onClick: function () { props.onStructure(id); } },
+            STRUCTURES[id].name);
+        }))),
+      h('div', null,
+        h('label', null, 'Appearance'),
+        h('span', { className: 'seg' }, Object.keys(APPEARANCE).map(function (id) {
+          return h('button', { key: id, type: 'button', 'aria-pressed': props.appearanceId === id,
+                               onClick: function () { props.onAppearance(id); } },
+            APPEARANCE[id].name);
+        }))),
+      h('span', { className: 'hint' }, STRUCTURES[props.structureId].suits)),
+    h('textarea', { value: props.draft, spellCheck: false, id: 'structure-source',
+                    'aria-label': 'The structure for one week',
+                    onChange: function (e) { props.onDraft(e.target.value); } }),
+    props.error
+      ? h('div', { className: 'err mono' }, props.error)
+      : h('div', { className: 'ok mono' },
+          'Parses. Every value is escaped on its way in, so this box cannot introduce markup ' +
+          'and cannot compute a figure — {{{ }}} is a parse error, and there are no expressions.'));
+}
+
+// -------------------------------------------------------------- chat mode
+function ChatMode() {
+  const turns = [
+    { who: 'professor', me: true, said: ['Where does CSS-4008 stand?'] },
+    { who: 'exoskeleton', said: [
+      'Validated first: 0 errors, 2 warnings, both on CRIT-01 where the items sum to 40 against a maximum of 60.',
+      'Ten of sixteen weeks hold a module, and eight of the ten that meet have no deck. Every assessment is dated and weighted, so the grading policy is complete at 100%.',
+      'The nearest thing that needs you is week 7 — it teaches on Tuesday and has no slides.'] },
+    { who: 'professor', me: true, said: ['Do week 7.'] },
+    { who: 'exoskeleton', said: [
+      'MODULE-07 introduces regularisation and the bias–variance tradeoff, and week 6 already covered evaluation, so I will open on the failure it fixes rather than on the formula.',
+      'Eighteen slides drafted into work/CSS-4008-2026-FALL/. Nothing is in the course until you run ainar approve.'] },
+  ];
+  return h('div', { className: 'chatmode' },
+    h('div', { className: 'convo' }, turns.map(function (t, i) {
+      return h('div', { className: 'turn', key: i },
+        h('div', { className: 'who' }, t.who),
+        h('div', { className: 'said' + (t.me ? ' me' : '') },
+          t.said.map(function (p, j) { return h('p', { key: j }, p); })));
+    })),
+    h('div', { className: 'pane' },
+      h('div', { className: 'pane-tabs' },
+        ['Course outline', 'Students', 'Progress', 'Tasks', 'Preferences', 'Integrations']
+          .map(function (name, i) {
+            return h('button', { key: name, type: 'button', 'aria-pressed': i === 0 }, name);
+          })),
+      h('div', { className: 'pane-sub' },
+        h('b', null, 'Week by week'), h('span', null, 'Grading policy'),
+        h('span', null, 'Assessments'), h('span', null, 'Slides'), h('span', null, 'Exams')),
+      h('iframe', { title: 'The pane as it is today', srcDoc: PANE_DOC })));
+}
+
+// ------------------------------------------------- the outline's other three
+//
+// Lectures, Assessment and Quiz are the same records the table shows, read down
+// a different axis. They are React rather than templates on purpose: a template
+// earns its place where a professor would want to rearrange the thing, and what
+// they rearrange is the week — not a list of every meeting in the term.
+
+function Lectures(props) {
+  const rows = [];
+  DATA.weeks.forEach(function (week) {
+    week.meetings.forEach(function (m) {
+      const deck = (m.resources || []).filter(function (r) { return r.kind === 'slides'; })[0];
+      rows.push({ week: week, meeting: m, deck: deck,
+                  module: (week.modules[0] || {}).title || null });
+    });
+  });
+  return h('div', { className: 'listing' },
+    h(Scroll, { min: 760 },
+      h('thead', null, h('tr', null,
+        h('th', null, 'Wk'), h('th', null, 'When'), h('th', null, 'Type'),
+        h('th', null, 'Where'), h('th', null, 'Module'), h('th', null, 'Slides'))),
+      h('tbody', null, rows.map(function (r) {
+        return h('tr', { key: r.meeting.activity_id, onClick: function () {
+          props.onSelect({ kind: 'meeting', id: r.meeting.activity_id, week: r.week, view: 'lectures' });
+        } },
+          h('td', { className: 'mono num' }, r.week.week),
+          h('td', { className: 'mono' }, shortDate(r.meeting.on) +
+            (r.meeting.scheduled_at ? ' · ' + r.meeting.scheduled_at.slice(11, 16) : '')),
+          h('td', null, r.meeting.type),
+          h('td', null, r.meeting.location || h('span', { className: 'dash' }, '—')),
+          h('td', null, r.module || h('span', { className: 'dash' }, 'unplanned')),
+          h('td', null, r.deck
+            ? h('span', { className: 'chip deck' }, r.deck.title)
+            : h('span', { className: 'chip gap' }, 'no deck')));
+      }))),
+    h('p', { className: 'foot' }, rows.length + ' meetings · ' +
+      rows.filter(function (r) { return !r.deck; }).length + ' without a deck · ' +
+      'duration and preparation are on the record and are not drawn here'));
+}
+
+function Assessments(props) {
+  const rows = DATA.assessments.filter(function (a) {
+    return props.only === 'quiz' ? a.type === 'quiz' : a.type !== 'quiz';
+  });
+  const inboxBy = {};
+  DATA.inbox.assessments.forEach(function (a) { inboxBy[a.assessment_id] = a; });
+  return h('div', { className: 'listing' },
+    h(Scroll, { min: 860 },
+      h('thead', null, h('tr', null,
+        h('th', null, 'Assessment'), h('th', null, 'Type'), h('th', { className: 'num' }, 'Weight'),
+        h('th', null, 'Opens'), h('th', null, 'Due'), h('th', { className: 'num' }, 'Criteria'),
+        h('th', { className: 'num' }, props.only === 'quiz' ? 'Items' : 'Handed in'),
+        h('th', null, 'Brief'))),
+      h('tbody', null, rows.map(function (a) {
+        const seen = inboxBy[a.assessment_id] || {};
+        return h('tr', { key: a.assessment_id, onClick: function () {
+          props.onSelect({ kind: 'work', id: a.assessment_id,
+                           week: weekOf(a.assessment_id), view: props.only === 'quiz' ? 'quiz' : 'assessment' });
+        } },
+          h('td', null, h('b', null, a.title),
+            h('small', { className: 'mono' }, a.assessment_id)),
+          h('td', null, a.type),
+          h('td', { className: 'num mono' }, a.weight === null
+            ? h('span', { className: 'chip gap' }, 'not set')
+            : Math.round(a.weight * 100) + '%'),
+          h('td', { className: 'mono' }, a.opens_on || h('span', { className: 'dash' }, '—')),
+          h('td', { className: 'mono' }, a.due_on ||
+            h('span', { className: 'chip gap' }, 'no deadline')),
+          h('td', { className: 'num mono' }, a.criteria || h('span', { className: 'chip gap' }, '0')),
+          h('td', { className: 'num mono' }, props.only === 'quiz'
+            ? (seen.items || 0)
+            : (seen.submissions_received || 0) + ' of ' + (seen.enrolled || DATA.enrolled)),
+          // `open` where there is something to read, and `no brief` in the
+          // same amber a missing weight gets. The brief is usually the
+          // record's own description rather than a document — twelve of this
+          // course's twenty-one assessments are that way — so keying this on
+          // `instructions_document_id` alone said "no brief" about work whose
+          // brief was written.
+          h('td', null, (DATA.briefs[a.assessment_id] || {}).none
+            ? h('span', { className: 'chip gap' }, 'no brief')
+            : h('button', {
+                className: 'chip', type: 'button',
+                onClick: function (e) {
+                  e.stopPropagation();
+                  props.onOpenBrief(a.assessment_id);
+                },
+              }, 'open')));
+      }))),
+    h('p', { className: 'foot' }, props.only === 'quiz'
+      ? rows.length + ' quiz, with its items — the answer key is deliberately not reachable ' +
+        'from any view: assessment_rubric has no widget, because a component draws itself the ' +
+        'moment a model decides it is relevant, in a window that gets projected.'
+      : 'Weights total ' + Math.round(DATA.grading.total_weight * 100) + '%' +
+        (DATA.grading.complete ? ', and the policy is complete.' : '. ' + (DATA.grading.note || ''))));
+}
+
+/** The week a piece of graded work sits in, so a press from a list still has one. */
+function weekOf(assessmentId) {
+  for (const week of DATA.weeks) {
+    const found = week.due.concat(week.opens, week.undated).filter(function (a) {
+      return a.assessment_id === assessmentId;
+    })[0];
+    if (found) return week;
+  }
+  return DATA.weeks[0];
+}
+
+// ------------------------------------------------------- students' progress
+function Students(props) {
+  const marks = DATA.students.length ? DATA.students[0].marks : [];
+  return h('div', { className: 'listing' },
+    // Wide by construction: one column per assessment, and a real course has
+    // twenty-one of them. It scrolls; the page does not.
+    h(Scroll, { min: 320 + 130 * (marks.length + 2) },
+      h('thead', null, h('tr', null,
+        h('th', null, 'Student'),
+        h('th', null, 'Concepts with evidence'),
+        marks.map(function (m) {
+          return h('th', { key: m.assessment_id, className: 'num' },
+            m.type === 'quiz' ? 'Quiz' : 'HW', h('small', { className: 'mono' }, m.title));
+        }),
+        h('th', null, 'Open signals'))),
+      h('tbody', null, DATA.students.map(function (s) {
+        const seen = s.concepts.filter(function (c) { return c.proportion !== null; });
+        return h('tr', { key: s.student_id, onClick: function () {
+          props.onSelect({ kind: 'student', id: s.student_id, student: s, view: 'students' });
+        } },
+          // The identifier stays under the name rather than being replaced by
+          // it: it is what whois, the gradebook and a bug report all use.
+          h('td', null,
+            props.names && s.name
+              ? [h('b', { key: 'n' }, s.name),
+                 h('small', { key: 'p', className: 'mono' },
+                   s.student_id + (s.group ? ' · ' + s.group : ''))]
+              : h('span', { className: 'mono' },
+                  s.student_id + (s.group ? ' · ' + s.group : ''))),
+          h('td', null,
+            h('span', { className: 'bar' }, h('i', {
+              style: { width: Math.round((seen.length / Math.max(1, s.concepts.length)) * 100) + '%' } })),
+            h('span', { className: 'mono num' },
+              ' ' + seen.length + ' of ' + s.concepts.length),
+            seen.length
+              ? h('span', { className: 'hint' }, ' · ' + seen.map(function (c) {
+                  return c.title + ' ' + Math.round(c.proportion * 100) + '%';
+                }).join(', '))
+              : h('span', { className: 'none-yet' }, ' nothing assessed yet')),
+          s.marks.map(function (m) {
+            return h('td', { key: m.assessment_id, className: 'num' },
+              m.percent !== null
+                ? h('b', { className: 'mono' }, Math.round(m.percent) + '%')
+                : h('span', { className: 'chip ' + (m.status === 'missing' ? 'gap' : '') },
+                    m.status.replace(/_/g, ' ')));
+          }),
+          h('td', null, s.signals.length
+            ? s.signals.map(function (sig) {
+                return h('span', { key: sig.signal_id, className: 'chip work',
+                                   title: sig.description }, sig.type.replace(/_/g, ' '));
+              })
+            : h('span', { className: 'dash' }, '—')));
+      }))),
+    h('p', { className: 'foot' },
+      'Not one figure here is a decision. A percentage comes from approved evaluations only — ' +
+      'an ai_suggestion is never counted, whatever its confidence — and a cell that says ' +
+      'partially graded is the model refusing to average an incomplete rubric rather than a zero. ' +
+      'A concept at 0% is a different cell from one with no evidence: both appear above.'),
+    h('div', { className: 'blocked' },
+      DATA.students.map(function (s) {
+        return s.marks.filter(function (m) { return m.blocked.length; }).map(function (m) {
+          return h('p', { key: s.student_id + m.assessment_id },
+            h('span', { className: 'mono' }, s.student_id + ' · ' + m.assessment_id + ' '),
+            m.blocked.join(' — '));
+        });
+      })));
+}
+
+/**
+ * A material, over the page.
+ *
+ * The same veil the chat overlay uses, which is `MaterialModal`'s own geometry
+ * in `lib/client.js` — because in the harness this IS MaterialModal. A deck is
+ * 4:3 and a brief is a page; neither belongs in a column, which is the whole
+ * argument for opening it over everything instead.
+ *
+ * What the panel can show is what the harness can frame. Markdown arrives
+ * rendered, by the pane's own renderer and style. An SVG and a PDF are framed
+ * as they are. A `.pptx` or `.docx` is rendered to PDF by LibreOffice first,
+ * and this page says whether the machine that BUILT it had one. Anything with
+ * a scheme in its storage key is object storage — student work, a dataset —
+ * and says so rather than offering a link that would fail.
+ */
+function MaterialModal(props) {
+  const close = props.onClose;
+  const box = useRef(null);
+  // Two things open here and they are the same act: a material is a file the
+  // course registered, a brief is the record's own text about a piece of work.
+  // `sendMaterial` and `sendBrief` are two routes for the same reason — one
+  // serves bytes, the other composes a page — and both land in this panel.
+  const brief = props.what.kind === 'brief' ? (DATA.briefs[props.what.id] || {}) : null;
+  const material = brief
+    ? (brief.doc ? DATA.materials[brief.doc] || {} : {})
+    : (DATA.materials[props.what.id] || {});
+
+  useEffect(function () {
+    const onKey = function (e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+    window.addEventListener('keydown', onKey, true);
+    const previous = document.activeElement;
+    if (box.current) box.current.focus();
+    return function () {
+      window.removeEventListener('keydown', onKey, true);
+      if (previous && previous.focus) previous.focus();
+    };
+  }, [close]);
+
+  let body;
+  if (brief && brief.none) {
+    body = h('div', { className: 'matnote' },
+      h('b', null, 'No brief.'),
+      h('p', null, 'This piece of graded work carries neither a brief document nor a ' +
+        'description, so there is nothing for a student to read and nothing for this panel to ' +
+        'show. The brief is the record’s own text — write it there and it appears here, ' +
+        'which is what sendBrief says when it refuses.'));
+  } else if (brief && brief.html) {
+    body = h('iframe', { className: 'matframe', title: brief.title,
+                         sandbox: 'allow-same-origin', srcDoc: brief.html });
+  } else if (material.html) {
+    // Framed rather than inlined, for the reason the harness frames it: a
+    // brief may be a file downloaded from anywhere, and its markup has no
+    // business inheriting this page's styles or reaching this page's DOM.
+    body = h('iframe', { className: 'matframe', title: material.title,
+                         sandbox: 'allow-same-origin', srcDoc: material.html });
+  } else if (material.held) {
+    body = h('div', { className: 'matnote' },
+      h('b', null, 'Held ' + material.held + '.'),
+      h('p', null, 'The model decides this, not the view: ' +
+        'versions/<TERM>/samples/documents.yaml says in as many words that the bytes of student ' +
+        'work live in object storage and never in the repository. A dead link that returned a ' +
+        'sentence about object storage would be worse than no link at all.'));
+  } else if (material.converts) {
+    body = h('div', { className: 'matnote' },
+      h('b', null, 'A .' + material.extension + ', rendered to PDF to be read.'),
+      h('p', null, DATA.office
+        ? 'The machine this page was built on has LibreOffice, so in the harness this opens ' +
+          'here as a PDF — converted once, cached by the source file’s size and mtime, and ' +
+          'framed without a sandbox because the browser’s PDF viewer is a document of its ' +
+          'own. The bytes are not embedded in this page, which is why you are reading this ' +
+          'instead of the deck.'
+        : 'The machine this page was built on has no LibreOffice, so in the harness this would ' +
+          'keep the tab it has always opened. The offer is a capability, not a flag: where ' +
+          'there is no converter there is no control.'));
+  } else {
+    body = h('div', { className: 'matnote' },
+      h('b', null, 'Nothing to frame.'),
+      h('p', null, 'A .' + (material.extension || 'file') + ' is not on the showable list and ' +
+        'is not one LibreOffice renders, so the harness keeps the tab it always opened.'));
+  }
+
+  return ReactDOM.createPortal(
+    h('div', { className: 'veil',
+               onMouseDown: function (e) { if (e.target === e.currentTarget) close(); } },
+      h('div', { className: 'modal', role: 'dialog', 'aria-modal': 'true', tabIndex: -1, ref: box,
+                 'aria-label': (brief ? brief.title : material.title) || props.what.id,
+                 onMouseDown: function (e) { e.stopPropagation(); } },
+        h('header', null,
+          h('b', null, (brief ? brief.title : material.title) || props.what.id),
+          h('span', { className: 'where mono' },
+            // Where what is ON SCREEN came from, not what else exists. An
+            // assessment can have both a description and an attached document
+            // — HW1 does — and a header naming the document above the record's
+            // own text would be crediting the wrong one.
+            brief
+              ? (brief.html
+                  ? 'brief · the record’s own text' + (brief.doc ? ' · also ' + brief.doc : '')
+                  : 'brief · ' + brief.doc)
+              : (material.extension ? '.' + material.extension : '')),
+          h('button', { className: 'ghost', type: 'button', onClick: close }, 'Back to the course'),
+          h('button', { className: 'x', type: 'button', onClick: close, 'aria-label': 'Close' }, '×')),
+        body)),
+    document.body);
+}
+
+/**
+ * A table in its own scroll box.
+ *
+ * Twenty-one assessments and a concept column is twenty-four columns, which is
+ * what a real course turned out to have — the example has seven. Past that the
+ * columns crush rather than the page scrolling, and the fix is the rule every
+ * wide table on a responsive page needs: the TABLE scrolls sideways inside its
+ * own container, and the page body never does.
+ */
+function Scroll(props) {
+  return h('div', { className: 'scroll' },
+    h('table', { style: props.min ? { minWidth: props.min + 'px' } : null }, props.children));
+}
+
+/** A fixture name for a pseudonym, or nothing. Never used in a packet. */
+function nameOf(studentId) {
+  const found = DATA.students.filter(function (s) { return s.student_id === studentId; })[0];
+  return found ? found.name : null;
+}
+
+// ------------------------------------------------------------------- todos
+function Todos(props) {
+  return h('div', { className: 'listing' },
+    h('ul', { className: 'todos' }, DATA.todos.map(function (t) {
+      return h('li', { key: t.kind + t.id, className: 'todo ' + t.priority,
+                       onClick: function () {
+                         props.onSelect({ kind: 'todo', id: t.id, todo: t, view: 'todos',
+                                          week: t.weeks ? DATA.weeks[t.weeks[0] - 1] : null });
+                       } },
+        h('span', { className: 'pri ' + t.priority }, t.priority),
+        h('span', { className: 'body' },
+          h('b', null, t.title),
+          h('small', null, t.detail),
+            t.student_id
+            ? h('small', { className: props.names ? '' : 'mono' },
+                props.names ? (nameOf(t.student_id) || t.student_id) : t.student_id)
+            : null),
+        t.due ? h('span', { className: 'mono when' }, 'by ' + t.due) : null,
+        h('span', { className: 'chip' }, t.kind));
+    })),
+    h('p', { className: 'foot' },
+      DATA.todos.length + ' things, ordered by the priority the record carries rather than by ' +
+      'one this page decided. The first four come from action_inbox — the action items, the ' +
+      'grades waiting on ainar approve, the open signal, the outstanding submissions — and the ' +
+      'rest are the structural holes, counted off the same weeks[].gaps the outline colours a ' +
+      'week with. Approving a grade is not among them: that is a terminal and a person.'));
+}
+
+// ------------------------------------------------------------------- app
+function App() {
+  const [mode, setMode] = useState(function () { return recall('proto.mode', 'course'); });
+  const [section, setSection] = useState('outline');
+  const [view, setView] = useState('prof');
+  const [structureId, setStructureId] = useState('table');
+  const [draft, setDraft] = useState(STRUCTURES.table.tmpl);
+  const [appearanceId, setAppearanceId] = useState('plain');
+  const [error, setError] = useState(null);
+  const [sel, setSel] = useState(null);
+  const [asking, setAsking] = useState(false);
+  const [opened, setOpened] = useState(null);
+  // Pseudonyms by default here, which is the opposite of the harness's own
+  // default — this page can be shared, and the harness runs on one machine.
+  const [names, setNames] = useState(false);
+
+  useEffect(function () { remember('proto.mode', mode); }, [mode]);
+  useEffect(function () {
+    const onKey = function (e) { if (e.key === 'Escape') { setAsking(false); setSel(null); } };
+    window.addEventListener('keydown', onKey);
+    return function () { window.removeEventListener('keydown', onKey); };
+  }, []);
+
+  const chooseStructure = useCallback(function (id) {
+    setStructureId(id);
+    setDraft(STRUCTURES[id].tmpl);
+  }, []);
+
+  const skin = APPEARANCE[appearanceId].css;
+  const gaps = DATA.totals.gaps;
+  const packet = packetFor(sel);
+
+  const top = h('div', { className: 'topbar' },
+    h('div', { className: 'brand' },
+      h('b', null, DATA.run.course_id + ' — ' + DATA.run.title),
+      h('span', { className: 'mono' },
+        DATA.run.term + ' · week ' + DATA.current_week + ' of ' + DATA.totals.weeks +
+        ' · ' + DATA.enrolled + ' enrolled')),
+    h('div', { className: 'seg' }, [['chat', 'Chat'], ['course', 'Course']].map(function (m) {
+      return h('button', { key: m[0], type: 'button', 'aria-pressed': mode === m[0],
+                           onClick: function () { setMode(m[0]); } }, m[1]);
+    })),
+    mode === 'course'
+      ? h('button', { className: 'ghost', type: 'button', onClick: function () { setAsking(true); } }, 'Ask →')
+      : null);
+
+  // The appearance half is embedded as text, so it is checked for markup the
+  // way `templates.ts` checks a style sheet rather than escaped into safety.
+  const style = MARKUP.test(skin) ? '' : ':root{' + skin + '}';
+
+  if (mode === 'chat') {
+    return h('div', null, top, h(ChatMode), h(Explainer, { mode: mode }));
+  }
+
+  const isTable = section === 'outline' && (view === 'student' || view === 'prof');
+  const hint = section === 'outline'
+    ? (OUTLINE_VIEWS.filter(function (v) { return v.id === view; })[0] || {}).hint
+    : (SECTIONS.filter(function (s) { return s.id === section; })[0] || {}).hint;
+
+  const named = section === 'students' || section === 'todos';
+
+  let body;
+  if (section === 'students') body = h(Students, { onSelect: setSel, names: names });
+  else if (section === 'todos') body = h(Todos, { onSelect: setSel, names: names });
+  else if (view === 'lectures') body = h(Lectures, { onSelect: setSel });
+  else if (view === 'assessment') body = h(Assessments, { only: 'other', onSelect: setSel,
+    onOpenBrief: function (id) { setOpened({ kind: 'brief', id: id }); } });
+  else if (view === 'quiz') body = h(Assessments, { only: 'quiz', onSelect: setSel,
+    onOpenBrief: function (id) { setOpened({ kind: 'brief', id: id }); } });
+  else body = h(Spine, { structure: draft, mode: OUTLINE_MODE[view], view: view,
+                         onSelect: setSel, onError: setError, onOpen: setOpened,
+                         layout: STRUCTURES[structureId].layout,
+                         selected: sel && sel.week ? sel.week.week : null });
+
+  return h('div', null,
+    h('style', null, style),
+    top,
+    h('div', { className: 'strip' },
+      h('div', { className: 'seg' }, SECTIONS.map(function (s) {
+        return h('button', { key: s.id, type: 'button', title: s.hint,
+                             'aria-pressed': section === s.id,
+                             onClick: function () { setSection(s.id); setSel(null); } }, s.label);
+      })),
+      section === 'outline'
+        ? h('div', { className: 'seg sub' }, OUTLINE_VIEWS.map(function (v) {
+            return h('button', { key: v.id, type: 'button', title: v.hint,
+                                 'aria-pressed': view === v.id,
+                                 onClick: function () { setView(v.id); setSel(null); } }, v.label);
+          }))
+        : null,
+      h('span', { className: 'hint' }, hint),
+      // Only where a student can be named, and only ever affirmatively — the
+      // same two places the pane offers it, for the same reason.
+      named
+        ? h('div', { className: 'seg', style: { marginLeft: 'auto' } },
+            h('button', { type: 'button', 'aria-pressed': !names,
+                          title: 'what whois, the gradebook and a bug report all use',
+                          onClick: function () { setNames(false); } }, 'Pseudonyms'),
+            h('button', { type: 'button', 'aria-pressed': names,
+                          title: 'fixture names, invented for this prototype',
+                          onClick: function () { setNames(true); } }, 'Names'))
+        : null,
+      section === 'todos' && !named
+        ? h('div', { className: 'tally' },
+            h('span', null, DATA.todos.length + ' waiting'))
+        : null,
+      section === 'outline' && view === 'prof'
+        ? h('div', { className: 'tally' },
+            h('span', null, gaps.weeks + ' weeks need something'),
+            h('span', null, gaps.module + ' no module'),
+            h('span', null, gaps.deck + ' no deck'),
+            h('span', { className: gaps.deadline ? '' : 'zero' }, gaps.deadline + ' no deadline'),
+            h('span', { className: gaps.weight ? '' : 'zero' }, gaps.weight + ' no weight'))
+        : null),
+    // The coloured rule the pane draws whenever names are showing. It exists
+    // because this thing gets screen-shared and thrown at lecture-hall
+    // projectors, and a professor who left Names on should be told by the
+    // chrome rather than by the room.
+    named && names
+      ? h('div', { className: 'rule' },
+          h('b', null, 'Names are showing. '),
+          'These three are fixtures invented for this prototype — no roster was read, and ' +
+          'there is none in this workspace to read. In the harness they would resolve from ' +
+          '~/.ainar/roster/people.json, be held for one response, and never enter a payload. ' +
+          'The identifier stays under each name, and the packet a press sends carries the ' +
+          'pseudonym alone, because that text goes to a model.')
+      : null,
+    section === 'outline' && view === 'prof'
+      ? h('div', { className: 'banner' }, h('b', null, 'Drafts are included. '), DATA.proposed.note)
+      : null,
+    section === 'outline' && view === 'student'
+      ? h('div', { className: 'banner student' }, h('b', null, 'The student view. '),
+          'The record only — no draft, no gap, no note about what has not been written. This is ' +
+          'what ainar page publishes, and the reason sections.gaps is the one flag a surface has ' +
+          'to ask for by name.')
+      : null,
+    error && isTable ? h('div', { className: 'banner err mono', style: { maxWidth: 'none' } },
+              'The structure does not parse: ' + error) : null,
+    body,
+    isTable
+      ? h(Workshop, { structureId: structureId, draft: draft, error: error, appearanceId: appearanceId,
+                      onStructure: chooseStructure, onDraft: setDraft, onAppearance: setAppearanceId })
+      : null,
+    h(Explainer, { mode: mode, section: section, view: view }),
+    sel ? h(Inspector, { sel: sel, packet: packet, onAsk: function () { setAsking(true); },
+                         onOpen: sel.doc
+                           ? function () { setOpened({ kind: 'doc', id: sel.doc }); }
+                           : (sel.kind === 'work' && !(DATA.briefs[sel.id] || {}).none
+                               ? function () { setOpened({ kind: 'brief', id: sel.id }); }
+                               : null),
+                         onClose: function () { setSel(null); } }) : null,
+    opened ? h(MaterialModal, { key: opened.kind + ':' + opened.id, what: opened,
+                                onClose: function () { setOpened(null); } }) : null,
+    // Keyed on what it was opened over, so pressing Ask on a different week
+    // opens a turn about that week rather than reusing the last one.
+    asking ? h(ChatOverlay, { key: sel ? sel.kind + ':' + sel.id : 'run', sel: sel, packet: packet,
+                              onClose: function () { setAsking(false); } }) : null);
+}
+
+function whereOf(sel) {
+  if (!sel) return 'the whole run';
+  if (sel.kind === 'student') return 'student ' + sel.id;
+  if (sel.kind === 'todo') return sel.todo.kind + ' · ' + sel.id;
+  if (!sel.week) return sel.kind + ' ' + sel.id;
+  return sel.kind + ' · week ' + sel.week.week +
+    (sel.week.modules[0] ? ' · ' + sel.week.modules[0].title : '');
+}
+
+function Inspector(props) {
+  const sel = props.sel;
+  const drafted = /-DRAFT-/.test(String(sel.id || ''));
+  return h('div', { className: 'inspect' },
+    h('div', { className: 'what' },
+      h('p', null, 'Selected: ' + whereOf(sel) +
+        ' — this is what the press would carry into the turn'),
+      h('pre', { className: 'packet mono' }, JSON.stringify(props.packet, null, 1))),
+    h('div', { className: 'verbs' },
+      h('button', { className: 'ghost', type: 'button', disabled: !props.onOpen,
+                    onClick: props.onOpen || undefined },
+        props.onOpen ? 'Open' : 'Open — nothing to read here'),
+      h('button', { className: 'primary', type: 'button', onClick: props.onAsk }, 'Ask →'),
+      h('button', { className: 'ghost', type: 'button', disabled: !drafted },
+        drafted ? 'Approve' : 'Approve — nothing drafted here'),
+      h('button', { className: 'x', type: 'button', onClick: props.onClose, 'aria-label': 'Clear' }, '×')),
+    h('div', { className: 'mono', style: { flexBasis: '100%', fontSize: '11px', color: 'var(--muted)' } },
+      'Approve only ever spawns ainar approve --dry-run. No control here settles a judgement about a student.'));
+}
+
+/**
+ * Chat, over the course page.
+ *
+ * Portalled to the body and given the veil `MaterialModal` already uses, so
+ * the gesture is one the professor has learnt once: it covers the page, the
+ * week they pressed stays visible around its edges, and Escape, the backdrop
+ * or the × puts it away. The course is never navigated away from — which is
+ * the whole claim course mode makes about the agent, expressed as geometry.
+ *
+ * The turn opens already knowing what it is about. Nothing here is typed to
+ * establish that; the packet in the header is what the press carried.
+ */
+function ChatOverlay(props) {
+  const close = props.onClose;
+  const box = useRef(null);
+  const [said, setSaid] = useState(function () {
+    return [{ me: true, lines: [promptFor(props.sel)] }, { me: false, lines: replyFor(props.sel) }];
+  });
+  const [typed, setTyped] = useState('');
+
+  useEffect(function () {
+    // Capture, and stop it: while this is open Escape belongs to it, not to the
+    // selection underneath. Same listener shape as MaterialModal's.
+    const onKey = function (e) {
+      if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    };
+    window.addEventListener('keydown', onKey, true);
+    const previous = document.activeElement;
+    if (box.current) box.current.focus();
+    return function () {
+      window.removeEventListener('keydown', onKey, true);
+      if (previous && previous.focus) previous.focus();
+    };
+  }, [close]);
+
+  const send = function () {
+    const text = typed.trim();
+    if (!text) return;
+    setSaid(said.concat([
+      { me: true, lines: [text] },
+      { me: false, lines: ['Noted — this prototype does not reach a model. What a real turn ' +
+        'would have here is the answer, with the packet above already in its context.'] },
+    ]));
+    setTyped('');
+  };
+
+  const where = whereOf(props.sel);
+
+  return ReactDOM.createPortal(
+    h('div', {
+      className: 'veil',
+      onMouseDown: function (e) { if (e.target === e.currentTarget) close(); },
+    },
+      h('div', {
+        className: 'modal', role: 'dialog', 'aria-modal': 'true', tabIndex: -1, ref: box,
+        'aria-label': 'Chat over ' + where,
+        onMouseDown: function (e) { e.stopPropagation(); },
+      },
+        h('header', null,
+          h('b', null, 'Chat'),
+          h('span', { className: 'where mono' }, 'over ' + where),
+          h('button', { className: 'ghost', type: 'button', onClick: close }, 'Back to the course'),
+          h('button', { className: 'x', type: 'button', onClick: close, 'aria-label': 'Close' }, '×')),
+        h('div', { className: 'body' },
+          h('div', { className: 'ctx mono' },
+            h('b', null, 'carried with the turn — nobody typed this'),
+            JSON.stringify(props.packet || { run: DATA.run.id, view: 'outline' })),
+          said.map(function (turn, i) {
+            return h('div', { key: i },
+              h('div', { className: 'who' }, turn.me ? 'professor' : 'exoskeleton'),
+              h('div', { className: 'said' + (turn.me ? ' me' : '') },
+                turn.lines.map(function (p, j) { return h('p', { key: j }, p); })));
+          })),
+        h('div', { className: 'composer' },
+          h('textarea', {
+            value: typed, id: 'composer', spellCheck: false,
+            placeholder: 'Ask about ' + where + '…', 'aria-label': 'Message',
+            onChange: function (e) { setTyped(e.target.value); },
+            onKeyDown: function (e) {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+            },
+          }),
+          h('button', { className: 'primary', type: 'button', onClick: send,
+                        disabled: !typed.trim() }, 'Send'))
+      )),
+    document.body);
+}
+
+function Explainer(props) {
+  if (props.mode === 'chat') {
+    return h('div', { className: 'legend' },
+      h('h2', null, 'Chat mode, as it exists today'),
+      h('p', null, 'The right column is the real ', h('code', null, 'dsh-professor-pane'),
+        ' document, served from the same files a chat client is served, with ',
+        h('code', null, 'sections.gaps'), ' on. The tabs above it are the pane’s own chrome. ' +
+        'Nothing here is a mockup except the conversation.'),
+      h('p', null, 'This is the arrangement course mode inverts: the course is a reference ' +
+        'beside the conversation rather than the thing being worked on.'));
+  }
+  return h('div', { className: 'legend' },
+    h('h2', null, 'What this is'),
+    h('p', null, 'Course mode over the real CSS-4008 example course. The course is the page and ' +
+      'the agent is the Ask button. Press any week, meeting, assessment, student or todo — the ' +
+      'bar at the foot shows the context packet that press would carry, which is the thing that ' +
+      'has to exist before this layout is worth building.'),
+    h('h2', null, 'Three sections, because a professor asks three questions'),
+    h('p', null, h('b', null, 'Course outline'), ' is what the course IS, and it has five ' +
+      'readings of the same records. ', h('b', null, 'Student view'),
+      ' is the record alone — no draft, no gap, nothing about what has not been written yet — ' +
+      'which is exactly what ', h('code', null, 'ainar page'), ' publishes. ',
+      h('b', null, 'Professor view'), ' adds the drafts from ', h('code', null, 'work/<RUN>/'),
+      ' and the gaps. Those two are the term table, and the two below them are the same records ' +
+      'read down a different axis: ', h('b', null, 'Lectures'), ' is every meeting of the term ' +
+      'with its room and its deck, ', h('b', null, 'Assessment'), ' is the graded work with its ' +
+      'weight and rubric, and ', h('b', null, 'Quiz'), ' is the quizzes alone.'),
+    h('p', null, h('b', null, "Students' progress"), ' is the class by pseudonym: how many ' +
+      'concepts have any evidence at all, where each piece of work stands, and the open signals. ' +
+      'The most useful column is the one nothing else draws — ', h('b', null, 'why a mark cannot ' +
+      'be exported'), ', in the model’s own words, under the table. ',
+      h('b', null, 'Todos'), ' is ', h('code', null, 'action_inbox'),
+      ' plus the structural holes: the action items, the grades waiting on ',
+      h('code', null, 'ainar approve'), ', the open signal, the outstanding submissions, and the ' +
+      'weeks with no module or no deck — ordered by the priority the record carries.'),
+    h('h2', null, 'The names are fixtures, and the page says so while they show'),
+    h('p', null, 'A student in this model is a pseudonymous identifier and nothing else — the ' +
+      'bundle holds one user, the instructor. The three names under Students and Todos were ' +
+      'invented for this prototype; no roster was read, and there is none in this workspace to ' +
+      'read. In the harness they resolve from ', h('code', null, '~/.ainar/roster/people.json'),
+      ' on the professor’s own machine, are held for the length of one response, and never ' +
+      'enter a payload.'),
+    h('p', null, 'Three things the toggle demonstrates, all of them the pane’s own rules. ' +
+      'The amber rule appears whenever names are showing, because this gets screen-shared and ' +
+      'projected and the chrome should say so before the room does. The identifier stays under ' +
+      'each name rather than being replaced by it, because that is what ', h('code', null, 'whois'),
+      ', the gradebook and a bug report all use. And the context packet carries the pseudonym ' +
+      'alone whichever way the toggle is set — that text goes to a model, and the model should ' +
+      'work in the record’s vocabulary. Press a student with Names on and read the packet at ' +
+      'the foot: there is no name in it.'),
+    h('p', null, 'The default here is Pseudonyms, which is the opposite of the harness’s own ' +
+      'default. The harness runs on one machine and shows names; a page like this one can be ' +
+      'shared with a link.'),
+    h('h2', null, 'Three columns, and the ones you could have instead'),
+    h('p', null, h('b', null, 'Lecture'), ' is every meeting the week holds — lecture, seminar ' +
+      'or lab, each chip saying which it was and where — with its own materials nested under ' +
+      'it: the deck first, then the readings, datasets and notebooks. They are nested because ' +
+      'that is the shape the record already has; a resource belongs to an ',
+      h('code', null, 'activity'), ', not to a week. The week’s deck gap sits at the foot ' +
+      'of the column, once, however many times the week meets.'),
+    h('p', null, h('b', null, 'Quiz'), ' is ', h('code', null, 'AssessmentType.quiz'),
+      ' alone, because it is the recurring one and a professor scanning a term is looking for ' +
+      'it by name. ', h('b', null, 'Assessment'), ' is everything else the enum holds — ',
+      h('code', null, 'assignment'), ', ', h('code', null, 'project'), ', ',
+      h('code', null, 'exam'), ', ', h('code', null, 'presentation'), ', ',
+      h('code', null, 'oral_defense'), ', ', h('code', null, 'participation'),
+      '. Both carry the weight beside the date, because a column of graded work that does not ' +
+      'say what it is worth is the half of the grading policy nobody can check.'),
+    h('p', null, 'On this course that is 4 lectures, 2 seminars and 4 labs in the first column; ' +
+      'two assignments and the final project in the second; one quiz in the third. The Quiz ' +
+      'column is nearly empty, and that is the course rather than the layout.'),
+    h('p', null, 'What else the record could fill a column with, none of it invented: ',
+      h('b', null, 'Prepare before'), ' (', h('code', null, 'activity.preparation'),
+      ' — what students are told to do first), ', h('b', null, 'Hours'), ' (',
+      h('code', null, 'module.estimated_hours'), '), ', h('b', null, 'Outcomes'),
+      ' (the LO ids a week serves, which is the column that makes alignment visible week by ' +
+      'week), ', h('b', null, 'Handed in'), ' (submissions against enrolment, and how many are ' +
+      'approved — private, so it belongs under Students and not to a page a student ' +
+      'may see), ', h('b', null, 'Subgroup'), ' (a meeting labelled for one group only), and ',
+      h('b', null, 'Source outline'), ' (what a syllabus document said this week was, before ' +
+      'anybody modelled it). Adding one is an edit to the template and a field on the model — ' +
+      'the box below is where you would try it.'),
+    h('h2', null, 'It is templated, the way the rest of this project is'),
+    h('p', null, 'The week card is not written in React. It is a ', h('code', null, '.tmpl'),
+      ' rendered by ', h('code', null, 'vendor/ainar/mcp/widget-assets/template.js'),
+      ' — the same interpreter every widget document carries, embedded here verbatim. Escaped ',
+      h('code', null, '{{ paths }}'), ', ', h('code', null, '{% if %}'), ', ',
+      h('code', null, '{% for %}'), ', and no way to ask for raw output.'),
+    h('p', null, 'So the two halves a professor already chooses for the public page — ',
+      h('code', null, 'ainar page --structure compact --template print'), ' — are the two halves ' +
+      'they would choose here. Edit the box above the notes and the spine redraws; break it and ' +
+      'the parse error is reported rather than rendered. A structure cannot introduce markup and ' +
+      'cannot compute, which is what makes it safe to let somebody edit it.'),
+    h('p', null, 'Clicks cross that boundary the way ', h('code', null, 'runtime.js'),
+      ' already does it: ', h('code', null, 'data-pick'), ' and ', h('code', null, 'data-id'),
+      ' on the element, one delegated listener on the container. A structure never holds a handler.'),
+    h('h2', null, 'Where it would mount'),
+    h('p', null, 'The shipped ', h('code', null, 'dsh-client-ui-layout'), ' declares four seats — ',
+      h('code', null, 'sidebar'), ', ', h('code', null, 'conversation'), ', ',
+      h('code', null, 'details'), ' and ', h('code', null, 'shell.overlay'), '. There is no ' +
+      'full-width seat: its README claims a ', h('code', null, 'conversation.empty'),
+      ' that appears nowhere in the bundle. So course mode is either the conversation slot, or ',
+      h('code', null, 'shell.overlay'), ' — the layer the deck overlay already uses to open a ' +
+      'slide over the harness. That is a decision to take, and the prototype does not take it.'),
+    h('h2', null, 'What is real and what is not'),
+    h('p', null, 'Real: the weeks, meetings, assessments, concepts, gaps and the tally, straight ' +
+      'from ', h('code', null, 'course_outline'), '. Evidence is real too — three students, six ' +
+      'submissions, no approved decisions — which is why it reads empty rather than being ' +
+      'invented. Proposed is illustrative and says so on its banner, because this workspace has ' +
+      'no ', h('code', null, 'work/<RUN>/'), ' for ', h('code', null, 'loadDrafts'), ' to merge.'));
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+</script>

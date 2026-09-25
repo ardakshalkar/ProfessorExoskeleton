@@ -22,7 +22,7 @@ Three moves, and the third is the point.
 
 **Model.** A course is records, not prose — outcomes, concepts and the
 prerequisites between them, modules, assessments, rubrics, items, evidence.
-Twenty-eight schemas in [`datalayer/schema/`](datalayer/schema/). Once a course
+Twenty-eight schemas in [`vendor/datalayer/schema/`](vendor/datalayer/schema/). Once a course
 is data, questions like *"which outcome does nothing assess?"* stop being
 essay questions.
 
@@ -35,6 +35,26 @@ promotes it. Drafts land in a separate place and `ainar approve` moves them,
 one identifier at a time if you like. This is the whole design: the system may
 propose anything and decide nothing. A grade suggestion is a suggestion until a
 human agrees with it.
+
+The instructor should not have to *type* that, though, and since 2026-09-21 they
+do not. `ainar publish` — and the Publish button in the pane, which spawns it —
+runs the same gate over the **documents and resources** a publication needs and
+then publishes, so a deck drafted an hour ago reaches the students' page in one
+press that shows what it would promote before it promotes anything. The line
+moved to where the decision actually is: pressing *publish the course page*
+having read what would go on it **is** the act of standing behind a deck, and
+says nothing about whether a suggested score is right. So a judgement about a
+student — an evaluation, a signal, an intervention — is still `ainar approve`,
+still the instructor's, and is reported as *left alone* when a publication walks
+past it in the same directory.
+
+Everything that produces a file a person opens — a deck, an exam paper, the
+students' page — runs through those three moves in the same order.
+[`GENERATION.md`](GENERATION.md) traces that one shape and then each pipeline
+against it, including where a stage is missing.
+[`PIPELINES.md`](PIPELINES.md) is the same thing in plain terms, one page: what
+happens between your sentence and the thing you wanted, and the two decisions
+that stay yours.
 
 ## What works today
 
@@ -59,7 +79,7 @@ items do not add up to the criterion maximum, because an example where nothing
 is wrong teaches you nothing about what the validator is for.
 
 Those 94 referential checks are held to the original Python implementation by
-98 mutation fixtures in [`golden/validator/`](golden/validator/) — each one
+98 mutation fixtures in [`workspace/golden/validator/`](workspace/golden/validator/) — each one
 breaks the course in a specific way and pins the exact diagnostic. The same
 data drives the rest of the read commands:
 
@@ -72,7 +92,7 @@ node --experimental-strip-types ainar-node/bin/ainar.ts gradebook CSS-4008-2026-
 
 `ainar --help` lists the rest: `context`, `stats`, `pending`, `rubric`,
 `student`, `class-progress`, `calibration`, `blueprint`, `schema`, `new
-course`, `new run`, `roster`, `approve`, `deck fit`.
+course`, `new run`, `roster`, `approve`, `publish`, `impact`, `deck fit`.
 
 ### The write layer
 
@@ -93,6 +113,23 @@ The two HTML surfaces are deliberate opposites, and the wall between them is
 the design: `dashboard` draws marks and is private; `page` draws the plan, is
 the only output written for a public URL, and copies a material file only after
 an answer-key scan that has no override.
+
+`page` builds the site; `publish` is what puts something in front of a class,
+and it is the one command that also promotes:
+
+```bash
+bin/ainar publish page CSS-4008-2026-FALL             # the plan: writes nothing
+bin/ainar publish page CSS-4008-2026-FALL --confirm   # promote the materials, then build
+bin/ainar publish telegram CSS-4008-2026-FALL --message-file note.txt
+bin/ainar publish canvas ASSESSMENT-04 --run CSS-4008-2026-FALL
+bin/ainar publish update CSS-4008-2026-FALL           # everywhere it already went
+```
+
+Four targets, one grammar, two presses each. The plan names the drafted
+documents it would promote, what would then be published, and what it would
+hold back; `--confirm` does both. What it may promote is documents and
+resources — a drafted evaluation in the same directory is reported as left
+alone, because publishing a deck is not a decision about anybody's mark.
 
 `lms` is the last one and the only thing here that reaches a third party:
 
@@ -139,10 +176,17 @@ them today:
 - `action_inbox.json` expects a `readiness` block — the checklist of what to
   build next — which `inbox.py` produces and this port does not. A missing
   feature, not a stale fixture.
-- `course_outline.json` pins an older wording of its `placement` note than the
-  code now emits. That one is genuinely just stale.
+- `course_outline.json` carries two fields on each assessment that `outline.py`
+  never emitted: `instructions_document_id`, which names the brief so a view
+  with a route to it can offer it, and `description`, which is the brief itself
+  for the great majority of assessments that have no document at all. Both are
+  deliberate additions, so the fixture is behind the code rather than the code
+  being wrong — but it is left failing rather than quietly rewritten, because a
+  golden file that is edited whenever it disagrees has stopped being one. (This
+  entry used to name the `placement` wording. That had already been fixed; the
+  fixture was failing on the field list and the note had not caught up.)
 
-A third fixture was added on 2026-09-08: `golden/CSS-4008/import.sql`, the 655
+A third fixture was added on 2026-09-08: `workspace/golden/CSS-4008/import.sql`, the 655
 lines `python -m ainar sql` wrote for the example course before Python was cut
 loose. `test/sqlgen.test.ts` compares the port's output against it line by line
 and names the only difference it is allowed to have.
@@ -161,7 +205,34 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
 - [x] Subgroups — `--group` narrows the gradebook, class progress, the inbox and
       the term plan to one subgroup, and refuses a label the run does not use
 - [x] Draft/approve promotion (`ainar approve`, `--only`, `--reject`, `--dry-run`)
+- [x] `ainar publish {page,telegram,homework,canvas}` — the plan, then one
+      `--confirm` that promotes the materials the publication needs and
+      publishes. The same command behind the pane's Publish button and the
+      `/publish` skill, so the three cannot disagree about what a press does
+- [x] A material edited in place is noticed rather than silently published: the
+      record is brought back into line with the file and its version goes up,
+      and a rendering whose source changed is held back instead of going out as
+      a picture of the old text
+- [x] A publication remembers where it went. The second plan says *last
+      published Tuesday, and these three have changed since* rather than
+      describing every publication as the first — in the ledger that already
+      holds what was sent to the gradebook, outside the repository
+- [x] `publish … --rebuild` runs the producer a course declares for a stale
+      rendering, so a corrected deck and the PDF beside it go out in one press.
+      Opt-in, because a producer is the course's own build script
+- [x] `ainar impact DOC-ID` — what a material is, whether the file still matches
+      the record, what was rendered from it, what points at it, where it has
+      been published and whether that copy is behind. The read a one-word edit
+      starts with, and the `/revise` skill's decision procedure
+- [x] `publish update RUN` revisits every destination that run has already been
+      published to and never a new one; a failure on one is reported and the
+      rest still go. `publish telegram --edit` corrects the announcement in the
+      channel instead of posting a second one
 - [x] `ainar new course` / `new run` scaffolding that validates as written
+- [x] One run of one course per workspace — no `versions/<TERM>/` level, with
+      `ainar migrate-layout` to move an old tree and `ainar archive-run` to
+      retire a finished term into `archive/<TERM>/`, text in full and binaries
+      by checksum
 - [ ] `readiness` in the action inbox — the checklist of what to build next,
       with its importance ordering. It exists in `inbox.py` and is not ported,
       which is one of the two golden fixtures that do not reproduce
@@ -204,6 +275,11 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
       shipped DeepSeek brand — see [`plugins/dsh-professor-brand`](plugins/dsh-professor-brand/)
 - [x] Telegram announcements, with explicit confirmation before anything sends
 - [ ] Canvas and Moodle publishing as a live integration rather than a file
+- [ ] More than one professor on one machine. [`deploy/`](deploy/) has the
+      per-person launcher, the systemd template and an authenticating Caddy
+      front door, and the launcher and the harness's trust fence were both
+      exercised against a running host — but nothing here has stood up on a
+      real server, and the identity-provider half is left to the institution
 
 **Before this is fair to hand to an early user**
 
@@ -249,11 +325,11 @@ cd ainar-node && npm test   # the model, the read layer, roster, approve, decks
 
 The second is the one that matters: 188 tests over 19 suites, and none of them
 skipped, because the example course below is checked in. Remove
-`courses/CSS-4008/` and eleven of them have nothing to run against.
+`workspace/courses/CSS-4008/` and eleven of them have nothing to run against.
 
 ## The example course
 
-[`courses/CSS-4008/`](courses/CSS-4008/) is a filled-in course to read and
+[`workspace/courses/CSS-4008/`](workspace/courses/CSS-4008/) is a filled-in course to read and
 break: *Artificial Intelligence*, 5 credits, offered `2026-FALL` — four
 outcomes, ten concepts with prerequisite edges, nine modules, four assessments
 with rubrics and items, and three enrolled students carrying recorded evidence.
@@ -261,11 +337,11 @@ with rubrics and items, and three enrolled students carrying recorded evidence.
 It is deliberately small enough to hold in your head and complete enough that
 every read command returns something. The expected output for each of those
 commands is checked in beside it under
-[`golden/CSS-4008/`](golden/CSS-4008/), which is what makes it a fixture and
+[`workspace/golden/CSS-4008/`](workspace/golden/CSS-4008/), which is what makes it a fixture and
 not just a demo.
 
 The two capabilities its outcomes reference sit in
-[`shared/capabilities.yaml`](shared/capabilities.yaml) rather than inside the
+[`workspace/shared/capabilities.yaml`](workspace/shared/capabilities.yaml) rather than inside the
 course, because a student accumulates evidence for a capability across several
 courses — which is what lets a capability map be built instead of a transcript.
 Remove that file and `validate` reports nine dangling references, which is the
@@ -298,32 +374,83 @@ draft arguments, unannounced results and student work quoted as examples, so
 
 ## Layout
 
+The repository root holds the product. Everything a *course* is made of lives
+one level down, in `workspace/`, because that is a workspace and this is not —
+see **The workspace is not the repository** below.
+
 ```
-courses/CSS-4008/              the example course — start here
-shared/capabilities.yaml       capabilities, which outlive any one course
-datalayer/schema/              28 record schemas: what a course IS
 ainar-node/                    the model and the read layer, in TypeScript
   src/                         validate, gradebook, roster, approve, decks
+  src/tools/                   the 16 read-only tools, and their widgets
+  src/mcp/                     protocol only: stdio, HTTP, OAuth
   bin/ainar.ts                 the `ainar` CLI
   test/                        19 suites
-golden/                        expected output, and 98 validator mutations
+workspace/                     a course workspace, which is what the tools read
+  courses/CSS-4008/            the example course — start here
+  homework/<slug>/             starter repositories students fork
+  imports/<label>/             material brought in from outside, not yet a record
+  archive/<TERM>/              offerings that have finished
+  shared/capabilities.yaml     capabilities, which outlive any one course
+  golden/                      expected output, and 98 validator mutations
+vendor/                        taken from elsewhere, kept as source — PROVENANCE.md
+  datalayer/schema/            28 record schemas: what a course IS
+  ainar/mcp/widget-assets/     the widget documents, shared with the Python server
 plugins/
   dsh-ainar-course-model/      the model as a harness plugin + MCP server
   dsh-professor-pane/          the UI for clicking through a course
   dsh-professor-brand/         this host's own mark and wordmark, not DeepSeek's
+  professor-course-skills/     20 course-level skills: planning, gaps, dashboards
   professor-skills/            19 skills: slides, assessment, grading, publishing
   dsh-sample/                  a minimal plugin, kept as the contract example
-.agents/skills/                16 course-level skills: planning, gaps, dashboards
+.claude-plugin/marketplace.json  the same seven skill trees, for the second host
 bin/sample[.cmd]               the front door: set DSH_HOME, then exec dsh
 .dsh/profiles/sample/          how this host is composed
+deploy/                        the same host for more than one professor:
+                               a home and a port each, behind an authenticating
+                               proxy, because the harness has no login of its own
 ```
 
-Everything under `plugins/` is source: edit it here. Three of the four began as
-copies from sibling checkouts and one still has a generated twin —
-`dsh-ainar-course-model/server/` is `ainar-node/src/` one build stage later, and
-a change to one is copied to the other by hand.
+### The workspace is not the repository
+
+A **workspace** is any directory holding a `courses/` directory, and the code
+finds one by walking up from wherever you are standing
+([`workspaceRootFor`](ainar-node/src/workspace.ts)). A professor's workspace is
+their own course folder, somewhere else entirely. `workspace/` here is a filled-in
+example, and the repository root is deliberately *not* one — it is the product,
+and a product that is also a course teaches the wrong lesson about which is
+which.
+
+The practical consequence: from the repository root, say where the course is.
+
+```bash
+bin/ainar stats --root workspace
+cd workspace && ../bin/ainar stats     # or just stand in it
+```
+
+Without `--root`, `ainar` reads the directory you are standing in and finds no
+courses there — which is the same thing it does in any other folder that is not
+a workspace. Until 2026-09-17 the repository root happened to be a workspace, so
+this was never needed here.
+
+### Everything under `plugins/` is source
+
+Edit it here. Three of the four began as copies from sibling checkouts; none has
+a generated twin any more — `dsh-ainar-course-model/server/` was 8,396 lines of
+compiled JavaScript kept in step with `ainar-node/src/` by hand, and it was
+deleted on 2026-09-16 in favour of importing `@ainar/core`.
 [`PROVENANCE.md`](PROVENANCE.md) records where each tree came from and what this
 project has changed since.
+
+The seven skill trees are read by two hosts and copied by neither. The harness
+names them as absolute roots in
+[`agent.cordis.yml`](.dsh/.agent-presets/professor/agent.cordis.yml), anchored to
+that file. Claude Code gets the same seven from
+[`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json): a
+marketplace added from a local directory loads a relative-path plugin **in
+place**, so it reads these files rather than a cached copy, and an edit here is
+live in both hosts at once. Add it with `claude plugin marketplace add .` — and
+note that a host reading skills from anywhere else, such as `~/.claude/skills`,
+is holding a copy that nothing updates.
 
 ## Writing a plugin against this
 

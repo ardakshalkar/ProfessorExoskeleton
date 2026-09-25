@@ -1,0 +1,158 @@
+# The files behind the course.
+#
+# `storage_key` with no scheme is a path in this repository — files small and
+# textual enough to live in git, which in practice means generated material.
+# Anything else uses `object://`, meaning the application's object storage
+# holds the bytes and this record holds only the metadata.
+#
+# `size_bytes` and `checksum` on repository files are filled in by
+# `ainar approve`, never by hand. Approved documents land in
+# `documents/generated.yaml` rather than here, so this file keeps its comments.
+
+documents:
+  - document_id: DOC-4410
+    title: Model evaluation and overfitting — slides
+    storage_key: courses/CSS-4008/materials/MODULE-06-slides.md
+    mime_type: text/markdown
+    original_filename: MODULE-06-slides.md
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-06
+    concepts: [CONCEPT-MODEL-EVALUATION, CONCEPT-OVERFITTING]
+    uploaded_by: USER-ARD-A01
+    created_at: 2026-09-28T11:00:00+05:00
+    generated_by:
+      produced_by: make-materials-skill
+      model_id: claude-opus-5
+      workflow_version: claude-code/prototype
+      prompt_version: make-materials/v1
+      input_refs: [MODULE-06, LO-02, LO-04, RES-442, SIGNAL-772]
+      created_at: 2026-09-28T10:52:00+05:00
+    # The plan is the deck's design, and the contract the render is checked
+    # against: same count, same order, matching titles. `audience` and
+    # `duration_minutes` are traceable — 27 is the version's expected enrollment,
+    # 100 minutes is ACT-0601's, and nothing here records a year of study, so the
+    # audience is described by where the cohort has just been instead.
+    presentation_plan:
+      audience: CSS-4008 cohort, 27 enrolled — introductory AI, arriving from MODULE-05
+      style: lecture
+      duration_minutes: 100
+      max_slides: 24
+      outcomes: [LO-02, LO-04]
+      concepts: [CONCEPT-MODEL-EVALUATION, CONCEPT-OVERFITTING]
+      slides:
+        - number: 1
+          type: title
+          title: Model Evaluation and Overfitting
+          minutes: 4
+          purpose: place the session in the sequence and name the outcomes it serves
+          outcomes: [LO-02, LO-04]
+
+        - number: 2
+          type: orientation
+          title: Where we are
+          minutes: 12
+          purpose: >-
+            correct the prerequisite before building on it — two of three
+            students read memorisation as generalisation on ITEM-01-02
+          concepts: [CONCEPT-TRAIN-TEST-SPLIT]
+          required_visual: train, validation and test, annotated with what each part is allowed to decide
+
+        - number: 3
+          type: hook
+          title: A number without a procedure is not a result
+          minutes: 14
+          purpose: make the procedure, not the figure, the thing that is reported
+          outcomes: [LO-02]
+          concepts: [CONCEPT-MODEL-EVALUATION]
+
+        - number: 4
+          type: concept
+          title: Choosing a metric
+          minutes: 20
+          purpose: >-
+            establish that the metric is part of the claim, through cases where
+            accuracy misleads
+          outcomes: [LO-02]
+          concepts: [CONCEPT-MODEL-EVALUATION]
+
+        - number: 5
+          type: concept
+          title: Overfitting
+          minutes: 16
+          purpose: define it as describing the sample rather than its source, not as a bug
+          outcomes: [LO-04]
+          concepts: [CONCEPT-OVERFITTING]
+
+        - number: 6
+          type: concept
+          title: Diagnosing it
+          minutes: 18
+          purpose: >-
+            read the train/held-out gap, including the case where the gap
+            inverts and the cause is a leak
+          outcomes: [LO-04]
+          concepts: [CONCEPT-OVERFITTING]
+
+        - number: 7
+          type: check
+          title: Check for understanding
+          minutes: 10
+          purpose: one question per new concept, answerable rather than nodded at
+          outcomes: [LO-02, LO-04]
+          concepts: [CONCEPT-MODEL-EVALUATION, CONCEPT-OVERFITTING]
+
+        - number: 8
+          type: handover
+          title: For the lab (ACT-0602)
+          minutes: 4
+          purpose: state what to bring and what the lab will produce
+          outcomes: [LO-04]
+          concepts: [CONCEPT-OVERFITTING]
+
+  # A figure is its own document, with no resource of its own — the deck has one,
+  # and this serves the deck. Flat beside it and named after it, because approval
+  # moves material to `materials/<filename>` and a sibling-relative link in the
+  # markdown is the only kind that survives that move.
+  - document_id: DOC-4411
+    title: One dataset, three jobs — train, validation and test
+    storage_key: courses/CSS-4008/materials/MODULE-06-slides-fig-01-split.svg
+    mime_type: image/svg+xml
+    original_filename: MODULE-06-slides-fig-01-split.svg
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-06
+    concepts: [CONCEPT-TRAIN-TEST-SPLIT]
+    uploaded_by: USER-ARD-A01
+    created_at: 2026-09-28T11:00:00+05:00
+    generated_by:
+      produced_by: make-materials-skill
+      model_id: claude-opus-5
+      workflow_version: claude-code/prototype
+      prompt_version: make-materials/v1
+      input_refs: [MODULE-06, CONCEPT-TRAIN-TEST-SPLIT, ITEM-01-02]
+      created_at: 2026-09-28T10:52:00+05:00
+
+  - document_id: DOC-4420
+    title: Diagnosing overfitting — starter notebook
+    storage_key: object://courses/css-4007/2026-fall/materials/diagnosing-overfitting.ipynb
+    mime_type: application/x-ipynb+json
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-06
+    concepts: [CONCEPT-OVERFITTING, CONCEPT-REGULARIZATION]
+    uploaded_by: USER-ARD-A01
+
+  - document_id: DOC-3301
+    title: Student performance dataset (teaching copy)
+    storage_key: object://courses/css-4007/2026-fall/datasets/student-performance.csv
+    mime_type: text/csv
+    course_version_id: CSS-4008-2026-FALL
+    concepts: [CONCEPT-DATA-PREPARATION]
+    uploaded_by: USER-ARD-A01
+
+  - document_id: DOC-9010
+    title: Experiment report template
+    storage_key: object://courses/css-4007/2026-fall/materials/experiment-report-template.docx
+    mime_type: application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    course_version_id: CSS-4008-2026-FALL
+    module_id: MODULE-09
+    concepts: [CONCEPT-EXPERIMENT-DESIGN]
+    uploaded_by: USER-ARD-A01

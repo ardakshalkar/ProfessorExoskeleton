@@ -77,7 +77,7 @@ pres grammar --deck technical_lecture                        # phases + a beat c
 
 `pres grammar` gives you the phase spine and a default beat chain for that kind
 of session, plus the discipline's representation ladder with `--discipline`. It
-replaces reading `deck-grammars.md`. `pres beats --phase build_understanding`
+replaces reading `skills/make-materials/references/deck-grammars.md`. `pres beats --phase build_understanding`
 lists candidates one line each; `pres beats <id>` opens exactly one, and only
 when you actually need its sequence.
 

@@ -2,8 +2,12 @@
 rem `ainar` — the AINAR course model CLI, in TypeScript, run straight from
 rem source. See bin/ainar for the full note.
 rem
-rem   bin\ainar validate CSS-4008
+rem   bin\ainar validate CSS-4008 --root workspace
 rem   bin\ainar inbox CSS-4008-2026-FALL --root C:\path\to\workspace
+rem
+rem This checkout's example course is under workspace\, and the repository root
+rem is not a workspace, so --root is needed when running from the root. See
+rem bin/ainar.
 rem
 rem This used to be one line: `node --experimental-strip-types ...`. That works
 rem in a terminal a person opened and fails in the shell an agent gets, whose

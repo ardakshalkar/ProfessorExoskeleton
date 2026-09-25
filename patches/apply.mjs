@@ -44,6 +44,43 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
  * any other; it simply has no turns in it yet. The pane already resolves its
  * workspace without one (see its `resolveWorkspace`), which is why this is a
  * one-condition change rather than a rework.
+ *
+ * ## There is no slot to do this with instead. Checked on 2026-09-17.
+ *
+ * `ui-layout`'s README says AppFrame "declares `sidebar`, `conversation`,
+ * `details`, and `conversation.empty`". The fourth one does not exist. The
+ * bundle in that same package, at the same 0.1.1-rc.2 this project pins,
+ * declares:
+ *
+ *     sidebar         single  root
+ *     conversation    single  session-maybe
+ *     details         single  session
+ *     shell.overlay   list    root
+ *
+ * and `conversation.empty` appears in no shipped bundle at all. It is a bug in
+ * their README, and it is a convincing one — a start-screen slot in the
+ * conversation column is exactly what this patch would otherwise not need.
+ *
+ * Every seat that needs no session, across layout and conversation both:
+ *
+ *     sidebar                        single   taken by the sidebar
+ *     conversation.hero.brand.mark   single   taken by dsh-professor-brand
+ *     conversation.hero.workspace    single   taken by the workspace picker
+ *     conversation.hero.agentPreset  single   taken by the preset chooser
+ *     shell.overlay                  list     free
+ *
+ * The only free one is the wrong shape: AppFrame renders `shell.overlay` into
+ * `<div className={overlayLayer} data-shell-overlay>`, a floating layer over the
+ * three columns rather than a column. The other four are `single` and taking one
+ * evicts something a professor uses.
+ *
+ * Nor can the column be opened from `ctx.layout`. The gate sits ABOVE the
+ * geometry — `computeColumns(..., detailsSession === void 0 ? 0 : panels.details)`
+ * zeroes the width whatever the store holds — so there is no action to call.
+ *
+ * So this stays a patch until a shipped version grows a root-scoped seat in the
+ * conversation column. Re-checking costs a look at that declaration table; the
+ * README is not evidence.
  */
 const detailsWithoutSession = {
   package: "@deepseek-ai/dsh-client-ui-layout",
@@ -66,38 +103,33 @@ const detailsWithoutSession = {
   note: "details column no longer needs a session",
 };
 
-/**
- * The browser tab's title.
+/*
+ * The served index.html's <title> used to be patched here, and is not any more.
  *
- * `plugins/dsh-professor-brand/` replaces the sidebar mark, the sidebar
- * wordmark and the conversation hero mark through UI slots, which is the
- * supported route and needs no patch. The title is the one piece of the brand
- * with no slot at all: `ui-brand-official`'s own README says so — "the browser
- * title is independent; `DSH_CLIENT_TITLE` selects title text at BUILD time
- * rather than through a UI slot" — and this project consumes a published
- * bundle rather than building the frontend, so that build-time variable is not
- * a lever it has.
+ * It moved to `plugins/dsh-professor-brand/` on 2026-09-17, as a
+ * `ctx.webServer.tapIndex` transform. The webserver documents that hook as "the
+ * escape hatch for markup no IndexInjection row expresses", `renderIndex`
+ * applies it to every index response, and `dsh-host-frontend-static` routes
+ * every index response through `renderIndex` — so this was a supported
+ * extension point the whole time, reached through a plugin, which is exactly
+ * the order of preference the note at the top of this file asks for.
  *
- * Which leaves the shipped `index.html`, one `<title>` in it, and this file.
- * The result is that every surface says the same name; without it the tab
- * still reads "DeepSeek Harness" beside a sidebar that does not.
+ * The replacement is also better than what it replaced: a tap can match
+ * `<title>` by pattern, where a patch has to match the shipped string exactly
+ * and breaks on any upstream retitling.
+ *
+ * It did NOT remove the need for `sessionBrowserTitle` below. That one is a
+ * constant inside a React component the renderer mounts itself, and no hook
+ * reaches it.
  */
-const browserTitle = {
-  package: "@deepseek-ai/dsh-web-frontend",
-  file: "dist/index.html",
-  find: "<title>DeepSeek Harness</title>",
-  replace: "<title>Professor's Exoskeleton</title><!-- PATCHED (patches/apply.mjs) -->",
-  marker: "PATCHED (patches/apply.mjs)",
-  note: "browser tab title is this host's own",
-};
 
 /**
  * The browser tab's title once a session is open.
  *
- * `browserTitle` above covers the document the server sends, which is what the
- * tab reads until React mounts. It is not the whole story: `ui-renderer`'s
- * `DocumentTitle` then takes the tab over for the rest of the session's life
- * and composes it from its OWN hardcoded constant —
+ * The `tapIndex` transform in `dsh-professor-brand` covers the document the
+ * server sends, which is what the tab reads until React mounts. It is not the
+ * whole story: `ui-renderer`'s `DocumentTitle` then takes the tab over for the
+ * rest of the session's life and composes it from its OWN hardcoded constant —
  *
  *     const productTitle = "DeepSeek Harness";
  *     document.title = title === void 0 ? productTitle : `${title} — ${productTitle}`;
@@ -107,9 +139,9 @@ const browserTitle = {
  * the moment a conversation was open. That is the state in which anybody
  * actually uses the thing, and it is the state a screenshot catches.
  *
- * Both patches are needed, and neither is redundant: this constant is also the
+ * Both halves are needed, and neither is redundant: this constant is also the
  * title restored on unmount, while the served HTML is what shows before any of
- * this JavaScript has run.
+ * this JavaScript has run. Only this half has to be a patch.
  */
 const sessionBrowserTitle = {
   package: "@deepseek-ai/dsh-client-ui-renderer",
@@ -121,7 +153,7 @@ const sessionBrowserTitle = {
   note: "session tab titles carry this host's name, not DeepSeek's",
 };
 
-const PATCHES = [detailsWithoutSession, browserTitle, sessionBrowserTitle];
+const PATCHES = [detailsWithoutSession, sessionBrowserTitle];
 
 let changed = 0;
 let already = 0;

@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "harness",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "bin\\sample.cmd"
+      ],
+      "port": 3080
+    }
+  ]
+}
