@@ -1,11 +1,11 @@
 /**
  * Slide markdown, and the contract between a deck and its plan.
  *
- * The parsing and the checking live here rather than in `bin/render-deck.ts`
- * because they are the part with opinions: what counts as a slide, what a
- * slide's title is, and when a `presentation_plan` no longer describes the
- * markdown it was written for. The binary does I/O and calls pptxgenjs, which
- * is not worth a test; this is.
+ * The parsing and the checking live here rather than in `render.ts` because
+ * they are the part with opinions: what counts as a slide, what a slide's
+ * title is, and when a plan no longer describes the markdown it was written
+ * for. The renderer does I/O and calls pptxgenjs; this is what is tested, in
+ * `test/slides.test.ts`.
  *
  * Nothing here touches the filesystem or the model — it takes strings and a
  * plain plan object, so `test/deck.test.ts` can exercise every branch without a

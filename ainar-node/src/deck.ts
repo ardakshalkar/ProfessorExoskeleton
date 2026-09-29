@@ -1,15 +1,16 @@
 /**
- * Slide markdown, and the contract between a deck and its plan.
+ * A dependency-free estimate of how far down each slide a deck reaches.
  *
- * The parsing and the checking live here rather than in `bin/render-deck.ts`
- * because they are the part with opinions: what counts as a slide, what a
- * slide's title is, and when a `presentation_plan` no longer describes the
- * markdown it was written for. The binary does I/O and calls pptxgenjs, which
- * is not worth a test; this is.
+ * This was the parser and the checks of `bin/render-deck.ts`, the second of
+ * two slide renderers. The renderers were merged on 2026-09-29 into
+ * `src/slides/`, which has its own parser, contract and checks; what is left
+ * here is the one thing that engine cannot do — answer `ainar deck fit` on a
+ * machine without pptxgenjs and sharp, or for a deck with no plan beside it.
+ * `deck fit` says "ESTIMATED" when it falls back to this, because the
+ * renderer's own layout can differ from it.
  *
- * Nothing here touches the filesystem or the model — it takes strings and a
- * plain plan object, so `test/deck.test.ts` can exercise every branch without a
- * course on disk.
+ * Nothing here touches the filesystem or the model — it takes strings, so
+ * `test/deck.test.ts` can exercise every branch without a course on disk.
  */
 
 export type Block =
@@ -164,144 +165,6 @@ export function slideTitle(blocks: Block[]): string {
     if (block.kind === "paragraph") return plain(block.text);
   }
   return "";
-}
-
-const normalise = (value: string): string =>
-  plain(value).toLowerCase().replace(/[\s ]+/g, " ").trim();
-
-/**
- * Where the plan and the markdown disagree — empty when they do not.
- *
- * Deliberately no tolerance and no repair. A plan that no longer matches its
- * deck means one of the two was edited after the other, and which one is wrong
- * is the professor's question, not a renderer's.
- */
-export function checkContract(slides: Block[][], plan: Plan): string[] {
-  const problems: string[] = [];
-  const planned = [...plan.slides].sort((a, b) => a.number - b.number);
-
-  if (planned.length !== slides.length) {
-    problems.push(`the plan has ${planned.length} slide(s), the markdown has ${slides.length}`);
-  }
-  const shared = Math.min(planned.length, slides.length);
-  for (let index = 0; index < shared; index += 1) {
-    const expected = planned[index]!.title;
-    const actual = slideTitle(slides[index]!);
-    if (normalise(expected) !== normalise(actual)) {
-      problems.push(`slide ${index + 1}: the plan says "${expected}", the markdown says "${actual}"`);
-    }
-  }
-  if (plan.max_slides && slides.length > plan.max_slides) {
-    problems.push(`${slides.length} slides, but the plan allows ${plan.max_slides}`);
-  }
-  return problems;
-}
-
-/** A problem with a deck, and whether it stops the render or is only said. */
-export type Problem = { severity: "error" | "warning"; message: string };
-
-/**
- * What the contract cannot see: the slides themselves.
- *
- * `checkContract` compares a plan against a deck. These four look at the deck
- * alone, and each is a mistake made in `professor-slides-skills` before the
- * check existed — ported here on 2026-09-16, when that plugin's checks moved
- * into the harness. The fifth check there, "the plan records a figure no slide
- * links", did not come with them: its plan carries a `figures` map and this one
- * does not, because a figure's licence lives in the `Document` record instead.
- *
- * Errors stop the render. Warnings are said and the deck is still written,
- * because the file is what was asked for and a surprise is worse than a flaw
- * that was named.
- */
-export function checkSlides(slides: Block[][], plan: Plan | null): Problem[] {
-  const problems: Problem[] = [];
-  const error = (message: string): void => void problems.push({ severity: "error", message });
-  const warning = (message: string): void => void problems.push({ severity: "warning", message });
-
-  for (const [index, blocks] of slides.entries()) {
-    const number = index + 1;
-
-    for (const block of blocks) {
-      if (block.kind === "list") {
-        // pptxgenjs cannot write a bulleted line that also carries mixed runs,
-        // so the renderer keeps the bullet and drops the emphasis. Saying so is
-        // the difference between a decision and a surprise.
-        const emphasised = block.items.filter((item) => /\*\*[^*]+\*\*|`[^`]+`/.test(item));
-        if (emphasised.length) {
-          warning(
-            `slide ${number}: ${emphasised.length} list item(s) use bold or code, which renders as ` +
-            "plain text — a bulleted line cannot carry both a bullet and mixed formatting. Move the " +
-            "emphasis into a paragraph, or accept the plain rendering.",
-          );
-        }
-        continue;
-      }
-      if (block.kind !== "image") continue;
-
-      if (!block.alt.trim()) {
-        error(
-          `slide ${number}: ${block.src} has no alt text. Slides are read by people who cannot see them.`,
-        );
-      }
-      if (block.src.includes("/") || block.src.includes("\\")) {
-        error(
-          `slide ${number}: ${block.src} is not a sibling path. Figures live flat beside the deck; ` +
-          "a subdirectory link breaks silently in a deck nobody opens until the lecture.",
-        );
-      }
-    }
-  }
-
-  // A visual the plan asked for and the deck does not have. A warning rather
-  // than an error: the professor may have decided against it, and this cannot
-  // tell that apart from forgetting.
-  for (const spec of plan?.slides ?? []) {
-    if (!spec.required_visual) continue;
-    const blocks = slides[spec.number - 1] ?? [];
-    if (!blocks.some((block) => block.kind === "image")) {
-      warning(
-        `slide ${spec.number} was planned with a visual ("${spec.required_visual}") and has none. ` +
-        "Either draw it, record the prompt that would produce it, or take the requirement off the plan.",
-      );
-    }
-  }
-
-  return problems;
-}
-
-/**
- * The credit a picture must carry on the slide, or null when it needs none.
- *
- * A figure drawn in this repository needs nothing. One found through
- * `find-image` carries `extensions.image_source`, and a Creative Commons licence
- * that requires attribution is not satisfied by a note in someone's memory — so
- * a document claiming a source without an attribution line stops the render
- * rather than producing a deck that infringes quietly.
- *
- * A generated illustration is labelled as generated, for the same reason its alt
- * text says so: a picture is read as evidence unless it says otherwise, and the
- * one on the screen behind a lecturer is read hardest.
- */
-export function creditFor(document: any, src: string): string | null {
-  const source = document?.extensions?.image_source;
-  if (source) {
-    const credit = String(source.attribution ?? "").trim();
-    if (!credit) {
-      throw new Error(
-        `${src} records a source (${source.source_url ?? source.provider ?? "unknown"}) but no ` +
-        "attribution.\nThe licence is a condition of using it — add " +
-        "extensions.image_source.attribution\nto its Document, or take the picture off the slide.",
-      );
-    }
-    return credit;
-  }
-  const prompt = document?.extensions?.image_prompt;
-  if (prompt) {
-    const model = String(prompt.model ?? "an image model");
-    return `Illustration generated with ${model}. Not a photograph or a measurement.`;
-  }
-  return null;
 }
 
 /**

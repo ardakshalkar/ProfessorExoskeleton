@@ -19,7 +19,7 @@
  * fixed, because this is what gets read.
  */
 
-import { ARCHETYPES, DENSITY, TEXT_ROLES, type ArchetypeName } from "./archetypes.ts";
+import { ARCHETYPES, DENSITY, TEXT_ROLES, type ArchetypeName } from "../../../../../ainar-node/src/slides/archetypes.ts";
 
 export interface RuleGroup {
   key: string;

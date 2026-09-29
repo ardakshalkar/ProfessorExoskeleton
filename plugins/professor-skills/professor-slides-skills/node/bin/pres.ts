@@ -23,31 +23,32 @@
  * `--timing` on any command, or `PRES_TIMING=1`, prints where the time went.
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   buildModuleContext,
   describeContext,
   describeContextBrief,
   inTeachingOrder,
   moduleOnDate,
-} from "../src/context.ts";
-import { checkDeck, describeProblems, errorsIn } from "../src/check.ts";
+} from "../../../../../ainar-node/src/slides/context.ts";
+import { describeProblems, errorsIn } from "../../../../../ainar-node/src/slides/check.ts";
 import { describeResults, downloadImage, figureEntry, searchImages } from "../src/find-image.ts";
-import { checkOutline, loadOutline } from "../src/plan.ts";
-import { buildPlan } from "../src/compile.ts";
-import { renderDeck } from "../src/render.ts";
-import { describeDraft } from "../src/draft.ts";
+import { checkOutline, loadOutline } from "../../../../../ainar-node/src/slides/plan.ts";
+import { buildPlan } from "../../../../../ainar-node/src/slides/compile.ts";
 import { describeProvenance, resolveCourse, type ResolveOptions } from "../src/source.ts";
-import { decideMode, describeRoute, isMode, MODES, type Mode, type SourcePreference } from "../src/route.ts";
+import { decideMode, describeRoute, isMode, MODES, type Mode, type SourcePreference } from "../../../../../ainar-node/src/slides/route.ts";
 import { describeGrammar, describeGrammars, grammarFor } from "../src/grammars.ts";
 import { describeBeat, describeCatalogue, findBeat, loadBeats, selectBeats } from "../src/beats.ts";
 import { describeArchetypes } from "../src/rules.ts";
 import { describeRules, RULE_GROUPS } from "../src/rules.ts";
-import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../src/timing.ts";
-import type { Origin } from "../src/model.ts";
+import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../../../../../ainar-node/src/slides/timing.ts";
+import type { Origin } from "../../../../../ainar-node/src/slides/model.ts";
 
 const args = process.argv.slice(2);
+const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const flag = (name: string): string | undefined => {
   const index = args.indexOf(`--${name}`);
   return index >= 0 ? args[index + 1] : undefined;
@@ -121,16 +122,10 @@ const USAGE = `pres — routing, course source, catalogues, checking and renderi
       should write that file by hand: every field in it is a copy of one in
       a file that is edited, except figure attributions, which are kept.
 
-  pres check DECK.md
-      Whether a deck is renderable: gated correctly for its mode, matching
-      its plan, figures present and credited.
-
-  pres render DECK.md [--pdf] [--out DIR] [--draft]
-      The .pptx, and with --pdf the LibreOffice conversion of that same deck.
-      --draft writes a second deck beside it, <name>-draft.pptx, in which
-      every planned-but-undrawn visual appears as a card carrying what it
-      must show and the prompt that would make it. Set PRES_IMAGE_COMMAND to
-      a command taking {prompt} and {out} and the draft fills itself instead.
+  pres check DECK.md      = ainar deck check DECK.md
+  pres render DECK.md     = ainar deck render DECK.md [--pdf] [--out DIR] [--draft]
+      Aliases: the renderer is the harness's. See \`ainar help\` for where a
+      render is written and what it refuses.
 
   pres find-image --search QUERY [--limit N] [--any-licence]
                   [--pick N --name STEM --into DIR]
@@ -346,65 +341,36 @@ function commandPlanBuild(): void {
     return;
   }
   console.log(`wrote ${result.planPath}`);
-  console.log("\nThen: pres check " + path);
+  console.log("\nThen: ainar deck check " + path);
+}
+
+/**
+ * `pres check` and `pres render` are `ainar deck check` and `ainar deck render`.
+ *
+ * The renderer moved into the harness on 2026-09-29 — there had been two, and
+ * the one the course's records were built with was this plugin's. These stay
+ * as aliases so a skill or a habit that says `pres render` still works, and
+ * they run the harness's command rather than the engine directly: that is the
+ * command that also reads the course record for figure credits and the
+ * approved plan, so the two spellings cannot disagree about a deck.
+ */
+function delegateToAinar(sub: "check" | "render"): void {
+  const ainar = resolve(scriptDirectory, "../../../../../ainar-node/bin/ainar.ts");
+  const result = spawnSync(
+    process.execPath,
+    ["--disable-warning=ExperimentalWarning", "--experimental-strip-types", ainar, "deck", sub, ...args.slice(1)],
+    { stdio: "inherit" },
+  );
+  if (result.error) throw result.error;
+  process.exitCode = result.status ?? 1;
 }
 
 function commandCheck(): void {
-  const [path] = positional(1);
-  if (!path) throw new Error("pres check needs the path to a deck");
-  const checked = checkDeck(resolve(path));
-  console.log(`${checked.deck}: ${checked.slides.length} slides, plan ${checked.planPath}`);
-  console.log(describeProblems(checked.problems));
-  if (errorsIn(checked.problems).length) process.exitCode = 1;
+  delegateToAinar("check");
 }
 
-async function commandRender(): Promise<void> {
-  const [path] = positional(1);
-  if (!path) throw new Error("pres render needs the path to a deck");
-  const outDir = flag("out");
-  const result = await renderDeck(resolve(path), {
-    pdf: has("pdf"),
-    draft: has("draft"),
-    ...(outDir ? { outDir } : {}),
-  });
-
-  // Before the "wrote" lines, not after. A slide that runs past the bottom
-  // margin loses its last lines *silently* — they are not clipped with a mark,
-  // they are simply off the slide — and a warning printed under a success
-  // message is a warning nobody reads until the lecture.
-  const overflow = result.warnings.filter((warning) => / runs to /.test(warning));
-  const others = result.warnings.filter((warning) => !/ runs to /.test(warning));
-  if (overflow.length) {
-    console.warn(
-      `\n${overflow.length} slide(s) run past the bottom of the slide. Whatever falls below is\n` +
-      "not clipped or marked — it is simply not on the slide, and you will find out in the room:\n",
-    );
-    for (const warning of overflow) console.warn(`  ${warning}`);
-    console.warn("\nShorten those slides or split them. Nothing here can do it for you: which half\nbelongs on which slide is a teaching decision.\n");
-  }
-  for (const warning of others) console.warn(`  ${warning}`);
-
-  console.log(`wrote ${result.pptx}`);
-  if (has("pdf")) {
-    if (result.pdf) console.log(`wrote ${result.pdf}`);
-    else {
-      console.warn(
-        "LibreOffice not found — the .pptx is written, the PDF is not. Set SOFFICE_PATH, or\n" +
-        "render a review PDF with Marp and say which it is:\n" +
-        `    npx @marp-team/marp-cli ${path} --pdf --pdf-outlines -o output/review.pdf\n` +
-        "That is a second rendering of the markdown, not a picture of this deck — fine for\n" +
-        "reading through, wrong for anything presented or handed out.",
-      );
-    }
-  }
-  // What the file honestly is. A .pptx from a fast deck and one from an approved
-  // outline are the same file format and nothing about either says which.
-  for (const line of result.provenance) console.log(line);
-  if (result.missing) {
-    console.log("");
-    console.log(describeDraft(result.missing));
-  }
-  console.log("\nThen look at it. The first render usually has a real defect or two, and they are\nobvious in the pages and invisible in the source.");
+function commandRender(): void {
+  delegateToAinar("render");
 }
 
 async function commandFindImage(): Promise<void> {

@@ -21,6 +21,10 @@ import { fileURLToPath } from "node:url";
 
 const pluginRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const nodeDirectory = join(pluginRoot, "node");
+// The slide engine — checking, planning, rendering — lives in the harness
+// since 2026-09-29 and resolves its packages from there, so a render needs the
+// harness's `npm install`, not this plugin's.
+const harnessDirectory = join(pluginRoot, "..", "..", "..", "ainar-node");
 
 const notes = [];
 
@@ -38,29 +42,33 @@ if (major < 22 || (major === 22 && minor < 6)) {
 }
 
 // --- what `npm install` would have put there -------------------------------
-// `yaml` is the only hard dependency: without it nothing can read a course.
-if (!existsSync(join(nodeDirectory, "node_modules", "yaml"))) {
+// `yaml` is the only hard dependency, in both places: without it nothing can
+// read a course, or a plan.
+const uninstalled = [
+  [nodeDirectory, "every `pres` command"],
+  [harnessDirectory, "every `pres` command that reads a deck, and `ainar` itself"],
+].filter(([dir]) => !existsSync(join(dir, "node_modules", "yaml")));
+for (const [dir, what] of uninstalled) {
   notes.push(
-    "professor-slides-skills: dependencies are not installed, so every `pres` command will fail " +
-    "on the first import. One command fixes it:\n" +
-    `    cd "${nodeDirectory}" && npm install`,
+    `professor-slides-skills: dependencies are not installed in ${dir}, so ${what} will fail ` +
+    `on the first import. One command fixes it:\n    cd "${dir}" && npm install`,
   );
-} else {
-  // These three are optional on purpose — reading and checking a course must
-  // not require a Postgres driver or a native image library — so a missing one
-  // is worth a sentence rather than a warning, and only about what it costs.
-  const missing = ["pg", "pptxgenjs", "sharp"]
-    .filter((name) => !existsSync(join(nodeDirectory, "node_modules", name)));
-  if (missing.length) {
-    const costs = {
-      pg: "the Supabase route (YAML and flat-file courses still work)",
-      pptxgenjs: "`pres render`",
-      sharp: "`pres render`",
-    };
-    const affected = [...new Set(missing.map((name) => costs[name]))].join(" and ");
+}
+if (!uninstalled.length) {
+  // Optional on purpose — reading and checking a course must not require a
+  // Postgres driver or a native image library — so a missing one is worth a
+  // sentence rather than a warning, and only about what it costs.
+  const missing = [
+    ["pg", nodeDirectory, "the Supabase route (YAML and flat-file courses still work)"],
+    ["pptxgenjs", harnessDirectory, "`ainar deck render` (and `pres render`)"],
+    ["sharp", harnessDirectory, "`ainar deck render` (and `pres render`)"],
+  ].filter(([name, dir]) => !existsSync(join(dir, "node_modules", name)));
+  for (const dir of new Set(missing.map(([, dir]) => dir))) {
+    const here = missing.filter(([, where]) => where === dir);
+    const affected = [...new Set(here.map(([, , cost]) => cost))].join(" and ");
     notes.push(
-      `professor-slides-skills: ${missing.join(", ")} did not install, so ${affected} is ` +
-      `unavailable. Everything else works. To retry:\n    cd "${nodeDirectory}" && npm install ${missing.join(" ")}`,
+      `professor-slides-skills: ${here.map(([name]) => name).join(", ")} did not install, so ${affected} ` +
+      `is unavailable. Everything else works. To retry:\n    cd "${dir}" && npm install ${here.map(([name]) => name).join(" ")}`,
     );
   }
 }

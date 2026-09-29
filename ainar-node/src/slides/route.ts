@@ -309,7 +309,7 @@ export function recipeFor(mode: Mode): Recipe {
       outline: "none",
       beats: "implicit",
       approval: "none",
-      checks: ["pres check DECK.md"],
+      checks: ["ainar deck check DECK.md"],
       load: ["nothing beyond this skill; `pres rules` if a reminder is wanted"],
       skips: [
         "external research",
@@ -322,8 +322,8 @@ export function recipeFor(mode: Mode): Recipe {
       steps: [
         "write the deck markdown straight out: one teaching point per slide, titles matched to each slide's job, draw what is drawable",
         "pres plan build DECK.md --mode fast     # generates the render contract",
-        "pres check DECK.md",
-        "pres render DECK.md --pdf               # only if a file was asked for",
+        "ainar deck check DECK.md",
+        "ainar deck render DECK.md --pdf         # only if a file was asked for",
       ],
     };
   }
@@ -336,7 +336,7 @@ export function recipeFor(mode: Mode): Recipe {
       outline: "full",
       beats: "library",
       approval: "required",
-      checks: ["pres outline check FILE", "pres check DECK.md"],
+      checks: ["pres outline check FILE", "ainar deck check DECK.md"],
       load: [
         "references/deck-grammars.md",
         "references/teaching-beats.md",
@@ -358,8 +358,8 @@ export function recipeFor(mode: Mode): Recipe {
         "hand over and STOP — the professor approves the outline",
         "reload the context, then write the deck and the figures",
         "pres plan build DECK.md --mode deep",
-        "pres check DECK.md",
-        "pres render DECK.md --pdf, then read the PDF",
+        "ainar deck check DECK.md",
+        "ainar deck render DECK.md --pdf, then read the PDF",
       ],
     };
   }
@@ -371,7 +371,7 @@ export function recipeFor(mode: Mode): Recipe {
     outline: "compact",
     beats: "catalogue",
     approval: "on-request",
-    checks: ["pres outline check FILE", "pres check DECK.md"],
+    checks: ["pres outline check FILE", "ainar deck check DECK.md"],
     load: [
       "pres grammar --deck <archetype>   # the phase spine and a default beat chain",
       "pres beats --family <family>      # one line each, to choose from",
@@ -390,8 +390,8 @@ export function recipeFor(mode: Mode): Recipe {
       "pres outline check FILE",
       "write the deck markdown and the figures",
       "pres plan build DECK.md --mode standard",
-      "pres check DECK.md",
-      "pres render DECK.md --pdf                     # only if a file was asked for",
+      "ainar deck check DECK.md",
+      "ainar deck render DECK.md --pdf               # only if a file was asked for",
     ],
   };
 }

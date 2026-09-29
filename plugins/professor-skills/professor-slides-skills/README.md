@@ -189,10 +189,12 @@ the top of each `SKILL.md` for the case where `${CLAUDE_PLUGIN_ROOT}` is unset.
 **Not** in the claude.ai side of the desktop app. That installs MCPB extensions
 and this is a skills-and-CLI plugin, with no MCP server in it.
 
-`pptxgenjs` and `sharp` are optional dependencies — reading and checking a
-course never needs a native image library, and a machine where they fail to
-install still resolves a course and still runs the tests. `pres render`
-needs them; the PDF additionally needs LibreOffice.
+The slide engine — checking, planning, rendering — lives in the harness, in
+`ainar-node/`, and resolves its packages from there, so that directory needs its
+`npm install` too. `pptxgenjs` and `sharp` are optional dependencies of it —
+reading and checking a course never needs a native image library, and a machine
+where they fail to install still resolves a course and still runs the tests.
+`ainar deck render` needs them; the PDF additionally needs LibreOffice.
 
 Node 22.6 or later. The plugin runs its TypeScript directly.
 
@@ -308,7 +310,7 @@ an outline they never asked for learns to type `status: approved` without readin
 it, which costs the gate everything it was for.
 
 What must never happen is a *silent* downgrade. A `.pptx` looks identical whether
-or not anybody agreed to what is inside it, so `pres check` and `pres render`
+or not anybody agreed to what is inside it, so `ainar deck check` and `ainar deck render`
 both print which of the four rows above applies, and the skills repeat it when
 handing the file over.
 
@@ -331,13 +333,13 @@ outline.yaml     the session: sequence, minutes, purposes, intents, archetypes, 
 deck.md          what is on each slide, including its title and its figures
       ↓  pres plan build   (deterministic)
 plan.yaml        the render contract — a projection of those two
-      ↓  pres render
+      ↓  ainar deck render
 pptx · pdf
 ```
 
 The one thing the projection carries that neither source holds is figure licence
 metadata: an attribution written by `pres find-image` is preserved across
-regeneration, because nothing else knows it. `pres check` notices a stale plan
+regeneration, because nothing else knows it. `ainar deck check` notices a stale plan
 and names the command that fixes it.
 
 ## The `pres` CLI
@@ -353,10 +355,17 @@ pres archetypes [--name X]
 pres rules      [writing | visual | questions | figures | record]
 pres outline    check FILE
 pres plan       build DECK.md [--mode M] [--approval A] [--dry-run]
-pres check      DECK.md
-pres render     DECK.md [--pdf] [--out DIR] [--draft]
+pres check      DECK.md                                  = ainar deck check
+pres render     DECK.md [--pdf] [--out DIR] [--draft]    = ainar deck render
 pres find-image --search QUERY [--pick N --name STEM --into DIR]
 ```
+
+Checking and rendering moved into the harness on 2026-09-29 — the engine is
+`ainar-node/src/slides/`, and `pres check`/`pres render` run `ainar deck
+check`/`ainar deck render`. The harness's command also reads the course record,
+for figure credits on Documents and the recorded `presentation_plan`, and decides
+where a render goes: beside the markdown for a deck recorded in `courses/`,
+`output/<DECK>/` for anything else.
 
 `--timing` on any command, or `PRES_TIMING=1`, prints where the time went:
 

@@ -20,9 +20,9 @@
 #                  preserved across regeneration.
 #
 # So: change the outline or the deck, then run `pres plan build` again.
-# `pres check` reports a plan that has fallen behind and names the command.
+# `ainar deck check` reports a plan that has fallen behind and names the command.
 #
-# Three things in it are enforced by `pres render`:
+# Three things in it are enforced by `ainar deck render`:
 #
 #   mode/approval  a deck built --mode deep, or with --approval required, is not
 #                  rendered until its outline says `approved`. fast and standard

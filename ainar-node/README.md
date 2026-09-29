@@ -66,10 +66,10 @@ Three things here are **not** ports, and live in Node because their libraries do
 | | | |
 | --- | --- | --- |
 | `bin/render-exam.ts` | — | a question-only exam as DOCX or PDF |
-| `bin/render-deck.ts`, `src/deck.ts` | — | an approved deck as `.pptx`, checked against its `presentation_plan` |
+| `ainar deck`, `src/slides/` | — | a deck checked and rendered as `.pptx` and PDF — the one renderer, merged from `render-deck` and the slides plugin's `pres render` on 2026-09-29 |
 | `bin/find-image.ts` | — | an openly-licensed image, with its licence and credit recorded |
 
-They write files, but only into `output/` and `work/`, never into `courses/`.
+They write files into `output/` and `work/`. The one exception is a deck recorded in the course, whose render replaces the rendering recorded beside its markdown; a draft is refused a path in `courses/`.
 
 One thing here *does* write into `courses/`: `bin/ainar.ts approve`, ported in
 Phase 6 of `docs/node-migration.md`. It is the one file in this package that is
@@ -84,14 +84,14 @@ mutations in `workspace/golden/validator/`.
 The line that has not moved: **grades, pseudonyms and anything a student can see
 stay Python's** — `lms`, `roster` and `notion push` are refused by name.
 
-`render-deck` and `find-image` need `pptxgenjs` and `sharp`, which are
+`ainar deck render` and `find-image` need `pptxgenjs` and `sharp`, which are
 `optionalDependencies` — reading a course must not depend on a native image
 library, and `npm run check` passes without them. `--pdf` shells out to
 LibreOffice so the PDF is a conversion of that same deck rather than a second
 renderer's idea of it.
 
 ```bash
-npm run render-deck -- --course-version CSS-4008-2026-FALL --document DOC-4410 --pdf
+npm run ainar -- deck render --document DOC-4410 --course-version CSS-4008-2026-FALL --pdf
 npm run find-image -- --search "confusion matrix"
 ```
 

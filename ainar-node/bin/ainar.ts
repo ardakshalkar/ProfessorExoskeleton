@@ -33,7 +33,8 @@
  * in `src/lms/` — this file parses its arguments and nothing else.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { parse } from "yaml";
 import {
@@ -111,7 +112,11 @@ import {
 import { archiveRun, migrateLayout } from "../src/layout.ts";
 import { organizeMaterials } from "../src/material-folders.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
-import { LAYOUT, measureDeck } from "../src/deck.ts";
+import { measureDeck } from "../src/deck.ts";
+import { checkDeck, describeProblems, errorsIn } from "../src/slides/check.ts";
+import { canRender, describeRender, PAGE, renderDeck, workspaceOf } from "../src/slides/render.ts";
+import { deckForDocument, recordFor, type RecordedDeck } from "../src/slides/recorded.ts";
+import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../src/slides/timing.ts";
 import { buildMaterials, producerFor, readProducers } from "../src/materials.ts";
 import { importMaterial } from "../src/materials-import.ts";
 import {
@@ -208,6 +213,10 @@ const BOOLEAN_FLAGS = new Set([
   "all",
   // `connections add`
   "default",
+  // `deck render`
+  "pdf",
+  "draft",
+  "timing",
 ]);
 
 /** Every occurrence of a repeatable flag, with comma-separated values split. */
@@ -339,6 +348,10 @@ const HELP = `ainar — the AINAR course model CLI
   archive-run [--force] [--dry-run]        pack the finished term into archive/
   organize-materials [COURSE_ID…] [--dry-run]  one folder per material, records rewritten
   deck fit FILE.md [--verbose]            will each slide fit on the page
+  deck check FILE.md | --document DOC     is the deck renderable: gate, plan, figures
+  deck render FILE.md | --document DOC [--pdf] [--draft] [--out DIR]
+      A recorded deck renders beside its markdown in courses/; anything else,
+      and every --draft, to output/<deck>/. Pictures always go to output/.
 
   Enrollments hold pseudonyms only. Names, numbers and emails go to
   --roster-dir (default ~/.ainar/roster, or AINAR_ROSTER_DIR), which must
@@ -1121,7 +1134,7 @@ try {
       }
 
       const course = bundle.course.course_id;
-      const report = buildMaterials({
+      const report = await buildMaterials({
         root,
         courseVersionId: runId,
         materialsDir: flag("materials") ?? join(root, "courses", course, "materials"),
@@ -1129,6 +1142,7 @@ try {
         pdf: !args.includes("--no-pdf"),
         dryRun: args.includes("--dry-run"),
         draftsDir: flag("drafts") ?? join(root, "work", runId),
+        bundle,
       });
       for (const line of report.lines) console.log(line);
       if (report.draft !== null) {
@@ -1511,7 +1525,7 @@ try {
             out(`${job.documentId}: no producer declares it, so it is still the old text`);
             continue;
           }
-          const report = buildMaterials({
+          const report = await buildMaterials({
             root,
             courseVersionId: runId,
             materialsDir,
@@ -1519,6 +1533,7 @@ try {
             pdf: !args.includes("--no-pdf"),
             dryRun: false,
             draftsDir,
+            bundle,
           });
           for (const line of report.lines) out(`  ${line}`);
           if (report.failed) {
@@ -2421,33 +2436,146 @@ try {
     }
 
     /**
-     * Will it fit, answered by the code that lays it out.
+     * Decks: will it fit, is it renderable, and render it — one engine.
      *
-     * The alternative was watched happening: an agent redesigning a deck said
-     * "let me read the exact textHeight formula so I can compute what actually
-     * fits" and opened `deck.ts`. Arithmetic carried out in a model's head is
-     * expensive, unverifiable, and stale the moment a font size moves. This
-     * runs the renderer's own measuring — literally the same `blockHeight` —
-     * without writing a file or starting PowerPoint.
+     * `check` and `render` were `pres check` and `pres render` in the slides
+     * plugin, and `render` was also `bin/render-deck.ts` here; the two
+     * renderers disagreed about fonts, layouts and where output went, and only
+     * one of them built what the course records. See `src/slides/render.ts`.
+     *
+     * `fit` is answered by the code that lays the deck out. The alternative was
+     * watched happening: an agent redesigning a deck said "let me read the
+     * exact textHeight formula so I can compute what actually fits" and opened
+     * the source. Arithmetic in a model's head is expensive, unverifiable, and
+     * stale the moment a font size moves. So `fit` lays the deck out with the
+     * renderer itself, into a temporary folder, and reports what it measured —
+     * and falls back to the dependency-free estimate only when it cannot.
      */
     case "deck": {
-      if (rest[0] !== "fit") {
-        console.error("usage: deck fit FILE.md [--verbose]");
+      const sub = rest[0];
+      const usage =
+        "usage: deck fit FILE.md [--verbose]\n" +
+        "       deck check FILE.md | --document DOC [--course-version RUN]\n" +
+        "       deck render FILE.md | --document DOC [--course-version RUN] [--pdf] [--draft] [--out DIR]";
+      if (sub !== "fit" && sub !== "check" && sub !== "render") {
+        console.error(usage);
         process.exit(1);
       }
-      const file = rest[1];
-      if (!file) throw new Error("usage: deck fit FILE.md [--verbose]");
-      const measured = measureDeck(readFileSync(resolve(file), "utf-8"));
-      const verbose = args.includes("--verbose");
+      // Where the seconds went — checks, layout, PDF — to stderr, as `pres`
+      // did with the same flag and the same variable.
+      enableTimingFromEnvironment();
+      if (args.includes("--timing")) enableTiming(true);
+      process.on("exit", () => reportTimings());
 
-      out(`${measured.length} slide(s), ${LAYOUT.floor}" of usable page\n`);
-      for (const slide of measured) {
-        // An image is measured at the most it can take — the renderer shrinks
-        // it to whatever space is left — so a slide holding one is an UPPER
-        // bound: the real picture may be shorter, and the overflow smaller or
-        // absent. Say "may" there rather than reporting a bound as a fact.
+      // Which deck, and what the course record says about it.
+      const documentId = flag("document");
+      let deck: RecordedDeck;
+      let deckRoot = root;
+      if (documentId) {
+        const runId = flag("course-version") ?? flag("run");
+        deck = deckForDocument(runId ? forRun(runId) : onlyCourse(), root, documentId);
+      } else {
+        const file = rest[1];
+        if (!file) throw new Error(usage);
+        const deckPath = resolve(file);
+        // A deck named by path carries its workspace with it, so this works
+        // from anywhere — `--root` still wins when given.
+        if (!rootFlag) deckRoot = workspaceOf(deckPath) ?? root;
+        const inCourses = relative(join(deckRoot, "courses"), deckPath).split(/[\\/]/);
+        let found: RecordedDeck | null = null;
+        if (inCourses.length > 1 && inCourses[0] !== ".." && !/^[A-Za-z]:/.test(inCourses[0]!)) {
+          try {
+            const bundle = new Workspace(deckRoot).load(inCourses[0]!).bundle!;
+            found = recordFor(bundle, deckRoot, deckPath);
+          } catch {
+            // A course that does not load still has decks worth checking.
+          }
+        }
+        deck = found ?? { deckPath, documentId: null, recordPlan: null, figures: {} };
+      }
+      const recordOptions = {
+        figures: deck.figures,
+        ...(deck.recordPlan ? { recordPlan: deck.recordPlan } : {}),
+      };
+
+      if (sub === "check") {
+        const checked = checkDeck(deck.deckPath, recordOptions);
+        out(
+          `${checked.deck}: ${checked.slides.length} slides, plan ${checked.planPath}` +
+            (deck.documentId ? `, recorded as ${deck.documentId}` : ""),
+        );
+        out(describeProblems(checked.problems));
+        if (errorsIn(checked.problems).length) process.exitCode = 1;
+        break;
+      }
+
+      if (sub === "render") {
+        const pdf = args.includes("--pdf");
+        const result = await renderDeck(deck.deckPath, {
+          root: deckRoot,
+          pdf,
+          draft: args.includes("--draft"),
+          ...(flag("out") ? { outDir: flag("out")! } : {}),
+          ...recordOptions,
+        });
+        const report = describeRender(result, pdf);
+        for (const line of report.err) console.warn(line);
+        for (const line of report.out) out(line);
+        // Only when this render replaced the recorded one, in the deck's own
+        // folder — a render to `--out` or to output/ changed nothing recorded.
+        if (deck.documentId && dirname(result.pptx) === dirname(deck.deckPath)) {
+          out(
+            `\nThis replaced the rendering recorded beside ${deck.documentId}, so its record's size ` +
+              "and checksum no longer describe the file. `ainar publish` names what is stale " +
+              "and restamps a changed rendering before it sends anything.",
+          );
+        }
+        break;
+      }
+
+      // fit
+      const verbose = args.includes("--verbose");
+      let measuredBy: "renderer" | "estimate" = "estimate";
+      let reason = "";
+      type Row = { slide: number; title: string; bottom: number; fits: boolean; approximate: boolean; overflow: number; blocks: { kind: string; at: number; height: number; text: string }[] };
+      let rows: Row[] = [];
+      if (canRender()) {
+        const scratch = mkdtempSync(join(tmpdir(), "ainar-deck-fit-"));
+        try {
+          const result = await renderDeck(deck.deckPath, { root: deckRoot, outDir: scratch, assetsDir: scratch, ...recordOptions });
+          measuredBy = "renderer";
+          rows = result.measured.map((slide) => ({
+            slide: slide.slide,
+            title: slide.title,
+            bottom: slide.bottom,
+            fits: slide.bottom <= PAGE.floor,
+            approximate: false,
+            overflow: Math.max(0, slide.bottom - PAGE.floor),
+            blocks: [],
+          }));
+        } catch (error) {
+          reason = String((error as Error).message ?? error).split("\n")[0]!;
+        } finally {
+          rmSync(scratch, { recursive: true, force: true });
+        }
+      } else {
+        reason = "pptxgenjs and sharp are not installed";
+      }
+      if (measuredBy === "estimate") rows = measureDeck(readFileSync(deck.deckPath, "utf-8"));
+
+      out(
+        `${rows.length} slide(s), ${PAGE.floor}" of usable page — ` +
+          (measuredBy === "renderer"
+            ? "laid out by the renderer"
+            : `ESTIMATED, not laid out (${reason}); the renderer's own numbers can differ`) +
+          "\n",
+      );
+      for (const slide of rows) {
+        // An estimated image is measured at the most it can take — the renderer
+        // shrinks it to the space left — so a slide holding one is an UPPER
+        // bound. Say "may" there rather than reporting a bound as a fact.
         const state = slide.fits
-          ? `fits, ${(LAYOUT.floor - slide.bottom).toFixed(2)}" to spare`
+          ? `fits, ${(PAGE.floor - slide.bottom).toFixed(2)}" to spare`
           : slide.approximate
             ? `may overflow, by up to ${slide.overflow.toFixed(2)}"`
             : `OVERFLOWS by ${slide.overflow.toFixed(2)}"`;
@@ -2464,9 +2592,10 @@ try {
           }
         }
       }
+      if (verbose && measuredBy === "renderer") out("\n(--verbose block detail is only available from the estimate.)");
 
-      const certain = measured.filter((slide) => !slide.fits && !slide.approximate);
-      const maybe = measured.filter((slide) => !slide.fits && slide.approximate);
+      const certain = rows.filter((slide) => !slide.fits && !slide.approximate);
+      const maybe = rows.filter((slide) => !slide.fits && slide.approximate);
       out("");
       if (certain.length) {
         out(
@@ -2477,13 +2606,12 @@ try {
       if (maybe.length) {
         out(
           `${maybe.length} slide(s) may run past it — ${maybe.map((entry) => entry.slide).join(", ")} — ` +
-            "each holds an image, and an image's real height is only known once it is " +
-            "placed. Render to be sure: the renderer warns using these same numbers.",
+            "each holds an image, and an image's real height is only known once it is placed.",
         );
       }
       if (!certain.length && !maybe.length) out("Every slide fits.");
-      // An estimate, so a failure here is a warning and not an exit code: the
-      // fonts are rendered by PowerPoint, not by this.
+      // A measurement, so a failure here is a warning and not an exit code: the
+      // fonts are finally rendered by PowerPoint, not by this.
       break;
     }
 

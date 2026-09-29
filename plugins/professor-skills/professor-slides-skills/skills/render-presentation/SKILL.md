@@ -4,25 +4,35 @@ description: Turn a finished presentation into the files a professor actually pr
 stage: publish
 requires: [deck, plan]
 produces: [pptx, pdf]
-writes: output
+writes: output, the recorded deck's own folder
 ---
 
 # Render the presentation
 
 **Needs:** a deck with its generated plan beside it. Rendering needs `pptxgenjs`
-and `sharp`; the PDF needs LibreOffice.
+and `sharp` (`npm install` in `ainar-node/`); the PDF needs LibreOffice. The
+renderer is the harness's — `pres render` still works and is the same command.
 
 ```bash
-pres render work/CSS-4008-2026-FALL/presentations/MODULE-06-slides.md --pdf
+ainar deck render work/CSS-4008-2026-FALL/presentations/MODULE-06-slides.md --pdf
 ```
 
 It reads the markdown, the plan beside it and the figures beside that, and writes
-`output/<DECK>.pptx` — plus the PDF with `--pdf`, converted from that same deck by
-LibreOffice rather than rendered a second time.
+`<DECK>.pptx` — plus the PDF with `--pdf`, converted from that same deck by
+LibreOffice rather than rendered a second time. Where it writes depends on what
+the deck is, and the command decides, not you:
 
-`output/` is gitignored deliberately: built binaries belong on the professor's
-disk, not in a directory whose value is that its contents diff. The rasterized
-PNGs go there too.
+- **A deck in the course** (`courses/<C>/materials/<DECK>/<DECK>.md`) renders into
+  its own folder, beside the markdown — that is where its `.pptx` and PDF are
+  recorded. The command says when it replaced a recorded rendering;
+  `ainar publish` restamps the record before it sends anything.
+- **Anything else** — a deck in `work/`, a deck anywhere on disk, and every
+  `--draft` — goes to `output/<DECK>/`, which is gitignored scratch.
+- **The rasterized PNGs always go to `output/<DECK>/`,** never into the course.
+
+Nothing but a recorded deck's own render is written inside `courses/`; pointing
+`--out` there for a draft is refused. A recorded deck can also be named by its
+Document: `ainar deck render --document DOC-ID --course-version RUN --pdf`.
 
 If there is no plan, or the plan is stale, generate it rather than writing one:
 
@@ -69,10 +79,10 @@ A slide planned with a figure and lacking one is invisible: the deck renders, th
 prose fills the space, and the hole is a line in a YAML file nobody opens.
 
 ```bash
-pres render DECK.md --pdf --draft
+ainar deck render DECK.md --pdf --draft
 ```
 
-Two decks, one command — the one you present, and `<name>-draft.pptx` beside it in
+`<name>-draft.pptx`, in `output/<DECK>/` whatever the deck is, in
 which every planned-but-undrawn visual is a dashed card carrying what the outline
 said the picture must show and the prompt that would produce it. Every draft slide
 is marked `DRAFT` and it is written under its own name, so it can never be handed
@@ -99,10 +109,11 @@ edited, and none of the four checks above runs.
 
 ## Afterwards
 
-The `.pptx` is not registered anywhere and is not a second source. It is
-reproducible from the markdown at any time, and a second artefact with a second
-checksum leaves the professor with two decks and no way to tell which one was
-approved.
+The `.pptx` is never a second source. It is reproducible from the markdown at
+any time. For a deck in the course it replaces the recorded rendering in place —
+the same path, so there is still one deck — and anything else stays in
+`output/`, unregistered: a second artefact with a second checksum leaves the
+professor with two decks and no way to tell which one was approved.
 
 If they then edit the deck in PowerPoint, **report that as drift and leave it**.
 The edited slide may well be the better one, and folding it back into the markdown
@@ -111,7 +122,7 @@ is their call.
 ## Timing
 
 ```bash
-pres render DECK.md --pdf --timing
+ainar deck render DECK.md --pdf --timing
 ```
 
 Prints where the seconds went — checks, pptx, PDF conversion — to stderr. Local
@@ -119,12 +130,13 @@ only; nothing is sent anywhere.
 
 ## Rules
 
-- **Render into gitignored `output/`,** and only when asked.
+- **Render only when asked,** and let the command choose where: beside the
+  markdown for a recorded deck, `output/<DECK>/` for everything else.
 - **Say what the file is.** Which mode built it, and whether an approval stands
   behind it.
 - **Never edit the deck or the plan to make a render succeed.** A refusal is
   information.
-- **Say which renderer produced the file** when it was not `pres render`, and what
+- **Say which renderer produced the file** when it was not `ainar deck render`, and what
   that costs.
 - **Do not register the render** as a source of anything.
 - **Report drift, do not reconcile it.**

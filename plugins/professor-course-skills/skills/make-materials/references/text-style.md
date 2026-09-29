@@ -113,7 +113,7 @@ unusual sense — not for emphasis, which italics do weakly at projector distanc
 And a constraint of this renderer rather than of typography: **emphasis inside a
 bulleted line renders as plain text.** PowerPoint cannot be given a bullet and
 mixed formatting in the same line through this toolchain, so the bullet wins and
-the bold is dropped. `pres check` names any item where that happened. If a word
+the bold is dropped. `ainar deck check` names any item where that happened. If a word
 in a list must be emphasised, the sentence probably wants to be a paragraph.
 
 ## Numbers, units and identifiers

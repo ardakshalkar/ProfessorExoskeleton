@@ -145,7 +145,7 @@ export const ACTIONS: readonly ActionPolicy[] = [
   ].map((name) => policy(name, PORTABLE)),
 
   ...[
-    "render-deck",
+    "deck-render",
     "render-exam",
     "export-bundle",
     "generate-schema",

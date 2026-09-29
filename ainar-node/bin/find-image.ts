@@ -18,7 +18,7 @@
  *     photograph is safe to annotate.
  *   - **Attribution travels with the file or the file does not travel.** `--pick`
  *     writes the image *and* prints the `Document` draft that records its source,
- *     licence and the attribution line. `render-deck` refuses to place an image
+ *     licence and the attribution line. `ainar deck render` refuses to place an image
  *     whose document claims a source without one, so a missed credit fails loudly
  *     here rather than quietly in a lecture theatre.
  *

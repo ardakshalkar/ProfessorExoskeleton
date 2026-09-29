@@ -22,7 +22,7 @@ test("portable computation prefers backend state and falls back to local files",
 });
 
 test("explicit file rendering stays local", () => {
-  const plan = resolveExecution("render-deck", { backendAvailable: true, actor: "agent" });
+  const plan = resolveExecution("deck-render", { backendAvailable: true, actor: "agent" });
   assert.equal(plan.available && plan.target, "local");
 });
 

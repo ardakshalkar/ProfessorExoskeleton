@@ -118,7 +118,7 @@ Two ways to get a picture you did not author, and they fail differently.
 ### Searching for one
 
 ```bash
-node --experimental-strip-types node/bin/find-image.ts --search "confusion matrix"
+node --experimental-strip-types ainar-node/bin/find-image.ts --search "confusion matrix"
 ```
 
 Searches Openverse — Creative Commons and public-domain works across Wikimedia,
@@ -130,7 +130,7 @@ NoDerivatives image is refused at download rather than warned about, because a
 slide always crops it.
 
 ```bash
-node --experimental-strip-types node/bin/find-image.ts --search "confusion matrix" \
+node --experimental-strip-types ainar-node/bin/find-image.ts --search "confusion matrix" \
     --pick 2 --course-version CSS-4008-2026-FALL --name MODULE-06-slides/figures/fig-02-matrix
 ```
 
@@ -147,7 +147,7 @@ carries its origin:
         attribution: '"Confusion matrix" by Pirehelokan is licensed under CC BY-SA 4.0.'
 ```
 
-**Attribution is enforced, not remembered.** `render-deck` prints that line under
+**Attribution is enforced, not remembered.** `ainar deck render` prints that line under
 the picture, and refuses to build the deck at all if a document claims a source
 without one. The failure it exists to prevent is the silent kind: the deck
 builds, the lecture happens, and the licence was never satisfied.
@@ -188,7 +188,7 @@ Record it on the figure's `Document`:
         generated: true
 ```
 
-`render-deck` then captions it *"Illustration generated with …. Not a photograph
+`ainar deck render` then captions it *"Illustration generated with …. Not a photograph
 or a measurement."* — the same reason the alt text says so. A generated picture
 without that label is the one mistake in this section that survives into a
 student's notes.

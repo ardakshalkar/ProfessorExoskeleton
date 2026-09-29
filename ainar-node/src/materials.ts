@@ -17,20 +17,25 @@
  * that were valid before they were written.
  *
  * **The runner orchestrates; it does not author.** The producers stay whatever
- * they are — today Python and python-pptx, tomorrow possibly a Marp deck
- * through `pres`. `materials.yaml` in the course names them, because the
+ * they are — a Python script, or a markdown deck through the harness's own
+ * renderer (`src/slides/`). `materials.yaml` in the course names them, because the
  * mechanism belongs to the exoskeleton and the list of decks belongs to the
  * course; guessing which script builds which file from their names is the same
  * stem-matching convention that `extensions.rendered_from` exists to replace.
  */
 
-import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { parse } from "yaml";
 import { z } from "zod";
+import { promoteIdentifier } from "./approve.ts";
+import type { CourseBundle } from "./bundle.ts";
 import { Document } from "./model/content.ts";
+import { officeAt, toPdf } from "./pdf.ts";
+import { recordFor } from "./slides/recorded.ts";
+import { renderDeck } from "./slides/render.ts";
 import { dump } from "./yaml-out.ts";
 
 /** Where a course declares what produces what. */
@@ -70,40 +75,6 @@ const Producer = z
 
 const Manifest = z.object({ producers: z.array(Producer).default([]) }).strict();
 
-/**
- * The project's own markdown-to-slides renderer.
- *
- * `pres render` turns an approved Marp deck into a `.pptx` of real editable
- * shapes with speaker notes, and a PDF from that same deck — and refuses first
- * if a slide overflows the page, if the plan no longer matches the markdown, or
- * if a figure needs an attribution it does not have. Those refusals are the
- * reason to prefer it over a hand-written builder: a slide that runs past the
- * bottom margin is invisible in the source and obvious in the room.
- *
- * Found by layout, because it is a sibling plugin rather than a dependency —
- * `ainar-node` does not import it, and should not. `PRES_BIN` overrides for a
- * checkout arranged differently, and a miss is reported as itself rather than
- * as a producer that failed.
- */
-const presAt = (): string | null => {
-  const named = process.env.PRES_BIN;
-  const candidates = [
-    named ?? "",
-    resolve(
-      import.meta.dirname,
-      "../../plugins/professor-skills/professor-slides-skills/node/bin/pres.mjs",
-    ),
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    try {
-      if (statSync(candidate).isFile()) return candidate;
-    } catch {
-      // not here; try the next
-    }
-  }
-  return null;
-};
-
 export type Producer = z.infer<typeof Producer>;
 
 /** A path that stays inside its directory, or an error naming why not. */
@@ -121,38 +92,15 @@ const inside = (dir: string, candidate: string): string => {
 };
 
 /**
- * LibreOffice, by known location when it is not on PATH.
+ * LibreOffice, by known location when it is not on PATH — see `pdf.ts`, which
+ * owns the one probe. Re-exported here because `dsh-professor-pane` imports it
+ * from this module.
  *
- * Windows installs it where this looks and does not add it to PATH, so probing
- * `soffice` alone reports "no converter" on a machine that has one. A miss is
- * reported and the build continues without the PDF: a deck that built is worth
- * having, and refusing the whole run over a format nobody asked for would be
- * the tool deciding the professor's priorities.
- *
- * Exported because `dsh-professor-pane` asks the same question for a different
- * reason — whether it may offer to open a `.pptx` in the overlay, which it can
- * only do by converting one first. Two probes with two lists of install paths
- * would disagree about whether this machine has a converter, and the pane would
- * offer a control that then failed.
+ * A miss is reported and the build continues without the PDF: a deck that
+ * built is worth having, and refusing the whole run over a format nobody asked
+ * for would be the tool deciding the professor's priorities.
  */
-export const officeAt = (): string | null => {
-  const candidates = [
-    process.env.SOFFICE ?? "",
-    "C:/Program Files/LibreOffice/program/soffice.exe",
-    "C:/Program Files (x86)/LibreOffice/program/soffice.exe",
-    "/usr/bin/soffice",
-    "/usr/bin/libreoffice",
-    "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-  ].filter(Boolean);
-  for (const candidate of candidates) {
-    try {
-      if (statSync(candidate).isFile()) return candidate;
-    } catch {
-      // not here; try the next
-    }
-  }
-  return null;
-};
+export { officeAt };
 
 /**
  * How many slides a `.pptx` has. Counted, not guessed.
@@ -226,13 +174,23 @@ export const readProducers = (materialsDir: string): Producer[] | null => {
  * keyed by producer id, and nothing joined the two. Both halves of a producer
  * are matched — a deck and the PDF beside it are one producer, and it is the
  * PDF that usually goes stale.
+ *
+ * Compared as promoted ids. The manifest names the DRAFT id — this command
+ * writes drafts — and `approve` takes the marker out, so the record freshness
+ * reports as stale is `DOC-DECK-MD-01` while the manifest says
+ * `DOC-DECK-MD-DRAFT-01`. An exact comparison answered "no producer declares
+ * it" for every approved deck in the course.
  */
-export const producerFor = (producers: Producer[], documentId: string): Producer | null =>
-  producers.find(
-    (producer) =>
-      producer.document_id === documentId ||
-      (producer.pdf_document_id ?? `${producer.document_id}-PDF`) === documentId,
-  ) ?? null;
+export const producerFor = (producers: Producer[], documentId: string): Producer | null => {
+  const wanted = promoteIdentifier(documentId);
+  return (
+    producers.find(
+      (producer) =>
+        promoteIdentifier(producer.document_id) === wanted ||
+        promoteIdentifier(producer.pdf_document_id ?? `${producer.document_id}-PDF`) === wanted,
+    ) ?? null
+  );
+};
 
 export type BuildOptions = {
   readonly root: string;
@@ -242,6 +200,12 @@ export type BuildOptions = {
   readonly pdf: boolean;
   readonly dryRun: boolean;
   readonly draftsDir: string;
+  /**
+   * The course, when the caller has it loaded: a rendered deck then gets the
+   * same figure credits and second contract from the record that
+   * `ainar deck render` gives it, so the two paths cannot build it differently.
+   */
+  readonly bundle?: CourseBundle;
 };
 
 export type BuildReport = {
@@ -258,7 +222,7 @@ export type BuildReport = {
  * The count comes back so the caller can exit non-zero without this function
  * deciding to end the process.
  */
-export const buildMaterials = (options: BuildOptions): BuildReport => {
+export const buildMaterials = async (options: BuildOptions): Promise<BuildReport> => {
   const manifestPath = join(options.materialsDir, MANIFEST);
   if (!existsSync(manifestPath)) {
     throw new Error(
@@ -291,6 +255,8 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
   }
 
   for (const producer of wanted) {
+    /** How many slides the renderer laid out, when this producer is a deck it rendered. */
+    let rendered: number | null = null;
     const from = producer.run ?? producer.render!;
     const source = inside(options.materialsDir, from);
     const artefact = inside(options.materialsDir, producer.produces);
@@ -308,39 +274,31 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
     }
 
     if (producer.render) {
-      // The renderer writes its own PDF from the same deck, so the LibreOffice
-      // step below is skipped for these: converting the .pptx a second time
-      // would produce a PDF of a deck rather than the deck's own.
-      const pres = presAt();
-      if (pres === null) {
-        lines.push(
-          `  ${producer.id}: no slide renderer found. Expected the ` +
-            "professor-slides-skills plugin beside this checkout, or PRES_BIN set.",
-        );
-        failed += 1;
-        continue;
-      }
-      // `spawnSync`, not `execFileSync`, for one reason that cost a run to
-      // notice: the renderer's GATES print to stderr, and on a SUCCESSFUL
-      // `execFileSync` stderr is not returned at all. The deck built, the
-      // overflow warnings vanished, and the output looked clean while four
-      // slides ran past the bottom of the page. Both streams are read here,
-      // whichever way it ends, because the warnings are the reason to use this
-      // renderer rather than a hand-written builder.
-      const ran = spawnSync(
-        process.execPath,
-        [pres, "render", source, "--pdf", "--out", dirname(artefact)],
-        { encoding: "utf-8" },
-      );
-      const said = `${ran.stdout ?? ""}\n${ran.stderr ?? ""}`;
-      for (const line of said.split("\n")) {
-        const text = line.trim();
-        // "wrote <path>" is this command's own report to make, below, with the
-        // size and the slide count. Everything else the renderer says is a
-        // judgement about the deck and is carried through verbatim.
-        if (text && !text.startsWith("wrote ")) lines.push(`    ${text}`);
-      }
-      if (ran.status !== 0) {
+      // The one renderer, in process — `ainar deck render` is the same call.
+      // It writes its own PDF from the same deck, so the LibreOffice step below
+      // is skipped for these: converting the .pptx a second time would produce
+      // a PDF of a deck rather than the deck's own.
+      //
+      // Every warning is carried through. That lesson cost a run when this was
+      // a child process: the renderer's gates went to stderr, a successful
+      // `execFileSync` returns no stderr at all, and four slides ran past the
+      // bottom of the page behind a clean report. The warnings are the reason
+      // to use this renderer rather than a hand-written builder.
+      const record = options.bundle ? recordFor(options.bundle, options.root, source) : null;
+      try {
+        const result = await renderDeck(source, {
+          root: options.root,
+          outDir: dirname(artefact),
+          pdf: options.pdf,
+          ...(record ? { figures: record.figures, recordPlan: record.recordPlan } : {}),
+        });
+        for (const warning of result.warnings) lines.push(`    ${warning}`);
+        if (options.pdf && !result.pdf) lines.push(`    no PDF: ${result.pdfError ?? "not converted"}`);
+        rendered = result.measured.length;
+      } catch (error) {
+        for (const line of String((error as Error).message ?? error).split("\n")) {
+          if (line.trim()) lines.push(`    ${line.trimEnd()}`);
+        }
         lines.push(`  ${producer.id}: render refused ${from}`);
         failed += 1;
         continue;
@@ -363,7 +321,10 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
     }
 
     const bytes = readFileSync(artefact);
-    const slides = slideCount(artefact);
+    // The renderer laid every slide out, so it knows the count; reading the
+    // zip back needs `unzip`, which a Windows machine does not have, and every
+    // deck built there was recorded with `slides: 0`.
+    const slides = rendered ?? slideCount(artefact);
     lines.push(
       `  ${producer.id}: ${basename(artefact)} (${bytes.length} bytes, ${slides} slides)`,
     );
@@ -427,23 +388,13 @@ export const buildMaterials = (options: BuildOptions): BuildReport => {
       continue;
     }
     if (!producer.pdf || office === null) continue;
-    const pdf = artefact.replace(/\.pptx$/i, ".pdf");
-    try {
-      execFileSync(
-        office,
-        ["--headless", "--convert-to", "pdf", "--outdir", dirname(artefact), artefact],
-        { stdio: "pipe" },
-      );
-    } catch (error) {
-      lines.push(`  ${producer.id}: PDF conversion failed — ${String(error).split("\n")[0]}`);
+    const converted = toPdf(artefact, dirname(artefact));
+    if ("error" in converted) {
+      lines.push(`  ${producer.id}: ${converted.error.split("\n").join("\n    ")}`);
       failed += 1;
       continue;
     }
-    if (!existsSync(pdf)) {
-      lines.push(`  ${producer.id}: PDF conversion produced nothing`);
-      failed += 1;
-      continue;
-    }
+    const pdf = converted.pdf;
     const pdfBytes = readFileSync(pdf);
     lines.push(`  ${producer.id}: ${basename(pdf)} (${pdfBytes.length} bytes)`);
     documents.push(

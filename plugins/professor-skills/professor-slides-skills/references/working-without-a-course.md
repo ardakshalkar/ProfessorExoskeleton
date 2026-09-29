@@ -52,7 +52,7 @@ draft, and it does not need a module.
 
 ## No `pptxgenjs` or `sharp`
 
-`pres check` still runs: approval, the plan contract, figures present, alt text,
+`ainar deck check` still runs: approval, the plan contract, figures present, alt text,
 attribution. Only the build stops.
 
 Marp will write a `.pptx`, and it is worse than it looks: each slide is a flat

@@ -3,7 +3,7 @@
  *
  * These run without pptxgenjs, without sharp and without LibreOffice, so a
  * professor can check a deck on a machine that cannot build one — and so the
- * build skill can check its own work before handing over. `pres render` runs
+ * build skill can check its own work before handing over. `ainar deck render` runs
  * the same function; there is one definition of "this deck is renderable" and
  * both paths use it.
  *
@@ -24,6 +24,7 @@ import {
   outlinePathFor,
   planPathFor,
   type DeckPlan,
+  type FigureRecord,
   type Outline,
   type Problem,
 } from "./plan.ts";
@@ -37,6 +38,19 @@ export interface DeckCheck {
   outline: Outline | null;
   slides: Block[][];
   problems: Problem[];
+  /** Every figure credit in force: the plan's, over any the caller supplied. */
+  figures: Record<string, FigureRecord>;
+}
+
+export interface CheckOptions {
+  /** Credits from the course's Document records, keyed by the link on the slide. */
+  figures?: Record<string, FigureRecord>;
+  /**
+   * The recorded Document's `presentation_plan`. When a deck is in the record,
+   * that is the contract somebody approved, and a `.plan.yaml` regenerated
+   * since does not get to overrule it silently.
+   */
+  recordPlan?: DeckPlan | null;
 }
 
 const error = (message: string): Problem => ({ severity: "error", message });
@@ -49,7 +63,7 @@ const note = (message: string): Problem => ({ severity: "note", message });
  * Missing files throw; anything else is a `Problem`, because a caller that
  * wants to print all of them should not be stopped by the first.
  */
-export function checkDeck(deckPath: string): DeckCheck {
+export function checkDeck(deckPath: string, options: CheckOptions = {}): DeckCheck {
   if (!existsSync(deckPath)) throw new Error(`${deckPath} does not exist`);
   const planPath = planPathFor(deckPath);
   if (!existsSync(planPath)) {
@@ -125,6 +139,21 @@ export function checkDeck(deckPath: string): DeckCheck {
       "  so what a mismatch really asks is whether the *deck* is still what was agreed to.",
     ));
   }
+  // A warning, not the refusal render-deck made of it. The `.plan.yaml` is
+  // regenerated with every build and is the contract checked above; the
+  // record's copy is a snapshot from when the deck was registered, and in the
+  // first course checked two of five had drifted from decks that were revised
+  // and re-rendered on purpose. What a mismatch means is that the record
+  // describes an older deck — worth saying, not worth refusing the render.
+  if (options.recordPlan?.slides?.length) {
+    const drift = checkContract(slides, options.recordPlan);
+    if (drift.length) {
+      problems.push(warning(
+        `the recorded presentation_plan describes an older deck (${drift.length} difference(s), ` +
+        `first: ${drift[0]}). The record needs re-registering once this render is the one you keep.`,
+      ));
+    }
+  }
 
   // --- the generated plan is stale ----------------------------------------
   // The contract check compares count, order and title. A generated plan can be
@@ -197,7 +226,7 @@ export function checkDeck(deckPath: string): DeckCheck {
 
   // --- figures -------------------------------------------------------------
   const materialsDir = dirname(deckPath);
-  const figures = plan.figures ?? {};
+  const figures: Record<string, FigureRecord> = { ...options.figures, ...plan.figures };
   const used = new Set<string>();
 
   for (const [index, blocks] of slides.entries()) {
@@ -229,7 +258,9 @@ export function checkDeck(deckPath: string): DeckCheck {
     }
   }
 
-  for (const name of Object.keys(figures)) {
+  // The plan's own entries only: a Document credit for a picture this deck does
+  // not use is the course's business, not a sign the plan is stale.
+  for (const name of Object.keys(plan.figures ?? {})) {
     if (!used.has(name)) {
       problems.push(warning(`the plan records figure ${name}, but no slide links it`));
     }
@@ -247,7 +278,7 @@ export function checkDeck(deckPath: string): DeckCheck {
     }
   }
 
-  return { deck: deckPath, planPath, plan, outline, slides, problems };
+  return { deck: deckPath, planPath, plan, outline, slides, problems, figures };
 }
 
 export const errorsIn = (problems: Problem[]): Problem[] =>

@@ -9,8 +9,8 @@ Read it before writing your first outline or deck. It is easier to see what
 in a file that has one than in a description of one.
 
 ```bash
-pres check    examples/MODULE-06/MODULE-06-slides.md
-pres render   examples/MODULE-06/MODULE-06-slides.md --pdf --out /tmp/pres-example
+ainar deck check    examples/MODULE-06/MODULE-06-slides.md
+ainar deck render   examples/MODULE-06/MODULE-06-slides.md --pdf --out /tmp/pres-example
 ```
 
 **`MODULE-06-slides.plan.yaml` is generated, and nothing wrote it by hand.**
