@@ -7,15 +7,11 @@
  * by construction, plus the preference and record files, read with
  * `readFileSync`.
  *
- * Five exceptions, and each one's own header argues for itself:
+ * Four exceptions, and each one's own header argues for itself:
  *
- * * `/api/approve` spawns this checkout's `ainar approve` rather than
- *   reimplementing the approval gate. The gate stays where `AGENTS.md` puts it.
- * * `/api/publish` spawns `ainar publish`, which runs that same gate over the
- *   DOCUMENTS AND RESOURCES a publication needs and then publishes. It is the
- *   reason a professor no longer leaves this window to put a deck in front of
- *   a class; see `runPublish`, and `ainar-node/src/publish.ts` for why the
- *   promotion stops where it does.
+ * * `/api/publish` spawns `ainar publish`. It publishes what the professor has
+ *   accepted and names every record still marked `approval: draft` as left
+ *   out; it accepts nothing on anybody's behalf. See `runPublish`.
  * * `/api/preferences` writes a preference layer. A preference is how the
  *   professor wants the skills to behave, not a claim about a student, so there
  *   is nothing in it for `approve` to gate.
@@ -27,20 +23,10 @@
  *   read-only Canvas endpoints, POST so that no link, prefetch or refresh can
  *   spend the professor's token.
  *
- * What is still true, and is the line worth keeping: **nothing here can approve
- * a judgement about a student, and nothing here can push a grade.** A pane that
- * could approve one would be a second approval path, and `AGENTS.md` says there
- * is one and the professor runs it.
- *
- * `/api/publish` is the case that tests that sentence, so it is worth being
- * exact about. It promotes drafts, which reads like the gate moving into the
- * pane; what it may promote is `MATERIAL_COLLECTIONS` — documents and
- * resources, the artefacts — enforced in `ainar publish` and not here, so no
- * argument this route could send would widen it. An `Evaluation` in the same
- * drafts directory is reported as left alone and stays a proposal. The
- * distinction is not squeamishness: pressing *publish the course page* having
- * read what would go on it IS the decision to stand behind a deck, and says
- * nothing whatever about whether a suggested score is right.
+ * What is still true, and is the line worth keeping: **nothing here can accept
+ * a draft, and nothing here can push a grade.** Accepting a record is changing
+ * `approval: draft` in the file it lives in — or, for a grade, recording the
+ * decision beside the AI suggestion — and the professor does that, not a route.
  *
  * Why HTTP rather than a service the browser half calls: four of the views this
  * pane switches between are already written. `dsh-ainar-course-model` ships
@@ -63,10 +49,9 @@
  * professor would eventually see disagree with itself.
  */
 
-// `execFile` is here for the write routes only — `/api/approve`, `/api/publish`
-// and the two that reach a third party — each of which spawns this checkout's
-// TypeScript `ainar` rather than reimplementing what it does. See `runApprove`
-// and `runPublish`. Nothing else in this file starts a process.
+// `execFile` is here for the write routes only — `/api/publish` and the two
+// that reach a third party — each of which spawns this checkout's TypeScript
+// `ainar` rather than reimplementing what it does. See `runPublish`. Nothing else in this file starts a process.
 import { execFile, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -81,7 +66,7 @@ import {
   requireGroups,
   runById,
 } from "@ainar/core/src/bundle.ts";
-import { loadDrafts, mergeDrafts } from "@ainar/core/src/drafts.ts";
+import { approvedView } from "@ainar/core/src/approval.ts";
 import { officeAt } from "@ainar/core/src/materials.ts";
 import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { inboxPayload } from "@ainar/core/src/inbox.ts";
@@ -188,7 +173,7 @@ const VIEWS = {
  * and lets a session-resolved request and an `AINAR_WORKSPACE` one share the
  * parse while still naming the right thing to fix.
  *
- * Invalidation is entirely the store's, so an `ainar approve`, a roster import
+ * Invalidation is entirely the store's, so an agent's write, a roster import
  * or a hand-edited YAML is picked up on the next request exactly as before —
  * this changes what is thrown away between requests, not when a re-read
  * happens.
@@ -280,34 +265,21 @@ const payload = (workspace, tool, args) => {
 };
 
 /**
- * The same four payloads, computed over the record with `work/<RUN>/` merged in.
+ * The four payloads, over the whole course or over what has been accepted.
  *
- * Why this exists, and why it is not the default: the professor's own course
- * lives in two halves. `courses/` is the record — what a person or `ainar
- * approve` wrote — and `work/<RUN>/` is what the skills proposed and nobody has
- * accepted. Both halves are real, and a pane that showed only the first would
- * report a course as nearly empty while fifteen weeks of it sat one directory
- * away. `work/CSS-4007-2026-FALL/course-outline-viewer.py` already draws both,
- * for exactly this reason, and marks the drafted half as drafted.
+ * Since 2026-09-29 a draft is not a file somewhere else: an agent writes into
+ * the course and marks the record `approval: draft` (a grade: `status:
+ * suggested`). So the two halves the pane has always shown are one bundle,
+ * read two ways — `withDrafts` is the course as it stands, drafts and all, and
+ * without it the view is `approvedView`, what a student may be shown and what
+ * an LMS may be given. The pane says which one is on screen, above the frame,
+ * because the widget documents are shared with two other hosts and know
+ * nothing about drafts.
  *
- * `loadDrafts` and `mergeDrafts` are the course model's own, the pair behind
- * `ainar validate <COURSE> --drafts work/<RUN>`, so what gets merged here is
- * what that command validates: `DRAFTABLE` refuses outcomes, capabilities and
- * enrollments in a draft file, and this inherits that refusal rather than
- * restating it.
- *
- * It is opt-in per request because the two answers mean different things. The
- * record is what a student may be shown and what an LMS may be given; the merge
- * is what the term would look like if every proposal were accepted. The pane
- * says which one is on screen, above the frame — not inside it, because the
- * widget documents are shared with two other hosts and know nothing about
- * drafts.
- *
- * What it cannot rescue: `versions` is not draftable. An offering with no
- * `start_date` does not load at all, so there is no run for a merged module to
- * be placed in and this returns the loader's error like any other.
+ * `issues` is kept, empty, for the callers that still read it: there is no
+ * draft directory to fail to load any more.
  */
-const draftedPayload = (workspace, root, tool, runId, on) => {
+const viewPayload = (workspace, tool, runId, on, withDrafts) => {
   let bundle = null;
   for (const courseId of workspace.courseIds()) {
     try {
@@ -325,20 +297,19 @@ const draftedPayload = (workspace, root, tool, runId, on) => {
   }
   if (bundle === null) throw new ToolError(`no course run '${runId}' in this workspace`);
 
-  const issues = new IssueList();
-  const merged = mergeDrafts(bundle, loadDrafts(join(root, "work", runId), issues));
-  const date = referenceDate(merged, runId, on);
+  const shown = withDrafts ? bundle : approvedView(bundle);
+  const date = referenceDate(shown, runId, on);
   switch (tool) {
     case "course_outline":
-      return { payload: outlinePayload(merged, runId, date), issues: issues.items };
+      return { payload: outlinePayload(shown, runId, date), issues: [] };
     case "class_progress":
-      return { payload: dashboardPayload(merged, runId), issues: issues.items };
+      return { payload: dashboardPayload(shown, runId), issues: [] };
     case "gradebook":
-      return { payload: gradebookPayload(merged, runId, {}), issues: issues.items };
+      return { payload: gradebookPayload(shown, runId, {}), issues: [] };
     case "action_inbox":
-      return { payload: inboxPayload(merged, runId, date), issues: issues.items };
+      return { payload: inboxPayload(shown, runId, date), issues: [] };
     default:
-      throw new ToolError(`${tool} has no drafted form`);
+      throw new ToolError(`${tool} has no view over the accepted record`);
   }
 };
 
@@ -413,12 +384,12 @@ const withRecordPaths = (data, root, courseId, term, entries) => {
  *
  * The pane used to redraw only when the professor changed something through it
  * — a run, a tab, an approval. Everything else that writes to the workspace
- * left it showing yesterday: an agent setting a due date, `bin/ainar approve`
- * run in a terminal, a file edited by hand. The professor then read a stale
+ * left it showing yesterday: an agent setting a due date, a draft accepted in
+ * an editor, a file edited by hand. The professor then read a stale
  * page with no way to tell it was stale, which is the failure this pane exists
  * to avoid everywhere else.
  *
- * Name, size and mtime of every YAML under `courses/` and `work/`, hashed. Not
+ * Name, size and mtime of every YAML under `courses/`, hashed. Not
  * the contents: this runs every few seconds and the point is to be cheap. The
  * cost of hashing metadata instead is one real case — a write that changes
  * neither size nor mtime, which on a filesystem with millisecond timestamps
@@ -464,7 +435,7 @@ const walkRevision = (root) => {
     }
   };
 
-  for (const top of ["courses", "work"]) walk(join(root, top), 0);
+  walk(join(root, "courses"), 0);
   return { revision: hash.digest("hex").slice(0, 16), files };
 };
 
@@ -546,12 +517,11 @@ const runsDocument = (workspace, root) => {
           term: run.term ?? null,
           start_date: run.start_date ?? null,
           end_date: run.end_date ?? null,
-          // Who may approve. `ainar approve --as` records WHO accepted the
-          // drafts, so the pane needs a candidate to offer rather than a box
-          // for the professor to retype their own id into. The run's own
-          // instructor list is that candidate, and it is a list rather than a
-          // name because a co-taught run has several and the pane must not
-          // pick one of them on their behalf.
+          // Who may decide. A grade's decision records WHO made it
+          // (`decided_by`), so the pane offers the run's own instructors
+          // rather than a box for the professor to retype their id into. A
+          // list rather than a name, because a co-taught run has several and
+          // the pane must not pick one of them on their behalf.
           instructors: instructorsOf(
             course.course_id,
             run.course_version_id ?? run.run_id ?? "",
@@ -756,11 +726,11 @@ const readBody = (req, limit = 256 * 1024) =>
  *
  * The second write verb in this pane, and unlike the first it is not an
  * approval. A preference is how the professor wants the skills to behave, not a
- * claim about a student, so there is nothing here for `ainar approve` to gate
- * and no second approval path is created by allowing it.
+ * claim about a student, so there is nothing here to accept and no approval
+ * path is created by allowing it.
  *
  * What it shares with the first is that it writes a file a person also edits by
- * hand, so it goes through `yaml-out`'s `dump` — the emitter `approve` uses,
+ * hand, so it goes through `yaml-out`'s `dump` — the emitter every record writer uses,
  * held to PyYAML byte for byte — and a file this saves is indistinguishable in
  * style from one written beside it.
  *
@@ -1670,7 +1640,7 @@ const integrationsDocument = (workspace, root, runId) => {
  * * **POST, not GET.** It is a read as far as Canvas is concerned, so GET would
  *   be the honest verb — but it spends the professor's API quota and sends a
  *   grade-changing token, and this file's rule for that is already written on
- *   `/api/approve`: a side effect behind a GET is one a link, a prefetch, a
+ *   `/api/publish`: a side effect behind a GET is one a link, a prefetch, a
  *   refresh or a replayed history entry can fire without anybody having decided
  *   to. A professor pressing `Fetch from Canvas` has decided to.
  * * **No caching.** The answer is a list of sections a registrar edits, and a
@@ -1753,12 +1723,12 @@ const canvasCatalogue = async (courseId, host, token) => {
  * The third write verb in this pane, and the first that touches `courses/`. Why
  * it is allowed to, where a grade is not:
  *
- * `ainar approve` gates the promotion of DRAFTS — claims about students and
- * about what the course teaches, produced by an agent, which a professor has to
- * read before they become the record. This writes neither. It records which
+ * Approval is for DRAFTS — claims about students and about what the course
+ * teaches, produced by an agent and marked `approval: draft`, which a professor
+ * has to read before anything student-facing uses them. This writes neither. It records which
  * Canvas section corresponds to which subgroup: a fact about the professor's
  * own LMS that only they know, that no skill drafts and no agent can propose,
- * and that therefore has no drafted half for `approve` to promote. Refusing it
+ * and that therefore has no drafted half to accept. Refusing it
  * would not protect the record — it would mean the fact stays settable only by
  * hand-editing YAML, which is the friction this tab exists to remove.
  *
@@ -1870,9 +1840,8 @@ const writeCanvasSelection = (workspace, root, runId, selections) => {
  * reason: guessing `generated.yaml` is right until somebody hand-authors one,
  * and then it silently edits the wrong record.
  *
- * **The header that says not to.** Files `ainar approve` writes carry
- * "Machine-managed — change these through approval, not by hand", and this
- * edits them. The line that makes it defensible: approval is a gate on
+ * **The header that says not to.** Files the record writer produces carry a
+ * machine-managed header, and this edits them. The line that makes it defensible: approval is a gate on
  * *decisions* — what a student was given, what an outcome claims — and a
  * Canvas assignment id is neither. It is a pointer at another system, it
  * carries no academic content, it changes when somebody rebuilds a Canvas
@@ -2452,9 +2421,7 @@ const todoOr = (value) =>
  * which are records of decisions rather than computations over them.
  */
 const gradingDocument = (workspace, root, runId, dark, withDrafts, on) => {
-  const data = withDrafts
-    ? draftedPayload(workspace, root, "course_outline", runId, on).payload
-    : payload(workspace, "course_outline", { course_version_id: runId });
+  const data = viewPayload(workspace, "course_outline", runId, on, withDrafts).payload;
 
   const bundle = workspace.findRun(runId);
   const run = runById(bundle).get(runId) ?? {};
@@ -2589,9 +2556,7 @@ const stamp = (value) => {
 };
 
 const outlinePayloadFor = (workspace, root, runId, withDrafts, on) =>
-  withDrafts
-    ? draftedPayload(workspace, root, "course_outline", runId, on).payload
-    : payload(workspace, "course_outline", { course_version_id: runId });
+  viewPayload(workspace, "course_outline", runId, on, withDrafts).payload;
 
 const rows = (entries) =>
   entries
@@ -2770,9 +2735,8 @@ const examsDocument = (workspace, root, runId, dark, withDrafts, on, origin, ses
     dark,
     withDrafts,
   );
-  const bundle = withDrafts
-    ? null
-    : workspace.findRun(runId);
+  // Drafts live in the course now, so both views have a bundle to count from.
+  const bundle = withDrafts ? workspace.findRun(runId) : approvedView(workspace.findRun(runId));
   const exams = (Array.isArray(data.assessments) ? data.assessments : []).filter(
     (row) => row.type === "exam",
   );
@@ -2884,34 +2848,28 @@ const filesIn = (dir) => {
  * was wrong in a specific way: `quiz-quiz-03-student.pdf` is not a task, and
  * "materials/ 117 files" hid the seven lecture decks inside it.
  *
- * Two sources, deliberately kept apart on screen, because they are two different
- * kinds of thing and only one of them can be approved:
+ * The source is the course itself. Since 2026-09-29 an agent writes into the
+ * file a record belongs in and marks it `approval: draft`, so what is prepared
+ * and not yet accepted is read off the bundle — `drafts()` in
+ * `ainar-node/src/approval.ts`, the rule every other reader uses — and set
+ * against what the same collections hold that has been accepted. Fifteen
+ * drafted meetings against none accepted is a sentence about what to do next;
+ * fifteen drafted meetings alone is trivia.
  *
- *   1. DRAFT RECORDS — `loadDrafts` parses `work/<RUN>/*.yaml` into the model's
- *      own collections. These are what `ainar approve` promotes into the course.
- *   2. FILES — decks, printed papers, figures sitting in `materials/`. Real work,
- *      but not records: approving the drafts does not put a .pptx anywhere.
- *
- * Against both, what the course record actually holds — which is the "what should
- * I do" of the whole tab. Fifteen drafted weeks against zero recorded ones is a
- * sentence about what to do next; fifteen drafted weeks alone is trivia.
- *
- * On parsing: an earlier version refused to parse, on the grounds that a
- * malformed draft would break the tab at the moment the professor most needed to
- * see it. `loadDrafts` removes that objection — it collects complaints into an
- * `IssueList` instead of throwing — so the parse is safe AND the complaints are
- * shown, which is strictly better than hiding the file.
+ * Accepting one is changing the word in its file. Nothing here does it: the pane
+ * can say what is waiting, and the professor decides.
  */
 
 /** What a drafted collection is called in a sentence, singular and plural. */
 const DRAFT_KINDS = [
-  { key: "modules", one: "Week", many: "Weeks", record: "modules" },
-  { key: "concepts", one: "Concept", many: "Concepts", record: "concepts" },
-  { key: "assessments", one: "Assessment", many: "Assessments", record: "assessments" },
-  { key: "items", one: "Assessment item", many: "Assessment items", record: "items" },
-  { key: "activities", one: "Meeting", many: "Meetings", record: "activities" },
-  { key: "documents", one: "Document", many: "Documents", record: "documents" },
-  { key: "resources", one: "Resource", many: "Resources", record: "resources" },
+  { key: "assessments", one: "Assessment", many: "Assessments" },
+  { key: "items", one: "Assessment item", many: "Assessment items" },
+  { key: "activities", one: "Meeting", many: "Meetings" },
+  { key: "documents", one: "Document", many: "Documents" },
+  { key: "resources", one: "Resource", many: "Resources" },
+  { key: "item_responses", one: "Scored response", many: "Scored responses" },
+  { key: "signals", one: "Signal", many: "Signals" },
+  { key: "action_items", one: "Action item", many: "Action items" },
 ];
 
 /** Files in `materials/`, by the kind of thing they are. */
@@ -2988,157 +2946,68 @@ const readyRow = (label, drafted, detail, recorded) =>
   (recorded === null
     ? ""
     : recorded === 0
-      ? ' · <span class="todo">none in the course</span>'
-      : ' · <span class="dim">' + recorded + " in the course</span>") +
+      ? ' · <span class="todo">none accepted</span>'
+      : ' · <span class="dim">' + recorded + " accepted</span>") +
   "</span></div>";
 
 const readyDocument = (workspace, root, runId, dark) => {
-  const dir = join(root, "work", runId);
-  const issues = new IssueList();
-  const drafted = loadDrafts(dir, issues);
-
-  // `draft.missing` is not a fault to report as one: a run nobody has drafted
-  // for is the ordinary state of a new course, and the empty page below says so
-  // better than an error would.
-  const missing = issues.errors.some((issue) => issue.code === "draft.missing");
-
-  // What the course itself holds, to sit beside each drafted count. Loading it
-  // is allowed to fail — a course whose offering does not parse still has a work
-  // directory worth listing — and the columns simply go quiet when it does.
-  let record = null;
+  let bundle;
   try {
-    const bundle = workspace.findRun(runId);
-    record = {};
-    for (const kind of DRAFT_KINDS) {
-      const rows = bundle[kind.record];
-      record[kind.key] = Array.isArray(rows) ? rows.length : 0;
-    }
-  } catch {
-    record = null;
+    bundle = workspace.findRun(runId);
+  } catch (error) {
+    return documentPage(
+      '<section><h2>Ready</h2><p class="empty">' + escapeText(String(error.message ?? error)) + "</p></section>",
+      dark,
+    );
   }
 
+  // Drafted and accepted, per collection, for this run's records. A record with
+  // no `course_version_id` (an item, a response) belongs to whatever it hangs
+  // off, and is counted with the course.
+  const inRun = (row) => !row.course_version_id || row.course_version_id === runId;
+
   const rows = DRAFT_KINDS.map((kind) => {
-    const items = Array.isArray(drafted[kind.key]) ? drafted[kind.key] : [];
-    if (items.length === 0) return "";
+    const all = (Array.isArray(bundle[kind.key]) ? bundle[kind.key] : []).filter(inRun);
+    const drafted = all.filter((row) => row.approval === "draft");
+    if (drafted.length === 0) return "";
     return readyRow(
-      items.length === 1 ? kind.one : kind.many,
-      items.length,
-      byType(items),
-      record === null ? null : record[kind.key],
+      drafted.length === 1 ? kind.one : kind.many,
+      drafted.length,
+      byType(drafted),
+      all.length - drafted.length,
     );
   })
     .filter(Boolean)
     .join("");
 
-  let body =
-    rows === ""
-      ? ""
-      : "<section><h2>Prepared, awaiting approval</h2>" +
-        '<p class="dim">Drafted into <code>work/</code> by the skills. ' +
-        "<code>ainar approve</code> puts them in the course.</p>" +
-        rows +
-        "</section>";
-
-  // The files. Counted by kind rather than listed, because the question here is
-  // "have I got slides for this course", not "what is every filename".
-  // A material is a folder — the deck on top, figures and build scripts in
-  // subfolders — so this walks down rather than reading one level.
-  const materialFiles = (folder) => {
-    const here = filesIn(folder);
-    if (here === null) return null;
-    return here.flatMap((entry) =>
-      entry.directory ? (materialFiles(join(folder, entry.name)) ?? []) : [entry],
-    );
-  };
-  const materials = materialFiles(join(dir, "materials"));
-  if (materials !== null) {
-    const files = materials.filter((entry) => !isBackup(entry.name));
-    const counted = MATERIAL_KINDS.map((kind) => ({
-      label: kind.label,
-      count: files.filter((file) => kind.test.test(file.name)).length,
-    })).filter((kind) => kind.count > 0);
-
-    if (counted.length) {
-      body +=
-        "<section><h2>Prepared as files</h2>" +
-        '<p class="dim">In <code>materials/</code>. Real work, but not records — ' +
-        "approving the drafts does not move these.</p>" +
-        counted
-          .map(
-            (kind) =>
-              '<div class="row"><span class="k">' +
-              escapeText(kind.label) +
-              '</span><span class="v">' +
-              kind.count +
-              "</span></div>",
-          )
-          .join("") +
-        "</section>";
-    }
-  }
-
-  // Complaints from the parse, said plainly. A draft the loader refused is the
-  // one thing on this page the professor can act on immediately.
-  const complaints = issues.items.filter((issue) => issue.code !== "draft.missing");
-  if (complaints.length) {
-    body +=
-      "<section><h2>Needs fixing (" +
-      complaints.length +
-      ")</h2>" +
-      complaints
-        .slice(0, 12)
-        .map(
-          (issue) =>
-            '<div class="row"><span class="k">' +
-            escapeText(issue.message ?? issue.code) +
-            '</span><span class="v">' +
-            escapeText(issue.location ?? issue.level ?? "") +
-            "</span></div>",
-        )
-        .join("") +
-      "</section>";
-  }
-
-  if (body === "") {
+  if (rows === "") {
     return documentPage(
       '<section><h2>Ready</h2><p class="empty">' +
-        (missing
-          ? "Nothing has been drafted for " +
-            escapeText(runId) +
-            ". Skills write their proposals to <code>work/" +
-            escapeText(runId) +
-            "</code>, and this lists them once they do."
-          : "The work directory for " +
-            escapeText(runId) +
-            " exists but holds nothing the model recognises yet.") +
-        "</p></section>",
+        "Nothing in " +
+        escapeText(runId) +
+        " is marked <code>approval: draft</code>. Skills write their proposals into " +
+        "the course marked that way, and this lists them once they do.</p></section>",
       dark,
     );
   }
 
-  // The closing sentence changes with the answer: a course that has approved
-  // nothing needs a different next step from one that is partly in.
-  const anythingRecorded =
-    record !== null && Object.values(record).some((count) => count > 0);
-  body +=
-    '<section><p class="dim">' +
-    (anythingRecorded
-      ? "Some of this course is already recorded. <code>ainar approve</code> promotes what is not."
-      : "None of this is in the course record yet, so nothing here reaches a student. " +
-        "<code>ainar approve</code> is the step that changes that, and it is yours to run.") +
-    "</p></section>";
-
-  return documentPage(body, dark);
+  return documentPage(
+    "<section><h2>Prepared, awaiting approval</h2>" +
+      '<p class="dim">Written into the course by the skills and marked ' +
+      "<code>approval: draft</code>. Nothing student-facing reads them until you " +
+      "change that word to <code>approved</code> in the record.</p>" +
+      rows +
+      "</section>",
+    dark,
+  );
 };
 
 /**
  * A count that exists in two halves.
  *
- * `recorded` is what `courses/` holds. `merged` is what it would hold if every
- * proposal in `work/<RUN>/` were approved. The drafted half is the difference
- * rather than a count of the draft files, because `mergeDrafts` is what decides
- * whether a proposal actually lands — `DRAFTABLE` refuses whole collections —
- * and a draft the merge threw away must not be reported here as work in hand.
+ * `recorded` is what the course holds that has been accepted. `merged` is
+ * everything it holds, drafts included — what it would be if every record
+ * marked `approval: draft` were approved. The drafted half is the difference.
  */
 const split = (recorded, merged) => ({
   recorded,
@@ -3193,13 +3062,13 @@ const decksByWeek = (data) => {
  * worth caching. See `checklistFor`.
  */
 const checklistReport = (workspace, root, runId) => {
-  const record = payload(workspace, "course_outline", { course_version_id: runId });
+  const record = viewPayload(workspace, "course_outline", runId, null, false).payload;
 
   // A run nobody has drafted for merges to itself, which is the right answer:
   // every drafted count comes out zero and every row reads "in the course".
   let merged = record;
   try {
-    merged = draftedPayload(workspace, root, "course_outline", runId, null).payload;
+    merged = viewPayload(workspace, "course_outline", runId, null, true).payload;
   } catch {
     // The record loaded, so the run is real; only the draft directory failed.
     // `ready` is the view that reports draft-loading complaints, and it says
@@ -3359,13 +3228,13 @@ const checklistReport = (workspace, root, runId) => {
  * The report, computed at most once per change to the workspace.
  *
  * `checklistReport` is the most expensive thing this file does: it builds the
- * outline payload twice — once over the record, once over the record with
- * `work/<RUN>/` merged — and the merge re-parses the draft directory. Doing
+ * outline payload twice — once over what has been accepted, once over the
+ * whole course, drafts included. Doing
  * that on every frame load would be paying a course parse for a page whose
  * answer cannot change until a file does.
  *
  * The key is the revision hash the pane ALREADY computes for its own refresh
- * poll: name, size and mtime of every YAML under `courses/` and `work/`. That
+ * poll: name, size and mtime of every YAML under `courses/`. That
  * makes the cache exactly as fresh as the pane itself — the same hash that
  * tells the browser to reload the frame is the one that invalidates what the
  * frame is about to be served, so there is no window in which the pane redraws
@@ -3625,13 +3494,13 @@ const checklistDocument = (workspace, root, runId, dark) => {
     "</section>";
 
   // The closing sentence, which changes with the answer: a course whose gaps
-  // are all drafted needs `ainar approve`, and one whose gaps are empty needs a
+  // are all drafted needs the professor's approval, and one whose gaps are empty needs a
   // skill run. Saying both every time would say neither.
   const closing =
     '<section><p class="dim">' +
     (report.anyDrafted
-      ? "Blue is written and waiting for you — <code>ainar approve</code> puts it in the " +
-        "course. Amber is not written yet."
+      ? "Blue is written and waiting for you — change <code>approval: draft</code> to " +
+        "<code>approved</code> in its record to accept it. Amber is not written yet."
       : "Nothing is drafted for this run, so every amber row above needs a skill run " +
         "rather than an approval.") +
     "</p></section>";
@@ -3654,7 +3523,7 @@ const loadedRun = (workspace, runId) => {
       if (runById(loaded.bundle).has(runId)) return loaded;
     } catch {
       // A course that will not load cannot be the one owning this run, and its
-      // error would replace the run's own. `draftedPayload` skips the same way.
+      // error would replace the run's own. `viewPayload` skips the same way.
       continue;
     }
   }
@@ -5006,9 +4875,7 @@ const sendBrief = (res, workspace, root, runId, assessmentId, withDrafts, dark) 
 
   let data;
   try {
-    data = withDrafts
-      ? draftedPayload(workspace, root, "course_outline", runId, null).payload
-      : payload(workspace, "course_outline", { course_version_id: runId });
+    data = viewPayload(workspace, "course_outline", runId, null, withDrafts).payload;
   } catch (error) {
     return sendErrorPage(res, String(error.message ?? error));
   }
@@ -5259,98 +5126,20 @@ const sendMaterial = (res, workspace, root, documentId, dark, asPdf) => {
 const AINAR_CLI = fileURLToPath(new URL("../../ainar-node/bin/ainar.ts", import.meta.url));
 
 /**
- * Promote the drafts in `work/<RUN>/` into the course record.
+ * Publish, by spawning the CLI.
  *
- * This SPAWNS the CLI rather than calling `approveDrafts` and `writeRecords`
- * here, and that is the one decision in this file worth defending. Everything
- * else the pane serves is a read, computed in-process from the course model, and
- * until now nothing here spawned anything at all.
+ * Spawned rather than reimplemented: `ainar publish` is the one place that
+ * decides what a publication carries, and a second copy of that in a web
+ * server would be a second answer to "what may a student be shown".
  *
- * Approval is different because it is a gate, and the gate is an ORDER of
- * operations: load drafts, stage documents, merge, validate, and only then
- * write. `bin/ainar.ts` performs that order and is the copy held to Python's by
- * `tests/test_approve_parity.py`, which compares the written trees byte for
- * byte. Re-typing those steps here would produce a third implementation, held to
- * nothing, whose first divergence would be a course record that validated and
- * was still wrong.
+ * **Publishing approves nothing.** Since 2026-09-29 a draft is a record in the
+ * course marked `approval: draft`, and `ainar publish` leaves every one out
+ * and names it in the plan. There is no route in this pane that accepts a
+ * draft — the professor changes the word in the record — and `--confirm` on
+ * this one does not become one.
  *
- * `--dry-run` unless `confirm`, because a button that writes on the first click
- * is a button nobody can safely explore.
- */
-const runApprove = (res, root, runId, approver, confirm) => {
-  if (!approver) {
-    return sendJson(res, 200, {
-      error:
-        "No approver. Approval records WHO accepted the drafts, so it needs a " +
-        "user id — the run's instructor, e.g. USER-ASHALKAR.",
-    });
-  }
-
-  if (!existsSync(AINAR_CLI)) {
-    return sendJson(res, 200, {
-      error:
-        `The TypeScript ainar CLI is not at ${AINAR_CLI}. This pane will not ` +
-        "fall back to the Python `ainar` on PATH — install or restore " +
-        "ainar-node/ instead.",
-    });
-  }
-
-  const args = [
-    "--experimental-strip-types",
-    AINAR_CLI,
-    "approve",
-    join(root, "work", runId),
-    "--as",
-    approver,
-    "--root",
-    root,
-    "--course-version",
-    runId,
-  ];
-  if (!confirm) args.push("--dry-run");
-
-  execFile(
-    process.execPath,
-    args,
-    { cwd: root, timeout: 120000, maxBuffer: 4 * 1024 * 1024 },
-    (error, stdout, stderr) => {
-      // The CLI exits non-zero when it refuses — drafts that do not load,
-      // validation that fails — and its own text is the useful part. It is
-      // passed through whole rather than summarised: "validation of the
-      // approved records failed" plus the issue list is what the professor
-      // needs, and a status code is not.
-      const code = error && typeof error.code === "number" ? error.code : error ? 1 : 0;
-      sendJson(res, 200, {
-        ok: code === 0,
-        confirmed: confirm,
-        exitCode: code,
-        command: `bin/ainar approve work/${runId} --as ${approver}${confirm ? "" : " --dry-run"}`,
-        output: [stdout, stderr].filter(Boolean).join("\n").trim(),
-      });
-    },
-  );
-};
-
-/**
- * Publish, by spawning the CLI — the one button that also promotes.
- *
- * Spawned for `runApprove`'s reason, and the reason is stronger here than
- * anywhere else on this route table: this command performs the GATE and then a
- * publication, and the order it does them in — load, promote, stage, validate,
- * write, publish — is `runApproval` in `ainar-node/src/approve.ts`. A second
- * copy of that order living in a web server is exactly the failure that file's
- * header describes.
- *
- * **What it may promote is not this route's decision either.** `ainar publish`
- * hands `runApproval` the list `MATERIAL_COLLECTIONS`, so a drafted evaluation
- * in the same directory is left alone whatever is asked for here. There is
- * still no route in this pane that can settle a judgement about a student, and
- * `--confirm` on this one does not become one: it promotes a deck, a brief or a
- * reading, and publishes.
- *
- * **Plan and publish are one route with a flag**, the shape the two buttons
- * beside it already use. Without `confirm` the CLI reads, prints and writes
- * nothing — including nothing in `courses/`.
+ * **Plan and publish are one route with a flag.** Without `confirm` the CLI
+ * reads, prints and writes nothing — including nothing in `courses/`.
  */
 const runPublish = (res, root, runId, target, body) => {
   const TARGETS = ["page", "homework", "canvas", "telegram", "update"];
@@ -5371,7 +5160,6 @@ const runPublish = (res, root, runId, target, body) => {
   const message = String(body.message ?? "");
   const repo = String(body.repo ?? "").trim();
   const group = String(body.group ?? "").trim();
-  const approver = String(body.approver ?? "").trim();
 
   const identifier = /^[A-Za-z0-9_.:@+/-]{1,200}$/;
   if ((target === "homework" || target === "canvas") && !identifier.test(assessment)) {
@@ -5391,7 +5179,6 @@ const runPublish = (res, root, runId, target, body) => {
   if (target === "page" || target === "telegram" || target === "update") args.push(runId);
   else args.push(assessment, "--run", runId);
   args.push("--root", root);
-  if (approver) args.push("--as", approver);
   if (repo) args.push("--repo", repo);
   if (group) args.push("--group", group);
   // The message goes in argv rather than a temporary file, deliberately: a file
@@ -5437,7 +5224,7 @@ const runPublish = (res, root, runId, target, body) => {
 /**
  * Send an assessment's DEFINITION to Canvas, by spawning the CLI.
  *
- * Spawned rather than reimplemented, for the reason `runApprove` gives: the
+ * Spawned rather than reimplemented, for the reason `runPublish` gives: the
  * rules that matter here — what counts as drift, which fields this model has
  * an opinion about, how a created assignment's id is written back into
  * `courses/` without destroying the comments around it — live in
@@ -5524,7 +5311,7 @@ const runAssignmentPush = (res, root, runId, body) => {
 /**
  * Write one connection into the registry, by spawning the CLI.
  *
- * Spawned rather than written here, for the reason `runApprove` gives about
+ * Spawned rather than written here, for the reason `runPublish` gives about
  * approval: the rules for what a usable connection is — HTTPS only, a numeric
  * Canvas course id, which variable each type defaults to — live in
  * `src/connections/`, and a second writer in this file would have its own
@@ -5811,7 +5598,7 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
       const course = url.searchParams.get("course") ?? "";
       const term = url.searchParams.get("term") ?? "";
 
-      // A write, and therefore POST only, for `/api/approve`'s reason: a GET
+      // A write, and therefore POST only, for `/api/publish`'s reason: a GET
       // that changes a file is one a link, a prefetch or a refresh can fire
       // without anybody having decided to.
       if (req.method === "POST") {
@@ -6157,7 +5944,7 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
      * several. An entry set to null clears the linkage.
      *
      * Writes into the assessment records, which is the one place in this pane
-     * that edits a file `ainar approve` owns. `recordAssessmentLinks` states
+     * that edits a machine-managed record file. `recordAssessmentLinks` states
      * why that is defensible; the short version is that a Canvas id is a
      * pointer, not a decision.
      */
@@ -6272,10 +6059,10 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
-    // The save. POST for `/api/approve`'s reason and one more of its own: this
+    // The save. POST for `/api/publish`'s reason and one more of its own: this
     // is the only route in the pane that writes to `courses/`.
     if (path === "/api/canvas/assignment") {
-      // POST only, for `/api/approve`'s reason: this one reaches outside the
+      // POST only, for `/api/publish`'s reason: this one reaches outside the
       // machine, and with `--confirm` it changes what a class can see.
       if (req.method !== "POST") {
         return sendJson(res, 405, { error: "assignment is POST only" });
@@ -6372,7 +6159,7 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
     // server, one of them narrower, is how a button ends up doing less than
     // the button beside it for reasons nobody can see. `git log -S` has it.
     if (path === "/api/publish") {
-      // POST only, for `/api/approve`'s reason and one of its own: with
+      // POST only, for `/api/publish`'s reason and one of its own: with
       // `confirm` this both writes to `courses/` and puts something in front of
       // students, and neither is a thing a prefetch should be able to start.
       if (req.method !== "POST") {
@@ -6396,20 +6183,13 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
     }
 
     if (path === "/api/approve") {
-      // POST only. Everything else on this route is a read a GET can serve;
-      // this one writes to `courses/`, and a side effect behind a GET is one a
-      // link, a prefetch or a refresh can fire without anybody deciding to.
-      if (req.method !== "POST") {
-        return sendJson(res, 405, { error: "approve is POST only" });
-      }
-      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
-      return runApprove(
-        res,
-        root,
-        runId,
-        url.searchParams.get("approver") ?? "",
-        url.searchParams.get("confirm") === "1",
-      );
+      // Removed on 2026-09-29, with `ainar approve`. Answered rather than
+      // left to fall through, so an older client says why its button is gone.
+      return sendJson(res, 410, {
+        error:
+          "Approval is no longer a command. Drafts live in the course marked " +
+          "`approval: draft`; accept one by changing that word in its record.",
+      });
     }
 
     // The two views with no widget behind them. Checked before the widget
@@ -6461,8 +6241,8 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
       );
     }
 
-    // The class list. No drafts toggle: `DRAFTABLE` refuses enrollments in a
-    // draft file, so there is never a drafted half of this view to show, and a
+    // The class list. No drafts toggle: enrollments are not agent-writable
+    // and carry no approval, so there is never a drafted half of this view, and a
     // toggle that changed nothing would suggest otherwise.
     if (view === "students") {
       if (!runId) return sendErrorPage(res, "No run chosen.");
@@ -6503,9 +6283,9 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
       const dark = url.searchParams.get("dark") === "1";
       // `grading` honours the drafts toggle, because a drafted assessment
       // carries a weight and changes the scheme. `ready` does not take it:
-      // it reads `work/` whatever the toggle says — that IS the drafted half,
-      // and a "Record" setting that emptied it would be answering a question
-      // nobody asked.
+      // it lists the drafts whatever the toggle says — that IS the drafted
+      // half, and a "Record" setting that emptied it would be answering a
+      // question nobody asked.
       const withDrafts = url.searchParams.get("drafts") === "1";
       return send(
         res,
@@ -6529,32 +6309,18 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
       const tool = VIEWS[view].tool;
       const widget = BY_TOOL.get(tool);
       if (!widget) return sendErrorPage(res, `no widget is bound to ${tool}`);
-      // `drafts=1` merges `work/<RUN>/` over the record. The response carries
-      // the draft loader's own complaints in a header rather than in the
-      // document, because the document is a widget shared with two other hosts
-      // and has no place to print them; the pane reads the header and says so
-      // in its own chrome, above the frame.
+      // `drafts=1` is the whole course, drafts included; without it the view
+      // is what has been accepted. The header says which, because the document
+      // is a widget shared with two other hosts and has no place to print it;
+      // the pane reads the header and says so in its own chrome.
       const withDrafts = url.searchParams.get("drafts") === "1";
-      let data;
-      let noted = [];
-      if (withDrafts) {
-        const drafted = draftedPayload(workspace, root, tool, runId, url.searchParams.get("date"));
-        data = drafted.payload;
-        // "There are no drafts" is not a complaint worth putting on screen.
-        //
-        // `draft.empty` and `draft.missing` mean the work directory is empty or
-        // absent, which since `+ drafts` became the default view is the ordinary
-        // state of a course whose proposals have all been approved. The banner
-        // used to read `warning:draft.empty` followed by an absolute path, on a
-        // course where nothing was wrong at all. Every other complaint — a file
-        // that will not parse, a collection that may not be drafted — still
-        // shows, because those are things a person can fix.
-        noted = drafted.issues.filter(
-          (issue) => issue.code !== "draft.empty" && issue.code !== "draft.missing",
-        );
-      } else {
-        data = payload(workspace, tool, { course_version_id: runId });
-      }
+      // The four views with an accepted-only form go through `viewPayload`; any
+      // other tool has only the one answer, over the whole course.
+      const filtered = ["course_outline", "class_progress", "gradebook", "action_inbox"].includes(tool);
+      let data = filtered
+        ? viewPayload(workspace, tool, runId, url.searchParams.get("date"), withDrafts).payload
+        : payload(workspace, tool, { course_version_id: runId });
+      const noted = [];
       // Only the outline carries resources; the other views have none to link.
       if (view === "outline") {
         const host = req.headers.host;

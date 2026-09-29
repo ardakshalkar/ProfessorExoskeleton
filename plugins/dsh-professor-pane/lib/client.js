@@ -78,15 +78,14 @@ window.__ModuleLoader__.load({
     /**
      * Redraw when something outside the pane writes to the workspace.
      *
-     * The pane knew about its own writes — an approval bumped `reload` — and
-     * about nothing else. An agent setting a due date, `bin/ainar approve` in a
-     * terminal, a file edited by hand: all of them left the professor reading a
+     * The pane knew about its own writes — a publication bumped `reload` — and
+     * about nothing else. An agent setting a due date, a draft accepted in an
+     * editor, a file edited by hand: all of them left the professor reading a
      * page that no longer matched the record, with nothing on screen to say so.
      * A course model is the sort of thing two people and a model all write to,
      * so "it changed" has to be observed rather than assumed.
      *
-     * `/api/revision` hashes the size and mtime of every YAML under `courses/`
-     * and `work/`. This polls it and calls `onChange` when the answer differs
+     * `/api/revision` hashes the size and mtime of every YAML under `courses/`. This polls it and calls `onChange` when the answer differs
      * from the last one seen.
      *
      * Three things this deliberately does not do:
@@ -256,18 +255,17 @@ window.__ModuleLoader__.load({
      * Not the same as "no sub-views": a tab absent from `SUBVIEWS` still gets
      * the pair, because most single-document views have a drafted half worth
      * seeing. These two do not — Preferences is not a view of a run, and the
-     * class list has no draftable half, since `DRAFTABLE` refuses enrollments
-     * in a draft file.
+     * class list has no drafted half: enrollments are not agent-writable and
+     * carry no approval.
      *
      * Students is in this set and still draws a row: the identity pair below
      * is its own control and has nothing to do with drafts.
      *
      * Integrations is in it for Preferences' reason and one sharper one. Its
      * subject is what the run is wired to — a Canvas host, a token, a section
-     * id — and none of that is draftable: `DRAFTABLE` does not accept
-     * `versions`, so there is no proposed half of an LMS linkage anywhere for a
-     * `+ drafts` press to reveal. A pair there would imply the course record
-     * and the work directory could disagree about which Canvas to push to.
+     * id — and none of that is drafted: `versions` is not agent-writable, so
+     * there is no proposed half of an LMS linkage anywhere for a `+ drafts`
+     * press to reveal.
      */
     const NO_DRAFT_PAIR = new Set(["preferences", "students", "integrations"]);
 
@@ -321,16 +319,15 @@ window.__ModuleLoader__.load({
     /**
      * Which halves of the course a view is computed over.
      *
-     * Not a display option. `courses/` is the record — what a person or `ainar
-     * approve` wrote — and `work/<RUN>/` is what the skills proposed and nobody
-     * has accepted. "Record" answers what a student may be shown; "+ drafts"
-     * answers what the term would look like if every proposal were accepted.
-     * They are different questions and the pane never merges the two silently:
-     * the merged view carries a banner naming the directory it came from.
+     * Not a display option. Drafts live in the course, marked `approval:
+     * draft` (a grade: `status: suggested`). "Record" answers what a student
+     * may be shown — only what has been accepted; "+ drafts" answers what the
+     * term looks like with every proposal in it. They are different questions
+     * and the pane never shows the second silently: it carries a banner.
      */
     const DRAFT_MODES = [
-      { label: "Record", drafts: false, hint: "courses/ only — what is approved" },
-      { label: "+ drafts", drafts: true, hint: "with unapproved proposals from work/<RUN>/" },
+      { label: "Record", drafts: false, hint: "only what has been accepted" },
+      { label: "+ drafts", drafts: true, hint: "including records marked approval: draft" },
     ];
 
     // ---------------------------------------------------------------- styles
@@ -3054,11 +3051,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               "div",
               { className: "pp-banner" },
               h("b", null, "Record + drafts. "),
-              "Everything below includes unapproved proposals from ",
-              h("code", null, "work/" + props.runId + "/"),
-              ". Nothing here has been accepted; ",
-              h("code", null, "ainar approve"),
-              " is what would accept it, and that command is yours.",
+              "Everything below includes records marked ",
+              h("code", null, "approval: draft"),
+              ", which nobody has accepted yet. Accepting one is changing that word to ",
+              h("code", null, "approved"),
+              " in its record, and that is yours to do.",
               doc.issues.length
                 ? h("span", { className: "pp-issues" }, doc.issues.join("  ·  "))
                 : null,
@@ -3335,12 +3332,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * message throws the plan away, so the red button can never send something
      * other than what was read — the rule `Send to Canvas` already holds.
      *
-     * **The first press is also what promotes.** `ainar publish` runs the gate
-     * over the drafted documents and resources the publication needs, so the
-     * plan's first lines are *would promote DOC-DRAFT-9001*. That is the whole
-     * of why there is no separate approval step in front of a publication any
-     * more, and the plan says it in the professor's own terms rather than
-     * leaving it to be inferred from a command they did not run.
+     * **Publishing approves nothing.** A record marked `approval: draft` is
+     * left out, and the plan names it — *Not published — 1 draft(s)* — so a
+     * deck the professor expected and did not see is one line from the reason.
      */
     const PUBLISH_TARGETS = [
       {
@@ -3380,7 +3374,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * next click writes a folder or posts to a channel of a hundred students.
      */
     const CONFIRM_LABEL = {
-      page: "Promote and write the page",
+      page: "Write the page",
       telegram: "Send to the channel",
       homework: "Publish to GitHub",
       canvas: "Send to Canvas",
@@ -3522,7 +3516,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     className: "pp-segbtn",
                     disabled: busy,
                     title:
-                      "Show what would be promoted and what would then be published. " +
+                      "Show what would be published, and which drafts would be left out. " +
                       "Writes nothing, here or anywhere else.",
                     onClick: () => props.run(false),
                   },
@@ -3535,8 +3529,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                         type: "button",
                         className: "pp-segbtn pp-danger",
                         title:
-                          "Promote the drafted materials this needs — documents and " +
-                          "resources only — and publish.",
+                          "Publish what has been accepted. Records still marked approval: draft " +
+                          "are left out.",
                         onClick: () => props.run(true),
                       },
                       state.target === "telegram" && state.edit
@@ -3572,8 +3566,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     "p",
                     { className: "pp-publishhint" },
                     "Nothing has been read or written yet. Check first; publishing is the " +
-                      "second press, and it is the press that also promotes the drafted " +
-                      "materials — never a grade.",
+                      "second press. Anything still marked approval: draft is left out.",
                   )
                 : h(
                     "pre",
@@ -3612,8 +3605,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       // recording rather than quietly flipping.
       //
       // The argument for `Record` was that the record is what a student may be
-      // shown and what an LMS may be given, so the merged view — what the term
-      // would look like if every proposal in `work/<RUN>/` were accepted — is a
+      // shown and what an LMS may be given, so the drafts view — what the term
+      // looks like with every proposal marked `approval: draft` in it — is a
       // different question and the professor should be the one who asks it.
       //
       // That argument holds for a course being taught. It fails for a course
@@ -3638,20 +3631,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       // pane shows never depends on what was pressed in some earlier session.
       const [names, setNames] = React.useState(true);
 
-      // The approval strip: what the last press produced, and whether the next
-      // press writes.
-      //
-      // Two presses by design. The first runs `--dry-run` and shows what WOULD
-      // be promoted; only then does a confirming button appear. A single button
-      // that wrote on first click would be one misplaced click away from
-      // promoting a term of drafts, and the thing being changed is the
-      // professor's course record.
-      //
-      // `phase` is idle | running | preview | done | error. `preview` is the
-      // only phase that offers the confirming button, so a stale preview cannot
-      // be confirmed after the drafts have changed underneath it — switching
-      // run, tab or draft mode resets this to idle.
-      const [approval, setApproval] = React.useState({ phase: "idle", text: "" });
 
       // Bumped after a write, and part of the frame's key, so the documents are
       // re-fetched. Without it the pane would go on drawing the course as it was
@@ -3819,12 +3798,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       }
       const current = options.find((option) => option.runId === chosen) || options[0] || null;
 
-      // Any change of subject invalidates a preview: the drafts it described are
-      // not necessarily the drafts a confirming press would now write.
-      React.useEffect(() => {
-        setApproval({ phase: "idle", text: "" });
-      }, [current ? current.runId : null, tab, drafts]);
-
       // Switching run returns to the default rather than carrying the last
       // press across. It matters in one direction now: a professor who pressed
       // `Pseudonyms` to cover one class list was covering THAT list, and the
@@ -3843,9 +3816,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
        * assessment does not name, a subgroup, the announcement itself — is
        * passed through and never guessed, on either side of the wire.
        *
-       * The approver is the run's first instructor, for `approve`'s reason:
-       * promoting a material records who accepted it, and this pane will not
-       * invent an identity to put in that field.
        */
       const runPublish = (confirm) => {
         if (!current || !publishing) return;
@@ -3864,7 +3834,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             group: (publishing.group || "").trim(),
             message: publishing.message || "",
             edit: publishing.edit === true,
-            approver: (current.instructors || [])[0] || "",
             confirm,
           }),
         })
@@ -3889,61 +3858,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           .catch((error) =>
             setPublishing((state) => state && { ...state, phase: "error", text: String(error) }),
           );
-      };
-
-      /**
-       * Run `ainar approve` on the server, previewing unless `confirm`.
-       *
-       * The request is a POST because it may write. The approver is the run's
-       * first instructor — the pane shows which id it is about to record, and
-       * declines to guess when the run names none.
-       *
-       * This is the whole-drafts-directory gate and stays what it always was:
-       * the only way an evaluation, a signal or an intervention becomes a
-       * record. `runPublish` above promotes materials and only materials.
-       */
-      const approve = (confirm) => {
-        if (!current) return;
-        const approver = (current.instructors || [])[0];
-        if (!approver) {
-          setApproval({
-            phase: "error",
-            text:
-              "This run names no instructor, so there is no id to record as the " +
-              "approver. Add one to `instructors` in the offering, or run " +
-              "`bin/ainar approve … --as <USER-ID>` yourself.",
-          });
-          return;
-        }
-        setApproval({ phase: "running", text: confirm ? "Writing…" : "Checking…" });
-        fetch(
-          scoped(
-            BASE +
-              "/api/approve?run=" +
-              encodeURIComponent(current.runId) +
-              "&approver=" +
-              encodeURIComponent(approver) +
-              (confirm ? "&confirm=1" : ""),
-            props.sessionId,
-          ),
-          { method: "POST" },
-        )
-          .then((response) => response.json())
-          .then((result) => {
-            if (result.error) {
-              setApproval({ phase: "error", text: result.error });
-              return;
-            }
-            setApproval({
-              phase: result.ok ? (confirm ? "done" : "preview") : "error",
-              text: result.output || "(the command said nothing)",
-            });
-            // A write changes the record the whole pane is drawing, so the
-            // frames have to be re-fetched rather than left showing the course
-            // as it was a moment ago.
-            if (confirm && result.ok) setReload((value) => value + 1);
-          })
-          .catch((error) => setApproval({ phase: "error", text: String(error) }));
       };
 
       const body = () => {
@@ -4049,7 +3963,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             // view happens to be open — a professor deciding to put the week
             // in front of the class should not first have to be on the right
             // tab. Absent with no offering, since there would be nothing to
-            // publish and no id to record as having promoted it.
+            // publish.
             current
               ? h(
                   "button",
@@ -4058,8 +3972,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     className: "pp-publishbtn",
                     title:
                       "The course page, an announcement, a homework repository or a " +
-                      "Canvas brief. Reads and shows a plan first; the drafted materials " +
-                      "it needs are promoted by the second press.",
+                      "Canvas brief. Reads and shows a plan first; anything still marked " +
+                      "approval: draft is left out.",
                     onClick: () => openPublish("page"),
                   },
                   "Publish",
@@ -4132,9 +4046,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         // computed over, and — on the class list only — whether people are
         // named. Preferences has none of it; it is not a view of a run.
         //
-        // Students gets no Record / + drafts pair, because `DRAFTABLE` refuses
-        // enrollments in a draft file: there is no drafted class list and never
-        // will be, and a pair that changed nothing would be a control implying
+        // Students gets no Record / + drafts pair, because enrollments are not
+        // agent-writable: there is no drafted class list and never will be, and a pair that changed nothing would be a control implying
         // an answer it does not have. It gets the identity pair instead.
         NO_SEGMENTED_ROW.has(tab)
           ? null
@@ -4194,59 +4107,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   )
                 : null,
             ),
-        // The approval strip. Only on Tasks, because that is the tab that shows
-        // what is drafted — a button to accept proposals belongs beside the list
-        // of them, not on the term plan or the gradebook.
-        tab === "tasks" && current
-          ? h(
-              "div",
-              { className: "pp-approve" },
-              h(
-                "div",
-                { className: "pp-approverow" },
-                h(
-                  "button",
-                  {
-                    type: "button",
-                    className: "pp-segbtn",
-                    disabled: approval.phase === "running",
-                    title:
-                      "Run `ainar approve --dry-run` and show what would be " +
-                      "promoted. Writes nothing.",
-                    onClick: () => approve(false),
-                  },
-                  approval.phase === "running" ? "Working…" : "Check what would be approved",
-                ),
-                approval.phase === "preview"
-                  ? h(
-                      "button",
-                      {
-                        type: "button",
-                        className: "pp-segbtn pp-danger",
-                        title:
-                          "Promote the drafts into courses/. This writes to the " +
-                          "course record.",
-                        onClick: () => approve(true),
-                      },
-                      "Approve and write",
-                    )
-                  : null,
-                (current.instructors || []).length
-                  ? h("span", { className: "pp-as" }, "as " + current.instructors[0])
-                  : null,
-              ),
-              approval.phase === "idle"
-                ? null
-                : h(
-                    "pre",
-                    {
-                      className:
-                        "pp-approveout" + (approval.phase === "error" ? " pp-approveerr" : ""),
-                    },
-                    approval.text,
-                  ),
-            )
-          : null,
         h("div", { className: "pp-body" }, body()),
         publishing === null
           ? null
