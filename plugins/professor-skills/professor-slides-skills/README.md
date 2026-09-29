@@ -33,9 +33,9 @@ pres route "Make 5 slides explaining RAG."
 | **DEEP** | a new lecture or course · research wanted · accreditation · material other instructors will teach from · 20+ slides · "show me the outline first" | the full workflow, unchanged |
 
 FAST is not sloppy. **The same rules about teaching apply in all three** —
-assertion headlines, one claim per slide, draw what is drawable, create the need
-before naming the thing, no answer on a question slide. What changes is how much
-of the reasoning becomes a file on disk.
+titles fitted to each slide's job, one teaching point per slide, draw what is
+drawable, create the need before naming the thing, no answer on a question
+slide. What changes is how much of the reasoning becomes a file on disk.
 
 ```text
 FAST      request → deck → check → render
@@ -137,7 +137,8 @@ enforced, not suggested. Some of what falls out of that:
 
 Two more references carry the craft no check can enforce:
 [`skills/make-materials/references/text-style.md`](skills/make-materials/references/text-style.md) on how to write the words
-— assertion headlines rather than topics, sentence case, parallel lists — and
+— supported takeaway titles for evidence and direct subject titles for explanations,
+sentence case, parallel lists — and
 [`skills/make-materials/references/typography.md`](skills/make-materials/references/typography.md) on which typefaces
 survive the lecture-room machine, and why the height estimator cares which one
 you pick.

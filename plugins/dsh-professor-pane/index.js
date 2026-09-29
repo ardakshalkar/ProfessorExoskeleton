@@ -3041,9 +3041,18 @@ const readyDocument = (workspace, root, runId, dark) => {
 
   // The files. Counted by kind rather than listed, because the question here is
   // "have I got slides for this course", not "what is every filename".
-  const materials = filesIn(join(dir, "materials"));
+  // A material is a folder — the deck on top, figures and build scripts in
+  // subfolders — so this walks down rather than reading one level.
+  const materialFiles = (folder) => {
+    const here = filesIn(folder);
+    if (here === null) return null;
+    return here.flatMap((entry) =>
+      entry.directory ? (materialFiles(join(folder, entry.name)) ?? []) : [entry],
+    );
+  };
+  const materials = materialFiles(join(dir, "materials"));
   if (materials !== null) {
-    const files = materials.filter((entry) => !entry.directory && !isBackup(entry.name));
+    const files = materials.filter((entry) => !isBackup(entry.name));
     const counted = MATERIAL_KINDS.map((kind) => ({
       label: kind.label,
       count: files.filter((file) => kind.test.test(file.name)).length,

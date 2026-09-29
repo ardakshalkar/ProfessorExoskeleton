@@ -752,7 +752,9 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
           // default, and a course kept somewhere with a long path lost the
           // render entirely, with an error from the image library that named
           // neither the deck nor the cause.
-          const stem = block.src.replace(/\.[^.]+$/, "");
+          // `figures/fig-01.svg` flattens to `figures-fig-01`: the PNG lands in
+          // one output directory, and a slash would ask for a subfolder of it.
+          const stem = block.src.replace(/\.[^.]+$/, "").replace(/[\\/]+/g, "-");
           const png = join(
             context.outDir,
             `${stem.startsWith(context.assets) ? stem : `${context.assets}-${stem}`}.png`,

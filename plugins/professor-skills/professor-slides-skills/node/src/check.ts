@@ -207,10 +207,13 @@ export function checkDeck(deckPath: string): DeckCheck {
       if (!existsSync(join(materialsDir, block.src))) {
         problems.push(error(`slide ${index + 1}: ${block.src} is linked but not beside the deck`));
       }
-      if (block.src.includes("/") || block.src.includes("\\")) {
+      // A deck is a folder: figures sit beside it or in a subfolder such as
+      // `figures/`. What breaks silently on approval is a link that leaves the
+      // folder — absolute, `..`, or a Windows separator — so that is what fails.
+      if (/^([a-zA-Z]:|[\\/])/.test(block.src) || block.src.includes("\\") || block.src.split("/").includes("..")) {
         problems.push(error(
-          `slide ${index + 1}: ${block.src} is not a sibling path. Figures live flat beside the deck; ` +
-          "a subdirectory link breaks silently in a deck nobody opens until the lecture.",
+          `slide ${index + 1}: ${block.src} leaves the deck's folder. Link figures relative to the deck ` +
+          "(`figures/fig-01.svg`); an absolute or `../` path breaks silently in a deck nobody opens until the lecture.",
         ));
       }
       if (!block.alt.trim()) {

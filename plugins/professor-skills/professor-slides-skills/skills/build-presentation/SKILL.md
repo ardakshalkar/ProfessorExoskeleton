@@ -121,11 +121,12 @@ claim, a source line, or an equation.
 pres rules writing
 ```
 
-The three that change a deck most. **A headline asserts; it does not name a
-topic** — "Kazakh costs 1.75× English for the same news", not "Cost analysis".
-This is the best-evidenced finding in slide design. **Sentence case**, headlines
-and body alike. **Every list parallel** — all verbs or all noun phrases, never
-mixed.
+The three that change a deck most. **Title the slide for its teaching job**:
+state a supported finding on an evidence slide ("Kazakh costs 1.75× English for
+the same news"), name the subject directly on a definition or process slide
+("The context window"), and put the actual question on a check slide. Do not
+turn every title into a claim. **Sentence case**, titles and body alike.
+**Every list parallel** — all verbs or all noun phrases, never mixed.
 
 Then: one thing per slide; the module's own identifiers where the structure
 matters; the example worked through; real questions on the check slides; fit,

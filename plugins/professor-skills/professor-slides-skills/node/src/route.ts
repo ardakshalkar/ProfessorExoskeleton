@@ -320,7 +320,7 @@ export function recipeFor(mode: Mode): Recipe {
         "the long reference documents",
       ],
       steps: [
-        "write the deck markdown straight out: one claim per slide, assertion headlines, draw what is drawable",
+        "write the deck markdown straight out: one teaching point per slide, titles matched to each slide's job, draw what is drawable",
         "pres plan build DECK.md --mode fast     # generates the render contract",
         "pres check DECK.md",
         "pres render DECK.md --pdf               # only if a file was asked for",

@@ -50,28 +50,31 @@ regions.
 
 ## Where the files live
 
-Approval flattens: `stage_documents` moves each document to
-`materials/<filename>`, by name, with no subdirectory. So figures live **flat
-beside the deck** and are named after it, and the markdown links to them as
-siblings:
+Approval keeps a material's folder: `stage_documents` moves a document from
+`work/<RUN>/materials/<MATERIAL>/…` to `courses/<C>/materials/<MATERIAL>/…`,
+same path below the folder. So a deck is a folder — the result on top, its
+figures in `figures/`, the scripts that made them in `build/`:
 
 ```text
-work/CSS-4008-2026-FALL/materials/
+work/CSS-4008-2026-FALL/materials/MODULE-06-slides/
   MODULE-06-slides.md
-  MODULE-06-slides-fig-01-split.svg
-  MODULE-06-slides-fig-02-gap.svg
-  MODULE-06-slides-fig-03-descent.py     # a manim scene, not its video
+  documents-draft.yaml
+  figures/
+    fig-01-split.svg
+    fig-02-gap.svg
+    fig-03-descent.py                    # a manim scene, not its video
 ```
 
 ```markdown
 ![Training data, validation data and a held-out test set never touched during
-tuning](MODULE-06-slides-fig-01-split.svg)
+tuning](figures/fig-01-split.svg)
 ```
 
-A sibling-relative link survives the move into
-`courses/<C>/materials/` unchanged, because both directories are
-flat. An absolute or `figures/`-prefixed path does not — it breaks on approval,
-and it breaks silently, in a deck nobody opens until the lecture.
+A link **relative to the deck** survives the move unchanged, because the folder
+moves as a unit. An absolute path, or one that climbs out with `../`, does not —
+it breaks on approval, and it breaks silently, in a deck nobody opens until the
+lecture. A file written straight into `materials/` (no folder) still lands flat
+by name; that is the old layout and only kept so existing courses keep working.
 
 The alt text is not optional and is not a caption of the filename. It says what
 the picture asserts, because it is what a screen reader gets, what a student
@@ -87,7 +90,7 @@ Each figure is its own `Document`, in the same `documents-draft.yaml`. No
 documents:
   - document_id: DOC-DRAFT-0602
     title: Train, validation and test split
-    storage_key: work/CSS-4008-2026-FALL/materials/MODULE-06-slides-fig-01-split.svg
+    storage_key: work/CSS-4008-2026-FALL/materials/MODULE-06-slides/figures/fig-01-split.svg
     mime_type: image/svg+xml
     course_version_id: CSS-4008-2026-FALL
     module_id: MODULE-06
@@ -128,10 +131,10 @@ slide always crops it.
 
 ```bash
 node --experimental-strip-types node/bin/find-image.ts --search "confusion matrix" \
-    --pick 2 --course-version CSS-4008-2026-FALL --name MODULE-06-slides-fig-02-matrix
+    --pick 2 --course-version CSS-4008-2026-FALL --name MODULE-06-slides/figures/fig-02-matrix
 ```
 
-The file lands in `work/<COURSE_VERSION_ID>/materials/` — a found image is a
+The file lands in `work/<COURSE_VERSION_ID>/materials/<deck>/figures/` — a found image is a
 proposal like anything else — and the tool prints the `Document` draft that
 carries its origin:
 

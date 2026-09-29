@@ -109,6 +109,7 @@ import {
   resolveAuth,
 } from "../src/homework.ts";
 import { archiveRun, migrateLayout } from "../src/layout.ts";
+import { organizeMaterials } from "../src/material-folders.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
 import { LAYOUT, measureDeck } from "../src/deck.ts";
 import { buildMaterials, producerFor, readProducers } from "../src/materials.ts";
@@ -336,6 +337,7 @@ const HELP = `ainar — the AINAR course model CLI
   the read to do before a small edit, and the one /revise starts with.
   migrate-layout [COURSE_ID…] [--dry-run]  move off versions/<TERM>/, once
   archive-run [--force] [--dry-run]        pack the finished term into archive/
+  organize-materials [COURSE_ID…] [--dry-run]  one folder per material, records rewritten
   deck fit FILE.md [--verbose]            will each slide fit on the page
 
   Enrollments hold pseudonyms only. Names, numbers and emails go to
@@ -2340,6 +2342,39 @@ try {
         for (const { path, why } of result.left) {
           out(`  left alone (${why}): ${relative(courseDir, path).split(/[\\/]/).join("/")}`);
         }
+      }
+      break;
+    }
+
+    /**
+     * Regroup a flat `materials/` into one folder per material.
+     *
+     * Rewrites every recorded path and every figure link, and restamps the
+     * checksum of a deck whose links changed. `--dry-run` first, always.
+     */
+    case "organize-materials": {
+      const dryRun = args.includes("--dry-run");
+      const ids = rest.filter((a) => !a.startsWith("--"));
+      const courseDirs = ids.length ? ids.map((id) => join(root, "courses", id)) : discoverCourses(root);
+      if (!courseDirs.length) throw new Error("no courses found under courses/");
+      for (const courseDir of courseDirs) {
+        const name = relative(root, courseDir).split(/[\\/]/).join("/");
+        const result = organizeMaterials({
+          root,
+          courseDir,
+          courseKey: `${name}/materials/`,
+          dryRun,
+        });
+        out(`${name}${dryRun ? " (dry run)" : ""}`);
+        const inCourse = (path: string): string => relative(courseDir, path).split(/[\\/]/).join("/");
+        for (const { from, to } of result.moved) {
+          out(`  ${dryRun ? "would move" : "moved"} ${inCourse(from)} -> ${inCourse(to)}`);
+        }
+        for (const { path, references } of result.rewritten) {
+          out(`  ${dryRun ? "would rewrite" : "rewrote"} ${references} spot(s) in ${inCourse(path)}`);
+        }
+        for (const id of result.restamped) out(`  restamped size and checksum of ${id}`);
+        for (const { path, why } of result.left) out(`  left alone (${why}): ${inCourse(path)}`);
       }
       break;
     }

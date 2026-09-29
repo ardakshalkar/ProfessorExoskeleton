@@ -149,9 +149,30 @@ course `preferences.yaml`, and finally the current task. Record the resulting
 audience, style, duration, outcome coverage and slide sequence in the Document's
 `presentation_plan`; do not bury those decisions only in prose.
 
-Write to `work/<RUN_ID>/materials/`. Use **markdown**, not binary formats:
-markdown diffs, reviews and converts. Slides use Marp front matter so they
-render as a deck.
+Write to `work/<RUN_ID>/materials/<MATERIAL>/` — **one folder per material**,
+named for its main file, with the result on top and everything that made it
+underneath:
+
+```text
+work/CSS-4008-2026-FALL/materials/MODULE-06-slides/
+  MODULE-06-slides.md          the result: what the professor opens
+  documents-draft.yaml         its registration, and its figures'
+  figures/                     fig-01-split.svg, fig-02-gap.svg, found images
+  build/                       scripts that produce a figure or a file
+```
+
+The professor opens the folder and sees the deck; the artefacts are in folders
+they only open on purpose. Approval moves the whole folder shape to
+`courses/<C>/materials/<MATERIAL>/` as it is. A file written straight into
+`materials/` still works and lands flat, but it is the old layout — do not
+start new material that way. A course that already has a flat `materials/`
+is regrouped by `ainar organize-materials <COURSE> --dry-run` (then without the
+flag): it moves each deck, its sidecars, figures and scripts into one folder,
+rewrites every recorded path and figure link, and reports what it would not
+guess at.
+
+Use **markdown**, not binary formats: markdown diffs, reviews and converts.
+Slides use Marp front matter so they render as a deck.
 
 ```markdown
 ---
@@ -168,7 +189,8 @@ generated_by: make-materials-skill
 `courses/CSS-4008/materials/MODULE-06-slides.md` is a worked
 example of the shape — read it before writing your first deck, along with
 `MODULE-06-slides-fig-01-split.svg` beside it and the `DOC-4411` record in
-`documents.yaml`, which are a worked example of a figure.
+`documents.yaml`, which are a worked example of a figure. (That sample
+predates folders and sits flat; new material follows the folder layout above.)
 
 What good material does here:
 
@@ -184,12 +206,12 @@ What good material does here:
 
 **Pictures follow the same rule as prose.** What you write is the thing that
 generates the picture — an SVG, a manim scene, a chart built from an `ainar`
-command — never only the picture. Figures live flat beside the deck, named after
-it, and are linked as siblings so the link survives approval:
+command — never only the picture. Figures live in the deck folder's `figures/`,
+and are linked relative to the deck so the link survives approval:
 
 ```markdown
 ![Training data, validation data and a held-out test set never touched during
-tuning](MODULE-06-slides-fig-01-split.svg)
+tuning](figures/fig-01-split.svg)
 ```
 
 Never draw a chart of this class's performance that no command produced, and
@@ -201,13 +223,13 @@ accessibility rules — read it before adding the first figure.
 
 ## 4. Register it
 
-In the same directory, write `documents-draft.yaml`:
+In the material's own folder, write `documents-draft.yaml`:
 
 ```yaml
 documents:
   - document_id: DOC-DRAFT-0601
     title: Model evaluation and overfitting — slides
-    storage_key: work/CSS-4008-2026-FALL/materials/MODULE-06-slides.md
+    storage_key: work/CSS-4008-2026-FALL/materials/MODULE-06-slides/MODULE-06-slides.md
     mime_type: text/markdown
     course_run_id: CSS-4008-2026-FALL
     module_id: MODULE-06

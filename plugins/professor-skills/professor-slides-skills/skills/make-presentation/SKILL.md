@@ -55,9 +55,11 @@ Drop `--source local` if the shared copy is the point.
 Still true, because it is what makes the deck good rather than what makes it
 slow:
 
-- **Assertion headlines.** "Retrieval puts the answer in the prompt, not in the
-  weights", never "Retrieval".
-- **One claim per slide.** Two claims is two slides.
+- **Titles match the teaching job.** Use a supported takeaway for evidence, a
+  direct subject for definitions and processes, and the actual question for a
+  check. "Retrieval puts the answer in the prompt, not in the weights" fits a
+  finding; "Retrieval process" fits a mechanism.
+- **One teaching point per slide.** Split competing claims across slides.
 - **Draw what is drawable.** A bulleted list of pipeline stages is a diagram you
   declined to draw. Hand-authored SVG beside the deck, alt text on every one.
 - **A question slide carries the question and nothing else.**

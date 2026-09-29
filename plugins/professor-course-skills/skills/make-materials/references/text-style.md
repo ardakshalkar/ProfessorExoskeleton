@@ -3,45 +3,55 @@
 `visual-grammar.md` says what each slide's text is *for* — its role and its
 density. This says how to write it.
 
-## The single highest-return change: a headline that asserts
+## Give the slide the title its teaching job needs
 
-Almost every generated deck, and most human ones, give a slide a **topic**:
+For a slide that presents evidence for a finding, a topic label leaves the
+conclusion for the audience to reconstruct:
 
 > Placer Deposits
 
-An assertion-evidence headline gives it a **claim**:
+A supported takeaway tells them what the evidence establishes:
 
 > Placer deposits arise from the erosion of lode deposits
 
-This is not a style preference; it is the best-evidenced finding in slide
-design. In controlled comparisons, audiences shown assertion headlines scored
-higher on recall, higher on understanding, higher on higher-order questions, and
-were still ahead on a delayed quiz a week later.
+The assertion-evidence approach is useful for this kind of slide. Controlled
+comparisons found gains in recall and understanding when a claim was paired with
+its evidence. That does not make a claim the right title for every slide.
 
-The mechanism is worth understanding, because it explains why the effect is so
-large. A topic headline says *what area we are in* and leaves the audience to
-work out what they are supposed to conclude — usually from a bullet list, while
-the speaker is talking over it. An assertion headline states the conclusion, and
-the rest of the slide becomes evidence for it. The audience knows what they are
-looking at, and the speaker has somewhere to land.
+On an evidence slide, a topic headline says *what area we are in* and leaves
+the audience to work out the conclusion while the speaker is talking. A
+takeaway headline states the conclusion, and the rest of the slide becomes
+evidence for it. A definition or process slide has a different job: its title
+helps students identify and find the subject.
 
-It also improves the deck before it is written. A professor forced to state each
-slide's claim as a sentence discovers which slides have no claim, and those are
-exactly the slides worth cutting.
+Choose the form from the slide's purpose:
 
-**Write the headline as a sentence.** It may run to two lines; that is fine and
-far better than a noun phrase.
+| Slide's job | Title form | Example |
+| --- | --- | --- |
+| Present evidence or a finding | A short, supported takeaway | Kazakh costs 1.75× English for the same news |
+| Define or explain a mechanism | A direct subject label | The context window |
+| Show a process or comparison | Name the process or the things compared | Autoregressive generation and diffusion |
+| Orient the class or open a section | Name the destination or section | Inside the LLM: roadmap |
+| Ask students to think or act | The actual question or task, without its answer | Which answer is supported by the passage? |
 
-| Instead of | Write |
+Do not manufacture a conclusion for a slide that is introducing a term, setting
+up an example, or showing how something works. Avoid presenter narration such
+as “Where Week 1 stopped, and what we open today” and vague framing such as
+“Two different generative stories”; name the subject directly.
+
+For an evidence slide, write the takeaway as a sentence when that is the clearest
+form. It may run to two lines. Keep other titles short enough to scan quickly.
+
+| Instead of this topic label on an evidence slide | Write the supported finding |
 | --- | --- |
-| Tokenization | A tokenizer maps text to integer IDs, and back |
 | Cost Analysis | Kazakh costs 1.75× English for the same news |
 | Overfitting | The gap between the curves is the diagnostic, not either number |
 | Results | Accuracy drops sharply beyond 8K tokens |
 
-The last one is the general rule for any slide carrying a chart: **the headline
-carries the claim, the chart carries the evidence.** "Accuracy by context
-length" describes the axes, which the audience can already see.
+On a chart that establishes a finding, **the headline carries the claim, and
+the chart carries the evidence.** “Accuracy by context length” merely describes
+the axes. A chart that introduces how a metric is defined can use the metric's
+name instead.
 
 ## Sentence case, not Title Case
 
@@ -53,8 +63,7 @@ Title Case flattens those outlines into a row of similar rectangles and is
 measurably slower to read. On a slide, read at distance and in a hurry, that
 cost is real.
 
-Sentence case also stops fighting the assertion rule: a headline that is a
-sentence should be capitalised like one.
+Sentence case works for both takeaway sentences and direct subject labels.
 
 ALL CAPS is worse again, for the same reason plus a shouting problem. Reserve it
 for a two-word label inside a diagram, if at all.
@@ -127,7 +136,8 @@ literature they go on to read will use it.
 
 Before handing a deck over:
 
-- Does every headline state a claim rather than name a topic?
+- Does each title fit the slide's job: supported takeaway, direct subject, or
+  question/task? Can a student find the topic by scanning the deck?
 - Is everything in sentence case?
 - Is every list parallel, and between two and five items?
 - Does any text describe something the audience can already see?

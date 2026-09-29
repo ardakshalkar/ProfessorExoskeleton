@@ -1,5 +1,6 @@
 # The records that register whatever was written, as `documents-draft.yaml` in
-# the same directory as the material. Approval is what turns these into records;
+# the material's own folder (`materials/{{ material }}/`), the deck on top and
+# its figures under `figures/`. Approval is what turns these into records;
 # nothing here is one yet, which is what the -DRAFT- segment says.
 #
 # Never write `size_bytes` or `checksum` — approval computes both from the file,
@@ -9,7 +10,7 @@
 documents:
   - document_id: DOC-DRAFT-{{ nnnn }}
     title: "{{ material title }}"
-    storage_key: work/{{ COURSE_VERSION_ID }}/materials/{{ filename }}
+    storage_key: work/{{ COURSE_VERSION_ID }}/materials/{{ material }}/{{ filename }}
     mime_type: text/markdown
     course_run_id: "{{ COURSE_VERSION_ID }}"
     module_id: "{{ MODULE-ID }}"
@@ -43,7 +44,7 @@ documents:
   # up pointing at a file left behind in gitignored work/.
   - document_id: DOC-DRAFT-{{ nnnn }}
     title: "{{ what the figure shows }}"
-    storage_key: work/{{ COURSE_VERSION_ID }}/materials/{{ figure filename }}
+    storage_key: work/{{ COURSE_VERSION_ID }}/materials/{{ material }}/figures/{{ figure filename }}
     mime_type: image/svg+xml
     course_run_id: "{{ COURSE_VERSION_ID }}"
     module_id: "{{ MODULE-ID }}"
