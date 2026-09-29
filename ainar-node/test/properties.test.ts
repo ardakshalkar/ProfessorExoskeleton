@@ -33,7 +33,8 @@ test("a typo in authored YAML is an error, not an ignored key", () => {
 
 test("identifier patterns are anchored at both ends", () => {
   assert.equal(module("MODULE-06").success, true);
-  assert.equal(module("MODULE-DRAFT-06").success, true);
+  // No draft marker in an identifier any more: a draft says so in `approval`.
+  assert.equal(module("MODULE-DRAFT-06").success, false);
   assert.equal(module("MODULE-6").success, false, "one digit — the pattern wants two");
   assert.equal(module("xMODULE-06x").success, false, "an unanchored regex would accept this");
 });

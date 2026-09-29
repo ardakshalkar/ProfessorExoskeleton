@@ -18,7 +18,7 @@
 
 import { mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { decidedAt, zoneOffsetMinutes } from "../approve.ts";
+import { decidedAt, upsertRecords, writeRecords, zoneOffsetMinutes } from "../records-write.ts";
 import { allRubrics, assessmentById, assessmentsOf, enrollmentsOf, runById } from "../bundle.ts";
 import { type CourseBundle } from "../bundle.ts";
 import { type GradeRow, gradeRows, gradebookPayload } from "../gradebook.ts";
@@ -93,7 +93,7 @@ import {
   totalsInTab,
   trailingRange,
 } from "./sheets.ts";
-import { submissionsFromApi, submissionsFromExport, writeDrafts } from "./pull.ts";
+import { submissionsFromApi, submissionsFromExport } from "./pull.ts";
 import { rosterDir } from "../roster.ts";
 
 /** Python's `%g`. */
@@ -1179,12 +1179,12 @@ const runImportSubmissions = async (
   }
 
   deps.out(`${source} → ${assessment.assessment_id}`);
-  deps.out(`  ${result.drafts.length} proposed, ${result.already.length} already recorded here`);
+  deps.out(`  ${result.drafts.length} new, ${result.already.length} already recorded here`);
   for (const studentId of result.unmatched) {
     deps.out(`  skipped ${studentId}: not an active enrollment in this run`);
   }
   if (!result.drafts.length) {
-    deps.out("\nnothing to propose");
+    deps.out("\nnothing new to record");
     return 0;
   }
   for (const draft of result.drafts.slice(0, 10)) {
@@ -1199,10 +1199,13 @@ const runImportSubmissions = async (
     return 0;
   }
 
-  const out = args.out
-    ? resolve(args.out)
-    : join(root, "work", args.run, "submissions-draft.yaml");
-  const path = writeDrafts(result.drafts, out);
+  // Into the course's own submissions file, or `--out` when one was given.
+  // A submission is a fact about what Canvas holds, so there is nothing for a
+  // person to accept: it is written as a record and carries no `approval`.
+  const courseDir = join(root, "courses", (bundle.course as any).course_id);
+  const path = args.out
+    ? upsertRecords(resolve(args.out), "submissions", result.drafts)
+    : writeRecords(courseDir, { submissions: result.drafts })[0]!;
   deps.out(`\nwrote ${path}`);
   if (args.target === "canvas-api") {
     deps.out("Submission times come from Canvas, converted to the run's timezone.");
@@ -1210,10 +1213,7 @@ const runImportSubmissions = async (
     deps.out("No submission time is recorded: a gradebook export does not carry one,");
     deps.out("and inventing it would be a fabricated fact about a student.");
   }
-  deps.out(
-    `\nCheck it, then approve:\n  ainar validate ${(bundle.course as any).course_id} ` +
-      `--drafts work/${args.run}`,
-  );
+  deps.out(`\nCheck it:\n  ainar validate ${(bundle.course as any).course_id}`);
   return 0;
 };
 

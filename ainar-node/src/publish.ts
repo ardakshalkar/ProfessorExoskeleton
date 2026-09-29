@@ -1,44 +1,32 @@
 /**
- * Publishing: the one grammar, and the promotion it carries with it.
+ * Publishing: the one grammar.
  *
  * Four things in this project reach an audience — the students' page, a
  * homework starter repository, an assessment's definition in Canvas, and a
- * Telegram announcement. They were four commands with four shapes, and each one
- * was preceded by a step the professor had to remember and perform somewhere
- * else: `ainar approve`, in a terminal, before the deck they had just drafted
- * could appear on the page at all.
+ * Telegram announcement. Each prints a plan, and `--confirm` carries it out.
  *
- * That step has not been removed. It has been **folded in**: `ainar publish`
- * runs the same gate, in the same order of operations (`runApproval` in
- * `approve.ts`), and then publishes. Two presses rather than two programs — a
- * plan that names what it would promote and what it would then publish, and a
- * `--confirm` that does both.
+ * ## Drafts are skipped, and named
  *
- * ## What may be promoted this way, and what may never be
+ * Since 2026-09-29 a proposal lives in the course beside everything else,
+ * marked `approval: draft` (see `approval.ts`), and publishing approves
+ * nothing. What reaches a student is what the professor has accepted; a draft
+ * the page would otherwise have carried is listed in the plan instead, so the
+ * deck a professor expected to see and did not is one line away from the reason.
  *
- * `MATERIAL_COLLECTIONS` is the whole of the answer, and it is enforced in code
- * rather than asserted in prose: `runApproval` is handed that list, so a drafted
- * evaluation sitting in the same `work/<RUN>/` directory is not promoted, is not
- * validated against, and is named in the plan as left alone.
- *
- * The reason the line falls exactly there: a `Document` or a `Resource` is an
- * artefact — a deck, a handout, a brief. Publishing one IS the act of standing
- * behind it, and a professor who pressed *publish the course page* having read
- * what would go on it has made the decision the gate exists to capture. An
- * `Evaluation` is a judgement about a person, and nothing about pressing
- * *publish* says whether a suggested score is right. `ainar approve` remains
- * the only way one of those becomes a record, and the professor runs it.
+ * This used to be the other way round: `publish --confirm` promoted drafted
+ * documents and resources out of `work/` on the grounds that publishing one is
+ * standing behind it. It no longer needs to — accepting a material is changing
+ * one word in its record — and a publish that also approved was two decisions
+ * behind one button.
  */
 
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { promoteIdentifier } from "./approve.ts";
+import { type Draft, drafts } from "./approval.ts";
 import type { CourseBundle } from "./bundle.ts";
-import { type Drafted, loadDrafts } from "./drafts.ts";
 import type { Fingerprint } from "./freshness.ts";
 import type { Publication } from "./lms/ledger.ts";
 import { type Transport, TransportError, json } from "./lms/http.ts";
-import { IssueList, describe } from "./issues.ts";
 import { publishable } from "./page.ts";
 import { describeLeak, scan } from "./safety.ts";
 
@@ -70,10 +58,10 @@ export const isUpdate = (target: Target): boolean => target === "update";
 export const UPDATABLE: readonly Target[] = ["page", "canvas", "homework"];
 
 /**
- * The only draft collections a publication may promote on the professor's
- * behalf. See this file's header for why the line is here and not elsewhere.
+ * The collections a publication carries to students, and so the ones whose
+ * drafts a plan names as left out.
  */
-export const MATERIAL_COLLECTIONS = ["documents", "resources"] as const;
+export const PUBLISHED_COLLECTIONS = ["documents", "resources", "activities", "assessments"] as const;
 
 export const describeTarget = (target: Target): string =>
   ({
@@ -122,104 +110,26 @@ export const destinations = (
 };
 
 // --------------------------------------------------------------------------
-// What a publication would promote
+// What a publication leaves out
 // --------------------------------------------------------------------------
 
-export interface Promotion {
-  collection: string;
-  draftId: string;
-  title: string;
-  /**
-   * The record this draft has already become, if it has.
-   *
-   * `ainar approve` leaves the drafts where they are and prints that they can
-   * now be removed, which is fine for a command a professor runs once and then
-   * tidies up after. It is not fine for a button: the second press would find
-   * the same draft, promote it to an identifier the record already holds, and
-   * refuse with `approve.collision` — four errors about a deck that is
-   * published and correct. So a draft whose promoted identifier is already in
-   * the course is reported here and rejected from the approval, and pressing
-   * Publish twice publishes twice.
-   */
-  recordedAs: string | null;
-}
-
-export interface Pending {
-  /** Material drafts this publication would promote. */
-  promotions: Promotion[];
-  /** Everything else in the drafts directory, by collection, left alone. */
-  leftAlone: Map<string, number>;
-  /** The drafts did not load. Publishing does not proceed past this. */
-  errors: string[];
-}
-
-/** The promotions that still have something to do. */
-export const outstanding = (pending: Pending): Promotion[] =>
-  pending.promotions.filter((entry) => entry.recordedAs === null);
-
-const TITLE_FIELDS = ["title", "name", "label"];
-
-const titleOf = (record: Record<string, unknown>): string => {
-  for (const field of TITLE_FIELDS) {
-    const value = record[field];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "(untitled)";
-};
-
 /**
- * Read `work/<RUN>/` and say what a publication would promote out of it.
+ * The drafts a publication of this run would leave out.
  *
- * This is the plan's first half and it writes nothing. It loads the drafts the
- * same way the gate does, so a directory that will not load fails here — in the
- * preview, where a professor is reading — rather than half way through a push
- * to GitHub.
+ * Only the collections a publication carries, and only this run's — a draft
+ * grade is not something a page would have shown, and naming it here would
+ * read as though it were.
  */
-export const pendingMaterials = (draftsDir: string, bundle?: CourseBundle): Pending => {
-  const issues = new IssueList();
-  const loaded = loadDrafts(draftsDir, issues) as Drafted;
-  if (issues.errors.length) {
-    return {
-      promotions: [],
-      leftAlone: new Map(),
-      errors: issues.errors.map((issue) => describe(issue)),
-    };
+export const unpublishedDrafts = (bundle: CourseBundle, courseVersionId?: string): Draft[] => {
+  const collections = bundle as unknown as Record<string, Record<string, unknown>[] | undefined>;
+  const scoped: Record<string, Record<string, unknown>[]> = {};
+  for (const collection of PUBLISHED_COLLECTIONS) {
+    scoped[collection] = (collections[collection] ?? []).filter((record) => {
+      const run = record.course_version_id;
+      return courseVersionId === undefined || run === undefined || run === null || run === courseVersionId;
+    });
   }
-
-  const already = new Set<string>();
-  for (const collection of MATERIAL_COLLECTIONS) {
-    const field = collection === "documents" ? "document_id" : "resource_id";
-    for (const record of ((bundle ?? {}) as Record<string, unknown>)[collection] as
-      | Record<string, unknown>[]
-      | undefined ?? []) {
-      const value = record[field];
-      if (typeof value === "string") already.add(value);
-    }
-  }
-
-  const drafted = loaded as unknown as Record<string, Record<string, unknown>[]>;
-  const allowed = new Set<string>(MATERIAL_COLLECTIONS);
-  const promotions: Promotion[] = [];
-  const leftAlone = new Map<string, number>();
-  for (const [collection, records] of Object.entries(drafted)) {
-    if (!records || !records.length) continue;
-    if (!allowed.has(collection)) {
-      leftAlone.set(collection, records.length);
-      continue;
-    }
-    const idField = collection === "documents" ? "document_id" : "resource_id";
-    for (const record of records) {
-      const draftId = String(record[idField] ?? "(no id)");
-      const promoted = promoteIdentifier(draftId);
-      promotions.push({
-        collection,
-        draftId,
-        title: titleOf(record),
-        recordedAs: already.has(promoted) ? promoted : null,
-      });
-    }
-  }
-  return { promotions, leftAlone, errors: [] };
+  return drafts(scoped as unknown as CourseBundle);
 };
 
 // --------------------------------------------------------------------------
@@ -236,14 +146,8 @@ export interface PagePlan {
 }
 
 /**
- * The page's own half of the plan, computed over the record as it stands.
- *
- * Deliberately NOT over the merge. A promotion moves a material out of `work/`,
- * so what it would publish is a question about the record after promoting, and
- * the honest way to answer it before promoting is to name the promotions
- * separately — which `pendingMaterials` does. A merged answer would read as
- * though the file were already where it will be, which is the one thing a
- * preview must not do.
+ * The page's own half of the plan, computed over the record as it stands —
+ * drafts held back, by `publishable`, with the reason in `heldBack`.
  */
 export const pagePlan = (
   bundle: CourseBundle,
@@ -507,39 +411,28 @@ export const announcementText = (message: string | undefined, file: string | und
  *
  * One shape for all four, because the professor's question is the same each
  * time and a different layout per target is how a line gets skimmed: what would
- * be promoted, what would then happen, and what would not.
+ * happen, what would be left out as a draft, and what would be refused.
  */
 export const publishPlan = (options: {
   target: Target;
-  pending: Pending;
+  drafts: Draft[];
   actions: string[];
   refusals: string[];
 }): string[] => {
-  const { target, pending, actions, refusals } = options;
+  const { target, drafts: left, actions, refusals } = options;
   const lines: string[] = [];
 
-  const todo = outstanding(pending);
-  if (todo.length) {
-    lines.push(`Would promote ${todo.length} drafted material(s) first:`);
-    for (const promotion of todo) {
-      lines.push(`  ${promotion.draftId}  ${promotion.title}`);
-    }
-  } else {
-    lines.push("Nothing drafted to promote — the record already holds what this publishes.");
-  }
-
-  for (const promotion of pending.promotions) {
-    if (promotion.recordedAs === null) continue;
-    lines.push(`  ${promotion.draftId} is already ${promotion.recordedAs} in the course — left as it is`);
-  }
-
-  for (const [collection, count] of pending.leftAlone) {
-    lines.push(`  left alone: ${count} draft(s) in ${collection}, which publishing does not promote`);
-  }
-
-  lines.push("");
-  lines.push(`Would then publish ${describeTarget(target)}:`);
+  lines.push(`Would publish ${describeTarget(target)}:`);
   for (const action of actions) lines.push(`  ${action}`);
+
+  if (left.length) {
+    lines.push("");
+    lines.push(`Not published — ${left.length} draft(s) nobody has approved yet:`);
+    for (const draft of left) {
+      lines.push(`  ${draft.id}${draft.title ? `  ${draft.title}` : ""}`);
+    }
+    lines.push("  Set `approval: approved` on a record to include it.");
+  }
 
   if (refusals.length) {
     lines.push("");

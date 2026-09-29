@@ -41,7 +41,7 @@ export interface Impact {
   documentId: string;
   title: string;
   storageKey: string;
-  /** `draft` while the file is under `work/`, `record` once approval moved it. */
+  /** `draft` while the record says `approval: draft`, `record` once accepted. */
   state: "draft" | "record" | "elsewhere";
   version: number;
   /**
@@ -132,7 +132,7 @@ export const impact = (options: {
   const storageKey = (document.storage_key as string) ?? "";
   const state = storageKey.includes("://")
     ? "elsewhere"
-    : storageKey.startsWith("work/")
+    : document.approval === "draft"
       ? "draft"
       : "record";
 
@@ -195,8 +195,8 @@ export const impact = (options: {
 
   const next: string[] = [];
   if (state === "draft") {
-    next.push(`edit ${storageKey} — it is a draft, so nothing has to be promoted first`);
-    next.push("publishing it is what promotes it, and the plan says so before it does");
+    next.push(`edit ${storageKey} — it is a draft, so nobody has accepted a version of it yet`);
+    next.push("set approval: approved on its record when it is right; until then nothing publishes it");
   } else if (state === "record") {
     if (fileState === "matches" || fileState === "unstamped") {
       next.push(`edit ${storageKey} in place — a new identifier is not needed, and neither is \`supersedes\``);

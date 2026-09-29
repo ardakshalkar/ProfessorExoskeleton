@@ -9,25 +9,27 @@ writes: drafts
 
 > **Non-negotiables.** This skill proposes; a person decides.
 >
-> - Write to `work/<RUN_ID>/`, never into `courses/`. Draft identifiers carry a
->   `-DRAFT-` segment so they cannot be mistaken for records.
+> - Write into the course, where the record belongs — the file for its
+>   collection under `courses/<COURSE>/`, with its real identifier — and mark
+>   every record you write `approval: draft` (a grade: `status: suggested`).
+>   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
+>   nothing student-facing reads a draft.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
 >   job. Concepts and modules may be **proposed** from source material the
 >   professor supplied, with `extensions.proposal.source` naming where each came
 >   from — proposed, not invented, and inert until approved.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -65,8 +67,9 @@ That returns, already joined:
 - `interventions_awaiting_approval`
 - `recent_events`
 - `existing_action_items` — what is already in the inbox
-
-Add `--drafts work/<RUN_ID>` to include unapproved agent output.
+- `drafts_awaiting_approval` — every record in the course still marked
+  `approval: draft`, present only when there is at least one. Grades and
+  interventions are not repeated here; they keep their own sections above.
 
 ## 2. Read the ladder before deciding anything
 
@@ -81,7 +84,7 @@ the counts, and a `kind` that says whose move it is:
 | `kind` | What you may do |
 | --- | --- |
 | `claim` | Report the gap and ask. `outcomes` and `weights` are the professor's sentences, and no phrasing of the question makes them yours |
-| `draft` | Propose it with the skill named in `next`, into `work/` for approval |
+| `draft` | Propose it with the skill named in `next`, into the course marked `approval: draft` |
 | `command` | Run it, or show it to them if it touches identities |
 
 **The counts in `detail` are computed. Copy them; never recount.** A number you
@@ -168,11 +171,13 @@ records behind it. The ladder decides which: with no student work, `pre-term.md`
 is the honest one. Show the professor the choice where it is not obvious.
 `references/templates.md` has the convention.
 
-Write to `work/<RUN_ID>/action-items-draft.yaml`:
+Write to `courses/<COURSE_ID>/records/action-items.yaml` — read it first and
+add to what is there — with the item's final identifier and `approval: draft`:
 
 ```yaml
 action_items:
-  - action_id: ACTION-DRAFT-001
+  - action_id: ACTION-REVIEW-ASSESSMENT-04
+    approval: draft
     course_run_id: CSS-4008-2026-FALL
     assigned_to: USER-ARD-A01
     type: review_grades
@@ -199,7 +204,8 @@ A `next_step` from the ladder is written the same way, sourced to the rung it
 came from and to nothing else:
 
 ```yaml
-  - action_id: ACTION-DRAFT-002
+  - action_id: ACTION-STATE-OUTCOMES
+    approval: draft
     course_run_id: CSS-4008-2026-FALL
     assigned_to: USER-ARD-A01
     type: build_course
@@ -228,7 +234,7 @@ the thing it concerns.
 ## 5. Check it
 
 ```bash
-bin/ainar validate CSS-4008 --drafts work/CSS-4008-2026-FALL
+bin/ainar validate CSS-4008
 ```
 
 An unknown `source_event_id`, an unknown assignee or a duplicate identifier
@@ -258,10 +264,17 @@ count is what the files hold, not a judgement that the content is any good —
 `ainar alignment` and `validate`'s warnings are where that lives, and a rung
 being `ready` never means those have nothing to say.
 
-**Do not run `ainar approve` yourself.** Offer it:
+If `drafts_awaiting_approval` is present, say how many records are waiting and
+in which files — that is a decision the professor owes too, and it belongs in
+the inbox rather than beside it.
+
+**Do not accept anything yourself.** Say that the items you wrote are in
+`records/action-items.yaml` marked `approval: draft`, that they accept one by
+changing `approval: draft` to `approval: approved` (or deleting the line) and
+reject one by deleting it, and that this lists everything waiting:
 
 ```bash
-bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
+bin/ainar drafts CSS-4008-2026-FALL
 ```
 
 ## Without the CLI

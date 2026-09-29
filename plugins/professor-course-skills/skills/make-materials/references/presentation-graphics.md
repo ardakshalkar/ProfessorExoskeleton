@@ -50,15 +50,14 @@ regions.
 
 ## Where the files live
 
-Approval keeps a material's folder: `stage_documents` moves a document from
-`work/<RUN>/materials/<MATERIAL>/…` to `courses/<C>/materials/<MATERIAL>/…`,
-same path below the folder. So a deck is a folder — the result on top, its
+A material is written straight into its own folder in the course,
+`courses/<C>/materials/<MATERIAL>/…`, and stays there — nothing moves it when
+the professor accepts it. So a deck is a folder — the result on top, its
 figures in `figures/`, the scripts that made them in `build/`:
 
 ```text
-work/CSS-4008-2026-FALL/materials/MODULE-06-slides/
+courses/CSS-4008/materials/MODULE-06-slides/
   MODULE-06-slides.md
-  documents-draft.yaml
   figures/
     fig-01-split.svg
     fig-02-gap.svg
@@ -70,11 +69,12 @@ work/CSS-4008-2026-FALL/materials/MODULE-06-slides/
 tuning](figures/fig-01-split.svg)
 ```
 
-A link **relative to the deck** survives the move unchanged, because the folder
-moves as a unit. An absolute path, or one that climbs out with `../`, does not —
-it breaks on approval, and it breaks silently, in a deck nobody opens until the
-lecture. A file written straight into `materials/` (no folder) still lands flat
-by name; that is the old layout and only kept so existing courses keep working.
+A link **relative to the deck** holds wherever the folder goes — a fresh
+checkout, the published page, `ainar organize-materials` regrouping an old
+course — because the folder travels as a unit. An absolute path, or one that
+climbs out with `../`, does not, and it breaks silently, in a deck nobody opens
+until the lecture. A file written straight into `materials/` (no folder) still
+works; that is the old layout and only kept so existing courses keep working.
 
 The alt text is not optional and is not a caption of the filename. It says what
 the picture asserts, because it is what a screen reader gets, what a student
@@ -83,14 +83,16 @@ the SVG is lost.
 
 ## Registering a figure
 
-Each figure is its own `Document`, in the same `documents-draft.yaml`. No
+Each figure is its own `Document`, beside the deck's in
+`documents/generated.yaml` and marked `approval: draft` like it. No
 `Resource` — the deck has one, and the figure serves the deck:
 
 ```yaml
 documents:
-  - document_id: DOC-DRAFT-0602
+  - document_id: DOC-0602
+    approval: draft
     title: Train, validation and test split
-    storage_key: work/CSS-4008-2026-FALL/materials/MODULE-06-slides/figures/fig-01-split.svg
+    storage_key: courses/CSS-4008/materials/MODULE-06-slides/figures/fig-01-split.svg
     mime_type: image/svg+xml
     course_version_id: CSS-4008-2026-FALL
     module_id: MODULE-06
@@ -104,9 +106,10 @@ documents:
       created_at: 2026-09-28T10:52:00+05:00
 ```
 
-An unregistered figure is a file `ainar validate` never checks and approval never
-moves, so it stays in gitignored `work/` and the approved deck points at nothing.
-As everywhere else: no `size_bytes`, no `checksum` — approval computes both.
+An unregistered figure is a file `ainar validate` never checks and the course
+record knows nothing about — no credit, no alt text on record, no approval of its
+own. As everywhere else: no `size_bytes`, no `checksum` — both are computed from
+the file.
 
 A figure that answers a `required_visual` in the `presentation_plan` should carry
 the same words in its `title`, so the two can be matched by eye.
@@ -134,9 +137,10 @@ node --experimental-strip-types ainar-node/bin/find-image.ts --search "confusion
     --pick 2 --course-version CSS-4008-2026-FALL --name MODULE-06-slides/figures/fig-02-matrix
 ```
 
-The file lands in `work/<COURSE_VERSION_ID>/materials/<deck>/figures/` — a found image is a
-proposal like anything else — and the tool prints the `Document` draft that
-carries its origin:
+The file lands in `courses/<COURSE>/materials/<deck>/figures/`, and the tool
+prints the `Document` record that carries its origin, marked `approval: draft` —
+a found image is a proposal like anything else, and its record is what says so.
+Paste it into `documents/generated.yaml`:
 
 ```yaml
     extensions:
@@ -206,7 +210,7 @@ student's notes.
 
 ## Rendering, after approval
 
-The render reads three things — the approved markdown, the `presentation_plan`
+The render reads three things — the accepted markdown, the `presentation_plan`
 on its `Document`, and the figures beside it — and writes one file into
 gitignored `output/`. Nothing it produces re-enters `courses/`.
 

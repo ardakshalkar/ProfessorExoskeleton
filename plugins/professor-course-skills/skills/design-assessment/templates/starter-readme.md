@@ -27,8 +27,13 @@ Due {{ YYYY-MM-DD, HH:MM +05:00 }}. The full brief is
 
 ## Getting set up
 
+**Fork this repository and keep your fork public.** Do not use "Use this
+template", do not make a private copy, and do not add anyone as a collaborator —
+you hand in your fork's link. A public fork is public to everyone: never commit an
+API key, a password or a token, because whatever you commit is published with it.
+
 ```
-{{ the commands, exactly — clone, install, and the one that proves it works }}
+{{ the commands, exactly — clone YOUR FORK, install, and the one that proves it works }}
 ```
 
 If {{ the proving command }} does not {{ the expected result }}, {{ what to do }}.
@@ -56,7 +61,7 @@ this file. If there are no such tests, delete this section. }}
 
 ## Handing in
 
-{{ What, where, in what form, by when. }}
+Submit the link to your public fork. {{ Where, and by when. }}
 
 ## How it is marked
 

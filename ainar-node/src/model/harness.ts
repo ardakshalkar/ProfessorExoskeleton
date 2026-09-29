@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import {
+  Approval,
   ActionId,
   ActionStatus,
   CourseVersionId,
@@ -18,6 +19,7 @@ import {
 
 export const CourseEvent = entity({
   event_id: EventId,
+  approval: Approval.optional(),
   event_type: z.string(),
   course_version_id: CourseVersionId,
   entity_type: z.string().nullish(),
@@ -28,6 +30,7 @@ export const CourseEvent = entity({
 
 export const ActionItem = entity({
   action_id: ActionId,
+  approval: Approval.optional(),
   course_version_id: CourseVersionId,
   assigned_to: UserId,
   type: z.string(),

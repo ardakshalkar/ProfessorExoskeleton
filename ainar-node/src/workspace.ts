@@ -7,7 +7,7 @@
  * for no benefit, since nothing here writes.
  *
  * But *something else* writes: the professor. `ainar roster import` adds two
- * students, `ainar approve` promotes a draft, and a cache with no invalidation
+ * students, an agent writes a draft into the course, and a cache with no invalidation
  * keeps serving the state from before either — for the life of the process,
  * which under Claude Desktop is until the app restarts. "I imported them and it
  * still says 27" is a confusing failure with nothing on screen to explain it, so

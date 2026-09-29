@@ -1,5 +1,8 @@
-# The assessment as a draft, under work/<COURSE_VERSION_ID>/. Approval is what
-# makes it a record; the -DRAFT- segment says it is not one yet.
+# The assessment as a draft, written straight into the course: the assessment
+# and its rubric in courses/<COURSE>/assessments/generated.yaml, its items in
+# courses/<COURSE>/items/generated.yaml. The identifiers are the final ones;
+# `approval: draft` is what says it is not accepted yet, and only the professor
+# changes that word.
 #
 # Two fields here are claims and are the professor's, never yours:
 #
@@ -14,7 +17,8 @@
 # The instrument around them — the task, the wording, the levels, the items — is
 # an artefact and is yours to draft.
 
-assessment_id: ASSESSMENT-DRAFT-{{ nn }}
+assessment_id: ASSESSMENT-{{ nn }}
+approval: draft   # always; never write approved
 course_version_id: "{{ COURSE_VERSION_ID }}"
 title: "{{ assessment title }}"
 type: "{{ quiz / assignment / exam / project }}"
@@ -27,9 +31,10 @@ due_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
 outcomes: ["{{ LO-ID }}"]   # the professor's
 submission_type: ["{{ text / file / url }}"]
 
-# The brief students read, written from templates/brief.md and registered so
-# approval files it with the course rather than leaving it in work/.
-instructions_document_id: DOC-DRAFT-{{ nnnn }}
+# The brief students read, written from templates/brief.md into
+# courses/<COURSE>/materials/<MATERIAL>/ and registered as a Document in
+# documents/generated.yaml, marked `approval: draft`.
+instructions_document_id: DOC-{{ nnnn }}
 
 design:
   purpose: "{{ formative knowledge check / summative … }}"
@@ -47,11 +52,11 @@ design:
     closed_book: {{ true / false }}
 
 rubric:
-  rubric_id: RUBRIC-DRAFT-{{ nn }}
+  rubric_id: RUBRIC-{{ nn }}
   title: "{{ rubric title }}"
   criteria:
-    - criterion_id: CRIT-DRAFT-{{ nn }}-01
-      rubric_id: RUBRIC-DRAFT-{{ nn }}
+    - criterion_id: CRIT-{{ nn }}-01
+      rubric_id: RUBRIC-{{ nn }}
       title: "{{ what this criterion judges }}"
       maximum_score: {{ n }}
       outcome_id: "{{ LO-ID }}"          # never blank
@@ -67,10 +72,12 @@ rubric:
 # Items, where the assessment has them. `answer_key`, `marking_guidance` and
 # `indicates_misconception_of` belong here on the item and NOWHERE a student can
 # read — not in the brief, not in the starter repository, not in a test fixture.
+# These go in courses/<COURSE>/items/generated.yaml, each marked `approval: draft`.
 items:
-  - item_id: ITEM-DRAFT-{{ nn }}-01
-    assessment_id: ASSESSMENT-DRAFT-{{ nn }}
-    criterion_id: CRIT-DRAFT-{{ nn }}-01
+  - item_id: ITEM-{{ nn }}-01
+    approval: draft
+    assessment_id: ASSESSMENT-{{ nn }}
+    criterion_id: CRIT-{{ nn }}-01
     concepts: ["{{ CONCEPT-ID }}"]
     item_type: multiple_choice
     difficulty: "{{ easy / medium / hard }}"

@@ -154,21 +154,25 @@ test("only files this repository holds are published", () => {
   assert.ok(tally["in object storage"]! > 0, "the example course keeps some documents elsewhere");
 });
 
-test("a draft under work/ is not published", () => {
+test("a document marked approval: draft is not published, wherever its file is", () => {
   const b = bundle();
+  // Beside every approved material, in the course's own materials folder —
+  // the record, not the folder, is what keeps it back.
+  const approved = (b.documents as any[]).find(
+    (document) => document.course_version_id === RUN && !String(document.storage_key).includes("://"),
+  );
   (b.documents as any[]).push({
-    document_id: "DOC-DRAFT",
-    course_version_id: RUN,
+    ...approved,
+    document_id: "DOC-UNACCEPTED",
     title: "A draft",
-    storage_key: "work/CSS-4008-2026-FALL/draft.md",
-    extensions: {},
+    approval: "draft",
   });
   const { published, heldBack } = publishable(b, RUN, ROOT);
   assert.equal(
-    published.some((material) => material.documentId === "DOC-DRAFT"),
+    published.some((material) => material.documentId === "DOC-UNACCEPTED"),
     false,
   );
-  assert.ok(heldBack.some((reason) => reason.includes("DOC-DRAFT")));
+  assert.ok(heldBack.some((reason) => /DOC-UNACCEPTED: a draft \(approval: draft\)/.test(reason)));
 });
 
 test("publishing a material makes it a link and nothing else", () => {

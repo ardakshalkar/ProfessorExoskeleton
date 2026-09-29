@@ -196,9 +196,9 @@ export type AuthMode = "gh" | "token";
 /**
  * Public unless the professor says otherwise.
  *
- * A starter repository exists to be forked — students press "Use this
- * template", and a private one they cannot see is a template that does not
- * work. It began private here, on the reasoning that going public is a
+ * A starter repository exists to be forked — students fork it and keep the
+ * fork public (it is not a GitHub template), and a private one they cannot see
+ * cannot be forked. It began private here, on the reasoning that going public is a
  * decision; but the decision is made the moment somebody sets homework that
  * students have to clone, and defaulting to the state that cannot serve its
  * purpose only meant an extra command every time.

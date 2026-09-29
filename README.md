@@ -30,23 +30,22 @@ essay questions.
 concept map extracted from a syllabus, an assessment blueprint, criterion-level
 grading suggestions with cited evidence, a lecture's slides.
 
-**Approve.** Nothing a skill writes is part of the course until the instructor
-promotes it. Drafts land in a separate place and `ainar approve` moves them,
-one identifier at a time if you like. This is the whole design: the system may
-propose anything and decide nothing. A grade suggestion is a suggestion until a
-human agrees with it.
+**Approve.** Nothing a skill writes is accepted until the instructor accepts
+it. A skill writes each record straight into the course file it belongs in,
+with its final identifier, marked `approval: draft`; the instructor accepts it
+by changing that word, and rejects it by deleting the record. A grade is an
+evaluation marked `status: suggested`, and becomes one when a
+`professor_decision` is added beside the AI's suggestion. This is the whole
+design: the system may propose anything and decide nothing. A grade suggestion
+is a suggestion until a human agrees with it.
 
-The instructor should not have to *type* that, though, and since 2026-09-21 they
-do not. `ainar publish` — and the Publish button in the pane, which spawns it —
-runs the same gate over the **documents and resources** a publication needs and
-then publishes, so a deck drafted an hour ago reaches the students' page in one
-press that shows what it would promote before it promotes anything. The line
-moved to where the decision actually is: pressing *publish the course page*
-having read what would go on it **is** the act of standing behind a deck, and
-says nothing about whether a suggested score is right. So a judgement about a
-student — an evaluation, a signal, an intervention — is still `ainar approve`,
-still the instructor's, and is reported as *left alone* when a publication walks
-past it in the same directory.
+Since 2026-09-29 there is no separate drafts folder and no `ainar approve` to
+type — the change is one word in a file, visible in a diff, and
+`ainar drafts` lists what is waiting. Everything a student can see — the
+course page, the gradebook, the LMS push — reads accepted records only.
+`ainar publish`, and the Publish button in the pane that spawns it, approves
+nothing: its plan names every draft it left out, and it refuses to hand
+students an assessment still marked draft.
 
 Everything that produces a file a person opens — a deck, an exam paper, the
 students' page — runs through those three moves in the same order.
@@ -92,7 +91,7 @@ node --experimental-strip-types ainar-node/bin/ainar.ts gradebook CSS-4008-2026-
 
 `ainar --help` lists the rest: `context`, `stats`, `pending`, `rubric`,
 `student`, `class-progress`, `calibration`, `blueprint`, `schema`, `new
-course`, `new run`, `roster`, `approve`, `publish`, `impact`, `deck fit`.
+course`, `new run`, `roster`, `drafts`, `publish`, `impact`, `deck fit`.
 
 ### The write layer
 
@@ -102,7 +101,7 @@ project reaches for Python any more — see [`PROVENANCE.md`](PROVENANCE.md) for
 what each was checked against.
 
 ```bash
-bin/ainar score-items work/CSS-4008-2026-FALL --course-version CSS-4008-2026-FALL --dry-run
+bin/ainar score-items CSS-4008-2026-FALL --dry-run   # scores item responses in place, as drafts
 bin/ainar export --out dist/            # canonical JSON for the application
 bin/ainar sql --out dist/               # an idempotent PostgreSQL import
 bin/ainar dashboard CSS-4008-2026-FALL  # the professor's grid, marks by pseudonym
@@ -114,22 +113,21 @@ the design: `dashboard` draws marks and is private; `page` draws the plan, is
 the only output written for a public URL, and copies a material file only after
 an answer-key scan that has no override.
 
-`page` builds the site; `publish` is what puts something in front of a class,
-and it is the one command that also promotes:
+`page` builds the site; `publish` is what puts something in front of a class:
 
 ```bash
 bin/ainar publish page CSS-4008-2026-FALL             # the plan: writes nothing
-bin/ainar publish page CSS-4008-2026-FALL --confirm   # promote the materials, then build
+bin/ainar publish page CSS-4008-2026-FALL --confirm   # build from what is accepted
 bin/ainar publish telegram CSS-4008-2026-FALL --message-file note.txt
 bin/ainar publish canvas ASSESSMENT-04 --run CSS-4008-2026-FALL
 bin/ainar publish update CSS-4008-2026-FALL           # everywhere it already went
 ```
 
-Four targets, one grammar, two presses each. The plan names the drafted
-documents it would promote, what would then be published, and what it would
-hold back; `--confirm` does both. What it may promote is documents and
-resources — a drafted evaluation in the same directory is reported as left
-alone, because publishing a deck is not a decision about anybody's mark.
+Four targets, one grammar, two presses each. The plan names what would be
+published, what it would hold back, and — as *Not published — N draft(s)* —
+every record still marked `approval: draft` that it left out; `--confirm`
+publishes. It accepts nothing on the way: publishing a deck is not a decision
+about whether the deck is right, still less about anybody's mark.
 
 `lms` is the last one and the only thing here that reaches a third party:
 
@@ -204,10 +202,12 @@ Honest state, not aspiration. `[x]` means it exists and something tests it.
 - [x] Action inbox — what needs the instructor's attention, ranked
 - [x] Subgroups — `--group` narrows the gradebook, class progress, the inbox and
       the term plan to one subgroup, and refuses a label the run does not use
-- [x] Draft/approve promotion (`ainar approve`, `--only`, `--reject`, `--dry-run`)
+- [x] Approval as a field — records written into the course marked
+      `approval: draft`, accepted by changing the word, listed by `ainar drafts`
+      and the inbox, and read by nothing student-facing until accepted
 - [x] `ainar publish {page,telegram,homework,canvas}` — the plan, then one
-      `--confirm` that promotes the materials the publication needs and
-      publishes. The same command behind the pane's Publish button and the
+      `--confirm` that publishes what the professor has accepted and names the
+      drafts it left out. The same command behind the pane's Publish button and the
       `/publish` skill, so the three cannot disagree about what a press does
 - [x] A material edited in place is noticed rather than silently published: the
       record is brought back into line with the file and its version goes up,
@@ -320,7 +320,7 @@ only needed to talk to an agent; `ainar` and the tests need none.
 
 ```bash
 npm test                    # the sample plugin's tools, against a bare Node
-cd ainar-node && npm test   # the model, the read layer, roster, approve, decks
+cd ainar-node && npm test   # the model, the read layer, roster, approval, decks
 ```
 
 The second is the one that matters: 188 tests over 19 suites, and none of them
@@ -380,7 +380,7 @@ see **The workspace is not the repository** below.
 
 ```
 ainar-node/                    the model and the read layer, in TypeScript
-  src/                         validate, gradebook, roster, approve, decks
+  src/                         validate, gradebook, roster, approval, decks
   src/tools/                   the 16 read-only tools, and their widgets
   src/mcp/                     protocol only: stdio, HTTP, OAuth
   bin/ainar.ts                 the `ainar` CLI

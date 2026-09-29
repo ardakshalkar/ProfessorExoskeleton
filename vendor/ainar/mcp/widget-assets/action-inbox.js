@@ -222,8 +222,9 @@ function view(d) {
     + esc(pending.total || 0) + ' judgement(s) pending</p>'
     + parts.join('')
     + '<div class="note"><strong>Approval is yours.</strong> This window reads the '
-    + 'course model and cannot approve, grade or send anything. When a draft is '
-    + 'ready, the command is '
-    + '<code>ainar approve work/' + esc(run.id) + ' --as USER-ARD-A01</code>.'
+    + 'course model and cannot approve, grade or send anything. A draft is a record '
+    + 'marked <code>approval: draft</code>; you accept it by changing that word, and a '
+    + 'grade by adding your decision beside the suggestion. '
+    + '<code>ainar drafts ' + esc(run.id) + '</code> lists what is waiting.'
     + '</div>';
 }

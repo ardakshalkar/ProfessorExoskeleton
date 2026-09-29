@@ -70,7 +70,11 @@ Not real, and labelled on screen wherever it appears:
   `~/.ainar/roster/people.json`, are held for one response, and never enter a
   payload. The amber rule appears whenever names are showing, the identifier
   stays under each name, and the context packet carries the pseudonym alone.
-* **The Proposed drafts** stand in for a merge. This workspace has no
-  `work/CSS-4008-2026-FALL/`, so `loadDrafts` has nothing to give it.
+* **The Proposed drafts** are invented for the prototype. They were written
+  when drafts lived in a separate `work/` directory and carried `-DRAFT-` in
+  their ids; since 2026-09-29 a draft is a record in the course marked
+  `approval: draft`, and the example course holds no drafted module, deck or
+  assessment, so
+  `build.mjs` still supplies three illustrative ones under the old naming.
 * **The conversation** in chat mode, and the replies in the chat overlay. The
   page reaches no model.

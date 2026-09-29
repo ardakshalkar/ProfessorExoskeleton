@@ -44,14 +44,14 @@ function model(d) {
     return MONTHS[Number(parts[2]) - 1] + ' ' + Number(parts[3]);
   }
 
-  // An identifier still carrying the draft marker.
+  // A row nobody has accepted yet.
   //
-  // This is the whole of how the pane can tell a proposal from a record: the
-  // banner above the frame says the VIEW includes drafts, but says nothing
-  // about which row is one. `-DRAFT-` in the id is the model's own signal, put
-  // there so a promotion is visible in a diff, and it works just as well here.
-  function isDraft(value) {
-    return String(value || '').indexOf('-DRAFT-') !== -1;
+  // The banner above the frame says the VIEW includes drafts, but says nothing
+  // about which row is one. The payload does: `draft: true` on a record marked
+  // `approval: draft` in the course. An identifier carrying the old `-DRAFT-`
+  // marker still counts, for a payload built before that field existed.
+  function isDraft(row, id) {
+    return (row && row.draft === true) || String(id || '').indexOf('-DRAFT-') !== -1;
   }
 
   // What kind of thing an artefact is, as a glyph and as a word.
@@ -252,7 +252,7 @@ function model(d) {
               };
             })
             .filter(function (f) { return f.href; }),
-          draft: isDraft(r.resource_id) || isDraft(r.document_id),
+          draft: isDraft(r, r.resource_id) || isDraft(null, r.document_id),
           slides: deck,
         });
       }
@@ -270,6 +270,7 @@ function model(d) {
           tone: verb === 'due' ? 'due' : 'task',
           kind: type,
           name: a.title,
+          draft: isDraft(a, a.assessment_id),
           href: safeUrl(a.url),
           // The brief students read, when the payload knows where it is and
           // the host has a route to it. Empty `view` is the request NOT to
@@ -298,7 +299,7 @@ function model(d) {
         tone: 'todo',
         kind: type,
         name: a.title,
-        draft: isDraft(a.assessment_id),
+        draft: isDraft(a, a.assessment_id),
         href: safeUrl(a.url),
         view: a.viewable ? a.title : '',
         format: a.format || '',

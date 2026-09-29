@@ -1,4 +1,8 @@
-# The items behind the report, as work/<COURSE_VERSION_ID>/action-items-draft.yaml.
+# The items behind the report. They go straight into
+# courses/<COURSE_ID>/records/action-items.yaml — read it first and add to what
+# is there — each with its real, final identifier and `approval: draft`. Nothing
+# is moved afterwards: the professor accepts an item by changing the word to
+# `approved`, and rejects it by deleting it. Never write `approval: approved`.
 #
 # `available_actions` is set to what actually applies. An item with nothing
 # drafted to approve does not offer `approve` — it exists to ask a question, and
@@ -10,7 +14,8 @@
 
 action_items:
   # Something drafted, waiting on a decision.
-  - action_id: ACTION-DRAFT-{{ nnn }}
+  - action_id: ACTION-{{ WHAT-IT-CONCERNS }}
+    approval: draft
     course_run_id: "{{ COURSE_VERSION_ID }}"
     assigned_to: "{{ USER-… }}"
     type: "{{ review_grades / review_signal / … }}"
@@ -34,7 +39,8 @@ action_items:
 
   # A step from the readiness ladder. Sourced to the rung it came from and to
   # nothing else. No `approve` — nothing has been drafted. No `due_at`.
-  - action_id: ACTION-DRAFT-{{ nnn }}
+  - action_id: ACTION-{{ THE-STEP }}
+    approval: draft
     course_run_id: "{{ COURSE_VERSION_ID }}"
     assigned_to: "{{ USER-… }}"
     type: build_course

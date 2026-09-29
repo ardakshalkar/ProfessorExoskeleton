@@ -18,9 +18,11 @@ writes: record
 >   published. Both of those were the old answer and both are wrong now.
 > - **Claims come from the professor.** Correcting a typo is yours; changing a
 >   weight, a deadline, an outcome or a mark is theirs. Propose, show, wait.
-> - **Never run `ainar approve`,** and never `ainar lms push --target
->   canvas-api` or `--target sheets-api`. `ainar publish … --confirm` is not a
->   way round that either — see `/publish`, which owns the publishing verb.
+> - **Never accept your own work** — never write `approval: approved`, a
+>   `professor_decision` or an approved status — and never `ainar lms push
+>   --target canvas-api` or `--target sheets-api`. `ainar publish … --confirm`
+>   publishes only what the professor has accepted; only `/publish` runs it, on
+>   explicit instruction.
 > - **No student name, email or institutional number** in any file you touch.
 > - After editing anything the record describes: `bin/ainar validate <COURSE>`.
 
@@ -56,8 +58,8 @@ record, whether anything has been rendered from it, what points at it, where it
 has already been published, and what follows. Read it before editing, because
 two of those change what you should do:
 
-- **`a draft`** — the file is under `work/` and nobody has accepted it. Edit it
-  freely; it is a proposal either way.
+- **`a draft`** — its record says `approval: draft` and nobody has accepted
+  it. Edit it freely; it is a proposal either way, and it stays marked draft.
 - **`a record`** — the course stands behind it and students may already have
   it. Edit it in place anyway: that is now supported and is the intended path.
   Say in your report that the change is live once it is published.
@@ -90,8 +92,8 @@ plan. If the edit changed a slide's title, the plan in the record has to match.
 ## 4. A field, not a file
 
 A deadline, a weight, a room, an assessment's title, a question's text: these
-are records and there is no material to edit. Nothing drafts them either, so
-there is no `work/` half and nothing for approval to promote.
+are records and there is no material to edit. The change is a change to the
+record where it lives, and nothing about it needs accepting a second time.
 
 Say which file and which line, show the change, and let the professor make it —
 or, where the harness has a control for it, point at that: the pane's Tasks tab

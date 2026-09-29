@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import {
+  Approval,
   CourseId,
   ConceptId,
   CourseVersionId,
@@ -45,6 +46,7 @@ export const PresentationPlan = entity({
 
 export const Document = entity({
   document_id: DocumentId,
+  approval: Approval.optional(),
   title: z.string(),
   storage_key: z.string(),
   mime_type: z.string(),

@@ -10,8 +10,8 @@
  * ## One direction, and drift reported rather than resolved
  *
  * This pushes out. It never edits the model from Canvas. The reason is the
- * project's spine: a record in `courses/` is something a person authored and
- * `ainar approve` promoted, and a background sync that rewrote a due date
+ * project's spine: a record in `courses/` is something a person authored or
+ * accepted, and a background sync that rewrote a due date
  * because somebody moved it in a Canvas UI would be the system deciding
  * something.
  *

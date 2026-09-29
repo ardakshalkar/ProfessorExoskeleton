@@ -9,25 +9,27 @@ writes: drafts
 
 > **Non-negotiables.** This skill proposes; a person decides.
 >
-> - Write to `work/<RUN_ID>/`, never into `courses/`. Draft identifiers carry a
->   `-DRAFT-` segment so they cannot be mistaken for records.
+> - Write into the course, where the record belongs — the file for its
+>   collection under `courses/<COURSE>/`, with its real identifier — and mark
+>   every record you write `approval: draft` (a grade: `status: suggested`).
+>   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
+>   nothing student-facing reads a draft.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
 >   job. Concepts and modules may be **proposed** from source material the
 >   professor supplied, with `extensions.proposal.source` naming where each came
 >   from — proposed, not invented, and inert until approved.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -58,8 +60,11 @@ The `learning_model.concepts` array gives you the prerequisite graph. Then read:
 - `samples/concept-states.yaml` — the previous estimate, if any.
 - `items/` and `samples/item-responses.yaml` — **your sharpest
   source.** See below.
-- `work/<RUN_ID>/` — drafts from `grade-submission` that have not been approved
-  yet. Weigh these lower and say so.
+- records still marked `approval: draft`, and evaluations still at
+  `status: suggested` — drafts from `grade-submission` that have not been
+  accepted yet. They sit in the same course files as the rest
+  (`records/evaluations.yaml` and so on); `bin/ainar drafts CSS-4008-2026-FALL`
+  lists them. Weigh these lower and say so.
 
 ### Use item responses before anything else
 
@@ -109,11 +114,16 @@ teaching problem.
 
 ## 4. Write the drafts
 
-Write to `work/<RUN_ID>/gaps-draft.yaml`. Both collections can live in one file:
+Each collection goes into its own course file, under `courses/<COURSE_ID>/`:
+concept states into `records/concept-states.yaml`, signals into
+`records/signals.yaml`. Read each first and add to what is there. Every record
+carries `approval: draft`:
 
 ```yaml
+# courses/CSS-4008/records/concept-states.yaml
 concept_states:
   - student_id: STUDENT-JNG7SN
+    approval: draft
     concept_id: CONCEPT-OVERFITTING
     course_run_id: CSS-4008-2026-FALL
     state: developing
@@ -128,8 +138,10 @@ concept_states:
       input_refs: [EVID-2801, EVID-3011, CONCEPT-OVERFITTING]
       created_at: 2026-10-19T14:15:00+05:00
 
+# courses/CSS-4008/records/signals.yaml
 signals:
-  - signal_id: SIGNAL-DRAFT-001
+  - signal_id: SIGNAL-TRAIN-TEST-SPLIT-001
+    approval: draft
     student_id: STUDENT-JNG7SN        # omit entirely for a class-level signal
     course_run_id: CSS-4008-2026-FALL
     type: repeated_concept_difficulty
@@ -152,7 +164,7 @@ observation worth watching.
 ## 5. Check it
 
 ```bash
-bin/ainar validate CSS-4008 --drafts work/CSS-4008-2026-FALL
+bin/ainar validate CSS-4008
 ```
 
 A signal with no `evidence_ids` is an error here. So is evidence that does not
@@ -167,17 +179,22 @@ at all — those are gaps in the assessment plan, and only the professor can
 close them.
 
 If the professor wants to act on a signal, an `Intervention` records the
-decision — `proposed_by: find-gaps-skill`, `status: proposed`, and
+decision — written into `records/interventions.yaml` with
+`proposed_by: find-gaps-skill`, `status: proposed`, `approval: draft`, and
 `approved_by` left empty until they approve it.
 
-Then hand over. **Do not run `ainar approve` yourself.**
+Then hand over. **Do not accept anything yourself.** Tell the professor what is
+marked `approval: draft` and where — the concept states in
+`records/concept-states.yaml`, the signals in `records/signals.yaml` — and that
+they accept a record by changing `approval: draft` to `approval: approved` (or
+deleting the line), and reject one by deleting it.
 
 ```bash
-bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
+bin/ainar drafts CSS-4008-2026-FALL
 ```
 
-Approval strips the `-DRAFT-` marker, stamps interventions with the approver,
-and writes the records into `courses/.../records/`.
+lists everything waiting. Nothing is moved when they accept it; the record is
+already where it belongs.
 
 ## Without the CLI
 

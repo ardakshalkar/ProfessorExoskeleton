@@ -9,25 +9,27 @@ writes: drafts
 
 > **Non-negotiables.** This skill proposes; a person decides.
 >
-> - Write to `work/<RUN_ID>/`, never into `courses/`. Draft identifiers carry a
->   `-DRAFT-` segment so they cannot be mistaken for records.
+> - Write into the course, where the record belongs — the file for its
+>   collection under `courses/<COURSE>/`, with its real identifier — and mark
+>   every record you write `approval: draft` (a grade: `status: suggested`).
+>   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
+>   nothing student-facing reads a draft.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
 >   job. Concepts and modules may be **proposed** from source material the
 >   professor supplied, with `extensions.proposal.source` naming where each came
 >   from — proposed, not invented, and inert until approved.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -149,23 +151,23 @@ course `preferences.yaml`, and finally the current task. Record the resulting
 audience, style, duration, outcome coverage and slide sequence in the Document's
 `presentation_plan`; do not bury those decisions only in prose.
 
-Write to `work/<RUN_ID>/materials/<MATERIAL>/` — **one folder per material**,
-named for its main file, with the result on top and everything that made it
-underneath:
+Write straight into the course, to `courses/<COURSE>/materials/<MATERIAL>/` —
+**one folder per material**, named for its main file, with the result on top and
+everything that made it underneath:
 
 ```text
-work/CSS-4008-2026-FALL/materials/MODULE-06-slides/
+courses/CSS-4008/materials/MODULE-06-slides/
   MODULE-06-slides.md          the result: what the professor opens
-  documents-draft.yaml         its registration, and its figures'
   figures/                     fig-01-split.svg, fig-02-gap.svg, found images
   build/                       scripts that produce a figure or a file
 ```
 
 The professor opens the folder and sees the deck; the artefacts are in folders
-they only open on purpose. Approval moves the whole folder shape to
-`courses/<C>/materials/<MATERIAL>/` as it is. A file written straight into
-`materials/` still works and lands flat, but it is the old layout — do not
-start new material that way. A course that already has a flat `materials/`
+they only open on purpose. This is where the material lives for good — nothing
+moves it afterwards. What keeps it from students until the professor accepts it
+is its record, marked `approval: draft` (§4), not where the file sits. A file
+written straight into `materials/` with no folder of its own still works, but it
+is the old layout — do not start new material that way. A course that already has a flat `materials/`
 is regrouped by `ainar organize-materials <COURSE> --dry-run` (then without the
 flag): it moves each deck, its sidecars, figures and scripts into one folder,
 rewrites every recorded path and figure link, and reports what it would not
@@ -207,7 +209,8 @@ What good material does here:
 **Pictures follow the same rule as prose.** What you write is the thing that
 generates the picture — an SVG, a manim scene, a chart built from an `ainar`
 command — never only the picture. Figures live in the deck folder's `figures/`,
-and are linked relative to the deck so the link survives approval:
+and are linked relative to the deck so the link holds wherever the course is
+checked out:
 
 ```markdown
 ![Training data, validation data and a held-out test set never touched during
@@ -223,13 +226,17 @@ accessibility rules — read it before adding the first figure.
 
 ## 4. Register it
 
-In the material's own folder, write `documents-draft.yaml`:
+Write the records into the course, marked `approval: draft`: the Document in
+`courses/<COURSE>/documents/generated.yaml`, the Resource in
+`courses/<COURSE>/resources/generated.yaml`. (If the course already holds these
+records elsewhere — a hand-authored `documents.yaml` — edit them there.)
 
 ```yaml
 documents:
-  - document_id: DOC-DRAFT-0601
+  - document_id: DOC-0601
+    approval: draft
     title: Model evaluation and overfitting — slides
-    storage_key: work/CSS-4008-2026-FALL/materials/MODULE-06-slides/MODULE-06-slides.md
+    storage_key: courses/CSS-4008/materials/MODULE-06-slides/MODULE-06-slides.md
     mime_type: text/markdown
     course_run_id: CSS-4008-2026-FALL
     module_id: MODULE-06
@@ -264,23 +271,27 @@ documents:
           required_visual: annotated train-validation-test split
 
 resources:
-  - resource_id: RES-DRAFT-0601
+  - resource_id: RES-0601
+    approval: draft
     title: Model evaluation and overfitting — slides
     kind: slides
     course_run_id: CSS-4008-2026-FALL
-    document_id: DOC-DRAFT-0601
+    document_id: DOC-0601
     concepts: [CONCEPT-MODEL-EVALUATION, CONCEPT-OVERFITTING]
     required: true
 ```
 
-**Every figure is its own `Document` too** — same file, `mime_type:
-image/svg+xml`, no `Resource` of its own. An unregistered figure is one approval
-never moves, so the approved deck ends up pointing at a file left behind in
-gitignored `work/`.
+The identifiers are the final ones and the `storage_key` is the file's real
+place in the course — nothing renames or moves either when the professor
+accepts it.
 
-Do **not** compute `size_bytes` or `checksum` — approval fills those in from
-the file itself. Do not write `storage_key` pointing into `courses/`; approval
-moves the file there.
+**Every figure is its own `Document` too** — same file, `mime_type:
+image/svg+xml`, no `Resource` of its own, also `approval: draft`. An
+unregistered figure is a file `ainar validate` never checks and the course record
+knows nothing about — no credit, no alt text, no approval of its own.
+
+Do **not** compute `size_bytes` or `checksum` — those are computed from the
+file itself, and a hand-written one is worse than none.
 
 If the material replaces an earlier version, set `supersedes` to the document
 it replaces rather than overwriting it.
@@ -294,23 +305,25 @@ for an old one — a rewritten handout, not a corrected one.
 ## 5. Check it
 
 ```bash
-bin/ainar validate CSS-4008 --drafts work/CSS-4008-2026-FALL
+bin/ainar validate CSS-4008
 ```
+
+Drafts are validated in place like any other record.
 
 ## 6. Hand over
 
 Summarise what you wrote in three or four lines — which module, which concepts
 covered, what you handled from class state, and anything you deliberately left
-out. Then:
+out. Then say what is waiting and where:
 
-> ```bash
-> bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
-> ```
->
-> Approval moves the material into `courses/.../materials/`, stamps its size
-> and checksum, and registers the document and resource.
+> The deck is in `courses/CSS-4008/materials/MODULE-06-slides/`. `DOC-0601`, its
+> figures' Documents, and `RES-0601` are in `documents/generated.yaml` and
+> `resources/generated.yaml`, marked `approval: draft`. To accept one, change
+> `approval: draft` to `approval: approved` (or delete the line); to reject one,
+> delete the record. `bin/ainar drafts CSS-4008-2026-FALL` lists everything
+> waiting. Until then the course page and `ainar publish` leave them out.
 
-**Never run `ainar approve` yourself.**
+**Never write `approval: approved` yourself.**
 
 Say that the deck can be rendered to `.pptx` once approved, and stop there. Do
 not render as a flourish.
@@ -318,10 +331,12 @@ not render as a flourish.
 ## 7. Render it — only after approval
 
 Markdown is the source; `.pptx` is a rendering of it, and the two must never
-compete for authority. So the render reads the file **approval put in
-`courses/`**, never the draft in `work/`. A deck rendered from a proposal looks
-finished, and a professor opening it in PowerPoint has no way to see that nobody
-approved what is inside it.
+compete for authority. So render the deck once its Document is **accepted** —
+no longer `approval: draft` — not while it is still a proposal. A deck rendered
+from a proposal looks finished, and a professor opening it in PowerPoint has no
+way to see that nobody approved what is inside it. The draft lives in the course
+and the command will render it in place; what keeps it from students is its
+record, so waiting is your discipline here, not the command's.
 
 Writing the file is yours to do — like `lms push --target canvas-csv`, it
 produces something inert until a person presents it. One command does it:
@@ -330,23 +345,27 @@ produces something inert until a person presents it. One command does it:
 ainar deck render --document DOC-4410 --course-version CSS-4008-2026-FALL --pdf
 ```
 
-It reads the approved markdown, the `.plan.yaml` beside it, the figures in its
+It reads the deck's markdown, the `.plan.yaml` beside it, the figures in its
 folder and — from the course record — the figure credits on `Document`s and the
 `presentation_plan`, and writes `<DECK>.pptx` into the deck's own folder,
 `courses/<C>/materials/<DECK>/`, where its rendering is recorded — plus the PDF
 with `--pdf`, converted from that same deck by LibreOffice rather than rendered
 a second time. Rasterized PNGs go to the gitignored `output/<DECK>/`, and
 nowhere else. For a deck the course builds from `materials.yaml`,
-`ainar materials build` is the same render with a draft record written after it.
+`ainar materials build` is the same render with its Document record written
+into `documents/generated.yaml` after it, marked `approval: draft` (a rebuild
+keeps an already-accepted record accepted).
 
-**Do not do this by hand.** Five rules are enforced in that command rather than
+To look at a deck that is still a draft, render it with `--draft`: it goes to
+`output/<DECK>/`, marked DRAFT on every slide, and nothing lands beside the
+markdown.
+
+**Do not do this by hand.** Four rules are enforced in that command rather than
 left to judgement, and each of them is a mistake this skill made before it
 existed:
 
-- **A document still in `work/` is refused.** A deck rendered from a proposal
-  looks finished once it is open in PowerPoint. To look at a draft, render the
-  file with `--draft`: it goes to `output/<DECK>/`, marked DRAFT on every slide.
-- **Nothing but a recorded deck's own render goes into `courses/`.**
+- **Nothing but a recorded deck's own render goes into `courses/`.** A `--draft`
+  render, with its placeholder figures, is refused there.
 - **The plan is the contract.** Slide count, order and titles must match the
   markdown, or it exits and says where. One of the two was edited after the
   other; which is wrong is the professor's question. Nothing reorders slides to
@@ -416,8 +435,7 @@ wrong for anything presented or handed out. Say that when you hand it over:
 
 **No `pptxgenjs` or `sharp`.** Marp will write a `.pptx`, and it is worse than it
 looks: each slide is a flat image, so nothing in it can be edited, and none of
-the four checks above runs — not the approval gate, not the plan match, not
-attribution, not overflow.
+the checks above runs — not the plan match, not attribution, not overflow.
 
 > ```bash
 > npx @marp-team/marp-cli courses/CSS-4008/materials/MODULE-06-slides.md --pptx -o output/CSS-4008-2026-FALL/DOC-4410.pptx
@@ -433,16 +451,17 @@ activity from the files directly rather than from `ainar context`. Draft the
 markdown exactly as described above.
 
 Two things change. **Leave `size_bytes` and `checksum` out of the `Document`
-draft entirely** — approval computes them from the file, and a hand-written
+draft entirely** — they are computed from the file, and a hand-written
 sha256 is worse than an absent one. And say which shared misconceptions you
 worked from, or that you had none: without recorded item responses the material
 is grounded in the course design rather than in what the class showed.
 
 Step 6 is unaffected — rendering needs the `pptx` skill and the approved
 markdown, not the CLI. What it does need is for approval to have happened, which
-by hand means the professor moved the file into `courses/.../materials/`
-themselves. A file still sitting in `work/` is not approved, however finished it
-reads, and is not what you render. One thing gets harder: a chart of class
+by hand means the professor changed the Document's `approval: draft` to
+`approval: approved`, or deleted the line. A Document still marked
+`approval: draft` is not approved, however finished it reads, and is not what
+you render. One thing gets harder: a chart of class
 performance has no `ainar gradebook` behind it, so there is no chart. Say that
 rather than drawing one from numbers you totalled.
 

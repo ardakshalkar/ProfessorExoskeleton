@@ -17,4 +17,4 @@ templates:
 
 parts:
   - file: action-items-draft.yaml
-    purpose: the ActionItem records behind the report, as drafts to approve
+    purpose: the ActionItem records behind the report, written into records/action-items.yaml marked approval draft

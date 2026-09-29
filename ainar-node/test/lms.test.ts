@@ -37,7 +37,7 @@ import {
   trailingRange,
 } from "../src/lms/sheets.ts";
 import { defaultSheetTab, effectiveSheetTab, effectiveSummaryTab, tabOwners } from "../src/lms/index.ts";
-import { draftSubmissionId, submissionsFromApi, submissionsFromExport } from "../src/lms/pull.ts";
+import { pulledSubmissionId, submissionsFromApi, submissionsFromExport } from "../src/lms/pull.ts";
 
 /**
  * `tests/test_lms.py`, `test_sheets.py` and `test_canvas_api.py`, reduced to the
@@ -709,8 +709,8 @@ test("two assessments cannot share one tab", () => {
 
 // ---------------------------------------------------------------- the pull
 
-test("the draft identifier names the student and assessment", () => {
-  assert.equal(draftSubmissionId("STUDENT-JNG7SN", "ASSESSMENT-04"), "SUB-DRAFT-JNG7SN-04");
+test("a pulled submission's identifier names the student and assessment", () => {
+  assert.equal(pulledSubmissionId("STUDENT-JNG7SN", "ASSESSMENT-04"), "SUB-JNG7SN-04");
 });
 
 test("submissions are proposed only for students Canvas has work for", () => {

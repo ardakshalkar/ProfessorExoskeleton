@@ -32,7 +32,7 @@ export const TermId = id(TERM);
 export const OutcomeId = id("LO-[0-9]{2,3}");
 export const ConceptId = id("CONCEPT-[A-Z0-9][A-Z0-9-]*");
 export const CapabilityId = id("CAP-[A-Z0-9][A-Z0-9-]*");
-export const ModuleId = id("MODULE-(?:DRAFT-)?[0-9]{2,3}");
+export const ModuleId = id("MODULE-[0-9]{2,3}");
 export const ActivityId = id("ACT-[A-Z0-9][A-Z0-9-]*");
 export const AssessmentId = id("ASSESSMENT-[A-Z0-9][A-Z0-9-]*");
 export const RubricId = id("RUBRIC-[A-Z0-9][A-Z0-9-]*");
@@ -142,6 +142,16 @@ export const SubmissionStatus = z.enum([
   "missing", "draft", "submitted", "late", "resubmitted", "withdrawn",
 ]);
 export const EvaluationStatus = z.enum(["suggested", "in_review", "approved", "overridden"]);
+/**
+ * Whether a person stands behind a record an agent wrote.
+ *
+ * Agents write straight into the course file a record belongs in and mark it
+ * `draft`; the professor accepts it by changing the word. Absent means
+ * `approved`, because a record typed into `courses/` by hand is the professor's
+ * own. Evaluations and interventions do not carry it — their `status` already
+ * says the same thing. See `src/approval.ts`.
+ */
+export const Approval = z.enum(["draft", "approved"]);
 export const ConceptStateValue = z.enum([
   "not_observed", "introduced", "developing", "demonstrated",
   "consistently_demonstrated", "needs_review",

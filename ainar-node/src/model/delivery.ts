@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import {
+  Approval,
   CourseId,
   ActivityId,
   ActivityType,
@@ -64,6 +65,7 @@ export const Enrollment = entity({
 
 export const Resource = entity({
   resource_id: ResourceId,
+  approval: Approval.optional(),
   title: z.string(),
   kind: ResourceKind.default("other"),
   course_version_id: CourseVersionId.nullish(),
@@ -77,6 +79,7 @@ export const Resource = entity({
 
 export const LearningActivity = entity({
   activity_id: ActivityId,
+  approval: Approval.optional(),
   course_version_id: CourseVersionId,
   module_id: ModuleId.nullish(),
   type: ActivityType,

@@ -4,7 +4,7 @@
       "code": "claim.unapproved_proposal",
       "level": "warning",
       "location": "CONCEPT-AI-PROBLEM-TYPES",
-      "message": "concept was proposed by an agent but carries no approval stamp — promote it with `ainar approve` rather than copying it"
+      "message": "concept was proposed by an agent but carries no approval stamp — the professor authors the course's structure; add extensions.approval to accept it"
     },
     {
       "code": "item.criterion_score_mismatch",

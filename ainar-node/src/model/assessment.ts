@@ -8,6 +8,7 @@
 
 import { z } from "zod";
 import {
+  Approval,
   AssessmentId,
   AssessmentType,
   CapabilityId,
@@ -63,6 +64,7 @@ const ScenarioValue = z.union([z.string(), z.number()]);
 
 export const ItemModel = entity({
   item_model_id: ItemModelId,
+  approval: Approval.optional(),
   course_version_id: CourseVersionId,
   title: z.string(),
   outcome_id: OutcomeId.nullish(),
@@ -110,6 +112,7 @@ export const Rubric = entity({
 
 export const Assessment = entity({
   assessment_id: AssessmentId,
+  approval: Approval.optional(),
   course_version_id: CourseVersionId,
   title: z.string(),
   type: AssessmentType,
@@ -156,6 +159,7 @@ export const ItemOption = entity({
 
 export const AssessmentItem = entity({
   item_id: ItemId,
+  approval: Approval.optional(),
   assessment_id: AssessmentId,
   item_model_id: ItemModelId.nullish(),
   type: ItemType,
@@ -195,6 +199,7 @@ export const AssessmentItem = entity({
 
 export const ItemResponse = entity({
   response_id: ResponseId,
+  approval: Approval.optional(),
   submission_id: SubmissionId,
   item_id: ItemId,
   student_id: StudentId,

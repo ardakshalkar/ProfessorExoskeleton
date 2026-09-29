@@ -97,6 +97,16 @@ const sourceOutlineByWeek = (
 const titled = (ids: string[], index: Map<string, any>): Record<string, unknown>[] =>
   ids.map((id) => ({ id, title: index.get(id)?.title ?? null }));
 
+/**
+ * `draft: true` on a record nobody has accepted, and nothing on one that has.
+ *
+ * Absent rather than false, so a course with no drafts produces exactly the
+ * payload it always did. The widget reads it to mark a row as a proposal; the
+ * students' page never sees one, because it is built from `approvedView`.
+ */
+const drafted = (record: any): Record<string, unknown> =>
+  record?.approval === "draft" ? { draft: true } : {};
+
 const resourceEntry = (resource: any): Record<string, unknown> => ({
   resource_id: resource.resource_id,
   title: resource.title,
@@ -104,6 +114,7 @@ const resourceEntry = (resource: any): Record<string, unknown> => ({
   url: resource.url ?? null,
   document_id: resource.document_id ?? null,
   required: resource.required,
+  ...drafted(resource),
 });
 
 const meeting = (
@@ -128,6 +139,7 @@ const meeting = (
   resources: (activity.resources as string[])
     .filter((id) => resources.has(id))
     .map((id) => resourceEntry(resources.get(id))),
+  ...drafted(activity),
 });
 
 const assessmentEntry = (assessment: any, rubrics: Map<string, any>): Record<string, unknown> => {
@@ -177,6 +189,7 @@ const assessmentEntry = (assessment: any, rubrics: Map<string, any>): Record<str
     // served to a chat client — simply has an id it cannot open, which is the
     // same position it is in for every other document the model names.
     instructions_document_id: assessment.instructions_document_id ?? null,
+    ...drafted(assessment),
   };
 };
 

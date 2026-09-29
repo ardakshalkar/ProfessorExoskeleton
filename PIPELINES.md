@@ -21,16 +21,22 @@ person and cannot be skipped. Everything else is the machine doing legwork.
 
 | Place | What it means |
 | --- | --- |
-| `work/<RUN>/` | proposals. Nobody has agreed to any of it. Ids carry `-DRAFT-` |
-| `courses/<COURSE>/` | the record. This is the course. You put things here |
+| `courses/<COURSE>/` | the course. Everything lives here, proposals included |
+| `approval: draft` on a record | a proposal. Nobody has agreed to it, and nothing students see reads it |
+| no `approval`, or `approval: approved` | the record. You stand behind it |
 | `dist/` and `output/` | files built out of the record — a page, a deck, a paper. Throwaway, rebuildable |
 
-A proposal becomes a record in exactly two ways, and both are you:
+A skill writes its proposal straight into the course file it belongs in, with
+its final id, marked `approval: draft` — a grade as `status: suggested`. Nothing
+is moved afterwards. A proposal becomes a record in exactly one way, and it is
+you:
 
-- **`ainar approve`** — promotes anything, including a grade. You run it.
-- **Publish** (the button, the `/publish` skill, or `ainar publish`) — promotes
-  only the **materials** the publication needs (decks, handouts, briefs), then
-  publishes. Never a grade.
+- **You change the word** — `approval: draft` to `approved`, or, for a grade,
+  your `professor_decision` beside the suggestion. Deleting the record rejects
+  it. `ainar drafts` lists what is waiting.
+- **Publish** (the button, the `/publish` skill, or `ainar publish`) accepts
+  nothing. It publishes what you have accepted and names the drafts it left
+  out.
 
 ---
 
@@ -44,7 +50,7 @@ A proposal becomes a record in exactly two ways, and both are you:
         |            (which outcomes are under-assessed, which concepts are due)
         v
   it drafts          the quiz, its questions, the marking key, the rubric,
-        |            and the brief students read  ->  work/<RUN>/
+        |            and the brief students read  ->  the course, marked draft
         v
   it checks          validate: every question serves a criterion, options add up,
         |            no question with two right answers
@@ -52,8 +58,8 @@ A proposal becomes a record in exactly two ways, and both are you:
   YOU READ IT        the coverage table, what it did NOT assess, what is missing
         |
         v
-  YOU APPROVE        bin/ainar approve work/<RUN> --as USER-…
-        |            (or press Publish, which promotes the brief for you)
+  YOU APPROVE        change approval: draft to approved, in the course files
+        |            (Publish will not do it for you, and refuses a draft quiz)
         v
   print it           exam-paper -> the question paper, WITHOUT the answers
         |            render-exam -> .docx and .pdf beside the course
@@ -74,8 +80,8 @@ the record but not yet regenerated in five variants; that is a known gap.
   it reads           the module, its concepts, what the outcomes claim
         |
         v
-  it writes          markdown slides + a plan of what each slide is  ->  work/<RUN>/
-        |
+  it writes          markdown slides + a plan of what each slide is
+        |              ->  courses/<COURSE>/materials/<MATERIAL>/, marked draft
         v
   deck fit           will each slide actually fit on the page?
         |
@@ -83,7 +89,7 @@ the record but not yet regenerated in five variants; that is a known gap.
   YOU READ IT        and edit the markdown, it is yours
         |
         v
-  YOU APPROVE        approve, or press Publish
+  YOU APPROVE        change the word on its record; then press Publish
         |
         v
   render             .pptx, and a .pdf of that same deck
@@ -116,7 +122,8 @@ map — what the course teaches and what has to come before what.
         |            scored by comparison, no model involved, no guessing
         v
   suggest            everything else: a suggested score per criterion, with the
-        |            quoted evidence and how confident it is  ->  work/<RUN>/
+        |            quoted evidence and how confident it is
+        |              ->  records/evaluations.yaml, status: suggested
         v
   it tells you       which few to look at first — low confidence, odd scores,
         |            unreadable files — and what the class got wrong together
@@ -124,7 +131,8 @@ map — what the course teaches and what has to come before what.
   YOU DECIDE         every score. Change one by writing your own beside it
         |
         v
-  YOU APPROVE        approve  — this is the one that can never be a button
+  YOU APPROVE        your professor_decision, with who and when, and the status
+                     set to approved or overridden — this can never be a button
         |
         v
   evidence           the approved marks become evidence, evidence becomes
@@ -157,15 +165,15 @@ check that no figure from one can reach the other.
         |
         v
   FIRST PRESS        a plan. Writes nothing, anywhere. It says:
-        |              - which drafted materials it would promote
-        |              - what it would then publish
+        |              - what it would publish
         |              - what it would hold back, and why
+        |              - which drafts it is leaving out, because you have
+        |                not accepted them
         v
   YOU READ IT
         |
         v
-  SECOND PRESS       promotes those materials into the course record,
-                     then publishes
+  SECOND PRESS       publishes what you have accepted, and nothing else
 ```
 
 Four things it can publish:
@@ -322,7 +330,8 @@ It refuses to send a message containing an answer, or naming a student.
 ## The two decisions that are always yours
 
 1. **A judgement about a person** — a grade, a concept someone has or has not
-   understood, an intervention. `ainar approve`, run by you, and nothing else.
+   understood, an intervention. Your decision, written into its record by you,
+   and nothing else.
 2. **Something a student will see** — the page, the announcement, the
    repository, the Canvas brief. The second press, after reading the plan.
 

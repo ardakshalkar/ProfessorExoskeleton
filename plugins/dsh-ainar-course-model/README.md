@@ -59,7 +59,8 @@ Every tool reads. None writes, approves, pushes a grade, or touches a
 credential — there is no tool here that could, which is a property of the list
 in `ainar-node/src/tools/index.ts` rather than a promise made by this bundle.
 
-Approval stays where it always is: a person running `ainar approve`.
+Approval stays where it always is: with a person. A draft is a record marked
+`approval: draft`, and the professor accepts it by changing that word.
 
 ## Where the model is
 

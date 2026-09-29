@@ -1,8 +1,10 @@
-# Written by `ainar approve`.
+# Written by ainar.
 #
-# Every entry was proposed by an agent and accepted by a person. AI
-# suggestions are preserved beside the decisions that superseded them.
-# Machine-managed — change these through approval, not by hand.
+# An entry with no `approval` field, or `approval: approved`, has been accepted
+# by a person; one marked `approval: draft` is a proposal nobody has accepted
+# yet. AI suggestions are preserved beside the decisions that superseded them.
+# Machine-managed — accept or reject an entry by its `approval` word, and leave
+# the rest of it to ainar.
 
 evidence:
 - evidence_id: EVID-9060-0101-1

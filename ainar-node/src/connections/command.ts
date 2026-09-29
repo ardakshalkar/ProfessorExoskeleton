@@ -26,9 +26,9 @@
  * is between this command and a second registry writer inside the pane — one
  * that would have its own idea of what a valid host is, its own idea of which
  * variable each type defaults to, and no test holding the two together. The
- * pane makes exactly that argument about `ainar approve`, in its own words:
- * re-typing the steps would produce a third implementation, held to nothing,
- * whose first divergence would be a record that validated and was still wrong.
+ * pane makes exactly that argument about `ainar publish`, in its own words:
+ * a second copy of the steps in a web server would be held to nothing, and its
+ * first divergence would be a record that validated and was still wrong.
  *
  * So `add` is the seam the pane spawns, and the validation lives in one place.
  */

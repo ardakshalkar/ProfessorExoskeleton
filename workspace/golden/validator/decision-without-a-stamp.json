@@ -4,7 +4,7 @@
       "code": "evaluation.unstamped",
       "level": "error",
       "location": "EVAL-6001",
-      "message": "status is approved but the decision has no decided_at — approve it with `ainar approve` rather than editing by hand"
+      "message": "status is approved but the decision has no decided_at — a decision says who made it and when"
     },
     {
       "code": "item.criterion_score_mismatch",

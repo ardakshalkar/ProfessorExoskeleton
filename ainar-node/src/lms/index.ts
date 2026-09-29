@@ -37,7 +37,7 @@
  * it overwrites a document a person edits by hand.
  *
  * Both live targets require `--confirm`, and no agent may run either — the same
- * line `ainar approve` draws, for the same reason.
+ * line accepting a draft draws, for the same reason.
  *
  * The linkage between an assessment and its Canvas column lives in the
  * assessment's `extensions` mapping, which is non-secret and belongs in the

@@ -101,7 +101,7 @@ test("a generated illustration says on the slide that it was generated", () => {
 
 // --- the checks, on a deck on disk -----------------------------------------
 
-/** A workspace with one recorded deck folder, and a draft one in work/. */
+/** A workspace with one deck folder in the course, and one outside it. */
 const workspace = () => {
   const root = mkdtempSync(join(tmpdir(), "slides-"));
   const recorded = join(root, "courses", "CSS-4008", "materials", "MODULE-06-slides");
@@ -253,7 +253,7 @@ test("a recorded deck renders beside its markdown, its pictures to output/", () 
   assert.equal(place.assetsDir, join(root, "output", "MODULE-06-slides"));
 });
 
-test("a draft of a recorded deck, and a deck in work/, go to output/<deck>/", () => {
+test("a --draft render of a course deck, and a deck outside the course, go to output/<deck>/", () => {
   const { root, recorded, draft } = workspace();
   assert.equal(placeFor(join(recorded, "MODULE-06-slides.md"), { draft: true }).outDir, join(root, "output", "MODULE-06-slides"));
   const work = placeFor(join(draft, "MODULE-07-slides.md"));
@@ -263,7 +263,7 @@ test("a draft of a recorded deck, and a deck in work/, go to output/<deck>/", ()
 
 test("nothing but a recorded deck's own render is written inside courses/", () => {
   const { root, recorded, draft } = workspace();
-  // A draft pointed into the course.
+  // A deck from outside the course, pointed into it.
   assert.throws(() => placeFor(join(draft, "MODULE-07-slides.md"), { outDir: recorded }), /refusing to write/);
   // A recorded deck's --draft into its own folder.
   assert.throws(() => placeFor(join(recorded, "MODULE-06-slides.md"), { draft: true, outDir: recorded }), /refusing/);

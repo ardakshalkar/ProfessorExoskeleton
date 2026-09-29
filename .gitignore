@@ -47,9 +47,9 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Agent drafts, which every skill already describes as ephemeral. Nothing here
-# is a record until `ainar approve` moves it into `courses/`, and a draft that
-# reached a commit would be a proposal wearing a decision's clothes.
+# Where agent drafts used to live, before 2026-09-29. Drafts are now records in
+# `courses/` marked `approval: draft`; nothing writes here any more, and an old
+# checkout's leftovers stay out of commits.
 work/
 
 # Rendered decks, and the scratch directories that build them.

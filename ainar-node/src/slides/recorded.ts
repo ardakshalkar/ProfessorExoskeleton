@@ -51,10 +51,9 @@ export function recordedFigures(bundle: CourseBundle, root: string, deckPath: st
 /**
  * A recorded Document, resolved to the deck it points at — or a refusal.
  *
- * The refusals are render-deck's, and each is a mistake that was made:
- * a draft rendered to `.pptx` looks finished; a Document whose `storage_key`
- * is the built `.pptx` was once read as a megabyte of text and "rendered" as
- * one slide 724 inches tall.
+ * The refusals are render-deck's, and each is a mistake that was made: a
+ * Document whose `storage_key` is the built `.pptx` was once read as a megabyte
+ * of text and "rendered" as one slide 724 inches tall.
  */
 export function deckForDocument(bundle: CourseBundle, root: string, documentId: string): RecordedDeck {
   const document = documentById(bundle).get(documentId) as any;
@@ -63,13 +62,9 @@ export function deckForDocument(bundle: CourseBundle, root: string, documentId: 
   if (storageKey.includes("://")) {
     throw new Error(`${documentId} lives in object storage (${storageKey}); there is no file here to render`);
   }
-  if (/^work[\\/]/.test(storageKey)) {
-    throw new Error(
-      `${documentId} is still a draft (${storageKey}).\n` +
-        "A deck rendered from work/ looks finished and nobody approved what is inside it.\n" +
-        "Approve it first, or render the file itself with --draft to look at it.",
-    );
-  }
+  // A document marked `approval: draft` renders like any other: it lives in the
+  // course now, and what keeps a draft from students is its record, which
+  // `publish` and the page both read, rather than which folder it sits in.
   if (!/\.(md|markdown)$/i.test(storageKey)) {
     throw new Error(
       `${documentId} points at ${storageKey}, which is not markdown.\n` +

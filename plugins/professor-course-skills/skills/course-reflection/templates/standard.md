@@ -1,6 +1,6 @@
 <!--
-  Written to work/{{ COURSE_VERSION_ID }}/reflection-{{ TERM }}.md, or beside the
-  course if there is no workspace. Never into courses/: a reflection is the
+  Written to output/{{ COURSE_VERSION_ID }}/reflection-{{ TERM }}.md (gitignored
+  scratch at the workspace root), or beside the course if there is no workspace. Never into courses/: a reflection is the
   professor's, not a record of what the course claims.
 
   The two sections most likely to be dropped are the two that carry the value.

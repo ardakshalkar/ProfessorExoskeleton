@@ -11,10 +11,12 @@
  * the file, thirty-eight in the model, for a month.
  *
  * So: one command runs the producer, converts what needs converting, reads the
- * result to describe it, and writes ONE draft through the same schema and the
- * same emitter `ainar approve` uses. Nothing here writes to `courses/`.
- * Approval stays the only way in, and this narrows what reaches it to records
- * that were valid before they were written.
+ * result to describe it, and writes the Document records through the schema
+ * and the one record writer, into the course, marked `approval: draft`. The
+ * files stay where the producer put them — beside their sources, in the
+ * course's materials folder — and nothing is moved afterwards. A material the
+ * professor already accepted keeps its approval when it is rebuilt: the same
+ * source rendered again is not a new proposal.
  *
  * **The runner orchestrates; it does not author.** The producers stay whatever
  * they are — a Python script, or a markdown deck through the harness's own
@@ -25,18 +27,17 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { parse } from "yaml";
 import { z } from "zod";
-import { promoteIdentifier } from "./approve.ts";
 import type { CourseBundle } from "./bundle.ts";
 import { Document } from "./model/content.ts";
 import { officeAt, toPdf } from "./pdf.ts";
 import { recordFor } from "./slides/recorded.ts";
 import { renderDeck } from "./slides/render.ts";
-import { dump } from "./yaml-out.ts";
+import { writeRecords } from "./records-write.ts";
 
 /** Where a course declares what produces what. */
 export const MANIFEST = "materials.yaml";
@@ -175,22 +176,15 @@ export const readProducers = (materialsDir: string): Producer[] | null => {
  * are matched — a deck and the PDF beside it are one producer, and it is the
  * PDF that usually goes stale.
  *
- * Compared as promoted ids. The manifest names the DRAFT id — this command
- * writes drafts — and `approve` takes the marker out, so the record freshness
- * reports as stale is `DOC-DECK-MD-01` while the manifest says
- * `DOC-DECK-MD-DRAFT-01`. An exact comparison answered "no producer declares
- * it" for every approved deck in the course.
+ * An exact comparison: a draft and the record it becomes have one id, so the
+ * manifest and the record always agree.
  */
-export const producerFor = (producers: Producer[], documentId: string): Producer | null => {
-  const wanted = promoteIdentifier(documentId);
-  return (
-    producers.find(
-      (producer) =>
-        promoteIdentifier(producer.document_id) === wanted ||
-        promoteIdentifier(producer.pdf_document_id ?? `${producer.document_id}-PDF`) === wanted,
-    ) ?? null
-  );
-};
+export const producerFor = (producers: Producer[], documentId: string): Producer | null =>
+  producers.find(
+    (producer) =>
+      producer.document_id === documentId ||
+      (producer.pdf_document_id ?? `${producer.document_id}-PDF`) === documentId,
+  ) ?? null;
 
 export type BuildOptions = {
   readonly root: string;
@@ -199,7 +193,8 @@ export type BuildOptions = {
   readonly only: string | null;
   readonly pdf: boolean;
   readonly dryRun: boolean;
-  readonly draftsDir: string;
+  /** `courses/<COURSE>` — where the Document records are written. */
+  readonly courseDir: string;
   /**
    * The course, when the caller has it loaded: a rendered deck then gets the
    * same figure credits and second contract from the record that
@@ -210,15 +205,18 @@ export type BuildOptions = {
 
 export type BuildReport = {
   readonly lines: string[];
-  readonly draft: string | null;
+  /** The record files written; empty on a dry run or when nothing was built. */
+  readonly written: string[];
+  /** The documents recorded, by id. */
+  readonly documents: string[];
   readonly failed: number;
 };
 
 /**
- * Run the producers a course declares, and write one draft for what they made.
+ * Run the producers a course declares, and record what they made.
  *
  * Failures are per producer and do not stop the rest: a course with one broken
- * build script should still get the other six decks and a draft naming them.
+ * build script should still get the other six decks and records naming them.
  * The count comes back so the caller can exit non-zero without this function
  * deciding to end the process.
  */
@@ -343,6 +341,7 @@ export const buildMaterials = async (options: BuildOptions): Promise<BuildReport
         module_id: producer.module_id ?? null,
         concepts: producer.concepts,
         version: 1,
+        approval: "draft",
         extensions: {
           // Where this came from, said rather than implied.
           //
@@ -381,6 +380,7 @@ export const buildMaterials = async (options: BuildOptions): Promise<BuildReport
             module_id: producer.module_id ?? null,
             concepts: producer.concepts,
             version: 1,
+            approval: "draft",
             extensions: { origin: "generated", rendered_from: producer.document_id },
           }),
         );
@@ -412,26 +412,21 @@ export const buildMaterials = async (options: BuildOptions): Promise<BuildReport
         // which is the state seven of these were registered in.
         concepts: producer.concepts,
         version: 1,
+        approval: "draft",
         extensions: { origin: "generated", rendered_from: producer.document_id },
       }),
     );
   }
 
   if (options.dryRun || documents.length === 0) {
-    return { lines, draft: null, failed };
+    return { lines, written: [], documents: [], failed };
   }
 
-  // One draft for the whole run, through the emitter `ainar approve` writes
-  // with — so a draft and the record it becomes are formatted by one function.
-  mkdirSync(options.draftsDir, { recursive: true });
-  const draft = join(options.draftsDir, "documents-materials.yaml");
-  writeFileSync(
-    draft,
-    "# Written by `ainar materials build`. Every entry was produced by a script\n" +
-      "# this course declares, validated against the Document schema before it was\n" +
-      "# written, and is a proposal until `ainar approve` promotes it.\n\n" +
-      dump({ documents }),
-    "utf-8",
-  );
-  return { lines, draft, failed };
+  const written = writeRecords(options.courseDir, { documents }, { keepApproval: true });
+  return {
+    lines,
+    written,
+    documents: documents.map((document) => document.document_id as string),
+    failed,
+  };
 };

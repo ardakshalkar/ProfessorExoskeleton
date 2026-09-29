@@ -3,6 +3,7 @@
  * Ported from `ainar/inbox.py`.
  */
 
+import { drafts } from "./approval.ts";
 import {
   allRubrics,
   assessmentById,
@@ -198,6 +199,10 @@ export const inboxPayload = (
       scheduled_at: intervention.scheduled_at ?? null,
     }));
 
+  const waiting = drafts(b).filter(
+    (draft) => draft.collection !== "evaluations" && draft.collection !== "interventions",
+  );
+
   // ----------------------------------------------------------------- events
   // Timestamps are ISO strings carrying their offset, so a lexical sort would
   // order `+05:00` against `Z` wrongly. Compare the instants.
@@ -247,5 +252,10 @@ export const inboxPayload = (
       payload: event.payload,
     })),
     existing_action_items: existing,
+    // Everything else an agent wrote that nobody has accepted — materials,
+    // meetings, assessments, items, signals — read off the course, where the
+    // drafts now live. Grades and interventions are above, in their own
+    // sections. Present only when there is one, like `groups`.
+    ...(waiting.length ? { drafts_awaiting_approval: waiting } : {}),
   };
 };

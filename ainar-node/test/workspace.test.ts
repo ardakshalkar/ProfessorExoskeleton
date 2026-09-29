@@ -2,8 +2,8 @@
  * The cache serves a course the professor is still editing.
  *
  * Nothing in the read surface writes, so caching a parsed course for the life of
- * the process looks free. It is not: `ainar roster import` and `ainar approve`
- * both write into `courses/` from another process, and under Claude Desktop this
+ * the process looks free. It is not: `ainar roster import` and every agent
+ * writing a draft both write into `courses/` from another process, and under Claude Desktop this
  * one lives until the app restarts. A cache that never notices is a server that
  * answers "27 students" all afternoon after you imported the twenty-eighth.
  *

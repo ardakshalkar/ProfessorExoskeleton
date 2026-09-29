@@ -60,7 +60,7 @@ const band = (criterion: any, score: number): number | null => {
  * This is `model_dump(mode="json", exclude_none=True)`, which is how
  * `ainar/approve.py` serialises every record it writes — and it has to be done
  * here, at construction, because the Node write path has no equivalent step.
- * `tidy()` in `approve.ts` drops only empty `extensions` and reorders; the YAML
+ * `tidy()` in `records-write.ts` drops only empty `extensions` and reorders; the YAML
  * emitter then writes ` null` for anything still holding one.
  *
  * The ground truth is a written record: `records/evidence.yaml` in a real course

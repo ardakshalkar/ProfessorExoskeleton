@@ -101,7 +101,7 @@ Record / + drafts already holds.
 | Overlay | The week card shows | Source |
 | --- | --- | --- |
 | **Plan** | the record: what a student may be shown, what an LMS may be given | `course_outline` over `courses/` |
-| **Proposed** | the same, with drafted modules, meetings and assessments in place and in blue, each with the approval affordance beside it | `course_outline` over the `loadDrafts` + `mergeDrafts` pair |
+| **Proposed** | the same, with drafted modules, meetings and assessments in place and in blue, each with the approval affordance beside it | `course_outline` over the whole course, drafts included (`+ drafts`) |
 | **Gaps** | the week coloured by what is missing from it: no module, no deadline, no weight, no deck | the Checklist report, re-keyed by week |
 | **Evidence** | how it actually went: what was due that week, how many handed it in, how the concepts taught that week are landing | `gradebook` and `class_progress`, re-keyed by week |
 
@@ -131,17 +131,20 @@ a concept, a hole — carries the same three affordances and never a fourth.
   [`BACKLOG.md`](../../BACKLOG.md), and course mode is what makes them worth
   building: in chat mode a packet saves a sentence of typing, on the spine it is
   the entire interaction.
-* **Approve.** Only on a drafted object, only ever by spawning `ainar approve`
-  the way `POST /api/approve` already does, `--dry-run` until a preview has been
-  read.
+* **Approve.** Only on a drafted object — a record marked `approval: draft`, or
+  an evaluation still `status: suggested` — and it is the professor's edit, not
+  the pane's: they change the word in the record's file. Since 2026-09-29 there
+  is no `ainar approve` to spawn and `POST /api/approve` answers 410, so on the
+  spine this affordance can only point at the record that is waiting, not change
+  it.
 
-  Since 2026-09-21 there is a fourth on the header rather than on the spine, and
-  it is the one that made the third rarer: **Publish** runs
-  `ainar publish <target>`, which performs that same gate over the documents and
-  resources one publication needs and then publishes. On the spine it would be a
-  week-level affordance — *put week seven in front of the class* — and the
-  argument for building it as chrome first is that a publication is about the
-  run, not about a week.
+  There is a fourth on the header rather than on the spine: **Publish** runs
+  `ainar publish <target>`, which publishes what the professor has accepted and
+  names the drafts it left out. (From 2026-09-21 to 2026-09-29 it also promoted
+  the documents and resources a publication needed; it no longer approves
+  anything.) On the spine it would be a week-level affordance — *put week seven
+  in front of the class* — and the argument for building it as chrome first is
+  that a publication is about the run, not about a week.
 
 The deadline button that exists today is the pattern, and it is already better
 than it looks: it does not write the date, it hands the model *which file holds
@@ -150,14 +153,15 @@ generalises that button, it does not replace it.
 
 **The line that does not move.** Nothing here settles a judgement about a
 student. A mark never becomes final on this page; there is no route that could,
-and the reason is the one `AGENTS.md` gives — there is one approval path and the
-professor runs it.
+and the reason is the one `AGENTS.md` gives — a grade is decided by the
+professor writing their `professor_decision` beside the suggestion, and by
+nothing else.
 
 ### The one concession to direct editing
 
 Three facts have no drafted half: a meeting's room, a week's title, a deadline
-the professor has just decided. No skill proposes them, so `ainar approve` has
-nothing to promote, and refusing them only means they stay editable by
+the professor has just decided. No skill proposes them, so there is no draft of
+them for anyone to accept, and refusing them only means they stay editable by
 hand-editing YAML. That is the argument `extensions.lms.canvas_sections`
 already won.
 
@@ -174,7 +178,7 @@ unambiguous, the Checklist already counts it, and Tasks already has a button
 for it.
 
 Everything with a drafted half keeps going through the agent, because a draft
-the professor reads and promotes is a better record of a decision than a field
+the professor reads and accepts is a better record of a decision than a field
 that silently changed.
 
 ### Chat as a button

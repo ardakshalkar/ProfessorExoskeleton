@@ -43,7 +43,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { floatPaths } from "./approve.ts";
+import { floatPaths } from "./records-write.ts";
 import { type CourseBundle, allRubrics, bundlePayload } from "./bundle.ts";
 import { SCHEMA_MODELS } from "./schema.ts";
 
