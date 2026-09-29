@@ -704,7 +704,7 @@ const publishHomework = async (
     items,
     github: auth.github,
     repo: flag("repo"),
-    // Public is the default because a template students cannot see cannot be
+    // Public is the default because a repository students cannot see cannot be
     // forked. `--private` is the way back, for work being staged before a
     // cohort is told about it.
     visibility: (args.includes("--private") ? "private" : "public") as "private" | "public",
@@ -729,15 +729,21 @@ const publishHomework = async (
     return { code: 1, repo: result.plan.repo ?? null, url: null };
   }
   for (const line of result.output) say(line);
-  if (result.created) say(`\nCreated ${result.plan.repo}, private.`);
+  if (result.created) say(`\nCreated ${result.plan.repo}, ${result.plan.visibility}.`);
   if (result.url) say(result.url);
   if (result.created) {
+    // Not a GitHub template, and nothing here suggests making it one: students
+    // fork it, keep the fork public, and hand in the fork's link.
     say(
-      "\nIt is private. Making it public, and marking it a template so students " +
-        "get a clean history, are both yours:\n" +
-        `  gh repo edit ${result.plan.repo} --template\n` +
-        `  gh repo edit ${result.plan.repo} --visibility public`,
+      "\nStudents fork it and keep their fork public; it is not a template, and " +
+        "they should not make a private copy.",
     );
+    if (result.plan.visibility === "private") {
+      say(
+        "It is private, so nobody can fork it yet. Making it public is yours:\n" +
+          `  gh repo edit ${result.plan.repo} --visibility public --accept-visibility-change-consequences`,
+      );
+    }
   }
   say(
     `\nRecord it on the assessment, if it is not there yet:\n` +
