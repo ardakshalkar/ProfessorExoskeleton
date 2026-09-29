@@ -28,11 +28,10 @@ Pick a folder — anywhere; `~/courses/` is fine — and inside it:
   enrollments.yaml                  pseudonyms only
   assessments/*.yaml                assessments with inline rubrics
   items/*.yaml                      concept-tagged questions
-  materials/*.md                    slides, handouts
+  materials/<MATERIAL>/             one folder per deck or handout
   records/*.yaml                    the actual semester
 homework/<slug>/                    starter repositories students fork
 imports/<label>/                    material brought in from outside
-work/<RUN_ID>/                      drafts — proposals, not content
 archive/<TERM>/                     offerings that have finished
 ```
 
@@ -138,23 +137,25 @@ Report what you checked **and what you could not**. Say it plainly:
 
 Never say "validated". You did not validate; you read.
 
-## 5. Approval, with no `ainar approve`
+## 5. Approval, with no command at all
 
-The gate does not disappear. It becomes manual, which is slower and exactly as
-binding.
+There is no `ainar approve` — with the CLI or without it. A draft is a record
+in the course that says so, and accepting it is changing one word.
 
-An agent writes drafts to `work/<RUN_ID>/`, with `-DRAFT-` in every identifier.
-To approve, **you**:
+An agent writes a record straight into the file its collection belongs in —
+`activities/generated.yaml`, `assessments/generated.yaml`,
+`records/signals.yaml` — with its real identifier and `approval: draft`.
+Materials go straight into `materials/<MATERIAL>/`, beside whatever they
+belong with. Nothing is moved afterwards. To accept one, **you**:
 
-1. Read the draft and edit anything you disagree with.
-2. Remove the `-DRAFT-` segment from each identifier you are keeping —
-   `CONCEPT-DRAFT-OVERFITTING` becomes `CONCEPT-OVERFITTING` — and fix every
-   reference to it in the same batch.
-3. Move the entries into the right file under `courses/`.
-4. Delete the draft.
+1. Read it and edit anything you disagree with.
+2. Change `approval: draft` to `approval: approved` (or delete the line — a
+   record with no `approval` is the professor's own).
 
-For anything with a suggestion in it, add your decision **beside** the
-suggestion, never over it:
+To reject one, delete the record.
+
+A grade is the one kind with more to write. Add your decision **beside** the
+suggestion, never over it, and set the status:
 
 ```yaml
 ai_suggestion:
@@ -170,13 +171,15 @@ status: overridden
 ```
 
 `approved` when you accept the suggested score, `overridden` when you change it.
-With the CLI those last three fields are stamped for you; here you write them.
+`ainar validate` refuses an `approved` or `overridden` grade whose decision does
+not say who made it and when.
 
 Keeping both halves is what later makes `ainar calibration` able to tell you
-where the agent drifts — so it is worth the typing even before the package
-exists.
+where the agent drifts — so it is worth the typing.
 
-**An agent never does any of this.** It writes the draft and stops.
+Nothing student-facing reads a draft: the course page, a publication and the
+gradebook all leave it out. **An agent never accepts one.** It writes
+`approval: draft` (a grade: `status: suggested`) and stops.
 
 ## 6. When the package arrives
 

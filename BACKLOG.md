@@ -58,14 +58,15 @@ is worth building.
 > without it. The single highest-leverage small thing on this page.
 
 - [ ] **PRV-1** Provenance block on the draft schema: model, skill and version,
-      evidence identifiers cited, timestamp. `ainar-node/src/drafts.ts` holds
-      the draft contract. `S` · depends: —
+      evidence identifiers cited, timestamp. `ainar-node/src/approval.ts` holds
+      the draft contract (`AGENT_WRITABLE`). `S` · depends: —
 - [ ] **PRV-2** Skills write it. One shared template line rather than forty
       bespoke ones. `M` · depends: PRV-1
-- [ ] **PRV-3** `approve` carries it onto the promoted record rather than
-      dropping it — `ainar-node/src/approve.ts`, around `approveDrafts` and
-      `writeRecords`. `M` · depends: PRV-1
-- [ ] **PRV-4** A validator check: a promoted record either carries provenance
+- [ ] **PRV-3** It stays on the record when the professor accepts it and when a
+      writer rebuilds it, rather than being dropped — `ainar-node/src/records-write.ts`,
+      around `upsertRecords` and `writeRecords`, which already keep `approval`
+      on a rebuild. `M` · depends: PRV-1
+- [ ] **PRV-4** A validator check: an accepted record either carries provenance
       or is marked professor-authored. Nothing anonymous. `S` · depends: PRV-3
 
 ## E4 · The record — [§4](FUTURE.md#4-the-record-readiness-history-a-real-backing-store)
@@ -183,8 +184,9 @@ is worth building.
 > That is exactly why it should be done now rather than when the payoff is
 > wanted.
 
-- [ ] **EVA-1** Record the outcome at `ainar approve`: promoted unchanged,
-      promoted edited, rejected — with the draft's provenance beside it. `M` ·
+- [ ] **EVA-1** Record the outcome at the moment the professor accepts: accepted
+      unchanged, accepted edited, rejected (the draft deleted) — with the
+      draft's provenance beside it. `M` ·
       depends: PRV-3
 - [ ] **EVA-2** `ainar acceptance` — the rate per skill over a term. `S` ·
       depends: EVA-1
@@ -338,7 +340,8 @@ is worth building.
       `decision` · blocks: VAR-2 … VAR-6
 - [ ] **VAR-2** Instantiate an `ItemModel` into items: bind the scenario
       variables, apply one `difficulty_features` profile, emit numbered items as
-      drafts through the same schema `ainar approve` reads. `M` · depends: VAR-1
+      records marked `approval: draft`, through the same schema and writer
+      (`writeRecords`) every other generator uses. `M` · depends: VAR-1
 - [ ] **VAR-3** Variant identity on the paper and on the submission, so a script
       can be marked against the key it was actually sat under. Without this the
       rest of the epic is a way to print papers nobody can grade. `M` ·

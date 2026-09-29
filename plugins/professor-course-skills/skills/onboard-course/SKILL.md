@@ -9,25 +9,27 @@ writes: records
 
 > **Non-negotiables.** This skill proposes; a person decides.
 >
-> - Write to `work/<RUN_ID>/`, never into `courses/`. Draft identifiers carry a
->   `-DRAFT-` segment so they cannot be mistaken for records.
+> - Write into the course, where the record belongs — the file for its
+>   collection under `courses/<COURSE>/`, with its real identifier — and mark
+>   every record you write `approval: draft` (a grade: `status: suggested`).
+>   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
+>   nothing student-facing reads a draft.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
 >   job. Concepts and modules may be **proposed** from source material the
 >   professor supplied, with `extensions.proposal.source` naming where each came
 >   from — proposed, not invented, and inert until approved.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -47,13 +49,14 @@ this skill can produce.
 
 ## What cannot be drafted, which is most of what onboarding touches
 
-Everything else in `skills/` writes a proposal into `work/` and lets
-`ainar approve` decide. **That machinery is unavailable to this skill**, because
-the records onboarding creates are precisely the ones the loader refuses in a
-draft file: `Course`, `CourseVersion` and `LearningOutcome`.
+Most of `skills/` writes a proposal into the course marked `approval: draft`
+and lets the professor accept it by changing that word. **That machinery is
+unavailable to this skill**, because the records onboarding creates are
+precisely the ones that cannot carry `approval`: `Course`, `CourseVersion` and
+`LearningOutcome`.
 
 So the line runs differently here, and it is about *transcription versus
-invention* rather than about `work/` versus `courses/`:
+invention* rather than about draft versus accepted:
 
 - **A fact the professor states in the conversation, you may write down.** The
   title, the credits, the department, the term dates, who teaches it, the Canvas
@@ -200,9 +203,11 @@ Tell them what exists, what is `TODO`, and the order of the next steps — this 
 the part that makes onboarding feel like a beginning rather than a form:
 
 1. `/find-ideas` — how other universities teach this, before committing to a shape
-2. `/propose-concepts` — the concept map, from their syllabus or teaching material
-3. 🔒 `ainar approve work/<RUN> --as USER-…` — they promote the concepts
-4. `/plan-term` — 15 weeks, the meetings, and the three assessment shells
+2. `/propose-concepts` — the concept map, from their syllabus or teaching
+   material, written straight into the course after they agree its shape
+3. `/plan-term` — 15 weeks, the meetings, and the three assessment shells
+4. 🔒 they accept the meetings and shells — each is marked `approval: draft`,
+   `ainar drafts <RUN>` lists them, and changing the word to `approved` accepts one
 5. `/design-assessment` — a real assessment with a rubric, when they need one
 6. `ainar roster import` — the class list, which writes pseudonyms here and
    identities outside the repository
@@ -243,5 +248,6 @@ later by installing the package.
   `AINAR_SHEETS_TOKEN`, not a service-account key. Say which one they need to set.
 - **No student names.** The roster comes later and comes from
   `ainar roster import`, which writes pseudonyms here and identities elsewhere.
-- **Do not run `ainar approve`.** Nothing in onboarding needs it, and if you think
-  it does, something has gone wrong earlier.
+- **Do not write `approval: draft` or `approval: approved`.** Nothing onboarding
+  writes can carry the field, and if you think it needs one, something has gone
+  wrong earlier.

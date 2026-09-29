@@ -178,19 +178,20 @@ criterion, with the disagreements listed rather than averaged away. A confidence
 number never checked against a human is decoration.
 
 **The line.** Nothing in any interface may approve a judgement about a student or
-push a grade. `ainar approve` is the one approval path for one of those and the
-professor runs it. Facts only the professor knows — LMS ids, section mappings —
-have no drafted half and are fair game for a UI to write. This is not a roadmap
-item; it is the constraint every roadmap item is checked against.
+push a grade. A grade becomes one when the professor writes their
+`professor_decision` — with `decided_by` and `decided_at` — beside the AI's
+suggestion, and nothing else writes it. Facts only the professor knows — LMS
+ids, section mappings — have no drafted half and are fair game for a UI to
+write. This is not a roadmap item; it is the constraint every roadmap item is
+checked against.
 
-Since 2026-09-21 the line is stated at the collection rather than at the command,
-because `ainar publish` promotes the **documents and resources** a publication
-needs and a button in the pane presses it. That was the right place to move to: a
-professor who has read what would go on the students' page and pressed *publish*
-has decided about a deck, which is the decision the gate is for. They have
-decided nothing about a mark, so an evaluation, a signal and an intervention
-still go through `approve` — and a publication that walks past one reports it as
-left alone rather than quietly taking it along.
+Since 2026-09-29 the line is stated at the record rather than at any command.
+Every proposal sits in the course marked `approval: draft` (a grade
+`status: suggested`), and the professor accepts it by changing the word. There
+is no `ainar approve` and no approve button, and `ainar publish` — which from
+2026-09-21 promoted the documents and resources a publication needed — now
+accepts nothing: it publishes what has been accepted and names every draft it
+left out, a deck as much as a mark.
 
 **First step.** An agreement report over already-approved evaluations. The data
 is sitting there.
@@ -219,27 +220,28 @@ nothing equivalent. There is no measure of whether a drafted term plan, rubric o
 grading suggestion is any good.
 
 **What done looks like.** The honest metric is acceptance: of what the skills
-drafted, how much did the professor promote unchanged, promote edited, or reject?
+drafted, how much did the professor accept unchanged, accept edited, or reject?
 That number per skill, over a term, is worth more than any benchmark — and the
-approve step already sits exactly where it can be recorded.
+moment the `approval` word changes, or a draft is deleted, is exactly where it
+can be recorded.
 
-**First step.** Record the outcome at `ainar approve` — unchanged, edited,
-rejected — with the draft's provenance beside it. Then leave it alone for a term
-and read it.
+**First step.** Record the outcome at the moment the professor accepts —
+unchanged, edited, rejected — with the draft's provenance beside it. Then leave
+it alone for a term and read it.
 
 ## 9. Trust: provenance on every draft
 
-**Where it stands.** Drafts land in a separate place and are promoted one
-identifier at a time. What is not recorded is where a draft came from: which
-model, which skill, which evidence it cited.
+**Where it stands.** Drafts sit in the course marked `approval: draft` and are
+accepted one record at a time. What is not recorded is where a draft came from:
+which model, which skill, which evidence it cited.
 
-**What done looks like.** Every promoted record carries how it was proposed, so a
+**What done looks like.** Every accepted record carries how it was proposed, so a
 year later "why is this rubric like that" has an answer. This also gives §8 its
 denominator and §6 its audit trail; the three are one piece of plumbing wearing
 three names.
 
-**First step.** A provenance block on drafts, written by the skills, preserved by
-`approve`.
+**First step.** A provenance block on drafts, written by the skills, and kept on
+the record when the professor accepts it.
 
 ## 10. Deployment: more than one professor
 

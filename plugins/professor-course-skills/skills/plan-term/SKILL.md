@@ -11,8 +11,8 @@ writes: records, drafts
 >
 > - **Modules go straight into `courses/`** with final identifiers — the week
 >   structure is the professor's own authoring, and `modules` is no longer a
->   draftable collection. Meetings and assessments still go to `work/<RUN_ID>/`
->   with a `-DRAFT-` segment, so they cannot be mistaken for records.
+>   draftable collection. Meetings and assessments go into the
+>   course too, marked `approval: draft` until the professor accepts them.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Modules you now write into the record directly, which raises the
@@ -20,17 +20,16 @@ writes: records, drafts
 >   so the shape you report in §3 and the professor's answer to it are the whole
 >   safeguard. Meetings and assessment shells are still artefacts and still wait
 >   for approval.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -136,17 +135,19 @@ each is a whole-plan error rather than a single wrong row:
 
 ## 4. Write the plan
 
-**Two destinations, not one.** Since 2026-09-05 the modules and the meetings
-part company:
+**Three files, all in the course.** Everything goes straight into `courses/`
+with its real, final identifier; what differs is whether it waits:
 
-| What | Where | Identifier |
+| What | Where | Waits? |
 | --- | --- | --- |
-| `modules` | `courses/<COURSE_ID>/modules.yaml` — the record | `MODULE-07`, no draft marker |
-| `activities`, `assessments` | `work/<RUN_ID>/term-plan-draft.yaml` | `ACT-DRAFT-…`, awaiting approval |
+| `modules` | `courses/<COURSE_ID>/modules.yaml` | No — the professor's own authoring; `modules` cannot carry `approval` |
+| `activities` | `courses/<COURSE_ID>/activities/generated.yaml` | Yes — `approval: draft` on every one |
+| `assessments` | `courses/<COURSE_ID>/assessments/generated.yaml` | Yes — `approval: draft` on every one |
 
-The week structure is the professor's own authoring and goes straight in; what
-carries a mark waits. A `modules:` key in a file under `work/` is refused with
-`draft.collection`, so writing them together no longer works.
+The week structure is the professor's own authoring and goes straight in; the
+meetings and the shells go in beside it marked `approval: draft`, and nothing
+is moved afterwards. An `approval` field on a module is refused by the schema,
+so do not add one.
 
 Read `modules.yaml` before writing it and keep what is there — an overwrite
 loses hand-authored weeks.
@@ -166,11 +167,13 @@ modules:
     # Say where the week came from in `description` if it is worth recording.
 ```
 
-Meetings and assessments, into `work/<RUN_ID>/term-plan-draft.yaml`:
+Meetings, into `courses/<COURSE_ID>/activities/generated.yaml` (read it first
+and add to what is there):
 
 ```yaml
 activities:
-  - activity_id: ACT-DRAFT-0701
+  - activity_id: ACT-0701
+    approval: draft
     course_run_id: CSS-4008-2026-FALL
     module_id: MODULE-07
     type: lecture
@@ -181,7 +184,8 @@ activities:
     extensions:
       proposal: { ... }
 
-  - activity_id: ACT-DRAFT-0702
+  - activity_id: ACT-0702
+    approval: draft
     course_run_id: CSS-4008-2026-FALL
     module_id: MODULE-07
     type: lab
@@ -195,9 +199,13 @@ activities:
 
 Rules for the draft:
 
-- **`ACT-DRAFT-<week><slot>`** — `ACT-DRAFT-0701` is week 7, first meeting. The
-  same two-digit-week convention the authored file uses, so approved meetings
-  sort with the ones already there.
+- **`ACT-<week><slot>`** — `ACT-0701` is week 7, first meeting. The same
+  two-digit-week convention the authored file uses, so the meetings sort with
+  the ones already there. It is the final identifier: accepting the draft
+  changes one word, not the id, so check it does not collide with an
+  `activity_id` already in the course.
+- **`approval: draft` on every meeting.** Never `approved`, and never leave the
+  field off — a record with no `approval` counts as the professor's own.
 - **A meeting names the module it teaches.** A meeting with no `module_id`
   produces a warning, and rightly: nothing links it to what is taught. Leave it
   off only for a revision or consultation slot, and say so in the report.
@@ -220,11 +228,13 @@ Rules for the draft:
 
 Draft three assessment shells. Their **placement** follows the calendar and is
 yours to propose; their **weight** is a claim about how students are judged, and
-this is the one place this skill proposes one:
+this is the one place this skill proposes one. They go into
+`courses/<COURSE_ID>/assessments/generated.yaml`, each marked `approval: draft`:
 
 ```yaml
 assessments:
-  - assessment_id: ASSESSMENT-DRAFT-MT1
+  - assessment_id: ASSESSMENT-MT1
+    approval: draft
     course_run_id: CSS-4008-2026-FALL
     title: Midterm 1
     type: exam
@@ -256,7 +266,7 @@ The conditions on that, and none of them is optional:
   says a human never chose this number for this course.
 - **Say it first in the report**, before anything else, in one sentence: *these
   three weights are Narxoz policy and not from your material; change them before
-  approving if this course differs.* A weight that reaches `courses/` unexamined
+  approving if this course differs.* A weight that is accepted unexamined
   becomes the divisor in `ainar alignment` and the grade share in
   `ainar gradebook`.
 - **No rubric, no criteria.** Those are claims and they are not yours. Say the
@@ -271,10 +281,11 @@ the run's dates may be the thing that is wrong.
 ## 6. Check it
 
 ```bash
-bin/ainar validate CSS-4008 --drafts work/CSS-4008-2026-FALL
+bin/ainar validate CSS-4008
 ```
 
-Five codes matter here and every one is a real planning error:
+It checks the drafts where they sit, in the course. Five codes matter here and
+every one is a real planning error:
 
 - `schedule.slot_clash` — two meetings at the same instant. The week increment
   is wrong; every week after it is wrong too.
@@ -286,7 +297,9 @@ Five codes matter here and every one is a real planning error:
 - `weight.sum` — the run's weights no longer total 1.0. **Report it. Never
   rebalance another assessment to absorb it.**
 
-Fix every error. Report every warning.
+Fix every error. Report every warning. `approval.depends_on_draft` is expected
+if a module or another accepted record already names one of these drafts — say
+which, since it clears when the professor accepts them.
 
 ## 7. Report, then hand over
 
@@ -304,17 +317,21 @@ In this order:
 6. **What is still missing**: rubrics for the three assessments, outcomes on the
    modules if the course has outcomes you could not map, rooms.
 
-Then stop. **Do not run `ainar approve` yourself.**
+Then stop. **Do not accept anything yourself.** Tell the professor what is
+waiting and where: the meetings in `activities/generated.yaml` and the three
+shells in `assessments/generated.yaml`, each marked `approval: draft`, beside
+the authored schedule rather than inside it. The modules are already in
+`modules.yaml` and wait for nothing.
 
 ```bash
-bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
+bin/ainar drafts CSS-4008-2026-FALL
 ```
 
-Tell them to edit first — move a week, change the weights, delete the meetings
-for a week they teach differently — and that `--only` and `--reject` approve a
-subset. Approved modules land in `modules/approved.yaml`; approved
-meetings land in `activities/generated.yaml`, beside the authored
-schedule rather than inside it.
+lists everything waiting. Tell them to edit first — move a week, change the
+weights, delete the meetings for a week they teach differently — then accept a
+record by changing `approval: draft` to `approval: approved` (or deleting the
+line), and reject one by deleting the record. Any subset works; nothing is
+moved.
 
 Also give them the snippet to paste into `run.yaml`, so next term is one
 question shorter:
@@ -328,7 +345,7 @@ extensions:
       - {type: lab, weekday: thursday, time: "14:00", duration_minutes: 150}
 ```
 
-`run` is not a draftable collection, so you cannot write that yourself — which
+`run` cannot carry `approval: draft`, so you cannot write that yourself — which
 is correct. It is the professor's own timetable.
 
 ## Without the CLI
@@ -349,8 +366,9 @@ are catchable by reading:
 - **Weight sum.** Add the run's existing assessment weights to anything you
   propose. If it is not 1.0, propose no weights.
 
-Read `activities.yaml` in full first — a run with meetings already
-in it is being extended, and a duplicate `activity_id` is refused on load.
+Read `activities.yaml` and `activities/generated.yaml` in full first — a run
+with meetings already in it, accepted or still `approval: draft`, is being
+extended, and a duplicate `activity_id` is refused on load.
 
 Report all four as checked, and say plainly that the rest of `ainar validate`
 did not run.

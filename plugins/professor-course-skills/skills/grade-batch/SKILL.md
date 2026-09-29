@@ -9,25 +9,27 @@ writes: drafts
 
 > **Non-negotiables.** This skill proposes; a person decides.
 >
-> - Write to `work/<RUN_ID>/`, never into `courses/`. Draft identifiers carry a
->   `-DRAFT-` segment so they cannot be mistaken for records.
+> - Write into the course, where the record belongs — the file for its
+>   collection under `courses/<COURSE>/`, with its real identifier — and mark
+>   every record you write `approval: draft` (a grade: `status: suggested`).
+>   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
+>   nothing student-facing reads a draft.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
 >   job. Concepts and modules may be **proposed** from source material the
 >   professor supplied, with `extensions.proposal.source` naming where each came
 >   from — proposed, not invented, and inert until approved.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -60,7 +62,7 @@ ASSESSMENT-04  Model Evaluation Assignment
 
 One submission times one criterion is one judgement. Grade only what is listed
 as remaining — re-grading something already evaluated creates a duplicate
-identifier and will be refused at approval.
+identifier, which `ainar validate` refuses.
 
 Report the missing submissions to the professor early. They are a different
 kind of problem and are often more urgent than the grading.
@@ -70,10 +72,12 @@ kind of problem and are often more urgent than the grading.
 If the assessment has choice items, score them first:
 
 ```bash
-bin/ainar score-items work/CSS-4008-2026-FALL --course-version CSS-4008-2026-FALL
+bin/ainar score-items CSS-4008-2026-FALL
 ```
 
-This compares `chosen_options` against the answer key. It is deterministic —
+This compares `chosen_options` against the answer key, scoring the item
+responses in the course's `records/item-responses*.yaml` in place and marking
+what it scored `approval: draft`. It is deterministic —
 do not do this work yourself, and do not second-guess its output. It also
 prints item difficulty and, for each item, which wrong answer the class
 converged on:
@@ -102,13 +106,17 @@ Two things change at batch scale:
   no spread usually means the criterion is not discriminating, which is worth
   telling the professor.
 
-Write everything to one file, `work/<RUN_ID>/evaluations-draft.yaml`.
+Write every evaluation into the course's `records/evaluations.yaml`, with its
+real identifier `EVAL-<submission digits>-<criterion digits>` and
+`status: suggested`.
 
 ## 4. Check it
 
 ```bash
-bin/ainar validate CSS-4008 --drafts work/CSS-4008-2026-FALL
+bin/ainar validate CSS-4008
 ```
+
+Suggestions and drafts are validated in place like any other record.
 
 ## 5. Report
 
@@ -122,13 +130,20 @@ Lead with the shape of the batch, not with a list of scores:
 - shared misconceptions from the item data;
 - missing submissions.
 
-Then hand over. **Never run `ainar approve` yourself.**
+Then hand over. **Never write a `professor_decision` or an approved status
+yourself.**
 
-> Review `work/CSS-4008-2026-FALL/evaluations-draft.yaml`. Change any score by
-> adding a `professor_decision` with the score and a comment. Then:
+> The suggestions are in `courses/CSS-4008/records/evaluations.yaml`, each
+> `status: suggested`; the scored item responses are in
+> `records/item-responses*.yaml`, marked `approval: draft`. To accept an
+> evaluation, add a `professor_decision` beside its `ai_suggestion` — `score`,
+> `comment`, `decided_by`, `decided_at` — and set `status: approved` (same score)
+> or `overridden` (changed score). To accept an item response, change
+> `approval: draft` to `approval: approved`, or delete the line.
+> `bin/ainar drafts CSS-4008-2026-FALL` lists everything still waiting; the
+> gradebook and `extract-evidence` skip it until then. Afterwards:
 >
 > ```bash
-> bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
 > bin/ainar extract-evidence --course-version CSS-4008-2026-FALL
 > ```
 

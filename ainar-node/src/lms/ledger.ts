@@ -118,7 +118,7 @@ export interface AssignmentEntry {
 export interface Publication {
   /** Where it went, in the words the plan prints: a path, a channel, a repository. */
   where: string;
-  /** When, in the run's own timezone — the stamp `approve` uses. */
+  /** When, in the run's own timezone — the stamp `decidedAt` gives every writer. */
   at: string;
   /** What the far end gave back, for a person to read: `message 4471`. */
   reference: string | null;

@@ -5,7 +5,7 @@ rather than assumed, at **the depth the request actually needs**.
 
 A spin-off of the AINAR Professor Exoskeleton's `/make-materials`, which does
 the same job welded to one repository: it needs the `ainar` CLI, a `courses/`
-tree, `ainar approve` to promote a draft, and `Document` records to carry the
+tree, `approval: draft` on the records it writes, and `Document` records to carry the
 render contract. This installs on its own.
 
 ## Use the minimum harness the task needs

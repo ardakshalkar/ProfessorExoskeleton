@@ -18,15 +18,17 @@ drawing it.
   PROPOSE          a skill drafts          plugins/*/skills/*/SKILL.md
      |
      v
-  DRAFT            work/<RUN>/*.yaml       src/drafts.ts  — DRAFTABLE, and its omissions
+  DRAFT            courses/<COURSE>/…      src/approval.ts — AGENT_WRITABLE, and its omissions
+                   approval: draft         src/records-write.ts — RECORD_FILES, upsert by id
      |
      v
-  ===== GATE ===== ainar approve           src/approve.ts — validate, strip -DRAFT-, write
-                   ainar publish           the same gate (runApproval), narrowed to
-                                           documents + resources, then the publication
+  ===== GATE ===== the professor changes   src/approval.ts — isApproved, approvedView
+                   the word                (an evaluation: professor_decision beside
+                                           the ai_suggestion). No command does it
      |
      v
   RECORD           courses/<COURSE>/       vendor/datalayer/schema/ — 28 schemas
+                   accepted records only   what every builder below reads
      |
      v
   BUILD            record -> intermediate  src/slides/, src/page.ts, bin/exam-paper.ts
@@ -47,11 +49,11 @@ shape is worth naming:
 
 | Where | What holds | Enforced in |
 | --- | --- | --- |
-| Draft | An agent may propose 16 collections and no others. Not outcomes, not capabilities, not enrollments — and since 2026-09-05 not concepts or modules either, because the structure of a course is the professor's own authoring. | `src/drafts.ts` |
-| Gate | Nothing is a record until a person promotes it. The promotion is visible in a diff, because the `-DRAFT-` marker comes out of the identifier. Two commands perform it and they are one implementation — `runApproval`: `ainar approve`, over everything, and `ainar publish`, over the documents and resources one publication needs. A judgement about a student has one path and it is the first. | `src/approve.ts`, `src/publish.ts` |
-| Build | An unapproved file has a `storage_key` under `work/`, and every builder that could publish one checks. A draft deck renders only to `output/<DECK>/`, never into `courses/`. | `src/page.ts`, `src/slides/render.ts` (`placeFor`), `src/slides/recorded.ts` |
+| Draft | An agent may propose 16 collections and no others. Not outcomes, not capabilities, not enrollments — and since 2026-09-05 not concepts or modules either, because the structure of a course is the professor's own authoring. Each proposal is written into the course file its collection belongs in, with its final identifier, marked `approval: draft` (an evaluation `status: suggested`, an intervention `status: proposed`). | `src/approval.ts` (`AGENT_WRITABLE`), `src/records-write.ts` |
+| Gate | Nothing a person has not accepted reaches a student. Accepting is changing the word — `approval: draft` to `approved`, or a `professor_decision` with `decided_by` and `decided_at` beside a grade's `ai_suggestion` — and it is visible in a diff. No command performs it: `ainar approve` was removed on 2026-09-29, and `ainar publish` approves nothing. A record with no `approval` field is approved, which is what keeps hand-authored courses reading as they did. | `src/approval.ts`, `src/validate.ts` |
+| Build | Every builder that could publish reads `approvedView` — accepted records only. The page, the gradebook, extract-evidence, the roll-up and the LMS push never see a draft; `publish` names the drafts it left out, and refuses a homework or Canvas publication of an assessment still marked draft. | `src/page.ts`, `src/publish.ts`, `src/gradebook.ts` |
 | Refusal | The answer-key scan before publication has no override. A file that names students is refused a path inside the workspace. | `src/safety.ts`, `src/lms/base.ts` |
-| Output | Build products go to `dist/` or `output/<DECK>/`. An artefact meant to become a record — a recorded deck's own render, from `ainar deck render` or `materials build`, a printed paper — is written beside the course under `materials/<DECK>/` instead, because a `storage_key` with no scheme is a path in this repository and a record may not point at a build directory. The YAML under `courses/` is still written by `approve` alone, which is what keeps it diffable. | every command |
+| Output | Build products go to `dist/` or `output/<DECK>/`. An artefact meant to become a record — a recorded deck's own render, from `ainar deck render` or `materials build`, a printed paper — is written beside the course under `materials/<DECK>/` instead, because a `storage_key` with no scheme is a path in this repository and a record may not point at a build directory. The YAML under `courses/` is written through one emitter that upserts by id and keeps a hand-authored file's comments, which is what keeps it diffable. | every command, `src/records-write.ts` |
 
 **Build and render are separate on purpose.** The build half has the opinions and
 no I/O, so it is testable without a course on disk; the render half does I/O and
@@ -90,8 +92,8 @@ the renderer does not have. That salvage is `MAT-1` … `MAT-3` in
 [`BACKLOG.md`](BACKLOG.md), and until it is done, deleting the tree loses
 something.
 
-**Read it this way.** If a skill ends by writing YAML into `work/`, it is on the
-record path and everything in §1 applies to it. If it ends by handing the
+**Read it this way.** If a skill ends by writing YAML marked `approval: draft`
+into the course, it is on the record path and everything in §1 applies to it. If it ends by handing the
 professor prose, it is on the standalone path and the gate never sees it.
 
 ---
@@ -106,14 +108,15 @@ professor prose, it is on the standalone path and the gate never sees it.
    |                                         and a slide holding an image reports
    |                                         an upper bound, not a fact
    v
-work/<RUN>/documents.yaml                    a Document with a storage_key
-   |
+courses/<C>/documents/generated.yaml         a Document with a storage_key under
+   |                                         courses/<C>/materials/<DECK>/, marked
+   |                                         approval: draft. Nothing moves later
    v
-ainar approve                                the storage_key leaves work/
-   |
+the professor changes the word               approval: approved — or leaves it, and
+   |                                         the page leaves the deck out
    v
-ainar deck render --document DOC-nnnn       refuses an unapproved document, and
-   |   (or FILE.md, or materials build)      a storage_key that is not markdown
+ainar deck render --document DOC-nnnn       renders a draft like any other, and
+   |   (or FILE.md, or materials build)      refuses a storage_key that is not markdown
    |   splitSlides / parseBlocks             src/slides/deck.ts — Marp's ---
    |                                         convention, so the same file is a deck
    |                                         in a Marp previewer and a deck here
@@ -126,7 +129,7 @@ ainar deck render --document DOC-nnnn       refuses an unapproved document, and
    |                                         Document), alt text, density
    |   placeFor                              where it may write, decided once
    v
-courses/<C>/materials/<DECK>/<DECK>.pptx     a recorded deck, beside its markdown —
+courses/<C>/materials/<DECK>/<DECK>.pptx     a course deck, accepted or draft, beside its markdown —
 output/<DECK>/<DECK>[-draft].pptx            anything else, and every --draft.
    |                                         Rasterized PNGs: output/<DECK>/ always.
    |                                         pptxgenjs + sharp, from ainar-node's
@@ -156,8 +159,9 @@ Two other doors open onto the same output.
   find the other. This is how the seven CSS-4007 decks are built.
 - **`ainar materials build RUN`** runs the producers a course declares in its own
   `materials.yaml`, converts what needs converting, reads the result back to
-  describe it, and writes **one** draft through the same schema and emitter
-  `approve` uses. It exists because those three acts had drifted apart in a real
+  describe it, and writes its `Document` records into the course, marked
+  `approval: draft`, through the same schema and emitter every writer uses — a
+  rebuild replaces its record and keeps whatever approval it had. It exists because those three acts had drifted apart in a real
   course: seven decks from seven scripts, PDFs converted once by a person, and
   `Document` records written by an eighth script that knew nothing of the schema
   — which is how a field the model does not define got into a record and made the
@@ -165,8 +169,8 @@ Two other doors open onto the same output.
 - **`ainar materials import RUN FILE.pptx --as DOC-nnnn`** is the mirror. It reads
   a finished deck somebody else made and proposes what is in it, matched against
   the course's **own** concept vocabulary, so an import cannot introduce a
-  concept. An invented one would fail `validate`, and `approve` writes nothing
-  when validation fails.
+  concept. An invented one would fail `validate`, and what it proposes is
+  written marked `approval: draft`, for the professor to accept.
 
 ---
 
@@ -180,15 +184,18 @@ ainar blueprint RUN                          src/blueprint.ts — what a new
 /design-assessment                           a skill drafts the assessment,
    |                                         its items, and its item models
    v
-work/<RUN>/{assessments,items,item-models}.yaml
-   |
+courses/<COURSE>/{assessments,items,item-models}/generated.yaml
+   |                                         marked approval: draft. ainar validate
+   |                                         refuses here, not later: a choice item
+   |                                         with no correct option, duplicate
+   |                                         option labels, two correct answers on
+   |                                         a single-choice item
    v
-ainar approve                                the schemas refuse here, not later:
-   |                                         a choice item with no correct option,
-   |                                         duplicate option labels, two correct
-   |                                         answers on a single-choice item
+the professor changes the word               approval: approved. An approved
+   |                                         assessment resting on a draft item or
+   |                                         brief is approval.depends_on_draft
    v
-courses/<COURSE>/{assessments,items}/
+courses/<COURSE>/{assessments,items}/        accepted
    |
    +--> bin/exam-paper.ts --assessment ID    role: main items only, sorted by
    |       |                                 number. An unnumbered one stops the
@@ -210,11 +217,12 @@ courses/<COURSE>/{assessments,items}/
    |       |                                 materials/, beside the decks, because
    |       |                                 a storage_key is a path in this
    |       v                                 repository
-   |    work/<RUN>/documents-<stem>-paper.yaml
-   |       |                                 one Document per format, through the
-   |       |                                 same documentRecord and emitter
-   |       v                                 `ainar materials build` writes with
-   |    ainar approve                        and then the professor's own line:
+   |    courses/<C>/documents/generated.yaml
+   |       |                                 one Document per format, marked
+   |       |                                 approval: draft, through the same
+   |       v                                 documentRecord and emitter
+   |    the professor accepts it             `ainar materials build` writes with,
+   |       |                                 and then adds their own line:
    |       |                                 instructions_document_id: DOC-…
    |       v
    |    the pane's Exams tab opens it        `Paper` is that field. Unrecorded, a
@@ -246,14 +254,15 @@ the mistake [`PROVENANCE.md`](PROVENANCE.md) records for the slides plugin.
 end at the filesystem, and the pane's Exams tab draws its `Paper` row off the
 assessment's `instructions_document_id` — so a paper that existed and was never
 registered read as `no brief`, which is a wrong claim rather than a missing
-control. Each printing is therefore also described as a `Document` and written as
-a draft, and nothing here writes to `courses/`: approval stays the only way in.
-The last hop is the professor's and is printed rather than performed, because an
-approved `Assessment` cannot be restated by a draft — `approve.collision` refuses
-the identifier — which is the same shape `homework publish` uses when it hands
-back `extensions.github.template_repo`. `--no-register` prints without proposing
-anything, and a paper written outside the workspace says why it cannot be a
-record instead of drafting a `storage_key` that would fail `document.missing_file`.
+control. Each printing is therefore also described as a `Document` and written
+into the course marked `approval: draft`; a reprint replaces its own record —
+new checksum, same approval. The last hop is the professor's and is printed
+rather than performed, because the assessment's `instructions_document_id` is
+the professor's own record — the same shape `homework publish` uses when it
+hands back `extensions.github.template_repo`. `--no-register` prints without
+proposing anything, and a paper written outside the workspace says why it
+cannot be a record instead of writing a `storage_key` that would fail
+`document.missing_file`.
 
 **Two gaps on this path, both now in [`BACKLOG.md`](BACKLOG.md).**
 
@@ -271,44 +280,43 @@ record instead of drafting a `storage_key` that would fail `document.missing_fil
 
 ## 4a. Publishing, and where the gate went
 
-The five properties above are unchanged; one *step* moved, on 2026-09-21.
+The five properties above are unchanged; the gate *step* has moved twice.
 
 Every pipeline here used to end at a file plus a sentence telling the professor
 to go and run something else — `ainar approve` in a terminal before a deck could
 appear on a page, and then the publishing command after it. Two programs for one
-intention, and the first of them typed from memory.
-
-`ainar publish` is those two acts in one, per target:
+intention, and the first of them typed from memory. On 2026-09-21 `ainar
+publish` folded the two together for documents and resources, promoting them out
+of the drafts folder on the confirming press. On 2026-09-29 the drafts folder and
+`ainar approve` went, and publishing stopped approving anything: accepting a
+material is now changing one word in its record, and a publish that also
+approved was two decisions behind one button.
 
 ```
   ainar publish {page|telegram|homework|canvas}     src/publish.ts
      |
-     +-- no --confirm: the plan                     pendingMaterials + the target's
-     |      what it would promote                   own read. Writes nothing, anywhere
-     |      what it would then publish
+     +-- no --confirm: the plan                     the target's own read.
+     |      what it would publish                   Writes nothing, anywhere
      |      what it would hold back or refuse
+     |      Not published — N draft(s)              records still marked
+     |                                              approval: draft it left out
      |
      +-- --confirm:
-            runApproval(collections = documents, resources)   src/approve.ts
-               the SAME order: load, promote, stage, validate, write
-            re-read the record                      the deck promoted a moment ago is
-               |                                    the one the page has to carry
-               v
             buildCoursePage / publishHomework / runLms / sendAnnouncement
+               over approvedView — accepted records only
 ```
 
-**Why the line is at documents and resources.** An artefact is a thing the
-professor is publishing; pressing *publish* having read what would go out **is**
-the act of standing behind it. An `Evaluation` is a judgement about a person, and
-nothing about that press says whether a suggested score is right. So the drafted
-evaluation sitting in the same `work/<RUN>/` is reported as *left alone* and
-stays a proposal — enforced by the `collections` argument, not by anybody's care,
-and pinned by `test/publish.test.ts`.
+**Why publishing accepts nothing.** Pressing *publish* having read the plan is
+a decision about whether students see what the professor has accepted, not about
+whether a draft is right — still less about whether a suggested score is. So a
+draft of any kind, a deck as much as an evaluation, is named in the plan and left
+out; `publish homework` and `publish canvas` refuse an assessment still marked
+draft outright. Pinned by `test/publish.test.ts`.
 
-**The minor change, which is the commonest one.** A material that is already a
-record cannot be re-approved — `approve.collision` refuses the identifier — so
-for a long time the only sanctioned way to fix a word was a new `Document` with
-`supersedes` set, which nothing in the code reads. What actually happens is that
+**The minor change, which is the commonest one.** A material that was already a
+record could not, under the old gate, be approved again — `approve.collision`
+refused the identifier — so for a long time the only sanctioned way to fix a word
+was a new `Document` with `supersedes` set, which nothing in the code reads. What actually happens is that
 the professor edits the file in place, and until 2026-09-21 nothing noticed:
 `validate` checks a checksum's *format* and never compares it to the file.
 
@@ -418,13 +426,12 @@ and something that is not a revision at all.
 
 Two consequences worth knowing:
 
-- **Publishing twice publishes twice.** `approve` never removes a draft, so a
-  second press would promote the same identifier again and collide. A draft
-  whose promoted id is already in the record is rejected from the approval and
-  reported as `already DOC-9001 — left as it is`.
+- **Producing twice records once.** Every writer upserts by id, so building a
+  material again, or reprinting a paper, replaces its record and keeps whatever
+  approval it had, rather than adding a second record that would collide.
 - **The pane and the skill are this command.** `POST /professor-pane/api/publish`
-  spawns it, and the `/publish` skill runs it. Neither reimplements a step, for
-  the reason `src/approve.ts` gives about two gates disagreeing.
+  spawns it, and the `/publish` skill runs it. Neither reimplements a step,
+  because two implementations of one publication would sooner or later disagree.
 
 ## 5. Views of the course
 
@@ -433,7 +440,7 @@ already-approved record and write a file.
 
 | Command | Reads | Writes | The rule that governs it |
 | --- | --- | --- | --- |
-| `ainar page RUN` | the plan — weeks, meetings, rooms, weights | `dist/pages/<RUN>/` | The only output written for a public URL. Material files are **copied, never transformed**, and only after the answer-key scan. A `storage_key` under `work/` is not published; anything unreadable as text is held back rather than published unscanned, and said so in the report. |
+| `ainar page RUN` | the plan — weeks, meetings, rooms, weights | `dist/pages/<RUN>/` | The only output written for a public URL. Material files are **copied, never transformed**, and only after the answer-key scan. A record marked `approval: draft` is not published; anything unreadable as text is held back rather than published unscanned, and said so in the report. |
 | `ainar dashboard RUN` | marks | `dist/<COURSE>/<RUN>-progress.html` | The private opposite. Students by pseudonym. The tests assert that these figures cannot appear on the page above. |
 | `ainar export` | everything | `dist/bundle.json`, one context document per run | Plain JSON. Nothing here writes to a database. |
 | `ainar sql` | everything | `dist/import.sql` | Idempotent, and pinned line by line to a 655-line golden file. |
@@ -458,12 +465,12 @@ since the page embeds it inside `<style>`.
 
 | Symptom | Layer | Where to look |
 | --- | --- | --- |
-| A skill wrote something the loader refuses | Draft | `src/drafts.ts` — is the collection in `DRAFTABLE` at all? |
-| `approve` refuses | Gate | It prints its coverage every run. This gate implements a subset of the 94 checks, and a narrower refusal is a narrower gate |
+| A skill wrote something the loader refuses | Draft | `src/approval.ts` — is the collection in `AGENT_WRITABLE` at all, and does `RECORD_FILES` give it a file? |
+| A material or assessment is missing from the page or refused by `publish` | Gate | It is still marked `approval: draft`. The plan names it; `ainar drafts RUN` lists everything waiting. `approval.depends_on_draft` from `validate` is an approved record resting on one |
 | A deck renders but disagrees with its plan | Build | `checkContract` in `src/slides/deck.ts` — one of the two was edited after the other. A recorded `presentation_plan` that has drifted is a warning: the record describes an older deck |
 | A slide runs off the page | Build | `deck fit`, which lays the deck out with the renderer itself. Without pptxgenjs and sharp it says ESTIMATED, and a slide holding an image is then an upper bound |
 | The `.pptx` appears and the PDF does not | Render | `src/pdf.ts` says why: not found (`SOFFICE_PATH` overrides), or its exit code and first stderr line. A PDF older than the run is never taken for its output |
-| `deck render --document` refuses a document | Gate | Its `storage_key` is still under `work/`, or is the `.pptx` rather than the markdown |
+| `deck render --document` refuses a document | Build | Its `storage_key` is the `.pptx` rather than the markdown |
 | A paper prints a total that looks wrong | Build | It does not silently fix one. The warning on stderr is the disagreement |
 | A material is missing from the published page | Refusal | The answer-key scan, or a file held back as unreadable. The report names which |
 

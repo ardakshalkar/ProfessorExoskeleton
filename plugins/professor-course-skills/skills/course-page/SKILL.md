@@ -9,25 +9,27 @@ writes: site
 
 > **Non-negotiables.** This skill proposes; a person decides.
 >
-> - Write to `work/<RUN_ID>/`, never into `courses/`. Draft identifiers carry a
->   `-DRAFT-` segment so they cannot be mistaken for records.
+> - Write into the course, where the record belongs — the file for its
+>   collection under `courses/<COURSE>/`, with its real identifier — and mark
+>   every record you write `approval: draft` (a grade: `status: suggested`).
+>   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
+>   nothing student-facing reads a draft.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
 >   job. Concepts and modules may be **proposed** from source material the
 >   professor supplied, with `extensions.proposal.source` naming where each came
 >   from — proposed, not invented, and inert until approved.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -116,11 +118,12 @@ that travel and the frame to start from.
 
 The report's lines are the professor's decisions waiting to be made:
 
-- **`a draft under work/, not approved material`** — the file is a proposal.
-  Publishing it would make it look approved. Tell them it exists, and that
-  either `ainar approve` or `/publish` — which promotes the materials a
-  publication needs as its second press — is what changes that. Never move a
-  file to make it publishable.
+- **`a draft (approval: draft), not approved material`** — the record is a
+  proposal. Publishing it would make it look approved. Tell them it exists,
+  where its record is marked `approval: draft`, and that changing that word to
+  `approved` (or deleting the line) is what changes it — they do that
+  themselves; `/publish` approves nothing. Never edit the field or move a file
+  to make it publishable.
 - **`is not a file in this repository`** — a `Document` names a path that is not
   there. That is a modelling error worth reporting; it is not yours to fix by
   pointing the record somewhere else.
@@ -198,7 +201,8 @@ answer to a machine that has not had `pip install` run on it.
 Read the model directly: `courses/<C>/course.yaml`,
 `version.yaml`, `modules.yaml`, `activities.yaml` and
 `assessments/`. Weeks, what is taught in each, meetings with their dates,
-assessments with the weights **as recorded**. Every one of those is copying a
+assessments with the weights **as recorded** — and leave out every record
+marked `approval: draft`, as the command does. Every one of those is copying a
 value out of a file, which is the safe half of what the command does.
 
 `templates/fallback.html` is the frame to start from: fill its slots and paste
@@ -243,8 +247,8 @@ patterns.
 - **Nothing written for the marker.** `answer_key`, the correct-option marker,
   `marking_guidance`, `indicates_misconception_of` and its note. The refusal has
   no override and you must not route around it.
-- **Only approved material, only what the repository holds.** A draft under
-  `work/` published looks exactly like a handout.
+- **Only approved material, only what the repository holds.** A document
+  marked `approval: draft` published looks exactly like a handout.
 - **You do not publish here.** Not `git push`, not enabling Pages, not `gh api`.
   Print the command, say what it does, stop. Putting the page in front of the
   class is `/publish`, on the professor's explicit instruction in that request.

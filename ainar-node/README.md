@@ -69,17 +69,26 @@ Three things here are **not** ports, and live in Node because their libraries do
 | `ainar deck`, `src/slides/` | — | a deck checked and rendered as `.pptx` and PDF — the one renderer, merged from `render-deck` and the slides plugin's `pres render` on 2026-09-29 |
 | `bin/find-image.ts` | — | an openly-licensed image, with its licence and credit recorded |
 
-They write files into `output/` and `work/`. The one exception is a deck recorded in the course, whose render replaces the rendering recorded beside its markdown; a draft is refused a path in `courses/`.
+A deck in the course renders beside its markdown, into its own
+`materials/<MATERIAL>/` folder, whether its record is accepted or still marked
+`approval: draft`; a found image downloads into `courses/<COURSE>/materials/`;
+anything else — a deck from elsewhere on disk, a `--draft` render with
+placeholder figures — goes to `output/`, and a
+`--draft` render is refused a path in `courses/`.
 
-One thing here *does* write into `courses/`: `bin/ainar.ts approve`, ported in
-Phase 6 of `docs/node-migration.md`. It is the one file in this package that is
-not a surface over already-verified code, so it is held by a differential oracle
-instead — `tests/test_approve_parity.py` runs both gates over the same drafts and
-compares the trees byte for byte, and `tests/test_yaml_parity.py` holds
-`src/yaml-out.ts` to PyYAML's output scalar by scalar. It prints its validator
-coverage on every run, because the refusal is what makes it a gate — since
-Phase 4 that is all 94 of `validate.py`'s checks, held there by the 98
-mutations in `workspace/golden/validator/`.
+Since 2026-09-29 there is no approve step, and so no one command that alone
+writes into `courses/`. `bin/ainar.ts approve` — ported in Phase 6 of
+`docs/node-migration.md` and held by `tests/test_approve_parity.py` — was
+removed, with `src/approve.ts` and `src/drafts.ts`; the case now only prints a
+message saying so. An agent or a generator writes each record straight into the
+file its collection belongs in (`RECORD_FILES` in `src/records-write.ts`), with
+its final identifier and `approval: draft`, upserting by id. The rule itself is
+in the header of `src/approval.ts`: no `approval` field is approved, and the
+professor accepts a record by changing the word. `tests/test_yaml_parity.py`
+still holds `src/yaml-out.ts` to PyYAML's output scalar by scalar, and
+`ainar validate` checks drafts in place with everything else — all 94 of
+`validate.py`'s checks, held there by the mutations in
+`workspace/golden/validator/`.
 
 The line that has not moved: **grades, pseudonyms and anything a student can see
 stay Python's** — `lms`, `roster` and `notion push` are refused by name.

@@ -170,11 +170,19 @@ decisions this project made, not code it inherited.
 
 **Policy**
 
-* `src/drafts.ts` — `concepts` and `modules` dropped from `DRAFTABLE`, so the
-  structure of a course is authored straight into `courses/` and only what
-  reaches a student through a grade waits for approval.
-* `src/approve.ts` — `stageDocuments` returns staged ids; the claim-file
-  mechanism removed; a non-draftable collection fails loudly.
+* `src/drafts.ts` (since removed) — `concepts` and `modules` dropped from
+  `DRAFTABLE`, so the structure of a course is authored straight into
+  `courses/` and only what reaches a student through a grade waits for
+  approval. The same omission is now `AGENT_WRITABLE` in `src/approval.ts`.
+* `src/approve.ts` (since removed) — `stageDocuments` returned staged ids; the
+  claim-file mechanism removed; a non-draftable collection failed loudly.
+* 2026-09-29 — the approve gate itself replaced. Upstream drafts into
+  `work/<RUN>/` with `-DRAFT-` identifiers and promotes them with
+  `ainar approve`; here an agent writes each record straight into the course
+  file it belongs in (`src/records-write.ts`), marked `approval: draft`, and the
+  professor accepts it by changing the word (`src/approval.ts`). `src/approve.ts`
+  and `src/drafts.ts` were deleted, and `ainar approve` only prints that it is
+  gone.
 * `src/inbox.ts` — an `undated` assessment reports no missing submissions.
   Upstream counted every active student, which said a class was late for a
   deadline nobody had set; what such work needs is a date, and the inbox asks

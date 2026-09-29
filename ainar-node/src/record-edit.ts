@@ -171,7 +171,7 @@ export const editRecords = (options: {
     // re-pads every flow sequence by default — `[LO-02, LO-04]` comes back as
     // `[ LO-02, LO-04 ]` — so a one-field edit arrived as twenty changed lines
     // in a file nobody had touched. Unpadded unless the file is consistently
-    // padded, because `yaml-out.ts`, the emitter `approve` writes with, is a
+    // padded, because `yaml-out.ts`, the emitter every record writer uses, is a
     // PyYAML transcription with `default_flow_style=False` and emits no flow
     // collections at all: the hand-authored files are the only ones with an
     // opinion here.
@@ -342,7 +342,7 @@ export const setRecordFields = (options: {
  *
  * `sha256:abc…` is a plain scalar — the colon is only a key separator when a
  * space follows it — and writing it quoted would make a file this touched
- * distinguishable from one `approve` wrote.
+ * distinguishable from one the record writer wrote.
  */
 const plainScalar = (value: string | number): string => {
   if (typeof value === "number") return String(value);

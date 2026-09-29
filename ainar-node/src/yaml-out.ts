@@ -1,11 +1,11 @@
 /**
  * Writing YAML the way `yaml.safe_dump` writes it.
  *
- * `ainar approve` appends to files under `courses/`, and `node bin/ainar.ts
- * approve` appends to the same files. If the two gates emit the same data
- * differently, every approval reformats whatever the other one wrote — and a
- * diff in `courses/` stops meaning "a person decided something" and starts
- * meaning "a different binary ran". So this is not "a YAML writer": it
+ * Every record writer in `records-write.ts` emits through this into files under
+ * `courses/`, and the Python `ainar` wrote the same files before it. If two
+ * writers emit the same data differently, every write reformats whatever the
+ * other one wrote — and a diff in `courses/` stops meaning "a person decided
+ * something" and starts meaning "a different binary ran". So this is not "a YAML writer": it
  * reproduces PyYAML's emitter for the shapes the model can hold, and
  * `tests/test_yaml_parity.py` compares the two byte for byte.
  *

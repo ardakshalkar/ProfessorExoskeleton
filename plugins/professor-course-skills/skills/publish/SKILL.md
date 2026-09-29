@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Publish something a student sees — the course page, a Telegram announcement, a homework starter repository, or an assessment's definition in Canvas — promoting the drafted materials it needs on the way. Use when the user asks to publish, post, put up, push out, release or send something to students, asks to refresh the course site, or says to go ahead with a publication that was planned. Composing the announcement's wording is /publish-telegram; building the page without publishing it is /course-page; promoting a grade is `ainar approve` and stays the professor's.
+description: Publish something a student sees — the course page, a Telegram announcement, a homework starter repository, or an assessment's definition in Canvas — carrying only what the professor has accepted. Use when the user asks to publish, post, put up, push out, release or send something to students, asks to refresh the course site, or says to go ahead with a publication that was planned. Composing the announcement's wording is /publish-telegram; building the page without publishing it is /course-page; accepting a draft or a grade is the professor changing its record, and stays theirs.
 stage: render
 requires: [modules, activities, assessments]
 produces: [documents, resources]
@@ -16,11 +16,13 @@ writes: record
 >   "Publish", "post it", "send it", "go ahead", "put it up". *Draft*, *prepare*,
 >   *check*, *what would this do* and a silent assumption authorise the plan
 >   only. A verb in an earlier turn is spent; ask again.
-> - **`ainar publish` promotes documents and resources, and nothing else.** That
->   is enforced by the command, not by your care. **Never run `ainar approve`**:
->   an evaluation, a signal or an intervention becomes a record when the
->   professor promotes it, and approving your own suggestion is the one place a
->   human enters.
+> - **`ainar publish` approves nothing.** It carries only records the professor
+>   has accepted, and names every `approval: draft` it left out. That is
+>   enforced by the command, not by your care. **Never accept your own work** —
+>   never write `approval: approved`, a `professor_decision` or an approved
+>   status: accepting a suggestion is the one place a human enters.
+>   `ainar publish … --confirm` publishes only what the professor has accepted,
+>   and only this skill runs it, on explicit instruction.
 > - **Never `ainar lms push --target canvas-api` or `--target sheets-api`.**
 >   Those post grades a student can see. `publish canvas` moves a *definition*
 >   and is a different act.
@@ -41,7 +43,7 @@ One command, four targets, and the same two steps every time:
 
 ```bash
 bin/ainar publish page CSS-4008-2026-FALL                 # the plan
-bin/ainar publish page CSS-4008-2026-FALL --confirm       # promote, then publish
+bin/ainar publish page CSS-4008-2026-FALL --confirm       # publish what is accepted
 ```
 
 | Target | What reaches whom |
@@ -58,24 +60,24 @@ The first run reads and writes nothing — not to `courses/`, not to disk, not t
 anybody's server beyond the reads that answer the question. It prints two
 halves, and both matter:
 
-- **what it would promote.** The drafted documents and resources this
-  publication needs, by identifier and title. This is the step that used to be
-  `ainar approve` in a terminal, and it is why a deck drafted an hour ago can be
-  on the page without a second command.
-- **what it would then publish**, and what it would hold back and why.
+- **what it would publish**, and what it would hold back and why.
+- **`Not published — N draft(s) nobody has approved yet`**, by identifier and
+  title. These are records still marked `approval: draft` that this publication
+  would otherwise have carried — a deck drafted an hour ago, say. Publishing
+  does not accept them. If the professor wants one on the page, they change its
+  `approval` to `approved` in its file and publish again; you do not.
 
-A draft already in the record says `is already DOC-9001 in the course — left as
-it is`. That is not an error and not a reason to stop: it means this was
-published before.
+`publish homework` and `publish canvas` refuse an assessment still marked
+`approval: draft` outright: students are not given a brief nobody has accepted.
 
-Anything under `left alone` — evaluations, signals, interventions — stays a
-proposal. Say so if there is any, because a professor reading *promote* may
-reasonably assume it means everything in `work/`.
+Say so whenever the plan lists drafts, because a professor who expected the deck
+to go out needs to know why it did not.
 
 ## 2. Read the plan to the professor
 
 Name the target, the run, and the three things they cannot see from the command
-line: what would be promoted, what would be held back, and who it reaches.
+line: what would be published, what would be held back or left out as a draft,
+and who it reaches.
 For Telegram, show the message exactly as it will be sent, on its own.
 
 **Say whether this is a first publication or an update.** The plan's
@@ -93,11 +95,8 @@ Then stop. Wait for the verb.
 bin/ainar publish telegram CSS-4008-2026-FALL --message-file announcement.txt --confirm
 ```
 
-`--as USER-ID` when the run names no instructor; the promotion records who
-accepted the materials and the command refuses rather than guessing.
-
-Read the whole output back. The promotion lines are a change to the course
-record and the professor should see them, not just the "published" line.
+Read the whole output back — what was sent, what was held back, and which
+drafts were left out — not just the "published" line.
 
 ## 3a. When the professor has just edited something
 
@@ -150,10 +149,11 @@ other.
   deleted; a page that briefly held the key held it for whoever was looking.
 - **`STUDENT-…` in an announcement** — a channel is everybody. Rewrite it
   without the person.
-- **the drafts do not load** — nothing was promoted and nothing published. It is
-  a modelling error; `bin/ainar validate <COURSE> --drafts work/<RUN>` names it.
-- **`approve.collision` / validation failed** — the gate refused, and the
-  refusal *is* the gate. Report the codes; do not retry with a narrower flag.
+- **`… is marked approval: draft`** — the assessment has not been accepted.
+  Tell the professor; accepting it is theirs, never a word you change.
+- **the course does not load / validation failed** — nothing was published. It
+  is a modelling error; `bin/ainar validate <COURSE>` names it, drafts included.
+  Report the codes; do not retry with a narrower flag.
 - **no channel, no token, no Canvas course** — configuration the professor owns.
   The pane's Integrations tab is where those are set.
 
@@ -162,8 +162,10 @@ other.
 - **The plan first, every time.** Even when the professor said "publish" in the
   first sentence: run the plan, read it, then confirm. Two presses is the shape
   the pane's button has and the shape this has.
-- **Publishing promotes artefacts, never judgements.** If what they actually
-  want is a grade approved, that is `ainar approve` and it is theirs to run.
+- **Publishing accepts nothing.** If what they actually want is a draft
+  accepted or a grade approved, that is a change to its record — the
+  `approval` word, or a `professor_decision` beside the suggestion — and it is
+  theirs to make.
 - **The announcement is the professor's words.** Draft wording with
   `/publish-telegram`, show it, and send what they approved — not an improved
   version of it.

@@ -34,8 +34,8 @@
  *
  * ## Why it is allowed to edit these files at all
  *
- * Files `ainar approve` writes carry "Machine-managed — change these through
- * approval, not by hand", and this edits them. The line that makes it
+ * Files the record writer produces carry a machine-managed header, and this
+ * edits them. The line that makes it
  * defensible: approval is a gate on *decisions* — what a student was given,
  * what an outcome claims — and a Canvas assignment id is neither. It is a
  * pointer at another system, it carries no academic content, it changes when

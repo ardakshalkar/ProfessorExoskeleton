@@ -10,12 +10,11 @@ writes: records
 > **Non-negotiables.** This skill proposes; a person decides.
 >
 > - **Concepts and modules are written straight into `courses/`,** with final
->   identifiers and no `-DRAFT-` segment. Since 2026-09-05 they are not draftable
->   at all: `concepts` or `modules` in a file under `work/` is refused with
->   `draft.collection`. The structure of a course is the professor's own
->   authoring, and this skill writes it for them rather than proposing it.
->   Everything else this skill touches still goes to `work/<RUN_ID>/` with a
->   `-DRAFT-` identifier.
+>   identifiers. They are not draftable at all: the schema refuses an
+>   `approval` field on a concept or a module. The structure of a course is the
+>   professor's own authoring, and this skill writes it for them rather than
+>   proposing it. Anything else this skill touches also goes straight into the
+>   course with its final identifier, marked `approval: draft`.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Concepts and modules you now write into the record directly, but
@@ -23,17 +22,16 @@ writes: records
 >   a line in the material the professor supplied, because nothing stands between
 >   your file and the course any more. Say in your report where each came from,
 >   and propose the shape before writing it — §4.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -137,16 +135,14 @@ concept are a real and common shape, and `/plan-term` handles them explicitly.
 
 Write them into the course itself — `courses/<COURSE_ID>/concepts.yaml` and
 `courses/<COURSE_ID>/modules.yaml`, or append to `concepts/approved.yaml` and
-`modules/approved.yaml` if those already exist. They are **not** drafts and do
-not go under `work/`: a file there naming `concepts` or `modules` is refused
-outright.
+`modules/approved.yaml` if those already exist. They are **not** drafts: do
+not mark them `approval: draft` — the schema refuses an `approval` field on a
+concept or a module outright.
 
 Two consequences for the identifiers, and both matter:
 
-- **No `-DRAFT-` segment.** `CONCEPT-GRADIENT-DESCENT`, not
-  `CONCEPT-DRAFT-GRADIENT-DESCENT`. A draft marker in the record raises
-  `id.unapproved_draft` on every validate, for something that will never be
-  approved because it never was a draft.
+- **The identifier is final.** `CONCEPT-GRADIENT-DESCENT`, written once. There
+  is no approval step that would rename it later, because it never was a draft.
 - **`extensions.proposal` without `extensions.approval` raises
   `claim.unapproved_proposal`,** for the same reason. Record where a concept came
   from in `description` or a comment instead — the provenance is still worth
@@ -188,8 +184,9 @@ modules:
 
 Rules for what you write:
 
-- **No `-DRAFT-` anywhere.** The identifier you choose is the permanent one and
-  nothing will rewrite it later, so choose it as if it were — because it is.
+- **No `approval` field, and no draft marker in the id.** The identifier you
+  choose is the permanent one and nothing will rewrite it later, so choose it as
+  if it were — because it is.
 - **Say where each came from, and keep saying it.** The record has no field for
   a pending claim, so the trace lives in `description`, in a `source_note`, and
   above all in your report to the professor. A concept they cannot trace back is
@@ -204,7 +201,7 @@ Rules for what you write:
 ## 6. Check it
 
 ```bash
-bin/ainar validate CSS-4008 --drafts work/CSS-4008-2026-FALL
+bin/ainar validate CSS-4008
 ```
 
 Three failures matter most here and all three are real design problems, not
@@ -215,7 +212,7 @@ formatting:
 - `concept.duplicate_name` — a title or alias already names another concept.
   Merge them and keep the **existing** identifier.
 - `ref.concept` — a prerequisite that does not exist in the course or the
-  batch. Usually a typo in a draft id.
+  batch. Usually a typo in an id.
 
 Coverage warnings (a concept no module teaches, an outcome nothing assesses)
 are worth reporting but are not yours to fix.
@@ -234,20 +231,14 @@ Report in this order:
 4. **Judgement calls**: every place you merged two mentions into one concept or
    split one into two, and why.
 
-Then stop. **Do not run `ainar approve` yourself.**
-
-```bash
-bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
-```
-
-Tell them they can edit the draft first — rename a concept, delete one, redraw
-an edge — and that `--only` and `--reject` approve a subset. Approval strips
-the `-DRAFT-` marker, stamps `extensions.approval` with who accepted it, and
-writes the result into `concepts/approved.yaml`, which is course
-content they can edit freely from then on.
+Then stop. There is nothing for the professor to accept: the concepts and
+modules are already in `concepts.yaml` and `modules.yaml`, with no `approval`
+field, as course content they can edit freely. Tell them that is where they
+are and that §4's answer was the gate — rename a concept, delete one, redraw an
+edge directly in the file if the result is not what they meant.
 
 Then name what comes next, because a concept map on its own teaches nobody:
-once the concepts are approved, `/plan-term` lays them onto the calendar — the
+once the professor is satisfied with the concepts, `/plan-term` lays them onto the calendar — the
 lecture and practice meetings for each week with real dates, and shells for the
 midterms and the final. It asks for the meeting pattern; you already established
 the week count here.

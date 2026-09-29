@@ -1,16 +1,19 @@
-# The records that register whatever was written, as `documents-draft.yaml` in
-# the material's own folder (`materials/{{ material }}/`), the deck on top and
-# its figures under `figures/`. Approval is what turns these into records;
-# nothing here is one yet, which is what the -DRAFT- segment says.
+# The records that register whatever was written. The documents go in
+# courses/<COURSE>/documents/generated.yaml and the resource in
+# courses/<COURSE>/resources/generated.yaml. The material itself is already in
+# its own folder, courses/<COURSE>/materials/{{ material }}/, the deck on top and
+# its figures under `figures/`, and nothing moves it afterwards. The identifiers
+# are the final ones; `approval: draft` on each record is what says the
+# professor has not accepted it yet, and only they change that word.
 #
-# Never write `size_bytes` or `checksum` — approval computes both from the file,
-# and a hand-written sha256 is worse than an absent one. Never point
-# `storage_key` into `courses/`; approval moves the file there.
+# Never write `size_bytes` or `checksum` — both are computed from the file, and
+# a hand-written sha256 is worse than an absent one.
 
 documents:
-  - document_id: DOC-DRAFT-{{ nnnn }}
+  - document_id: DOC-{{ nnnn }}
+    approval: draft   # always; never write approved
     title: "{{ material title }}"
-    storage_key: work/{{ COURSE_VERSION_ID }}/materials/{{ material }}/{{ filename }}
+    storage_key: courses/{{ COURSE }}/materials/{{ material }}/{{ filename }}
     mime_type: text/markdown
     course_run_id: "{{ COURSE_VERSION_ID }}"
     module_id: "{{ MODULE-ID }}"
@@ -39,12 +42,13 @@ documents:
           purpose: "{{ what this slide is for }}"
           concepts: ["{{ CONCEPT-ID }}"]
 
-  # Every figure is its own Document, with no Resource of its own. An
-  # unregistered figure is one approval never moves, and the approved deck ends
-  # up pointing at a file left behind in gitignored work/.
-  - document_id: DOC-DRAFT-{{ nnnn }}
+  # Every figure is its own Document, with no Resource of its own, marked
+  # `approval: draft` like the deck. An unregistered figure is a file
+  # `ainar validate` never checks and the record knows nothing about.
+  - document_id: DOC-{{ nnnn }}
+    approval: draft
     title: "{{ what the figure shows }}"
-    storage_key: work/{{ COURSE_VERSION_ID }}/materials/{{ material }}/figures/{{ figure filename }}
+    storage_key: courses/{{ COURSE }}/materials/{{ material }}/figures/{{ figure filename }}
     mime_type: image/svg+xml
     course_run_id: "{{ COURSE_VERSION_ID }}"
     module_id: "{{ MODULE-ID }}"
@@ -58,11 +62,12 @@ documents:
       created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
 
 resources:
-  - resource_id: RES-DRAFT-{{ nnnn }}
+  - resource_id: RES-{{ nnnn }}
+    approval: draft
     title: "{{ material title }}"
     kind: "{{ slides / handout / notebook }}"
     course_run_id: "{{ COURSE_VERSION_ID }}"
-    document_id: DOC-DRAFT-{{ nnnn }}
+    document_id: DOC-{{ nnnn }}
     concepts: ["{{ CONCEPT-ID }}"]
     required: {{ true / false }}
     # If this replaces an earlier version, name it rather than overwriting:

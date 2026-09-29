@@ -82,37 +82,38 @@
       say what a push would do and let them decide.
 
 
-      Draft records into `work/` first: that is where a proposal belongs before
-      anybody has accepted it.
+      Write each record straight into the course file its collection belongs in
+      (`RECORD_FILES` in `ainar-node/src/records-write.ts`), with its real,
+      final identifier, marked `approval: draft`. Materials go straight into
+      `courses/<COURSE>/materials/<MATERIAL>/`. There is no drafts folder and no
+      `-DRAFT-` marker, and nothing is moved afterwards. A grade is an evaluation
+      with `status: suggested` and its `ai_suggestion`; an intervention is
+      `status: proposed`. When you write, say plainly what you wrote and into
+      which files; `bin/ainar drafts RUN` lists what is waiting.
 
 
-      You MAY then run `bin/ainar approve` to promote those drafts into the
-      course record. Run `--dry-run` first, and when you write, say plainly what
-      you promoted, out of which directory, and which identifiers lost their
-      `-DRAFT-` marker. Approval is still a traceable act — it is now one you can
-      perform rather than one you can only describe. The Course pane has a button
-      that runs the same command, so the professor can do it without you.
+      You may NOT accept anything. Never write `approval: approved`, a
+      `professor_decision`, or an approved status — not on your own work, not on
+      anyone's. The professor accepts a record by changing the word (a grade, by
+      adding the `professor_decision` beside the suggestion) and rejects it by
+      deleting the record. `ainar approve` is gone; an older skill that tells you
+      to run it is out of date, and the command only prints a message saying so.
+      The `/ainar-records` skill carries the mechanism in full.
 
 
-      Fifteen of the installed skills open with a line reading "Never run
-      `ainar approve`". That line is an earlier policy and this paragraph
-      supersedes it. Do not weigh the two against each other and do not ask
-      which wins — the skills predate the change, they are vendored copies this
-      project cannot edit, and the rule above is the current one. The `/ainar-records`
-      skill carries the mechanism in full and says the same thing.
-
-
-      What stays theirs is anything that LEAVES this machine and reaches a
+      What also stays theirs is anything that LEAVES this machine and reaches a
       student. Never push a grade to an LMS, never publish to Telegram, Canvas or
       Moodle, and never write to Supabase without being asked to in that turn.
-      The line is drawn there deliberately: approving changes the professor's own
-      record on their own disk, where it can be read, diffed and undone, while a
-      grade in front of a student cannot be recalled. `prof-publish plan`
-      previews and is yours to run; `prof-publish publish --confirm` is theirs.
+      A draft in the professor's own record, on their own disk, can be read,
+      diffed and undone; a grade in front of a student cannot be recalled.
+      `bin/ainar publish … --confirm` publishes only what the professor has
+      accepted, and only `/publish` runs it, on explicit instruction.
+      `prof-publish plan` previews and is yours to run; `prof-publish publish
+      --confirm` is theirs.
 
 
       Your skills come from two sets. The AINAR ones are written against the
-      workspace and draft into `work/<RUN_ID>/`. The ProfessorSkills ones —
+      workspace and write into the course, marked `approval: draft`. The ProfessorSkills ones —
       the activity, course-design, exam, publishing, presentation and student-
       assessment skills — are written against a course and reach deterministic
       work through a bundled CLI: `prof-assess` for grading checks,

@@ -9,25 +9,27 @@ writes: drafts
 
 > **Non-negotiables.** This skill proposes; a person decides.
 >
-> - Write to `work/<RUN_ID>/`, never into `courses/`. Draft identifiers carry a
->   `-DRAFT-` segment so they cannot be mistaken for records.
+> - Write into the course, where the record belongs — the file for its
+>   collection under `courses/<COURSE>/`, with its real identifier — and mark
+>   every record you write `approval: draft` (a grade: `status: suggested`).
+>   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
+>   nothing student-facing reads a draft.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
 >   job. Concepts and modules may be **proposed** from source material the
 >   professor supplied, with `extensions.proposal.source` naming where each came
 >   from — proposed, not invented, and inert until approved.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -78,13 +80,15 @@ evidence about reporting quality.
 
 ## 4. Write the draft
 
-Write to `work/<RUN_ID>/evaluations-draft.yaml`. Identifiers are
-`EVAL-DRAFT-<submission digits>-<criterion digits>` so they can never collide
-with real records.
+Write into the course, to `courses/<COURSE>/records/evaluations.yaml`, with the
+real identifier the evaluation will keep: `EVAL-<submission digits>-<criterion
+digits>`, one per submission and criterion. What makes it a suggestion rather
+than a grade is `status: suggested` — an evaluation carries its state in
+`status`, not in `approval`.
 
 ```yaml
 evaluations:
-  - evaluation_id: EVAL-DRAFT-9081-0401
+  - evaluation_id: EVAL-9081-0401
     submission_id: SUB-9081
     criterion_id: CRIT-04-01
     status: suggested
@@ -107,35 +111,36 @@ evaluations:
         created_at: 2026-10-17T08:20:00+05:00
 ```
 
-If the submission record does not exist yet, draft it in the same file under
-`submissions:` first — `submission_id`, `assessment_id`, `student_id`,
-`submitted_at`, `files`, `status`.
+If the submission record does not exist yet, write it first, in
+`records/submissions.yaml` — `submission_id`, `assessment_id`, `student_id`,
+`submitted_at`, `files`, `status`. A submission is a fact about what was handed
+in, not a judgement, so it carries no `approval`.
 
 ## 5. Check it
 
 ```bash
-bin/ainar validate CSS-4008 --drafts work/CSS-4008-2026-FALL
+bin/ainar validate CSS-4008
 ```
 
-Fix every error. A score above the criterion maximum, an unknown criterion, or
+Suggestions are validated in place like any other record. Fix every error. A score above the criterion maximum, an unknown criterion, or
 a `status: approved` with no decision will all fail here — that is the point.
 
 ## 6. Report and hand over
 
 Give the user a table: criterion, suggested score out of max, confidence, and a
 one-line reason. List anything below 0.6 confidence separately, as the items
-worth their attention first. State the draft file path.
+worth their attention first. State the file path and the evaluation ids.
 
-Then hand over. **Do not run `ainar approve` yourself** — approving your own
-suggestions empties the guarantee. Tell the user:
+Then hand over. **Do not write a `professor_decision` or an approved status
+yourself** — approving your own suggestions empties the guarantee. Tell the
+user:
 
-> Review `work/CSS-4008-2026-FALL/evaluations-draft.yaml`. To change a score,
-> add a `professor_decision` with just the score and a comment — the audit
-> stamp is applied on approval. Then:
->
-> ```bash
-> bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
-> ```
+> The suggestions are in `courses/CSS-4008/records/evaluations.yaml`, each
+> `status: suggested`. To accept one, add a `professor_decision` beside its
+> `ai_suggestion` — `score`, `comment`, `decided_by`, `decided_at` — and set
+> `status: approved` if the score is the same, or `overridden` if you changed it.
+> `bin/ainar drafts CSS-4008-2026-FALL` lists everything still waiting. Until
+> then the gradebook and any LMS push leave them out.
 
 An override is recorded as `overridden` with your suggestion preserved beside
 it. That is how the grading agent gets measured against the professor over
@@ -153,8 +158,8 @@ within its criterion's `maximum_score`. A score above the maximum is an error
 the validator would refuse outright, and it is the easiest one to make by hand.
 
 Write `ai_suggestion` only. Never write `professor_decision`, and never a
-status of `approved` or `overridden` — those are the professor's, and without
-`ainar approve` they will type them by hand.
+status of `approved` or `overridden` — those are the professor's, and they type
+them by hand, beside your suggestion.
 
 `references/working-without-the-cli.md` carries the file layout, the identifier patterns, the read-based checks and how approval works by hand. Read it before starting.
 

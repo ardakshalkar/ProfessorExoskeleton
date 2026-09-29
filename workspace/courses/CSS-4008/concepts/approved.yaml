@@ -1,9 +1,9 @@
-# Written by `ainar approve`.
+# The professor's own record.
 #
 # These are claims about what the course teaches: proposed by an agent from
 # source material, reviewed, and accepted by the person named in
-# `extensions.approval`. Editing them here is fine — they are course content
-# now, not machine state. Move one into the hand-authored file whenever that
+# `extensions.approval`. Editing them here is fine — they are course content,
+# not machine state. Move one into the hand-authored file whenever that
 # reads better; nothing depends on which file it sits in.
 
 concepts:

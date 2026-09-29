@@ -211,8 +211,8 @@ can see: it sends an assessment's *definition* — title, points, dates, what ma
 be handed in, and the brief as the Canvas description. Not the marks; those are
 `ainar lms push` and are not reachable from here at all.
 
-It spawns `ainar lms assignment-plan` / `assignment-push`, the way the approval
-strip spawns `ainar approve`, and for the same reason: what counts as drift,
+It spawns `ainar lms assignment-plan` / `assignment-push`, the way the Publish
+button spawns `ainar publish`, and for the same reason: what counts as drift,
 which fields this model has an opinion about, and how a created assignment's id
 is written back into `courses/` all live in `ainar-node/src/lms/`, and a second
 implementation in the plugin would have its own idea of all three. The LMS
@@ -238,7 +238,7 @@ Four rules, each of which is the reason a button is shaped the way it is:
   that reached CS-401 and not CS-402 is how two halves end up being told
   different things.
 
-`POST` only, like `/api/approve` — a plan makes Canvas answer, and that is not
+`POST` only, like `/api/publish` — a plan makes Canvas answer, and that is not
 something a prefetch or a replayed history entry should be able to fire.
 
 ### Selecting the Canvas sections
@@ -293,20 +293,22 @@ off by default and deliberately so.
 
 Two presses per target, and the first is the one worth naming. It runs
 `ainar publish <target>` with no `--confirm`, which reads and writes nothing —
-not to `courses/`, not to GitHub, not to a channel — and prints two halves:
-**what it would promote** and **what it would then publish**. Only then does the
-red button appear, and it says what it will do rather than "Publish": *Promote
-and write the page*, *Send to the channel*, *Publish to GitHub*, *Send to
-Canvas*. Editing anything — the target, the assessment, a word of an
+not to `courses/`, not to GitHub, not to a channel — and prints **what it would
+publish**, what it would hold back, and **the drafts it would leave out**. Only
+then does the red button appear, and it says what it will do rather than
+"Publish": *Write the page*, *Send to the channel*, *Publish to GitHub*, *Send
+to Canvas*. Editing anything — the target, the assessment, a word of an
 announcement — throws the plan away, so the red button can never send something
 other than what was read.
 
-**The first half is the step that used to be a terminal.** A deck drafted an
-hour ago was a `Document` under `work/` with `-DRAFT-` in its id, which
-`ainar page` deliberately would not publish; getting it onto the page meant
-leaving the harness, running `ainar approve`, and coming back. The publishing
-press now promotes the drafted **documents and resources** the publication needs
-and then publishes, which is the one press this pane was missing.
+**Publishing approves nothing.** A deck drafted an hour ago is a `Document` in
+the course marked `approval: draft`, and `ainar publish` leaves it out and names
+it — *Not published — 1 draft(s) nobody has approved yet*. Getting it onto the
+page is the professor changing that word in its record and pressing again; the
+pane has no control that does it for them. (From 2026-09-21 to 2026-09-29 the
+confirming press promoted drafted documents and resources out of `work/` on the
+way; that went with `ainar approve`.) `publish homework` and `publish canvas`
+refuse an assessment still marked draft.
 
 **And it notices what you edited.** A material changed in place since it was
 recorded — the commonest change there is, and the one that used to need a new
@@ -324,10 +326,9 @@ nothing has been published here before. That memory is the run's sync ledger in
 pane reads none of it directly; it is in the CLI's output, like everything else
 in this dialog.
 
-What it does not promote, and cannot be made to: a drafted evaluation, signal or
-intervention. Those come back in the plan as `left alone`, and `ainar approve`
-remains the professor's. See `runPublish` in `index.js`, and
-`ainar-node/src/publish.ts` for why the line is drawn at artefacts.
+What it cannot be made to do: accept a draft of any kind, a deck or a grade.
+See `runPublish` in `index.js`, and `ainar-node/src/publish.ts` for why a
+publish that also approved was two decisions behind one button.
 
 The announcement box is the only thing in the pane a professor composes rather
 than picks, and it is sent as typed: the command composes nothing, and the plan
@@ -340,25 +341,27 @@ term's channel cannot be recalled.
 A second control sits on the right of the segmented row: **Record** and
 **+ drafts**.
 
-A course lives in two halves. `courses/` is the record — what a person or `ainar
-approve` wrote. `work/<RUN>/` is what the skills proposed and nobody has
-accepted. Both are real, and a pane that showed only the first would report a
-course as nearly empty while fifteen weeks of it sat one directory away.
+A course is one bundle read two ways. Everything lives in `courses/`, and each
+record says whether anyone has accepted it: `approval: draft` (a grade
+`status: suggested`) is what the skills proposed and nobody has accepted yet; no
+`approval`, or `approval: approved`, is the professor's own. A pane that showed
+only the accepted half would report a course as nearly empty while fifteen weeks
+of proposals sat in the same files.
 
 - **Record** answers *what may a student be shown, and what may an LMS be given*.
-- **+ drafts** answers *what would the term look like if every proposal were
-  accepted*. The view carries a banner naming the directory it merged and saying
-  nothing in it has been accepted.
+  It is `approvedView` — the course model's own filter, the one the page, the
+  gradebook and the LMS push read — so what appears here is what they would see.
+- **+ drafts** answers *what does the course look like as it stands, every
+  proposal included*. The view carries a banner saying some of it has not been
+  accepted, and the outline marks each drafted meeting, resource or assessment
+  from the payload's `draft: true`.
 
-It is off by default, and the pane never blends the two silently. The merge is
-`loadDrafts` + `mergeDrafts` — the course model's own pair, the one behind `ainar
-validate <COURSE> --drafts work/<RUN>` — so what appears here is what that
-command validates, `DRAFTABLE`'s refusal of drafted outcomes, capabilities and
-enrollments included.
+It is off by default, and the pane never blends the two silently. Drafts are
+validated in place, with everything else, by `ainar validate <COURSE>`.
 
-`versions` is not draftable, so this cannot rescue an offering that does not
-load. A `version.yaml` with no `start_date` has no run for a merged module to be
-placed in, and the pane reports the loader's error like any other.
+An offering that does not load is not rescued by either half. A `version.yaml`
+with no `start_date` has no run for a module to be placed in, and the pane
+reports the loader's error like any other.
 
 ## Why there is no view code in here
 
@@ -411,54 +414,53 @@ lines, not before.
 | `POST /professor-pane/api/credentials?run=` | store one credential; body is `{ref, value}`, an empty value clears it. Write-only: the response carries presence, never a value |
 | `POST /professor-pane/api/canvas/catalogue?run=` | ask Canvas for this course's sections and student groups |
 | `POST /professor-pane/api/canvas/selection?run=` | write `extensions.lms.canvas_sections`; body is `{selections}` |
-| `POST /professor-pane/api/publish?run=` | plan or perform one publication; body is `{target, assessment, repo, group, message, approver, confirm}`. Without `confirm` it reads and writes nothing |
-| `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/` and `work/`, for the pane's refresh poll |
+| `POST /professor-pane/api/publish?run=` | plan or perform one publication; body is `{target, assessment, repo, group, message, edit, confirm}`. Without `confirm` it reads and writes nothing |
+| `POST /professor-pane/api/approve` | gone since 2026-09-29: answers 410 and says where approval went |
+| `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/`, for the pane's refresh poll |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
 
-`drafts=1` merges `work/<RUN>/` before computing the payload. The response says
-what it did in `x-professor-pane-drafts` and reports the draft loader's own
-complaints in `x-professor-pane-draft-issues`, percent-encoded on one line —
-headers rather than payload fields, because the payload goes into a widget
-document shared with two other hosts and has no place to print them.
+`drafts=1` computes the payload over the whole course, drafts included; without
+it the payload is computed over `approvedView`. The response says which in
+`x-professor-pane-drafts` (`merged` or `record-only`) — a header rather than a
+payload field, because the payload goes into a widget document shared with two
+other hosts and has no place to print it. `x-professor-pane-draft-issues` is
+still read by the client, but there is no draft directory to fail to load any
+more, so it is not sent.
 
 Every view behind them is a read — `callTool` is read-only by construction —
-and five routes are not:
+and four routes are not:
 
-* `POST /api/approve` spawns the CLI rather than reimplementing the gate.
-* `POST /api/publish` spawns `ainar publish`, which runs that same gate over the
-  materials a publication needs and then publishes.
+* `POST /api/publish` spawns `ainar publish`, which publishes what the
+  professor has accepted and names the drafts it left out.
 * `POST /api/preferences` writes a preference layer.
 * `POST /api/canvas/selection` writes `extensions.lms.canvas_sections`.
 * `POST /api/canvas/catalogue` writes nothing here, but is the one route that
   reaches off this machine.
 
-**None of them is an approval path for a judgement**, which is the property that
-matters. `AGENTS.md` says there is one and the professor runs it: `/api/approve`
-IS that command, run as it would be run in a terminal, `--dry-run` until a
-preview has been read. A preference is not a claim about a student — it is how
-the professor wants the skills to behave. And a Canvas section id is a fact about
-the professor's own LMS that only they know: no skill drafts it and no agent can
-propose it, so it has no drafted half for `ainar approve` to promote, and
-refusing it would only mean the fact stays settable by hand-editing YAML.
+**None of them is an approval path**, which is the property that matters.
+Accepting a record is the professor changing `approval: draft` in its file, or
+writing their `professor_decision` beside a grade's suggestion, and the pane
+has no route that does either — `/api/approve`, which once spawned
+`ainar approve`, was removed with that command on 2026-09-29 and answers 410. A
+preference is not a claim about a student — it is how the professor wants the
+skills to behave. And a Canvas section id is a fact about the professor's own
+LMS that only they know: no skill drafts it and no agent can propose it, so it
+has no drafted half for anyone to accept, and refusing it would only mean the
+fact stays settable by hand-editing YAML.
 
 `/api/publish` is the case that tests that sentence, so it is worth being exact.
-It *does* promote drafts, which reads like the gate moving into the pane. What it
-may promote is `MATERIAL_COLLECTIONS` — documents and resources — and that is
-enforced inside `ainar publish`, so no argument this route could send would widen
-it; an `Evaluation` in the same drafts directory comes back reported as left
-alone. The distinction is the one the whole pane is built on: pressing *publish
-the course page* having read what would go on it is the decision to stand behind
-a deck, and says nothing about whether a suggested score is right. A pane that
-could accept a *grade* on its own would be the second path, and there is still no
-route that does.
+It approves nothing: every record still marked draft is left out and named in
+the plan, and that is enforced inside `ainar publish`, so no argument this route
+could send would change it. A pane that could accept a deck or a *grade* on its
+own would be a second path, and there is no route that does.
 
 Every write goes through the model's own emitter or the comment-preserving
 parser, because a professor also edits these files by hand and a file the pane
 saved must not be distinguishable from one they wrote:
 
-* `/api/preferences` uses `yaml-out`'s `dump`, the one `approve` uses and the
-  one held to PyYAML byte for byte. It owns its file whole.
+* `/api/preferences` uses `yaml-out`'s `dump`, the one every record writer uses
+  and the one held to PyYAML byte for byte. It owns its file whole.
 * `/api/canvas/selection` does not own its file at all — `version.yaml` opens
   with a comment explaining the version/run merge — so it goes through `yaml`'s
   `parseDocument`, replaces one key, and writes the rest back untouched, line
@@ -466,7 +468,7 @@ saved must not be distinguishable from one they wrote:
   `instructors`.
 
 `POST` on the Canvas catalogue even though it is a read, for the reason
-`/api/approve` is POST: it spends the professor's API quota and sends a
+`/api/publish` is POST: it spends the professor's API quota and sends a
 grade-changing token, and a side effect behind a `GET` is one a link, a
 prefetch, a refresh or a replayed history entry can fire without anybody having
 decided to. Pressing `Fetch from Canvas` is deciding to.
@@ -531,7 +533,9 @@ that a view which asks does get them.
 
 ## The Checklist
 
-Under **Tasks**, beside Pending and Ready. It answers the four questions a
+Under **Tasks**, beside Pending and Ready — Ready being what is marked
+`approval: draft`, collection by collection, against how many of each are
+already accepted. It answers the four questions a
 course still being built raises, and it answers them together because a
 professor asks them together:
 
@@ -560,9 +564,9 @@ professor would have no way to tell which half was lying.
 
 **It takes no Record / + drafts toggle**, for `ready`'s reason and one of its
 own: this view *is* the comparison. Every row says which half a thing is in —
-amber for what nobody has written, blue for what is written and waiting for
-`ainar approve` — so a setting that hid one half would remove the answer rather
-than narrow it.
+amber for what nobody has written, blue for what is written and still marked
+`approval: draft` — so a setting that hid one half would remove the answer
+rather than narrow it.
 
 ## Names, and where they are allowed
 
@@ -618,7 +622,7 @@ still gets a fresh walk every time it asks.
 
 **The Checklist report, per revision.** It is the most expensive thing in
 `index.js` — it builds the outline payload twice, once over the record and once
-over the merge — and the key is that same revision hash. So the cache is
+over the whole course, drafts included — and the key is that same revision hash. So the cache is
 exactly as fresh as the pane itself: the hash that tells the browser to reload
 the frame is the hash that invalidates what the frame is about to be served,
 and there is no window in which the pane redraws and gets the previous answer.

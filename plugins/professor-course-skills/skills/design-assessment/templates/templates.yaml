@@ -22,4 +22,4 @@ templates:
 
 parts:
   - file: assessment-draft.yaml
-    purpose: the Assessment, its criteria and its Document, as a draft to approve
+    purpose: the Assessment, its criteria and its Document, written into the course marked `approval: draft`

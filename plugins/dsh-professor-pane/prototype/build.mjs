@@ -329,7 +329,7 @@ if ((inbox.pending_evaluations?.total ?? 0) > 0) {
         " waiting on you for " + row.title,
       detail: row.low_confidence
         ? row.low_confidence + " of them low confidence"
-        : "ainar approve is the only way in",
+        : "add your decision beside each suggestion",
       priority: "high", due: null,
     });
   }

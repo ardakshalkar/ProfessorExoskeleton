@@ -5,8 +5,8 @@
 # Anything else uses `object://`, meaning the application's object storage
 # holds the bytes and this record holds only the metadata.
 #
-# `size_bytes` and `checksum` on repository files are filled in by
-# `ainar approve`, never by hand. Approved documents land in
+# `size_bytes` and `checksum` on repository files are filled in by ainar when
+# it writes the record, never by hand. Documents an agent writes land in
 # `documents/generated.yaml` rather than here, so this file keeps its comments.
 
 documents:

@@ -1,7 +1,7 @@
 <!--
   Written outside the workspace — the default is
   ~/.ainar/reports/{{ COURSE_VERSION_ID }}/{{ STUDENT-XXXXXX }}.md. Never
-  courses/, never work/, never dist/. If you are unsure whether a path is inside
+  courses/, never output/, never dist/. If you are unsure whether a path is inside
   the workspace, it is.
 
   Pseudonym only, including in the filename. Every figure comes from

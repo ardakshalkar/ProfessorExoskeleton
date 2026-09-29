@@ -9,25 +9,27 @@ writes: drafts
 
 > **Non-negotiables.** This skill proposes; a person decides.
 >
-> - Write to `work/<RUN_ID>/`, never into `courses/`. Draft identifiers carry a
->   `-DRAFT-` segment so they cannot be mistaken for records.
+> - Write into the course, where the record belongs — the file for its
+>   collection under `courses/<COURSE>/`, with its real identifier — and mark
+>   every record you write `approval: draft` (a grade: `status: suggested`).
+>   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
+>   nothing student-facing reads a draft.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
 >   job. Concepts and modules may be **proposed** from source material the
 >   professor supplied, with `extensions.proposal.source` naming where each came
 >   from — proposed, not invented, and inert until approved.
-> - **Never run `ainar approve`,** and never `ainar lms push --target canvas-api`
->   or `--target sheets-api`. Approving your own suggestion, or posting a grade a
->   student can see, is the one place a human enters. Show the command instead.
->   **`ainar publish … --confirm` is not a way round that** — it promotes the
->   materials a publication needs, which makes it the same act performed from a
->   different direction. Only `/publish` runs it, and only on the professor's
->   explicit instruction in that request.
+> - **Never accept your own work,** and never `ainar lms push --target canvas-api`
+>   or `--target sheets-api`. Do not write `approval: approved`, a
+>   `professor_decision`, or an approved status: accepting a draft, or posting a
+>   grade a student can see, is the one place a human enters. Say what is
+>   waiting instead. `ainar publish … --confirm` publishes only what the
+>   professor has accepted; only `/publish` runs it, and only on the
+>   professor's explicit instruction in that request.
 > - **No student name, email or institutional number in any file,** including a
 >   grading comment or a lesson brief. Write the identifier.
-> - Before reporting anything: `bin/ainar validate <COURSE> --drafts
->   work/<RUN_ID>`, and fix every error.
+> - Before reporting anything: `bin/ainar validate <COURSE>`, and fix every error.
 > - Never recompute by hand what a command does exactly — `score-items`,
 >   `gradebook`, `extract-evidence`, `roll-up`, `calibration`, `lms plan`.
 >
@@ -159,12 +161,16 @@ weight or other course claim.
 
 ## 3. Draft it
 
-Write to `work/<RUN_ID>/assessment-draft.yaml`. Assessment and rubric together,
-items in the same file under `items:`.
+Write each record into the course file its collection belongs in, under
+`courses/<COURSE>/`: the assessment with its rubric in
+`assessments/generated.yaml`, the items in `items/generated.yaml`, the item
+models in `item-models/generated.yaml`. Use the real identifier the record will
+keep, and mark every one `approval: draft`. The shapes, shown together:
 
 ```yaml
 assessments:
-  - assessment_id: ASSESSMENT-DRAFT-06
+  - assessment_id: ASSESSMENT-06
+    approval: draft
     course_run_id: CSS-4008-2026-FALL
     title: Midterm Examination
     type: exam
@@ -197,11 +203,11 @@ assessments:
           item_count: 4
           marks: 60
     rubric:
-      rubric_id: RUBRIC-DRAFT-06
+      rubric_id: RUBRIC-06
       title: Midterm rubric
       criteria:
-        - criterion_id: CRIT-DRAFT-06-01
-          rubric_id: RUBRIC-DRAFT-06
+        - criterion_id: CRIT-06-01
+          rubric_id: RUBRIC-06
           title: Problem formulation and method families
           maximum_score: 40
           outcome_id: LO-01
@@ -215,7 +221,8 @@ assessments:
               description: Formulation incorrect or unjustified.
 
 item_models:
-  - item_model_id: ITEM-MODEL-DRAFT-OVERFITTING-DIAGNOSIS
+  - item_model_id: ITEM-MODEL-OVERFITTING-DIAGNOSIS
+    approval: draft
     course_version_id: CSS-4008-2026-FALL
     title: Diagnose generalisation failure from evaluation evidence
     outcome_id: LO-02
@@ -239,9 +246,10 @@ item_models:
     allowed_item_types: [multiple_choice, short_answer]
 
 items:
-  - item_id: ITEM-DRAFT-06-01
-    assessment_id: ASSESSMENT-DRAFT-06
-    item_model_id: ITEM-MODEL-DRAFT-OVERFITTING-DIAGNOSIS
+  - item_id: ITEM-06-01
+    approval: draft
+    assessment_id: ASSESSMENT-06
+    item_model_id: ITEM-MODEL-OVERFITTING-DIAGNOSIS
     number: 1
     type: multiple_choice
     prompt: >-
@@ -249,7 +257,7 @@ items:
       back. Which statement is best supported?
     maximum_score: 10
     outcome_id: LO-02
-    criterion_id: CRIT-DRAFT-06-02
+    criterion_id: CRIT-06-02
     concepts: [CONCEPT-OVERFITTING, CONCEPT-TRAIN-TEST-SPLIT]
     options:
       - label: a
@@ -261,9 +269,11 @@ items:
         note: Attributes the gap to the data rather than to the model.
 ```
 
-Draft identifiers use `-DRAFT-` throughout, including the rubric and criteria —
-approval strips the marker and rewrites every reference, so an item pointing at
-`CRIT-DRAFT-06-02` follows it to `CRIT-06-02`.
+The identifiers are the final ones from the start, including the rubric and
+criteria — nothing is renamed on approval, so an item pointing at `CRIT-06-02`
+already points where it always will. What makes the record a draft is its
+`approval: draft`, not its name. The rubric and its criteria sit inside the
+assessment and go with its `approval`.
 
 Arithmetic the validator will check, so get it right:
 
@@ -284,30 +294,33 @@ the construct and evidence; the item owns the actual wording and answer.
 ## 4. Write the brief students actually read
 
 The YAML is the model; it is not a document anybody can be handed. Write the
-brief as markdown beside it, and register it as a `Document` so approval files it
-with the course rather than leaving it in `work/`:
+brief as markdown straight into the course, in its own material folder
+`courses/<COURSE>/materials/<MATERIAL>/`, and register it as a `Document` in
+`documents/generated.yaml`, marked `approval: draft`:
 
 ```yaml
 documents:
-  - document_id: DOC-DRAFT-A06-BRIEF
+  - document_id: DOC-A06-BRIEF
+    approval: draft
     title: Midterm 2 — assignment brief
-    storage_key: work/CSS-4008-2026-FALL/materials/ASSESSMENT-DRAFT-06-brief.md
+    storage_key: courses/CSS-4008/materials/midterm-2-brief/midterm-2-brief.md
     mime_type: text/markdown
     course_run_id: CSS-4008-2026-FALL
     generated_by:
       produced_by: design-assessment-skill
       model_id: claude-opus-5
       prompt_version: design-assessment/v1
-      input_refs: [ASSESSMENT-DRAFT-06, LO-02, LO-04]
+      input_refs: [ASSESSMENT-06, LO-02, LO-04]
       created_at: 2026-08-13T10:00:00+05:00
 ```
 
-Then set `instructions_document_id: DOC-DRAFT-A06-BRIEF` on the assessment, so the
+Then set `instructions_document_id: DOC-A06-BRIEF` on the assessment, so the
 model knows which document is the brief rather than leaving the link implicit.
 
 Markdown, not `.docx` or `.pdf`: it diffs, it reviews, and it converts afterwards.
-Approval moves it into `courses/<C>/materials/` and computes
-`size_bytes` and `checksum` from the file — never write those yourself.
+The file stays where you wrote it — nothing moves it on approval, so the
+`storage_key` is final from the start. Never write `size_bytes` or `checksum`
+yourself; they are computed from the file.
 
 What the brief contains: the task, what to hand in, when, how it is marked. **The
 rubric goes in it** — a criterion a student cannot read before starting is a
@@ -329,30 +342,31 @@ homework/hw3-retrieval-over-a-corpus/
 
 The slug is short, lowercase and says what the work is — `hw1-llm-apis-and-tokenizers`,
 `hw2-json-grant-assistant` — because it becomes the repository name students see,
-and `ASSESSMENT-DRAFT-06` means nothing to them.
+and `ASSESSMENT-06` means nothing to them.
 
-`homework/` is neither `work/` nor `courses/`, and that is deliberate. The
-assessment *record* is still a draft that goes through `work/<RUN_ID>/` and
-`ainar approve` like everything else; the starter repository is not a record but
-the material itself, it outlives the draft marker, and it gets adapted for the
-next offering rather than rewritten. Build it where it will live.
+`homework/` is not `courses/`, and that is deliberate. The assessment *record* is
+still a draft in `assessments/generated.yaml`, marked `approval: draft` like
+everything else; the starter repository is not a record but the material itself,
+it outlives the draft, and it gets adapted for the next offering rather than
+rewritten. Build it where it will live.
 
 Then **stop, and hand over the commands.** Creating a repository is an outward
 facing act — the moment it exists, it has a URL that can be found — and it belongs
-to a person for the same reason `ainar approve` and `lms push --target canvas-api`
-do. Never run `gh repo create`, `git push`, `gh api`, or anything that publishes.
+to a person for the same reason accepting a draft and `lms push --target
+canvas-api` do. Never run `gh repo create`, `git push`, `gh api`, or anything that publishes.
 
 ```bash
 cd homework/hw3-retrieval-over-a-corpus
 gh repo create narxoz-css4007/hw3-retrieval-over-a-corpus --public --source=. --push
-gh repo edit narxoz-css4007/hw3-retrieval-over-a-corpus --template
 ```
 
-Say plainly what those do: the first creates it and pushes, the second marks it as
-a template so students get a clean history rather than a fork of your commits.
-`--public` is what lets students fork it at all — say that it is also public to
-next year's cohort, and that `--private` creates it closed if they would rather
-open it when the cohort is told.
+Say plainly what that does: it creates the repository, public, and pushes. It is
+**not** marked as a GitHub template, and never offer `gh repo edit --template`:
+students **fork** it, keep their fork **public**, and hand in the fork's link.
+They do not press "Use this template", do not make a private copy, and do not add
+the professor as a collaborator. Public is what lets them fork it at all — say
+that it is also public to next year's cohort, and that a fork is public too, so a
+key or password a student commits is published with it.
 
 `bin/ainar homework publish <ASSESSMENT_ID>` does the same thing from the record,
 and the professor's pane has a button for it. Both plan first and write only on
@@ -401,10 +415,12 @@ who forked it in that window has it.
 ## 7. Check it
 
 ```bash
-bin/ainar validate CSS-4008 --drafts work/CSS-4008-2026-FALL
+bin/ainar validate CSS-4008
 ```
 
-Expect a `weight.sum` warning if the run's weights no longer total 1.0 — do not
+Drafts are validated in place like any other record. Expect
+`approval.depends_on_draft` if an approved assessment rests on items you drafted —
+it clears when the professor accepts them. Expect a `weight.sum` warning if the run's weights no longer total 1.0 — do not
 silence it by adjusting an existing assessment's weight. That is the
 professor's call. Report it.
 
@@ -419,15 +435,17 @@ items serve it. Then, separately:
 - the brief, the repository scaffold if you built one, and the commands that
   publish them — with a sentence on what each command does before it runs.
 
-Say explicitly that nothing has been published. The draft is in `work/`, the
-repository exists only as files on disk, and no student can see any of it until
-they run the commands themselves.
+Say explicitly that nothing has been published. Name what is marked
+`approval: draft` and where — the assessment in `assessments/generated.yaml`, the
+items in `items/generated.yaml`, the brief's Document in
+`documents/generated.yaml` — and say that they accept each by changing
+`approval: draft` to `approval: approved` (or deleting the line), and reject one
+by deleting the record. `bin/ainar drafts CSS-4008-2026-FALL` lists everything
+waiting. The repository exists only as files on disk, and no student can see any
+of it: student-facing outputs skip drafts, and the repository waits for the
+commands they run themselves.
 
-> ```bash
-> bin/ainar approve work/CSS-4008-2026-FALL --as USER-ARD-A01
-> ```
-
-**Never run `ainar approve` yourself.**
+**Never write `approval: approved` yourself.**
 
 ## Without the CLI
 

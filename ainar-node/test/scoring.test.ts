@@ -86,16 +86,16 @@ const responses = (...rows: [string, string, string[]][]) =>
   })) as Record<string, any>[];
 
 test("a correct choice earns the full item score", () => {
-  const rows = responses(["RESP-DRAFT-01", "ITEM-01-01", ["a"]]);
+  const rows = responses(["RESP-T01", "ITEM-01-01", ["a"]]);
   const result = scoreChoiceItems(rows, items());
   assert.equal(rows[0]!.score, 20);
   assert.equal(rows[0]!.correct, true);
   assert.equal(rows[0]!.scored_by, "auto");
-  assert.deepEqual(result.scored, ["RESP-DRAFT-01"]);
+  assert.deepEqual(result.scored, ["RESP-T01"]);
 });
 
 test("a wrong choice earns nothing", () => {
-  const rows = responses(["RESP-DRAFT-02", "ITEM-01-02", ["b"]]);
+  const rows = responses(["RESP-T02", "ITEM-01-02", ["b"]]);
   scoreChoiceItems(rows, items());
   assert.equal(rows[0]!.score, 0);
   assert.equal(rows[0]!.correct, false);
@@ -104,7 +104,7 @@ test("a wrong choice earns nothing", () => {
 test("free text items are left for a human", () => {
   const rows = [
     {
-      response_id: "RESP-DRAFT-03",
+      response_id: "RESP-T03",
       submission_id: "SUB-9060",
       item_id: "ITEM-01-03",
       student_id: "STUDENT-JNG7SN",
@@ -117,29 +117,29 @@ test("free text items are left for a human", () => {
 });
 
 test("already scored responses are left alone", () => {
-  const rows = responses(["RESP-DRAFT-04", "ITEM-01-01", ["a"]]);
+  const rows = responses(["RESP-T04", "ITEM-01-01", ["a"]]);
   rows[0]!.score = 7;
   const result = scoreChoiceItems(rows, items());
   assert.equal(rows[0]!.score, 7);
-  assert.deepEqual(result.alreadyScored, ["RESP-DRAFT-04"]);
+  assert.deepEqual(result.alreadyScored, ["RESP-T04"]);
 });
 
 test("rescoring is opt in", () => {
-  const rows = responses(["RESP-DRAFT-05", "ITEM-01-01", ["a"]]);
+  const rows = responses(["RESP-T05", "ITEM-01-01", ["a"]]);
   rows[0]!.score = 7;
   scoreChoiceItems(rows, items(), { rescore: true });
   assert.equal(rows[0]!.score, 20);
 });
 
 test("an undefined option is refused, not marked wrong", () => {
-  const rows = responses(["RESP-DRAFT-06", "ITEM-01-01", ["z"]]);
+  const rows = responses(["RESP-T06", "ITEM-01-01", ["z"]]);
   const result = scoreChoiceItems(rows, items());
   assert.equal("score" in rows[0]!, false);
   assert.match(result.unscorable[0]!, /not defined/);
 });
 
 test("an unanswered item is not silently zeroed", () => {
-  const rows = responses(["RESP-DRAFT-07", "ITEM-01-01", []]);
+  const rows = responses(["RESP-T07", "ITEM-01-01", []]);
   const result = scoreChoiceItems(rows, items());
   assert.equal("score" in rows[0]!, false);
   assert.match(result.unscorable[0]!, /no option chosen/);
@@ -147,9 +147,9 @@ test("an unanswered item is not silently zeroed", () => {
 
 test("the class converging on one distractor is surfaced", () => {
   const rows = responses(
-    ["RESP-DRAFT-08", "ITEM-01-02", ["b"]],
-    ["RESP-DRAFT-09", "ITEM-01-02", ["b"]],
-    ["RESP-DRAFT-10", "ITEM-01-02", ["a"]],
+    ["RESP-T08", "ITEM-01-02", ["b"]],
+    ["RESP-T09", "ITEM-01-02", ["b"]],
+    ["RESP-T10", "ITEM-01-02", ["a"]],
   );
   const result = scoreChoiceItems(rows, items());
   const stats = result.stats.get("ITEM-01-02")!;
@@ -163,15 +163,15 @@ test("the class converging on one distractor is surfaced", () => {
 });
 
 test("no dominant misconception when everyone is right", () => {
-  const rows = responses(["RESP-DRAFT-11", "ITEM-01-02", ["a"]]);
+  const rows = responses(["RESP-T11", "ITEM-01-02", ["a"]]);
   const stats = scoreChoiceItems(rows, items()).stats.get("ITEM-01-02")!;
   assert.equal(dominantMisconception(stats), null);
 });
 
 test("an unknown item is named rather than skipped", () => {
-  const rows = responses(["RESP-DRAFT-12", "ITEM-NOPE", ["a"]]);
+  const rows = responses(["RESP-T12", "ITEM-NOPE", ["a"]]);
   const result = scoreChoiceItems(rows, items());
-  assert.deepEqual(result.unscorable, ["RESP-DRAFT-12: unknown item ITEM-NOPE"]);
+  assert.deepEqual(result.unscorable, ["RESP-T12: unknown item ITEM-NOPE"]);
 });
 
 // ------------------------------------------------------- partial credit

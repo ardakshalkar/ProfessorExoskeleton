@@ -1,6 +1,7 @@
 <!--
-  The inbox as the professor reads it. The drafts behind it go in
-  action-items-draft.yaml; this is the report.
+  The inbox as the professor reads it. The records behind it go into
+  records/action-items.yaml marked `approval: draft` (shape in
+  action-items-draft.yaml); this is the report.
 
   Order by what is actually urgent, not by section. If nothing needs attention,
   say that plainly — an inbox with manufactured items in it is worse than an
@@ -49,10 +50,15 @@
 | {{ rung }} | {{ detail, verbatim }} | {{ the skill that does it }} |
 | {{ rung }} | {{ detail }} | **A claim — your decision, not work an agent can do** |
 
-## To approve the drafts behind this
+## Drafts waiting for you
+
+{{ n }} records are marked `approval: draft` — {{ which files, e.g. the items
+behind this list in `records/action-items.yaml` }}. Accept one by changing
+`approval: draft` to `approval: approved` (or deleting the line); reject it by
+deleting the record. To list everything waiting:
 
 ```bash
-bin/ainar approve work/{{ COURSE_VERSION_ID }} --as {{ USER-… }}
+bin/ainar drafts {{ COURSE_RUN_ID }}
 ```
 
-<!-- Never run that. It is the one place a person enters the loop. -->
+<!-- Never change the word yourself. It is the one place a person enters the loop. -->
