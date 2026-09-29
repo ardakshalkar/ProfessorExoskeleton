@@ -38,7 +38,7 @@
  */
 
 import { copyFileSync, mkdirSync, readFileSync, statSync } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { type CourseBundle } from "./bundle.ts";
 import { BY_TOOL, stylesheet } from "./tools/widgets.ts";
 import { refusal, scan } from "./safety.ts";
@@ -247,7 +247,13 @@ export const publishable = (
       continue;
     }
 
-    const filename = (document.original_filename as string) || basename(source);
+    // A material inside a folder publishes as that folder, so the links between
+    // its files (`figures/…`, a PDF beside its deck) resolve on the site as they
+    // do in the course. Anything else publishes by its recorded name.
+    const folder = /^courses\/[^/]+\/materials\/(.+\/.+)$/.exec(key);
+    const filename = folder
+      ? folder[1]
+      : (document.original_filename as string) || basename(source);
     if (claimed.has(filename)) {
       heldBack.push(
         `${document.document_id}: publishes as ${filename}, which ` +
@@ -327,6 +333,8 @@ export const linkMaterials = (payload: Record<string, any>, materials: Material[
 export const copyMaterials = (site: string, materials: Material[]): void => {
   mkdirSync(join(site, MATERIALS), { recursive: true });
   for (const material of materials) {
-    copyFileSync(material.source, join(site, MATERIALS, material.filename));
+    const to = join(site, MATERIALS, material.filename);
+    mkdirSync(dirname(to), { recursive: true });
+    copyFileSync(material.source, to);
   }
 };

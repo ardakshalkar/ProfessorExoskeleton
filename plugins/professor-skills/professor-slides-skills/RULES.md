@@ -54,8 +54,8 @@ approve an outline they never asked for learns to type `status: approved` withou
 reading it, which costs the gate everything it was for. A safety mechanism people
 route around has been removed, slowly.
 
-What is not negotiable is **saying which of those happened**. `pres check` and
-`pres render` print the deck's mode and whether an approval stands behind it, and
+What is not negotiable is **saying which of those happened**. `ainar deck check` and
+`ainar deck render` print the deck's mode and whether an approval stands behind it, and
 a skill handing over a file repeats it. That refusal, and that sentence, both
 exist because a `.pptx` looks identical whether or not anybody agreed to what is
 inside it.
@@ -76,7 +76,7 @@ So a fact has exactly one home. The session's shape is the outline's. What is on
 a slide is the markdown's. The plan is a projection of both, and the only thing
 it holds that neither source does is a figure's licence metadata — preserved
 across regeneration, because `pres find-image` wrote it and nothing else knows
-it. A hand-edited plan is a plan that will be overwritten, and `pres check`
+it. A hand-edited plan is a plan that will be overwritten, and `ainar deck check`
 reports one that has fallen behind rather than letting a stale contract pass.
 
 ## The source says where it came from
@@ -94,8 +94,9 @@ server's certificate, that is said too.
 
 Markdown diffs. A professor can see in a diff that the slide claiming three
 questions now claims four. A `.pptx` cannot be reviewed that way, so it is never
-the source and never re-enters the working directory — it goes to gitignored
-`output/`.
+the source. A draft's render goes to gitignored `output/<DECK>/`; a deck recorded
+in the course renders beside its markdown, replacing the rendering recorded
+there, so there is still exactly one.
 
 The same rule reaches pictures: **what you commit is the thing that generates
 the picture**, never only the picture. An SVG, a manim scene, a table in
@@ -177,7 +178,7 @@ adaptation, and a slide that annotates one may have to carry the same licence.
 
 Alt text on every figure, and it is not a caption of the filename: it says what
 the picture asserts. It is what a screen reader gets, what a student reading on
-a phone gets, and what survives when the SVG is lost. `pres check` refuses an
+a phone gets, and what survives when the SVG is lost. `ainar deck check` refuses an
 empty one.
 
 Colour is never the only channel. A red/green distinction is invisible to part

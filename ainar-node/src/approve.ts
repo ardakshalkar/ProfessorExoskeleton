@@ -416,7 +416,17 @@ export const stageDocuments = (
     let destination = source;
     const parts = relative(root, source).split(/[\\/]/);
     if (parts[0] === "work") {
-      destination = join(courseDir, MATERIALS_DIR, basename(source));
+      // `work/<RUN>/materials/<deck>/…` keeps its `<deck>/…`: a material is a
+      // folder — the result on top, figures and build scripts underneath — and
+      // flattening it here would strand every sibling-relative link inside it.
+      // A file straight in `materials/`, or anywhere else under `work/`, still
+      // lands flat by name, as before.
+      const inFolder = parts[2] === MATERIALS_DIR && parts.length > 4;
+      destination = join(
+        courseDir,
+        MATERIALS_DIR,
+        ...(inFolder ? parts.slice(3) : [basename(source)]),
+      );
       if (existsSync(destination) && !dryRun) {
         issues.error(
           "document.collision",

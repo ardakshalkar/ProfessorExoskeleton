@@ -3,14 +3,14 @@
  *
  * The CSS-4007 decks were not rendered from markdown. Each week is a script
  * that draws its slides by coordinate — `build-week5-pptx.py` and its six
- * siblings — over a shared kit, and `render-deck.ts` was never in that path.
+ * siblings — over a shared kit, and the markdown renderer was never in that path.
  * That is why weeks 5, 6 and 7 have no markdown to re-render from: the script
  * IS the source.
  *
  * It worked, and it had one problem: the scripts are Python, in a project where
  * nothing else is, sitting inside `courses/` — so the course record depends on
  * a toolchain the project does not otherwise carry. This is the same kit over
- * `pptxgenjs`, which `render-deck.ts` already loads.
+ * `pptxgenjs`, which the slide renderer (`src/slides/render.ts`) already loads.
  *
  * ## The canvas, and why the numbers carry over unchanged
  *
@@ -46,7 +46,7 @@ const require = createRequire(import.meta.url);
 /**
  * `pptxgenjs`, from wherever the renderer finds it.
  *
- * Same rule as `bin/render-deck.ts`: it is not a dependency of the course model,
+ * Same rule as `src/slides/render.ts`: it is not a dependency of the course model,
  * because reading a course should not require a presentation library.
  */
 const loadPptxgen = (): any => {

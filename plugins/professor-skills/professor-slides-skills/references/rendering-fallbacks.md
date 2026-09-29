@@ -1,12 +1,12 @@
 # When a render dependency is missing
 
-`pres render` needs `pptxgenjs` and `sharp`, and the PDF additionally needs
+`ainar deck render` needs `pptxgenjs` and `sharp`, and the PDF additionally needs
 LibreOffice. When one of them is not there, there is usually something you can
 hand over — and the whole value of handing it over is saying precisely what it is
 and is not.
 
 ```bash
-cd node && npm install pptxgenjs sharp
+cd ainar-node && npm install pptxgenjs sharp
 ```
 
 is the fix for the first two, and is worth offering before any substitute.
@@ -48,12 +48,12 @@ Neither is the renderer. Both are what you offer while saying so.
 
 ## Filling a draft deck's placeholders with a generator
 
-`pres render --draft` writes the prompt onto the card rather than calling an image
+`ainar deck render --draft` writes the prompt onto the card rather than calling an image
 model. A professor who does want it filled in points `PRES_IMAGE_COMMAND` at a
 command taking `{prompt}` and `{out}`:
 
 ```bash
-PRES_IMAGE_COMMAND='mytool --prompt {prompt} --out {out}' pres render DECK.md --draft
+PRES_IMAGE_COMMAND='mytool --prompt {prompt} --out {out}' ainar deck render DECK.md --draft
 ```
 
 Quote any part with spaces in it; the template is split the way a shell splits it.

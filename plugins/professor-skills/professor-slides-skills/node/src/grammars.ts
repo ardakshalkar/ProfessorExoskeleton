@@ -17,7 +17,7 @@
  * default at all.
  */
 
-import { DECK_ARCHETYPES, PHASES, type Phase } from "./archetypes.ts";
+import { DECK_ARCHETYPES, PHASES, type Phase } from "../../../../../ainar-node/src/slides/archetypes.ts";
 
 /** How much of a session a phase gets. Not minutes — a weighting. */
 export type Weight = "light" | "normal" | "heavy" | "skip";

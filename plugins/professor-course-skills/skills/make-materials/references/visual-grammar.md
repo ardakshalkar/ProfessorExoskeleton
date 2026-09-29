@@ -2,7 +2,7 @@
 
 How one slide should be shaped, and why the answer is not a layout.
 
-`node/src/archetypes.ts` is the machine-readable version of everything here and
+`ainar-node/src/slides/archetypes.ts` is the machine-readable version of everything here and
 is what `pres outline check` enforces. This file is the reasoning.
 
 ## Three taxonomies, kept apart
@@ -327,7 +327,7 @@ differ rather than as numbers to quote to a class.
 
 ### What checks it, and what it means when it fires
 
-`pres check` compares the markdown against the band the slide's archetype
+`ainar deck check` compares the markdown against the band the slide's archetype
 declares, and warns at half again over the top of it — 38 words on a `sparse`
 slide, 75 on a `moderate` one. Half again, rather than the exact number, because
 the bands overlap on purpose and warning at the edge would fire on slides nobody

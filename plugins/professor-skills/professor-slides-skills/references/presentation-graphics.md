@@ -51,32 +51,35 @@ regions.
 
 ## Where the files live
 
-Figures live **flat beside the deck**, named after it, linked as siblings:
+A deck is a **folder**: the deck and its plan and outline on top, its figures in
+`figures/`, linked relative to the deck:
 
 ```text
-work/CSS-4008-2026-FALL/presentations/
+work/CSS-4008-2026-FALL/materials/MODULE-06-slides/
   MODULE-06-slides.md
   MODULE-06-slides.outline.yaml
   MODULE-06-slides.plan.yaml
-  MODULE-06-slides-fig-01-split.svg
-  MODULE-06-slides-fig-02-gap.svg
-  MODULE-06-slides-fig-03-descent.py     # a manim scene, not its video
+  figures/
+    fig-01-split.svg
+    fig-02-gap.svg
+    fig-03-descent.py                    # a manim scene, not its video
 ```
 
 ```markdown
 ![Training data, validation data and a held-out test set never touched during
-tuning](MODULE-06-slides-fig-01-split.svg)
+tuning](figures/fig-01-split.svg)
 ```
 
-A sibling-relative link survives being moved anywhere as a set. A `figures/`
-prefix does not survive being flattened, and it breaks silently, in a deck
-nobody opens until the lecture. `pres check` refuses a link with a slash in it
-for that reason.
+A link relative to the deck survives being moved anywhere, because the folder
+moves as a unit — approval keeps it whole. An absolute path, or one that climbs
+out with `../`, does not, and it breaks silently, in a deck nobody opens until
+the lecture. `ainar deck check` refuses a link that leaves the deck's folder for
+that reason.
 
 The alt text is not optional and is not a caption of the filename. It says what
 the picture *asserts*, because it is what a screen reader gets, what a student
 reading the markdown on a phone gets, and what you will thank yourself for when
-the SVG is lost. `pres check` refuses an empty one.
+the SVG is lost. `ainar deck check` refuses an empty one.
 
 ## Registering a figure
 
@@ -130,7 +133,7 @@ figures:
       attribution: '"Confusion matrix" by Pirehelokan is licensed under CC BY-SA 4.0.'
 ```
 
-**Attribution is enforced, not remembered.** `pres render` prints that line under
+**Attribution is enforced, not remembered.** `ainar deck render` prints that line under
 the picture, and refuses to build the deck at all if a figure claims a source
 without one. The failure it exists to prevent is the silent kind: the deck
 builds, the lecture happens, and the licence was never satisfied.
@@ -174,16 +177,16 @@ figures:
       generated: true
 ```
 
-`pres render` then captions it *"Illustration generated with …. Not a photograph
+`ainar deck render` then captions it *"Illustration generated with …. Not a photograph
 or a measurement."* — the same reason the alt text says so. A generated picture
 without that label is the one mistake in this section that survives into a
 student's notes.
 
 A planned visual with no figure beside it is not left blank and shrugged at.
 Write the prompt onto the figure record and report that the slide is waiting on
-an image; `pres check` warns about it by name.
+an image; `ainar deck check` warns about it by name.
 
-Then render the draft — `pres render DECK.md --draft` writes a second deck in
+Then render the draft — `ainar deck render DECK.md --draft` writes a second deck in
 which each of those holes is a card carrying the requirement and the prompt, so
 the list of pictures still to make is a thing you can page through rather than a
 field in a YAML file. See the render skill for `PRES_IMAGE_COMMAND`.
@@ -200,13 +203,15 @@ field in a YAML file. See the render skill for `PRES_IMAGE_COMMAND`.
 
 ## Rendering
 
-`pres render` reads three things — the markdown, the plan beside it, and the
-figures beside that — and writes into `output/`, which is gitignored. Nothing it
-produces re-enters the source directory.
+`ainar deck render` reads three things — the markdown, the plan beside it, and the
+figures in its folder. A deck recorded in the course renders its `.pptx` and PDF
+beside the markdown, where they are recorded; anything else renders into
+`output/<DECK>/`, which is gitignored.
 
 **SVG rasterizes at render time**, at twice its placed size, and the PNG goes to
-`output/` with the deck. The PNG is never committed and never registered: it is
-regenerable from an SVG that is.
+`output/<DECK>/`, keeping its `figures/` path — never into the deck's folder. The
+PNG is never committed and never registered: it is regenerable from an SVG that
+is.
 
 **Manim renders to MP4** and needs ffmpeg (and LaTeX for typeset formulae), so
 treat it as optional. The scene `.py` is the committed source; the video goes to

@@ -11,7 +11,7 @@
  * **The plan** (`<deck>.plan.yaml`) is the render contract: the approved slide
  * sequence plus what every figure needs in order to be shown lawfully. It is
  * the standalone replacement for the parent's `Document.presentation_plan`, and
- * `pres render` reads it rather than trusting whoever is driving.
+ * `ainar deck render` reads it rather than trusting whoever is driving.
  *
  * They are separate because they answer to different people. The outline is
  * reviewed by a professor; the plan is enforced by a program. Merging them

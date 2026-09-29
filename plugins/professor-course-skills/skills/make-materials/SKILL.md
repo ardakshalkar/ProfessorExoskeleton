@@ -149,9 +149,30 @@ course `preferences.yaml`, and finally the current task. Record the resulting
 audience, style, duration, outcome coverage and slide sequence in the Document's
 `presentation_plan`; do not bury those decisions only in prose.
 
-Write to `work/<RUN_ID>/materials/`. Use **markdown**, not binary formats:
-markdown diffs, reviews and converts. Slides use Marp front matter so they
-render as a deck.
+Write to `work/<RUN_ID>/materials/<MATERIAL>/` — **one folder per material**,
+named for its main file, with the result on top and everything that made it
+underneath:
+
+```text
+work/CSS-4008-2026-FALL/materials/MODULE-06-slides/
+  MODULE-06-slides.md          the result: what the professor opens
+  documents-draft.yaml         its registration, and its figures'
+  figures/                     fig-01-split.svg, fig-02-gap.svg, found images
+  build/                       scripts that produce a figure or a file
+```
+
+The professor opens the folder and sees the deck; the artefacts are in folders
+they only open on purpose. Approval moves the whole folder shape to
+`courses/<C>/materials/<MATERIAL>/` as it is. A file written straight into
+`materials/` still works and lands flat, but it is the old layout — do not
+start new material that way. A course that already has a flat `materials/`
+is regrouped by `ainar organize-materials <COURSE> --dry-run` (then without the
+flag): it moves each deck, its sidecars, figures and scripts into one folder,
+rewrites every recorded path and figure link, and reports what it would not
+guess at.
+
+Use **markdown**, not binary formats: markdown diffs, reviews and converts.
+Slides use Marp front matter so they render as a deck.
 
 ```markdown
 ---
@@ -168,7 +189,8 @@ generated_by: make-materials-skill
 `courses/CSS-4008/materials/MODULE-06-slides.md` is a worked
 example of the shape — read it before writing your first deck, along with
 `MODULE-06-slides-fig-01-split.svg` beside it and the `DOC-4411` record in
-`documents.yaml`, which are a worked example of a figure.
+`documents.yaml`, which are a worked example of a figure. (That sample
+predates folders and sits flat; new material follows the folder layout above.)
 
 What good material does here:
 
@@ -184,12 +206,12 @@ What good material does here:
 
 **Pictures follow the same rule as prose.** What you write is the thing that
 generates the picture — an SVG, a manim scene, a chart built from an `ainar`
-command — never only the picture. Figures live flat beside the deck, named after
-it, and are linked as siblings so the link survives approval:
+command — never only the picture. Figures live in the deck folder's `figures/`,
+and are linked relative to the deck so the link survives approval:
 
 ```markdown
 ![Training data, validation data and a held-out test set never touched during
-tuning](MODULE-06-slides-fig-01-split.svg)
+tuning](figures/fig-01-split.svg)
 ```
 
 Never draw a chart of this class's performance that no command produced, and
@@ -201,13 +223,13 @@ accessibility rules — read it before adding the first figure.
 
 ## 4. Register it
 
-In the same directory, write `documents-draft.yaml`:
+In the material's own folder, write `documents-draft.yaml`:
 
 ```yaml
 documents:
   - document_id: DOC-DRAFT-0601
     title: Model evaluation and overfitting — slides
-    storage_key: work/CSS-4008-2026-FALL/materials/MODULE-06-slides.md
+    storage_key: work/CSS-4008-2026-FALL/materials/MODULE-06-slides/MODULE-06-slides.md
     mime_type: text/markdown
     course_run_id: CSS-4008-2026-FALL
     module_id: MODULE-06
@@ -305,37 +327,43 @@ Writing the file is yours to do — like `lms push --target canvas-csv`, it
 produces something inert until a person presents it. One command does it:
 
 ```bash
-node --experimental-strip-types node/bin/render-deck.ts \
-    --course-version CSS-4008-2026-FALL --document DOC-4410 --pdf
+ainar deck render --document DOC-4410 --course-version CSS-4008-2026-FALL --pdf
 ```
 
-It reads the approved markdown, the `presentation_plan` on its `Document` and
-the figures beside it, and writes `output/<COURSE_VERSION_ID>/<DOCUMENT_ID>.pptx`
-— plus the PDF with `--pdf`, converted from that same deck by LibreOffice rather
-than rendered a second time. `output/` is gitignored deliberately: built binaries
-belong on the professor's disk, not in a repository whose value is that its
-contents diff. Rasterized PNGs go there too, and nowhere else.
+It reads the approved markdown, the `.plan.yaml` beside it, the figures in its
+folder and — from the course record — the figure credits on `Document`s and the
+`presentation_plan`, and writes `<DECK>.pptx` into the deck's own folder,
+`courses/<C>/materials/<DECK>/`, where its rendering is recorded — plus the PDF
+with `--pdf`, converted from that same deck by LibreOffice rather than rendered
+a second time. Rasterized PNGs go to the gitignored `output/<DECK>/`, and
+nowhere else. For a deck the course builds from `materials.yaml`,
+`ainar materials build` is the same render with a draft record written after it.
 
-**Do not do this by hand.** Four rules are enforced in that command rather than
+**Do not do this by hand.** Five rules are enforced in that command rather than
 left to judgement, and each of them is a mistake this skill made before it
 existed:
 
 - **A document still in `work/` is refused.** A deck rendered from a proposal
-  looks finished once it is open in PowerPoint.
+  looks finished once it is open in PowerPoint. To look at a draft, render the
+  file with `--draft`: it goes to `output/<DECK>/`, marked DRAFT on every slide.
+- **Nothing but a recorded deck's own render goes into `courses/`.**
 - **The plan is the contract.** Slide count, order and titles must match the
   markdown, or it exits and says where. One of the two was edited after the
   other; which is wrong is the professor's question. Nothing reorders slides to
-  make them agree.
-- **Attribution is enforced.** A figure whose `Document` records an
+  make them agree. A `presentation_plan` on the record that has fallen behind
+  the deck is reported, not refused — the record needs re-registering.
+- **Attribution is enforced.** A figure whose plan entry or `Document` records an
   `image_source` without an attribution line stops the render.
 - **Overflow is reported.** Any slide running past the bottom margin is named.
+  `ainar deck fit DECK.md` answers the same question before rendering, with the
+  renderer's own layout.
 
 Then look at the PDF. The first render usually has a real defect or two —
 misjudged image height, a list that lost its numbering — and they are obvious in
 the pages and invisible in the source.
 
 If the deck needs a picture you did not draw,
-`node/bin/find-image.ts` searches openly-licensed images and prints the
+`ainar-node/bin/find-image.ts` searches openly-licensed images and prints the
 `Document` draft carrying the licence and credit. Read the "Images you did not
 draw" section of `references/presentation-graphics.md` first: what may be
 searched, what must be drawn, and why a generated illustration is captioned as
@@ -345,7 +373,7 @@ A `required_visual` with no figure beside it is not left blank and shrugged at.
 **Write the prompt that would produce it** onto the figure's `Document`, under
 `extensions.image_prompt`, and report that the slide is waiting on an image. The
 prompt is language work, so writing it is yours; running it is the professor's,
-with whatever generator they have. `render-deck` then captions the result as a
+with whatever generator they have. `ainar deck render` then captions the result as a
 generated illustration, which is the half that must not be forgotten.
 
 `references/presentation-graphics.md` has the record shape and, more

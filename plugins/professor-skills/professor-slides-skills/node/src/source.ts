@@ -25,7 +25,7 @@ import {
   type CourseSource,
   type Origin,
   type Provenance,
-} from "./model.ts";
+} from "../../../../../ainar-node/src/slides/model.ts";
 import {
   connect,
   failureTtl,
@@ -40,8 +40,8 @@ import {
   DatabaseUnreachable,
 } from "./supabase.ts";
 import { coursesIn, readCourseDirectory } from "./yaml-source.ts";
-import { formatMs, noteTiming, timed } from "./timing.ts";
-import type { SourcePreference } from "./route.ts";
+import { formatMs, noteTiming, timed } from "../../../../../ainar-node/src/slides/timing.ts";
+import type { SourcePreference } from "../../../../../ainar-node/src/slides/route.ts";
 
 export interface ResolveOptions {
   /** The course identifier, e.g. `CSS-4008`. */

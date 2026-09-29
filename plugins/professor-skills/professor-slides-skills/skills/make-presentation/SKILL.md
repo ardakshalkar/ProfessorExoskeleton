@@ -34,11 +34,11 @@ Write the deck. Nothing before it.
 
 ```bash
 pres plan build DECK.md --mode fast     # generates the render contract
-pres check DECK.md
+ainar deck check DECK.md
 ```
 
 No research. No outline file. No approval gate — the request for slides *was*
-the agreement, and `pres check` says so in a note, which you repeat when you hand
+the agreement, and `ainar deck check` says so in a note, which you repeat when you hand
 the file over.
 
 No course probing either, unless they named a course. If they did, ask for the
@@ -55,9 +55,11 @@ Drop `--source local` if the shared copy is the point.
 Still true, because it is what makes the deck good rather than what makes it
 slow:
 
-- **Assertion headlines.** "Retrieval puts the answer in the prompt, not in the
-  weights", never "Retrieval".
-- **One claim per slide.** Two claims is two slides.
+- **Titles match the teaching job.** Use a supported takeaway for evidence, a
+  direct subject for definitions and processes, and the actual question for a
+  check. "Retrieval puts the answer in the prompt, not in the weights" fits a
+  finding; "Retrieval process" fits a mechanism.
+- **One teaching point per slide.** Split competing claims across slides.
 - **Draw what is drawable.** A bulleted list of pipeline stages is a diagram you
   declined to draw. Hand-authored SVG beside the deck, alt text on every one.
 - **A question slide carries the question and nothing else.**
@@ -130,7 +132,7 @@ Write the slides, draw the figures, then:
 
 ```bash
 pres plan build DECK.md --mode standard
-pres check DECK.md
+ainar deck check DECK.md
 ```
 
 If they *did* ask to approve first, stop after the outline check and pass
@@ -159,5 +161,5 @@ Do not compress it. A professor in DEEP mode asked for the rigour.
   copy of one in the outline or the markdown. Editing it by hand creates the
   second source of truth this plugin was built to remove.
 - **Render only when asked.** `/render-presentation`, or
-  `pres render DECK.md --pdf`. Then read the PDF.
+  `ainar deck render DECK.md --pdf`. Then read the PDF.
 - **Say what you generated.** `generated_by` in the deck's front matter.

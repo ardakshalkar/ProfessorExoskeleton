@@ -5,7 +5,7 @@
  *
  *     node --experimental-strip-types bin/find-image.ts --search "confusion matrix"
  *     node --experimental-strip-types bin/find-image.ts --search "confusion matrix" \
- *       --pick 2 --course-version CSS-4008-2026-FALL --name MODULE-06-slides-fig-02-matrix
+ *       --pick 2 --course-version CSS-4008-2026-FALL --name MODULE-06-slides/figures/fig-02-matrix
  *
  * Searches Openverse, which indexes Creative Commons and public-domain works
  * across Flickr, Wikimedia and others. Two decisions are built in and are the
@@ -18,7 +18,7 @@
  *     photograph is safe to annotate.
  *   - **Attribution travels with the file or the file does not travel.** `--pick`
  *     writes the image *and* prints the `Document` draft that records its source,
- *     licence and the attribution line. `render-deck` refuses to place an image
+ *     licence and the attribution line. `ainar deck render` refuses to place an image
  *     whose document claims a source without one, so a missed credit fails loudly
  *     here rather than quietly in a lecture theatre.
  *
@@ -35,7 +35,7 @@
  */
 
 import { writeFile, mkdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 type Result = {
   id: string;
@@ -123,12 +123,16 @@ async function download(
   if (resolve(directory).startsWith(resolve(options.root, "courses"))) {
     throw new Error("refusing to download into courses/ — a found image is a draft");
   }
-  await mkdir(directory, { recursive: true });
-
+  // `--name` may carry the deck's folder (`MODULE-06-slides/figures/fig-02`),
+  // so the folder is made from the file's own path rather than `directory`.
   const response = await fetch(result.url, { headers: { "User-Agent": "ainar-find-image/0.1" } });
   if (!response.ok) throw new Error(`downloading the image: ${response.status}`);
   const extension = (result.filetype ?? result.url.split(".").pop() ?? "jpg").replace(/\W/g, "");
   const file = join(directory, `${options.name}.${extension}`);
+  if (!resolve(file).startsWith(resolve(directory))) {
+    throw new Error("--name climbs out of the materials directory");
+  }
+  await mkdir(dirname(file), { recursive: true });
   await writeFile(file, Buffer.from(await response.arrayBuffer()));
   return file;
 }
@@ -172,7 +176,8 @@ const USAGE = `find-image — an openly-licensed picture, with its credit attach
   --any-licence            include non-commercial and no-derivatives results
   --pick N                 download result N as a draft
   --course-version RUN     the run it is for (required with --pick)
-  --name STEM              the filename stem, e.g. MODULE-06-slides-fig-02-matrix
+  --name STEM              the filename stem, e.g. MODULE-06-slides/figures/fig-02-matrix
+                           (the first segment is the deck's folder)
   --into DIR               override the download directory
   --root DIR               the workspace (default: the current directory)
 
@@ -211,8 +216,10 @@ async function main(): Promise<void> {
   console.log(`\nRegister it — the credit is part of the record, not a note to self:\n`);
   console.log(documentDraft(chosen, file, { root, courseVersionId, name }));
   console.log(
-    `\nOn the slide, link it as a sibling of the deck:\n\n` +
-    `    ![DESCRIBE WHAT IT SHOWS](${name}.${file.split(".").pop()})\n\n` +
+    // The deck sits at the top of its folder, so a `--name` of
+    // `DECK/figures/fig-02` is linked from the deck as `figures/fig-02`.
+    `\nOn the slide, link it relative to the deck:\n\n` +
+    `    ![DESCRIBE WHAT IT SHOWS](${(name.includes("/") ? name.slice(name.indexOf("/") + 1) : name)}.${file.split(".").pop()})\n\n` +
     "The alt text is not the title. Say what a student who cannot see it would need.",
   );
 }

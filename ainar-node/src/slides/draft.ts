@@ -2,7 +2,7 @@
  * The draft deck: the same slides, with the pictures that do not exist yet
  * standing in for themselves.
  *
- * `pres render` builds the deck you present. `pres render --draft` builds a
+ * `ainar deck render` builds the deck you present. `ainar deck render --draft` builds a
  * second one beside it in which every planned-but-undrawn visual appears as a
  * card carrying what it is meant to show and the prompt that would produce it.
  * Flip between the two and the gap is the list of figures still to make.

@@ -1,36 +1,27 @@
 /**
- * The deck renderer's judgement, separated from its I/O.
+ * The dependency-free deck estimate: parsing, and `ainar deck fit`'s fallback.
  *
- * Two things here are worth a test and the rest of `bin/render-deck.ts` is not.
- * The first is that the markdown a professor actually writes parses into the
- * blocks the renderer expects — a deck whose numbered list silently became a
- * paragraph is not a crash, it is a slide that looks wrong in the lecture
- * theatre. The second is the contract: it exists to stop a deck being rendered
- * from a plan that no longer describes it, so a check that passes when it should
- * fail is worse than no check.
+ * What the renderer judges — the contract, the credits, the checks — is tested
+ * in `slides.test.ts`, against the one engine. This file keeps the half of the
+ * old `render-deck` module that is still used: the parser the estimate reads
+ * with, and the estimate itself. A deck whose numbered list silently became a
+ * paragraph is not a crash; it is a slide measured wrong.
  *
  *     node --experimental-strip-types --test test/
  */
 
 import { strict as assert } from "node:assert";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   CONTENT_WIDTH,
   LAYOUT,
-  checkContract,
-  checkSlides,
   columnWidths,
-  creditFor,
   measureDeck,
   parseBlocks,
   slideTitle,
   splitSlides,
   textHeight,
-  type Block,
-  type Plan,
 } from "../src/deck.ts";
-
 const DECK = `---
 marp: true
 title: Model Evaluation
@@ -101,92 +92,6 @@ test("a slide's title is its heading", () => {
   assert.equal(slideTitle(slides[1]!), "Where we are");
 });
 
-const plan = (titles: string[], extra: Partial<Plan> = {}): Plan => ({
-  slides: titles.map((title, index) => ({ number: index + 1, title })),
-  ...extra,
-});
-
-test("a plan that describes the deck raises nothing", () => {
-  const problems = checkContract(
-    slides,
-    plan(["Model Evaluation", "Where we are", "Choosing a metric"]),
-  );
-  assert.deepEqual(problems, []);
-});
-
-test("a slide inserted into the markdown is caught, not absorbed", () => {
-  const problems = checkContract(slides, plan(["Model Evaluation", "Where we are"]));
-  assert.equal(problems.length, 1);
-  assert.match(problems[0]!, /2 slide\(s\), the markdown has 3/);
-});
-
-test("two slides swapped are caught even though the set is identical", () => {
-  // The failure a count check cannot see: same slides, wrong order, and every
-  // speaker note now attached to the wrong slide.
-  const problems = checkContract(
-    slides,
-    plan(["Model Evaluation", "Choosing a metric", "Where we are"]),
-  );
-  assert.equal(problems.length, 2);
-  assert.match(problems[0]!, /slide 2: the plan says "Choosing a metric"/);
-});
-
-test("a retitled slide is caught, but rewrapping and case are not a mismatch", () => {
-  assert.equal(
-    checkContract(slides, plan(["Model Evaluation", "where   we\nare", "Choosing a metric"])).length,
-    0,
-  );
-  assert.equal(
-    checkContract(slides, plan(["Model Evaluation", "Where we were", "Choosing a metric"])).length,
-    1,
-  );
-});
-
-test("more slides than the plan allows is a problem in itself", () => {
-  const problems = checkContract(
-    slides,
-    plan(["Model Evaluation", "Where we are", "Choosing a metric"], { max_slides: 2 }),
-  );
-  assert.equal(problems.length, 1);
-  assert.match(problems[0]!, /3 slides, but the plan allows 2/);
-});
-
-test("a figure this repository drew carries no credit line", () => {
-  assert.equal(creditFor(undefined, "fig.svg"), null);
-  assert.equal(creditFor({ title: "drawn here" }, "fig.svg"), null);
-});
-
-test("a found image without its attribution stops the render", () => {
-  // The failure this exists to prevent is silent: the deck builds, the lecture
-  // happens, and the licence was never satisfied.
-  assert.throws(
-    () =>
-      creditFor(
-        { extensions: { image_source: { provider: "openverse", source_url: "https://x/y" } } },
-        "fig-02.jpg",
-      ),
-    /attribution/,
-  );
-  assert.throws(
-    () => creditFor({ extensions: { image_source: { attribution: "   " } } }, "fig-02.jpg"),
-    /attribution/,
-  );
-});
-
-test("a found image with its attribution puts the credit on the slide", () => {
-  const credit = creditFor(
-    { extensions: { image_source: { attribution: '"Histograms" by yuriy, CC BY 2.0' } } },
-    "fig-02.jpg",
-  );
-  assert.equal(credit, '"Histograms" by yuriy, CC BY 2.0');
-});
-
-test("a generated illustration says on the slide that it was generated", () => {
-  const credit = creditFor({ extensions: { image_prompt: { model: "some-image-model" } } }, "fig.png");
-  assert.match(credit!, /generated with some-image-model/);
-  assert.match(credit!, /Not a photograph or a measurement/);
-});
-
 test("columns are proportional to their content but never vanish", () => {
   const widths = columnWidths(
     [
@@ -202,7 +107,7 @@ test("columns are proportional to their content but never vanish", () => {
 });
 
 // --------------------------------------------------------------------------
-// Measuring — the half `ainar deck fit` and the renderer now share
+// Measuring — `ainar deck fit`'s estimate, for when the renderer is absent
 // --------------------------------------------------------------------------
 
 test("a slide's bottom is where its last block ends, not where the next would start", () => {
@@ -239,75 +144,4 @@ test("a slide holding an image is a bound, not a measurement", () => {
   // starts lying.
   const slide = measureDeck("## With a picture\n\n![alt](chart.png)")[0]!;
   assert.equal(slide.approximate, true);
-});
-
-test("the fit check and the renderer measure with one set of numbers", () => {
-  // The whole point of the extraction. If a block's height is ever computed in
-  // `bin/render-deck.ts` again, `blockHeight` stops being the single answer and
-  // `deck fit` becomes a second opinion — which is what it was written to
-  // replace.
-  const source = readFileSync(new URL("../bin/render-deck.ts", import.meta.url), "utf-8");
-  assert.ok(!/const height = textHeight\(/.test(source), "render-deck computes a height itself");
-  assert.ok(!/const SLIDE_W = 13\.33/.test(source), "render-deck carries its own page width");
-  assert.ok(source.includes("blockHeight"), "render-deck should call the shared measurement");
-});
-
-// --- what the contract cannot see -------------------------------------------
-// Ported from `professor-slides-skills/node/src/check.ts` on 2026-09-16. Each
-// of these fires on a deck the contract calls perfectly well-formed, which is
-// the only reason they are worth carrying.
-
-const oneSlide = (markdown: string): Block[][] => splitSlides(markdown).map(parseBlocks);
-
-test("a picture with no alt text stops the render", () => {
-  const problems = checkSlides(oneSlide("## Figure\n\n![](chart.svg)"), null);
-  assert.equal(problems.length, 1);
-  assert.equal(problems[0]!.severity, "error");
-  assert.match(problems[0]!.message, /has no alt text/);
-});
-
-test("a figure in a subdirectory stops the render", () => {
-  // It breaks silently: the deck builds on the machine that has the folder and
-  // is missing a picture on the one that does not.
-  const problems = checkSlides(oneSlide("## Figure\n\n![a chart](figs/chart.svg)"), null);
-  assert.equal(problems.length, 1);
-  assert.equal(problems[0]!.severity, "error");
-  assert.match(problems[0]!.message, /is not a sibling path/);
-});
-
-test("a credited sibling figure raises nothing", () => {
-  assert.deepEqual(checkSlides(oneSlide("## Figure\n\n![a chart](chart.svg)"), null), []);
-});
-
-test("emphasis inside a list is a warning, not a refusal", () => {
-  // The renderer keeps the bullet and drops the emphasis. The deck is still
-  // written; what must not happen is that nobody is told.
-  const problems = checkSlides(oneSlide("## Points\n\n- a **bold** word\n- plain"), null);
-  assert.equal(problems.length, 1);
-  assert.equal(problems[0]!.severity, "warning");
-  assert.match(problems[0]!.message, /1 list item\(s\) use bold or code/);
-});
-
-test("a planned visual that the deck does not carry is named", () => {
-  const problems = checkSlides(oneSlide("## Figure\n\nJust prose."), {
-    slides: [{ number: 1, title: "Figure", required_visual: "the split of the dataset" }],
-  });
-  assert.equal(problems.length, 1);
-  assert.equal(problems[0]!.severity, "warning");
-  assert.match(problems[0]!.message, /planned with a visual \("the split of the dataset"\)/);
-});
-
-test("a planned visual the deck does carry raises nothing", () => {
-  assert.deepEqual(
-    checkSlides(oneSlide("## Figure\n\n![the split](split.svg)"), {
-      slides: [{ number: 1, title: "Figure", required_visual: "the split of the dataset" }],
-    }),
-    [],
-  );
-});
-
-test("the deck this repository ships passes all four", () => {
-  // The fixture course is what every skill's example points at. If it cannot
-  // pass its own checks, the examples teach the wrong thing.
-  assert.deepEqual(checkSlides(slides, null), []);
 });

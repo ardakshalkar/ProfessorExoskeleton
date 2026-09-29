@@ -5,7 +5,7 @@
  * `presentation-graphics.md`, `typography.md` — and together they are about
  * seven thousand words. Reading all four to write one deck is the single largest
  * cost in this plugin, and most of what is read is reasoning rather than rule:
- * *why* assertion headlines beat topic labels, the evidence behind sentence
+ * *when* assertion headlines help evidence slides, the evidence behind sentence
  * case, what happens to a diagram whose labels sit in a glossary underneath it.
  *
  * That reasoning changes how somebody writes decks. It does not need to be
@@ -19,7 +19,7 @@
  * fixed, because this is what gets read.
  */
 
-import { ARCHETYPES, DENSITY, TEXT_ROLES, type ArchetypeName } from "./archetypes.ts";
+import { ARCHETYPES, DENSITY, TEXT_ROLES, type ArchetypeName } from "../../../../../ainar-node/src/slides/archetypes.ts";
 
 export interface RuleGroup {
   key: string;
@@ -35,11 +35,12 @@ export const RULE_GROUPS: RuleGroup[] = [
     title: "The words",
     reference: "references/text-style.md",
     rules: [
-      "A headline asserts; it does not name a topic. \"Kazakh costs 1.75× English for the same news\", never \"Cost analysis\". Best-evidenced finding in slide design: assertion headlines raise recall and understanding, still measurable a week later.",
-      "A slide whose claim you cannot state in one sentence is usually a slide worth cutting.",
+      "Match the title to the slide's job: a supported takeaway for evidence or a finding; a direct subject for a definition, process, comparison, roadmap or section opener; the actual question or task for a check. Do not force every title into a claim.",
+      "Name the subject plainly. Avoid presenter narration such as \"Where Week 1 stopped\" and vague framing such as \"Two different stories\" when \"Inside the LLM: roadmap\" or \"Autoregressive generation and diffusion\" tells students what they will find.",
+      "On an evidence slide, a claim such as \"Kazakh costs 1.75× English for the same news\" can guide attention to the evidence. Do not make a stronger claim than the slide supports.",
       "Sentence case, headlines and body alike. Title Case flattens the word shapes we read by and is slower at distance.",
       "Every list parallel — all verbs or all noun phrases, never mixed. A reader who hits the break spends a moment on grammar instead of content.",
-      "One thing per slide. A slide with two claims is two slides.",
+      "One teaching point per slide. Split competing claims across slides.",
       "Keep emphasis out of bullets. Bold, italic and code render as plain text inside a bulleted item, because a bullet and mixed formatting cannot share a line through this renderer. `pres check` names any item where that happened.",
       "Real questions on the check slides — something a student answers, not a topic they nod at.",
       "An example you construct yourself is fine and is labelled as such. A statistic, dataset or quotation you cannot cite is not.",

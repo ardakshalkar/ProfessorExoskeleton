@@ -80,7 +80,7 @@ pres archetypes --name roadmap     # one, with what to write
 ```
 
 The archetype is not decoration on the plan: it says what the slide is allowed
-to contain, and `pres check` reads it. Those two commands replace reading
+to contain, and `ainar deck check` reads it. Those two commands replace reading
 `skills/make-materials/references/visual-grammar.md`, which is there for the reasoning.
 
 The ones most often got wrong: `roadmap` is the map *drawn*, with the words as
@@ -121,15 +121,16 @@ claim, a source line, or an equation.
 pres rules writing
 ```
 
-The three that change a deck most. **A headline asserts; it does not name a
-topic** — "Kazakh costs 1.75× English for the same news", not "Cost analysis".
-This is the best-evidenced finding in slide design. **Sentence case**, headlines
-and body alike. **Every list parallel** — all verbs or all noun phrases, never
-mixed.
+The three that change a deck most. **Title the slide for its teaching job**:
+state a supported finding on an evidence slide ("Kazakh costs 1.75× English for
+the same news"), name the subject directly on a definition or process slide
+("The context window"), and put the actual question on a check slide. Do not
+turn every title into a claim. **Sentence case**, titles and body alike.
+**Every list parallel** — all verbs or all noun phrases, never mixed.
 
 Then: one thing per slide; the module's own identifiers where the structure
 matters; the example worked through; real questions on the check slides; fit,
-because `pres check` warns about a slide running past the bottom margin. And keep
+because `ainar deck check` warns about a slide running past the bottom margin. And keep
 emphasis out of bullets — bold, italic and code render as plain text inside a
 bulleted item, because a bullet and mixed formatting cannot share a line through
 this renderer.
@@ -150,11 +151,13 @@ cited on the slide. **An image you did not draw** comes from
 illustration nobody has** gets a written prompt and a slide reported as waiting;
 running the generator is the professor's.
 
-Figures live **flat beside the deck**, named after it, linked as siblings:
+A deck is a **folder** — `MODULE-06-slides/MODULE-06-slides.md` on top, its
+figures in `MODULE-06-slides/figures/` — and a figure is linked relative to the
+deck. A link that climbs out with `../` or is absolute is refused:
 
 ```markdown
 ![Training data, validation data and a held-out test set never touched during
-tuning](MODULE-06-slides-fig-01-split.svg)
+tuning](figures/fig-01-split.svg)
 ```
 
 Alt text on every one, saying what the picture *asserts* rather than captioning
@@ -183,11 +186,11 @@ asked to approve before rendering.
 ## 6. Check it
 
 ```bash
-pres check work/CSS-4008-2026-FALL/presentations/MODULE-06-slides.md
+ainar deck check work/CSS-4008-2026-FALL/presentations/MODULE-06-slides.md
 ```
 
 The approval gate for this deck's mode, the plan matching the markdown in count,
-order and title, every linked figure present beside the deck, alt text on all of
+order and title, every linked figure present in the deck's folder, alt text on all of
 them, an attribution line for every claimed source, formulas that converted, and
 every planned visual either present or reported.
 

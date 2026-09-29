@@ -5,7 +5,7 @@
  * and every archetype carries a density band and a set of text roles. Until
  * this file existed, nothing ever compared that declaration against the
  * markdown. A slide could be planned `roadmap` (sparse, headline and labels)
- * and ship five paragraphs, and `pres check` would say "No problems found."
+ * and ship five paragraphs, and `ainar deck check` would say "No problems found."
  *
  * That is the exact shape of the defect this catches, found by reading a real
  * deck: slide 2 planned as a roadmap, seventy-eight words of prose, no picture,

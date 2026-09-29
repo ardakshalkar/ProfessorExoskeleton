@@ -182,7 +182,7 @@ Report in a few lines: where the course came from, the arc, the beats and why
 those, what is covered, what is deliberately left out, what you assumed.
 
 **Leave `status: draft`.** Approval is the professor's, in every mode. In deep
-mode it is also a gate — `pres check` and `pres render` refuse a deck whose plan
+mode it is also a gate — `ainar deck check` and `ainar deck render` refuse a deck whose plan
 was built `--mode deep` from an unapproved outline. In standard mode it is a
 record rather than a gate, and you proceed to the deck.
 

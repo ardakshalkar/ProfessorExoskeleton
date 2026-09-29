@@ -1,8 +1,12 @@
 @echo off
-rem `deck` — render an approved slide deck to .pptx, and with --pdf to PDF too.
+rem `deck` — slide decks: `ainar deck fit`, `check` and `render`.
 rem
-rem   bin\deck --course-version CSS-4007-2026-FALL --document DOC-DECK-01 --pdf
-rem   bin\deck --course-version … --document … --root "C:\path\to\workspace" --pdf
+rem   bin\deck render courses\CSS-4007\materials\MODULE-01-slides\MODULE-01-slides.md --pdf
+rem   bin\deck render --document DOC-DECK-SRC-01 --course-version CSS-4007-2026-FALL --pdf
+rem   bin\deck check  work\CSS-4007-2026-FALL\materials\MODULE-08-slides\MODULE-08-slides.md
+rem
+rem A first argument that is a flag means the old form, `bin\deck --document …`,
+rem from when this launched render-deck; it is read as `render`.
 rem
 rem This launcher exists because the renderer did not have one. `render-deck.ts`
 rem has worked since it was ported and LibreOffice has been installed the whole
@@ -33,13 +37,18 @@ if not defined NODE_EXE (
   exit /b 127
 )
 
-rem LibreOffice does the PDF conversion and is found the same way — see SOFFICE
-rem in render-deck.ts. Setting it here means the renderer does not have to guess
-rem when the professor installed it somewhere unusual.
+rem LibreOffice does the PDF conversion and is found the same way — see
+rem ainar-node\src\pdf.ts. Setting it here means the renderer does not have to
+rem guess when the professor installed it somewhere unusual.
 if not defined SOFFICE_PATH call :soffice "%ProgramFiles%\LibreOffice\program\soffice.exe"
 if not defined SOFFICE_PATH call :soffice "%ProgramFiles(x86)%\LibreOffice\program\soffice.exe"
 
-"%NODE_EXE%" --experimental-strip-types "%~dp0..\ainar-node\bin\render-deck.ts" %*
+set "FIRST=%~1"
+if "%FIRST:~0,2%"=="--" (
+  "%NODE_EXE%" --experimental-strip-types "%~dp0..\ainar-node\bin\ainar.ts" deck render %*
+) else (
+  "%NODE_EXE%" --experimental-strip-types "%~dp0..\ainar-node\bin\ainar.ts" deck %*
+)
 exit /b %ERRORLEVEL%
 
 :pick

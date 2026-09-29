@@ -53,8 +53,8 @@ Visual Studio, *not* with Windows itself, so a lecture-room PC may not have it.
 **JetBrains Mono** and **Fira Code** are excellent and installed nowhere by
 default.
 
-Any of them is a one-line change in `node/src/render.ts` (`MONO_FONT`) — but if
-you change it, change `CHAR_WIDTH.mono` in `node/src/deck.ts` to match, or the
+Any of them is a one-line change in `ainar-node/src/slides/render.ts` (`MONO_FONT`) — but if
+you change it, change `CHAR_WIDTH.mono` in `ainar-node/src/slides/deck.ts` to match, or the
 height estimator will mis-measure every code block. Consolas is 0.55em; the
 value used is 0.57, deliberately a little conservative.
 
@@ -83,7 +83,7 @@ This covers what actually appears on a lecture slide: conditional probabilities,
 cost formulas, sums, ratios, Greek. It does **not** cover stacked fractions,
 matrices, integrals with limits above and below, or aligned environments.
 
-Where a command has no text equivalent, `pres check` **refuses the deck** and
+Where a command has no text equivalent, `ainar deck check` **refuses the deck** and
 names the command. That is deliberate and it is an error rather than a warning:
 a formula is read as authoritative, nobody proofreads the projector, and a
 half-converted formula is worse than an absent one. The two honest ways out are

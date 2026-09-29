@@ -268,8 +268,8 @@ and anything you had to assume.
 
 Then ask for approval, and stop there.
 
-**Leave `status: draft`.** In DEEP mode the status is a gate: `pres check` and
-`pres render` refuse a deck whose plan was built with `--mode deep` and whose
+**Leave `status: draft`.** In DEEP mode the status is a gate: `ainar deck check` and
+`ainar deck render` refuse a deck whose plan was built with `--mode deep` and whose
 outline is not approved. It moves to `approved` when the professor says so.
 Never on your own initiative, and never because the outline looks finished.
 
@@ -291,7 +291,7 @@ under the rules in `references/presentation-graphics.md`, write the words under
 
 ```bash
 pres plan build DECK.md --mode deep
-pres check DECK.md
+ainar deck check DECK.md
 ```
 
 `pres plan build` generates the render contract from the outline and the
@@ -304,7 +304,7 @@ whose approval was for a different session.
 ## 12. QA, render, inspect
 
 ```bash
-pres render DECK.md --pdf --draft
+ainar deck render DECK.md --pdf --draft
 ```
 
 `--draft` writes a second deck beside the first in which every planned-but-undrawn

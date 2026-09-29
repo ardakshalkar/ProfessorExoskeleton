@@ -12,7 +12,7 @@ generated_by: build-presentation-skill
   Fill every {{ slot }} and delete every slide the outline does not have,
   including this comment.
 
-  Slide order, count and titles must match the outline, or `pres render` stops
+  Slide order, count and titles must match the outline, or `ainar deck render` stops
   and says where. The outline is what was approved; this is the writing of it.
 
   Every concept named here belongs to the module. If the session needs one the

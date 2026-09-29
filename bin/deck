@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# `deck` — render an approved slide deck to .pptx, and with --pdf to PDF too.
+# `deck` — slide decks: `ainar deck fit | check | render`.
 #
-#   bin/deck --course-version CSS-4007-2026-FALL --document DOC-DECK-01 --pdf
+#   bin/deck render courses/CSS-4007/materials/MODULE-01-slides/MODULE-01-slides.md --pdf
+#   bin/deck render --document DOC-DECK-SRC-01 --course-version CSS-4007-2026-FALL --pdf
+#   bin/deck check  work/CSS-4007-2026-FALL/materials/MODULE-08-slides/MODULE-08-slides.md
 #
-# See bin/deck.cmd for why this launcher exists: the renderer has worked since
-# it was ported and had no command in front of it, so the decks for weeks 1 to 7
-# were converted by calling soffice by hand.
+# A first argument that is a flag means the old form, `bin/deck --document …`,
+# from when this launched render-deck; it is read as `render`. See bin/deck.cmd
+# for why this launcher exists at all.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [ -z "${SOFFICE_PATH:-}" ]; then
@@ -17,4 +19,7 @@ if [ -z "${SOFFICE_PATH:-}" ]; then
     if [ -x "$candidate" ]; then export SOFFICE_PATH="$candidate"; break; fi
   done
 fi
-exec node --experimental-strip-types "$here/ainar-node/bin/render-deck.ts" "$@"
+case "${1:-}" in
+  --*) set -- render "$@" ;;
+esac
+exec node --experimental-strip-types "$here/ainar-node/bin/ainar.ts" deck "$@"

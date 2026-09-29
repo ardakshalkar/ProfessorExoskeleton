@@ -1,15 +1,20 @@
 /**
- * An approved deck to `.pptx`, and from there to PDF.
+ * A deck to `.pptx`, and from there to PDF — the only renderer.
  *
- * Ported from `ProfessorHarness/node/bin/render-deck.ts`. The layout, the
- * palette and the overflow arithmetic are unchanged; what changed is where the
- * contract comes from. The parent read a `Document` record out of a course
- * repository, which a standalone plugin has no access to, so the contract is a
- * `<deck>.plan.yaml` sitting beside the markdown — see `plan.ts`.
+ * There used to be two. `bin/render-deck.ts` rendered a recorded Document and
+ * was called by nobody in the pipeline; this one, then in the slides plugin as
+ * `pres render`, rendered every deck the course actually registered, through
+ * `materials build`. They were merged on 2026-09-29 into this one, living here,
+ * behind `ainar deck render`. What render-deck had and this lacked came with
+ * it: the careful PDF conversion (`../pdf.ts`), the refusal to write a draft's
+ * binaries into `courses/`, and figure credits read off Document records.
  *
- * The four gates the parent enforced are enforced here, in `check.ts`, and this
- * module will not render a deck that fails them. Each is a mistake this made
- * before the gate existed:
+ * The contract is a `<deck>.plan.yaml` sitting beside the markdown — see
+ * `plan.ts` — and, when the deck is a recorded Document, that record's
+ * `presentation_plan` as well.
+ *
+ * The four gates are enforced in `check.ts`, and this module will not render a
+ * deck that fails them. Each is a mistake this made before the gate existed:
  *
  *   - a deck rendered from an unapproved outline looks finished in PowerPoint;
  *   - a plan that no longer matches its markdown means one of the two was
@@ -24,24 +29,31 @@
  */
 
 import { createRequire } from "node:module";
-import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkDeck, errorsIn, describeProblems } from "./check.ts";
 import { CHAR_WIDTH, columnWidths, plain, tableRowHeights, textHeight, unescape, type Block } from "./deck.ts";
-import { approvalRequired, creditForFigure, type DeckPlan } from "./plan.ts";
-import { generateMissing, missingVisuals, type MissingVisual } from "./draft.ts";
+import { approvalRequired, creditForFigure, type DeckPlan, type FigureRecord } from "./plan.ts";
+import { describeDraft, generateMissing, missingVisuals, type MissingVisual } from "./draft.ts";
 import { timed, timedSync } from "./timing.ts";
+import { toPdf as convert } from "../pdf.ts";
 
 const require = createRequire(import.meta.url);
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 
-function loadDependency(name: string): any {
-  const root = process.env.PRES_NODE_MODULES
-    ? resolve(process.env.PRES_NODE_MODULES)
-    : resolve(scriptDirectory, "..", "node_modules");
+/**
+ * `pptxgenjs` and `sharp`, from `ainar-node/node_modules` unless told otherwise.
+ *
+ * Optional dependencies of `@ainar/core`, loaded only when something renders:
+ * reading a course must not need a native image library. Both overrides are
+ * honoured because both were documented — `PRES_NODE_MODULES` by the slides
+ * plugin, `DECK_RENDERER_NODE_MODULES` by render-deck.
+ */
+export function loadDependency(name: string): any {
+  const named = process.env.DECK_RENDERER_NODE_MODULES ?? process.env.PRES_NODE_MODULES;
+  const root = named ? resolve(named) : resolve(scriptDirectory, "..", "..", "node_modules");
   try {
     return require(join(root, name));
   } catch {
@@ -49,10 +61,21 @@ function loadDependency(name: string): any {
       return require(name);
     } catch (error) {
       throw new Error(
-        `Cannot load ${name}. Run \`npm install pptxgenjs sharp\` in the plugin's node/ directory, ` +
-        `or set PRES_NODE_MODULES to a directory containing it.\n${String(error)}`,
+        `Cannot load ${name}. Run \`npm install\` in ainar-node/ (it is an optional dependency), ` +
+        `or set DECK_RENDERER_NODE_MODULES to a directory containing it.\n${String(error)}`,
       );
     }
+  }
+}
+
+/** Whether this machine can render at all, without trying to. */
+export function canRender(): boolean {
+  try {
+    loadDependency("pptxgenjs");
+    loadDependency("sharp");
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -142,28 +165,75 @@ function describeBlock(block: Block): string {
 interface RenderContext {
   materialsDir: string;
   outDir: string;
-  name: string;
   /**
-   * The deck name without `-draft`, used for every file *beside* the .pptx.
+   * Where the rasterized pictures go: converted SVGs, the title picture, the
+   * logo, a draft's placed images. Intermediates, embedded into the .pptx and
+   * needed by nobody afterwards — so never the deck's own folder in the
+   * course, where they read as sources and were once regrouped as figures.
    *
-   * Converted SVGs, the title picture and the logo are identical in both
-   * renders, so both point at one set. Prefixing them with the draft name
-   * instead produced `<deck>-draft-<deck>-fig-01.png` — a doubled name, twice
-   * the conversions, and on Windows a path that can pass 260 characters and
-   * simply fail to open.
+   * Shared by a deck and its draft, which convert the same pictures: prefixing
+   * them with the draft's name produced twice the conversions and, on Windows,
+   * paths past 260 characters that simply failed to open.
    */
-  assets: string;
+  assetsDir: string;
+  name: string;
   title: string;
   plan: DeckPlan;
+  /** Credits for figures, the plan's own entries first. */
+  figures: Record<string, FigureRecord>;
   /** Set only for `--draft`: the visuals the plan wants and the deck lacks. */
   draft?: MissingVisual[];
 }
 
-async function build(slides: Block[][], context: RenderContext): Promise<{ file: string; warnings: string[] }> {
+/**
+ * A picture the image library could not read, said with the slide and the
+ * likely cause.
+ *
+ * libvips reports a Windows path past 260 characters as "Input file is
+ * missing" — about a file that is right there. A course kept in a deep
+ * OneDrive folder reaches that length with a long figure name, and the error
+ * then names neither the deck nor the reason.
+ */
+function imageFailure(failure: unknown, what: string, paths: string[]): Error {
+  const message = String((failure as Error)?.message ?? failure);
+  const longest = paths.reduce((a, b) => (b.length > a.length ? b : a), "");
+  const tooLong = process.platform === "win32" && longest.length >= 260;
+  return new Error(
+    `${what}: ${message}` +
+      (tooLong
+        ? `\n  The path is ${longest.length} characters, past Windows' 260-character limit, and the image ` +
+          "library reports that as a missing file. Move the course to a shorter path, shorten the figure's " +
+          "name, or enable long paths (LongPathsEnabled) in Windows."
+        : ""),
+  );
+}
+
+/** How far down one slide its content reaches, as the renderer laid it out. */
+export interface SlideMeasure {
+  slide: number;
+  title: string;
+  /** Inches from the top of the page to the bottom of the last block. */
+  bottom: number;
+  /** The block that crossed the edge of the page, when one did. */
+  lost: string | null;
+}
+
+async function build(
+  slides: Block[][],
+  context: RenderContext,
+): Promise<{ file: string; warnings: string[]; measured: SlideMeasure[] }> {
   const pptxgen = loadDependency("pptxgenjs");
   const sharp = loadDependency("sharp");
   const warnings: string[] = [];
-  const figures = context.plan.figures ?? {};
+  const measured: SlideMeasure[] = [];
+  const figures = context.figures;
+  await mkdir(context.assetsDir, { recursive: true });
+  /** One rasterized picture's path, keeping the folder it was linked from. */
+  const assetPath = async (name: string): Promise<string> => {
+    const file = join(context.assetsDir, name);
+    await mkdir(dirname(file), { recursive: true });
+    return file;
+  };
 
   const pres = new pptxgen();
   pres.layout = "LAYOUT_WIDE"; // before any slide is added, or coordinates lie
@@ -229,7 +299,7 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
     const showWanted = async (top: number): Promise<number> => {
       if (!wanted?.generated) return placeholder(top);
       const placedW = Math.min(CONTENT_W * 0.62, 7.2);
-      const png = join(context.outDir, `${context.name}-placed-${index + 1}.png`);
+      const png = await assetPath(`${context.name}-placed-${index + 1}.png`);
       const meta = await sharp(wanted.generated)
         .resize({ width: Math.round(placedW * 96 * 2) })
         .png()
@@ -349,6 +419,12 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
       if (y > FLOOR) {
         warnings.push(`slide ${index + 1} runs to ${y.toFixed(2)}" of ${FLOOR}" — shorten it`);
       }
+      measured.push({
+        slide: index + 1,
+        title: heading?.kind === "heading" ? heading.text : "",
+        bottom: y,
+        lost: y > SLIDE_H ? "the end of the slide" : null,
+      });
       const note = noteFor(index);
       if (note) slide.addNotes(note);
       continue;
@@ -448,7 +524,7 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
 
       if (hasImage) {
         // Bled to the right edge, cover-cropped so it never distorts.
-        const png = join(context.outDir, `${context.assets}-title.png`);
+        const png = await assetPath(`${context.name.replace(/-draft$/, "")}-title.png`);
         await sharp(imagePath!)
           .resize({
             width: Math.round(PANEL_W * 96 * 2),
@@ -521,7 +597,7 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
         const meta = await sharp(logoPath!).metadata();
         const height = 0.5;
         const width = height * ((meta.width ?? 1) / (meta.height ?? 1));
-        const png = join(context.outDir, `${context.assets}-logo.png`);
+        const png = await assetPath(`${context.name.replace(/-draft$/, "")}-logo.png`);
         await sharp(logoPath!).resize({ height: Math.round(height * 96 * 3) }).png().toFile(png);
         slide.addImage({
           path: png,
@@ -537,6 +613,7 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
           "on the slide after it.",
         );
       }
+      measured.push({ slide: index + 1, title: plain(titleText), bottom: y, lost: y > SLIDE_H ? "the title block" : null });
 
       const note = noteFor(index);
       if (note) slide.addNotes(note);
@@ -663,7 +740,7 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
           // wrong quietly is the one with no bullets at all.
           //
           // So bullets and hanging indents win over bold inside a bullet, and
-          // `pres check` names any item whose emphasis was dropped rather than
+          // `ainar deck check` names any item whose emphasis was dropped rather than
           // letting the author find out from the projector.
           //
           // pptxgenjs also restarts numbering at 1 for every paragraph unless
@@ -752,17 +829,19 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
           // default, and a course kept somewhere with a long path lost the
           // render entirely, with an error from the image library that named
           // neither the deck nor the cause.
-          const stem = block.src.replace(/\.[^.]+$/, "");
-          const png = join(
-            context.outDir,
-            `${stem.startsWith(context.assets) ? stem : `${context.assets}-${stem}`}.png`,
-          );
+          // The assets directory is this deck's alone, so the link's own path
+          // is the name — `figures/fig-01.svg` becomes `figures/fig-01.png`
+          // there. A prefix is only needed in a directory several decks share.
+          const png = await assetPath(`${block.src.replace(/\.[^./\\]+$/, "")}.png`);
           const credit = creditForFigure(figures[block.src], block.src);
           const creditH = credit ? 0.3 : 0;
           const meta = await sharp(source)
             .resize({ width: Math.round(placedW * 96 * 2) }) // 2x its placed size
             .png()
-            .toFile(png);
+            .toFile(png)
+            .catch((failure: unknown) => {
+              throw imageFailure(failure, `slide ${index + 1}: ${block.src}`, [source, png]);
+            });
           let width = placedW;
           let height = width * (meta.height / meta.width);
           // Room for what comes *after* the figure, too. Sizing against the
@@ -810,6 +889,12 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
     // The point is that the hole is *visible*: a planned visual with nothing in
     // its place is invisible in the deck and buried in the plan.
     if (wanted && !isTitleSlide) advance(await showWanted(cursor));
+    measured.push({
+      slide: index + 1,
+      title: heading?.kind === "heading" ? heading.text : "",
+      bottom,
+      lost,
+    });
 
     // The slide number, bottom right, quiet.
     //
@@ -831,45 +916,17 @@ async function build(slides: Block[][], context: RenderContext): Promise<{ file:
 
   const file = join(context.outDir, `${context.name}.pptx`);
   await pres.writeFile({ fileName: file });
-  return { file, warnings };
-}
-
-const SOFFICE = [
-  process.env.SOFFICE_PATH,
-  "soffice",
-  "C:/Program Files/LibreOffice/program/soffice.exe",
-  "/usr/bin/soffice",
-  "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-].filter(Boolean) as string[];
-
-/**
- * PDF by converting *this exact deck*.
- *
- * The dependency on LibreOffice is chosen rather than inherited: anything that
- * renders the markdown a second time produces a different document that merely
- * looks the same, and then there are two PDFs and no way to say which one the
- * slides are.
- */
-export function toPdf(pptx: string, outDir: string): string | null {
-  return timedSync("pdf conversion", () => convertToPdf(pptx, outDir));
-}
-
-function convertToPdf(pptx: string, outDir: string): string | null {
-  for (const binary of SOFFICE) {
-    const result = spawnSync(binary, ["--headless", "--convert-to", "pdf", "--outdir", outDir, pptx], {
-      encoding: "utf8",
-    });
-    if (result.error) continue;
-    const pdf = pptx.replace(/\.pptx$/, ".pdf");
-    if (existsSync(pdf)) return pdf;
-  }
-  return null;
+  return { file, warnings, measured };
 }
 
 export interface RenderResult {
   pptx: string;
   pdf: string | null;
+  /** Why there is no PDF, when one was asked for and not made. */
+  pdfError?: string;
   warnings: string[];
+  /** Every slide, as laid out — what `ainar deck fit` reports. */
+  measured: SlideMeasure[];
   /**
    * What the file can honestly be said to be.
    *
@@ -906,6 +963,139 @@ export function describeRenderProvenance(plan: DeckPlan, approved: boolean): str
   ];
 }
 
+const isInside = (dir: string, path: string): boolean => {
+  const rel = relative(dir, path);
+  return rel === "" || (!rel.startsWith("..") && !/^[A-Za-z]:/.test(rel) && !rel.startsWith(sep));
+};
+
+/**
+ * The workspace a deck belongs to: the nearest directory above it holding a
+ * `courses/`. Null for a deck kept somewhere else entirely.
+ */
+export function workspaceOf(deckPath: string): string | null {
+  let dir = dirname(resolve(deckPath));
+  for (;;) {
+    if (existsSync(join(dir, "courses"))) return dir;
+    const up = dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
+}
+
+export interface RenderPlace {
+  /** Where the `.pptx` and the PDF go. */
+  outDir: string;
+  /** Where the rasterized pictures go — see `RenderContext.assetsDir`. */
+  assetsDir: string;
+  /** Whether the deck is part of the course record, under `courses/`. */
+  recorded: boolean;
+}
+
+/**
+ * Where a render of this deck is written. One rule, decided here and nowhere
+ * else, because the two renderers this replaced had two:
+ *
+ * - **A deck in the course** (`courses/<C>/materials/<deck>/<deck>.md`) renders
+ *   into its own folder, beside the markdown. That is where its `.pptx` and PDF
+ *   are recorded, and where `materials build` always wrote them.
+ * - **Anything else** — a draft in `work/`, a deck anywhere on disk, and a
+ *   `--draft` render of a recorded deck — goes to `output/<deck>/`, which is
+ *   gitignored scratch. One folder per deck, so two decks' pictures never
+ *   share a directory.
+ * - **Nothing but a recorded deck's own render goes inside `courses/`.** A
+ *   binary rendered from a draft and written into the course looks finished,
+ *   and nobody approved what is in it.
+ *
+ * The rasterized pictures always go to `output/<deck>/`, even for a recorded
+ * deck: they are intermediates, and in the course they read as sources.
+ */
+export function placeFor(
+  deckPath: string,
+  options: { root?: string; outDir?: string; draft?: boolean } = {},
+): RenderPlace {
+  const deck = resolve(deckPath);
+  const base = basename(deck).replace(/\.md$/i, "");
+  const workspace = resolve(options.root ?? workspaceOf(deck) ?? process.cwd());
+  const courses = join(workspace, "courses");
+  const recorded = isInside(courses, deck);
+  const scratch = join(workspace, "output", base);
+  const own = dirname(deck);
+  const outDir = options.outDir
+    ? resolve(options.outDir)
+    : recorded && !options.draft ? own : scratch;
+  if (isInside(courses, outDir) && !(recorded && !options.draft && outDir === own)) {
+    throw new Error(
+      `refusing to write a rendered binary into ${relative(workspace, outDir) || outDir}.\n` +
+      "Only a recorded deck's own render goes inside courses/, beside its markdown. A draft\n" +
+      "rendered into the course looks finished, and nobody approved what is inside it.",
+    );
+  }
+  return { outDir, assetsDir: scratch, recorded };
+}
+
+export interface RenderOptions {
+  /** The workspace; found from the deck's own path when not given. */
+  root?: string;
+  outDir?: string;
+  pdf?: boolean;
+  draft?: boolean;
+  /**
+   * Credits for figures from outside the plan — the course's Document records,
+   * whose `extensions.image_source` is the same shape as a plan's figure
+   * entry. The plan's own entry wins where both exist.
+   */
+  figures?: Record<string, FigureRecord>;
+  /** The recorded Document's `presentation_plan`, checked as a second contract. */
+  recordPlan?: DeckPlan | null;
+  /** Override where the rasterized pictures go — `deck fit` uses a temp dir. */
+  assetsDir?: string;
+}
+
+/** The page, as the renderer lays it out: 13.33 × 7.5 in, a 0.5 in bottom margin. */
+export const PAGE = { width: SLIDE_W, height: SLIDE_H, floor: FLOOR } as const;
+
+/**
+ * A render, as the lines a person reads — the same from `ainar deck render`
+ * and from `pres render`, because they are the same render.
+ *
+ * Overflow goes first and to stderr, before the "wrote" lines: a slide that
+ * runs past the bottom loses its last lines *silently* — not clipped with a
+ * mark, simply off the slide — and a warning printed under a success message
+ * is a warning nobody reads until the lecture.
+ */
+export function describeRender(result: RenderResult, pdfAsked: boolean): { out: string[]; err: string[] } {
+  const out: string[] = [];
+  const err: string[] = [];
+  const overflow = result.warnings.filter((warning) => / runs to /.test(warning));
+  const others = result.warnings.filter((warning) => !/ runs to /.test(warning));
+  if (overflow.length) {
+    err.push(
+      `\n${overflow.length} slide(s) run past the bottom of the slide. Whatever falls below is\n` +
+        "not clipped or marked — it is simply not on the slide, and you will find out in the room:\n",
+    );
+    for (const warning of overflow) err.push(`  ${warning}`);
+    err.push(
+      "\nShorten those slides or split them. Nothing here can do it for you: which half\n" +
+        "belongs on which slide is a teaching decision.\n",
+    );
+  }
+  for (const warning of others) err.push(`  ${warning}`);
+  out.push(`wrote ${result.pptx}`);
+  if (pdfAsked) {
+    if (result.pdf) out.push(`wrote ${result.pdf}`);
+    else err.push(`The .pptx is written, the PDF is not. ${result.pdfError ?? ""}`);
+  }
+  // What the file honestly is. A .pptx from a fast deck and one from an
+  // approved outline are the same file format and nothing about either says.
+  out.push(...result.provenance);
+  if (result.missing) out.push("", describeDraft(result.missing));
+  out.push(
+    "\nThen look at it. The first render usually has a real defect or two, and they are\n" +
+      "obvious in the pages and invisible in the source.",
+  );
+  return { out, err };
+}
+
 /**
  * Check, then render, then optionally convert.
  *
@@ -913,11 +1103,13 @@ export function describeRenderProvenance(plan: DeckPlan, approved: boolean): str
  * carried out to the caller rather than swallowed: an overflowing slide is not
  * a reason to refuse a deck, and it is very much a reason to say so.
  */
-export async function renderDeck(
-  deckPath: string,
-  options: { outDir?: string; pdf?: boolean; draft?: boolean } = {},
-): Promise<RenderResult> {
-  const checked = timedSync("checks", () => checkDeck(deckPath));
+export async function renderDeck(deckPath: string, options: RenderOptions = {}): Promise<RenderResult> {
+  const checked = timedSync("checks", () =>
+    checkDeck(deckPath, {
+      ...(options.figures ? { figures: options.figures } : {}),
+      ...(options.recordPlan ? { recordPlan: options.recordPlan } : {}),
+    }),
+  );
   const failures = errorsIn(checked.problems);
   if (failures.length) {
     throw new Error(
@@ -927,29 +1119,37 @@ export async function renderDeck(
     );
   }
 
-  const base = deckPath.replace(/^.*[\\/]/, "").replace(/\.md$/i, "");
+  const base = basename(deckPath).replace(/\.md$/i, "");
   // A separate filename, always. A draft that overwrote the deck you present
   // is the one mistake this feature must not make.
   const name = options.draft ? `${base}-draft` : base;
-  const outDir = resolve(options.outDir ?? join(process.cwd(), "output"));
+  const place = placeFor(deckPath, {
+    ...(options.root ? { root: options.root } : {}),
+    ...(options.outDir ? { outDir: options.outDir } : {}),
+    ...(options.draft ? { draft: true } : {}),
+  });
+  const outDir = place.outDir;
+  if (options.assetsDir) place.assetsDir = resolve(options.assetsDir);
   await mkdir(outDir, { recursive: true });
 
   let draft: MissingVisual[] | undefined;
   const draftWarnings: string[] = [];
   if (options.draft) {
+    await mkdir(place.assetsDir, { recursive: true });
     const found = missingVisuals(checked.slides, checked.plan);
-    const generated = generateMissing(found, outDir, base);
+    const generated = generateMissing(found, place.assetsDir, base);
     draft = generated.filled;
     draftWarnings.push(...generated.warnings);
   }
 
-  const { file, warnings } = await timed("render pptx", () => build(checked.slides, {
+  const { file, warnings, measured } = await timed("render pptx", () => build(checked.slides, {
     materialsDir: dirname(deckPath),
     outDir,
+    assetsDir: place.assetsDir,
     name,
-    assets: base,
     title: checked.plan.title ?? base,
     plan: checked.plan,
+    figures: checked.figures,
     ...(draft ? { draft } : {}),
   }));
 
@@ -959,9 +1159,13 @@ export async function renderDeck(
     ...checked.problems.filter((problem) => problem.severity === "warning").map((problem) => problem.message),
   ];
 
+  const converted = options.pdf ? timedSync("pdf conversion", () => convert(file, outDir)) : null;
+
   return {
     pptx: file,
-    pdf: options.pdf ? toPdf(file, outDir) : null,
+    pdf: converted && "pdf" in converted ? converted.pdf : null,
+    ...(converted && "error" in converted ? { pdfError: converted.error } : {}),
+    measured,
     warnings: carried,
     provenance: describeRenderProvenance(
       checked.plan,

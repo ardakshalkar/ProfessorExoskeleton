@@ -61,7 +61,7 @@ import { createRequire } from "node:module";
 import { resolve4 } from "node:dns/promises";
 import { mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { noteTiming, startSpan } from "./timing.ts";
+import { noteTiming, startSpan } from "../../../../../ainar-node/src/slides/timing.ts";
 
 const require = createRequire(import.meta.url);
 

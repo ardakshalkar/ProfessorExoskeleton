@@ -29,16 +29,16 @@ drawing it.
   RECORD           courses/<COURSE>/       vendor/datalayer/schema/ — 28 schemas
      |
      v
-  BUILD            record -> intermediate  src/deck.ts, src/page.ts, bin/exam-paper.ts
+  BUILD            record -> intermediate  src/slides/, src/page.ts, bin/exam-paper.ts
      |
      v
   ==== REFUSAL === answer keys, student names, unapproved files   src/safety.ts
      |
      v
-  RENDER           intermediate -> bytes   bin/render-deck.ts, bin/render-exam.ts
+  RENDER           intermediate -> bytes   src/slides/render.ts, bin/render-exam.ts
      |
      v
-  OUTPUT           dist/, output/<RUN>/    never in git. An artefact that becomes
+  OUTPUT           dist/, output/<DECK>/   never in git. An artefact that becomes
                    courses/<C>/materials/  a record lives beside the course
 ```
 
@@ -49,13 +49,13 @@ shape is worth naming:
 | --- | --- | --- |
 | Draft | An agent may propose 16 collections and no others. Not outcomes, not capabilities, not enrollments — and since 2026-09-05 not concepts or modules either, because the structure of a course is the professor's own authoring. | `src/drafts.ts` |
 | Gate | Nothing is a record until a person promotes it. The promotion is visible in a diff, because the `-DRAFT-` marker comes out of the identifier. Two commands perform it and they are one implementation — `runApproval`: `ainar approve`, over everything, and `ainar publish`, over the documents and resources one publication needs. A judgement about a student has one path and it is the first. | `src/approve.ts`, `src/publish.ts` |
-| Build | An unapproved file has a `storage_key` under `work/`, and every builder that could publish one checks. | `src/page.ts`, `bin/render-deck.ts` |
+| Build | An unapproved file has a `storage_key` under `work/`, and every builder that could publish one checks. A draft deck renders only to `output/<DECK>/`, never into `courses/`. | `src/page.ts`, `src/slides/render.ts` (`placeFor`), `src/slides/recorded.ts` |
 | Refusal | The answer-key scan before publication has no override. A file that names students is refused a path inside the workspace. | `src/safety.ts`, `src/lms/base.ts` |
-| Output | Build products go to `dist/` or `output/<RUN>/`. An artefact meant to become a record — a deck from `materials build`, a printed paper — is written beside the course under `materials/` instead, because a `storage_key` with no scheme is a path in this repository and a record may not point at a build directory. The YAML under `courses/` is still written by `approve` alone, which is what keeps it diffable. | every command |
+| Output | Build products go to `dist/` or `output/<DECK>/`. An artefact meant to become a record — a recorded deck's own render, from `ainar deck render` or `materials build`, a printed paper — is written beside the course under `materials/<DECK>/` instead, because a `storage_key` with no scheme is a path in this repository and a record may not point at a build directory. The YAML under `courses/` is still written by `approve` alone, which is what keeps it diffable. | every command |
 
 **Build and render are separate on purpose.** The build half has the opinions and
 no I/O, so it is testable without a course on disk; the render half does I/O and
-calls a third-party writer, which is not worth a test. `src/deck.ts` says this
+calls a third-party writer, which is not worth a test. `src/slides/deck.ts` says this
 about itself and `src/lms-export.ts` is the same split. When you want to know
 *why* a document came out the way it did, read the `src/` half; when you want to
 know why it did not come out at all, read the `bin/` half.
@@ -112,25 +112,40 @@ work/<RUN>/documents.yaml                    a Document with a storage_key
 ainar approve                                the storage_key leaves work/
    |
    v
-bin/render-deck.ts --document DOC-nnnn       refuses an unapproved document
-   |   splitSlides / parseBlocks             src/deck.ts — Marp's --- convention,
-   |                                         so the same file is a deck in a Marp
-   |                                         previewer and a deck here
-   |   checkContract                         presentation_plan vs markdown: count,
+ainar deck render --document DOC-nnnn       refuses an unapproved document, and
+   |   (or FILE.md, or materials build)      a storage_key that is not markdown
+   |   splitSlides / parseBlocks             src/slides/deck.ts — Marp's ---
+   |                                         convention, so the same file is a deck
+   |                                         in a Marp previewer and a deck here
+   |   checkDeck                             src/slides/check.ts — the .plan.yaml
+   |                                         beside the deck is the contract: count,
    |                                         order and title must agree, and a
    |                                         mismatch EXITS rather than reordering
-   |                                         either one to make them agree
+   |                                         either one. Also the mode's approval
+   |                                         gate, figure credits (plan, then the
+   |                                         Document), alt text, density
+   |   placeFor                              where it may write, decided once
    v
-output/<COURSE_VERSION_ID>/*.pptx            pptxgenjs + sharp, loaded from
-   |                                         node/node_modules — not dependencies
-   |                                         of @ainar/core, because reading a
+courses/<C>/materials/<DECK>/<DECK>.pptx     a recorded deck, beside its markdown —
+output/<DECK>/<DECK>[-draft].pptx            anything else, and every --draft.
+   |                                         Rasterized PNGs: output/<DECK>/ always.
+   |                                         pptxgenjs + sharp, from ainar-node's
+   |                                         optionalDependencies — reading a
    |                                         course should not need a native
    |                                         image library
-   +-- --pdf -> LibreOffice                  a conversion of THIS deck, so the PDF
+   +-- --pdf -> LibreOffice (src/pdf.ts)     a conversion of THIS deck, so the PDF
                                              cannot disagree with the .pptx. With
                                              no LibreOffice the .pptx is still
-                                             written and the PDF reported skipped
+                                             written and the PDF reported, with why
 ```
+
+There were two renderers here until 2026-09-29: `bin/render-deck.ts`, which the
+diagram above used to describe and which nothing in the pipeline called, and the
+slides plugin's `pres render`, which built every deck the course recorded. They
+disagreed about fonts, layouts and where output went. The plugin's engine won —
+it is what the records were built with, so keeping it changed no deck — and
+moved to `src/slides/`, taking render-deck's gate, credit lookup and PDF
+conversion with it. `render-deck` and `pres render` remain as aliases.
 
 Two other doors open onto the same output.
 
@@ -445,10 +460,10 @@ since the page embeds it inside `<style>`.
 | --- | --- | --- |
 | A skill wrote something the loader refuses | Draft | `src/drafts.ts` — is the collection in `DRAFTABLE` at all? |
 | `approve` refuses | Gate | It prints its coverage every run. This gate implements a subset of the 94 checks, and a narrower refusal is a narrower gate |
-| A deck renders but disagrees with its plan | Build | `checkContract` in `src/deck.ts` — one of the two was edited after the other |
-| A slide runs off the page | Build | `deck fit`. A slide holding an image reports an upper bound, so "may overflow" means may |
-| The `.pptx` appears and the PDF does not | Render | LibreOffice was not found. `SOFFICE` overrides the search |
-| `render-deck` refuses a document | Gate | Its `storage_key` is still under `work/` |
+| A deck renders but disagrees with its plan | Build | `checkContract` in `src/slides/deck.ts` — one of the two was edited after the other. A recorded `presentation_plan` that has drifted is a warning: the record describes an older deck |
+| A slide runs off the page | Build | `deck fit`, which lays the deck out with the renderer itself. Without pptxgenjs and sharp it says ESTIMATED, and a slide holding an image is then an upper bound |
+| The `.pptx` appears and the PDF does not | Render | `src/pdf.ts` says why: not found (`SOFFICE_PATH` overrides), or its exit code and first stderr line. A PDF older than the run is never taken for its output |
+| `deck render --document` refuses a document | Gate | Its `storage_key` is still under `work/`, or is the `.pptx` rather than the markdown |
 | A paper prints a total that looks wrong | Build | It does not silently fix one. The warning on stderr is the disagreement |
 | A material is missing from the published page | Refusal | The answer-key scan, or a file held back as unreadable. The report names which |
 
