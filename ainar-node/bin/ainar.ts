@@ -8,15 +8,9 @@
  * hold to the implementation this port replaces. No logic is reimplemented in
  * those, so nothing in them can drift in a way `npm run golden` would not catch.
  *
- * `approve` is the oldest exception, and it is not a surface over verified code —
- * it is a second implementation of the one gate, which is exactly what the
- * migration plan argued against on the grounds that two gates can disagree. What
- * made it defensible was that the disagreement was *measured*: both gates were
- * run over the same drafts and the trees they wrote compared, the emitters were
- * compared scalar by scalar, and the refusal is the same width — all 94 checks,
- * held there by the 98 mutations in `workspace/golden/validator/`. It still prints its
- * coverage on every run, because that number is the gate and a reader should not
- * have to trust it.
+ * There is no `approve` any more (2026-09-29). A record an agent wrote sits in
+ * the course marked `approval: draft`, and the professor accepts it by changing
+ * the word — see `src/approval.ts`. `drafts` lists what is waiting.
  *
  * ## The write verbs
  *
@@ -49,7 +43,7 @@ import { blueprintPayload } from "../src/blueprint.ts";
 import { gradebookPayload } from "../src/gradebook.ts";
 import { calibrationPayload, pendingPayload, rubricPayload } from "../src/grading.ts";
 import { inboxPayload } from "../src/inbox.ts";
-import { discoverCourses, loadCourse } from "../src/loader.ts";
+import { COLLECTIONS, discoverCourses, loadCourse } from "../src/loader.ts";
 import { dashboardPayload, rollUpCapabilities, studentRecord } from "../src/progress.ts";
 import { extractEvidence } from "../src/evidence.ts";
 import { bundleStats, exportBundle } from "../src/export.ts";
@@ -75,7 +69,8 @@ import { prerender } from "./prerender-widget.mjs";
 import { alignmentMarkdown, syllabusMarkdown } from "../src/report.ts";
 import { coverage, validate } from "../src/validate.ts";
 import { IssueList, describe } from "../src/issues.ts";
-import { DRAFTABLE, draftFiles, mergeDrafts } from "../src/drafts.ts";
+import { AGENT_WRITABLE, approvedView, drafts as draftsIn, withRecords } from "../src/approval.ts";
+import { candidateFiles } from "../src/record-edit.ts";
 import {
   dominantMisconception,
   emptyResult,
@@ -119,14 +114,8 @@ import { deckForDocument, recordFor, type RecordedDeck } from "../src/slides/rec
 import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../src/slides/timing.ts";
 import { buildMaterials, producerFor, readProducers } from "../src/materials.ts";
 import { importMaterial } from "../src/materials-import.ts";
+import { decidedAt, floatPaths, writeRecords } from "../src/records-write.ts";
 import {
-  floatPaths,
-  decidedAt,
-  runApproval,
-  writeRecords,
-} from "../src/approve.ts";
-import {
-  MATERIAL_COLLECTIONS,
   // `TARGETS` is taken by the gradebook targets above, and these are a
   // different list of a different kind of thing.
   TARGETS as PUBLISH_TARGETS,
@@ -140,9 +129,8 @@ import {
   isUpdate,
   materialChecksums,
   pagePlan,
-  outstanding,
-  pendingMaterials,
   publishPlan,
+  unpublishedDrafts,
   readChannel,
   sendAnnouncement,
 } from "../src/publish.ts";
@@ -301,7 +289,7 @@ const HELP = `ainar — the AINAR course model CLI
   inbox RUN [--date D] [--group G]
   calibration RUN
   blueprint RUN
-  approve DRAFTS --as USER [--only IDS] [--reject IDS] [--dry-run]
+  drafts [RUN]             what is marked approval: draft, awaiting you
   impact DOC-ID [--run RUN]   what a material is, and what changing it drags
 
   roster import FILE.csv [--run RUN] [--id-column C] [--name-column C]
@@ -318,21 +306,16 @@ const HELP = `ainar — the AINAR course model CLI
   homework publish ASSESSMENT [--repo owner/name] [--private] [--confirm]
                                            plan it; --confirm creates and pushes
 
-  Publishing, with the gate folded in. Each of these reads and prints a plan;
-  --confirm promotes the drafted DOCUMENTS AND RESOURCES the publication needs
-  — never an evaluation, which is \`approve\` and is yours — and then publishes:
+  Publishing. Each of these reads and prints a plan, and --confirm publishes.
+  A record marked \`approval: draft\` is never published — the plan names it
+  instead. Accepting one is changing that word in its file:
 
-  publish page RUN [--as USER] [--out DIR] [--template T] [--structure S]
+  publish page RUN [--out DIR] [--template T] [--structure S]
   publish telegram RUN --message TEXT | --message-file PATH [--chat-id C] [--edit]
   publish homework ASSESSMENT --run RUN [--repo owner/name] [--private]
   publish canvas ASSESSMENT --run RUN [--group G] [--overwrite-drift]
   publish update RUN                       everywhere it has already gone
   …any of them with --rebuild             run a stale rendering's producer first
-
-  The approver recorded against a promoted material is --as, or the run's first
-  instructor. A draft the record already holds is left alone rather than
-  promoted twice, so publishing the same run again publishes rather than
-  colliding.
 
   A material edited in place is noticed: the record is brought back into line
   with the file and its version goes up, and a rendering whose source changed
@@ -376,7 +359,7 @@ const HELP = `ainar — the AINAR course model CLI
 
   These write files. Each says what it wrote and where:
 
-  score-items DRAFTS --course-version RUN [--partial] [--rescore] [--dry-run]
+  score-items RUN [--partial] [--rescore] [--dry-run]
   export [COURSE] [--out DIR]              canonical JSON, default dist/
   sql [COURSE] [--out DIR] [--prune]       an idempotent PostgreSQL import
   sql --ddl [--out FILE]                   the schema the import expects
@@ -393,9 +376,9 @@ const HELP = `ainar — the AINAR course model CLI
 
   Producing a material and registering it, as one act. The producers a course
   declares in its materials.yaml are run, what they make is converted and
-  described, and ONE draft is written through the same schema and emitter
-  approve uses. Nothing is written to courses/: approval stays the only way in,
-  and this narrows what reaches it to records already known to be valid.
+  described, and the Document records are written into the course, validated
+  against the schema first and marked \`approval: draft\`. The files stay where
+  the producer wrote them. Rebuilding an accepted material keeps it accepted.
 
   --template is appearance only: a style sheet, refused if it carries markup or
   fetches anything, and refused outright if it declares a different surface.
@@ -553,7 +536,11 @@ const buildCoursePage = (runId: string): { lines: string[]; published: string[] 
   // rebuilt here instead.
   const holdBack = heldBackForStaleness(freshness(bundle, runId, root));
   const on = onDate(runId);
-  const payload = outlinePayload(bundle, runId, on, {
+  // The outline is drawn from what the professor has accepted: a drafted
+  // meeting or assessment is not on the students' plan until it is approved.
+  // The materials below read the whole bundle, so that a drafted one is named
+  // as held back rather than silently absent.
+  const payload = outlinePayload(approvedView(bundle), runId, on, {
     groups: runGroups(runId),
   }) as Record<string, any>;
 
@@ -727,7 +714,7 @@ const publishHomework = async (
     const plan = await planPublish(shared);
     say(`Publishing ${assessmentId} would do this, and has done nothing:`);
     for (const line of describePlan(plan)) say(`  ${line}`);
-    // Non-zero on a refusal, the way `approve` is: a caller that offers a
+    // Non-zero on a refusal, the way `validate` is: a caller that offers a
     // "publish now" button off the back of this must not offer it for a plan
     // that cannot run, and "did it refuse" is not something a reader of the
     // text should have to work out by looking for a word in it.
@@ -852,7 +839,9 @@ try {
       const resolvedRun = asked ?? soleRun(bundle);
       const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
 
-      const produced = extractEvidence(bundle, resolvedRun);
+      // Evidence is derived from what the professor has accepted — a decided
+      // evaluation, an approved scored response — never from a draft.
+      const produced = extractEvidence(approvedView(bundle), resolvedRun);
       if (produced.length === 0) {
         out("no new evidence — every approved decision is already recorded");
         break;
@@ -868,7 +857,7 @@ try {
       }
 
       const issues = new IssueList();
-      const merged = mergeDrafts(bundle, { evidence: produced });
+      const merged = withRecords(bundle, { evidence: produced });
       issues.extend(validate(merged, { root }));
       if (issues.errors.length) {
         console.error("\nvalidation failed; nothing was written");
@@ -884,14 +873,8 @@ try {
         break;
       }
 
-      const approval = {
-        records: new Map([["evidence", produced]]),
-        idMap: new Map<string, string>(),
-        skipped: [] as string[],
-        notes: [] as string[],
-      };
       out("");
-      for (const path of writeRecords(courseDir, approval as never)) {
+      for (const path of writeRecords(courseDir, { evidence: produced as never[] })) {
         out(`wrote ${relative(root, path)}`);
       }
       out(`\n${produced.length} evidence record(s) derived.`);
@@ -910,11 +893,11 @@ try {
       const run = runById(bundle).get(resolvedRun) as { term: string; timezone?: string };
       const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
 
-      // The same stamp helper `approve` uses, so a state derived at the same
-      // moment as an approval carries the same instant in the same timezone.
+      // The same stamp helper every writer uses, so a state derived at the same
+      // moment as a decision carries the same instant in the same timezone.
       const now = decidedAt(run.timezone);
 
-      const produced = rollUpCapabilities(bundle, resolvedRun, now);
+      const produced = rollUpCapabilities(approvedView(bundle), resolvedRun, now);
       if (produced.length === 0) {
         out("no new capability states — every capability with evidence already has one");
         break;
@@ -928,7 +911,7 @@ try {
       }
 
       const issues = new IssueList();
-      const merged = mergeDrafts(bundle, { capability_states: produced });
+      const merged = withRecords(bundle, { capability_states: produced });
       issues.extend(validate(merged, { root }));
       if (issues.errors.length) {
         console.error("\nvalidation failed; nothing was written");
@@ -936,7 +919,7 @@ try {
         process.exit(1);
       }
 
-      // The same disclosure `approve` makes, for the same reason: this command
+      // The same disclosure extract-evidence makes, for the same reason: this command
       // writes to the record, and the width of the check it passed is the only
       // honest measure of what that write was held to.
       const { implemented, total: allChecks } = coverage();
@@ -947,13 +930,7 @@ try {
         break;
       }
 
-      const approval = {
-        records: new Map([["capability_states", produced]]),
-        idMap: new Map<string, string>(),
-        skipped: [] as string[],
-        notes: [] as string[],
-      };
-      for (const path of writeRecords(courseDir, approval as never)) {
+      for (const path of writeRecords(courseDir, { capability_states: produced as never[] })) {
         out(`wrote ${relative(root, path)}`);
       }
       out(`\n${produced.length} capability state(s) derived.`);
@@ -1120,15 +1097,17 @@ try {
           title: flag("title") ?? null,
           moduleId: flag("module") ?? null,
           vocabulary,
-          draftsDir: flag("drafts") ?? join(root, "work", runId),
+          courseDir: join(root, "courses", bundle.course.course_id),
           dryRun: args.includes("--dry-run"),
         });
         for (const line of report.lines) console.log(line);
-        if (report.draft !== null) {
+        if (report.written.length) {
           console.log("");
-          console.log(`wrote ${relative(root, report.draft).split(sep).join("/")}`);
-          console.log("Read it before approving — the outline was measured, not written:");
-          console.log(`  ainar approve work/${runId} --as <USER-ID>`);
+          for (const path of report.written) {
+            console.log(`wrote ${relative(root, path).split(sep).join("/")}`);
+          }
+          console.log(`${as} is marked approval: draft. Read it before accepting it —`);
+          console.log("the outline was measured, not written. To accept, set approval: approved.");
         }
         break;
       }
@@ -1141,15 +1120,19 @@ try {
         only: flag("only") ?? null,
         pdf: !args.includes("--no-pdf"),
         dryRun: args.includes("--dry-run"),
-        draftsDir: flag("drafts") ?? join(root, "work", runId),
+        courseDir: join(root, "courses", course),
         bundle,
       });
       for (const line of report.lines) console.log(line);
-      if (report.draft !== null) {
+      if (report.written.length) {
         console.log("");
-        console.log(`wrote ${relative(root, report.draft).split(sep).join("/")}`);
-        console.log("Nothing is a record yet. Review it, then:");
-        console.log(`  ainar approve work/${runId} --as <USER-ID>`);
+        for (const path of report.written) {
+          console.log(`wrote ${relative(root, path).split(sep).join("/")}`);
+        }
+        console.log(
+          `${report.documents.join(", ")}: a new record is marked approval: draft, and a ` +
+            "rebuilt one keeps the approval it had. Review, then set approval: approved.",
+        );
       }
       if (report.failed > 0) {
         console.error("");
@@ -1197,33 +1180,31 @@ try {
     }
 
     /**
-     * Publishing, with the gate folded in.
+     * Publishing.
      *
      * Four targets, one grammar: the command with no `--confirm` reads and
      * prints a plan and writes nothing anywhere; the same command with
-     * `--confirm` promotes the drafted **materials** the publication needs and
-     * then performs it. `src/publish.ts` says why those two halves belong in
-     * one press and why the promotion stops at documents and resources.
+     * `--confirm` performs it. A record marked `approval: draft` is never
+     * published, and the plan names it — `src/publish.ts` says why publishing
+     * no longer approves anything on the professor's behalf.
      *
      * Nothing new is implemented here. The page is `buildCoursePage`, the
-     * starter repository is `publishHomework`, Canvas is `runLms`, and the
-     * promotion is `runApproval` — the same call `ainar approve` makes. This
-     * case is the argument parsing, the order, and the refusal to go on when
-     * the first half failed.
+     * starter repository is `publishHomework`, and Canvas is `runLms`. This
+     * case is the argument parsing, the order, and the refusals.
      */
     case "publish": {
       const target = (rest[0] ?? "") as Target;
       if (!PUBLISH_TARGETS.includes(target)) {
         console.error(
           "usage: publish {page|homework|canvas|telegram|update} … [--confirm]\n" +
-            "  publish page RUN [--as USER] [--out DIR] [--template T] [--structure S]\n" +
+            "  publish page RUN [--out DIR] [--template T] [--structure S]\n" +
             "  publish homework ASSESSMENT [--run RUN] [--repo owner/name] [--private]\n" +
             "  publish canvas ASSESSMENT --run RUN [--group G] [--overwrite-drift]\n" +
             "  publish telegram RUN --message TEXT | --message-file PATH [--chat-id C] [--edit]\n" +
             "  publish update RUN\n\n" +
             "Without --confirm each of these reads and prints what it would do.\n" +
-            "With it, the drafted documents and resources the publication needs are\n" +
-            "promoted first — never an evaluation, which is `ainar approve` and yours.\n\n" +
+            "With it, it publishes. A record marked `approval: draft` is never\n" +
+            "published; the plan names it, and accepting it is changing that word.\n\n" +
             "`update` revisits every destination this run has already been published to,\n" +
             "which the ledger knows and nothing else does. It never publishes anywhere\n" +
             "for the first time. `telegram --edit` corrects the last announcement in the\n" +
@@ -1242,23 +1223,15 @@ try {
       const run = runById(bundle).get(runId) as any;
       const courseId = (bundle.course as { course_id: string }).course_id;
       const courseDir = join(root, "courses", courseId);
-      const draftsDir = resolve(flag("drafts") ?? join(root, "work", runId));
 
-      // Half of the plan, and the half that is the same whatever the target is.
-      // A drafts directory that is not there is not an error: a course whose
-      // materials are all recorded publishes with nothing to promote.
-      const pending = existsSync(draftsDir)
-        ? pendingMaterials(draftsDir, bundle)
-        : { promotions: [], leftAlone: new Map<string, number>(), errors: [] };
-      if (pending.errors.length) {
-        console.error(`the drafts in ${within(root, draftsDir)} do not load, so nothing is published:`);
-        for (const error of pending.errors) console.error(`    ${error}`);
-        process.exit(1);
-      }
+      // What a page or an update would leave out because nobody has accepted
+      // it. An announcement is typed, and an assessment's own draft status is a
+      // refusal below rather than a line in a list.
+      const left = target === "page" || target === "update" ? unpublishedDrafts(bundle, runId) : [];
 
-      // The other half: what this particular target would do, and what it
-      // would refuse. Computed before anything is promoted, because a plan a
-      // professor cannot read is a plan they will press past.
+      // What this particular target would do, and what it would refuse.
+      // Computed before anything is sent, because a plan a professor cannot
+      // read is a plan they will press past.
       const actions: string[] = [];
       const refusals: string[] = [];
       let announcement: ReturnType<typeof checkAnnouncement> | null = null;
@@ -1407,6 +1380,12 @@ try {
           (entry) => entry.assessment_id === assessmentId,
         );
         if (!assessment) throw new Error(`no assessment ${assessmentId} in this workspace`);
+        if (assessment.approval === "draft") {
+          refusals.push(
+            `${assessmentId} is marked approval: draft. Read it, set approval: approved, ` +
+              "and publish again — students are not given a brief nobody has accepted.",
+          );
+        }
         actions.push(
           target === "homework"
             ? `plan and push the starter repository for ${assessmentId} — GitHub answers first`
@@ -1415,7 +1394,7 @@ try {
       }
 
       if (!confirm) {
-        for (const line of publishPlan({ target, pending, actions, refusals })) out(line);
+        for (const line of publishPlan({ target, drafts: left, actions, refusals })) out(line);
 
         // Not for an update: its own list already says when each destination
         // was last sent, and "nothing has been published here before" about a
@@ -1459,7 +1438,7 @@ try {
         out(
           refusals.length
             ? "Nothing was published, and this plan cannot run until the refusals above are fixed."
-            : "Nothing was published. Run it again with --confirm to promote and publish.",
+            : "Nothing was published. Run it again with --confirm to publish.",
         );
         if (refusals.length) process.exit(1);
         break;
@@ -1471,40 +1450,8 @@ try {
         process.exit(1);
       }
 
-      // The gate, over materials only, and the same one `ainar approve` runs.
-      // A draft the record already holds is rejected rather than re-promoted,
-      // which is what makes pressing Publish a second time publish a second
-      // time instead of reporting a collision.
-      const todo = outstanding(pending);
-      if (todo.length) {
-        const approver = flag("as") ?? (run?.instructors ?? [])[0];
-        if (!approver) {
-          console.error(
-            "This run names no instructor, so there is no id to record as having " +
-              "accepted the materials. Pass --as USER-ID, or add one to `instructors`.",
-          );
-          process.exit(1);
-        }
-        const outcome = runApproval({
-          bundle,
-          draftsDir,
-          courseDir,
-          root,
-          approver,
-          timezone: run?.timezone,
-          collections: MATERIAL_COLLECTIONS,
-          reject: new Set(
-            pending.promotions
-              .filter((entry) => entry.recordedAs !== null)
-              .map((entry) => entry.draftId),
-          ),
-        });
-        for (const line of outcome.lines) out(line);
-        if (!outcome.ok) {
-          for (const error of outcome.errors) console.error(`    ${error}`);
-          console.error("\nnothing was published: the materials did not pass the gate");
-          process.exit(1);
-        }
+      if (left.length) {
+        out(`${left.length} draft(s) left out: ${left.map((draft) => draft.id).join(", ")}`);
         out("");
       }
 
@@ -1532,7 +1479,7 @@ try {
             only: job.producer,
             pdf: !args.includes("--no-pdf"),
             dryRun: false,
-            draftsDir,
+            courseDir,
             bundle,
           });
           for (const line of report.lines) out(`  ${line}`);
@@ -1814,41 +1761,38 @@ try {
     case "score-items": {
       // Ported from `cmd_score_items` in `ainar/cli.py`.
       //
-      // Two deliberate departures from Python, both about which files it opens:
+      // Scores the item responses in the course's own record files, in place.
+      // What it scores is marked `approval: draft`: a score against the answer
+      // key is still a score nobody has looked at, and the gradebook and
+      // extract-evidence read only approved ones.
       //
-      // * It walks with `draftFiles`, so a dot-directory, a `node_modules` and a
-      //   deck's `.plan.yaml` sidecar are skipped. Python globbed everything and
-      //   relied on `item_responses` being absent from whatever it picked up.
-      // * A file it rewrites is emitted by `dump`, which leaves a timestamp as
-      //   the text the author wrote. Python round-tripped it through a `datetime`
-      //   and rewrote every one of them in its own spelling.
-      const draftsDir = rest[0];
-      const runFlag = flag("course-version") ?? flag("run");
-      if (!draftsDir || !runFlag) {
-        console.error(
-          "usage: score-items DRAFTS_DIR --course-version RUN [--partial] [--rescore] [--dry-run]",
-        );
+      // A file it rewrites is emitted by `dump`, which leaves a timestamp as the
+      // text the author wrote; the comment block at the top is kept.
+      const runFlag = rest[0] ?? flag("course-version") ?? flag("run");
+      if (!runFlag) {
+        console.error("usage: score-items RUN [--partial] [--rescore] [--dry-run]");
         process.exit(1);
       }
 
-      const items = itemById(forRun(runFlag)) as Map<string, any>;
-      const files = draftFiles(resolve(draftsDir));
+      const bundle = forRun(runFlag);
+      const items = itemById(bundle) as Map<string, any>;
+      const files = candidateFiles(
+        root,
+        (bundle.course as { course_id: string }).course_id,
+        COLLECTIONS.item_responses,
+      ).filter((path) => existsSync(path));
       if (!files.length) {
-        out(`no draft files in ${draftsDir}`);
+        out(`no item-response files in courses/${(bundle.course as any).course_id}/records/`);
         process.exit(1);
       }
 
-      // Every collection's floats, not just `item_responses`: one draft file may
-      // hold several, and the ones this command does not touch are still rewritten.
-      const floats = new Set<string>();
-      for (const [collection, schema] of Object.entries(DRAFTABLE)) {
-        for (const path of floatPaths(schema, [collection])) floats.add(path);
-      }
+      const floats = floatPaths(AGENT_WRITABLE.item_responses, ["item_responses"]);
 
       const combined = emptyResult();
       const touched: string[] = [];
       for (const path of files) {
-        const document = parse(readFileSync(path, "utf-8")) ?? {};
+        const text = readFileSync(path, "utf-8");
+        const document = parse(text) ?? {};
         if (typeof document !== "object" || Array.isArray(document)) continue;
         if (!("item_responses" in document)) continue;
 
@@ -1862,8 +1806,14 @@ try {
         combined.unscorable.push(...result.unscorable);
         for (const [itemId, stats] of result.stats) combined.stats.set(itemId, stats);
 
+        const scored = new Set(result.scored);
+        for (const response of responses) {
+          if (scored.has(response.response_id)) response.approval = "draft";
+        }
+
         if (result.scored.length && !args.includes("--dry-run")) {
-          writeFileSync(path, dump(document, (p) => floats.has(p.join("."))), {
+          const header = (/^(?:#[^\n]*\r?\n|\r?\n)*/.exec(text)?.[0] ?? "").replace(/\r\n/g, "\n");
+          writeFileSync(path, header + dump(document, (p) => floats.has(p.join("."))), {
             encoding: "utf-8",
           });
           touched.push(path);
@@ -1899,52 +1849,62 @@ try {
         out("\ndry run — nothing written");
         break;
       }
-      for (const path of touched) out(`\nupdated ${path}`);
+      for (const path of touched) out(`\nupdated ${within(root, path)}`);
       if (combined.scored.length) {
-        out(`\nReview, then: ainar approve ${draftsDir} --as USER-…`);
+        out(
+          `\n${combined.scored.length} scored response(s) are marked approval: draft. ` +
+            "Review, then set approval: approved.",
+        );
       }
       break;
     }
 
-    case "approve": {
-      const draftsDir = rest[0];
-      const approver = flag("as");
-      if (!draftsDir || !approver) {
-        console.error("usage: approve DRAFTS_DIR --as USER_ID [--only IDS] [--reject IDS] [--dry-run]");
-        process.exit(1);
+    /**
+     * What is waiting for the professor: every record marked as a draft.
+     *
+     * The list `ainar approve` used to be the only way to see, now read off the
+     * course itself. It changes nothing — accepting a record is changing its
+     * `approval` (or, for a grade, adding the decision) in the file it is in.
+     */
+    case "drafts": {
+      const asked = rest[0] ?? flag("run") ?? flag("course-version");
+      const bundle = asked ? forRun(asked) : onlyCourse();
+      const waiting = draftsIn(bundle);
+      if (args.includes("--json")) {
+        out(waiting);
+        break;
       }
-
-      const courseVersionId = flag("course-version") ?? flag("run");
-      const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
-      const resolvedRun = courseVersionId ?? soleRun(bundle);
-      const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
-
-      // The order of operations is `runApproval`'s, not this file's, because
-      // `ainar publish` performs the same gate over the materials a publication
-      // needs and two copies of that order is how a record validates and is
-      // still wrong. What stays here is argument parsing and the exit code.
-      const dryRun = args.includes("--dry-run");
-      const outcome = runApproval({
-        bundle,
-        draftsDir: resolve(draftsDir),
-        courseDir,
-        root,
-        approver,
-        timezone: (runById(bundle).get(resolvedRun) as { timezone?: string }).timezone,
-        only: flag("only") ? new Set(flag("only")!.split(",")) : undefined,
-        reject: flag("reject") ? new Set(flag("reject")!.split(",")) : undefined,
-        dryRun,
-      });
-
-      for (const line of outcome.lines) out(line);
-      if (!outcome.ok) {
-        for (const error of outcome.errors) console.error(`    ${error}`);
-        process.exit(1);
+      if (!waiting.length) {
+        out("nothing is waiting — no record is marked as a draft");
+        break;
       }
-      if (outcome.written.length) {
-        out(`The drafts in ${draftsDir} can now be removed.`);
+      let current = "";
+      for (const draft of waiting) {
+        if (draft.collection !== current) {
+          current = draft.collection;
+          out(`${current}:`);
+        }
+        out(`  ${draft.id}${draft.title ? `  ${draft.title}` : ""}`);
       }
+      out(
+        `\n${waiting.length} draft(s). Accept one by setting approval: approved in its file; ` +
+          "for an evaluation, add the professor_decision with decided_by and decided_at.",
+      );
       break;
+    }
+
+    case "approve": {
+      // Removed on 2026-09-29. A record an agent wrote sits in the course marked
+      // `approval: draft`; accepting it is changing that word. Kept as a message
+      // rather than an unknown command, because an older copy of a skill may
+      // still say to run it.
+      console.error(
+        "`ainar approve` is gone. Drafts live in the course, marked `approval: draft`\n" +
+          "(an evaluation: `status: suggested`). `ainar drafts RUN` lists them; accept one\n" +
+          "by setting `approval: approved` in its file, or for a grade by adding the\n" +
+          "professor_decision with decided_by and decided_at and setting its status.",
+      );
+      process.exit(1);
     }
 
     /**
@@ -2298,7 +2258,7 @@ try {
      * Publish a homework starter repository, or say what publishing would do.
      *
      * A plan by default and a push only with `--confirm`, which is the same
-     * shape `approve` and `lms push` have and for the same reason: the outward
+     * shape `publish` and `lms push` have and for the same reason: the outward
      * facing half of this belongs to a person, and the flag is where they say
      * so. The rules live in `src/homework.ts`; this is the seam.
      */

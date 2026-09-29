@@ -2,7 +2,7 @@
   "course_id": "CSS-4008",
   "errors": [],
   "note": "A warning usually means a real gap in the course design — an outcome nothing assesses, a concept nothing teaches — and resolving it is the professor's call, not something to silence.",
-  "scope": "courses/ only. Drafts under work/ are not visible to this server, so a clean result here says nothing about unapproved agent output — that needs `ainar validate <COURSE> --drafts work/<RUN>`.",
+  "scope": "courses/, drafts included. A record marked `approval: draft` lives in the course and is validated like any other, so a clean result covers unapproved agent output too.",
   "warnings": [
     {
       "code": "item.criterion_score_mismatch",

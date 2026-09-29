@@ -1,0 +1,26 @@
+{
+  "issues": [
+    {
+      "level": "warning",
+      "code": "approval.depends_on_draft",
+      "message": "approved, but its item(s) ITEM-01-01 are still marked approval: draft",
+      "location": "ASSESSMENT-01"
+    },
+    {
+      "level": "warning",
+      "code": "item.criterion_score_mismatch",
+      "message": "items feeding this criterion sum to 40 but its maximum_score is 60, so an item-derived score would need rescaling",
+      "location": "CRIT-01-01"
+    },
+    {
+      "level": "warning",
+      "code": "item.criterion_score_mismatch",
+      "message": "items feeding this criterion sum to 60 but its maximum_score is 40, so an item-derived score would need rescaling",
+      "location": "CRIT-01-02"
+    }
+  ],
+  "mutation": "approved-assessment-with-a-draft-item",
+  "patch": {
+    "items.0.approval": "draft"
+  }
+}

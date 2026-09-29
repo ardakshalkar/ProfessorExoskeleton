@@ -29,17 +29,17 @@
  * assessment's `instructions_document_id`, so a paper that existed and was
  * never registered read as `no brief` — the wrong claim, not merely a missing
  * control, which is the fault `sendBrief` and the `no brief` amber exist to
- * end. So each printing is also described as a `Document` and written as a
- * draft, through `documentRecord` and the emitter `ainar approve` promotes
- * with. Nothing here writes to `courses/`; approval stays the only way in.
+ * end. So each printing is also described as a `Document`, checked by
+ * `documentRecord` and written into the course marked `approval: draft`. A
+ * reprint replaces its own record — new checksum, same approval.
  *
- * The last hop is the professor's and is printed rather than performed: an
- * approved `Assessment` cannot be restated by a draft (`approve.collision`
- * refuses it), so `instructions_document_id` is a line for them to add, the way
- * `homework publish` hands back `extensions.github.template_repo`.
+ * The last hop is the professor's and is printed rather than performed: the
+ * assessment's `instructions_document_id` is the professor's own record, so it
+ * is a line for them to add, the way `homework publish` hands back
+ * `extensions.github.template_repo`.
  *
  *     exam-paper.ts --assessment ASSESSMENT-QUIZ-01 --root <workspace>
- *     exam-paper.ts --assessment ASSESSMENT-QUIZ-01 --format pdf --out work/
+ *     exam-paper.ts --assessment ASSESSMENT-QUIZ-01 --format pdf --out output/
  *     exam-paper.ts --assessment ASSESSMENT-QUIZ-01 --no-register
  */
 
@@ -49,8 +49,8 @@ import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "n
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { documentRecord } from "../src/materials.ts";
+import { writeRecords } from "../src/records-write.ts";
 import { Workspace } from "../src/workspace.ts";
-import { dump } from "../src/yaml-out.ts";
 
 type Format = "docx" | "pdf";
 
@@ -60,7 +60,7 @@ const RENDERER = join(HERE, "render-exam.ts");
 const USAGE =
   "Usage: exam-paper.ts --assessment ID [--root DIR] [--out DIR]\n" +
   "                    [--format docx|pdf|both] [--answers under-question|separate-sheet]\n" +
-  "                    [--doc-id DOC-XXX] [--drafts DIR] [--no-register]";
+  "                    [--doc-id DOC-XXX] [--no-register]";
 
 /**
  * What a paper is served as.
@@ -153,22 +153,17 @@ const assessmentFile = (root: string, courseId: string, assessmentId: string): s
 };
 
 /**
- * Describe each printing as a `Document`, as a draft.
+ * Describe each printing as a `Document`, written into the course as a draft.
  *
  * Valid before it is written or not written at all — `documentRecord` is the
  * check a hand-written YAML emitter does not have, and the reason it is shared
  * with `ainar materials build` rather than copied.
  *
- * Two things are reported rather than fixed, both of them cases where a quiet
- * success would leave the record saying something untrue:
- *
- * - **A paper written outside the workspace** cannot be a record at all. A
- *   `storage_key` with no scheme is a path in this repository, and `validate`
- *   says so with `document.missing_file`.
- * - **An identifier already in the record** is a reprint. The draft is not
- *   written for it, because `ainar approve` would refuse the collision, and the
- *   record's `checksum` and `size_bytes` now describe the previous printing —
- *   which is worth a sentence, since nothing else on any surface would say so.
+ * A paper written outside the workspace cannot be a record at all — a
+ * `storage_key` with no scheme is a path in this repository — and is reported
+ * rather than registered. A reprint of a paper the record already holds is
+ * recorded under the id it already has, so its checksum and size describe the
+ * printing on disk, and it keeps whatever approval it had.
  */
 const registerPapers = (options: {
   root: string;
@@ -178,14 +173,12 @@ const registerPapers = (options: {
   baseId: string;
   questions: number;
   marks: number;
-  draftsDir: string;
-  stem: string;
-}): { lines: string[]; draft: string | null; pointAt: string | null } => {
-  const { root, bundle, assessment, papers, baseId, draftsDir, stem } = options;
+  courseDir: string;
+}): { lines: string[]; written: string[]; pointAt: string | null } => {
+  const { root, bundle, assessment, papers, baseId, courseDir } = options;
   const lines: string[] = [];
   const documents: Record<string, unknown>[] = [];
 
-  const byId = new Set(((bundle.documents as any[]) ?? []).map((row) => row.document_id));
   const byKey = new Map(
     ((bundle.documents as any[]) ?? []).map((row) => [String(row.storage_key ?? ""), row.document_id]),
   );
@@ -203,17 +196,7 @@ const registerPapers = (options: {
       continue;
     }
 
-    const documentId = `${baseId}-${paper.format.toUpperCase()}`;
-    const clash = byId.has(documentId) ? documentId : byKey.get(key);
-    if (clash !== undefined) {
-      lines.push(
-        `  ${clash} already holds this paper, so nothing was drafted for it. ` +
-          "The file was just rewritten and the record's checksum now describes the " +
-          "previous printing; --doc-id registers this one under an id of its own.",
-      );
-      registered.push({ format: paper.format, id: clash });
-      continue;
-    }
+    const documentId = byKey.get(key) ?? `${baseId}-${paper.format.toUpperCase()}`;
 
     const bytes = readFileSync(paper.path);
     documents.push(
@@ -229,6 +212,7 @@ const registerPapers = (options: {
         course_version_id: assessment.course_version_id ?? null,
         created_at: stamp,
         version: 1,
+        approval: "draft",
         generated_by: {
           produced_by: "ainar-node/bin/exam-paper.ts",
           // The assessment, not the items: a paper is the printing of one piece
@@ -262,19 +246,10 @@ const registerPapers = (options: {
   const pointAt =
     registered.find((entry) => entry.format === "pdf")?.id ?? registered[0]?.id ?? null;
 
-  if (documents.length === 0) return { lines, draft: null, pointAt };
+  if (documents.length === 0) return { lines, written: [], pointAt };
 
-  mkdirSync(draftsDir, { recursive: true });
-  const draft = join(draftsDir, `documents-${stem}-paper.yaml`);
-  writeFileSync(
-    draft,
-    "# Written by `exam-paper.ts`. Each entry describes a paper printed from the\n" +
-      "# course record, validated against the Document schema before it was\n" +
-      "# written, and is a proposal until `ainar approve` promotes it.\n\n" +
-      dump({ documents }),
-    "utf-8",
-  );
-  return { lines, draft, pointAt };
+  const written = writeRecords(courseDir, { documents }, { keepApproval: true });
+  return { lines, written, pointAt };
 };
 
 const parse = (argv: string[]): Record<string, string> => {
@@ -432,8 +407,6 @@ const main = (): void => {
 
   if (!register) return;
 
-  // Required by the model, so it is never absent on a loaded assessment.
-  const runId: string = assessment.course_version_id;
   const report = registerPapers({
     root,
     bundle,
@@ -442,18 +415,16 @@ const main = (): void => {
     baseId: args["doc-id"] ?? `DOC-${stem.toUpperCase()}-PAPER`,
     questions: items.length,
     marks,
-    draftsDir: args.drafts
-      ? resolve(isAbsolute(args.drafts) ? args.drafts : join(root, args.drafts))
-      : join(root, "work", runId),
-    stem,
+    courseDir: join(root, "courses", courseId),
   });
 
   const out: string[] = [""];
   out.push(...report.lines);
-  if (report.draft !== null) {
-    out.push(`wrote ${relative(root, report.draft).split(sep).join("/")}`);
-    out.push("Nothing is a record yet. Review it, then:");
-    out.push(`  ainar approve work/${runId} --as <USER-ID>`);
+  for (const path of report.written) {
+    out.push(`wrote ${relative(root, path).split(sep).join("/")}`);
+  }
+  if (report.written.length) {
+    out.push("A new paper is marked approval: draft. Review it, then set approval: approved.");
   }
   if (report.pointAt !== null) {
     const file = assessmentFile(root, courseId, assessmentId);

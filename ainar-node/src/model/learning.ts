@@ -5,6 +5,7 @@
 
 import { z } from "zod";
 import {
+  Approval,
   CapabilityId,
   ConceptId,
   ConceptStateValue,
@@ -26,6 +27,7 @@ import {
 
 export const LearningEvidence = entity({
   evidence_id: EvidenceId,
+  approval: Approval.optional(),
   student_id: StudentId,
   course_version_id: CourseVersionId,
   source_type: z.string(),
@@ -42,6 +44,7 @@ export const LearningEvidence = entity({
 
 export const StudentConceptState = entity({
   student_id: StudentId,
+  approval: Approval.optional(),
   concept_id: ConceptId,
   course_version_id: CourseVersionId,
   state: ConceptStateValue.default("not_observed"),
@@ -53,6 +56,7 @@ export const StudentConceptState = entity({
 
 export const StudentCapabilityState = entity({
   student_id: StudentId,
+  approval: Approval.optional(),
   capability_id: CapabilityId,
   course_version_id: CourseVersionId.nullish(),
   level: z.number().int().min(0).nullish(),
@@ -66,6 +70,7 @@ export const StudentCapabilityState = entity({
 
 export const StudentSignal = entity({
   signal_id: SignalId,
+  approval: Approval.optional(),
   student_id: StudentId.nullish(),
   course_version_id: CourseVersionId,
   type: z.string(),

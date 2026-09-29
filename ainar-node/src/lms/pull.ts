@@ -22,21 +22,23 @@
  * work was handed in, so `submitted_at` is read rather than left out.
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
-import { dump } from "../yaml-out.ts";
 import { type Directory, type MatchKey } from "./base.ts";
 import { type CanvasExport, KEY_COLUMNS, cellNumber } from "./canvas.ts";
 
-const DRAFT_MARKER = "DRAFT";
-
-/** `SUB-DRAFT-JNG7SN-04` — the marker makes the origin unmistakable. */
-export const draftSubmissionId = (studentId: string, assessmentId: string): string => {
+/**
+ * `SUB-JNG7SN-04` — one student, one assessment.
+ *
+ * A pulled submission is a fact about what Canvas holds, not a judgement
+ * anybody has to accept, so it is written straight into the course's
+ * `records/submissions.yaml` and carries no `approval`. It used to carry a
+ * `-DRAFT-` marker and wait for `ainar approve`.
+ */
+export const pulledSubmissionId = (studentId: string, assessmentId: string): string => {
   const student = studentId.startsWith("STUDENT-") ? studentId.slice("STUDENT-".length) : studentId;
   const assessment = assessmentId.startsWith("ASSESSMENT-")
     ? assessmentId.slice("ASSESSMENT-".length)
     : assessmentId;
-  return `SUB-${DRAFT_MARKER}-${student}-${assessment}`;
+  return `SUB-${student}-${assessment}`;
 };
 
 export interface PullResult {
@@ -92,7 +94,7 @@ export const submissionsFromExport = (
       continue;
     }
     drafts.push({
-      submission_id: draftSubmissionId(studentId, assessmentId),
+      submission_id: pulledSubmissionId(studentId, assessmentId),
       assessment_id: assessmentId,
       student_id: studentId,
       status: "submitted",
@@ -110,7 +112,7 @@ export const submissionsFromExport = (
  * Canvas timestamps are UTC with a `Z`. House style is the run's offset.
  *
  * The offset is given as minutes rather than a timezone object: `decidedAt` in
- * `approve.ts` already resolves a run's zone that way, and doing it twice with
+ * `records-write.ts` already resolves a run's zone that way, and doing it twice with
  * two different mechanisms is how two records of the same moment end up an hour
  * apart.
  */
@@ -166,7 +168,7 @@ export const submissionsFromApi = (
     }
 
     const draft: Record<string, any> = {
-      submission_id: draftSubmissionId(studentId, assessmentId),
+      submission_id: pulledSubmissionId(studentId, assessmentId),
       assessment_id: assessmentId,
       student_id: studentId,
       status: submission.late ? "late" : "submitted",
@@ -185,20 +187,4 @@ export const submissionsFromApi = (
   }
 
   return { drafts, already: already.sort(), unmatched: [...new Set(unmatched)].sort() };
-};
-
-/** Write the proposals where `validate --drafts` will find them. */
-export const writeDrafts = (drafts: Record<string, any>[], path: string): string => {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(
-    path,
-    "# Proposed submission records, from a Canvas gradebook export.\n" +
-      "#\n" +
-      "# Not records. Check them, then approve:\n" +
-      "#   ainar validate <COURSE> --drafts work/<COURSE_VERSION_ID>\n" +
-      "#   ainar approve work/<COURSE_VERSION_ID> --as USER-...\n\n" +
-      dump({ submissions: drafts }),
-    { encoding: "utf-8" },
-  );
-  return path;
 };

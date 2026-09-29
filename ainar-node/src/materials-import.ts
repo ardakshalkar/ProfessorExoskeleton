@@ -3,9 +3,9 @@
  *
  * The other half of `materials.ts`. That one RUNS a producer this course owns
  * and records what it made; this one READS a finished file somebody else made
- * and proposes what is in it. Both end the same way — one draft, validated
- * against the `Document` schema before it is written, promoted by
- * `ainar approve` and by nothing else.
+ * and proposes what is in it. Both end the same way — one record, validated
+ * against the `Document` schema before it is written into the course, marked
+ * `approval: draft` until the professor accepts it.
  *
  * Separate module because the failure modes have nothing in common. A build
  * fails when a script errors or a slide overflows the page. An import is never
@@ -15,20 +15,17 @@
  *
  * The safety property is not in this file and is worth naming anyway: concepts
  * are matched against the course's OWN set, so an import cannot introduce one.
- * `validate.ts` makes an unknown concept on a document an error, and `approve`
- * writes nothing when validation fails. A reader that invented a plausible
- * concept would be stopped at the gate rather than believed.
+ * `validate.ts` makes an unknown concept on a document an error. A reader that
+ * invented a plausible concept would be caught by `ainar validate` rather than
+ * believed.
  */
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, join, relative, resolve, sep } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, relative, resolve, sep } from "node:path";
 import { documentRecord } from "./materials.ts";
-import { dump } from "./yaml-out.ts";
-
-/** What `ainar approve` strips from an identifier when it promotes it. */
-export const DRAFT_MARKER = "-DRAFT-";
+import { writeRecords } from "./records-write.ts";
 
 /** One slide, as read out of a `.pptx`. */
 type ReadSlide = { readonly number: number; readonly runs: string[]; readonly notes: string };
@@ -125,17 +122,18 @@ export type ImportOptions = {
   readonly title: string | null;
   readonly moduleId: string | null;
   readonly vocabulary: Map<string, string[]>;
-  readonly draftsDir: string;
+  /** `courses/<COURSE>` — where the Document record is written. */
+  readonly courseDir: string;
   readonly dryRun: boolean;
 };
 
-export type ImportReport = { readonly lines: string[]; readonly draft: string | null };
+export type ImportReport = { readonly lines: string[]; readonly written: string[] };
 
 /**
  * Read a finished deck and propose a record for it.
  *
- * The output is a PROPOSAL and says so twice: the identifier carries the draft
- * marker, and the record carries `origin: imported` with `read_by: text`. A
+ * The output is a PROPOSAL and says so twice: the record carries
+ * `approval: draft`, and `origin: imported` with `read_by: text`. A
  * professor looking at an outline that seems wrong can then tell it was
  * obtained mechanically rather than written — a different kind of wrong, which
  * wants a different response.
@@ -226,15 +224,12 @@ export const importMaterial = (options: ImportOptions): ImportReport => {
     );
   }
 
-  if (options.dryRun) return { lines, draft: null };
+  if (options.dryRun) return { lines, written: [] };
 
   const bytes = readFileSync(file);
-  const draftId = options.documentId.includes(DRAFT_MARKER)
-    ? options.documentId
-    : options.documentId.replace(/^DOC-/, `DOC${DRAFT_MARKER}`);
 
   const fields = documentRecord({
-    document_id: draftId,
+    document_id: options.documentId,
     title: options.title ?? basename(file, ".pptx"),
     storage_key: relative(options.root, file).split(sep).join("/"),
     mime_type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -245,6 +240,7 @@ export const importMaterial = (options: ImportOptions): ImportReport => {
     module_id: options.moduleId ?? null,
     concepts: union,
     version: 1,
+    approval: "draft",
     presentation_plan: {
       audience: `students of ${options.courseVersionId}`,
       // Not a judgement about how the deck teaches — a statement about how this
@@ -257,15 +253,8 @@ export const importMaterial = (options: ImportOptions): ImportReport => {
     extensions: { origin: "imported", read_by: "text" },
   });
 
-  mkdirSync(options.draftsDir, { recursive: true });
-  const draft = join(options.draftsDir, `documents-imported-${draftId}.yaml`);
-  writeFileSync(
-    draft,
-    "# Written by `ainar materials import`. The outline and the concepts were READ\n" +
-      "# from the file, not authored: each title is that slide's first line of text\n" +
-      "# and every `type` is unclassified. Review before approving.\n\n" +
-      dump({ documents: [fields] }),
-    "utf-8",
-  );
-  return { lines, draft };
+  // Importing the same file again re-reads it; the record is replaced, and one
+  // the professor already accepted stays accepted.
+  const written = writeRecords(options.courseDir, { documents: [fields] }, { keepApproval: true });
+  return { lines, written };
 };

@@ -23,8 +23,8 @@ import { IssueList } from "./issues.ts";
 import { Capability, Concept, Course } from "./model/academic.ts";
 import { User } from "./model/delivery.ts";
 
-/** One list on the bundle and the files it is read from. */
-const COLLECTIONS: Record<CollectionName, string[]> = {
+/** One list on the bundle and the files it is read from. Exported for the writers. */
+export const COLLECTIONS: Record<CollectionName, string[]> = {
   outcomes: ["outcomes.yaml", "outcomes/*.yaml"],
   concepts: ["concepts.yaml", "concepts/*.yaml"],
   concept_edges: ["concept-edges.yaml"],

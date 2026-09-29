@@ -39,7 +39,7 @@ import { BY_TOOL } from "./widgets.ts";
 
 export const WITHHELD: Record<string, string> = {
   approve:
-    "turns a proposal into a record. It is the only place a human enters the loop, and a tool that could be called by the model it is meant to check is not a check at all.",
+    "accepts a draft — `approval: draft` becoming `approved`, or a grade decision recorded beside the AI suggestion. It is the only place a human enters the loop, and a tool that could be called by the model it is meant to check is not a check at all.",
   "lms push":
     "writes a grade to Canvas or a spreadsheet. A student can see a posted grade within seconds, which makes it the same act as approving.",
   "lms plan / lms diff":
@@ -275,9 +275,9 @@ export const TOOLS: Tool[] = [
         // of 94 checks can support.
         validation: coverage(),
         scope:
-          "courses/ only. Drafts under work/ are not visible to this server, so a clean " +
-          "result says nothing about unapproved agent output — that needs " +
-          "`ainar validate <COURSE> --drafts work/<RUN>`.",
+          "courses/, drafts included. A record marked `approval: draft` lives in the course " +
+          "and is validated like any other, so a clean result covers unapproved agent " +
+          "output too.",
         note:
           "A warning usually means a real gap in the course design — an outcome nothing " +
           "assesses, a concept nothing teaches — and resolving it is the professor's call, " +

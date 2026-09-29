@@ -997,14 +997,16 @@ export interface RenderPlace {
  *
  * - **A deck in the course** (`courses/<C>/materials/<deck>/<deck>.md`) renders
  *   into its own folder, beside the markdown. That is where its `.pptx` and PDF
- *   are recorded, and where `materials build` always wrote them.
- * - **Anything else** — a draft in `work/`, a deck anywhere on disk, and a
- *   `--draft` render of a recorded deck — goes to `output/<deck>/`, which is
- *   gitignored scratch. One folder per deck, so two decks' pictures never
+ *   are recorded, and where `materials build` always wrote them. A deck whose
+ *   record is still `approval: draft` is one of these too: drafts live in the
+ *   course, and it is the record, not the folder, that keeps one from students.
+ * - **Anything else** — a deck anywhere on disk, and a `--draft` render (with
+ *   placeholder visuals) of a recorded deck — goes to `output/<deck>/`, which
+ *   is gitignored scratch. One folder per deck, so two decks' pictures never
  *   share a directory.
- * - **Nothing but a recorded deck's own render goes inside `courses/`.** A
- *   binary rendered from a draft and written into the course looks finished,
- *   and nobody approved what is in it.
+ * - **Nothing but a course deck's own render goes inside `courses/`.** A
+ *   `--draft` render has placeholders where its figures should be, and written
+ *   into the course it would overwrite the real one.
  *
  * The rasterized pictures always go to `output/<deck>/`, even for a recorded
  * deck: they are intermediates, and in the course they read as sources.
@@ -1026,8 +1028,8 @@ export function placeFor(
   if (isInside(courses, outDir) && !(recorded && !options.draft && outDir === own)) {
     throw new Error(
       `refusing to write a rendered binary into ${relative(workspace, outDir) || outDir}.\n` +
-      "Only a recorded deck's own render goes inside courses/, beside its markdown. A draft\n" +
-      "rendered into the course looks finished, and nobody approved what is inside it.",
+      "Only a course deck's own render goes inside courses/, beside its markdown. A --draft\n" +
+      "render has placeholder figures, and written into the course it would pass for the real one.",
     );
   }
   return { outDir, assetsDir: scratch, recorded };

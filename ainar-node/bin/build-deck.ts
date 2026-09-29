@@ -16,7 +16,7 @@
  * the kit, and the path problem disappears — which also means a deck script is
  * readable as what it is, a page of layout with no plumbing at the top.
  *
- *     export const OUTPUT = "MODULE-DRAFT-05-….pptx";
+ *     export const OUTPUT = "MODULE-05-….pptx";
  *     export default function build({ deck, C, W, H }) { … }
  *
  * `--out` defaults to the script's own directory, which is where the Python

@@ -76,12 +76,19 @@ const fromItems = (
 ): CriterionScore => {
   const resolved = criterion(spec);
   const itemMaximum = items.reduce((sum, item) => sum + item.maximum_score, 0);
-  const scored = items
+  const present = items
     .map((item) => responses.get(item.item_id))
     .filter((response) => response && response.score !== null && response.score !== undefined);
+  // A score nobody has accepted is not a grade. `score-items` marks what it
+  // scores `approval: draft`, and it counts here once the professor says so.
+  const drafted = present.filter((response) => response.approval === "draft");
+  const scored = present.filter((response) => response.approval !== "draft");
 
   if (scored.length < items.length) {
-    resolved.note = `${scored.length} of ${items.length} items scored — the rest need a human`;
+    resolved.note = drafted.length
+      ? `${scored.length} of ${items.length} items scored and approved — ` +
+        `${drafted.length} scored but still marked approval: draft`
+      : `${scored.length} of ${items.length} items scored — the rest need a human`;
     return resolved;
   }
   if (Math.abs(itemMaximum - spec.maximum_score) > TOLERANCE) {

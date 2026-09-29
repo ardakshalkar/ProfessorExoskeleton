@@ -62,6 +62,7 @@ const isFile = (root: string, key: string): boolean => {
 
 /** Every code `validate.py` can emit. Kept sorted; `TOTAL_CODES` is its length. */
 export const IMPLEMENTED = [
+  "approval.depends_on_draft",
   "assessment.design_count",
   "assessment.design_marks",
   "assessment.design_scope",
@@ -91,7 +92,6 @@ export const IMPLEMENTED = [
   "graph.self_loop",
   "id.convention",
   "id.duplicate",
-  "id.unapproved_draft",
   "intervention.unapproved",
   "item.criterion_score_mismatch",
   "item.difficulty_mismatch",
@@ -2037,8 +2037,8 @@ const checkItems = (b: CourseBundle, issues: IssueList): void => {
  * The runtime records: submissions, evaluations, evidence, states, signals,
  * interventions, events and the inbox. A faithful port of `_check_runtime`.
  *
- * These are the records `approve` writes, which makes them the ones the gate has
- * most reason to check before writing them.
+ * These are the records agents and derivations write into `records/`, which
+ * makes them the ones most worth checking before anything reads them.
  */
 const checkRuntime = (b: CourseBundle, issues: IssueList): void => {
   const assessments = assessmentById(b);
@@ -2116,7 +2116,7 @@ const checkRuntime = (b: CourseBundle, issues: IssueList): void => {
         issues.error(
           "evaluation.unstamped",
           `status is ${evaluation.status} but the decision has no ${missing.join(" or ")} — ` +
-            "approve it with `ainar approve` rather than editing by hand",
+            "a decision says who made it and when",
           evaluation.evaluation_id,
         );
       }
@@ -2281,17 +2281,69 @@ const checkRuntime = (b: CourseBundle, issues: IssueList): void => {
   }
 };
 
-const checkNoDrafts = (b: CourseBundle, issues: IssueList): void => {
-  for (const [collection, field] of ID_FIELDS) {
-    for (const record of (b as any)[collection] as any[]) {
-      if (String(record[field]).includes("-DRAFT-")) {
-        issues.warn(
-          "id.unapproved_draft",
-          `${collection}: draft identifier in the course record — approve it with ` +
-            "`ainar approve` rather than copying it",
-          record[field],
-        );
-      }
+/**
+ * Drafts, and what leans on them.
+ *
+ * A record an agent wrote sits in the course marked `approval: draft` until the
+ * professor changes the word (see `approval.ts`). Nothing here objects to a
+ * draft — that is the ordinary state of work in progress. What it names is an
+ * ACCEPTED record resting on one: an approved assessment whose items are still
+ * drafts, a meeting whose handout nobody has accepted. Publishing would carry
+ * the first and leave out the second, so the student-facing result would be
+ * half of what the professor approved.
+ */
+const checkApproval = (b: CourseBundle, issues: IssueList): void => {
+  const draft = (record: any): boolean => record?.approval === "draft";
+  const documents = documentById(b);
+  const resources = resourceById(b);
+
+  const draftItems = new Map<string, string[]>();
+  for (const item of b.items as any[]) {
+    if (!draft(item)) continue;
+    if (!draftItems.has(item.assessment_id)) draftItems.set(item.assessment_id, []);
+    draftItems.get(item.assessment_id)!.push(item.item_id);
+  }
+
+  for (const assessment of b.assessments as any[]) {
+    if (draft(assessment)) continue;
+    const waiting = draftItems.get(assessment.assessment_id) ?? [];
+    if (waiting.length) {
+      issues.warn(
+        "approval.depends_on_draft",
+        `approved, but its item(s) ${waiting.sort().join(", ")} are still marked approval: draft`,
+        assessment.assessment_id,
+      );
+    }
+    const brief = assessment.instructions_document_id;
+    if (brief && draft(documents.get(brief))) {
+      issues.warn(
+        "approval.depends_on_draft",
+        `approved, but its brief ${brief} is still marked approval: draft`,
+        assessment.assessment_id,
+      );
+    }
+  }
+
+  for (const resource of b.resources as any[]) {
+    if (draft(resource)) continue;
+    if (resource.document_id && draft(documents.get(resource.document_id))) {
+      issues.warn(
+        "approval.depends_on_draft",
+        `approved, but its document ${resource.document_id} is still marked approval: draft`,
+        resource.resource_id,
+      );
+    }
+  }
+
+  for (const activity of b.activities as any[]) {
+    if (draft(activity)) continue;
+    const waiting = ((activity.resources as string[]) ?? []).filter((id) => draft(resources.get(id)));
+    if (waiting.length) {
+      issues.warn(
+        "approval.depends_on_draft",
+        `approved, but its resource(s) ${waiting.sort().join(", ")} are still marked approval: draft`,
+        activity.activity_id,
+      );
     }
   }
 
@@ -2305,7 +2357,7 @@ const checkNoDrafts = (b: CourseBundle, issues: IssueList): void => {
         issues.warn(
           "claim.unapproved_proposal",
           `${name.slice(0, -1)} was proposed by an agent but carries no approval stamp — ` +
-            "promote it with `ainar approve` rather than copying it",
+            "the professor authors the course's structure; add extensions.approval to accept it",
           record[field],
         );
       }
@@ -2315,7 +2367,7 @@ const checkNoDrafts = (b: CourseBundle, issues: IssueList): void => {
 
 export const validate = (
   b: CourseBundle,
-  options: { draftsMerged?: boolean; root?: string } = {},
+  options: { root?: string } = {},
 ): IssueList => {
   const issues = new IssueList();
   checkDocuments(b, issues, options.root);
@@ -2339,7 +2391,7 @@ export const validate = (
   checkRuntime(b, issues);
   checkStudentIdentifiers(b, issues);
   checkCoverage(b, issues);
-  if (!options.draftsMerged) checkNoDrafts(b, issues);
+  checkApproval(b, issues);
   return issues;
 };
 

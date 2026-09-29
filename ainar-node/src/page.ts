@@ -23,8 +23,8 @@
  *
  * Only files this repository actually holds are published. A `storage_key` with a
  * scheme means the application owns the bytes and there is nothing here to copy;
- * a key under `work/` is a proposal, and a proposal published looks exactly like
- * an approved handout. Anything that cannot be read as text is held back rather
+ * a document marked `approval: draft` is a proposal, and a proposal published
+ * looks exactly like an approved handout. Anything that cannot be read as text is held back rather
  * than published unscanned, and said so in the report.
  *
  * ## What the port changed
@@ -39,13 +39,14 @@
 
 import { copyFileSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
+import { isApproved } from "./approval.ts";
 import { type CourseBundle } from "./bundle.ts";
 import { BY_TOOL, stylesheet } from "./tools/widgets.ts";
 import { refusal, scan } from "./safety.ts";
 
 /**
  * Where published material lands, relative to the site root. The same directory
- * name approval uses inside a course, so a link written between two materials
+ * name a course keeps its materials in, so a link written between two materials
  * resolves the same in both places.
  */
 export const MATERIALS = "materials";
@@ -224,8 +225,8 @@ export const publishable = (
       tally["in object storage"] += 1;
       continue;
     }
-    if (key.startsWith("work/")) {
-      heldBack.push(`${document.document_id}: a draft under work/, not approved material`);
+    if (!isApproved("documents", document)) {
+      heldBack.push(`${document.document_id}: a draft (approval: draft), not approved material`);
       continue;
     }
 

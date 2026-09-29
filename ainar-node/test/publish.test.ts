@@ -1,23 +1,19 @@
 /**
- * Publishing with the gate folded in, and the line it may not cross.
+ * Publishing, and the line it keeps: a draft does not reach a student.
  *
- * The point of these is one property: `ainar publish` promotes the materials a
- * publication needs and **nothing else**, whatever else is sitting in the same
- * drafts directory. It is asserted against a real workspace rather than a
- * hand-built bundle, because the failure being guarded against is a
- * `work/<RUN>/` holding a term's proposals of every kind at once — which is
- * what a drafts directory actually looks like.
+ * Since 2026-09-29 a draft is a record in the course marked `approval: draft`,
+ * and publishing approves nothing. These assert that against a real workspace
+ * rather than a hand-built bundle, because the failure being guarded against is
+ * a course holding proposals of every kind at once beside what was accepted.
  */
 
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parse } from "yaml";
 import {
-  MATERIAL_COLLECTIONS,
   UPDATABLE,
   announcementDigest,
   checkAnnouncement,
@@ -25,20 +21,22 @@ import {
   destinations,
   editAnnouncement,
   isUpdate,
-  outstanding,
-  pendingMaterials,
   publishPlan,
+  unpublishedDrafts,
 } from "../src/publish.ts";
+import { publishable } from "../src/page.ts";
 import { Ledger } from "../src/lms/ledger.ts";
-import { runApproval } from "../src/approve.ts";
 import { Workspace } from "../src/workspace.ts";
 
 const SAMPLE = fileURLToPath(new URL("../../workspace", import.meta.url));
 const RUN = "CSS-4008-2026-FALL";
 const COURSE = "CSS-4008";
 
-/** A copy of the sample course, with a drafts directory of the caller's making. */
-const workspaceWith = (drafts: Record<string, string>): string => {
+/**
+ * A copy of the sample course with records of the caller's making added to it —
+ * written into the course, where drafts live now, and not beside it.
+ */
+const workspaceWith = (files: Record<string, string>): string => {
   const root = mkdtempSync(join(tmpdir(), "ainar-publish-"));
   // `shared/` as well as `courses/`: the capabilities the outcomes point at
   // live there, and a copy without them fails validation for a reason that has
@@ -46,155 +44,92 @@ const workspaceWith = (drafts: Record<string, string>): string => {
   for (const directory of ["courses", "shared"]) {
     cpSync(join(SAMPLE, directory), join(root, directory), { recursive: true });
   }
-  const draftsDir = join(root, "work", RUN);
-  mkdirSync(draftsDir, { recursive: true });
-  for (const [name, body] of Object.entries(drafts)) {
-    writeFileSync(join(draftsDir, name), body, "utf-8");
+  for (const [name, body] of Object.entries(files)) {
+    const path = join(root, "courses", COURSE, name);
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, body, "utf-8");
   }
   return root;
 };
 
-const DRAFTED_DECK = `documents:
-  - document_id: DOC-DRAFT-9001
+const DECK = (approval: string | null) => `documents:
+  - document_id: DOC-9001
     title: Week 7 — cross-validation, slides
-    storage_key: work/${RUN}/week-07-slides.md
+    storage_key: courses/${COURSE}/materials/week-07-slides/week-07-slides.md
     mime_type: text/markdown
     course_version_id: ${RUN}
     module_id: MODULE-06
-`;
+${approval ? `    approval: ${approval}\n` : ""}`;
 
 const DRAFTED_EVALUATION = `evaluations:
-  - evaluation_id: EVAL-DRAFT-9001
+  - evaluation_id: EVAL-9001
     submission_id: SUB-1
     criterion_id: CRIT-01-01
+    status: suggested
     ai_suggestion:
       score: 8
 `;
 
 // ------------------------------------------------------------------ reading
 
-test("a plan names the materials it would promote and counts the rest", () => {
+test("a plan names the drafts it leaves out, and nothing it would approve", () => {
   const root = workspaceWith({
-    "documents.yaml": DRAFTED_DECK,
-    "evaluations.yaml": DRAFTED_EVALUATION,
+    "documents/generated.yaml": DECK("draft"),
+    "records/evaluations-extra.yaml": DRAFTED_EVALUATION,
   });
-  const pending = pendingMaterials(join(root, "work", RUN));
+  const bundle = new Workspace(root).findRun(RUN);
+  const left = unpublishedDrafts(bundle, RUN);
 
+  // The deck is named. The grade is not: a page never carried one, so saying
+  // it was left out would read as though it might have been published.
   assert.deepEqual(
-    pending.promotions.map((entry) => entry.draftId),
-    ["DOC-DRAFT-9001"],
+    left.map((draft) => draft.id),
+    ["DOC-9001"],
   );
-  assert.equal(pending.promotions[0]!.title, "Week 7 — cross-validation, slides");
-  // The evaluation is not a promotion and is not silence either: it is counted
-  // and named, so the plan can say what it is leaving alone.
-  assert.equal(pending.leftAlone.get("evaluations"), 1);
-  assert.equal(pending.errors.length, 0);
-});
 
-test("the plan says both halves — what it promotes and what it then publishes", () => {
-  const root = workspaceWith({ "documents.yaml": DRAFTED_DECK });
   const lines = publishPlan({
     target: "page",
-    pending: pendingMaterials(join(root, "work", RUN)),
+    drafts: left,
     actions: ["write dist/pages/" + RUN],
     refusals: [],
   }).join("\n");
-
-  assert.match(lines, /Would promote 1 drafted material/);
-  assert.match(lines, /DOC-DRAFT-9001/);
-  assert.match(lines, /Would then publish the students' course page/);
+  assert.match(lines, /Would publish the students' course page/);
+  assert.match(lines, /Not published — 1 draft\(s\) nobody has approved yet/);
+  assert.match(lines, /DOC-9001  Week 7 — cross-validation, slides/);
+  assert.match(lines, /Set `approval: approved`/);
+  assert.doesNotMatch(lines, /promote/i, "publishing approves nothing any more");
 });
 
-// ------------------------------------------------------- the line itself
+test("an accepted deck is not a draft, and the plan says nothing about it", () => {
+  const root = workspaceWith({ "documents/generated.yaml": DECK("approved") });
+  const bundle = new Workspace(root).findRun(RUN);
+  assert.deepEqual(unpublishedDrafts(bundle, RUN), []);
 
-test("publishing promotes a drafted deck and leaves a drafted grade alone", () => {
-  const root = workspaceWith({
-    "documents.yaml": DRAFTED_DECK,
-    "evaluations.yaml": DRAFTED_EVALUATION,
-  });
-  writeFileSync(join(root, "work", RUN, "week-07-slides.md"), "# Cross-validation\n", "utf-8");
+  const lines = publishPlan({ target: "page", drafts: [], actions: [], refusals: [] }).join("\n");
+  assert.doesNotMatch(lines, /Not published/);
+});
+
+test("a draft deck is held back from the page by its record, not its folder", () => {
+  const root = workspaceWith({ "documents/generated.yaml": DECK("draft") });
+  const deck = join(root, "courses", COURSE, "materials", "week-07-slides", "week-07-slides.md");
+  mkdirSync(join(deck, ".."), { recursive: true });
+  writeFileSync(deck, "# Cross-validation\n", "utf-8");
 
   const bundle = new Workspace(root).findRun(RUN);
-  const outcome = runApproval({
-    bundle,
-    draftsDir: join(root, "work", RUN),
-    courseDir: join(root, "courses", COURSE),
-    root,
-    approver: "USER-ARD-A01",
-    collections: MATERIAL_COLLECTIONS,
-  });
+  const { published, heldBack } = publishable(bundle, RUN, root);
+  assert.equal(published.some((material) => material.documentId === "DOC-9001"), false);
+  assert.ok(heldBack.some((reason) => /DOC-9001: a draft \(approval: draft\)/.test(reason)), heldBack.join("\n"));
 
-  assert.equal(outcome.ok, true, outcome.errors.join("\n"));
-  assert.deepEqual([...outcome.approval.records.keys()], ["documents"]);
-  assert.equal(outcome.leftAlone.get("evaluations"), 1);
-
-  // The deck is a record and its material has moved out of `work/`.
-  const written = parse(readFileSync(join(root, "courses", COURSE, "documents/generated.yaml"), "utf-8"));
-  assert.deepEqual(
-    written.documents.map((entry: Record<string, unknown>) => entry.document_id),
-    ["DOC-9001"],
-  );
-  assert.equal(written.documents[0].storage_key, `courses/${COURSE}/materials/week-07-slides.md`);
-  // Size and checksum are the gate's, not the agent's.
-  assert.equal(typeof written.documents[0].checksum, "string");
-
-  // And the judgement about a student is still a proposal. This is the whole
-  // property: a publication is not an approval of anything but the artefact.
-  assert.equal(
-    outcome.written.some((path) => path.includes("evaluations")),
-    false,
-  );
+  // Accepting it is changing the word — and then it publishes, from where it
+  // already was. Nothing moved.
+  writeFileSync(join(root, "courses", COURSE, "documents/generated.yaml"), DECK("approved"), "utf-8");
+  const after = publishable(new Workspace(root).findRun(RUN), RUN, root);
+  const material = after.published.find((entry) => entry.documentId === "DOC-9001");
+  assert.ok(material, after.heldBack.join("\n"));
+  assert.equal(material!.source, deck);
+  assert.ok(existsSync(deck));
 });
 
-test("pressing publish twice does not try to promote the same deck twice", () => {
-  const root = workspaceWith({ "documents.yaml": DRAFTED_DECK });
-  writeFileSync(join(root, "work", RUN, "week-07-slides.md"), "# Cross-validation\n", "utf-8");
-
-  const promote = (bundle: ReturnType<Workspace["findRun"]>, reject: Set<string>) =>
-    runApproval({
-      bundle,
-      draftsDir: join(root, "work", RUN),
-      courseDir: join(root, "courses", COURSE),
-      root,
-      approver: "USER-ARD-A01",
-      collections: MATERIAL_COLLECTIONS,
-      reject,
-    });
-
-  const first = promote(new Workspace(root).findRun(RUN), new Set());
-  assert.equal(first.ok, true, first.errors.join("\n"));
-
-  // Second press. The draft is still in `work/` — `approve` never removes one —
-  // and its material has moved, so promoting it again would collide on the
-  // identifier and fail on the missing file. It is rejected instead.
-  const after = new Workspace(root).findRun(RUN);
-  const pending = pendingMaterials(join(root, "work", RUN), after);
-  assert.equal(pending.promotions[0]!.recordedAs, "DOC-9001");
-  assert.deepEqual(outstanding(pending), []);
-
-  const second = promote(after, new Set(["DOC-DRAFT-9001"]));
-  assert.equal(second.ok, true, second.errors.join("\n"));
-  assert.equal(second.written.length, 0);
-  assert.match(second.lines.join("\n"), /nothing to approve/);
-});
-
-test("a drafts directory of only judgements publishes nothing and promotes nothing", () => {
-  const root = workspaceWith({ "evaluations.yaml": DRAFTED_EVALUATION });
-  const bundle = new Workspace(root).findRun(RUN);
-  const outcome = runApproval({
-    bundle,
-    draftsDir: join(root, "work", RUN),
-    courseDir: join(root, "courses", COURSE),
-    root,
-    approver: "USER-ARD-A01",
-    collections: MATERIAL_COLLECTIONS,
-  });
-
-  assert.equal(outcome.ok, true);
-  assert.equal(outcome.written.length, 0);
-  assert.match(outcome.lines.join("\n"), /nothing to approve/);
-  assert.match(outcome.lines.join("\n"), /1 draft\(s\) in evaluations left alone/);
-});
 
 // ------------------------------------------------- what went out last time
 

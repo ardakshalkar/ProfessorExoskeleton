@@ -22,11 +22,11 @@
  *     whose document claims a source without one, so a missed credit fails loudly
  *     here rather than quietly in a lecture theatre.
  *
- * The download goes to `work/<COURSE_VERSION_ID>/materials/`, never to
- * `courses/` — a found image is a proposal like anything else, and approval is
- * what moves it. Nothing is written into any draft file: the YAML is printed for
- * a person to paste, because clobbering a draft someone is editing is a poor
- * trade for saving one copy.
+ * The download goes straight into the course, `courses/<COURSE>/materials/`,
+ * beside the deck it is for — nothing is moved afterwards. What makes it a
+ * proposal is its record: the YAML printed here says `approval: draft`, and is
+ * printed for a person to paste rather than written, because clobbering a file
+ * someone is editing is a poor trade for saving one copy.
  *
  * What this tool cannot do is judge whether the picture is *true*. A photograph
  * of a server room illustrates; a plotted curve asserts. Search decorative and
@@ -119,10 +119,7 @@ async function download(
     );
   }
   const directory =
-    options.into ?? join(options.root, "work", options.courseVersionId, "materials");
-  if (resolve(directory).startsWith(resolve(options.root, "courses"))) {
-    throw new Error("refusing to download into courses/ — a found image is a draft");
-  }
+    options.into ?? join(options.root, "courses", courseOf(options.courseVersionId), "materials");
   // `--name` may carry the deck's folder (`MODULE-06-slides/figures/fig-02`),
   // so the folder is made from the file's own path rather than `directory`.
   const response = await fetch(result.url, { headers: { "User-Agent": "ainar-find-image/0.1" } });
@@ -137,6 +134,13 @@ async function download(
   return file;
 }
 
+/** `CSS-4008-2026-FALL` → `CSS-4008`: a run's id is its course's and a term. */
+function courseOf(courseVersionId: string): string {
+  const match = /^(.*)-\d{4}-[A-Z0-9]+$/.exec(courseVersionId);
+  if (!match) throw new Error(`${courseVersionId} does not read as COURSE-YEAR-TERM`);
+  return match[1]!;
+}
+
 /** The record that keeps the credit attached to the bytes. */
 function documentDraft(
   result: Result,
@@ -147,7 +151,8 @@ function documentDraft(
   const extension = relative.split(".").pop() ?? "jpg";
   const mime = extension === "svg" ? "image/svg+xml" : extension === "png" ? "image/png" : "image/jpeg";
   return `documents:
-  - document_id: DOC-DRAFT-XXXX
+  - document_id: DOC-XXXX
+    approval: draft
     title: ${JSON.stringify(result.title)}
     storage_key: ${relative}
     mime_type: ${mime}
@@ -174,15 +179,16 @@ const USAGE = `find-image — an openly-licensed picture, with its credit attach
   --search QUERY           what to look for (required)
   --limit N                how many results (default 8, max 20)
   --any-licence            include non-commercial and no-derivatives results
-  --pick N                 download result N as a draft
+  --pick N                 download result N into the course
   --course-version RUN     the run it is for (required with --pick)
   --name STEM              the filename stem, e.g. MODULE-06-slides/figures/fig-02-matrix
                            (the first segment is the deck's folder)
   --into DIR               override the download directory
   --root DIR               the workspace (default: the current directory)
 
-Downloads land in work/<RUN>/materials/. The Document draft is printed, not
-written — paste it into documents-draft.yaml so nothing you are editing is lost.`;
+Downloads land in courses/<COURSE>/materials/. The Document record is printed,
+not written, marked approval: draft — paste it into documents/generated.yaml
+(or wherever the course keeps its documents) so nothing you are editing is lost.`;
 
 async function main(): Promise<void> {
   const query = flag("search");

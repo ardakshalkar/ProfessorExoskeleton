@@ -74,7 +74,7 @@ const LOCAL_LOOKUP = {
   local: "supported",
   approval: "none",
   credentials: false,
-  reason: "A public lookup may run locally because it holds no secret and produces only a draft file.",
+  reason: "A public lookup may run locally because it holds no secret and produces only a draft.",
 } as const;
 
 const HUMAN_STATE = {
@@ -154,6 +154,10 @@ export const ACTIONS: readonly ActionPolicy[] = [
 
   policy("find-image", LOCAL_LOOKUP),
 
+  // Accepting a draft: `approval: draft` becoming `approved`, or a grade's
+  // professor_decision. There is no command for it since 2026-09-29 — the
+  // professor edits the record — but it is still the one act an agent may not
+  // perform, and naming it here is what keeps any surface from offering it.
   policy("approve", HUMAN_STATE),
   policy("roster-import", {
     ...HUMAN_STATE,
