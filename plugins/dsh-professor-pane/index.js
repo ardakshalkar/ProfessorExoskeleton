@@ -4682,6 +4682,17 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
     (dark ? "&dark=1" : "");
 
   const runId = String(data?.run?.id ?? "");
+  const courseId = String(data?.run?.course_id ?? "");
+
+  /** Where this pane serves a homework's starter README, by run and id. */
+  const starterAddress = (runId, assessmentId) =>
+    `${origin}${BASE}/starter?run=` +
+    encodeURIComponent(runId) +
+    "&assessment=" +
+    encodeURIComponent(assessmentId) +
+    (sessionId ? "&session=" + encodeURIComponent(sessionId) : "") +
+    (withDrafts ? "&drafts=1" : "") +
+    (dark ? "&dark=1" : "");
 
   const linkAssessment = (assessment) => {
     if (!assessment || typeof assessment !== "object") return assessment;
@@ -4693,7 +4704,23 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
         ? briefAddress(runId, assessment.assessment_id)
         : null;
     const documentId = assessment.instructions_document_id;
-    if (!documentId) return brief ? { ...assessment, brief_url: brief } : assessment;
+    if (!documentId) {
+      // No brief document named, but the homework has a starter folder with a
+      // README in it: that README IS the brief students read, so it opens
+      // without anyone having to register it first. HW3 went unlinked for
+      // exactly that reason — its README was on disk and its record was not.
+      if (starterReadme(workspace.root, courseId, assessment)) {
+        return {
+          ...assessment,
+          ...(brief ? { brief_url: brief } : {}),
+          url: starterAddress(runId, assessment.assessment_id),
+          viewable: true,
+          format: "md",
+          formats: [],
+        };
+      }
+      return brief ? { ...assessment, brief_url: brief } : assessment;
+    }
     return {
       ...assessment,
       ...(brief ? { brief_url: brief } : {}),
@@ -4929,6 +4956,64 @@ const sendBrief = (res, workspace, root, runId, assessmentId, withDrafts, dark) 
   ].join("\n");
 
   return send(res, 200, "text/html; charset=utf-8", markdownPage(title, source, dark === true));
+};
+
+/**
+ * A homework's starter README on disk, or null.
+ *
+ * Found from the assessment rather than from anything a request supplies:
+ * `extensions.github.local_path` when the record names one, then the storage
+ * layout's own place for it, `courses/<COURSE>/assessments/<ID>/starter/`.
+ * Either must resolve inside the workspace — the same rule `sendMaterial`
+ * holds a `storage_key` to — so a record cannot point this outside it.
+ */
+const starterReadme = (root, courseId, assessment) => {
+  if (!root || !assessment?.assessment_id) return null;
+  const base = resolve(root);
+  const dirs = [];
+  const local = assessment.github?.local_path;
+  if (typeof local === "string" && local && !local.includes("://")) dirs.push(local);
+  if (courseId) dirs.push(join("courses", courseId, "assessments", assessment.assessment_id, "starter"));
+  for (const dir of dirs) {
+    const full = resolve(base, dir, "README.md");
+    if (!full.startsWith(base + sep)) continue;
+    if (existsSync(full)) return full;
+  }
+  return null;
+};
+
+/**
+ * A homework's starter README, as a page the overlay can frame.
+ *
+ * Addressed by run and assessment id, never by path, for `sendMaterial`'s
+ * reason: the only READMEs this can serve are ones in a folder the course
+ * record already puts under an assessment.
+ */
+const sendStarter = (res, workspace, root, runId, assessmentId, withDrafts, dark) => {
+  if (!runId) return sendJson(res, 200, { error: "no run chosen" });
+  if (!assessmentId) return sendJson(res, 200, { error: "no assessment named" });
+
+  let data;
+  try {
+    data = viewPayload(workspace, "course_outline", runId, null, withDrafts).payload;
+  } catch (error) {
+    return sendErrorPage(res, String(error.message ?? error));
+  }
+
+  const found = (data.assessments ?? []).find((a) => a && a.assessment_id === assessmentId);
+  if (!found) return sendErrorPage(res, `no assessment ${assessmentId} in ${runId}`);
+
+  const full = starterReadme(root, String(data?.run?.course_id ?? ""), found);
+  if (!full) return sendErrorPage(res, `${assessmentId} has no starter README on disk.`);
+
+  let text;
+  try {
+    text = readFileSync(full, "utf8");
+  } catch {
+    return sendErrorPage(res, `${assessmentId}'s starter README could not be read.`);
+  }
+  const title = String(found.title ?? assessmentId);
+  return send(res, 200, "text/html; charset=utf-8", markdownPage(title, text, dark === true));
 };
 
 /**
@@ -6142,6 +6227,19 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
     // rule: addressed by an identifier the course record already names.
     if (path === "/brief") {
       return sendBrief(
+        res,
+        workspace,
+        root,
+        runId,
+        url.searchParams.get("assessment") ?? "",
+        url.searchParams.get("drafts") === "1",
+        url.searchParams.get("dark") === "1",
+      );
+    }
+
+    // A homework's starter README, for work that names no brief document.
+    if (path === "/starter") {
+      return sendStarter(
         res,
         workspace,
         root,

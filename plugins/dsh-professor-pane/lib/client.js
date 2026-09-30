@@ -3100,12 +3100,19 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * - `/outline` serves what was READ out of a deck the course did not write,
      *   addressed by `document_id`. Same shape again: a `presentation_plan` is
      *   a record, not a file, so there is no `/file` address for it either.
+     * - `/starter` serves a homework's starter README when no brief document is
+     *   registered, addressed by run and `assessment_id`, like `/brief`.
      *
      * Adding a route here is granting it the overlay, so the bar is the one
      * `/file` already meets: same origin, a read, and addressed by an id rather
      * than by anything resembling a path.
      */
-    const MATERIAL_ROUTES = new Set([BASE + "/file", BASE + "/brief", BASE + "/outline"]);
+    const MATERIAL_ROUTES = new Set([
+      BASE + "/file",
+      BASE + "/brief",
+      BASE + "/outline",
+      BASE + "/starter",
+    ]);
 
     function materialUrl(value) {
       if (typeof value !== "string" || value === "") return null;
