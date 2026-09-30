@@ -97,7 +97,7 @@ workspace/                                  the folder that contains courses/
 │     │
 │     └─ records/                           everything about students
 │        ├─ submissions.yaml                fact
-│        ├─ item-responses.yaml             fact
+│        ├─ item-responses.yaml             fact (proposed when read off a scan)
 │        ├─ evaluations.yaml                proposed — status field
 │        ├─ evidence.yaml                   derived
 │        ├─ concept-states.yaml             derived
@@ -295,43 +295,94 @@ submissions:
 
 A handwritten exam comes back as a scan. The scan carries names and
 handwriting, so it never enters the repository; what the course keeps is the
-pseudonymous record of it.
+pseudonymous record of it. `ainar scans` does the deterministic half
+(`ainar-node/src/scans.ts`); `/grade-scans` is the workflow around it.
 
 ```
 ~/.ainar/submissions/CSS-4008-2026-FALL/ASSESSMENT-MIDTERM/
-├─ _inbox/                        you drop the PDFs here — one per student, or one
-│  └─ midterm-batch-1.pdf         for the whole pile; nothing here is graded yet
-└─ STUDENT-4F2A/                  after matching: one folder per student
-   ├─ scan.pdf                    that student's pages, split out of the batch
-   ├─ pages/p01.png …             one image per page, what grading reads
-   └─ transcript.md               the answers read off the pages, per question
+├─ _inbox/
+│  ├─ midterm-batch-1.pdf         the PDFs as uploaded — one per student, or batches
+│  ├─ plan.yaml                   who is on which pages (names: private)
+│  └─ done/                       a batch every page of which has been placed
+└─ STUDENT-4F2A7Q/                one folder per matched student
+   ├─ scan.pdf                    that student's pages, split out and turned upright
+   ├─ scan.json                   where they came from: batch checksum, page range
+   └─ transcript.yaml             the answers read off the pages, per question
 ```
 
-1. **Upload** into `_inbox/`. Nothing else happens until the next step.
-2. **Match.** Each paper's cover page (the name or student number written on
-   it) is looked up in `~/.ainar/roster/` and becomes a pseudonym. The pages
-   move into `<STUDENT>/`. A paper that matches nobody, or matches two, stays in
-   `_inbox/` and is listed for you — never guessed.
-3. **Record.** For each matched paper the course gets a fact in
-   `records/submissions.yaml` — `SUB-<STUDENT>-<ASSESSMENT>`, no file path, no
-   name. The scan's place follows from the id, so the record needs none.
-4. **Grade.** `/grade-batch` reads `pages/` and `transcript.md` against the
-   assessment's items and rubric, and writes `status: suggested` evaluations.
-   Evidence points into the scan by reference, never by copying it:
+| Step | Command | What it does |
+| --- | --- | --- |
+| upload | — | the PDFs go into `_inbox/` |
+| plan | `scans plan RUN --assessment A [--per-file \| --pages-per-student N]` | lists the inbox and proposes the split; additive, so a late batch keeps earlier work |
+| fill | the reader | one entry per paper: `pages`, `number` or `name`, `variant`, `skip`, `rotate` |
+| apply | `scans apply RUN --assessment A [--replace] [--dry-run]` | checks every page is used once and the variant exists, matches each paper to a pseudonym through the roster, splits it out, writes `records/submissions.yaml` |
+| read | the reader | fills each `transcript.yaml`: `chosen` or `text`, `page`, `confidence`, or `blank` |
+| record | `scans record RUN --assessment A` | a complete transcript becomes item responses, `approval: draft` |
+| grade | `score-items`, then `/grade-batch` | choice items against the key; written items against the rubric |
+
+**Workflows it covers:** one PDF per student; one batch split every N pages
+(duplex: N counts back sides too); one batch whose papers differ in length,
+split at the covers the reader finds; several batches for one exam; exam
+variants (items marked `extensions.variant`, shared items unmarked); a question
+sheet or blank page in the pile (`skip`); a page scanned upside down
+(`rotate`); a rescan of one student (`--replace`).
+
+**What it refuses rather than guesses:** a batch whose ranges miss or repeat a
+page (held whole); a paper that matches nobody, or two people; two papers for
+one student; a variant the items do not carry; a transcript with a question
+left unread. Each waits in `plan.yaml` or is listed, with its reason.
+
+**Identity.** A student number is hashed with the roster's salt exactly as
+`roster import` did; a name must match one enrolled student with case,
+punctuation and word order ignored. The course sees only the pseudonym.
+
+**Records.** The submission is a fact (no approval). An item response read off
+the page is `approval: draft` — a model read the handwriting, and a misread is
+what a person catches. Neither carries a name, a number or a file name:
+
+```yaml
+# records/submissions.yaml
+- submission_id: SUB-4F2A7Q-MIDTERM
+  assessment_id: ASSESSMENT-MIDTERM
+  student_id: STUDENT-4F2A7Q
+  status: submitted
+  files: []
+  extensions:
+    scan:
+      pages: 4
+      variant: A
+      checksum: sha256:dda4…
+      ref: private://submissions/CSS-4008-2026-FALL/ASSESSMENT-MIDTERM/STUDENT-4F2A7Q/scan.pdf
+
+# records/item-responses.yaml
+- response_id: RESP-4F2A7Q-MID-03
+  approval: draft
+  submission_id: SUB-4F2A7Q-MIDTERM
+  item_id: ITEM-MID-03
+  student_id: STUDENT-4F2A7Q
+  chosen_options: []
+  raw_response: "The learning rate is too large, so it overshoots."
+  extensions:
+    scan: { page: 3, confidence: low, read_by: claude-opus-5-5 }
+```
+
+A written answer's text is in the course, pseudonymous, because grading and
+calibration read it there. The page itself is not: an evaluation cites it by
+reference.
 
 ```yaml
 # records/evaluations.yaml
 evaluations:
-  - evaluation_id: EVAL-SUB-4F2A-MIDTERM-3
-    submission_id: SUB-STUDENT-4F2A-ASSESSMENT-MIDTERM
-    criterion_id: CRIT-MIDTERM-3
+  - evaluation_id: EVAL-4F2A7Q-MID-03
+    submission_id: SUB-4F2A7Q-MIDTERM
+    criterion_id: CRIT-MID-03
     status: suggested
     ai_suggestion:
       score: 4
-      confidence: 0.55              # handwriting read with doubt says so
-      comment: Correct gradient, learning rate not discussed.
+      confidence: 0.55
+      comment: Correct direction, learning rate not discussed.
       evidence:
-        - source_ref: private://submissions/ASSESSMENT-MIDTERM/STUDENT-4F2A/scan.pdf
+        - source_ref: private://submissions/CSS-4008-2026-FALL/ASSESSMENT-MIDTERM/STUDENT-4F2A7Q/scan.pdf
           location: "p.3, question 3"
 ```
 
@@ -409,7 +460,7 @@ Chat ids, tokens and LMS ids stay in `~/.ainar/sync/`.
 | items | `assessments/<ID>/items.yaml` | same | authored / proposed | `approval` |
 | item models | `assessments/<ID>/src/item-models.yaml` | same | authored / proposed | `approval` |
 | submissions | — | `records/submissions.yaml` | fact | — |
-| item responses | — | `records/item-responses.yaml` | fact | — |
+| item responses | — | `records/item-responses.yaml` | fact; proposed when read off a scan | `approval` on a read one |
 | evaluations | — | `records/evaluations.yaml` | proposed | `status` |
 | evidence | — | `records/evidence.yaml` | derived | — |
 | concept states | — | `records/concept-states.yaml` | derived | — |
@@ -464,8 +515,9 @@ behaviour wins and the skill says so.
 - Allow `approval` on Concept and Module; read `concepts/generated.yaml` and
   `modules/generated.yaml`.
 - Stop loading `samples/`; move the example course's samples into `golden/`.
-- Remove `approval` from ItemResponse, LearningEvidence, StudentConceptState,
-  StudentCapabilityState, CourseEvent. Add it to Intervention; drop the
+- Remove `approval` from LearningEvidence, StudentConceptState,
+  StudentCapabilityState, CourseEvent. (ItemResponse keeps it: one read off a
+  scan is a proposal.) Add it to Intervention; drop the
   "no status means proposed" rule.
 - Refuse `-DRAFT-` in every id pattern, not only `ModuleId`.
 - Add `provenance` to every proposable entity; drop `extensions.proposal` and
@@ -487,9 +539,7 @@ behaviour wins and the skill says so.
 - ~~`exam-paper`: write papers to `assessments/<ID>/`, the JSON to `src/`~~
   — done. Still to do: the answer key into `keys/` (`exam-paper` does not
   print a key at all yet).
-- Scanned papers: a new `ainar scans` step that splits a batch in `_inbox/`,
-  matches covers against the roster, writes `records/submissions.yaml`, and
-  hands the pages to `/grade-batch`. Nothing of it exists yet.
+- ~~Scanned papers: `ainar scans` plan / apply / record~~ — done, with `/grade-scans`.
 - `ainar deck plan`: new command that writes `src/plan.yaml`.
 - Deck check and render: plan, outline and figures under `src/`.
   `organize-materials` migrates existing decks into this shape.
