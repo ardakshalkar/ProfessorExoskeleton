@@ -46,6 +46,10 @@ routine, and the professor's attention should land on the few that are neither.
 
 Your output is still only suggestions. Nothing here approves anything.
 
+**Paper exams that came back as scans start at `/grade-scans`,** which splits
+the pile, matches it to the roster and records the answers read off the pages;
+it hands the written items back here.
+
 ## 1. Find the work
 
 ```bash

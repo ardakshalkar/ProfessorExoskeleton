@@ -28,16 +28,22 @@ import { dump } from "./yaml-out.ts";
  * authored counterparts but in a separate `generated.yaml` — writing YAML back
  * into a hand-authored file would strip its comments and reformat it.
  *
+ * An assessment, its items and its item models go into the assessment's own
+ * folder, `assessments/<ASSESSMENT_ID>/` (STORAGE.md §5), so the file is a
+ * function of the record rather than of the collection — see `recordFile`.
+ *
  * Concepts and modules are not here: the professor authors them into
  * `courses/` directly, and nothing writes them on anybody's behalf.
  */
-export const RECORD_FILES: Record<string, string> = {
+export const RECORD_FILES: Record<string, string | ((record: Record_, context: PlaceContext) => string)> = {
   activities: "activities/generated.yaml",
   documents: "documents/generated.yaml",
   resources: "resources/generated.yaml",
-  assessments: "assessments/generated.yaml",
-  items: "items/generated.yaml",
-  item_models: "item-models/generated.yaml",
+  assessments: (record) => `assessments/${folderOf(record.assessment_id, "an assessment")}/assessment.yaml`,
+  items: (record) => `assessments/${folderOf(record.assessment_id, "an item")}/items.yaml`,
+  // An item model names no assessment, so the caller says which one it serves.
+  item_models: (_record, context) =>
+    `assessments/${folderOf(context.assessmentId, "an item model (pass assessmentId)")}/src/item-models.yaml`,
   submissions: "records/submissions.yaml",
   item_responses: "records/item-responses.yaml",
   evaluations: "records/evaluations.yaml",
@@ -50,7 +56,34 @@ export const RECORD_FILES: Record<string, string> = {
   action_items: "records/action-items.yaml",
 };
 
-type Record_ = Record<string, unknown>;
+/** What a destination may need beyond the record itself. */
+export interface PlaceContext {
+  assessmentId?: string;
+}
+
+/**
+ * An assessment id, checked before it becomes a directory name — a missing one
+ * would be written to `assessments/undefined/`, and one with a slash in it
+ * outside the folder it names.
+ */
+const folderOf = (id: unknown, what: string): string => {
+  if (typeof id !== "string" || !/^[A-Z0-9][A-Z0-9-]*$/.test(id)) {
+    throw new Error(`${what} needs an assessment_id to find its folder; got ${JSON.stringify(id)}`);
+  }
+  return id;
+};
+
+/** The file one record lands in, relative to the course directory. */
+export const recordFile = (collection: string, record: Record_, context: PlaceContext = {}): string => {
+  const file = RECORD_FILES[collection];
+  if (file === undefined) {
+    throw new Error(
+      `${collection} has no destination in RECORD_FILES, so it cannot be written. ` +
+        "Add one, or take the collection out of AGENT_WRITABLE.",
+    );
+  }
+  return typeof file === "string" ? file : file(record, context);
+};
 
 // --------------------------------------------------------------------------
 // Timestamps
@@ -324,50 +357,65 @@ const elsewhere = (
 export const writeRecords = (
   courseDir: string,
   records: Iterable<[string, Record_[]]> | Record<string, Record_[]>,
-  options: { keepApproval?: boolean } = {},
+  options: { keepApproval?: boolean } & PlaceContext = {},
 ): string[] => {
   const entries =
     Symbol.iterator in Object(records)
       ? [...(records as Iterable<[string, Record_[]]>)]
       : Object.entries(records as Record<string, Record_[]>);
   const written: string[] = [];
-  for (const [collection, items] of entries) {
-    if (!items.length) continue;
-    const file = RECORD_FILES[collection];
-    if (file === undefined) {
-      throw new Error(
-        `${collection} has no destination in RECORD_FILES, so it cannot be written. ` +
-          "Add one, or take the collection out of AGENT_WRITABLE.",
-      );
+  for (const [collection, all] of entries) {
+    if (!all.length) continue;
+    // Grouped by destination: the items of two assessments go to two folders.
+    // Every destination is resolved before anything is written, so a record
+    // with no place refuses the whole call rather than half of it.
+    const byFile = new Map<string, Record_[]>();
+    for (const item of all) {
+      const file = recordFile(collection, item, options);
+      byFile.set(file, [...(byFile.get(file) ?? []), item]);
     }
-    const target = join(courseDir, file);
-    const field = ID_FIELDS[collection];
-    const inPlace = elsewhere(courseDir, collection, target, items);
-    const here = items.filter((item) => !field || !inPlace.has(item[field] as string));
-    const there = items.filter((item) => field && inPlace.has(item[field] as string));
-
-    if (there.length) {
-      const edits = new Map<string, (node: any) => void>();
-      for (const item of there) {
-        const cleaned = tidy(item) as Record_;
-        edits.set(cleaned[field!] as string, (node) => {
-          for (const [key, value] of Object.entries(cleaned)) {
-            if (key === "approval" && options.keepApproval) continue;
-            node.set(key, value);
-          }
-        });
-      }
-      const result = editRecords({
-        root: dirname(dirname(courseDir)),
-        courseId: basename(courseDir),
-        patterns: COLLECTIONS[collection as keyof typeof COLLECTIONS],
-        idField: field!,
-        collection,
-        edits,
-      });
-      written.push(...result.written);
+    for (const [file, items] of byFile) {
+      written.push(...writeOne(courseDir, collection, join(courseDir, file), items, options));
     }
-    if (here.length) written.push(upsertRecords(target, collection, here, options));
   }
+  return written;
+};
+
+/** One destination file: records already elsewhere are edited there, the rest upserted here. */
+const writeOne = (
+  courseDir: string,
+  collection: string,
+  target: string,
+  items: Record_[],
+  options: { keepApproval?: boolean },
+): string[] => {
+  const written: string[] = [];
+  const field = ID_FIELDS[collection];
+  const inPlace = elsewhere(courseDir, collection, target, items);
+  const here = items.filter((item) => !field || !inPlace.has(item[field] as string));
+  const there = items.filter((item) => field && inPlace.has(item[field] as string));
+
+  if (there.length) {
+    const edits = new Map<string, (node: any) => void>();
+    for (const item of there) {
+      const cleaned = tidy(item) as Record_;
+      edits.set(cleaned[field!] as string, (node) => {
+        for (const [key, value] of Object.entries(cleaned)) {
+          if (key === "approval" && options.keepApproval) continue;
+          node.set(key, value);
+        }
+      });
+    }
+    const result = editRecords({
+      root: dirname(dirname(courseDir)),
+      courseId: basename(courseDir),
+      patterns: COLLECTIONS[collection as keyof typeof COLLECTIONS],
+      idField: field!,
+      collection,
+      edits,
+    });
+    written.push(...result.written);
+  }
+  if (here.length) written.push(upsertRecords(target, collection, here, options));
   return written;
 };

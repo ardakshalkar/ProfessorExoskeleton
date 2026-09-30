@@ -38,6 +38,7 @@ import {
   itemById,
   requireGroups,
   runById,
+  enrolledIn,
 } from "../src/bundle.ts";
 import { blueprintPayload } from "../src/blueprint.ts";
 import { gradebookPayload } from "../src/gradebook.ts";
@@ -115,6 +116,17 @@ import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../src
 import { buildMaterials, producerFor, readProducers } from "../src/materials.ts";
 import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, writeRecords } from "../src/records-write.ts";
+import {
+  applyScans,
+  planScans,
+  readPlan,
+  recordTranscripts,
+  scanPlace,
+  scanStatus,
+  submissionsDir,
+  variantsOf,
+  type Shape,
+} from "../src/scans.ts";
 import {
   // `TARGETS` is taken by the gradebook targets above, and these are a
   // different list of a different kind of thing.
@@ -205,6 +217,9 @@ const BOOLEAN_FLAGS = new Set([
   "pdf",
   "draft",
   "timing",
+  // `scans`
+  "per-file",
+  "replace",
 ]);
 
 /** Every occurrence of a repeatable flag, with comma-separated values split. */
@@ -299,6 +314,17 @@ const HELP = `ainar — the AINAR course model CLI
   roster whois STUDENT-XXXXXX              PRIVATE: one identity
   roster groups [--run RUN]                the subgroups, and who is in them
   roster status                            where the identities live
+
+  Scanned papers. The PDFs stay in --submissions-dir (default
+  ~/.ainar/submissions, or AINAR_SUBMISSIONS_DIR), outside the workspace:
+
+  scans status RUN --assessment A          what is in the inbox, placed, read
+  scans plan RUN --assessment A [--per-file | --pages-per-student N]
+                                           list _inbox/*.pdf, propose the split
+  scans apply RUN --assessment A [--replace] [--dry-run]
+                                           split, match to the roster, record
+  scans record RUN --assessment A [--dry-run]
+                                           complete transcripts -> item responses
 
   schema [ENTITY] [--json] [--out DIR]     what a record must look like
   new course COURSE_ID [--title T] [--credits N] [--department D]
@@ -1924,6 +1950,169 @@ try {
      * The interesting code is in `src/roster.ts` — what is here is the part
      * that says no.
      */
+    case "scans": {
+      // The deterministic half of grading a scanned exam: see src/scans.ts.
+      // Everything this reads or writes about a named person stays under
+      // --submissions-dir; what reaches courses/ is pseudonymous.
+      const sub = rest[0] ?? "";
+      const runId = rest[1];
+      const assessmentId = flag("assessment");
+      if (!["status", "plan", "apply", "record"].includes(sub) || !runId || !assessmentId) {
+        console.error("usage: scans {status|plan|apply|record} RUN --assessment ASSESSMENT-ID");
+        process.exit(2);
+      }
+      const bundle = forRun(runId);
+      const run = runById(bundle).get(runId) as { timezone?: string };
+      const assessment = (bundle.assessments as any[]).find(
+        (entry) => entry.assessment_id === assessmentId && entry.course_version_id === runId,
+      );
+      if (!assessment) throw new Error(`${runId} has no assessment ${assessmentId}`);
+      const items = (bundle.items as any[]).filter((item) => item.assessment_id === assessmentId);
+      const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
+      const base = submissionsDir(flag("submissions-dir"));
+      refuseInsideRepo(base, root);
+      const place = scanPlace(base, runId, assessmentId);
+      const enrolled = new Set(enrolledIn(bundle, runId).map((entry) => entry.student_id as string));
+      const now = decidedAt(run?.timezone);
+      const dryRun = args.includes("--dry-run");
+
+      if (sub === "status") {
+        const status = scanStatus(place, enrolled);
+        const variants = variantsOf(items);
+        out(`${assessmentId} — ${assessment.title}`);
+        out(`  private folder  ${place.base}`);
+        out(`  questions       ${items.length}${variants.length ? `, variants ${variants.join(", ")}` : ""}`);
+        out(
+          `  inbox           ${status.inbox.length} PDF(s)` +
+            (status.unplanned.length ? `, ${status.unplanned.length} not in the plan yet` : ""),
+        );
+        out(`  planned         ${status.planned} paper(s)${status.problems ? `, ${status.problems} with a problem` : ""}`);
+        out(`  placed          ${status.placed.length} of ${enrolled.size} enrolled`);
+        out(`  transcribed     ${status.transcribed.length} of ${status.placed.length}`);
+        if (status.missing.length && status.placed.length) {
+          const shown = status.missing.slice(0, 8).join(", ");
+          out(`  no scan yet     ${status.missing.length}: ${shown}${status.missing.length > 8 ? ", …" : ""}`);
+        }
+        break;
+      }
+
+      if (sub === "plan") {
+        const perPaper = flag("pages-per-student");
+        if (perPaper !== undefined && args.includes("--per-file")) {
+          throw new Error("--per-file and --pages-per-student are two different shapes; pass one");
+        }
+        const size = perPaper === undefined ? null : Number(perPaper);
+        if (size !== null && (!Number.isInteger(size) || size < 1)) {
+          throw new Error(`--pages-per-student takes a whole number of pages, not ${perPaper}`);
+        }
+        const shape: Shape = args.includes("--per-file")
+          ? { kind: "per-file" }
+          : size !== null
+            ? { kind: "fixed", pagesPerPaper: size }
+            : { kind: "read" };
+        const result = await planScans(place, { courseVersionId: runId, assessmentId }, shape);
+        if (!result.added.length && !result.changed.length && !result.kept.length) {
+          out(`nothing in ${place.inbox} — put the scanned PDFs there, then run this again`);
+          break;
+        }
+        for (const file of result.added) out(`  added     ${file}`);
+        for (const file of result.changed) out(`  CHANGED   ${file} — re-proposed; what was written for it is gone`);
+        for (const file of result.kept) out(`  kept      ${file}`);
+        out(`\nwrote ${place.plan}`);
+        out(
+          shape.kind === "read"
+            ? "Next: read each file's pages and write one entry per paper (pages, number or name, variant), then `scans apply`."
+            : "Next: check each entry's pages, add who it is (number or name) and the variant, then `scans apply`.",
+        );
+        break;
+      }
+
+      if (sub === "apply") {
+        const plan = readPlan(place);
+        if (!plan) {
+          throw new Error(`no plan at ${place.plan} — run \`scans plan ${runId} --assessment ${assessmentId}\` first`);
+        }
+        const directory = rosterDir(flag("roster-dir"));
+        let salt: Buffer | null = null;
+        try {
+          salt = loadSalt(directory, { create: false });
+        } catch {
+          salt = null; // `identify` says so, per paper, when a number needs it
+        }
+        const result = await applyScans(plan, {
+          place,
+          courseVersionId: runId,
+          assessmentId,
+          items,
+          enrolled,
+          store: RosterStore.load(directory),
+          salt,
+          replace: args.includes("--replace"),
+          dryRun,
+          now,
+        });
+        for (const entry of result.placed) {
+          out(
+            `  placed    ${entry.student}  ${entry.pages} page(s)` +
+              (entry.variant ? `  variant ${entry.variant}` : "") +
+              (entry.replaced ? "  (replaced an earlier scan)" : ""),
+          );
+        }
+        if (result.unchanged.length) out(`  unchanged ${result.unchanged.length} already placed from the same pages`);
+        if (result.skipped) out(`  skipped   ${result.skipped} page range(s) marked skip`);
+        for (const problem of result.problems) {
+          out(`  WAITING   ${problem.file}${problem.pages ? ` pages ${problem.pages}` : ""}: ${problem.problem}`);
+        }
+        if (dryRun) {
+          out("\n--dry-run: nothing written.");
+          break;
+        }
+        if (result.submissions.length) {
+          for (const path of writeRecords(courseDir, { submissions: result.submissions as never[] })) {
+            out(`wrote ${relative(root, path)}`);
+          }
+        }
+        out(`wrote ${place.plan}`);
+        if (result.transcripts.length) {
+          out(`\n${result.transcripts.length} transcript(s) to fill: ${join(place.base, "<STUDENT>", "transcript.yaml")}`);
+        }
+        if (result.problems.length) out("The papers marked WAITING stay in the plan with their problem written beside them.");
+        break;
+      }
+
+      // record
+      const submitted = new Set(
+        (bundle.submissions as any[])
+          .filter((entry) => entry.assessment_id === assessmentId)
+          .map((entry) => entry.student_id as string),
+      );
+      const result = recordTranscripts({ place, assessmentId, items, submitted, now });
+      for (const student of result.recorded) out(`  recorded  ${student}`);
+      for (const entry of result.incomplete) {
+        const shown = entry.unread.slice(0, 5).join(", ");
+        out(`  unread    ${entry.student}: ${entry.unread.length} question(s) — ${shown}${entry.unread.length > 5 ? ", …" : ""}`);
+      }
+      for (const entry of result.invalid) out(`  REFUSED   ${entry.student}: ${entry.problem}`);
+      if (result.low.length) {
+        out(`\n${result.low.length} answer(s) read with low confidence — look at these first:`);
+        for (const entry of result.low) out(`  ${entry.student}  ${entry.item}${entry.page ? `  p.${entry.page}` : ""}`);
+      }
+      if (result.blank) out(`${result.blank} question(s) left blank.`);
+      if (dryRun) {
+        out("\n--dry-run: nothing written.");
+        break;
+      }
+      if (!result.responses.length) break;
+      for (const path of writeRecords(courseDir, { item_responses: result.responses as never[] })) {
+        out(`wrote ${relative(root, path)}`);
+      }
+      out(
+        `\nEvery response is marked approval: draft. Next: \`score-items ${runId}\` for the choice ` +
+          "items, then /grade-batch for the written ones.",
+      );
+      break;
+    }
+
     case "roster": {
       const sub = rest[0] ?? "";
       const directory = rosterDir(flag("roster-dir"));

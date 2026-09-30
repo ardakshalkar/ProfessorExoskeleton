@@ -38,6 +38,10 @@
  * is a line for them to add, the way `homework publish` hands back
  * `extensions.github.template_repo`.
  *
+ * The papers are written to the assessment's own folder,
+ * `courses/<COURSE>/assessments/<ID>/QUIZ-01-student.pdf`, with the JSON they
+ * are rendered from under its `src/` (STORAGE.md §5).
+ *
  *     exam-paper.ts --assessment ASSESSMENT-QUIZ-01 --root <workspace>
  *     exam-paper.ts --assessment ASSESSMENT-QUIZ-01 --format pdf --out output/
  *     exam-paper.ts --assessment ASSESSMENT-QUIZ-01 --no-register
@@ -133,6 +137,9 @@ const assessmentFile = (root: string, courseId: string, assessmentId: string): s
     }
   };
   walk(join(root, "courses", courseId));
+  // An assessment in its own folder is defined by exactly one file there.
+  const own = join(root, "courses", courseId, "assessments", assessmentId, "assessment.yaml");
+  if (found.includes(own)) return relative(root, own).split(sep).join("/");
   // Every item on a quiz names the assessment it belongs to, so a plain text
   // search finds the items file as well as the record that defines it. Where
   // several match, the ones that live among the assessments are preferred —
@@ -350,23 +357,26 @@ const main = (): void => {
     })),
   };
 
-  // `courses/<COURSE>/materials/` rather than the working directory, because a
-  // paper is course material and the record has to be able to name it: a
-  // `storage_key` is a path in this repository, so a paper printed outside it
-  // is a file the pane can never serve. It is also where the pane's Ready tab
-  // counts printed papers, beside the decks.
+  // The assessment's own folder, `courses/<COURSE>/assessments/<ID>/`
+  // (STORAGE.md §5), rather than the working directory: a paper is course
+  // material and the record has to be able to name it — a `storage_key` is a
+  // path in this repository, so a paper printed outside it is a file the pane
+  // can never serve. The papers sit at the top of the folder, where the
+  // professor looks for them; the JSON they are rendered from is an
+  // intermediate and goes under `src/`.
   const courseId = (bundle.course as any).course_id;
   const outDir = resolve(
     isAbsolute(args.out ?? "")
       ? args.out!
       : args.out
         ? join(root, args.out)
-        : join(root, "courses", courseId, "materials"),
+        : join(root, "courses", courseId, "assessments", assessmentId),
   );
-  mkdirSync(outDir, { recursive: true });
+  mkdirSync(join(outDir, "src"), { recursive: true });
 
-  const stem = assessmentId.replace(/^ASSESSMENT-/, "").toLowerCase();
-  const jsonPath = join(outDir, `${stem}-paper.json`);
+  // `QUIZ-01` for `ASSESSMENT-QUIZ-01`: the name a professor says aloud.
+  const stem = assessmentId.replace(/^ASSESSMENT-/, "");
+  const jsonPath = join(outDir, "src", `${stem}-paper.json`);
   writeFileSync(jsonPath, JSON.stringify(exam, null, 2) + "\n");
 
   const formats: Format[] = format === "both" ? ["docx", "pdf"] : [format as Format];

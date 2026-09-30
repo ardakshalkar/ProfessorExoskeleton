@@ -118,6 +118,7 @@ export const ACTIONS: readonly ActionPolicy[] = [
     "design-assessment",
     "grade-submission",
     "grade-batch",
+    "grade-scans",
     "find-gaps",
     "action-inbox",
     "student-report",
@@ -153,6 +154,15 @@ export const ACTIONS: readonly ActionPolicy[] = [
   ].map((name) => policy(name, LOCAL_FILE)),
 
   policy("find-image", LOCAL_LOOKUP),
+
+  // Scanned papers carry names and handwriting, so the files never leave the
+  // private folder on this machine: local, and never a backend's to hold.
+  ...["scans-plan", "scans-apply", "scans-record"].map((name) =>
+    policy(name, {
+      ...LOCAL_FILE,
+      reason: "Scans hold names and handwriting; they are split and matched in the private folder on this machine.",
+    }),
+  ),
 
   // Accepting a draft: `approval: draft` becoming `approved`, or a grade's
   // professor_decision. There is no command for it since 2026-09-29 — the
