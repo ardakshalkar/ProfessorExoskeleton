@@ -122,7 +122,10 @@ workspace/                                  the folder that contains courses/
 ~/.ainar/                                   outside the repository
 ├─ roster/                                  salt, people.json — names ↔ STUDENT-…
 ├─ sync/                                    LMS and Telegram ledger (ids, tokens)
-├─ submissions/<RUN>/<ASSESSMENT>/<STUDENT>/  student forks and uploads, for grading
+├─ submissions/<RUN>/<ASSESSMENT>/
+│  ├─ _inbox/                               scans as you upload them, before matching
+│  └─ <STUDENT>/                            one student's work: a fork, an upload, a scan
+
 └─ reports/<RUN>/                           anything with a real name in it
 ```
 
@@ -194,7 +197,7 @@ assessments/ASSESSMENT-QUIZ-01/
 │  └─ QUIZ-01-marking-guide.md  how open answers are scored
 └─ src/
    ├─ item-models.yaml          the item models the questions came from
-   ├─ paper.json                the intermediate the renderer builds
+   ├─ QUIZ-01-paper.json        the intermediate the renderer builds
    └─ figures/q03-confusion-matrix.png
 ```
 
@@ -227,7 +230,8 @@ assessments/ASSESSMENT-HW-02/
 | `items.yaml` | the Items whose `assessment_id` is this folder's | authored or proposed |
 | `src/item-models.yaml` | the ItemModels those items use | authored or proposed |
 | `HW-02-brief.md` | registered as a Document; `instructions_document_id` points to it | proposed |
-| papers, keys | derived renders of the record, no record of their own | derived |
+| student papers | each printing registered as a Document (`DOC-QUIZ-01-PAPER-PDF`), so the pane can open it and `instructions_document_id` can name it | proposed |
+| keys | derived renders of the record, never registered, never published | derived |
 
 A record in this folder must name this folder's assessment
 (`assessment_id` / the folder name agree), and carries its `approval`
@@ -286,6 +290,53 @@ submissions:
     status: submitted
     note: fork at commit 3e1f9ab
 ```
+
+### Scanned papers, for grading
+
+A handwritten exam comes back as a scan. The scan carries names and
+handwriting, so it never enters the repository; what the course keeps is the
+pseudonymous record of it.
+
+```
+~/.ainar/submissions/CSS-4008-2026-FALL/ASSESSMENT-MIDTERM/
+├─ _inbox/                        you drop the PDFs here — one per student, or one
+│  └─ midterm-batch-1.pdf         for the whole pile; nothing here is graded yet
+└─ STUDENT-4F2A/                  after matching: one folder per student
+   ├─ scan.pdf                    that student's pages, split out of the batch
+   ├─ pages/p01.png …             one image per page, what grading reads
+   └─ transcript.md               the answers read off the pages, per question
+```
+
+1. **Upload** into `_inbox/`. Nothing else happens until the next step.
+2. **Match.** Each paper's cover page (the name or student number written on
+   it) is looked up in `~/.ainar/roster/` and becomes a pseudonym. The pages
+   move into `<STUDENT>/`. A paper that matches nobody, or matches two, stays in
+   `_inbox/` and is listed for you — never guessed.
+3. **Record.** For each matched paper the course gets a fact in
+   `records/submissions.yaml` — `SUB-<STUDENT>-<ASSESSMENT>`, no file path, no
+   name. The scan's place follows from the id, so the record needs none.
+4. **Grade.** `/grade-batch` reads `pages/` and `transcript.md` against the
+   assessment's items and rubric, and writes `status: suggested` evaluations.
+   Evidence points into the scan by reference, never by copying it:
+
+```yaml
+# records/evaluations.yaml
+evaluations:
+  - evaluation_id: EVAL-SUB-4F2A-MIDTERM-3
+    submission_id: SUB-STUDENT-4F2A-ASSESSMENT-MIDTERM
+    criterion_id: CRIT-MIDTERM-3
+    status: suggested
+    ai_suggestion:
+      score: 4
+      confidence: 0.55              # handwriting read with doubt says so
+      comment: Correct gradient, learning rate not discussed.
+      evidence:
+        - source_ref: private://submissions/ASSESSMENT-MIDTERM/STUDENT-4F2A/scan.pdf
+          location: "p.3, question 3"
+```
+
+What goes back to students (the graded paper, feedback naming them) is written
+under `~/.ainar/reports/<RUN>/`, never into the course.
 
 ---
 
@@ -407,9 +458,9 @@ behaviour wins and the skill says so.
 
 **Loader and schema**
 
-- Read `assessments/*/assessment.yaml`, `assessments/*/items.yaml`,
-  `assessments/*/src/item-models.yaml`; refuse an item whose `assessment_id`
-  is not its folder's.
+- ~~Read the assessment folder; refuse a record filed under another
+  assessment (`assessment.folder_mismatch`)~~ — done; the flat files are
+  still read beside it until the example course moves.
 - Allow `approval` on Concept and Module; read `concepts/generated.yaml` and
   `modules/generated.yaml`.
 - Stop loading `samples/`; move the example course's samples into `golden/`.
@@ -429,11 +480,16 @@ behaviour wins and the skill says so.
 
 **Writers**
 
-- `records-write.ts`: assessments, items and item models go into the
-  assessment's folder; an upsert that changes content resets `approval` to
-  `draft` (today `materials.ts:18` keeps it).
-- `exam-paper`: write to `assessments/<ID>/` (papers) and `keys/` (answer
-  key), `paper.json` to `src/`; today it writes loose into `materials/`.
+- ~~`records-write.ts`: assessments, items and item models go into the
+  assessment's folder~~ — done (an item model needs the caller to name its
+  assessment). Still to do: an upsert that changes content resets `approval`
+  to `draft` (today `materials.ts:18` keeps it).
+- ~~`exam-paper`: write papers to `assessments/<ID>/`, the JSON to `src/`~~
+  — done. Still to do: the answer key into `keys/` (`exam-paper` does not
+  print a key at all yet).
+- Scanned papers: a new `ainar scans` step that splits a batch in `_inbox/`,
+  matches covers against the roster, writes `records/submissions.yaml`, and
+  hands the pages to `/grade-batch`. Nothing of it exists yet.
 - `ainar deck plan`: new command that writes `src/plan.yaml`.
 - Deck check and render: plan, outline and figures under `src/`.
   `organize-materials` migrates existing decks into this shape.

@@ -48,6 +48,7 @@
  * silently delete every one of them.
  */
 
+import { COLLECTIONS } from "../loader.ts";
 import { type EditResult, editRecords } from "../record-edit.ts";
 import { CANVAS_ASSIGNMENTS_KEY, CANVAS_ASSIGNMENT_KEY, LMS_EXTENSION } from "./index.ts";
 
@@ -123,7 +124,7 @@ export const writeAssessmentLinks = (
   return editRecords({
     root,
     courseId,
-    patterns: ["assessments.yaml", "assessments/*.yaml"],
+    patterns: COLLECTIONS.assessments,
     idField: "assessment_id",
     collection: "assessments",
     edits,

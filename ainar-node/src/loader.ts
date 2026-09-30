@@ -23,6 +23,15 @@ import { IssueList } from "./issues.ts";
 import { Capability, Concept, Course } from "./model/academic.ts";
 import { User } from "./model/delivery.ts";
 
+/**
+ * The files inside `assessments/<ASSESSMENT_ID>/`. Everything else in that
+ * folder — the papers, `keys/`, `starter/`, `src/figures/` — is material, not
+ * record, and no pattern here reaches it.
+ */
+export const ASSESSMENT_FILE = "assessments/*/assessment.yaml";
+export const ASSESSMENT_ITEMS = "assessments/*/items.yaml";
+export const ASSESSMENT_ITEM_MODELS = "assessments/*/src/item-models.yaml";
+
 /** One list on the bundle and the files it is read from. Exported for the writers. */
 export const COLLECTIONS: Record<CollectionName, string[]> = {
   outcomes: ["outcomes.yaml", "outcomes/*.yaml"],
@@ -36,10 +45,12 @@ export const COLLECTIONS: Record<CollectionName, string[]> = {
   activities: ["activities.yaml", "activities/*.yaml"],
   documents: ["documents.yaml", "documents/*.yaml", "samples/documents*.yaml"],
   resources: ["resources.yaml", "resources/*.yaml"],
-  assessments: ["assessments.yaml", "assessments/*.yaml"],
+  // An assessment's own folder (STORAGE.md §5) is read beside the flat files
+  // courses written before it, which stay valid until they are moved.
+  assessments: ["assessments.yaml", "assessments/*.yaml", ASSESSMENT_FILE],
   rubrics: ["rubrics.yaml", "rubrics/*.yaml"],
-  items: ["items.yaml", "items/*.yaml", "assessments/items/*.yaml"],
-  item_models: ["item-models.yaml", "item-models/*.yaml"],
+  items: ["items.yaml", "items/*.yaml", "assessments/items/*.yaml", ASSESSMENT_ITEMS],
+  item_models: ["item-models.yaml", "item-models/*.yaml", ASSESSMENT_ITEM_MODELS],
   submissions: ["samples/submissions*.yaml", "records/submissions*.yaml"],
   item_responses: ["samples/item-responses*.yaml", "records/item-responses*.yaml"],
   evaluations: ["samples/evaluations*.yaml", "records/evaluations*.yaml"],
@@ -171,6 +182,14 @@ const report = (error: z.ZodError, path: string, issues: IssueList): void => {
   }
 };
 
+/**
+ * The assessment a file's folder belongs to, for `assessments/<ID>/assessment.yaml`
+ * and `items.yaml`. `assessments/items/` is the older flat items folder, not an
+ * assessment.
+ */
+const assessmentFolder = (relativePath: string): string | null =>
+  /^assessments\/(?!items\/)([^/]+)\/(?:assessment|items)\.yaml$/.exec(relativePath)?.[1] ?? null;
+
 const readInto = <T extends z.ZodTypeAny>(
   base: string,
   name: string,
@@ -184,11 +203,27 @@ const readInto = <T extends z.ZodTypeAny>(
     for (const path of glob(base, pattern)) {
       if (seen.has(path) || !statSync(path).isFile()) continue;
       seen.add(path);
+      const folder = assessmentFolder(relative(base, path).split(sep).join(posix.sep));
       for (const document of documents(path, issues)) {
         for (const entry of entries(document, name, path, issues)) {
           const result = schema.safeParse(entry);
-          if (result.success) loaded.push(result.data);
-          else report(result.error, path, issues);
+          if (!result.success) {
+            report(result.error, path, issues);
+            continue;
+          }
+          const owner = (result.data as { assessment_id?: unknown }).assessment_id;
+          if (folder !== null && owner !== undefined && owner !== folder) {
+            // The folder is the assessment. An item filed under another one
+            // would print on the wrong paper and be graded against the wrong
+            // rubric, so it is refused rather than read.
+            issues.error(
+              "assessment.folder_mismatch",
+              `names ${String(owner)} but sits in the folder of ${folder}`,
+              path,
+            );
+            continue;
+          }
+          loaded.push(result.data);
         }
       }
     }

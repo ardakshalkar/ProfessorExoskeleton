@@ -32,9 +32,9 @@ collection an agent may write goes into the file it belongs in, under
     activities         activities/generated.yaml
     documents          documents/generated.yaml
     resources          resources/generated.yaml
-    assessments        assessments/generated.yaml
-    items              items/generated.yaml
-    item_models        item-models/generated.yaml
+    assessments        assessments/<ASSESSMENT_ID>/assessment.yaml
+    items              assessments/<ASSESSMENT_ID>/items.yaml
+    item_models        assessments/<ASSESSMENT_ID>/src/item-models.yaml
     submissions        records/submissions.yaml
     item_responses     records/item-responses.yaml
     evaluations        records/evaluations.yaml
@@ -56,6 +56,12 @@ assessments:
     module_id: MODULE-04
     approval: draft
 ```
+
+An assessment is a folder named by its id: the record, its items, its printed
+papers at the top, `keys/` for answer keys, `starter/` for a homework's starter
+repository, and everything that makes them under `src/`. An item filed in
+another assessment's folder is refused (`assessment.folder_mismatch`).
+`STORAGE.md` at the repository root has the whole layout.
 
 Material files go straight into `courses/<COURSE>/materials/<MATERIAL>/`, and
 their Document points there. Nothing is moved afterwards: the record you wrote

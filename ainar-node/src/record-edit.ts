@@ -28,7 +28,7 @@
  * caller makes its own case, because each case is different.
  */
 
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseDocument } from "yaml";
 
@@ -43,9 +43,10 @@ export interface EditResult {
  * Every file under a course that a collection's records could be in.
  *
  * `patterns` are the loader's own, from `COLLECTIONS` in `loader.ts`, so this
- * looks exactly where the record could have been read from. Two shapes are
- * supported because those are the two the loader uses: a plain name, and one
- * `*` inside a directory.
+ * looks exactly where the record could have been read from. A `*` matches
+ * within one path segment, in any segment — an assessment's own folder is a
+ * `*` between `assessments/` and `/items.yaml` — the same rule the loader's
+ * glob applies.
  */
 export const candidateFiles = (root: string, courseId: string, patterns: string[]): string[] => {
   const base = join(root, "courses", courseId);
@@ -55,21 +56,30 @@ export const candidateFiles = (root: string, courseId: string, patterns: string[
       found.push(join(base, pattern));
       continue;
     }
-    const slash = pattern.lastIndexOf("/");
-    const directory = slash === -1 ? "" : pattern.slice(0, slash);
-    const name = pattern.slice(slash + 1);
-    const star = name.indexOf("*");
-    const prefix = name.slice(0, star);
-    const suffix = name.slice(star + 1);
-    try {
-      for (const entry of readdirSync(join(base, directory)).sort()) {
-        if (entry.startsWith(prefix) && entry.endsWith(suffix)) {
-          found.push(join(base, directory, entry));
-        }
+    let paths = [base];
+    for (const segment of pattern.split("/")) {
+      if (!segment.includes("*")) {
+        paths = paths.map((path) => join(path, segment));
+        continue;
       }
-    } catch {
-      // The directory does not exist, which is the single-file layout.
+      const star = segment.indexOf("*");
+      const prefix = segment.slice(0, star);
+      const suffix = segment.slice(star + 1);
+      paths = paths.flatMap((path) => {
+        try {
+          return readdirSync(path)
+            .sort()
+            .filter((entry) => entry.startsWith(prefix) && entry.endsWith(suffix))
+            .map((entry) => join(path, entry));
+        } catch {
+          // The directory does not exist, which is the single-file layout.
+          return [];
+        }
+      });
     }
+    // A `*` in a directory segment also matches files there
+    // (`assessments/01.yaml` for `assessments/*/items.yaml`), which lead nowhere.
+    found.push(...paths.filter((path) => existsSync(path)));
   }
   return found;
 };
