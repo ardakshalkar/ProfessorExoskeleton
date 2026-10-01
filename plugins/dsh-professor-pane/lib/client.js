@@ -3901,8 +3901,15 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 // went up stays up — it is in the private folder, renamed, and
                 // an upload of it again is recognised rather than doubled.
                 setPhase("error");
+                // The browser half is read from disk on every load, the server
+                // half once at boot — so a pane updated under a running harness
+                // has this button and not the route behind it.
+                const stale = /no route \/api\/upload/.test(String(result.error));
                 setText(
-                  file.name + ": " + result.error +
+                  file.name + ": " +
+                    (stale
+                      ? "the harness was started before uploads existed. Restart it, then upload again."
+                      : result.error) +
                     (stored.length ? "\n\n" + stored.length + " file(s) before it were uploaded." : ""),
                 );
                 return;
