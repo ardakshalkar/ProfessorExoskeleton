@@ -10,9 +10,11 @@
   --flag:#a4362f; --flag-line:#f0c4c0; --flag-tint:#fdf1f0;
   --draft:#2f5b8a; --draft-line:#bdd0e4; --draft-tint:#eef3f9;
   --on-fg:#ffffff;
+  /* Five sizes, and nothing under 12px. Every font-size below is one of them. */
+  --fs-xs:12px; --fs-s:13px; --fs-m:14px; --fs-l:16px; --fs-xl:20px;
   /* The appearance half. A preset sets only these four, the way a template's
      style sheet may set only appearance — see the Appearance picker. */
-  --card-pad:12px; --card-gap:8px; --title:14.5px; --chip:12px;
+  --card-pad:12px; --card-gap:8px; --title:14px; --chip:13px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -36,46 +38,61 @@
 * { box-sizing: border-box; }
 body { background: var(--ground); color: var(--ink); margin: 0;
        font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-       font-size: 14px; line-height: 1.5; }
+       font-size: var(--fs-m); line-height: 1.5; }
 button { font: inherit; color: inherit; cursor: pointer; }
+/* An icon sits on the text's baseline at the text's size and colour, so it
+   follows a chip's tone (red on a hole, green on a deck) without its own rule. */
+.i { width: 1.15em; height: 1.15em; flex: none; fill: none; stroke: currentColor;
+     stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; }
+.chip .i { opacity: .85; }
+.seg button, .primary, .ghost { display: inline-flex; align-items: center; gap: 6px; }
+.todo-i { flex: none; color: var(--muted); font-size: var(--fs-l); line-height: 1; padding-top: 1px; }
+.todo.high .todo-i, .todo.urgent .todo-i { color: var(--flag); }
+.inspect .what p .k .i { color: var(--accent); }
+.wkconcepts .concept-i { color: var(--muted); align-self: center; }
 .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
 
 .topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 30;
           background: var(--surface); border-bottom: 1px solid var(--line);
           display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 20px; }
 .brand { display: flex; align-items: baseline; gap: 9px; margin-right: auto; min-width: 0; }
-.brand b { font-weight: 600; font-size: 14px; white-space: nowrap; }
-.brand span { font-size: 11.5px; color: var(--muted); white-space: nowrap;
+.brand b { font-weight: 600; font-size: var(--fs-m); white-space: nowrap; }
+.brand span { font-size: var(--fs-xs); color: var(--muted); white-space: nowrap;
               overflow: hidden; text-overflow: ellipsis; }
 .seg { display: inline-flex; background: var(--sunk); border-radius: 8px; padding: 2px; gap: 2px; }
 .seg button { border: 0; background: none; border-radius: 6px; padding: 4px 11px;
-              font-size: 12.5px; color: var(--muted); }
+              font-size: var(--fs-s); color: var(--muted); }
 .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink);
                                    font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .seg button:focus-visible, .ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Everything a press reaches, the keyboard reaches, and shows where it is. */
+[tabindex="0"]:focus-visible, .chip:focus-visible, .primary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px; }
 .ghost { border: 1px solid var(--line); background: var(--surface); border-radius: 8px;
-         padding: 5px 11px; font-size: 12.5px; }
+         padding: 5px 11px; font-size: var(--fs-s); }
 .ghost:hover { border-color: var(--accent-line); color: var(--accent-ink); }
 .ghost[aria-pressed="true"] { border-color: var(--accent); color: var(--accent-ink);
                               background: var(--accent-tint); }
 .primary { border: 1px solid var(--accent); background: var(--accent); color: var(--on-fg);
-           border-radius: 8px; padding: 5px 12px; font-size: 12.5px; font-weight: 500; }
+           border-radius: 8px; padding: 5px 12px; font-size: var(--fs-s); font-weight: 500; }
 .primary[disabled] { opacity: .4; cursor: not-allowed; }
 
-.strip { position: sticky; top: calc(51px + env(safe-area-inset-top, 0px)); z-index: 20;
+/* The bars' heights are measured, not assumed: the top bar wraps on a narrow
+   window, and a hard-coded offset then slides the sticky headers under it. */
+.strip { position: sticky; top: calc(var(--top-h, 51px) + env(safe-area-inset-top, 0px)); z-index: 20;
          background: var(--ground); border-bottom: 1px solid var(--rule);
          display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 9px 20px; }
-.hint { font-size: 11.5px; color: var(--muted); }
+.hint { font-size: var(--fs-xs); color: var(--muted); }
 .tally { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; font-variant-numeric: tabular-nums; }
-.tally span { font-size: 11px; border-radius: 999px; padding: 2px 9px;
+.tally span { font-size: var(--fs-xs); border-radius: 999px; padding: 2px 9px;
               border: 1px dashed var(--flag-line); color: var(--flag); }
 .tally span.zero { border-style: solid; border-color: var(--line); color: var(--muted); }
 .banner { margin: 14px 20px 0; max-width: 1140px; padding: 9px 13px; border-radius: 9px;
-          font-size: 12.5px; background: var(--draft-tint); color: var(--muted);
+          font-size: var(--fs-s); background: var(--draft-tint); color: var(--muted);
           border: 1px solid var(--draft-line); }
 .banner b { color: var(--draft); font-weight: 500; }
 
-.spine { padding: 16px 20px 210px; display: flex; flex-direction: column; gap: 10px;
+.spine { padding: 16px 20px 24px; display: flex; flex-direction: column; gap: 10px;
          max-width: 1180px; }
 
 /* The term table. A structure declares the layout its children expect — this
@@ -89,8 +106,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .meeting { display: flex; flex-wrap: wrap; gap: 5px; align-items: center;
            padding-left: 9px; border-left: 2px solid var(--rule); }
 .meeting + .meeting { margin-top: 3px; }
-.spine.grid3 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr);
-               gap: 0; max-width: none; margin: 16px 20px 210px; padding: 0;
+.spine.grid3 { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1.25fr) minmax(0, .75fr);
+               gap: 0; max-width: none; margin: 16px 20px 24px; padding: 0;
                background: var(--surface); border: 1px solid var(--line);
                border-radius: 12px;
                /* `clip`, not `hidden`: hidden makes this a scroll container, and
@@ -99,14 +116,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
                   still clips to the radius and leaves the viewport as the
                   scrollport the headers stick to. */
                overflow: clip; }
-.spine.grid3 .th { position: sticky; top: calc(92px + env(safe-area-inset-top, 0px)); z-index: 10;
+.spine.grid3 .th { position: sticky; z-index: 10;
+                   top: calc(var(--top-h, 51px) + var(--strip-h, 41px) + env(safe-area-inset-top, 0px));
                    background: var(--sunk); color: var(--muted); padding: 8px 12px;
-                   font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+                   font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase;
                    border-bottom: 1px solid var(--line); }
 .wkhead { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
           padding: 14px 12px 4px; border-top: 1px solid var(--line); cursor: pointer; }
 .wkhead:hover { background: var(--sunk); }
-.wkhead b { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums;
+.wkhead b { font-size: var(--fs-l); font-weight: 600; font-variant-numeric: tabular-nums;
             letter-spacing: -.02em; }
 .wkhead h3 { margin: 0; font-size: var(--title); font-weight: 600; }
 .wkhead h3.none { color: var(--muted); font-weight: 450; }
@@ -120,6 +138,18 @@ button { font: inherit; color: inherit; cursor: pointer; }
         min-width: 0; }
 .cell > * { max-width: 100%; }
 .dash { color: var(--muted); opacity: .5; }
+/* A run of weeks with nothing planned in them, drawn once. Five identical
+   "Unplanned" rows are a fifth of the page saying one thing. */
+.band { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap;
+        padding: 14px 12px; border-top: 1px solid var(--line); background: var(--sunk); }
+.spine:not(.grid3) > .band { border: 1px dashed var(--line); border-radius: 12px; }
+.band b { font-size: var(--fs-l); font-weight: 600; font-variant-numeric: tabular-nums; }
+.band .none { color: var(--muted); }
+/* What is on no week, before week 1: the most actionable thing on the page. */
+.lead { margin: 16px 20px 0; padding: 12px 14px; border: 1px dashed var(--flag-line);
+        border-radius: 12px; background: var(--surface); display: flex; flex-wrap: wrap;
+        align-items: center; gap: 8px 10px; }
+.lead > b { font-size: var(--fs-m); font-weight: 600; margin-right: 4px; }
 /* Columns do not fit a phone. The cells stack and each says which column it
    was, from the name the structure gave it — so the fallback is the template's
    own word rather than one this style sheet invented. */
@@ -128,7 +158,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .spine.grid3 .th { display: none; }
   .cell { border-left: 0; padding: 4px 12px; flex-direction: row; flex-wrap: wrap;
           align-items: baseline; gap: 6px; }
-  .cell::before { content: attr(data-col); color: var(--muted); font-size: 10.5px;
+  .cell::before { content: attr(data-col); color: var(--muted); font-size: var(--fs-xs);
                   letter-spacing: .06em; text-transform: uppercase; flex: 0 0 74px; }
   .cell:last-of-type { padding-bottom: 14px; }
 }
@@ -141,16 +171,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wk.stranded { border-style: dashed; cursor: default; }
 .wk-n { border-right: 1px solid var(--rule); padding: var(--card-pad) 0; text-align: center;
         display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.wk-n b { font-size: 21px; font-weight: 600; letter-spacing: -.02em; line-height: 1;
+.wk-n b { font-size: var(--fs-xl); font-weight: 600; letter-spacing: -.02em; line-height: 1;
           font-variant-numeric: tabular-nums; }
 .wk.now .wk-n b { color: var(--accent); }
-.wk-n span { font-size: 10px; color: var(--muted); }
+.wk-n span { font-size: var(--fs-xs); color: var(--muted); }
 .wk-body { padding: var(--card-pad) 14px; min-width: 0; display: flex; flex-direction: column;
            gap: var(--card-gap); }
 .wk-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
 .wk-head h3 { margin: 0; font-size: var(--title); font-weight: 600; }
 .wk-head h3.none { color: var(--muted); font-weight: 450; }
-.pill { font-size: 10px; letter-spacing: .04em; text-transform: uppercase; border-radius: 999px;
+.pill { font-size: var(--fs-xs); border-radius: 999px;
         padding: 2px 8px; font-weight: 500; }
 .pill.now { background: var(--accent); color: var(--on-fg); }
 .pill.draft { background: var(--draft-tint); color: var(--draft); border: 1px solid var(--draft-line); }
@@ -158,50 +188,91 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .chip { display: inline-flex; align-items: center; gap: 6px; font-size: var(--chip);
         border: 1px solid var(--line); background: var(--surface); border-radius: 7px;
         padding: 3px 9px; max-width: 100%; text-align: left; }
-.chip .k { color: var(--muted); font-size: 11px; }
+.chip .k { color: var(--muted); font-size: var(--fs-xs); }
 .chip.meet { background: var(--sunk); border-color: transparent; }
 .chip.deck { border-color: var(--accent-line); background: var(--accent-tint);
              color: var(--accent-ink); font-weight: 500; }
-.chip.work { border-color: var(--flag-line); color: var(--flag); background: var(--flag-tint); }
-.chip.gap { border-style: dashed; border-color: var(--flag-line); color: var(--flag); background: none; }
+/* Graded work is a fact about the week, not an alarm: ink on the surface, with
+   the weight as the one figure in bold. Red is kept for what is missing, so
+   that "Foundations Quiz 15%" and "Draft deck" never read as the same thing. */
+.chip.work { border-color: var(--line); color: var(--ink); background: var(--surface); }
+.chip .wt { font-weight: 600; font-variant-numeric: tabular-nums; }
+/* A hole is a verb. The chip says what pressing it does, and the press opens
+   the conversation with the packet already in it. */
+.chip.gap { border-style: dashed; border-color: var(--flag-line); color: var(--flag); background: none;
+            font-weight: 500; }
+button.chip.gap:hover { background: var(--flag-tint); border-style: solid; }
+/* Ranked by when it bites. This week and next: filled, because it is the
+   Tuesday problem. Weeks already taught: grey, still pressable, because a deck
+   for week 1 is next year's work and not today's. */
+.chip.gap.soon { background: var(--flag-tint); border-style: solid; font-weight: 600; }
+.chip.gap.past { color: var(--muted); border-color: var(--line); font-weight: 450; }
+button.chip.gap.past:hover { background: var(--sunk); }
+.tally span.soon { border-style: solid; background: var(--flag-tint); font-weight: 600; }
+.tally span.past { border-color: var(--line); color: var(--muted); }
+
+/* The one menu: everything that changes how the page is drawn rather than
+   what it shows. */
+.menu-wrap { position: relative; }
+.menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 50; min-width: 300px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.14); padding: 12px 14px;
+        display: flex; flex-direction: column; gap: 12px; }
+.menu label { display: block; font-size: var(--fs-xs); font-weight: 500;
+              color: var(--muted); margin-bottom: 5px; }
+.menu .hint { display: block; margin-top: 4px; }
+.pick { display: inline-flex; align-items: center; gap: 7px; font-size: var(--fs-s); color: var(--muted); }
+.pick select { font: inherit; font-size: var(--fs-s); color: var(--ink); background: var(--surface);
+               border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
+.pick select:focus-visible, .pick input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pick input { accent-color: var(--accent); margin: 0; }
+.pick.off { opacity: .45; }
 .chip.draftc { border-color: var(--draft-line); background: var(--draft-tint); color: var(--draft); }
 .chip.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
-.chip.concept { border-color: transparent; background: var(--sunk); color: var(--muted); font-size: 11.5px; }
+/* The work's type, in the chip: the word a professor scans the column for. */
+.chip .tag { font-size: var(--fs-xs); color: var(--muted); border-right: 1px solid var(--line);
+             padding-right: 6px; }
+/* An outcome taught here is quiet; one assessed here is the accent, so a run
+   of weeks teaching LO-02 and then the week that measures it reads as a shape. */
+.chip.lo { background: none; border-color: var(--line); color: var(--ink); font-weight: 500; }
+.chip.lo .k { font-weight: 400; }
+.chip.lo.hit { background: var(--accent-tint); border-color: var(--accent-line); color: var(--accent-ink); }
+.chip.concept { border-color: transparent; background: var(--sunk); color: var(--muted); font-size: var(--fs-xs); }
 /* Another format of the deck beside it, the way `.fmt` reads in the pane: a
    small hard label, not a second thing called Slides. */
-.chip.fmt { border-color: var(--accent-line); color: var(--accent-ink); font-size: 10.5px;
+.chip.fmt { border-color: var(--accent-line); color: var(--accent-ink); font-size: var(--fs-xs);
             letter-spacing: .04em; font-weight: 600; padding: 2px 7px; }
-.ev { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
+.ev { display: inline-flex; align-items: center; gap: 7px; font-size: var(--fs-xs); color: var(--muted); }
 .ev b { color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
 .ev .none-yet { font-style: italic; }
 .bar { height: 5px; border-radius: 3px; background: var(--sunk); width: 76px; overflow: hidden;
        display: inline-block; }
 .bar i { display: block; height: 100%; background: var(--accent); }
-.ready { font-size: 11.5px; color: var(--accent); }
-.none-yet { font-size: 12px; color: var(--muted); font-style: italic; }
+.ready { font-size: var(--fs-xs); color: var(--accent); }
+.none-yet { font-size: var(--fs-xs); color: var(--muted); font-style: italic; }
 
 /* ------------------------------------------------------------- the workshop */
 .shop { border-top: 1px solid var(--line); background: var(--surface);
         padding: 14px 20px 18px; display: flex; flex-direction: column; gap: 12px; }
 .shop .lineup { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
-.shop label { font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
+.shop label { font-size: var(--fs-xs); font-weight: 500;
               color: var(--muted); margin-right: 8px; }
-.shop textarea { width: 100%; min-height: 190px; resize: vertical; font-size: 12px;
+.shop textarea { width: 100%; min-height: 190px; resize: vertical; font-size: var(--fs-xs);
                  line-height: 1.55; font-family: "IBM Plex Mono", ui-monospace, monospace;
                  background: var(--sunk); color: var(--ink); border: 1px solid var(--line);
                  border-radius: 10px; padding: 11px 13px; }
 .shop textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.err { font-size: 12px; color: var(--flag); background: var(--flag-tint);
+.err { font-size: var(--fs-xs); color: var(--flag); background: var(--flag-tint);
        border: 1px solid var(--flag-line); border-radius: 8px; padding: 8px 11px; }
-.ok { font-size: 12px; color: var(--muted); }
+.ok { font-size: var(--fs-xs); color: var(--muted); }
 
 /* Lectures, Assessment, Quiz, Students and Todos: lists rather than a spine,
    because each reads down a different axis from the week. */
-.listing { margin: 16px 20px 210px; }
+.listing { margin: 16px 20px 24px; }
 .listing .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px;
                    background: var(--surface); }
 .listing table { width: 100%; border-collapse: collapse; background: var(--surface);
-                 font-size: 13px; }
+                 font-size: var(--fs-s); }
 /* The student column stays put while the assessments scroll past it. Without
    it a row of twenty-one marks is a row of numbers belonging to nobody. */
 .listing tbody td:first-child, .listing thead th:first-child {
@@ -209,25 +280,38 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .listing thead th:first-child { background: var(--sunk); }
 .listing tbody tr:hover td:first-child { background: var(--sunk); }
 .listing th { text-align: left; background: var(--sunk); color: var(--muted);
-              font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+              font-size: var(--fs-xs); letter-spacing: .06em; text-transform: uppercase;
               font-weight: 500; padding: 9px 12px; border-bottom: 1px solid var(--line);
               vertical-align: bottom; }
-.listing th small { display: block; font-size: 9.5px; letter-spacing: 0; text-transform: none;
+.listing th small { display: block; font-size: var(--fs-xs); letter-spacing: 0; text-transform: none;
                     color: var(--muted); font-weight: 400; max-width: 11ch; overflow: hidden;
                     text-overflow: ellipsis; white-space: nowrap; }
 .listing td { padding: 9px 12px; border-top: 1px solid var(--rule); vertical-align: top; }
 .listing tbody tr { cursor: pointer; }
 .listing tbody tr:hover { background: var(--sunk); }
-.listing td small { display: block; color: var(--muted); font-size: 11px; }
+.listing td small { display: block; color: var(--muted); font-size: var(--fs-xs); }
 .listing .num { text-align: right; font-variant-numeric: tabular-nums; }
-.listing .foot { color: var(--muted); font-size: 12px; margin: 12px 2px 0; max-width: 80ch; }
-.listing .blocked p { color: var(--muted); font-size: 11.5px; margin: 6px 2px 0;
+.listing .foot { color: var(--muted); font-size: var(--fs-xs); margin: 12px 2px 0; max-width: 80ch; }
+/* A mark, scannable along the row: the glyph is the state, the text the
+   amount. Colour follows the glyph, never replaces it. */
+.mark { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap;
+        font-variant-numeric: tabular-nums; cursor: help; }
+.mark .g { font-size: var(--fs-m); line-height: 1; }
+.mark.ok { color: var(--accent-ink); font-weight: 600; }
+.mark.part { color: var(--ink); }
+.mark.miss { color: var(--flag); font-weight: 500; }
+.mark.wait { color: var(--muted); }
+.warn { color: var(--flag); font-weight: 600; }
+.chip.sig { border-color: var(--flag-line); color: var(--flag); background: var(--flag-tint); }
+.listing .foot.key { display: flex; flex-wrap: wrap; gap: 6px 16px; max-width: none; }
+.listing .foot.key .mark { cursor: default; }
+.listing .blocked p { color: var(--muted); font-size: var(--fs-xs); margin: 6px 2px 0;
                       max-width: 90ch; border-left: 2px solid var(--flag-line);
                       padding-left: 10px; }
 .seg button[disabled] { opacity: .45; cursor: not-allowed; }
 /* Names are showing. Amber, full width, and above the table rather than beside
    it — the point is that it is impossible to have missed. */
-.rule { margin: 0; padding: 9px 20px; font-size: 12px; color: var(--flag);
+.rule { margin: 0; padding: 9px 20px; font-size: var(--fs-xs); color: var(--flag);
         background: var(--flag-tint); border-bottom: 1px solid var(--flag-line);
         border-top: 1px solid var(--flag-line); }
 .rule b { font-weight: 600; }
@@ -244,12 +328,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
         background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
 .todo:hover { border-color: var(--accent-line); }
 .todo .body { flex: 1; min-width: 0; }
-.todo .body b { display: block; font-size: 13.5px; font-weight: 500; }
-.todo .body small { display: block; color: var(--muted); font-size: 11.5px; }
-.todo .when { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.todo .body b { display: block; font-size: var(--fs-m); font-weight: 500; }
+.todo .body small { display: block; color: var(--muted); font-size: var(--fs-xs); }
+.todo .when { color: var(--muted); font-size: var(--fs-xs); white-space: nowrap; }
 /* Severity is form as well as colour: the rail is what you scan, the word is
    what you read when you have stopped. */
-.pri { flex: none; font-size: 10px; letter-spacing: .05em; text-transform: uppercase;
+.pri { flex: none; font-size: var(--fs-xs); text-transform: capitalize;
        border-radius: 4px; padding: 2px 7px; font-weight: 600; }
 .pri.high, .pri.urgent { background: var(--flag-tint); color: var(--flag);
                          border: 1px solid var(--flag-line); }
@@ -262,8 +346,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
            padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
            display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 .inspect .what { min-width: 0; flex: 1 1 320px; }
-.inspect .what p { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
-.packet { font-size: 11.5px; background: var(--sunk); border-radius: 8px; padding: 9px 11px;
+.inspect .what p { margin: 0; font-size: var(--fs-m); }
+.inspect .what p .k { color: var(--muted); }
+.inspect details { margin-top: 6px; }
+.inspect summary { font-size: var(--fs-xs); color: var(--muted); cursor: pointer; }
+.inspect details .packet { margin-top: 6px; }
+.inspect .note { flex-basis: 100%; font-size: var(--fs-xs); color: var(--muted); }
+/* What the fixed bar covers, given back at the foot of the page — its real
+   height rather than a guess reserved whether or not anything is selected. */
+.inspect-room { height: var(--inspect-h, 0px); }
+.packet { font-size: var(--fs-xs); background: var(--sunk); border-radius: 8px; padding: 9px 11px;
           overflow-x: auto; white-space: pre; margin: 0; }
 .verbs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
@@ -271,20 +363,20 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .convo { flex: 1 1 auto; min-width: 0; padding: 26px 20px 60px; display: flex;
          flex-direction: column; gap: 18px; }
 .convo .turn { max-width: 640px; }
-.who { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+.who { font-size: var(--fs-xs); color: var(--muted); text-transform: capitalize; font-weight: 500;
        margin-bottom: 5px; }
 .said { background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
-        padding: 12px 14px; font-size: 13.5px; }
+        padding: 12px 14px; font-size: var(--fs-m); }
 .said.me { background: var(--sunk); border-color: transparent; }
 .said p { margin: 0 0 9px; } .said p:last-child { margin: 0; }
 .pane { flex: 0 0 300px; border-left: 1px solid var(--line); background: var(--surface);
         display: flex; flex-direction: column; }
 .pane-tabs { display: flex; gap: 2px; padding: 8px 8px 0; flex-wrap: wrap; }
-.pane-tabs button { border: 0; background: none; font-size: 11.5px; padding: 4px 7px;
+.pane-tabs button { border: 0; background: none; font-size: var(--fs-xs); padding: 4px 7px;
                     border-radius: 6px; color: var(--muted); }
 .pane-tabs button[aria-pressed="true"] { background: var(--sunk); color: var(--ink); font-weight: 500; }
 .pane-sub { display: flex; gap: 6px; padding: 7px 10px; border-bottom: 1px solid var(--rule);
-            font-size: 11px; color: var(--muted); flex-wrap: wrap; }
+            font-size: var(--fs-xs); color: var(--muted); flex-wrap: wrap; }
 .pane-sub b { color: var(--ink); font-weight: 500; }
 .pane iframe { border: 0; width: 100%; flex: 1 1 auto; min-height: 620px; }
 @media (max-width: 760px) {
@@ -308,8 +400,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .modal:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .modal > header { flex: none; display: flex; align-items: center; gap: 10px;
                   padding: 10px 10px 10px 14px; border-bottom: 1px solid var(--rule); }
-.modal > header b { font-size: 13px; font-weight: 600; }
-.modal > header .where { font-size: 11.5px; color: var(--muted); margin-right: auto;
+.modal > header b { font-size: var(--fs-s); font-weight: 600; }
+.modal > header .where { font-size: var(--fs-xs); color: var(--muted); margin-right: auto;
                          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .modal .body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 18px;
                display: flex; flex-direction: column; gap: 14px; }
@@ -317,29 +409,67 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .composer { flex: none; border-top: 1px solid var(--rule); padding: 12px;
             display: flex; gap: 8px; align-items: flex-end; }
 .composer textarea { flex: 1; min-height: 40px; max-height: 140px; resize: vertical;
-                     font: inherit; font-size: 13.5px; padding: 9px 11px; color: var(--ink);
+                     font: inherit; font-size: var(--fs-m); padding: 9px 11px; color: var(--ink);
                      background: var(--sunk); border: 1px solid var(--line); border-radius: 10px; }
 .composer textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* A material fills the panel the way the deck does in the harness. */
 .matframe { flex: 1; min-height: 0; width: 100%; border: 0; display: block; background: #fff; }
 .matnote { padding: 26px 24px; max-width: 70ch; }
-.matnote b { display: block; font-size: 14px; margin-bottom: 8px; }
-.matnote p { margin: 0; color: var(--muted); font-size: 13px; }
+.matnote b { display: block; font-size: var(--fs-m); margin-bottom: 8px; }
+.matnote p { margin: 0; color: var(--muted); font-size: var(--fs-s); }
 .ctx { border: 1px dashed var(--accent-line); border-radius: 9px; padding: 9px 11px;
-       background: var(--accent-tint); font-size: 11.5px; color: var(--accent-ink);
+       background: var(--accent-tint); font-size: var(--fs-xs); color: var(--accent-ink);
        overflow-x: auto; }
-.ctx b { display: block; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase;
+.ctx b { display: block; font-size: var(--fs-xs);
          margin-bottom: 5px; color: var(--accent); }
-.x { border: 0; background: none; font-size: 18px; line-height: 1; color: var(--muted);
+.x { border: 0; background: none; font-size: var(--fs-xl); line-height: 1; color: var(--muted);
      padding: 2px 6px; border-radius: 6px; }
 .x:hover { background: var(--sunk); color: var(--ink); }
 
 .legend { max-width: 1180px; padding: 4px 20px 26px; }
-.legend h2 { font-size: 15px; margin: 20px 0 6px; font-weight: 600; }
-.legend p { margin: 0 0 8px; color: var(--muted); font-size: 13px; max-width: 76ch; }
-.legend code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px;
+.legend h2 { font-size: var(--fs-l); margin: 20px 0 6px; font-weight: 600; }
+.legend p { margin: 0 0 8px; color: var(--muted); font-size: var(--fs-s); max-width: 76ch; }
+.legend code { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: var(--fs-xs);
                background: var(--sunk); border-radius: 4px; padding: .1em .35em; }
 </style>
+
+<!-- The icon set, once. Line icons on a 24-unit grid in the Lucide idiom,
+     drawn inline so the page needs no icon font and works offline. A template
+     names one with <use href="#i-NAME">; the name comes from the view-model,
+     escaped like every other value, so a structure still cannot add markup. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-lecture" viewBox="0 0 24 24"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></symbol>
+    <symbol id="i-lab" viewBox="0 0 24 24"><path d="M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.6a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4l-5.1-10.2a2 2 0 0 1-.2-.9V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></symbol>
+    <symbol id="i-seminar" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
+    <symbol id="i-slides" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m10 7.5 4.5 2.5-4.5 2.5z"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
+    <symbol id="i-reading" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></symbol>
+    <symbol id="i-data" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+    <symbol id="i-notebook" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="m10 10-2 2 2 2"/><path d="m14 10 2 2-2 2"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+    <symbol id="i-brief" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></symbol>
+    <symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+    <symbol id="i-quiz" viewBox="0 0 24 24"><path d="m3 7 2 2 4-4"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+    <symbol id="i-homework" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
+    <symbol id="i-project" viewBox="0 0 24 24"><path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/></symbol>
+    <symbol id="i-exam" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+    <symbol id="i-outcome" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
+    <symbol id="i-concept" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/></symbol>
+    <symbol id="i-module" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></symbol>
+    <symbol id="i-misdated" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M12 13.5v3"/><path d="M12 19.2h.01"/></symbol>
+    <symbol id="i-weight" viewBox="0 0 24 24"><path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></symbol>
+    <symbol id="i-outline" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M7 14h4"/><path d="M7 18h10"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/></symbol>
+    <symbol id="i-ask" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/></symbol>
+    <symbol id="i-signal" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+    <symbol id="i-approve" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-missing" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="m10 12 4 4"/><path d="m14 12-4 4"/></symbol>
+    <symbol id="i-action" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></symbol>
+  </defs>
+</svg>
 
 <div id="root"></div>
 
@@ -386,33 +516,34 @@ const STRUCTURES = {
     suits: 'the whole term on one screen — the class, what is handed in, and the quiz',
     tmpl: [
       '{% if w.first %}',
-      '<div class="th">Lecture</div><div class="th">Assessment</div><div class="th">Quiz</div>',
+      '<div class="th">Lecture</div><div class="th">Graded work</div><div class="th">Outcomes</div>',
       '{% endif %}',
-      '<div class="wkhead {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
+      '<div class="wkhead {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}" role="button" tabindex="0" aria-label="Week {{ w.week }}{% if w.title %}: {{ w.title }}{% endif %}">',
       '  <b>{{ w.label }}</b><span class="k mono">{{ w.dates }}</span>',
       '  {% if w.title %}<h3>{{ w.title }}</h3>{% else %}<h3 class="none">Unplanned</h3>{% endif %}',
       '  {% if w.is_now %}<span class="pill now">this week</span>{% endif %}',
       '  {% if w.proposed %}<span class="pill draft">proposed</span>{% endif %}',
-      '  {% for g in w.gaps_other %}<button class="chip gap" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}">{{ g.label }}</button>{% endfor %}',
+      '  {% for g in w.gaps_other %}<button class="chip gap {{ g.tier }}" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}"><svg class="i" aria-hidden="true"><use href="#i-{{ g.icon }}"/></svg>{{ g.label }}</button>{% endfor %}',
       '</div>',
-      '{% if w.concepts %}<div class="wkconcepts">{% for c in w.concepts %}<span class="chip concept">{{ c }}</span>{% endfor %}</div>{% endif %}',
+      '{% if w.concepts %}<div class="wkconcepts"><svg class="i concept-i" aria-hidden="true"><use href="#i-concept"/></svg>{% for c in w.concepts %}<span class="chip concept">{{ c }}</span>{% endfor %}</div>{% endif %}',
       '<div class="cell" data-col="Lecture" data-week="{{ w.week }}">',
       '  {% for m in w.lecture %}<div class="meeting">',
-      '    <button class="chip meet" data-pick="meeting" data-id="{{ m.id }}"><span class="k mono">{{ m.on }}</span>{{ m.label }}</button>',
-      '    {% for r in m.materials %}<button class="chip {{ r.tone }}" data-pick="{{ r.pick }}" data-id="{{ r.id }}" data-doc="{{ r.doc }}" title="open it over the course"><span class="k mono">{{ r.kind }}</span>{{ r.label }}</button>{% endfor %}',
+      '    <button class="chip meet" data-pick="meeting" data-id="{{ m.id }}"><span class="k mono">{{ m.on }}</span><svg class="i" aria-hidden="true"><use href="#i-{{ m.icon }}"/></svg>{{ m.label }}</button>',
+      '    {% if m.misdated %}<button class="chip gap {{ w.tier }}" data-pick="gap" data-id="misdated" data-ref="{{ m.id }}" title="{{ m.misdated }}"><svg class="i" aria-hidden="true"><use href="#i-misdated"/></svg>Check date</button>{% endif %}',
+      '    {% for r in m.materials %}<button class="chip {{ r.tone }}" data-pick="{{ r.pick }}" data-id="{{ r.id }}" data-doc="{{ r.doc }}" title="{% if r.kind %}{{ r.kind }} — {% endif %}open it over the course">{% if r.icon %}<svg class="i" aria-hidden="true"><use href="#i-{{ r.icon }}"/></svg>{% endif %}{{ r.label }}</button>{% endfor %}',
       '  </div>{% endfor %}',
-      '  {% if w.no_deck %}<button class="chip gap" data-pick="gap" data-id="deck" title="{{ w.deck_note }}">no deck</button>{% endif %}',
+      '  {% if w.no_deck %}<button class="chip gap {{ w.tier }}" data-pick="gap" data-id="deck" title="{{ w.deck_note }}"><svg class="i" aria-hidden="true"><use href="#i-slides"/></svg>Draft deck</button>{% endif %}',
       '  {% if w.no_lecture %}<span class="dash">—</span>{% endif %}',
       '</div>',
-      '<div class="cell" data-col="Assessment" data-week="{{ w.week }}">{% for a in w.assessment %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}" data-brief="{{ a.brief }}" title="open the brief"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% if a.no_brief %}<span class="chip gap">no brief</span>{% endif %}{% endfor %}{% if w.no_assessment %}<span class="dash">—</span>{% endif %}</div>',
-      '<div class="cell" data-col="Quiz" data-week="{{ w.week }}">{% for a in w.quiz %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}" data-brief="{{ a.brief }}" title="open the brief"><span class="k mono">{{ a.when }}</span>{{ a.title }}<span class="k mono">{{ a.weight }}</span></button>{% if a.no_brief %}<span class="chip gap">no brief</span>{% endif %}{% endfor %}{% if w.no_quiz %}<span class="dash">—</span>{% endif %}</div>',
+      '<div class="cell" data-col="Graded work" data-week="{{ w.week }}">{% for a in w.graded %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}" data-brief="{{ a.brief }}" title="open the brief"><span class="k mono">{{ a.when }}</span><span class="tag"><svg class="i" aria-hidden="true"><use href="#i-{{ a.icon }}"/></svg>{{ a.kind }}</span>{{ a.title }}<span class="wt">{{ a.weight }}</span></button>{% if a.no_brief %}<button class="chip gap {{ w.tier }}" data-pick="gap" data-id="brief" data-ref="{{ a.id }}"><svg class="i" aria-hidden="true"><use href="#i-brief"/></svg>Write brief</button>{% endif %}{% endfor %}{% if w.no_graded %}<span class="dash">—</span>{% endif %}</div>',
+      '<div class="cell" data-col="Outcomes" data-week="{{ w.week }}">{% for o in w.outcomes %}<button class="chip lo {{ o.tone }}" data-pick="outcome" data-id="{{ o.id }}" title="{{ o.title }} — {{ o.how }}"><svg class="i" aria-hidden="true"><use href="#i-outcome"/></svg>{{ o.id }}<span class="k">{{ o.how }}</span></button>{% endfor %}{% if w.no_outcomes %}<span class="dash">—</span>{% endif %}</div>',
     ].join('\n'),
   },
   spine: {
     name: 'Spine',
     suits: 'the default — everything a week holds, in the order a week is read',
     tmpl: [
-      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
+      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}" role="button" tabindex="0" aria-label="Week {{ w.week }}{% if w.title %}: {{ w.title }}{% endif %}">',
       '  <div class="wk-n"><b>{{ w.label }}</b><span>{{ w.mark }}</span></div>',
       '  <div class="wk-body">',
       '    <div class="wk-head">',
@@ -422,14 +553,14 @@ const STRUCTURES = {
       '      {% if w.ready %}<span class="ready">nothing outstanding</span>{% endif %}',
       '    </div>',
       '    {% if w.meetings %}<div class="row">',
-      '      {% for m in w.meetings %}<button class="chip meet" data-pick="meeting" data-id="{{ m.id }}"><span class="k mono">{{ m.on }}</span>{{ m.label }}</button>{% endfor %}',
-      '      {% for d in w.decks %}<button class="chip {{ d.tone }}" data-pick="deck" data-id="{{ d.id }}">{{ d.label }}</button>{% endfor %}',
+      '      {% for m in w.meetings %}<button class="chip meet" data-pick="meeting" data-id="{{ m.id }}"><span class="k mono">{{ m.on }}</span><svg class="i" aria-hidden="true"><use href="#i-{{ m.icon }}"/></svg>{{ m.label }}</button>{% if m.misdated %}<button class="chip gap {{ w.tier }}" data-pick="gap" data-id="misdated" data-ref="{{ m.id }}" title="{{ m.misdated }}"><svg class="i" aria-hidden="true"><use href="#i-misdated"/></svg>Check date</button>{% endif %}{% endfor %}',
+      '      {% for d in w.decks %}<button class="chip {{ d.tone }}" data-pick="deck" data-id="{{ d.id }}"><svg class="i" aria-hidden="true"><use href="#i-slides"/></svg>{{ d.label }}</button>{% endfor %}',
       '    </div>{% endif %}',
       '    {% if w.work %}<div class="row">',
-      '      {% for a in w.work %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}</button>{% endfor %}',
+      '      {% for a in w.work %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span><svg class="i" aria-hidden="true"><use href="#i-{{ a.icon }}"/></svg>{{ a.title }}</button>{% endfor %}',
       '    </div>{% endif %}',
       '    {% if w.gaps %}<div class="row">',
-      '      {% for g in w.gaps %}<button class="chip gap" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}">{{ g.label }}</button>{% endfor %}',
+      '      {% for g in w.gaps %}<button class="chip gap {{ g.tier }}" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}"><svg class="i" aria-hidden="true"><use href="#i-{{ g.icon }}"/></svg>{{ g.label }}</button>{% endfor %}',
       '    </div>{% endif %}',
       '    {% if w.concepts %}<div class="row">',
       '      {% for c in w.concepts %}<span class="chip concept">{{ c }}</span>{% endfor %}',
@@ -442,12 +573,12 @@ const STRUCTURES = {
     name: 'One line',
     suits: 'sixteen weeks on one screen — title and state, nothing else',
     tmpl: [
-      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
+      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}" role="button" tabindex="0" aria-label="Week {{ w.week }}{% if w.title %}: {{ w.title }}{% endif %}">',
       '  <div class="wk-n"><b>{{ w.label }}</b></div>',
       '  <div class="wk-body"><div class="wk-head">',
       '    {% if w.title %}<h3>{{ w.title }}</h3>{% else %}<h3 class="none">Unplanned</h3>{% endif %}',
       '    <span class="k mono">{{ w.mark }}</span>',
-      '    {% for g in w.gaps %}<button class="chip gap" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}">{{ g.label }}</button>{% endfor %}',
+      '    {% for g in w.gaps %}<button class="chip gap {{ g.tier }}" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}"><svg class="i" aria-hidden="true"><use href="#i-{{ g.icon }}"/></svg>{{ g.label }}</button>{% endfor %}',
       '    {% if w.ready %}<span class="ready">ready</span>{% endif %}',
       '  </div></div>',
       '</div>',
@@ -457,7 +588,7 @@ const STRUCTURES = {
     name: 'Teaching first',
     suits: 'what is taught and what is handed in; materials fold away',
     tmpl: [
-      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}">',
+      '<div class="wk {{ w.classes }}" data-pick="week" data-id="{{ w.week }}" data-week="{{ w.week }}" role="button" tabindex="0" aria-label="Week {{ w.week }}{% if w.title %}: {{ w.title }}{% endif %}">',
       '  <div class="wk-n"><b>{{ w.label }}</b><span>{{ w.mark }}</span></div>',
       '  <div class="wk-body">',
       '    <div class="wk-head">',
@@ -465,8 +596,8 @@ const STRUCTURES = {
       '      {% if w.is_now %}<span class="pill now">this week</span>{% endif %}',
       '    </div>',
       '    {% if w.concepts %}<div class="row">{% for c in w.concepts %}<span class="chip concept">{{ c }}</span>{% endfor %}</div>{% endif %}',
-      '    {% if w.work %}<div class="row">{% for a in w.work %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span>{{ a.title }}</button>{% endfor %}</div>{% endif %}',
-      '    {% if w.gaps %}<div class="row">{% for g in w.gaps %}<button class="chip gap" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}">{{ g.label }}</button>{% endfor %}</div>{% endif %}',
+      '    {% if w.work %}<div class="row">{% for a in w.work %}<button class="chip {{ a.tone }}" data-pick="work" data-id="{{ a.id }}"><span class="k mono">{{ a.when }}</span><svg class="i" aria-hidden="true"><use href="#i-{{ a.icon }}"/></svg>{{ a.title }}</button>{% endfor %}</div>{% endif %}',
+      '    {% if w.gaps %}<div class="row">{% for g in w.gaps %}<button class="chip gap {{ g.tier }}" data-pick="gap" data-id="{{ g.kind }}" title="{{ g.note }}"><svg class="i" aria-hidden="true"><use href="#i-{{ g.icon }}"/></svg>{{ g.label }}</button>{% endfor %}</div>{% endif %}',
       '  </div>',
       '</div>',
     ].join('\n'),
@@ -479,9 +610,10 @@ const STRUCTURES = {
 // escaped, because the text is embedded inside a <style> element.
 // ---------------------------------------------------------------------------
 const APPEARANCE = {
-  plain:     { name: 'Plain',     css: '--card-pad:12px; --card-gap:8px; --title:14.5px; --chip:12px;' },
-  dense:     { name: 'Dense',     css: '--card-pad:7px; --card-gap:5px; --title:13px; --chip:11px;' },
-  projector: { name: 'Projector', css: '--card-pad:18px; --card-gap:12px; --title:19px; --chip:14px;' },
+  // Sizes from the five-step scale only, and Dense stops at its 12px floor.
+  plain:     { name: 'Plain',     css: '--card-pad:12px; --card-gap:8px; --title:14px; --chip:13px;' },
+  dense:     { name: 'Dense',     css: '--card-pad:7px; --card-gap:5px; --title:13px; --chip:12px;' },
+  projector: { name: 'Projector', css: '--card-pad:18px; --card-gap:12px; --title:20px; --chip:16px;' },
 };
 const MARKUP = /[<>]|@import|url\s*\(/i;
 
@@ -489,9 +621,9 @@ const MARKUP = /[<>]|@import|url\s*\(/i;
 // professor's own question rather than the model's shape: what is the course,
 // how is the class doing, and what is waiting for me.
 const SECTIONS = [
-  { id: 'outline', label: 'Course outline', hint: 'what the course is' },
-  { id: 'students', label: "Students' progress", hint: 'how the class is doing' },
-  { id: 'todos', label: 'Todos', hint: 'what is waiting for you' },
+  { id: 'outline', label: 'Course outline', hint: 'what the course is', icon: 'outline' },
+  { id: 'students', label: "Students' progress", hint: 'how the class is doing', icon: 'seminar' },
+  { id: 'todos', label: 'Todos', hint: 'what is waiting for you', icon: 'inbox' },
 ];
 const OUTLINE_VIEWS = [
   { id: 'student', label: 'Student view', hint: 'the record only — what a student may be shown' },
@@ -500,12 +632,46 @@ const OUTLINE_VIEWS = [
   { id: 'assessment', label: 'Assessment', hint: 'graded work, its weight and its rubric' },
   { id: 'quiz', label: 'Quiz', hint: 'the quizzes alone, with their items' },
 ];
+// What the outline is read by. The week is the spine; the others are the same
+// records read down a different axis.
+const GROUPS = [['week', 'Week'], ['lectures', 'Meeting'], ['assessment', 'Graded work'],
+                ['quiz', 'Quizzes']];
 /** Which halves of a week the two table views ask for. */
 const OUTLINE_MODE = {
   student: { gaps: false, drafts: false },
   prof: { gaps: true, drafts: true },
 };
-const GAP_WORD = { module: 'no module', deck: 'no deck', deadline: 'no deadline', weight: 'no weight' };
+// What pressing a hole does, not what the hole is. The tally in the strip still
+// counts the hole; the chip on the week is the way to fill it.
+const GAP_WORD = { module: 'Plan module', deck: 'Draft deck', deadline: 'Set dates',
+                   weight: 'Set weight', brief: 'Write brief', misdated: 'Check date' };
+
+// Icons, by what the record says a thing is. Names in the sprite at the top of
+// the page; a kind with no entry gets the plain file, never nothing.
+const GAP_ICON = { module: 'module', deck: 'slides', deadline: 'calendar', weight: 'weight',
+                   brief: 'brief', misdated: 'misdated' };
+const MEETING_ICON = { lecture: 'lecture', lab: 'lab', seminar: 'seminar', discussion: 'seminar',
+                       review: 'seminar', exercise: 'homework', project_work: 'project',
+                       field_work: 'project', reading: 'reading' };
+const RESOURCE_ICON = { slides: 'slides', reading: 'reading', textbook_chapter: 'reading',
+                        dataset: 'data', notebook: 'notebook', video: 'video', link: 'link',
+                        tool: 'notebook' };
+const WORK_ICON = { quiz: 'quiz', assignment: 'homework', project: 'project', exam: 'exam',
+                    presentation: 'lecture', oral_defense: 'seminar', participation: 'seminar' };
+const TODO_ICON = { action: 'action', approve: 'approve', signal: 'signal', missing: 'missing' };
+// A structural todo takes the icon of the hole it counts.
+function todoIcon(t) { return t.kind === 'gap' ? (GAP_ICON[t.id] || 'module') : (TODO_ICON[t.kind] || 'action'); }
+function iconOf(table, key, fallback) { return table[key] || fallback || 'file'; }
+/** The same icon as markup, for the band and the lead card built outside a template. */
+function svgIcon(name) {
+  return '<svg class="i" aria-hidden="true"><use href="#i-' + esc(name) + '"/></svg>';
+}
+
+/** An icon as a React element, for the chrome outside the templates. */
+function icon(name, cls) {
+  return h('svg', { className: 'i' + (cls ? ' ' + cls : ''), 'aria-hidden': 'true', focusable: 'false' },
+    h('use', { href: '#i-' + name }));
+}
 
 // The three enums the columns are cut along, from `src/model/common.ts`. A week
 // is sorted into them rather than into categories invented for the table, so a
@@ -521,7 +687,62 @@ const GAP_WORD = { module: 'no module', deck: 'no deck', deadline: 'no deadline'
 const READING_WORD = { textbook_chapter: 'chapter', reading: 'reading', video: 'video',
                        link: 'link', dataset: 'data', notebook: 'notebook', tool: 'tool',
                        other: 'file' };
+const TYPE_WORD = { quiz: 'quiz', assignment: 'homework', project: 'project', exam: 'exam',
+                    presentation: 'talk', oral_defense: 'defence', participation: 'participation',
+                    other: 'work' };
+const OUTCOME_TITLE = (DATA.outcomes || []).reduce(function (all, o) {
+  all[o.outcome_id] = o.title; return all;
+}, {});
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// When a hole bites, from where the run stands. This week and next are the
+// ones a professor can still fix before the class meets; anything already
+// taught is a note for next year. Said once here so the chip, the band and the
+// tally cannot disagree about which is which.
+function tierOf(weekNumber) {
+  const now = DATA.current_week;
+  if (now == null) return 'later';
+  if (weekNumber < now) return 'past';
+  return weekNumber <= now + 1 ? 'soon' : 'later';
+}
+
+// A hole a draft already stands in for is not a hole while drafts are shown:
+// week 10 with a proposed module should offer that draft, not "Plan module".
+function openGaps(week, mode) {
+  if (!mode.drafts) return week.gaps;
+  return week.gaps.filter(function (g) {
+    if (g.kind === 'module') return !DATA.proposed.modules[week.week];
+    if (g.kind === 'deck') return !DATA.proposed.decks[week.week];
+    return true;
+  });
+}
+
+// A meeting whose date falls outside the week it is drawn in (`build.mjs`
+// finds these). Said on the chip's title; empty where gaps are not shown.
+function misdatedNote(activityId, mode) {
+  if (!mode.gaps) return '';
+  const m = (DATA.misdated || []).filter(function (x) { return x.activity_id === activityId; })[0];
+  if (!m) return '';
+  return 'Dated ' + shortDate(m.on) + ', which is week ' + (m.date_week || '—') +
+    ' — but its module puts it in week ' + m.week + '.';
+}
+
+/**
+ * Every open hole on the page, with its tier: the week gaps the chips draw,
+ * the meetings dated off their week, and the work in the card before week 1.
+ * Counted from the same functions that draw them, so the tally and the page
+ * cannot disagree.
+ */
+function rankedGaps() {
+  const prof = OUTLINE_MODE.prof;
+  const out = { soon: 0, later: 0, past: 0 };
+  DATA.weeks.forEach(function (w) {
+    openGaps(w, prof).forEach(function () { out[tierOf(w.week)] += 1; });
+  });
+  (DATA.misdated || []).forEach(function (m) { out[tierOf(m.week)] += 1; });
+  undatedWork(prof).forEach(function (x) { out[x.week ? tierOf(x.week) : 'soon'] += 1; });
+  return out;
+}
 
 function shortDate(value) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''));
@@ -551,17 +772,21 @@ function weekModel(week, mode, selected) {
 
   const work = [];
   week.due.forEach(function (a) {
-    work.push({ id: a.assessment_id, title: a.title, when: 'due ' + shortDate(a.due_on), tone: 'work' });
+    work.push({ id: a.assessment_id, title: a.title, when: 'due ' + shortDate(a.due_on), tone: 'work', icon: iconOf(WORK_ICON, a.type) });
   });
   week.opens.forEach(function (a) {
-    work.push({ id: a.assessment_id, title: a.title, when: 'opens ' + shortDate(a.opens_on), tone: 'work' });
+    work.push({ id: a.assessment_id, title: a.title, when: 'opens ' + shortDate(a.opens_on), tone: 'work', icon: iconOf(WORK_ICON, a.type) });
   });
-  week.undated.forEach(function (a) {
-    work.push({ id: a.assessment_id, title: a.title, when: 'no date', tone: 'gap' });
+  // Work with no date is on no week, whatever week the record files it under.
+  // Where gaps are shown it goes to the card before week 1 (`undatedWork`); the
+  // student view has no such card, so there it stays where the record put it.
+  if (!mode.gaps) week.undated.forEach(function (a) {
+    work.push({ id: a.assessment_id, title: a.title, when: 'no date', tone: 'gap', icon: iconOf(WORK_ICON, a.type) });
   });
-  if (proposedWork) {
+  if (proposedWork && proposedWork.due_on) {
     work.push({ id: proposedWork.assessment_id, title: proposedWork.title + ' · proposed',
-                when: 'no date', tone: 'draftc' });
+                when: 'due ' + shortDate(proposedWork.due_on), tone: 'draftc',
+                icon: iconOf(WORK_ICON, proposedWork.type) });
   }
 
   // The three columns of the term table. The class is one column whatever type
@@ -586,7 +811,7 @@ function weekModel(week, mode, selected) {
       const formats = (DATA.materials[r.document_id] || {}).formats || [];
       formats.slice(1).forEach(function (f) {
         materials.push({ id: r.resource_id + ':' + f.doc, doc: f.doc, label: f.label,
-                         kind: '', tone: 'fmt', pick: 'resource' });
+                         kind: '', tone: 'fmt', pick: 'resource', icon: '' });
       });
       materials.push({
         id: r.resource_id,
@@ -600,6 +825,7 @@ function weekModel(week, mode, selected) {
         kind: deck ? '' : (READING_WORD[r.kind] || r.kind),
         tone: deck ? 'deck' : '',
         pick: deck ? 'deck' : 'resource',
+        icon: deck ? 'slides' : iconOf(RESOURCE_ICON, r.kind),
       });
     });
     // Slides first, then its other formats, then everything else: the deck is
@@ -608,7 +834,8 @@ function weekModel(week, mode, selected) {
     materials.sort(function (a, b) { return rank(a) - rank(b); });
     return { id: m.activity_id, on: shortDate(m.on),
              label: m.type + (m.location ? ' · ' + m.location : ''),
-             materials: materials };
+             icon: iconOf(MEETING_ICON, m.type, 'lecture'),
+             materials: materials, misdated: misdatedNote(m.activity_id, mode) };
   });
 
   // Graded work, split the way the professor asked for it: the quiz has a
@@ -623,6 +850,7 @@ function weekModel(week, mode, selected) {
     const brief = DATA.briefs[a.id] || {};
     (source && source.type === 'quiz' ? quiz : assessment).push(
       Object.assign({}, a, {
+        kind: TYPE_WORD[(source && source.type) || 'other'] || (source && source.type) || 'work',
         weight: source && source.weight != null ? Math.round(source.weight * 100) + '%' : '',
         // The brief students read, as the chip's own press. Empty when there is
         // none, and the week then draws `no brief` beside the work in the same
@@ -631,6 +859,29 @@ function weekModel(week, mode, selected) {
         brief: brief.none ? '' : a.id,
         no_brief: Boolean(brief.none),
       }));
+  });
+
+  // One column of graded work, the type said on the chip. A Quiz column of its
+  // own held one item in sixteen weeks on this course; a tag holds it in one word.
+  const graded = [];
+  work.forEach(function (a) {
+    const chip = assessment.concat(quiz).filter(function (x) { return x.id === a.id && x.when === a.when; })[0];
+    if (chip) graded.push(chip);
+  });
+
+  // The outcomes the week serves, and how: TAUGHT by its module, ASSESSED by
+  // work falling due in it. The width the Quiz column gave back goes here,
+  // because it is the column that makes alignment visible week by week — an
+  // outcome assessed in a week that never taught it is the thing to see.
+  const taught = {};
+  week.modules.forEach(function (m) { (m.outcomes || []).forEach(function (o) { taught[o.id] = o.title; }); });
+  const assessed = {};
+  week.due.forEach(function (a) { (a.outcomes || []).forEach(function (id) { assessed[id] = true; }); });
+  const weekOutcomes = Object.keys(Object.assign({}, taught, assessed)).sort().map(function (id) {
+    const how = taught[id] !== undefined && assessed[id] ? 'taught · assessed'
+      : assessed[id] ? 'assessed' : 'taught';
+    return { id: id, title: taught[id] || OUTCOME_TITLE[id] || id, how: how,
+             tone: assessed[id] ? 'hit' : '' };
   });
 
   return {
@@ -651,17 +902,23 @@ function weekModel(week, mode, selected) {
     no_lecture: !lecture.length,
     no_assessment: !assessment.length,
     no_quiz: !quiz.length,
+    graded: graded,
+    no_graded: !graded.length,
+    outcomes: weekOutcomes,
+    no_outcomes: !weekOutcomes.length,
     // Once per week, not once per meeting: the model's rule is that a week
     // which meets and registers no slides has one deck gap, and a lecture and
     // a lab both saying "no deck" would report it twice.
-    no_deck: !decks.length && week.meetings.length > 0,
+    // A gap, so only where gaps are shown: the student view is the record alone.
+    no_deck: mode.gaps && !decks.length && week.meetings.length > 0,
     deck_note: (week.gaps.filter(function (g) { return g.kind === 'deck'; })[0] || {}).note || '',
     // Every gap except the one the Slides column already draws. A week that is
     // missing its deck says so once, in the column whose subject it is.
     gaps_other: mode.gaps
-      ? week.gaps.filter(function (g) { return g.kind !== 'deck'; })
-          .map(function (g) { return { kind: g.kind, label: GAP_WORD[g.kind], note: g.note }; })
+      ? openGaps(week, mode).filter(function (g) { return g.kind !== 'deck'; })
+          .map(function (g) { return { kind: g.kind, label: GAP_WORD[g.kind], icon: GAP_ICON[g.kind], note: g.note, tier: tierOf(week.week) }; })
       : [],
+    tier: tierOf(week.week),
     title: title || (proposedModule ? proposedModule.title : ''),
     proposed: Boolean(proposedModule && !title),
     is_now: week.week === DATA.current_week,
@@ -674,12 +931,14 @@ function weekModel(week, mode, selected) {
              (mode.gaps && week.gaps.length === 0 ? 'quiet' : ''),
     meetings: week.meetings.map(function (m) {
       return { id: m.activity_id, on: shortDate(m.on),
-               label: m.type + (m.location ? ' · ' + m.location : '') };
+               label: m.type + (m.location ? ' · ' + m.location : ''),
+               icon: iconOf(MEETING_ICON, m.type, 'lecture'),
+               misdated: misdatedNote(m.activity_id, mode) };
     }),
     decks: decks,
     work: work,
     gaps: mode.gaps
-      ? week.gaps.map(function (g) { return { kind: g.kind, label: GAP_WORD[g.kind], note: g.note }; })
+      ? openGaps(week, mode).map(function (g) { return { kind: g.kind, label: GAP_WORD[g.kind], icon: GAP_ICON[g.kind], note: g.note, tier: tierOf(week.week) }; })
       : [],
     // Every concept the week's module names, not the first four. On a card at
     // three hundred pixels that had to fold; on a full-width page the line of
@@ -717,10 +976,19 @@ function packetFor(sel) {
     });
   }
   if (sel.kind === 'gap') {
+    // A press on a band or on one piece of work names exactly what it is about:
+    // the weeks the band folded, or the assessment beside the chip.
+    if (sel.id === 'misdated') {
+      const m = (DATA.misdated || []).filter(function (x) { return x.activity_id === sel.ref; })[0] || {};
+      return Object.assign(base, { gap: 'misdated', activity_id: sel.ref, on: m.on, week_by_date: m.date_week });
+    }
+    if (sel.ref) return Object.assign(base, { gap: sel.id, assessment_id: sel.ref });
+    if (sel.weeks) return Object.assign(base, { week: undefined, weeks: sel.weeks, gap: sel.id });
     const gap = week.gaps.filter(function (g) { return g.kind === sel.id; })[0] || {};
     return Object.assign(base, { gap: sel.id, ids: gap.ids || [] });
   }
   if (sel.kind === 'meeting') return Object.assign(base, { activity_id: sel.id });
+  if (sel.kind === 'outcome') return Object.assign(base, { outcome_id: sel.id });
   if (sel.kind === 'work') return Object.assign(base, { assessment_id: sel.id });
   if (sel.kind === 'deck') return Object.assign(base, { resource_id: sel.id, kind: 'slides' });
   if (sel.kind === 'resource') return Object.assign(base, { resource_id: sel.id });
@@ -745,6 +1013,15 @@ function promptFor(sel) {
   const w = sel.week.week;
   const title = (sel.week.modules[0] || {}).title || 'this week';
   if (sel.kind === 'gap') {
+    if (sel.id === 'misdated') return sel.ref + ' — ' + misdatedNote(sel.ref, OUTLINE_MODE.prof) +
+      ' Which is wrong: its date, its module’s week, or the run’s start date? Change nothing until I say.';
+    if (sel.id === 'brief') return sel.ref + ' has no brief students can read. Draft one from its ' +
+      'rubric and outcomes with /design-assessment, as a draft for me to read.';
+    if (sel.id === 'deadline' && sel.ref) return 'Ask me the open and due dates for ' + sel.ref +
+      ' before running anything — those dates exist only in my head.';
+    if (sel.id === 'module' && sel.weeks) return 'Weeks ' + sel.weeks[0] + '–' +
+      sel.weeks[sel.weeks.length - 1] + ' have no module. Propose what they should teach, given ' +
+      'what comes before them and what falls due in them.';
     if (sel.id === 'deck') return 'Week ' + w + ' has no deck. Draft the slides for ' + title + ' with /make-materials.';
     if (sel.id === 'deadline') {
       const g = sel.week.gaps.filter(function (x) { return x.kind === 'deadline'; })[0] || { ids: [] };
@@ -755,6 +1032,8 @@ function promptFor(sel) {
     return 'Week ' + w + ' has no module. What should it teach, given the weeks either side?';
   }
   if (sel.kind === 'work') return 'Show me ' + sel.id + ' and how it is going.';
+  if (sel.kind === 'outcome') return 'Which work measures ' + sel.id + ', and is what week ' + w +
+    ' teaches enough to be assessed on it? Use /syllabus-review’s alignment rules.';
   if (sel.kind === 'meeting') return 'Prepare ' + sel.id + '.';
   if (sel.kind === 'deck') return 'What was read out of this deck?';
   if (sel.kind === 'resource') return 'Is ' + sel.id + ' still the right thing to set for week ' + w + '?';
@@ -775,16 +1054,16 @@ function replyFor(sel) {
   }
   if (sel && sel.kind === 'todo' && sel.todo.kind === 'approve') {
     return ['I can lay the suggestions out with the evidence each one cites and its confidence.',
-            'I cannot approve them, and there is no route from this page that could: ' +
-            'ainar approve is a command you run.'];
+            'I cannot decide them, and there is no route from this page that could: a grade is ' +
+            'yours when you write your professor_decision beside the suggestion.'];
   }
   if (sel && sel.kind === 'gap' && sel.id === 'deck') {
     const concepts = ((sel.week.modules[0] || {}).concepts || [])
       .slice(0, 2).map(function (c) { return c.title; }).join(' and ');
     return ['I have the week, its module and what is missing from it, so there is nothing to look up first.',
             'MODULE-' + sel.week.week + ' introduces ' + (concepts || 'this week’s concepts') +
-            '. Eighteen slides against those, written to work/' + DATA.run.id + '/ as a draft resource.',
-            'Nothing joins the course until you run ainar approve.'];
+            '. Eighteen slides against those, registered in the course as a resource marked approval: draft.',
+            'Students see none of it until you change that word in its record.'];
   }
   if (sel && sel.kind === 'gap' && sel.id === 'deadline') {
     return ['Skipping the usual validate-and-inbox opening on purpose: nothing on disk can answer this.',
@@ -795,17 +1074,107 @@ function replyFor(sel) {
 }
 
 // ------------------------------------------------------------------- spine
+
+// A week with nothing planned in it: no module, no meeting, and no drafted
+// module standing in for one. Graded work falling due in it does not make it
+// planned — the final project due in week 16 is the reason to plan week 16.
+function isEmptyWeek(week, mode) {
+  return !week.modules.length && !week.meetings.length &&
+    !(mode.drafts && DATA.proposed.modules[week.week]);
+}
+
+// Consecutive weeks, with every run of two or more empty ones folded into one
+// band. A single empty week between two planned ones stays a row: it is a hole
+// in the middle of the term, and a band would make it look like a tail.
+function rowsOf(weeks, mode) {
+  const rows = [];
+  let run = [];
+  const flush = function () {
+    if (run.length >= 2) rows.push({ band: run });
+    else run.forEach(function (w) { rows.push({ week: w }); });
+    run = [];
+  };
+  weeks.forEach(function (w) {
+    if (isEmptyWeek(w, mode)) run.push(w);
+    else { flush(); rows.push({ week: w }); }
+  });
+  flush();
+  return rows;
+}
+
+// Everything the professor has to put on a date: record work with none, the
+// run's unplaced work, and a drafted assessment with no due date.
+function undatedWork(mode) {
+  if (!mode.gaps) return [];
+  const out = [];
+  DATA.weeks.forEach(function (w) {
+    w.undated.forEach(function (a) {
+      out.push({ id: a.assessment_id, title: a.title, week: w.week, tone: 'work' });
+    });
+    const p = mode.drafts ? DATA.proposed.assessments[w.week] : null;
+    if (p && !p.due_on) out.push({ id: p.assessment_id, title: p.title + ' · proposed',
+                                   week: w.week, tone: 'draftc' });
+  });
+  (DATA.unplaced.assessments || []).forEach(function (a) {
+    out.push({ id: a.assessment_id, title: a.title, week: '', tone: 'work' });
+  });
+  return out;
+}
+
+const COLUMN_HEADS = '<div class="th">Lecture</div><div class="th">Graded work</div><div class="th">Outcomes</div>';
+
+function bandMarkup(run, mode, layout, first) {
+  const a = run[0], z = run[run.length - 1];
+  const span = 'Weeks ' + a.week + '–' + z.week;
+  const work = [];
+  run.forEach(function (w) {
+    const m = weekModel(w, mode, null);
+    m.graded.forEach(function (x) {
+      work.push('<button class="chip ' + esc(x.tone) + '" data-pick="work" data-id="' + esc(x.id) +
+        '" data-week="' + esc(w.week) + '" data-brief="' + esc(x.brief) + '"><span class="k mono">' +
+        esc(x.when) + '</span><span class="tag">' + svgIcon(x.icon) + esc(x.kind) + '</span>' + esc(x.title) + '<span class="wt">' + esc(x.weight) + '</span></button>');
+    });
+  });
+  return (first && layout === 'grid3' ? COLUMN_HEADS : '') +
+    '<div class="band" data-week="' + esc(a.week) + '">' +
+    '<b>' + svgIcon('calendar') + ' ' + esc(span) + '</b><span class="k mono">' + esc(shortDate(a.starts_on) + ' – ' + shortDate(z.ends_on)) + '</span>' +
+    '<span class="none">' + (mode.gaps ? 'unplanned · ' + run.length + ' weeks' : 'no sessions scheduled') + '</span>' +
+    work.join('') +
+    (mode.gaps ? '<button class="chip gap ' + tierOf(a.week) + '" data-pick="gap" data-id="module" data-weeks="' +
+      esc(run.map(function (w) { return w.week; }).join(',')) + '">' + svgIcon('module') + 'Plan ' + esc(span.toLowerCase()) + '</button>' : '') +
+    '</div>';
+}
+
+function leadMarkup(mode) {
+  const items = undatedWork(mode);
+  if (!items.length) return '';
+  return '<div class="lead"><b>' + svgIcon('misdated') + ' ' + items.length + (items.length === 1 ? ' thing is' : ' things are') +
+    ' not on the calendar yet</b>' +
+    items.map(function (x) {
+      return '<button class="chip ' + esc(x.tone) + '" data-pick="work" data-id="' + esc(x.id) +
+        '" data-week="' + esc(x.week) + '">' + esc(x.title) + '</button>' +
+        '<button class="chip gap" data-pick="gap" data-id="deadline" data-ref="' + esc(x.id) +
+        '" data-week="' + esc(x.week) + '">' + svgIcon('calendar') + 'Set dates</button>';
+    }).join('') + '</div>';
+}
+
 function Spine(props) {
   const ref = useRef(null);
   const html = useMemo(function () {
     try {
-      return { markup: DATA.weeks.map(function (week) {
-        return tmpl(props.structure, { w: weekModel(week, props.mode, props.selected) });
+      const rows = rowsOf(DATA.weeks, props.mode);
+      return { lead: leadMarkup(props.mode), markup: rows.map(function (row, i) {
+        if (row.band) return bandMarkup(row.band, props.mode, props.layout, i === 0);
+        const w = weekModel(row.week, props.mode, props.selected);
+        // `first` is the first ROW, so the column heads survive a term whose
+        // opening weeks are a band.
+        w.first = i === 0;
+        return tmpl(props.structure, { w: w });
       }).join('\n'), error: null };
     } catch (e) {
-      return { markup: '', error: e.message };
+      return { lead: '', markup: '', error: e.message };
     }
-  }, [props.structure, props.mode, props.selected]);
+  }, [props.structure, props.mode, props.selected, props.layout]);
 
   useEffect(function () { props.onError(html.error); }, [html.error]);
 
@@ -823,42 +1192,39 @@ function Spine(props) {
     const week = DATA.weeks.filter(function (w) {
       return String(w.week) === String(number);
     })[0];
-    if (!week) return;
+    // Work the run holds on no week at all sits in the lead card with an empty
+    // `data-week`; it still selects, as a thing with no week.
+    if (!week && !(holder && holder.dataset.week === '')) return;
+    const weeks = el.dataset.weeks ? el.dataset.weeks.split(',').map(Number) : null;
     props.onSelect({ kind: el.dataset.pick, id: el.dataset.id, doc: el.dataset.doc || '',
-                     week: week, view: props.view });
+                     ref: el.dataset.ref || '', weeks: weeks,
+                     week: week || null, view: props.view });
+    // A hole is a verb: pressing it starts the turn that fills it, with the
+    // packet already in it, rather than selecting it and waiting for Ask.
+    if (el.dataset.pick === 'gap') { props.onAsk(); return; }
     // A material or a brief opens on the press, the way it does in the harness:
     // the chip IS the link. It still selects, so the packet under it is about
     // the thing now on screen rather than whatever was pressed before it.
     if (el.dataset.doc) props.onOpen({ kind: 'doc', id: el.dataset.doc });
     else if (el.dataset.brief) props.onOpen({ kind: 'brief', id: el.dataset.brief });
-  }, [props.view, props.onSelect, props.onOpen]);
+  }, [props.view, props.onSelect, props.onOpen, props.onAsk]);
 
   if (html.error) return null;
   // The structure says how its own children are laid out; the chrome does not
   // guess. A structure with no `layout` gets the stacked column.
-  return h('div', { className: 'spine ' + (props.layout || ''), ref: ref, onClick: onClick,
-                    dangerouslySetInnerHTML: { __html: html.markup } });
+  return h('div', { ref: ref, onClick: onClick },
+    html.lead ? h('div', { dangerouslySetInnerHTML: { __html: html.lead } }) : null,
+    h('div', { className: 'spine ' + (props.layout || ''),
+               dangerouslySetInnerHTML: { __html: html.markup } }));
 }
 
 // ---------------------------------------------------------------- workshop
 function Workshop(props) {
+  // The structure and appearance pickers live in the ⋯ menu; this is only the
+  // source of whichever structure is chosen there.
   return h('div', { className: 'shop' },
     h('div', { className: 'lineup' },
-      h('div', null,
-        h('label', null, 'Structure'),
-        h('span', { className: 'seg' }, Object.keys(STRUCTURES).map(function (id) {
-          return h('button', { key: id, type: 'button', title: STRUCTURES[id].suits,
-                               'aria-pressed': props.structureId === id,
-                               onClick: function () { props.onStructure(id); } },
-            STRUCTURES[id].name);
-        }))),
-      h('div', null,
-        h('label', null, 'Appearance'),
-        h('span', { className: 'seg' }, Object.keys(APPEARANCE).map(function (id) {
-          return h('button', { key: id, type: 'button', 'aria-pressed': props.appearanceId === id,
-                               onClick: function () { props.onAppearance(id); } },
-            APPEARANCE[id].name);
-        }))),
+      h('label', { htmlFor: 'structure-source' }, 'Template · ' + STRUCTURES[props.structureId].name),
       h('span', { className: 'hint' }, STRUCTURES[props.structureId].suits)),
     h('textarea', { value: props.draft, spellCheck: false, id: 'structure-source',
                     'aria-label': 'The structure for one week',
@@ -881,7 +1247,7 @@ function ChatMode() {
     { who: 'professor', me: true, said: ['Do week 7.'] },
     { who: 'exoskeleton', said: [
       'MODULE-07 introduces regularisation and the bias–variance tradeoff, and week 6 already covered evaluation, so I will open on the failure it fixes rather than on the formula.',
-      'Eighteen slides drafted into work/CSS-4008-2026-FALL/. Nothing is in the course until you run ainar approve.'] },
+      'Eighteen slides, registered in the course as a resource marked approval: draft. Students see none of it until you change that word in its record.'] },
   ];
   return h('div', { className: 'chatmode' },
     h('div', { className: 'convo' }, turns.map(function (t, i) {
@@ -924,7 +1290,7 @@ function Lectures(props) {
         h('th', null, 'Wk'), h('th', null, 'When'), h('th', null, 'Type'),
         h('th', null, 'Where'), h('th', null, 'Module'), h('th', null, 'Slides'))),
       h('tbody', null, rows.map(function (r) {
-        return h('tr', { key: r.meeting.activity_id, onClick: function () {
+        return h('tr', { key: r.meeting.activity_id, tabIndex: 0, onClick: function () {
           props.onSelect({ kind: 'meeting', id: r.meeting.activity_id, week: r.week, view: 'lectures' });
         } },
           h('td', { className: 'mono num' }, r.week.week),
@@ -957,7 +1323,7 @@ function Assessments(props) {
         h('th', null, 'Brief'))),
       h('tbody', null, rows.map(function (a) {
         const seen = inboxBy[a.assessment_id] || {};
-        return h('tr', { key: a.assessment_id, onClick: function () {
+        return h('tr', { key: a.assessment_id, tabIndex: 0, onClick: function () {
           props.onSelect({ kind: 'work', id: a.assessment_id,
                            week: weekOf(a.assessment_id), view: props.only === 'quiz' ? 'quiz' : 'assessment' });
         } },
@@ -1010,23 +1376,72 @@ function weekOf(assessmentId) {
 }
 
 // ------------------------------------------------------- students' progress
+/**
+ * One mark, as a glyph a row can be scanned by.
+ *
+ *   ●  graded — an approved percentage, the only figure the gradebook counts
+ *   ◐  partly decided — how many criteria have the professor's decision
+ *   ○  missing — due, and nothing handed in
+ *   ·  not due yet — nothing handed in, and nothing is wrong with that
+ *   ⚠  beside any of them: the rubric itself is inconsistent
+ *
+ * The reason a mark cannot be exported is the cell's title, on the cell it
+ * explains, instead of a list of criterion ids under the table.
+ */
+function markCell(m) {
+  const due = (DATA.assessments.filter(function (a) { return a.assessment_id === m.assessment_id; })[0] || {}).due_on;
+  const scale = m.blocked.some(function (b) { return /wrong scale|sum to/.test(b); });
+  const undecided = m.blocked.map(function (b) { return /(\d+) of (\d+) criteria undecided/.exec(b); })
+    .filter(Boolean)[0];
+  let glyph, text, tone;
+  if (m.percent !== null && m.exportable) { glyph = '●'; text = Math.round(m.percent) + '%'; tone = 'ok'; }
+  else if (undecided) {
+    glyph = '◐'; tone = 'part';
+    text = (Number(undecided[2]) - Number(undecided[1])) + '/' + undecided[2];
+  } else if (m.status === 'not_submitted' || m.status === 'missing') {
+    const late = due && DATA.as_of && due < DATA.as_of;
+    glyph = late ? '○' : '·'; text = late ? 'missing' : 'not due'; tone = late ? 'miss' : 'wait';
+  } else { glyph = '◐'; text = m.status.replace(/_/g, ' '); tone = 'part'; }
+  const why = m.blocked.length ? m.blocked.join('\n') : 'exportable';
+  return h('span', { className: 'mark ' + tone, title: why + (m.percent !== null && !m.exportable
+      ? '\nso far: ' + Math.round(m.percent) + '% from the decided criteria' : '') },
+    h('span', { className: 'g', 'aria-hidden': 'true' }, glyph), text,
+    scale ? h('span', { className: 'warn', 'aria-label': 'rubric problem' }, ' ⚠') : null);
+}
+
+/** Who needs the professor first: open signals, then missing work, then a
+ *  broken rubric, then how much is left to decide. Counted, not judged. */
+function attentionOf(s) {
+  let score = s.signals.length * 100;
+  s.marks.forEach(function (m) {
+    const due = (DATA.assessments.filter(function (a) { return a.assessment_id === m.assessment_id; })[0] || {}).due_on;
+    if ((m.status === 'not_submitted' || m.status === 'missing') && due && DATA.as_of && due < DATA.as_of) score += 30;
+    if (m.blocked.some(function (b) { return /wrong scale|sum to/.test(b); })) score += 20;
+    const u = m.blocked.map(function (b) { return /(\d+) of \d+ criteria undecided/.exec(b); }).filter(Boolean)[0];
+    if (u) score += Number(u[1]);
+  });
+  return score;
+}
+
 function Students(props) {
   const marks = DATA.students.length ? DATA.students[0].marks : [];
+  const rows = DATA.students.slice().sort(function (a, b) { return attentionOf(b) - attentionOf(a); });
   return h('div', { className: 'listing' },
     // Wide by construction: one column per assessment, and a real course has
     // twenty-one of them. It scrolls; the page does not.
-    h(Scroll, { min: 320 + 130 * (marks.length + 2) },
+    h(Scroll, { min: 320 + 120 * (marks.length + 2) },
       h('thead', null, h('tr', null,
         h('th', null, 'Student'),
         h('th', null, 'Concepts with evidence'),
         marks.map(function (m) {
-          return h('th', { key: m.assessment_id, className: 'num' },
-            m.type === 'quiz' ? 'Quiz' : 'HW', h('small', { className: 'mono' }, m.title));
+          return h('th', { key: m.assessment_id, title: m.title },
+            TYPE_WORD[m.type] || m.type,
+            h('small', null, m.title + (m.weight != null ? ' · ' + Math.round(m.weight * 100) + '%' : '')));
         }),
         h('th', null, 'Open signals'))),
-      h('tbody', null, DATA.students.map(function (s) {
+      h('tbody', null, rows.map(function (s) {
         const seen = s.concepts.filter(function (c) { return c.proportion !== null; });
-        return h('tr', { key: s.student_id, onClick: function () {
+        return h('tr', { key: s.student_id, tabIndex: 0, onClick: function () {
           props.onSelect({ kind: 'student', id: s.student_id, student: s, view: 'students' });
         } },
           // The identifier stays under the name rather than being replaced by
@@ -1038,43 +1453,32 @@ function Students(props) {
                    s.student_id + (s.group ? ' · ' + s.group : ''))]
               : h('span', { className: 'mono' },
                   s.student_id + (s.group ? ' · ' + s.group : ''))),
-          h('td', null,
+          // The bar and the count; which concepts, and how each landed, on hover.
+          h('td', { title: seen.length ? seen.map(function (c) {
+                      return c.title + ' ' + Math.round(c.proportion * 100) + '%';
+                    }).join('\n') : 'nothing assessed yet' },
             h('span', { className: 'bar' }, h('i', {
               style: { width: Math.round((seen.length / Math.max(1, s.concepts.length)) * 100) + '%' } })),
             h('span', { className: 'mono num' },
-              ' ' + seen.length + ' of ' + s.concepts.length),
-            seen.length
-              ? h('span', { className: 'hint' }, ' · ' + seen.map(function (c) {
-                  return c.title + ' ' + Math.round(c.proportion * 100) + '%';
-                }).join(', '))
-              : h('span', { className: 'none-yet' }, ' nothing assessed yet')),
-          s.marks.map(function (m) {
-            return h('td', { key: m.assessment_id, className: 'num' },
-              m.percent !== null
-                ? h('b', { className: 'mono' }, Math.round(m.percent) + '%')
-                : h('span', { className: 'chip ' + (m.status === 'missing' ? 'gap' : '') },
-                    m.status.replace(/_/g, ' ')));
-          }),
+              ' ' + seen.length + ' of ' + s.concepts.length)),
+          s.marks.map(function (m) { return h('td', { key: m.assessment_id }, markCell(m)); }),
           h('td', null, s.signals.length
             ? s.signals.map(function (sig) {
-                return h('span', { key: sig.signal_id, className: 'chip work',
-                                   title: sig.description }, sig.type.replace(/_/g, ' '));
+                return h('span', { key: sig.signal_id, className: 'chip sig',
+                                   title: sig.description }, icon('signal'), sig.type.replace(/_/g, ' '));
               })
             : h('span', { className: 'dash' }, '—')));
       }))),
+    h('p', { className: 'foot key' },
+      h('span', null, h('b', { className: 'mark ok' }, '●'), ' graded'),
+      h('span', null, h('b', { className: 'mark part' }, '◐'), ' criteria decided'),
+      h('span', null, h('b', { className: 'mark miss' }, '○'), ' missing'),
+      h('span', null, h('b', { className: 'mark wait' }, '·'), ' not due'),
+      h('span', null, h('b', { className: 'warn' }, '⚠'), ' rubric problem'),
+      h('span', null, 'Rows: who needs you first. Hover a cell for why it cannot be exported.')),
     h('p', { className: 'foot' },
-      'Not one figure here is a decision. A percentage comes from approved evaluations only — ' +
-      'an ai_suggestion is never counted, whatever its confidence — and a cell that says ' +
-      'partially graded is the model refusing to average an incomplete rubric rather than a zero. ' +
-      'A concept at 0% is a different cell from one with no evidence: both appear above.'),
-    h('div', { className: 'blocked' },
-      DATA.students.map(function (s) {
-        return s.marks.filter(function (m) { return m.blocked.length; }).map(function (m) {
-          return h('p', { key: s.student_id + m.assessment_id },
-            h('span', { className: 'mono' }, s.student_id + ' · ' + m.assessment_id + ' '),
-            m.blocked.join(' — '));
-        });
-      })));
+      'Not one figure here is a decision. A grade counts only from your professor_decision; an ' +
+      'ai_suggestion is never counted, whatever its confidence.'));
 }
 
 /**
@@ -1206,11 +1610,12 @@ function nameOf(studentId) {
 function Todos(props) {
   return h('div', { className: 'listing' },
     h('ul', { className: 'todos' }, DATA.todos.map(function (t) {
-      return h('li', { key: t.kind + t.id, className: 'todo ' + t.priority,
+      return h('li', { key: t.kind + t.id, tabIndex: 0, className: 'todo ' + t.priority,
                        onClick: function () {
                          props.onSelect({ kind: 'todo', id: t.id, todo: t, view: 'todos',
                                           week: t.weeks ? DATA.weeks[t.weeks[0] - 1] : null });
                        } },
+        h('span', { className: 'todo-i' }, icon(todoIcon(t))),
         h('span', { className: 'pri ' + t.priority }, t.priority),
         h('span', { className: 'body' },
           h('b', null, t.title),
@@ -1223,18 +1628,23 @@ function Todos(props) {
         h('span', { className: 'chip' }, t.kind));
     })),
     h('p', { className: 'foot' },
-      DATA.todos.length + ' things, ordered by the priority the record carries rather than by ' +
-      'one this page decided. The first four come from action_inbox — the action items, the ' +
-      'grades waiting on ainar approve, the open signal, the outstanding submissions — and the ' +
-      'rest are the structural holes, counted off the same weeks[].gaps the outline colours a ' +
-      'week with. Approving a grade is not among them: that is a terminal and a person.'));
+      DATA.todos.length + ' things, ordered by the priority the record carries. Grades waiting ' +
+      'on you are decided by your professor_decision in the evaluation record; this page only ' +
+      'points at them.'));
 }
 
 // ------------------------------------------------------------------- app
 function App() {
   const [mode, setMode] = useState(function () { return recall('proto.mode', 'course'); });
   const [section, setSection] = useState('outline');
-  const [view, setView] = useState('prof');
+  // Two separate questions the old row of five buttons asked as one: what the
+  // outline is read by, and whether it is being previewed as a student sees it.
+  // The second only means something when it is read by week.
+  const [group, setGroup] = useState('week');
+  const [preview, setPreview] = useState(false);
+  const view = group === 'week' ? (preview ? 'student' : 'prof') : group;
+  const [menu, setMenu] = useState(false);
+  const [shop, setShop] = useState(false);
   const [structureId, setStructureId] = useState('table');
   const [draft, setDraft] = useState(STRUCTURES.table.tmpl);
   const [appearanceId, setAppearanceId] = useState('plain');
@@ -1248,10 +1658,44 @@ function App() {
 
   useEffect(function () { remember('proto.mode', mode); }, [mode]);
   useEffect(function () {
-    const onKey = function (e) { if (e.key === 'Escape') { setAsking(false); setSel(null); } };
+    const onKey = function (e) {
+      if (e.key === 'Escape') { setAsking(false); setSel(null); setMenu(false); return; }
+      // A week, a row or a todo is focusable but not a <button>, so Enter and
+      // Space do what a press does — the same click the delegated listeners
+      // already handle, so the keyboard takes no second path through the page.
+      const t = e.target;
+      if ((e.key === 'Enter' || e.key === ' ') && t && t.getAttribute &&
+          t.getAttribute('tabindex') === '0' && !/^(BUTTON|INPUT|SELECT|TEXTAREA|A)$/.test(t.tagName)) {
+        e.preventDefault();
+        t.click();
+      }
+    };
     window.addEventListener('keydown', onKey);
     return function () { window.removeEventListener('keydown', onKey); };
   }, []);
+  // The menu closes on any press outside it, the way every menu does.
+  useEffect(function () {
+    if (!menu) return;
+    const onDown = function (e) { if (!e.target.closest('.menu-wrap')) setMenu(false); };
+    document.addEventListener('mousedown', onDown);
+    return function () { document.removeEventListener('mousedown', onDown); };
+  }, [menu]);
+  // The sticky offsets and the room at the foot, from the bars' real heights.
+  useEffect(function () {
+    const root = document.documentElement.style;
+    const watch = [['.topbar', '--top-h'], ['.strip', '--strip-h'], ['.inspect', '--inspect-h']];
+    const measure = function () {
+      watch.forEach(function (p) {
+        const el = document.querySelector(p[0]);
+        root.setProperty(p[1], (el ? el.offsetHeight : 0) + 'px');
+      });
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    watch.forEach(function (p) { const el = document.querySelector(p[0]); if (el) ro.observe(el); });
+    return function () { ro.disconnect(); };
+  });
 
   const chooseStructure = useCallback(function (id) {
     setStructureId(id);
@@ -1260,7 +1704,37 @@ function App() {
 
   const skin = APPEARANCE[appearanceId].css;
   const gaps = DATA.totals.gaps;
+  const ranked = rankedGaps();
   const packet = packetFor(sel);
+
+  // Everything that changes how the page is drawn rather than what it shows,
+  // behind one button: the chat-mode comparison, the structure and the
+  // appearance, and the template editor that used to sit under every week.
+  const seg = function (options, current, choose) {
+    return h('span', { className: 'seg' }, options.map(function (o) {
+      return h('button', { key: o[0], type: 'button', title: o[2] || undefined,
+                           'aria-pressed': current === o[0],
+                           onClick: function () { choose(o[0]); } }, o[3] ? icon(o[3]) : null, o[1]);
+    }));
+  };
+  const settings = h('div', { className: 'menu-wrap' },
+    h('button', { className: 'ghost', type: 'button', 'aria-haspopup': 'true', 'aria-expanded': menu,
+                  'aria-label': 'Page settings', onClick: function () { setMenu(!menu); } }, icon('settings')),
+    menu ? h('div', { className: 'menu', role: 'menu' },
+      h('div', null, h('label', null, 'Arrangement'),
+        seg([['course', 'Course mode'], ['chat', 'Chat mode', 'the pane as it ships today']], mode,
+            function (m) { setMode(m); setMenu(false); })),
+      mode === 'course' ? h('div', null, h('label', null, 'Week structure'),
+        seg(Object.keys(STRUCTURES).map(function (id) {
+          return [id, STRUCTURES[id].name, STRUCTURES[id].suits];
+        }), structureId, chooseStructure),
+        h('span', { className: 'hint' }, STRUCTURES[structureId].suits)) : null,
+      mode === 'course' ? h('div', null, h('label', null, 'Appearance'),
+        seg(Object.keys(APPEARANCE).map(function (id) { return [id, APPEARANCE[id].name]; }),
+            appearanceId, setAppearanceId)) : null,
+      mode === 'course' ? h('label', { className: 'pick' },
+        h('input', { type: 'checkbox', checked: shop, onChange: function (e) { setShop(e.target.checked); } }),
+        'Show the template editor') : null) : null);
 
   const top = h('div', { className: 'topbar' },
     h('div', { className: 'brand' },
@@ -1268,13 +1742,14 @@ function App() {
       h('span', { className: 'mono' },
         DATA.run.term + ' · week ' + DATA.current_week + ' of ' + DATA.totals.weeks +
         ' · ' + DATA.enrolled + ' enrolled')),
-    h('div', { className: 'seg' }, [['chat', 'Chat'], ['course', 'Course']].map(function (m) {
-      return h('button', { key: m[0], type: 'button', 'aria-pressed': mode === m[0],
-                           onClick: function () { setMode(m[0]); } }, m[1]);
-    })),
     mode === 'course'
-      ? h('button', { className: 'ghost', type: 'button', onClick: function () { setAsking(true); } }, 'Ask →')
-      : null);
+      ? seg(SECTIONS.map(function (s) { return [s.id, s.label, s.hint, s.icon]; }), section,
+            function (id) { setSection(id); setSel(null); })
+      : null,
+    mode === 'course'
+      ? h('button', { className: 'primary', type: 'button', onClick: function () { setAsking(true); } }, icon('ask'), 'Ask')
+      : null,
+    settings);
 
   // The appearance half is embedded as text, so it is checked for markup the
   // way `templates.ts` checks a style sheet rather than escaped into safety.
@@ -1301,6 +1776,7 @@ function App() {
     onOpenBrief: function (id) { setOpened({ kind: 'brief', id: id }); } });
   else body = h(Spine, { structure: draft, mode: OUTLINE_MODE[view], view: view,
                          onSelect: setSel, onError: setError, onOpen: setOpened,
+                         onAsk: function () { setAsking(true); },
                          layout: STRUCTURES[structureId].layout,
                          selected: sel && sel.week ? sel.week.week : null });
 
@@ -1308,17 +1784,18 @@ function App() {
     h('style', null, style),
     top,
     h('div', { className: 'strip' },
-      h('div', { className: 'seg' }, SECTIONS.map(function (s) {
-        return h('button', { key: s.id, type: 'button', title: s.hint,
-                             'aria-pressed': section === s.id,
-                             onClick: function () { setSection(s.id); setSel(null); } }, s.label);
-      })),
       section === 'outline'
-        ? h('div', { className: 'seg sub' }, OUTLINE_VIEWS.map(function (v) {
-            return h('button', { key: v.id, type: 'button', title: v.hint,
-                                 'aria-pressed': view === v.id,
-                                 onClick: function () { setView(v.id); setSel(null); } }, v.label);
-          }))
+        ? h('label', { className: 'pick' }, 'Group by',
+            h('select', { value: group, onChange: function (e) { setGroup(e.target.value); setSel(null); } },
+              GROUPS.map(function (g) { return h('option', { key: g[0], value: g[0] }, g[1]); })))
+        : null,
+      section === 'outline'
+        ? h('label', { className: 'pick' + (group === 'week' ? '' : ' off'),
+                       title: group === 'week' ? 'the record only — what ainar page publishes'
+                                               : 'only the week view has a student version' },
+            h('input', { type: 'checkbox', checked: preview && group === 'week', disabled: group !== 'week',
+                         onChange: function (e) { setPreview(e.target.checked); setSel(null); } }),
+            'Preview as student')
         : null,
       h('span', { className: 'hint' }, hint),
       // Only where a student can be named, and only ever affirmatively — the
@@ -1337,12 +1814,14 @@ function App() {
             h('span', null, DATA.todos.length + ' waiting'))
         : null,
       section === 'outline' && view === 'prof'
-        ? h('div', { className: 'tally' },
-            h('span', null, gaps.weeks + ' weeks need something'),
-            h('span', null, gaps.module + ' no module'),
-            h('span', null, gaps.deck + ' no deck'),
-            h('span', { className: gaps.deadline ? '' : 'zero' }, gaps.deadline + ' no deadline'),
-            h('span', { className: gaps.weight ? '' : 'zero' }, gaps.weight + ' no weight'))
+        // Ranked the way the chips are, so the strip answers "what before
+        // Tuesday" rather than "how much is missing in all".
+        ? h('div', { className: 'tally', title: gaps.module + ' weeks with no module · ' +
+                       gaps.deck + ' with no deck · ' + gaps.deadline + ' undated · ' + gaps.weight + ' unweighted' },
+            h('span', { className: ranked.soon ? 'soon' : 'zero' },
+              ranked.soon + ' this week or next'),
+            h('span', { className: ranked.later ? '' : 'zero' }, ranked.later + ' later'),
+            h('span', { className: 'past' }, ranked.past + ' in weeks taught'))
         : null),
     // The coloured rule the pane draws whenever names are showing. It exists
     // because this thing gets screen-shared and thrown at lecture-hall
@@ -1369,11 +1848,12 @@ function App() {
     error && isTable ? h('div', { className: 'banner err mono', style: { maxWidth: 'none' } },
               'The structure does not parse: ' + error) : null,
     body,
-    isTable
+    isTable && shop
       ? h(Workshop, { structureId: structureId, draft: draft, error: error, appearanceId: appearanceId,
                       onStructure: chooseStructure, onDraft: setDraft, onAppearance: setAppearanceId })
       : null,
     h(Explainer, { mode: mode, section: section, view: view }),
+    sel ? h('div', { className: 'inspect-room', 'aria-hidden': 'true' }) : null,
     sel ? h(Inspector, { sel: sel, packet: packet, onAsk: function () { setAsking(true); },
                          onOpen: sel.doc
                            ? function () { setOpened({ kind: 'doc', id: sel.doc }); }
@@ -1394,28 +1874,89 @@ function whereOf(sel) {
   if (sel.kind === 'student') return 'student ' + sel.id;
   if (sel.kind === 'todo') return sel.todo.kind + ' · ' + sel.id;
   if (!sel.week) return sel.kind + ' ' + sel.id;
+  if (sel.weeks) return sel.kind + ' · weeks ' + sel.weeks[0] + '–' + sel.weeks[sel.weeks.length - 1];
   return sel.kind + ' · week ' + sel.week.week +
     (sel.week.modules[0] ? ' · ' + sel.week.modules[0].title : '');
 }
 
+const GAP_SAID = { deck: 'no deck', module: 'no module', deadline: 'undated work',
+                   weight: 'unweighted work', brief: 'no brief',
+                   misdated: 'a meeting dated outside the week' };
+
+function isDraft(id) {
+  const p = DATA.proposed;
+  return [p.modules, p.decks, p.assessments].some(function (table) {
+    return Object.keys(table).some(function (k) {
+      const r = table[k];
+      return r.approval === 'draft' && (r.module_id === id || r.resource_id === id || r.assessment_id === id);
+    });
+  });
+}
+
+function titleOfWork(id) {
+  return (DATA.briefs[id] || {}).title || id;
+}
+
+/**
+ * The packet, said the way a person would say it. The JSON is still one press
+ * away, because it is what the model receives — but the professor reading the
+ * bar wants to know what Claude will be told, not how it is spelled.
+ */
+function sayOf(sel) {
+  if (sel.kind === 'student') {
+    const none = sel.student.concepts.filter(function (c) { return c.proportion === null; }).length;
+    return sel.id + ' · ' + none + ' concept' + (none === 1 ? '' : 's') + ' with no evidence' +
+      (sel.student.signals.length ? ' · ' + sel.student.signals.length + ' open signal' : '');
+  }
+  if (sel.kind === 'todo') return sel.todo.title;
+  if (!sel.week) return titleOfWork(sel.id);
+  const w = sel.week;
+  const where = sel.weeks
+    ? 'Weeks ' + sel.weeks[0] + '–' + sel.weeks[sel.weeks.length - 1]
+    : 'Week ' + w.week + (w.modules[0] ? ' · ' + w.modules[0].title : '');
+  if (sel.kind === 'week') {
+    const missing = w.gaps.map(function (g) { return GAP_SAID[g.kind]; });
+    return where + (missing.length ? ' · ' + missing.join(', ') : ' · nothing missing');
+  }
+  if (sel.kind === 'gap') {
+    if (sel.id === 'misdated') return where + ' · ' + sel.ref + ' · ' + misdatedNote(sel.ref, OUTLINE_MODE.prof);
+    return where + ' · ' + GAP_SAID[sel.id] + (sel.ref ? ' for ' + titleOfWork(sel.ref) : '');
+  }
+  if (sel.kind === 'work') return where + ' · ' + titleOfWork(sel.id);
+  if (sel.kind === 'meeting') {
+    const m = w.meetings.filter(function (x) { return x.activity_id === sel.id; })[0];
+    return where + ' · the ' + (m ? m.type + ' on ' + shortDate(m.on) : 'meeting ' + sel.id);
+  }
+  if (sel.kind === 'deck') return where + ' · its slides';
+  if (sel.kind === 'outcome') return where + ' · ' + sel.id + ' ' + (OUTCOME_TITLE[sel.id] || '');
+  return where + ' · ' + sel.id;
+}
+
 function Inspector(props) {
   const sel = props.sel;
-  const drafted = /-DRAFT-/.test(String(sel.id || ''));
+  // A draft is a record marked `approval: draft`; accepting it is an edit to
+  // that record, which this page can name but not make.
+  const drafted = isDraft(sel.id);
+  const aboutStudents = sel.kind === 'student' || (sel.kind === 'todo' && sel.todo.kind === 'approve');
+  // Only the verbs that apply. A disabled "Open — nothing to read here" is a
+  // button explaining that it is not a button.
   return h('div', { className: 'inspect' },
     h('div', { className: 'what' },
-      h('p', null, 'Selected: ' + whereOf(sel) +
-        ' — this is what the press would carry into the turn'),
-      h('pre', { className: 'packet mono' }, JSON.stringify(props.packet, null, 1))),
+      h('p', null, h('span', { className: 'k' }, icon('ask'), ' Claude will know: '), sayOf(sel)),
+      h('details', null,
+        h('summary', null, 'the packet, as sent'),
+        h('pre', { className: 'packet mono' }, JSON.stringify(props.packet, null, 1)))),
     h('div', { className: 'verbs' },
-      h('button', { className: 'ghost', type: 'button', disabled: !props.onOpen,
-                    onClick: props.onOpen || undefined },
-        props.onOpen ? 'Open' : 'Open — nothing to read here'),
-      h('button', { className: 'primary', type: 'button', onClick: props.onAsk }, 'Ask →'),
-      h('button', { className: 'ghost', type: 'button', disabled: !drafted },
-        drafted ? 'Approve' : 'Approve — nothing drafted here'),
+      props.onOpen ? h('button', { className: 'ghost', type: 'button', onClick: props.onOpen }, 'Open') : null,
+      h('button', { className: 'primary', type: 'button', onClick: props.onAsk }, icon('ask'), 'Ask'),
       h('button', { className: 'x', type: 'button', onClick: props.onClose, 'aria-label': 'Clear' }, '×')),
-    h('div', { className: 'mono', style: { flexBasis: '100%', fontSize: '11px', color: 'var(--muted)' } },
-      'Approve only ever spawns ainar approve --dry-run. No control here settles a judgement about a student.'));
+    drafted
+      ? h('div', { className: 'note' }, 'A draft. To accept it, change ', h('code', null, 'approval: draft'),
+          ' in its record — this page can point at it, not change it.')
+      : aboutStudents
+        ? h('div', { className: 'note' }, 'Nothing here settles a judgement about a student: a grade is ' +
+            'decided by your professor_decision beside the suggestion.')
+        : null);
 }
 
 /**
@@ -1517,105 +2058,14 @@ function Explainer(props) {
       h('p', null, 'This is the arrangement course mode inverts: the course is a reference ' +
         'beside the conversation rather than the thing being worked on.'));
   }
+  // One note, not an essay. The design reasoning that used to sit here is in
+  // README.md beside this file, where it is read by the people reviewing the
+  // design rather than scrolled past by the professor using the page.
   return h('div', { className: 'legend' },
-    h('h2', null, 'What this is'),
-    h('p', null, 'Course mode over the real CSS-4008 example course. The course is the page and ' +
-      'the agent is the Ask button. Press any week, meeting, assessment, student or todo — the ' +
-      'bar at the foot shows the context packet that press would carry, which is the thing that ' +
-      'has to exist before this layout is worth building.'),
-    h('h2', null, 'Three sections, because a professor asks three questions'),
-    h('p', null, h('b', null, 'Course outline'), ' is what the course IS, and it has five ' +
-      'readings of the same records. ', h('b', null, 'Student view'),
-      ' is the record alone — no draft, no gap, nothing about what has not been written yet — ' +
-      'which is exactly what ', h('code', null, 'ainar page'), ' publishes. ',
-      h('b', null, 'Professor view'), ' adds the drafts from ', h('code', null, 'work/<RUN>/'),
-      ' and the gaps. Those two are the term table, and the two below them are the same records ' +
-      'read down a different axis: ', h('b', null, 'Lectures'), ' is every meeting of the term ' +
-      'with its room and its deck, ', h('b', null, 'Assessment'), ' is the graded work with its ' +
-      'weight and rubric, and ', h('b', null, 'Quiz'), ' is the quizzes alone.'),
-    h('p', null, h('b', null, "Students' progress"), ' is the class by pseudonym: how many ' +
-      'concepts have any evidence at all, where each piece of work stands, and the open signals. ' +
-      'The most useful column is the one nothing else draws — ', h('b', null, 'why a mark cannot ' +
-      'be exported'), ', in the model’s own words, under the table. ',
-      h('b', null, 'Todos'), ' is ', h('code', null, 'action_inbox'),
-      ' plus the structural holes: the action items, the grades waiting on ',
-      h('code', null, 'ainar approve'), ', the open signal, the outstanding submissions, and the ' +
-      'weeks with no module or no deck — ordered by the priority the record carries.'),
-    h('h2', null, 'The names are fixtures, and the page says so while they show'),
-    h('p', null, 'A student in this model is a pseudonymous identifier and nothing else — the ' +
-      'bundle holds one user, the instructor. The three names under Students and Todos were ' +
-      'invented for this prototype; no roster was read, and there is none in this workspace to ' +
-      'read. In the harness they resolve from ', h('code', null, '~/.ainar/roster/people.json'),
-      ' on the professor’s own machine, are held for the length of one response, and never ' +
-      'enter a payload.'),
-    h('p', null, 'Three things the toggle demonstrates, all of them the pane’s own rules. ' +
-      'The amber rule appears whenever names are showing, because this gets screen-shared and ' +
-      'projected and the chrome should say so before the room does. The identifier stays under ' +
-      'each name rather than being replaced by it, because that is what ', h('code', null, 'whois'),
-      ', the gradebook and a bug report all use. And the context packet carries the pseudonym ' +
-      'alone whichever way the toggle is set — that text goes to a model, and the model should ' +
-      'work in the record’s vocabulary. Press a student with Names on and read the packet at ' +
-      'the foot: there is no name in it.'),
-    h('p', null, 'The default here is Pseudonyms, which is the opposite of the harness’s own ' +
-      'default. The harness runs on one machine and shows names; a page like this one can be ' +
-      'shared with a link.'),
-    h('h2', null, 'Three columns, and the ones you could have instead'),
-    h('p', null, h('b', null, 'Lecture'), ' is every meeting the week holds — lecture, seminar ' +
-      'or lab, each chip saying which it was and where — with its own materials nested under ' +
-      'it: the deck first, then the readings, datasets and notebooks. They are nested because ' +
-      'that is the shape the record already has; a resource belongs to an ',
-      h('code', null, 'activity'), ', not to a week. The week’s deck gap sits at the foot ' +
-      'of the column, once, however many times the week meets.'),
-    h('p', null, h('b', null, 'Quiz'), ' is ', h('code', null, 'AssessmentType.quiz'),
-      ' alone, because it is the recurring one and a professor scanning a term is looking for ' +
-      'it by name. ', h('b', null, 'Assessment'), ' is everything else the enum holds — ',
-      h('code', null, 'assignment'), ', ', h('code', null, 'project'), ', ',
-      h('code', null, 'exam'), ', ', h('code', null, 'presentation'), ', ',
-      h('code', null, 'oral_defense'), ', ', h('code', null, 'participation'),
-      '. Both carry the weight beside the date, because a column of graded work that does not ' +
-      'say what it is worth is the half of the grading policy nobody can check.'),
-    h('p', null, 'On this course that is 4 lectures, 2 seminars and 4 labs in the first column; ' +
-      'two assignments and the final project in the second; one quiz in the third. The Quiz ' +
-      'column is nearly empty, and that is the course rather than the layout.'),
-    h('p', null, 'What else the record could fill a column with, none of it invented: ',
-      h('b', null, 'Prepare before'), ' (', h('code', null, 'activity.preparation'),
-      ' — what students are told to do first), ', h('b', null, 'Hours'), ' (',
-      h('code', null, 'module.estimated_hours'), '), ', h('b', null, 'Outcomes'),
-      ' (the LO ids a week serves, which is the column that makes alignment visible week by ' +
-      'week), ', h('b', null, 'Handed in'), ' (submissions against enrolment, and how many are ' +
-      'approved — private, so it belongs under Students and not to a page a student ' +
-      'may see), ', h('b', null, 'Subgroup'), ' (a meeting labelled for one group only), and ',
-      h('b', null, 'Source outline'), ' (what a syllabus document said this week was, before ' +
-      'anybody modelled it). Adding one is an edit to the template and a field on the model — ' +
-      'the box below is where you would try it.'),
-    h('h2', null, 'It is templated, the way the rest of this project is'),
-    h('p', null, 'The week card is not written in React. It is a ', h('code', null, '.tmpl'),
-      ' rendered by ', h('code', null, 'vendor/ainar/mcp/widget-assets/template.js'),
-      ' — the same interpreter every widget document carries, embedded here verbatim. Escaped ',
-      h('code', null, '{{ paths }}'), ', ', h('code', null, '{% if %}'), ', ',
-      h('code', null, '{% for %}'), ', and no way to ask for raw output.'),
-    h('p', null, 'So the two halves a professor already chooses for the public page — ',
-      h('code', null, 'ainar page --structure compact --template print'), ' — are the two halves ' +
-      'they would choose here. Edit the box above the notes and the spine redraws; break it and ' +
-      'the parse error is reported rather than rendered. A structure cannot introduce markup and ' +
-      'cannot compute, which is what makes it safe to let somebody edit it.'),
-    h('p', null, 'Clicks cross that boundary the way ', h('code', null, 'runtime.js'),
-      ' already does it: ', h('code', null, 'data-pick'), ' and ', h('code', null, 'data-id'),
-      ' on the element, one delegated listener on the container. A structure never holds a handler.'),
-    h('h2', null, 'Where it would mount'),
-    h('p', null, 'The shipped ', h('code', null, 'dsh-client-ui-layout'), ' declares four seats — ',
-      h('code', null, 'sidebar'), ', ', h('code', null, 'conversation'), ', ',
-      h('code', null, 'details'), ' and ', h('code', null, 'shell.overlay'), '. There is no ' +
-      'full-width seat: its README claims a ', h('code', null, 'conversation.empty'),
-      ' that appears nowhere in the bundle. So course mode is either the conversation slot, or ',
-      h('code', null, 'shell.overlay'), ' — the layer the deck overlay already uses to open a ' +
-      'slide over the harness. That is a decision to take, and the prototype does not take it.'),
-    h('h2', null, 'What is real and what is not'),
-    h('p', null, 'Real: the weeks, meetings, assessments, concepts, gaps and the tally, straight ' +
-      'from ', h('code', null, 'course_outline'), '. Evidence is real too — three students, six ' +
-      'submissions, no approved decisions — which is why it reads empty rather than being ' +
-      'invented. Proposed is illustrative and says so on its banner, because this workspace has ' +
-      'no ', h('code', null, 'work/<RUN>/'), ' for ', h('code', null, 'loadDrafts'), ' to merge.'));
+    h('p', null, h('b', null, 'Prototype. '), 'The weeks, meetings, assessments, evidence, ' +
+      'gradebook and inbox are the real CSS-4008 example course. Invented, and marked where they ' +
+      'appear: the three student names, the three drafts, and the conversation. The page reaches ' +
+      'no model. Design notes: ', h('code', null, 'prototype/README.md'), '.'));
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(h(App));
