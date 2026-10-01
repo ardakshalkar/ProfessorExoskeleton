@@ -109,13 +109,13 @@ const GAP = {
 const LIGHT = `--ground:#f3f4f0;--surface:#fff;--sunk:#eceee8;--ink:#171b18;--muted:#5f685f;
 --line:#dadfd6;--rule:#e8ebe4;--accent:#2f6b3c;--accent-ink:#245231;--accent-line:#bcd8c2;
 --accent-tint:#eef5ef;--flag:#a4362f;--flag-line:#f0c4c0;--flag-tint:#fdf1f0;
---draft:#2f5b8a;--draft-line:#bdd0e4;--draft-tint:#eef3f9;--on-fg:#fff;`;
+--draft:#2f5b8a;--draft-line:#bdd0e4;--draft-tint:#eef3f9;--on-fg:#fff;--hw:#a46a1f;`;
 // DSH's theme is an explicit choice on its body, not the OS setting, so the
 // host passes it and the page does not consult `prefers-color-scheme`.
 const DARK = `--ground:#101310;--surface:#191d1a;--sunk:#141815;--ink:#e6eae4;--muted:#99a399;
 --line:#2b312c;--rule:#222722;--accent:#7fc98d;--accent-ink:#a6dcaf;--accent-line:#33513a;
 --accent-tint:#18231a;--flag:#e08c85;--flag-line:#6b3a37;--flag-tint:#2a1c1b;
---draft:#8fb6de;--draft-line:#37506b;--draft-tint:#171f27;--on-fg:#0d100d;`;
+--draft:#8fb6de;--draft-line:#37506b;--draft-tint:#171f27;--on-fg:#0d100d;--hw:#d9a35b;`;
 
 const STYLE = `
 *{box-sizing:border-box}
@@ -176,6 +176,57 @@ a.chip:hover,button.chip:hover{border-color:var(--accent-line)}
 .band b{font-size:16px;font-weight:600;display:inline-flex;gap:6px;align-items:center}
 .band .none{color:var(--muted)}
 .foot{margin:0 20px 28px;font-size:12px;color:var(--muted);max-width:90ch}
+.mode{margin:14px 20px 24px;display:flex;flex-direction:column;gap:14px}
+.mode .foot{margin:0}
+.calm{margin:0;color:var(--muted);font-size:13px}
+button.link{border:0;background:none;padding:0;font:inherit;font-size:13px;color:var(--accent-ink);cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:var(--accent-line);text-underline-offset:2px}
+.chip.ask.strong{border:1px solid var(--accent-line);background:var(--surface);font-weight:500}
+.primary{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font:inherit;font-size:13px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--on-fg);cursor:pointer}
+.weights{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.wcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 13px;display:flex;flex-direction:column;gap:2px}
+.wcard small{color:var(--muted);font-size:12px}
+.wcard b{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.wcard.ok{background:var(--accent-tint);border-color:var(--accent-line)}.wcard.ok b,.wcard.ok small{color:var(--accent-ink)}
+.wcard.bad{background:var(--flag-tint);border-color:var(--flag-line)}.wcard.bad b,.wcard.bad small{color:var(--flag)}
+.faults{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.faults li{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:var(--surface);border:1px dashed var(--flag-line);color:var(--flag)}
+.faults li.warn{border-color:var(--line);color:var(--ink)}
+.faults li span{flex:1}
+table.plan{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:clip;font-size:13px}
+table.plan th{text-align:left;background:var(--sunk);color:var(--muted);font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--line)}
+table.plan td{padding:6px 12px;border-top:1px solid var(--rule);vertical-align:middle}
+table.plan tr.now td{background:var(--accent-tint)}
+table.plan .wkn{width:72px;white-space:nowrap}.wkn b{font-size:16px;margin-right:6px;font-variant-numeric:tabular-nums}.wkn small{color:var(--muted);font-size:12px}
+.topic span{font-weight:500}.topic small{margin-left:8px;color:var(--muted);font-size:12px}
+.notopic{color:var(--flag);font-style:italic;font-weight:400!important}.draftword{color:var(--draft)}
+table.plan td.lane{width:16%;min-width:140px;padding:0 6px}
+.lanehead{border-bottom:3px solid var(--lane)!important}
+.lseg{display:flex;flex-direction:column;justify-content:center;gap:1px;min-height:30px;border-left:3px solid var(--lane);padding:3px 8px;font-size:12px;color:var(--ink);text-decoration:none;background:color-mix(in srgb,var(--lane) 12%,var(--surface))}
+.lseg.first{border-top-right-radius:6px}.lseg.last{border-bottom-right-radius:6px}
+.lseg.draft{border-left-style:dashed}
+.segt{font-weight:600}.segd{font-variant-numeric:tabular-nums}
+.q{--lane:var(--draft)}.hw{--lane:var(--hw)}.pj{--lane:var(--accent)}.ex,.ot{--lane:var(--muted)}
+.trio-wrap{display:flex;flex-direction:column;gap:12px}.trio-wrap[hidden]{display:none}
+.stepper{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.stepper .chip{cursor:pointer}.stepper b{font-size:14px}
+.private{margin-left:auto;font-size:12px;color:var(--muted)}
+.trio{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,1fr);gap:12px;align-items:start}
+.side,.focus{border-radius:12px;padding:13px 15px;display:flex;flex-direction:column;gap:8px}
+.side{background:var(--sunk)}.side.empty p{margin:0;color:var(--muted)}
+.side>small,.focus>small{color:var(--muted);font-size:12px}
+.side>b{font-size:14px}
+.focus{background:var(--surface);border:2px solid var(--accent-line)}
+.focus h2{margin:0;font-size:20px;font-weight:600}
+.focus .concepts{padding:0;grid-column:auto}
+.facts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.facts li{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.facts li small{color:var(--muted);font-size:12px}
+.facts.big{font-size:14px}
+.need{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--flag-tint);color:var(--flag);font-size:13px}
+.need span{flex:1}.need.warn{background:var(--sunk);color:var(--ink)}
+.revisit{border-left:3px solid var(--hw);padding:6px 10px;background:var(--sunk);font-size:13px}
+.revisit b{display:block;margin-bottom:2px}.revisit p{margin:2px 0 0}
+@media (max-width:900px){.trio{grid-template-columns:1fr}.trio .focus{order:-1}}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 @media (max-width:900px){
   .grid{grid-template-columns:1fr}.th{display:none}
@@ -197,6 +248,12 @@ var strip=document.querySelector('.strip');
 function measure(){if(strip)document.documentElement.style.setProperty('--strip-h',strip.offsetHeight+'px');}
 measure();if(window.ResizeObserver&&strip)new ResizeObserver(measure).observe(strip);
 var now=document.querySelector('.wkhead.now');if(now)now.scrollIntoView({block:'start'});
+document.addEventListener('click',function(e){
+  var g=e.target.closest&&e.target.closest('[data-goto]');if(!g)return;
+  var n=g.getAttribute('data-goto');
+  document.querySelectorAll('.trio-wrap').forEach(function(s){s.hidden=s.getAttribute('data-week')!==n;});
+  window.scrollTo(0,0);
+});
 if(parent===window)return;
 document.addEventListener('click',function(e){
   var b=e.target.closest&&e.target.closest('[data-ask]');
@@ -314,6 +371,274 @@ const workChip = (a, when) => {
 
 const hasBrief = (a) => Boolean(a.url || a.brief_url || String(a.description ?? "").trim());
 
+const titleOf = (w) => (w.modules ?? []).map((m) => m.title).join(" · ");
+const conceptsOf = (w) => (w.modules ?? []).flatMap((m) => m.concepts ?? []);
+const askButton = (prompt, label, cls = "chip ask") =>
+  `<button type="button" class="${cls}" data-ask="${esc(prompt)}">${icon("ask")}${esc(label)}</button>`;
+
+// ---------------------------------------------------------------- planning
+
+/**
+ * Does the term hold together — asked at the start of a term, of the term as
+ * a structure. The weights against a whole, one row per week with its topic
+ * and the graded work running through it as lanes, and the faults said as
+ * sentences with one press each. No rooms, times or decks: those are
+ * teaching questions. Built from the outline payload alone, so it carries
+ * nothing derived from student work.
+ */
+const LANES = [["quiz", "Quizzes", "q"], ["assignment", "Homework", "hw"], ["project", "Project", "pj"], ["exam", "Exams", "ex"]];
+const laneOf = (type) => LANES.find((l) => l[0] === type) ?? ["other", "Other", "ot"];
+
+const planningBody = (data, { student }) => {
+  const run = data.run ?? {};
+  const weeks = data.weeks ?? [];
+  const weekOf = (date) => (date ? weeks.find((w) => date >= w.starts_on && date <= w.ends_on)?.week ?? null : null);
+
+  // Weights by kind of work, against the model's own total and verdict.
+  const groups = [];
+  for (const a of data.assessments ?? []) {
+    const [, name] = laneOf(a.type);
+    let g = groups.find((x) => x.name === name);
+    if (!g) groups.push((g = { name, weight: 0, count: 0, unweighted: 0 }));
+    g.count += 1;
+    if (a.weight === null || a.weight === undefined) g.unweighted += 1;
+    else g.weight += a.weight;
+  }
+  const grading = data.grading ?? {};
+  const cards =
+    groups
+      .map((g) => `<div class="wcard"><small>${esc(g.name)}</small><b>${esc(pct(g.weight) || "—")}</b>` +
+        `<small>${g.count} ${g.count === 1 ? "item" : "items"}${g.unweighted ? ` · ${g.unweighted} with no weight` : ""}</small></div>`)
+      .join("") +
+    `<div class="wcard ${grading.complete ? "ok" : "bad"}"><small>Total</small><b>${esc(pct(grading.total_weight) || "—")}</b>` +
+    `<small>${grading.complete ? "weights add up" : "does not add up"}</small></div>`;
+
+  // A span per piece of graded work, the week it opens to the week it is due.
+  const spans = (data.assessments ?? []).map((a) => {
+    const end = weekOf(a.due_on);
+    return { a, lane: laneOf(a.type), start: weekOf(a.opens_on) ?? end, end };
+  });
+  const lanes = LANES.concat([["other", "Other", "ot"]]).filter((l) => spans.some((s) => s.lane[1] === l[1]));
+
+  // Faults, as sentences. Unplanned runs, quiet runs, undated work, weights.
+  const faults = [];
+  if (!student) {
+    const unplanned = weeks.filter((w) => (w.gaps ?? []).some((g) => g.kind === "module")).map((w) => w.week);
+    const runsOf = (list) =>
+      list.reduce((all, n) => {
+        const last = all[all.length - 1];
+        if (last && last[last.length - 1] === n - 1) last.push(n);
+        else all.push([n]);
+        return all;
+      }, []);
+    for (const r of runsOf(unplanned)) {
+      const span = r.length === 1 ? `Week ${r[0]}` : `Weeks ${r[0]}–${r[r.length - 1]}`;
+      faults.push(["flag", "module", `${span} ${r.length === 1 ? "has" : "have"} no topic`,
+        `${span} of ${run.id} ${r.length === 1 ? "has" : "have"} no module. Propose what ${r.length === 1 ? "it" : "they"} should teach, ` +
+          "given what comes before and what falls due, as draft modules for me to read.",
+        r.length === 1 ? `Plan week ${r[0]}` : "Plan these weeks"]);
+    }
+    const graded = new Set();
+    for (const s of spans) if (s.start !== null && s.end !== null) for (let n = s.start; n <= s.end; n += 1) graded.add(n);
+    for (const r of runsOf(weeks.map((w) => w.week).filter((n) => !graded.has(n))).filter((r) => r.length >= 2)) {
+      const span = `Weeks ${r[0]}–${r[r.length - 1]}`;
+      faults.push(["warn", "quiz", `${span}: nothing graded opens, runs or falls due`,
+        `${span} of ${run.id} have no graded work opening, running or falling due. Should something be assessed ` +
+          "there, given what those weeks teach? Propose it as a draft; change nothing else.",
+        "Suggest an assessment"]);
+    }
+    const undated = [...weeks.flatMap((w) => w.undated ?? []), ...(data.unplaced?.assessments ?? [])];
+    for (const a of undated) faults.push(["flag", "calendar", `${a.title} has no dates`, datesPrompt(a, run), "Set dates"]);
+    if (!grading.complete) {
+      faults.push(["flag", "weight", grading.note || "The weights do not add up to 100%",
+        `The weights in ${run.id} do not settle the grading policy: ${grading.note || "they do not add up"} ` +
+          "Propose a correction and wait.", "Fix the weights"]);
+    }
+  }
+  const faultList = student
+    ? ""
+    : faults.length
+      ? `<ul class="faults">${faults
+          .map(([tone, ic, text, prompt, verb]) =>
+            `<li class="${tone}">${icon(ic)}<span>${esc(text)}</span>${askButton(prompt, verb, "chip ask strong")}</li>`)
+          .join("")}</ul>`
+      : '<p class="calm">Every week has a topic, the graded work is spread, and the weights add up.</p>';
+
+  const rows = weeks
+    .map((w) => {
+      const title = titleOf(w);
+      const n = conceptsOf(w).length;
+      const draft = (w.modules ?? []).some((m) => m.draft);
+      const lanesHtml = lanes
+        .map((l) => {
+          const here = spans.filter((s) => s.lane[1] === l[1] && s.start !== null && w.week >= s.start && w.week <= s.end);
+          return `<td class="lane">${here
+            .map((s) => {
+              const first = w.week === s.start;
+              const last = w.week === s.end;
+              const inner =
+                (first ? `<span class="segt">${esc(s.a.title)}</span>` : "") +
+                (last ? `<span class="segd">due ${esc(shortDate(s.a.due_on))} · ${esc(pct(s.a.weight) || "no weight")}</span>` : "");
+              const cls = `lseg ${s.lane[2]}${first ? " first" : ""}${last ? " last" : ""}${s.a.draft ? " draft" : ""}`;
+              const href = s.a.viewable && s.a.url ? s.a.url : s.a.brief_url;
+              const tip = `${s.a.title}${s.a.opens_on ? " · opens " + shortDate(s.a.opens_on) : ""} · due ${shortDate(s.a.due_on)}`;
+              return href
+                ? `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener" data-view="${esc(s.a.title)}" ` +
+                    `data-format="${esc(s.a.viewable && s.a.url ? s.a.format : "html")}" title="${esc(tip)}">${inner}</a>`
+                : `<span class="${cls}" title="${esc(tip)}">${inner}</span>`;
+            })
+            .join("")}</td>`;
+        })
+        .join("");
+      return `<tr class="${w.when === "current" ? "now" : ""}"><td class="wkn"><b>${w.week}</b><small>${esc(shortDate(w.starts_on))}</small></td>` +
+        `<td class="topic">${
+          title
+            ? `<span class="${draft ? "draftword" : ""}">${esc(title)}</span>${n ? `<small>${n} ${n === 1 ? "concept" : "concepts"}</small>` : ""}${draft ? "<small>draft</small>" : ""}`
+            : '<span class="notopic">No topic yet</span>'
+        }</td>${lanesHtml}</tr>`;
+    })
+    .join("");
+
+  return `<div class="mode"><div class="weights">${cards}</div>${faultList}` +
+    `<table class="plan"><thead><tr><th>Week</th><th>Topic</th>${lanes
+      .map((l) => `<th class="lanehead ${l[2]}">${esc(l[1])}</th>`)
+      .join("")}</tr></thead><tbody>${rows}</tbody></table>` +
+    `<p class="foot">Each bar runs from the week a piece of work opens to the week it is due. Rooms, times and decks are in Teaching.</p></div>`;
+};
+
+// ---------------------------------------------------------------- teaching
+
+/**
+ * One week between its neighbours — asked during the term. The week in focus
+ * is the large card; the one before says what was taught and handed in and
+ * how its concepts landed, the one after what has to be ready. Every week of
+ * the term is rendered, and the page's script shows one trio at a time, so
+ * ‹ › needs no round trip.
+ *
+ * Private. It carries class figures — a concept's class mean over approved
+ * evidence, how much of a piece of work has been handed in, the open signals —
+ * which is why it is a mode of its own, behind the pane, and never part of a
+ * document a student may be shown.
+ */
+const REVISIT_BELOW = 0.6;
+
+const teachingBody = (data, evidence) => {
+  const run = data.run ?? {};
+  const weeks = data.weeks ?? [];
+  const current = data.current_week ?? null;
+  const at = (n) => weeks.find((w) => w.week === n) ?? null;
+  const concepts = evidence.concepts ?? {};
+  const handed = evidence.handed_in ?? {};
+  const signals = evidence.signals ?? [];
+
+  const workLine = (a, verb, date, withHanded) => {
+    const h = handed[a.assessment_id];
+    return `<li>${workChip(a, `${verb} ${shortDate(date)}`)}` +
+      (withHanded && h && h.enrolled ? `<small>${h.received} of ${h.enrolled} handed in</small>` : "") + "</li>";
+  };
+  const deckNeed = (w) => {
+    const meets = w.meetings ?? [];
+    if (!meets.length || meets.some((m) => (m.resources ?? []).some((r) => r.kind === "slides"))) return "";
+    return `<div class="need">${icon("slides")}<span>No slides yet</span>${askButton(promptFor("deck", w, run), "Draft slides", "chip ask strong")}</div>`;
+  };
+  const meetingLine = (m) =>
+    `<li>${icon(MEETING_ICON[m.type] ?? "lecture")}<span>${esc(shortDate(m.on) || "no date")} · ${esc(m.type)}</span>` +
+    `<small>${esc(m.location ?? "")}</small></li>`;
+
+  const side = (w, label) => {
+    if (!w) return `<div class="side empty"><small>${esc(label)}</small><p>Outside the run.</p></div>`;
+    const taught = current !== null && w.week < current;
+    const ev = taught
+      ? conceptsOf(w)
+          .map((c) => {
+            const x = concepts[c.id];
+            return `<li>${icon("concept")}<span>${esc(c.title ?? c.id)}</span><small>${
+              x && x.class_mean !== null && x.class_mean !== undefined
+                ? `class ${esc(pct(x.class_mean))} · ${esc(x.coverage ?? "")}`
+                : "not assessed yet"
+            }</small></li>`;
+          })
+          .join("")
+      : "";
+    return `<div class="side"><small>${esc(label)} · week ${w.week}</small><b>${esc(titleOf(w) || "No topic yet")}</b>` +
+      `<ul class="facts">${(w.meetings ?? []).map(meetingLine).join("")}` +
+      (w.opens ?? []).map((a) => workLine(a, "opens", a.opens_on, false)).join("") +
+      (w.due ?? []).map((a) => workLine(a, "due", a.due_on, true)).join("") + ev + "</ul>" +
+      deckNeed(w) + `<button type="button" class="link" data-goto="${w.week}">Make this the focus ›</button></div>`;
+  };
+
+  const focusCard = (w) => {
+    const misdated = (w.gaps ?? []).find((g) => g.kind === "misdated");
+    const off = misdated
+      ? misdated.ids
+          .map((id) => {
+            const m = (w.meetings ?? []).find((x) => x.activity_id === id) ?? {};
+            const word = m.type ? m.type.charAt(0).toUpperCase() + m.type.slice(1) : "A meeting";
+            return `<div class="need warn" title="${esc(misdated.note)}">${icon("misdated")}<span>${esc(word)} dated ${esc(shortDate(m.on))}, ${
+              m.on < w.starts_on ? `before this week starts (${esc(shortDate(w.starts_on))})` : `after this week ends (${esc(shortDate(w.ends_on))})`
+            }</span>${askButton(promptFor("misdated", w, run, id), "Check date", "chip ask strong")}</div>`;
+          })
+          .join("")
+      : "";
+    const meetings = (w.meetings ?? [])
+      .map((m) => {
+        const resources = [...(m.resources ?? [])].sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
+        return `<li>${icon(MEETING_ICON[m.type] ?? "lecture")}<span>${esc(shortDate(m.on) || "no date")} · ${esc(
+          [m.type, m.location].filter(Boolean).join(" · "),
+        )}</span>${resources.map(materialChip).join("")}</li>`;
+      })
+      .join("");
+    const work = [
+      ...(w.opens ?? []).map((a) => workLine(a, "opens", a.opens_on, false)),
+      ...(w.due ?? []).map((a) => workLine(a, "due", a.due_on, true)),
+    ].join("");
+    // What to repair before building on it: concepts taught in the two weeks
+    // before the focus whose class mean sits under the line.
+    const revisit = [w.week - 1, w.week - 2]
+      .map(at)
+      .filter(Boolean)
+      .flatMap((p) =>
+        conceptsOf(p)
+          .map((c) => ({ c, x: concepts[c.id], week: p.week }))
+          .filter(({ x }) => x && x.class_mean !== null && x.class_mean !== undefined && x.class_mean < REVISIT_BELOW),
+      );
+    const module = (w.modules ?? [])[0];
+    const prepare =
+      `For week ${w.week} of ${run.id}${module ? ` (${module.module_id})` : ""}, what should I teach and what should I revisit first?` +
+      (revisit.length ? ` The class is weakest on ${revisit.map((r) => r.c.title ?? r.c.id).join(" and ")}.` : "");
+    return `<div class="focus"><small>${w.week === current ? "This week" : `Week ${w.week}`} · ${esc(shortDate(w.starts_on))} – ${esc(shortDate(w.ends_on))}</small>` +
+      `<h2>${esc(titleOf(w) || "No topic yet")}</h2>` +
+      (conceptsOf(w).length ? `<div class="concepts">${icon("concept")}${conceptsOf(w).map((c) => `<span class="chip concept">${esc(c.title ?? c.id)}</span>`).join("")}</div>` : "") +
+      (meetings ? `<ul class="facts big">${meetings}</ul>` : '<p class="calm">No meeting this week.</p>') +
+      off + deckNeed(w) +
+      (work ? `<ul class="facts">${work}</ul>` : '<p class="calm">Nothing graded opens or falls due this week.</p>') +
+      (revisit.length || signals.length
+        ? `<div class="revisit"><b>Revisit first</b>${revisit
+            .map((r) => `<p>${esc(r.c.title ?? r.c.id)} — class ${esc(pct(r.x.class_mean))} on ${esc(r.x.coverage ?? "")} observed, taught in week ${r.week}</p>`)
+            .join("")}${signals.length ? `<p>${signals.length} open signal${signals.length === 1 ? "" : "s"}: ${esc(signals[0].description ?? "")}</p>` : ""}</div>`
+        : "") +
+      askButton(prepare, "Prepare this week", "primary") + "</div>";
+  };
+
+  const start = current ?? 1;
+  const sections = weeks
+    .map((w) => {
+      const prev = at(w.week - 1);
+      const next = at(w.week + 1);
+      const step =
+        `<div class="stepper">` +
+        (prev ? `<button type="button" class="chip" data-goto="${prev.week}">‹ Week ${prev.week}</button>` : "") +
+        `<b>Week ${w.week} of ${weeks.length}</b>` +
+        (current !== null && w.week !== current ? `<button type="button" class="chip" data-goto="${current}">Back to this week</button>` : "") +
+        (next ? `<button type="button" class="chip" data-goto="${next.week}">Week ${next.week} ›</button>` : "") +
+        `<span class="private">Private — class figures from approved evidence only</span></div>`;
+      return `<section class="trio-wrap" data-week="${w.week}"${w.week === start ? "" : " hidden"}>${step}` +
+        `<div class="trio">${side(prev, "Before")}${focusCard(w)}${side(next, "After")}</div></section>`;
+    })
+    .join("");
+  return `<div class="mode">${sections}</div>`;
+};
+
 /** A week nobody has planned and nothing meets in: a candidate for a band. */
 const isEmpty = (w) => !(w.modules ?? []).length && !(w.meetings ?? []).length;
 
@@ -328,7 +653,10 @@ const isEmpty = (w) => !(w.modules ?? []).length && !(w.meetings ?? []).length;
  * @param options.student - Preview as student: the record alone, no hole drawn.
  *   What `ainar page` publishes, in this layout.
  */
-export const courseModeDocument = (data, { dark = false, student = false } = {}) => {
+export const courseModeDocument = (
+  data,
+  { dark = false, student = false, mode = "term", evidence = null } = {},
+) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];
   const current = data.current_week ?? null;
@@ -505,22 +833,34 @@ export const courseModeDocument = (data, { dark = false, student = false } = {})
       `<span class="past">${tally.past} in weeks taught</span></div>`
     : "";
 
+  // Which of the three readings this page is. Planning and the term table
+  // are structure only; Teaching carries class figures and says so.
+  const strip = (note, extra = "") =>
+    `<div class="strip"><span class="note">${esc(run.term ?? "")} · ${
+      current ? `week ${current} of ${weeks.length}` : `${weeks.length} weeks`
+    } · ${esc(note)}</span>${extra}</div>`;
+  const studentBanner = student
+    ? '<div class="banner"><b>Preview as student.</b> The record alone — no hole, no note about what has not been written yet.</div>'
+    : "";
+  const structureFoot =
+    `<p class="foot">Structure only — nothing here is derived from student work. Accepting a draft is changing ` +
+    `<span class="mono">approval: draft</span> in its record; this page points at records and changes none.</p>`;
+
+  let main;
+  if (mode === "planning") {
+    main = strip("does the term hold together") + studentBanner + planningBody(data, { student }) + structureFoot;
+  } else if (mode === "teaching") {
+    main = strip("this week, between the last and the next") + teachingBody(data, evidence ?? {});
+  } else {
+    main = strip("press a hole to have Claude fill it", tallyHtml) + studentBanner + lead +
+      `<div class="grid"><div class="th">Lecture</div><div class="th">Graded work</div><div class="th">Outcomes</div>${body}</div>` +
+      structureFoot;
+  }
+
   return (
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">` +
     `<title>${esc(`${run.course_id ?? ""} · course mode`)}</title>` +
     `<style>:root{${dark ? DARK : LIGHT}}${STYLE}</style></head><body>` +
-    SPRITE +
-    `<div class="strip"><span class="note">${esc(run.term ?? "")} · ${
-      current ? `week ${current} of ${weeks.length}` : `${weeks.length} weeks`
-    } · press a hole to have Claude fill it</span>${tallyHtml}</div>` +
-    (student
-      ? '<div class="banner"><b>Preview as student.</b> The record alone — no hole, no note about what has not been written yet.</div>'
-      : "") +
-    lead +
-    `<div class="grid"><div class="th">Lecture</div><div class="th">Graded work</div><div class="th">Outcomes</div>${body}</div>` +
-    `<p class="foot">Structure only — nothing here is derived from student work. Accepting a draft is changing ` +
-    `<span class="mono">approval: draft</span> in its record; this page points at records and changes none.</p>` +
-    SCRIPT +
-    "</body></html>"
+    SPRITE + main + SCRIPT + "</body></html>"
   );
 };
