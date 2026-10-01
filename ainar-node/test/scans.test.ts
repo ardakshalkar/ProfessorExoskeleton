@@ -15,19 +15,25 @@ import { PDFDocument } from "pdf-lib";
 import { parse, stringify } from "yaml";
 import { pseudonym, RosterStore } from "../src/roster.ts";
 import {
+  answerKey,
   applyScans,
   checkSource,
+  fileScan,
+  groupAnswers,
   identify,
   itemsForVariant,
   nameKey,
   parsePages,
   planScans,
   proposePapers,
+  rankAssessments,
   readPlan,
   recordTranscripts,
+  runInbox,
   scanPlace,
   scanStatus,
   scanSubmissionId,
+  unfiledScans,
   variantsOf,
   writePlan,
   type ApplyContext,
@@ -360,4 +366,61 @@ test("status counts each step and names who has no scan", async () => {
   assert.deepEqual(status.placed, [s.alice]);
   assert.deepEqual(status.transcribed, []);
   assert.deepEqual(status.missing, [s.bob, s.carol].sort());
+});
+
+// ------------------------------------------------------------------ before the assessment is known
+
+test("the run's assessments rank against the cover, and a contradicting number weighs against", () => {
+  const assessments = [
+    { assessment_id: "ASSESSMENT-QUIZ-02", title: "Quiz 2 - Regression", type: "quiz", delivery: "paper_exam" },
+    { assessment_id: "ASSESSMENT-QUIZ-03", title: "Quiz 3 - Classification", type: "quiz", delivery: "paper_exam", due_at: "2026-10-21T10:00:00+05:00" },
+    { assessment_id: "ASSESSMENT-HW-01", title: "Homework 1", type: "assignment", delivery: "github_repo" },
+  ];
+  const items = [{ item_id: "ITEM-QUIZ-03-01", assessment_id: "ASSESSMENT-QUIZ-03", extensions: { variant: "A" } }];
+  const ranked = rankAssessments(assessments, items, { title: "QUIZ №3 Classification", date: "2026-10-20" });
+  assert.equal(ranked[0]!.assessment_id, "ASSESSMENT-QUIZ-03");
+  assert.equal(ranked[0]!.questions, 1);
+  assert.deepEqual(ranked[0]!.variants, ["A"]);
+  assert.ok(ranked[0]!.reasons.some((reason) => /due within/.test(reason)));
+  const two = ranked.find((entry) => entry.assessment_id === "ASSESSMENT-QUIZ-02")!;
+  assert.ok(two.reasons.some((reason) => /not the cover's/.test(reason)));
+  assert.equal(ranked.at(-1)!.assessment_id, "ASSESSMENT-HW-01");
+});
+
+test("filing moves a PDF from the run's inbox to the assessment's, and refuses a clash", async () => {
+  const s = setting();
+  const inbox = runInbox(join(s.base, "submissions"), RUN);
+  mkdirSync(inbox, { recursive: true });
+  writeFileSync(join(inbox, "pile.pdf"), await pdf(3));
+  assert.deepEqual(await unfiledScans(inbox), [{ file: "pile.pdf", page_count: 3 }]);
+  fileScan(inbox, "pile.pdf", s.place);
+  assert.ok(existsSync(join(s.place.inbox, "pile.pdf")));
+  assert.ok(!existsSync(join(inbox, "pile.pdf")));
+  writeFileSync(join(inbox, "pile.pdf"), await pdf(4));
+  assert.throws(() => fileScan(inbox, "pile.pdf", s.place), /already has a different/);
+  assert.throws(() => fileScan(inbox, "../x.pdf", s.place), /not a path/);
+});
+
+// ------------------------------------------------------------------ answers
+
+test("answers group by what was marked or written, case and punctuation aside", () => {
+  const items = [
+    { item_id: "ITEM-MID-01", type: "multiple_choice", number: 1, maximum_score: 1, prompt: "Pick", options: [{ label: "a", correct: false }, { label: "b", correct: true }] },
+    { item_id: "ITEM-MID-02", type: "essay", number: 2, maximum_score: 5, prompt: "Why?", options: [] },
+  ];
+  const responses = [
+    { item_id: "ITEM-MID-01", student_id: "STUDENT-A", chosen_options: ["b"] },
+    { item_id: "ITEM-MID-01", student_id: "STUDENT-B", chosen_options: ["a"] },
+    { item_id: "ITEM-MID-01", student_id: "STUDENT-C", chosen_options: ["b"] },
+    { item_id: "ITEM-MID-02", student_id: "STUDENT-A", raw_response: "Overfitting." },
+    { item_id: "ITEM-MID-02", student_id: "STUDENT-B", raw_response: "overfitting", extensions: { scan: { confidence: "low" } } },
+    { item_id: "ITEM-MID-02", student_id: "STUDENT-C", raw_response: "", extensions: { scan: { blank: true } } },
+  ];
+  const [choice, written] = groupAnswers(items, responses);
+  assert.deepEqual(choice!.groups.map((group) => [group.text, group.count, group.correct]), [["b", 2, true], ["a", 1, false]]);
+  assert.equal(written!.blank, 1);
+  assert.equal(written!.groups.length, 1);
+  assert.equal(written!.groups[0]!.count, 2);
+  assert.equal(written!.groups[0]!.low_confidence, 1);
+  assert.equal(answerKey("  The  Learning rate!! "), "the learning rate");
 });

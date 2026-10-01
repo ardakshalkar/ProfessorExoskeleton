@@ -740,6 +740,243 @@ export const recordTranscripts = (context: {
 };
 
 // --------------------------------------------------------------------------
+// Before the assessment is known
+// --------------------------------------------------------------------------
+
+/**
+ * Where a pile waits before anybody has said which assessment it is.
+ *
+ * `<RUN>/_inbox/`, beside the assessment folders and never mistaken for one —
+ * they are named `ASSESSMENT-…`. A professor uploads "the exam"; which exam is
+ * read off the cover pages, put to them, and only then is the file moved into
+ * that assessment's own inbox by `fileScan`.
+ */
+export const runInbox = (submissions: string, courseVersionId: string): string =>
+  join(submissions, courseVersionId, "_inbox");
+
+export interface UnfiledScan {
+  file: string;
+  page_count: number;
+}
+
+export const unfiledScans = async (inbox: string): Promise<UnfiledScan[]> => {
+  const found: UnfiledScan[] = [];
+  for (const file of pdfFiles(inbox)) {
+    const bytes = readFileSync(join(inbox, file));
+    found.push({ file, page_count: (await PDFDocument.load(bytes, { ignoreEncryption: true })).getPageCount() });
+  }
+  return found;
+};
+
+/** Lowercase words and numbers; `Quiz №3`, `quiz-3` and `QUIZ-03` agree. */
+const words = (text: string): string[] =>
+  text
+    .toLocaleLowerCase()
+    .normalize("NFKC")
+    .replace(/№/g, " ")
+    .replace(/(\p{L})(\d)|(\d)(\p{L})/gu, "$1$3 $2$4")
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    // `QUIZ-03` is quiz 3.
+    .map((word) => (/^\d+$/.test(word) ? String(Number(word)) : word));
+
+export interface Candidate {
+  assessment_id: string;
+  title: string;
+  type: string;
+  questions: number;
+  variants: string[];
+  due_at: string | null;
+  score: number;
+  reasons: string[];
+}
+
+/**
+ * The run's assessments, ranked against what was read off a cover page.
+ *
+ * A ranking, not a match: the top candidate is put to the professor as a
+ * question, and their answer is what files the scan. The score is explainable on
+ * purpose — every point comes with its reason — because "it looked like Quiz 3"
+ * is the sentence the professor is asked to confirm. A number on the cover that
+ * contradicts the title's number weighs heavily against it: Quiz 2 and Quiz 3
+ * share every other word.
+ */
+export const rankAssessments = (
+  assessments: any[],
+  items: any[],
+  hint: { title?: string | null; date?: string | null },
+): Candidate[] => {
+  const read = words(hint.title ?? "");
+  const readNumbers = read.filter((word) => /^\d+$/.test(word));
+  const when = hint.date ? Date.parse(hint.date) : NaN;
+  return assessments
+    .map((assessment) => {
+      const own = items.filter((item) => item.assessment_id === assessment.assessment_id);
+      const title = String(assessment.title ?? "");
+      const vocabulary = new Set([
+        ...words(title),
+        ...words(shortOf(String(assessment.assessment_id))),
+        ...words(String(assessment.type ?? "")),
+      ]);
+      const reasons: string[] = [];
+      let score = 0;
+      if (read.length) {
+        const shared = read.filter((word) => vocabulary.has(word));
+        score += shared.length / read.length;
+        if (shared.length) reasons.push(`shares ${shared.map((word) => `"${word}"`).join(", ")} with the cover`);
+        const theirs = [...vocabulary].filter((word) => /^\d+$/.test(word));
+        if (readNumbers.length && theirs.length && !readNumbers.some((number) => theirs.includes(number))) {
+          score *= 0.3;
+          reasons.push(`its number (${theirs.join(", ")}) is not the cover's (${readNumbers.join(", ")})`);
+        }
+      }
+      if (assessment.delivery === "paper_exam") {
+        score += 0.1;
+        reasons.push("sat on paper");
+      }
+      if (!Number.isNaN(when) && assessment.due_at) {
+        const days = Math.abs(Date.parse(assessment.due_at) - when) / 86_400_000;
+        if (days <= 7) {
+          score += 0.2;
+          reasons.push(`due within ${Math.max(1, Math.round(days))} day(s) of the date given`);
+        }
+      }
+      return {
+        assessment_id: String(assessment.assessment_id),
+        title,
+        type: String(assessment.type ?? ""),
+        questions: own.length,
+        variants: variantsOf(own),
+        due_at: assessment.due_at ?? null,
+        score: Math.round(score * 100) / 100,
+        reasons,
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.assessment_id.localeCompare(b.assessment_id));
+};
+
+const shortOf = (id: string): string => short(id, "ASSESSMENT-");
+
+/**
+ * Move one PDF from the run's inbox into an assessment's, once the professor
+ * has said which assessment it is. Refuses to overwrite a different file of the
+ * same name: two uploads called `scan.pdf` are two piles.
+ */
+export const fileScan = (inbox: string, file: string, place: ScanPlace): string => {
+  if (file.includes("/") || file.includes("\\")) throw new Error(`${file}: name a file in ${inbox}, not a path`);
+  const from = join(inbox, file);
+  if (!existsSync(from)) throw new Error(`${file} is not in ${inbox}`);
+  const to = join(place.inbox, file);
+  if (existsSync(to)) {
+    if (digest(readFileSync(to)) !== digest(readFileSync(from))) {
+      throw new Error(`${place.inbox} already has a different ${file} — rename one of them first`);
+    }
+  }
+  mkdirSync(place.inbox, { recursive: true });
+  renameSync(from, to);
+  return to;
+};
+
+// --------------------------------------------------------------------------
+// What the class wrote, grouped
+// --------------------------------------------------------------------------
+
+/** Case, spacing and punctuation set aside: "Overfitting." and "overfitting" are one answer. */
+export const answerKey = (text: string): string =>
+  text
+    .toLocaleLowerCase()
+    .normalize("NFKC")
+    .replace(/[^\p{L}\p{N}$\\^_=+\-*/<>.]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[\s.]+$/, "")
+    .trim();
+
+export interface AnswerGroup {
+  /** The answer as the first student in the group wrote it. */
+  text: string;
+  count: number;
+  students: string[];
+  /** For a choice item: was this combination the key? */
+  correct?: boolean;
+  low_confidence: number;
+}
+
+export interface ItemAnswers {
+  item_id: string;
+  number: number | null;
+  variant: string | null;
+  type: string;
+  maximum_score: number;
+  prompt: string;
+  answered: number;
+  blank: number;
+  groups: AnswerGroup[];
+}
+
+/**
+ * Every recorded answer to an assessment, per question, with identical answers
+ * collapsed.
+ *
+ * The exact half of grouping. A choice item groups by the options marked; a
+ * written one by its text once case, spacing and trailing punctuation are set
+ * aside. Grouping answers that *mean* the same thing in different words is a
+ * judgement and is left to the reader, who works from this list — which is
+ * what makes a rubric proposed from it a description of what the class wrote
+ * rather than of what somebody expected.
+ */
+export const groupAnswers = (items: any[], responses: any[]): ItemAnswers[] =>
+  [...items]
+    .sort(
+      (a, b) =>
+        String(a.extensions?.variant ?? "").localeCompare(String(b.extensions?.variant ?? "")) ||
+        (a.number ?? 0) - (b.number ?? 0) ||
+        String(a.item_id).localeCompare(String(b.item_id)),
+    )
+    .map((item) => {
+      const choice = (item.options ?? []).length > 0;
+      const correct = (item.options ?? [])
+        .filter((option: any) => option.correct)
+        .map((option: any) => String(option.label))
+        .sort()
+        .join(",");
+      const groups = new Map<string, AnswerGroup>();
+      let blank = 0;
+      let answered = 0;
+      for (const response of responses.filter((entry) => entry.item_id === item.item_id)) {
+        const chosen = [...(response.chosen_options ?? [])].map(String).sort();
+        const text = choice ? chosen.join(", ") : String(response.raw_response ?? "");
+        if (response.extensions?.scan?.blank || !text.trim()) {
+          blank += 1;
+          continue;
+        }
+        answered += 1;
+        const key = choice ? chosen.join(",") : answerKey(text);
+        const group = groups.get(key) ?? {
+          text,
+          count: 0,
+          students: [],
+          ...(choice ? { correct: key === correct } : {}),
+          low_confidence: 0,
+        };
+        group.count += 1;
+        group.students.push(String(response.student_id));
+        if (response.extensions?.scan?.confidence === "low") group.low_confidence += 1;
+        groups.set(key, group);
+      }
+      return {
+        item_id: String(item.item_id),
+        number: item.number ?? null,
+        variant: item.extensions?.variant ?? null,
+        type: String(item.type),
+        maximum_score: Number(item.maximum_score ?? 1),
+        prompt: String(item.prompt ?? ""),
+        answered,
+        blank,
+        groups: [...groups.values()].sort((a, b) => b.count - a.count || a.text.localeCompare(b.text)),
+      };
+    });
+
+// --------------------------------------------------------------------------
 // Where things stand
 // --------------------------------------------------------------------------
 

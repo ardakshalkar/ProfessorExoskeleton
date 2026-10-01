@@ -1071,13 +1071,16 @@ const checkDelivery = (b: CourseBundle, issues: IssueList): void => {
       }
 
       if (channel === "paper_exam") {
+        // Its items are the question map a scan is read against. The older
+        // `extensions.paper.questions` still counts, for a course written before.
         const paper = (assessment.extensions ?? {}).paper;
         const questions = paper && typeof paper === "object" ? paper.questions : undefined;
-        if (!questions || !(questions as unknown[]).length) {
+        const items = ((b.items as any[]) ?? []).some((item) => item.assessment_id === where);
+        if (!items && (!questions || !(questions as unknown[]).length)) {
           issues.warn(
             "delivery.unreachable",
-            "is sat on paper but has no extensions.paper.questions, so `exam-setup` and " +
-              "`import-graded-exam` cannot map a question to a criterion",
+            "is sat on paper but has no questions recorded, so a scanned paper has nothing " +
+              "to be read against — `ainar import-paper` records them from the paper",
             where,
           );
         }
@@ -1929,51 +1932,69 @@ const checkItems = (b: CourseBundle, issues: IssueList): void => {
   }
 
   for (const assessment of b.assessments as any[]) {
-    const items = itemsOf(b, assessment.assessment_id);
-    if (!items.length) continue;
+    const all = itemsOf(b, assessment.assessment_id);
+    if (!all.length) continue;
 
-    const total = items.reduce((sum, item) => sum + (item.maximum_score as number), 0);
-    if (Math.abs(total - assessment.maximum_score) > 0.01) {
-      issues.warn(
-        "item.score_mismatch",
-        `items sum to ${g(total)} but maximum_score is ${g(assessment.maximum_score)}`,
-        assessment.assessment_id,
-      );
-    }
+    // An exam with versions is several papers, each its own items plus the
+    // shared ones (`extensions.variant` unset). Every sum and every number is a
+    // fact about one paper a student sat, so each is checked per paper: two
+    // versions of question 1 are not a clash, and their marks are not added.
+    const variants = [
+      ...new Set(all.map((item) => item.extensions?.variant).filter((v): v is string => typeof v === "string")),
+    ].sort();
+    const papers: [string, any[]][] = variants.length
+      ? variants.map((variant) => [
+          ` in variant ${variant}`,
+          all.filter((item) => item.extensions?.variant == null || item.extensions.variant === variant),
+        ])
+      : [["", all]];
+    const said = new Set<string>();
+    const warnOnce = (code: string, message: string, where: string): void => {
+      if (said.has(`${code} ${where} ${message}`)) return;
+      said.add(`${code} ${where} ${message}`);
+      issues.warn(code, message, where);
+    };
 
-    const numbers = items.filter((item) => item.number != null).map((item) => String(item.number));
-    for (const duplicate of duplicates(numbers)) {
-      issues.warn(
-        "item.number_clash",
-        `more than one item is numbered ${duplicate}`,
-        assessment.assessment_id,
-      );
-    }
-
-    // Items that feed a criterion have to add up to it. Otherwise the criterion
-    // score derived from them is on a different scale from the criterion, and
-    // totalling the rubric silently rescales the marks — which is how a student
-    // ends up with a grade nobody intended.
-    const perCriterion = new Map<string, number>();
-    for (const item of items) {
-      if (item.criterion_id) {
-        perCriterion.set(
-          item.criterion_id,
-          (perCriterion.get(item.criterion_id) ?? 0) + (item.maximum_score as number),
+    for (const [label, items] of papers) {
+      const total = items.reduce((sum, item) => sum + (item.maximum_score as number), 0);
+      if (Math.abs(total - assessment.maximum_score) > 0.01) {
+        warnOnce(
+          "item.score_mismatch",
+          `items sum to ${g(total)}${label} but maximum_score is ${g(assessment.maximum_score)}`,
+          assessment.assessment_id,
         );
       }
-    }
-    for (const criterionId of [...perCriterion.keys()].sort()) {
-      const criterion = criteria.get(criterionId);
-      if (criterion === undefined) continue;
-      const itemTotal = perCriterion.get(criterionId)!;
-      if (Math.abs(itemTotal - criterion.maximum_score) > 0.01) {
-        issues.warn(
-          "item.criterion_score_mismatch",
-          `items feeding this criterion sum to ${g(itemTotal)} but its maximum_score is ` +
-            `${g(criterion.maximum_score)}, so an item-derived score would need rescaling`,
-          criterionId,
-        );
+
+      const numbers = items.filter((item) => item.number != null).map((item) => String(item.number));
+      for (const duplicate of duplicates(numbers)) {
+        warnOnce("item.number_clash", `more than one item is numbered ${duplicate}${label}`, assessment.assessment_id);
+      }
+
+      // Items that feed a criterion have to add up to it. Otherwise the criterion
+      // score derived from them is on a different scale from the criterion, and
+      // totalling the rubric silently rescales the marks — which is how a student
+      // ends up with a grade nobody intended.
+      const perCriterion = new Map<string, number>();
+      for (const item of items) {
+        if (item.criterion_id) {
+          perCriterion.set(
+            item.criterion_id,
+            (perCriterion.get(item.criterion_id) ?? 0) + (item.maximum_score as number),
+          );
+        }
+      }
+      for (const criterionId of [...perCriterion.keys()].sort()) {
+        const criterion = criteria.get(criterionId);
+        if (criterion === undefined) continue;
+        const itemTotal = perCriterion.get(criterionId)!;
+        if (Math.abs(itemTotal - criterion.maximum_score) > 0.01) {
+          warnOnce(
+            "item.criterion_score_mismatch",
+            `items feeding this criterion sum to ${g(itemTotal)}${label} but its maximum_score is ` +
+              `${g(criterion.maximum_score)}, so an item-derived score would need rescaling`,
+            criterionId,
+          );
+        }
       }
     }
   }

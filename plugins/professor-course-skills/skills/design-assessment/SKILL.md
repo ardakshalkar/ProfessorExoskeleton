@@ -1,6 +1,6 @@
 ---
 name: design-assessment
-description: Draft an assignment, quiz, exam or project against the outcomes it should measure — assessment, rubric criteria and concept-tagged items together, built from a coverage blueprint and the professor's constraints. Use when the user asks to create, design, write or generate an assignment, homework, quiz, midterm, exam, test or project brief.
+description: Draft an assignment, quiz, exam or project against the outcomes it should measure — assessment, rubric criteria and concept-tagged items together, built from a coverage blueprint and the professor's constraints. Use when the user asks to create, design, write or generate an assignment, homework, quiz, midterm, exam, test or project brief. An exam that already exists — set, printed or sat, whose questions only need recording — is /import-assessment instead.
 stage: design
 requires: [outcomes, concepts]
 produces: [assessments, items, item_models, documents]

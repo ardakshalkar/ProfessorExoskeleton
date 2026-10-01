@@ -44,7 +44,14 @@ _inbox/*.pdf ──plan──► _inbox/plan.yaml ──apply──► <STUDENT>
                                                           /grade-batch (written) ◄─┘
 ```
 
-## 0. Where things stand
+## 0. Which exam, and where things stand
+
+**If nobody has said which assessment the pile is** — "here are the scans, grade
+them" — it goes to the run's unfiled inbox, `~/.ainar/submissions/<RUN>/_inbox/`,
+and `/import-assessment` §1 works it out: read the covers, `scans identify`,
+ask the professor, `scans file`. Never pick the assessment yourself.
+
+Once it is filed:
 
 ```bash
 bin/ainar scans status CSS-4008-2026-FALL --assessment ASSESSMENT-MIDTERM
@@ -55,10 +62,12 @@ transcribed, and who has no scan yet. Start every session here: the pipeline is
 resumable, and each step only does what is still waiting.
 
 **Before anything else, check the assessment has its questions recorded** —
-`questions N` in the status. No items means nothing to transcribe against;
-stop and send the professor to `/design-assessment`. An exam with versions needs
-each version-specific item marked `extensions: { variant: A }` (shared questions
-carry no variant); `status` prints the variants it found.
+`questions N` in the status. No items means nothing to transcribe against, and
+`scans plan` refuses: the exam already exists, so its questions are imported
+from the paper, not designed — `/import-assessment` §2–§5, then come back. An
+exam with versions has each version-specific item marked
+`extensions: { variant: A }` (shared questions carry no variant); `status`
+prints the variants it found.
 
 ## 1. Choose the workflow from what arrived
 
@@ -170,7 +179,10 @@ another variant, is refused.
 bin/ainar score-items CSS-4008-2026-FALL
 ```
 
-scores the choice items against the key — never score them yourself. Then the
+scores the choice items against the key — never score them yourself. A written
+question with no rubric criterion yet — always the case for an imported exam —
+gets one proposed from the class's answers first: `/import-assessment` §7,
+`scans answers`, and the professor's reply. Then the
 written items, by `/grade-batch`: criterion by criterion, from the recorded
 `raw_response`, checked against the page itself when the transcript was `low`.
 Cite the scan by reference, never by copying it:

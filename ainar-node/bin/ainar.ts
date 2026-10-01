@@ -113,20 +113,26 @@ import { checkDeck, describeProblems, errorsIn } from "../src/slides/check.ts";
 import { canRender, describeRender, PAGE, renderDeck, workspaceOf } from "../src/slides/render.ts";
 import { deckForDocument, recordFor, type RecordedDeck } from "../src/slides/recorded.ts";
 import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../src/slides/timing.ts";
-import { buildMaterials, producerFor, readProducers } from "../src/materials.ts";
+import { buildMaterials, documentRecord, producerFor, readProducers } from "../src/materials.ts";
 import { importMaterial } from "../src/materials-import.ts";
-import { decidedAt, floatPaths, writeRecords } from "../src/records-write.ts";
+import { decidedAt, floatPaths, stampDocument, writeRecords } from "../src/records-write.ts";
 import {
   applyScans,
+  fileScan,
+  groupAnswers,
   planScans,
+  rankAssessments,
   readPlan,
   recordTranscripts,
+  runInbox,
   scanPlace,
   scanStatus,
   submissionsDir,
+  unfiledScans,
   variantsOf,
   type Shape,
 } from "../src/scans.ts";
+import { importPaper, paperFiles, parseKey, parsePaper, readText, type Paper } from "../src/paper-import.ts";
 import {
   // `TARGETS` is taken by the gradebook targets above, and these are a
   // different list of a different kind of thing.
@@ -318,6 +324,10 @@ const HELP = `ainar — the AINAR course model CLI
   Scanned papers. The PDFs stay in --submissions-dir (default
   ~/.ainar/submissions, or AINAR_SUBMISSIONS_DIR), outside the workspace:
 
+  scans identify RUN [--title T] [--date D] [--json]
+                                           unfiled PDFs in RUN/_inbox, and the
+                                           run's assessments ranked against T
+  scans file RUN FILE.pdf --assessment A   move an unfiled PDF under A
   scans status RUN --assessment A          what is in the inbox, placed, read
   scans plan RUN --assessment A [--per-file | --pages-per-student N]
                                            list _inbox/*.pdf, propose the split
@@ -325,6 +335,14 @@ const HELP = `ainar — the AINAR course model CLI
                                            split, match to the roster, record
   scans record RUN --assessment A [--dry-run]
                                            complete transcripts -> item responses
+  scans answers RUN --assessment A [--item ITEM] [--json]
+                                           every recorded answer per question,
+                                           identical ones grouped and counted
+
+  import-paper RUN --assessment A --paper PAPER.md [--paper PAPER-B.md]
+               [--key KEY.md] [--title T] [--type exam] [--dry-run]
+                                           an exam that already exists: the
+                                           paper as markdown, its items derived
 
   schema [ENTITY] [--json] [--out DIR]     what a record must look like
   new course COURSE_ID [--title T] [--credits N] [--department D]
@@ -1957,24 +1975,119 @@ try {
       const sub = rest[0] ?? "";
       const runId = rest[1];
       const assessmentId = flag("assessment");
-      if (!["status", "plan", "apply", "record"].includes(sub) || !runId || !assessmentId) {
-        console.error("usage: scans {status|plan|apply|record} RUN --assessment ASSESSMENT-ID");
+      const SUBS = ["identify", "file", "status", "plan", "apply", "record", "answers"];
+      if (!SUBS.includes(sub) || !runId || (sub !== "identify" && !assessmentId)) {
+        console.error(
+          "usage: scans identify RUN [--title TEXT] [--date YYYY-MM-DD]\n" +
+            "       scans file RUN FILE.pdf --assessment ASSESSMENT-ID\n" +
+            "       scans {status|plan|apply|record|answers} RUN --assessment ASSESSMENT-ID",
+        );
         process.exit(2);
       }
       const bundle = forRun(runId);
       const run = runById(bundle).get(runId) as { timezone?: string };
-      const assessment = (bundle.assessments as any[]).find(
-        (entry) => entry.assessment_id === assessmentId && entry.course_version_id === runId,
-      );
-      if (!assessment) throw new Error(`${runId} has no assessment ${assessmentId}`);
-      const items = (bundle.items as any[]).filter((item) => item.assessment_id === assessmentId);
-      const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
       const base = submissionsDir(flag("submissions-dir"));
       refuseInsideRepo(base, root);
-      const place = scanPlace(base, runId, assessmentId);
+      const unfiled = runInbox(base, runId);
+      const runAssessments = (bundle.assessments as any[]).filter((entry) => entry.course_version_id === runId);
+
+      if (sub === "identify") {
+        // Which assessment is this pile? Ranked, never decided: the reader puts
+        // the top candidate to the professor, and `scans file` acts on the answer.
+        const files = await unfiledScans(unfiled);
+        out(`unfiled scans in ${unfiled}`);
+        if (!files.length) out("  none — put the uploaded PDFs here, then run this again");
+        for (const entry of files) out(`  ${entry.file}  ${entry.page_count} page(s)`);
+        const candidates = rankAssessments(runAssessments, bundle.items as any[], {
+          title: flag("title"),
+          date: flag("date"),
+        });
+        if (args.includes("--json")) {
+          out({ inbox: unfiled, files, candidates });
+          break;
+        }
+        out(`\n${runId} assessments${flag("title") ? `, against "${flag("title")}"` : ""}:`);
+        if (!candidates.length) out("  none yet — this is a new assessment: /import-assessment");
+        for (const entry of candidates) {
+          out(
+            `  ${entry.score.toFixed(2)}  ${entry.assessment_id}  ${entry.title} (${entry.type})` +
+              `  ${entry.questions ? `${entry.questions} question(s)` : "NO QUESTIONS"}` +
+              (entry.variants.length ? `, variants ${entry.variants.join(", ")}` : "") +
+              (entry.due_at ? `  due ${String(entry.due_at).slice(0, 10)}` : ""),
+          );
+          if (entry.reasons.length) out(`        ${entry.reasons.join("; ")}`);
+        }
+        out(
+          "\nAsk the professor which it is. Then `scans file` it there — or, for an exam " +
+            "the course has no record of, or one with no questions, /import-assessment.",
+        );
+        break;
+      }
+
+      const assessment = runAssessments.find((entry) => entry.assessment_id === assessmentId);
+      if (!assessment) throw new Error(`${runId} has no assessment ${assessmentId} — /import-assessment records one`);
+      const items = (bundle.items as any[]).filter((item) => item.assessment_id === assessmentId);
+      const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
+      const place = scanPlace(base, runId, assessmentId!);
       const enrolled = new Set(enrolledIn(bundle, runId).map((entry) => entry.student_id as string));
       const now = decidedAt(run?.timezone);
       const dryRun = args.includes("--dry-run");
+
+      if (sub === "file") {
+        const file = rest[2];
+        if (!file) throw new Error(`name the file: scans file ${runId} FILE.pdf --assessment ${assessmentId}`);
+        const to = fileScan(unfiled, file, place);
+        out(`filed ${file} under ${assessmentId}: ${to}`);
+        out(
+          items.length
+            ? `Next: \`scans plan ${runId} --assessment ${assessmentId}\`.`
+            : `${assessmentId} has no questions yet — /import-assessment records them before \`scans plan\`.`,
+        );
+        break;
+      }
+
+      if (sub === "answers") {
+        // What the class wrote, per question, identical answers collapsed: what
+        // a rubric is proposed from. Pseudonyms only — the records hold no names.
+        const only = flag("item");
+        const scoped = items.filter((item) => !only || item.item_id === only);
+        if (only && !scoped.length) throw new Error(`${assessmentId} has no item ${only}`);
+        const grouped = groupAnswers(
+          scoped,
+          (bundle.item_responses as any[]).filter((entry) => scoped.some((item) => item.item_id === entry.item_id)),
+        );
+        if (args.includes("--json")) {
+          out(grouped);
+          break;
+        }
+        for (const entry of grouped) {
+          out(
+            `\n${entry.item_id}  Q${entry.number ?? "?"}${entry.variant ? ` (variant ${entry.variant})` : ""}  ` +
+              `${entry.type}, ${entry.maximum_score} mark(s)  ·  ${entry.answered} answered, ${entry.blank} blank, ` +
+              `${entry.groups.length} distinct`,
+          );
+          out(`  ${entry.prompt.split("\n")[0]!.slice(0, 100)}`);
+          for (const group of entry.groups) {
+            const mark = group.correct === undefined ? "" : group.correct ? " ✓" : "  ";
+            const low = group.low_confidence ? `  (${group.low_confidence} read with low confidence)` : "";
+            const text = group.text.replace(/\s+/g, " ");
+            out(`  ${String(group.count).padStart(3)}×${mark} ${text.length > 160 ? `${text.slice(0, 157)}…` : text}${low}`);
+          }
+        }
+        if (!grouped.some((entry) => entry.answered)) {
+          out(`\nNo answers recorded for ${assessmentId} yet — \`scans record\` writes them.`);
+        }
+        break;
+      }
+
+      if (!items.length && (sub === "plan" || sub === "apply")) {
+        // Every transcript is built from the questions; with none, each paper
+        // would be placed with an empty transcript and nothing would say so.
+        throw new Error(
+          `${assessmentId} has no questions recorded, so there is nothing to read the papers against. ` +
+            `Record them first (/import-assessment, or \`import-paper ${runId} --assessment ${assessmentId} --paper …\`).`,
+        );
+      }
 
       if (sub === "status") {
         const status = scanStatus(place, enrolled);
@@ -2109,6 +2222,175 @@ try {
       out(
         `\nEvery response is marked approval: draft. Next: \`score-items ${runId}\` for the choice ` +
           "items, then /grade-batch for the written ones.",
+      );
+      break;
+    }
+
+    /**
+     * An exam that already exists, read into the course: see src/paper-import.ts.
+     *
+     * The papers and the key are copied to where they belong in the
+     * assessment's folder when they are given from elsewhere; a re-import reads
+     * them from there. The items are derived and written marked `approval:
+     * draft`, the papers registered as Documents, and — for an exam the course
+     * has no record of — the assessment itself is written as a draft with the
+     * claims only the professor can make (weight, outcomes) left empty.
+     */
+    case "import-paper": {
+      const runId = rest[0];
+      const assessmentId = flag("assessment");
+      const given = flagList("paper");
+      if (!runId || !assessmentId || !given.length) {
+        console.error(
+          "usage: import-paper RUN --assessment ASSESSMENT-ID --paper PAPER.md [--paper PAPER-B.md]\n" +
+            "                    [--key KEY.md] [--title TEXT] [--type exam|quiz|…] [--dry-run]",
+        );
+        process.exit(2);
+      }
+      const bundle = forRun(runId);
+      const run = runById(bundle).get(runId) as { timezone?: string };
+      const courseId = (bundle.course as { course_id: string }).course_id;
+      const courseDir = join(root, "courses", courseId);
+      const now = decidedAt(run?.timezone);
+      const dryRun = args.includes("--dry-run");
+      const existing = (bundle.assessments as any[]).find((entry) => entry.assessment_id === assessmentId);
+      if (existing && existing.course_version_id !== runId) {
+        throw new Error(`${assessmentId} belongs to ${existing.course_version_id}, not ${runId}`);
+      }
+      if (!existing && !flag("title")) {
+        throw new Error(`${runId} has no assessment ${assessmentId}; to record a new one, give it a --title as printed on the paper`);
+      }
+
+      const papers: { paper: Paper; from: string }[] = given.map((path) => {
+        const from = resolve(path);
+        return { paper: parsePaper(readText(from), path), from };
+      });
+      const keyPath = flag("key");
+      const keyFrom = keyPath ? resolve(keyPath) : join(courseDir, paperFiles(assessmentId, null).key);
+      const key = existsSync(keyFrom) ? parseKey(readFileSync(keyFrom, "utf-8")) : null;
+      if (keyPath && !key) throw new Error(`${keyPath} does not exist`);
+
+      const result = importPaper({ assessmentId, papers: papers.map((entry) => entry.paper), key, now });
+      // What the paper does not say, a re-import keeps: the criterion a question
+      // was linked to when its rubric was proposed, the concepts and outcome it
+      // was tagged with. The paper owns the question; the course owns the rest.
+      const before = new Map(
+        (bundle.items as any[]).filter((item) => item.assessment_id === assessmentId).map((item) => [item.item_id, item]),
+      );
+      for (const item of result.items) {
+        const previous = before.get(item.item_id);
+        if (!previous) continue;
+        for (const field of ["criterion_id", "outcome_id", "concepts", "difficulty", "role", "item_model_id", "marking_guidance"]) {
+          const value = previous[field];
+          const empty = value === undefined || value === null || (Array.isArray(value) && !value.length);
+          if (!empty && item[field] === undefined) item[field] = value;
+        }
+      }
+      for (const [variant, total] of result.totals) {
+        const count = result.items.filter((item) => ((item.extensions as any).variant ?? "") === variant).length;
+        out(`  ${variant ? `variant ${variant}` : "paper"}: ${count} question(s), ${total} mark(s)`);
+      }
+      for (const problem of result.problems) out(`  PROBLEM  ${problem}`);
+      if (result.unkeyed.length) {
+        out(`  NO KEY   ${result.unkeyed.join(", ")} — choice questions need the professor's answer before anything is written`);
+      }
+      if (result.noModelAnswer.length) {
+        out(`  note     no model answer for ${result.noModelAnswer.join(", ")} — the rubric step will ask`);
+      }
+      if (existing && existing.maximum_score && result.totals.size) {
+        const total = [...result.totals.values()][0]!;
+        if (total !== existing.maximum_score) {
+          out(`  note     the paper adds up to ${total}, the assessment says maximum_score ${existing.maximum_score}`);
+        }
+      }
+      const kept = new Set(result.items.map((item) => item.item_id));
+      const orphans = (bundle.items as any[]).filter((item) => item.assessment_id === assessmentId && !kept.has(item.item_id));
+      if (orphans.length) {
+        out(`  note     on record but not on these papers: ${orphans.map((item) => item.item_id).join(", ")} — remove them from items.yaml if the paper dropped them`);
+      }
+      if (result.problems.length || result.unkeyed.length) {
+        out("\nNothing written.");
+        process.exit(1);
+      }
+      if (dryRun) {
+        out("\n--dry-run: nothing written.");
+        break;
+      }
+
+      // The papers and the key, into the folder they belong in — every clash
+      // checked before the first file is copied, so a refusal writes nothing.
+      const moves: [string, string][] = [
+        ...(key && keyPath ? [[keyFrom, paperFiles(assessmentId, null).key] as [string, string]] : []),
+        ...papers.map(({ paper, from }) => [from, paperFiles(assessmentId, paper.variant).paper] as [string, string]),
+      ];
+      for (const [from, relativeTo] of moves) {
+        const to = join(courseDir, relativeTo);
+        if (resolve(to) !== from && existsSync(to) && readFileSync(to, "utf-8") !== readFileSync(from, "utf-8")) {
+          throw new Error(
+            `${relative(root, to)} already exists and differs from ${relative(root, from) || from} — ` +
+              "edit the one in the assessment's folder and import it from there",
+          );
+        }
+      }
+      const place = (from: string, relativeTo: string): string => {
+        const to = join(courseDir, relativeTo);
+        if (resolve(to) === from) return to;
+        mkdirSync(dirname(to), { recursive: true });
+        writeFileSync(to, readFileSync(from));
+        out(`wrote ${relative(root, to)}`);
+        return to;
+      };
+      if (key && keyPath) place(keyFrom, paperFiles(assessmentId, null).key);
+      const documents: Record<string, unknown>[] = [];
+      for (const { paper, from } of papers) {
+        const files = paperFiles(assessmentId, paper.variant);
+        place(from, files.paper);
+        const document: Record<string, unknown> = {
+          document_id: files.documentId,
+          approval: "draft",
+          title: `${existing?.title ?? flag("title")} — question paper${paper.variant ? `, variant ${paper.variant}` : ""}`,
+          storage_key: `courses/${courseId}/${files.paper}`,
+          mime_type: "text/markdown",
+          course_id: courseId,
+          course_version_id: runId,
+          created_at: now,
+          generated_by: { produced_by: "ainar import-paper", input_refs: [assessmentId], created_at: now },
+          extensions: { origin: "imported" },
+        };
+        stampDocument(document, root);
+        documents.push(documentRecord(document));
+      }
+
+      const records: Record<string, Record<string, unknown>[]> = { items: result.items, documents };
+      if (!existing) {
+        const variants = papers.map((entry) => entry.paper.variant).filter(Boolean);
+        records.assessments = [
+          {
+            assessment_id: assessmentId,
+            approval: "draft",
+            course_version_id: runId,
+            title: flag("title"),
+            type: flag("type") ?? "exam",
+            maximum_score: [...result.totals.values()][0],
+            // The professor's: what it is worth, and what it measures.
+            weight: null,
+            outcomes: [],
+            delivery: "paper_exam",
+            submission_type: ["pdf"],
+            // One version: the paper is its instructions. With variants there is
+            // no single paper to point at, and the Documents name themselves.
+            ...(papers.length === 1 ? { instructions_document_id: documents[0]!.document_id } : {}),
+            extensions: {
+              ...(variants.length ? { paper: { variants } } : {}),
+              provenance: { produced_by: "ainar import-paper", created_at: now },
+            },
+          },
+        ];
+      }
+      for (const path of writeRecords(courseDir, records as never)) out(`wrote ${relative(root, path)}`);
+      out(
+        `\nEverything written is approval: draft.${existing ? "" : " The weight and the outcomes are yours to fill in."}\n` +
+          `Next: \`ainar validate ${courseId}\`, then the scans — \`scans plan ${runId} --assessment ${assessmentId}\`.`,
       );
       break;
     }

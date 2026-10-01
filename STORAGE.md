@@ -312,12 +312,16 @@ pseudonymous record of it. `ainar scans` does the deterministic half
 
 | Step | Command | What it does |
 | --- | --- | --- |
-| upload | — | the PDFs go into `_inbox/` |
+| upload | — | the PDFs go into `<RUN>/_inbox/` while nobody has said which exam they are, or straight into the assessment's `_inbox/` |
+| identify | `scans identify RUN [--title T] [--date D]` | lists the unfiled PDFs and ranks the run's assessments against the title read off a cover; the professor confirms |
+| file | `scans file RUN FILE --assessment A` | moves a confirmed PDF into that assessment's `_inbox/` |
+| questions | `import-paper RUN --assessment A --paper P.md [--key K.md]` | an exam that already exists: the paper as markdown (`<SHORT>-student[-A].md`), the key in `keys/`, the items derived from both; `plan` and `apply` refuse an assessment with no items |
 | plan | `scans plan RUN --assessment A [--per-file \| --pages-per-student N]` | lists the inbox and proposes the split; additive, so a late batch keeps earlier work |
 | fill | the reader | one entry per paper: `pages`, `number` or `name`, `variant`, `skip`, `rotate` |
 | apply | `scans apply RUN --assessment A [--replace] [--dry-run]` | checks every page is used once and the variant exists, matches each paper to a pseudonym through the roster, splits it out, writes `records/submissions.yaml` |
 | read | the reader | fills each `transcript.yaml`: `chosen` or `text`, `page`, `confidence`, or `blank` |
 | record | `scans record RUN --assessment A` | a complete transcript becomes item responses, `approval: draft` |
+| rubric | `scans answers RUN --assessment A` | every recorded answer per question, identical ones counted together; `/import-assessment` proposes a written question's criterion and levels from it |
 | grade | `score-items`, then `/grade-batch` | choice items against the key; written items against the rubric |
 
 **Workflows it covers:** one PDF per student; one batch split every N pages

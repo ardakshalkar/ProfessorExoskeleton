@@ -50,6 +50,11 @@ Your output is still only suggestions. Nothing here approves anything.
 the pile, matches it to the roster and records the answers read off the pages;
 it hands the written items back here.
 
+**A written item with no criterion, or a criterion with no levels, is not
+graded here.** There is nothing to match a passage to. `/import-assessment` §7
+proposes the criterion from what the class wrote (`scans answers`), the
+professor answers, and then it comes back.
+
 ## 1. Find the work
 
 ```bash

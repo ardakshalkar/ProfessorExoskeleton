@@ -116,6 +116,7 @@ export const ACTIONS: readonly ActionPolicy[] = [
     "prepare-lesson",
     "make-materials",
     "design-assessment",
+    "import-assessment",
     "grade-submission",
     "grade-batch",
     "grade-scans",
@@ -148,6 +149,7 @@ export const ACTIONS: readonly ActionPolicy[] = [
   ...[
     "deck-render",
     "render-exam",
+    "import-paper",
     "export-bundle",
     "generate-schema",
     "generate-import-sql",
@@ -157,7 +159,7 @@ export const ACTIONS: readonly ActionPolicy[] = [
 
   // Scanned papers carry names and handwriting, so the files never leave the
   // private folder on this machine: local, and never a backend's to hold.
-  ...["scans-plan", "scans-apply", "scans-record"].map((name) =>
+  ...["scans-identify", "scans-file", "scans-plan", "scans-apply", "scans-record", "scans-answers"].map((name) =>
     policy(name, {
       ...LOCAL_FILE,
       reason: "Scans hold names and handwriting; they are split and matched in the private folder on this machine.",
