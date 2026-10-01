@@ -84,6 +84,8 @@ import { writeAssessmentLinks } from "@ainar/core/src/lms/link.ts";
 import { outlinePayload } from "@ainar/core/src/outline.ts";
 import { dump as dumpYaml } from "@ainar/core/src/yaml-out.ts";
 import { dashboardPayload } from "@ainar/core/src/progress.ts";
+import { submissionsDir } from "@ainar/core/src/scans.ts";
+import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 // `parseDocument` alongside `parse`, for one caller: `writeCanvasSelection`
 // edits a file a professor also writes by hand, and the plain parse would hand
 // back a JS object with every comment in `version.yaml` already discarded.
@@ -95,6 +97,7 @@ import { parse as parseYaml, parseDocument as parseYamlDocument } from "yaml";
 // harness — see `test/pane-markdown.test.mjs`.
 import { MARKDOWN_STYLE, escapeText, renderMarkdown } from "./lib/markdown.js";
 import { courseModeDocument } from "./lib/course-mode.js";
+import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./lib/upload.js";
 
 export const name = "professor-pane";
 
@@ -5678,6 +5681,51 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
 
     if (path === "/api/revision") {
       return sendJson(res, 200, revisionDocument(root));
+    }
+
+    /**
+     * One file, as the raw request body: `?run=&kind=scans|paper&name=`.
+     *
+     * Raw rather than multipart, one file a request, because the browser half
+     * sends a `File` as it is and a multipart parser is a dependency this
+     * plugin would otherwise not have. The destination is never the caller's:
+     * `kind` picks one of two folders under the private submissions directory,
+     * and `name` is only ever the original filename, reduced to a safe one (a
+     * scan's is replaced outright — see lib/upload.js for why).
+     *
+     * The run has to be one this workspace has, so a request cannot make a
+     * folder for a course run nobody opened. The answer is where the file is,
+     * which the browser half then puts in a message to the agent.
+     */
+    if (path === "/api/upload") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "An upload is a POST." });
+      const kind = url.searchParams.get("kind") ?? "";
+      const original = url.searchParams.get("name") ?? "";
+      const refused = checkUpload(kind, original);
+      if (refused) return sendJson(res, 200, { error: refused });
+      const known = (runsDocument(workspace, root).courses ?? []).some((course) =>
+        (course.runs ?? []).some((run) => run.run_id === runId),
+      );
+      if (!known) return sendJson(res, 200, { error: `This workspace has no course run ${runId || "(none given)"}.` });
+      let folder;
+      try {
+        const submissions = submissionsDir(null);
+        refuseInsideRepo(submissions, root);
+        folder = uploadFolder(submissions, runId, kind);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      return receiveFile(req, folder)
+        .then((received) =>
+          sendJson(res, 200, {
+            ok: true,
+            kind,
+            run: runId,
+            folder,
+            ...storeUpload({ kind, folder, original, received, now: new Date().toISOString() }),
+          }),
+        )
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
     if (path === "/api/preferences") {

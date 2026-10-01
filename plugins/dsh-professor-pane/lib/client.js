@@ -574,6 +574,21 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
   word-break:break-word;font-size:11.5px;line-height:1.5;padding:10px;border-radius:6px;
   background:var(--dsw-alias-bg-l2,#f6f6f7);color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-publishhint{margin:0;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+/* The upload dialog: a drop box, the files, a note. Not the full-height sheet the
+   publish dialog is — there is no long plan to read — so it sizes to content. */
+.pp-uploadmodal{flex:none;max-height:100%;width:min(640px,100%);margin:auto}
+.pp-uploadmodal .pp-publishbody{overflow:auto}
+.pp-drop{flex:none;display:flex;align-items:center;justify-content:center;min-height:96px;
+  padding:14px;border-radius:8px;cursor:pointer;text-align:center;font-size:12px;
+  color:var(--dsw-alias-label-secondary,#444);
+  border:1.5px dashed var(--dsw-alias-border-l2,#c9c9ce)}
+.pp-drop:hover,.pp-drop:focus-visible{border-color:var(--dsw-alias-label-tertiary,#9a9a9a);outline:none}
+.pp-dropover{border-color:var(--dsw-alias-label-primary,#1a1a1a);
+  background:var(--dsw-alias-bg-l2,#f6f6f7)}
+.pp-uploadlist{margin:0;padding:0 0 0 2px;list-style:none;font-size:11.5px;max-height:150px;overflow:auto}
+.pp-uploadlist li{padding:2px 0;display:flex;gap:4px;align-items:baseline}
+.pp-uploadname{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-uploadnote{min-height:56px}
 /* The repository field, sized at 18ch above for a pane four hundred pixels
    wide. This dialog is not that, and at 18ch it clipped its own placeholder —
    the one control whose whole job is to be typed into was the one you could
@@ -3758,6 +3773,321 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    // --------------------------------------------------------------- upload
+
+    /**
+     * The two things a professor uploads, and what each is for.
+     *
+     * Kept to two on purpose. The harness's own attachment path takes images
+     * and gives the model no file it can run a command on, so these are the
+     * files that otherwise have no way in: the scanned pile, and the paper and
+     * key it was sat against. Each lands in the private submissions folder
+     * where the skill that reads it already looks — see `lib/upload.js`.
+     */
+    const UPLOAD_KINDS = [
+      {
+        id: "scans",
+        label: "Scanned student papers",
+        accept: ".pdf,application/pdf",
+        hint:
+          "PDFs from the scanner — one per student or one batch for the class. Kept outside " +
+          "the course, renamed so no student's name travels with them.",
+      },
+      {
+        id: "paper",
+        label: "Exam paper or answer key",
+        accept: ".pdf,.docx,.odt,.md,.txt,.png,.jpg,.jpeg",
+        hint:
+          "The paper you set, and its key — so the questions can be recorded exactly as " +
+          "printed. Kept outside the course until they are imported.",
+      },
+    ];
+
+    /**
+     * The message the agent gets once the files are in place.
+     *
+     * Paths, never the original filenames: a scan's name can carry a student's,
+     * and this sentence goes into the transcript. The server has already renamed
+     * a scan by its content, so what is quoted here is safe to say.
+     */
+    const uploadPrompt = (kind, runId, stored, note) => {
+      const fresh = stored.filter((entry) => !entry.duplicate);
+      const again = stored.length - fresh.length;
+      const list = stored.map((entry) => "- " + entry.path).join("\n");
+      const extra = note.trim() === "" ? "" : "\n\nWhat I can tell you: " + note.trim();
+      const repeat = again ? " (" + again + " of them already uploaded before)" : "";
+      if (kind === "scans") {
+        return (
+          "I uploaded " + stored.length + " scanned exam PDF(s) for " + runId + repeat +
+          ", into the run's unfiled inbox:\n" + list + extra +
+          "\n\nWork out which assessment they are from the covers and ask me before filing " +
+          "them (/import-assessment §1), then grade them (/grade-scans)."
+        );
+      }
+      return (
+        "I uploaded the exam paper / answer key for " + runId + repeat + ":\n" + list + extra +
+        "\n\nUse them to record the exam's questions and key (/import-assessment) — ask me " +
+        "which assessment it is and about variants first."
+      );
+    };
+
+    function UploadModal(props) {
+      const close = props.onClose;
+      const [kind, setKind] = React.useState(props.kind || "scans");
+      const [files, setFiles] = React.useState([]);
+      const [note, setNote] = React.useState("");
+      const [phase, setPhase] = React.useState("idle"); // idle | running | error
+      const [text, setText] = React.useState("");
+      const [over, setOver] = React.useState(false);
+      const input = React.useRef(null);
+      const spec = UPLOAD_KINDS.find((entry) => entry.id === kind);
+      const busy = phase === "running";
+
+      React.useEffect(() => {
+        const onKey = (event) => {
+          if (event.key === "Escape" && !busy) {
+            event.stopPropagation();
+            close();
+          }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [close, busy]);
+
+      /** Add files, once each — the same file dropped twice is one file. */
+      const add = (list) => {
+        const incoming = Array.from(list || []);
+        setFiles((current) => {
+          const seen = new Set(current.map((file) => file.name + "|" + file.size));
+          return current.concat(incoming.filter((file) => !seen.has(file.name + "|" + file.size)));
+        });
+        setPhase("idle");
+        setText("");
+      };
+
+      // The harness listens for drops on the whole document, to attach images
+      // to the chat. A drop meant for this box is not one of those, so it stops
+      // here rather than also arriving there as an attachment the model gets.
+      const stop = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      };
+
+      const upload = () => {
+        if (busy || files.length === 0) return;
+        setPhase("running");
+        const stored = [];
+        const next = (index) => {
+          if (index >= files.length) {
+            props.ask(uploadPrompt(kind, props.runId, stored, note));
+            close();
+            return;
+          }
+          const file = files[index];
+          setText("Uploading " + (index + 1) + " of " + files.length + " — " + file.name + "…");
+          fetch(
+            scoped(
+              BASE + "/api/upload?run=" + encodeURIComponent(props.runId) +
+                "&kind=" + encodeURIComponent(kind) +
+                "&name=" + encodeURIComponent(file.name),
+              props.sessionId,
+            ),
+            { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file },
+          )
+            .then((response) => response.json())
+            .then((result) => {
+              if (result.error) {
+                // Stop at the first refusal and say which file. What already
+                // went up stays up — it is in the private folder, renamed, and
+                // an upload of it again is recognised rather than doubled.
+                setPhase("error");
+                setText(
+                  file.name + ": " + result.error +
+                    (stored.length ? "\n\n" + stored.length + " file(s) before it were uploaded." : ""),
+                );
+                return;
+              }
+              stored.push(result);
+              next(index + 1);
+            })
+            .catch((error) => {
+              setPhase("error");
+              setText(file.name + ": " + String(error));
+            });
+        };
+        next(0);
+      };
+
+      return ReactDOM.createPortal(
+        h(
+          "div",
+          {
+            className: "pp-veil",
+            onMouseDown: (event) => {
+              if (event.target === event.currentTarget && !busy) close();
+            },
+            onDragEnter: stop,
+            onDragOver: stop,
+            onDrop: stop,
+          },
+          h(
+            "div",
+            {
+              className: "pp-modal pp-uploadmodal",
+              role: "dialog",
+              "aria-modal": "true",
+              "aria-label": "Upload files",
+              onMouseDown: (event) => event.stopPropagation(),
+            },
+            h(
+              "div",
+              { className: "pp-modalhead" },
+              h("div", { className: "pp-modaltitle" }, "Upload · " + props.runId),
+              h(
+                "button",
+                { type: "button", className: "pp-close", "aria-label": "Close", disabled: busy, onClick: close },
+                "×",
+              ),
+            ),
+            h(
+              "div",
+              { className: "pp-publishbody" },
+              h(
+                "div",
+                { className: "pp-approverow" },
+                UPLOAD_KINDS.map((entry) =>
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-segbtn",
+                      "aria-pressed": kind === entry.id,
+                      title: entry.hint,
+                      disabled: busy,
+                      onClick: () => {
+                        setKind(entry.id);
+                        setPhase("idle");
+                        setText("");
+                      },
+                      key: entry.id,
+                    },
+                    entry.label,
+                  ),
+                ),
+              ),
+              h("p", { className: "pp-publishhint" }, spec.hint),
+              h(
+                "div",
+                {
+                  className: "pp-drop" + (over ? " pp-dropover" : ""),
+                  role: "button",
+                  tabIndex: 0,
+                  "aria-label": "Choose files, or drop them here",
+                  onClick: () => !busy && input.current && input.current.click(),
+                  onKeyDown: (event) => {
+                    if ((event.key === "Enter" || event.key === " ") && !busy && input.current) {
+                      event.preventDefault();
+                      input.current.click();
+                    }
+                  },
+                  onDragEnter: (event) => {
+                    stop(event);
+                    setOver(true);
+                  },
+                  onDragOver: stop,
+                  onDragLeave: (event) => {
+                    stop(event);
+                    setOver(false);
+                  },
+                  onDrop: (event) => {
+                    stop(event);
+                    setOver(false);
+                    if (!busy) add(event.dataTransfer && event.dataTransfer.files);
+                  },
+                },
+                files.length === 0
+                  ? "Drop files here, or press to choose"
+                  : files.length + " file(s) — drop more, or press to add",
+                h("input", {
+                  ref: input,
+                  type: "file",
+                  multiple: true,
+                  accept: spec.accept,
+                  style: { display: "none" },
+                  onChange: (event) => {
+                    add(event.target.files);
+                    event.target.value = "";
+                  },
+                }),
+              ),
+              files.length
+                ? h(
+                    "ul",
+                    { className: "pp-uploadlist" },
+                    files.map((file, index) =>
+                      h(
+                        "li",
+                        { key: file.name + "|" + file.size },
+                        h("span", { className: "pp-uploadname" }, file.name),
+                        h("span", { className: "pp-as" }, " " + Math.max(1, Math.round(file.size / 1024)) + " KB"),
+                        busy
+                          ? null
+                          : h(
+                              "button",
+                              {
+                                type: "button",
+                                className: "pp-modallink",
+                                "aria-label": "Remove " + file.name,
+                                onClick: () => setFiles((current) => current.filter((_, at) => at !== index)),
+                              },
+                              " remove",
+                            ),
+                      ),
+                    ),
+                  )
+                : null,
+              h("textarea", {
+                className: "pp-publishtext pp-uploadnote",
+                placeholder:
+                  kind === "scans"
+                    ? "Anything Claude should know — which quiz this is, how many versions, a page scanned twice."
+                    : "Anything Claude should know — which exam, which file is the key, versions.",
+                value: note,
+                disabled: busy,
+                "aria-label": "A note for Claude",
+                onChange: (event) => setNote(event.target.value),
+              }),
+              h(
+                "div",
+                { className: "pp-approverow" },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    disabled: busy || files.length === 0,
+                    title:
+                      "Upload to the private folder outside the course, then tell Claude where " +
+                      "the files are. Nothing is graded or filed without asking you.",
+                    onClick: upload,
+                  },
+                  busy ? "Uploading…" : "Upload and ask Claude",
+                ),
+              ),
+              phase === "idle"
+                ? null
+                : h(
+                    "pre",
+                    { className: "pp-publishout" + (phase === "error" ? " pp-approveerr" : "") },
+                    text,
+                  ),
+            ),
+          ),
+        ),
+        document.body,
+      );
+    }
+
     // ----------------------------------------------------------------- pane
 
     /**
@@ -3861,6 +4191,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       // any of them; an overlay owned by one of those would vanish mid-slide
       // because the OS went dark. It closes when the professor closes it.
       const [material, setMaterial] = React.useState(null);
+      // The upload dialog, open or not. Not held by a frame for the material
+      // overlay's reason: a theme change mid-upload must not lose the files.
+      const [uploading, setUploading] = React.useState(false);
       // Course mode open or not. Not persisted: like the column itself, it
       // opens on a press, and a reload is back in the conversation.
       const [courseMode, setCourseMode] = React.useState(false);
@@ -4180,6 +4513,23 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   "Publish",
                 )
               : null,
+            // The way in for files the chat cannot take: a scanned pile, an
+            // exam paper, its key. Beside Publish because it is the other half
+            // of the same edge — what comes in from paper, against what goes out.
+            current
+              ? h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-publishbtn",
+                    title:
+                      "Scanned papers, or an exam paper and its key. Kept outside the course; " +
+                      "Claude is told where they are and asks before filing or grading anything.",
+                    onClick: () => setUploading(true),
+                  },
+                  "Upload",
+                )
+              : null,
             h(
               "button",
               {
@@ -4331,6 +4681,14 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               reload: reload,
               covered: material !== null || publishing !== null,
               onClose: () => setCourseMode(false),
+            })
+          : null,
+        uploading && current
+          ? h(UploadModal, {
+              runId: current.runId,
+              sessionId: props.sessionId,
+              ask: props.ask,
+              onClose: () => setUploading(false),
             })
           : null,
         material === null
