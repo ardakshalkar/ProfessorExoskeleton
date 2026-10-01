@@ -93,6 +93,21 @@ wrong is the professor's to say; the build moves nothing.
 These notes used to sit at the foot of the page. They are for whoever reviews
 the design; the page itself carries one line saying what is real.
 
+**Two modes, because a professor is in one of two.** *Planning* is the term
+as a structure, asked at its start: the weights against 100%, one row per week
+with its topic, the graded work as lanes (Quizzes, Homework, Project) running
+from the week it opens to the week it is due, and the faults as sentences with
+one press each — weeks with no topic, runs of weeks nothing graded touches,
+work with no dates, weights that do not add up. No rooms, times or decks.
+*Teaching* is one week between its neighbours, asked during the term: the week
+in focus large in the middle (meetings, materials, a date that is off its week,
+the missing deck, what is due and how much is handed in, and *Revisit first* —
+concepts from the two weeks before whose class mean sits under 60%), the week
+before and the week after either side, and ‹ › to move through the term. It
+carries class figures, so it says it is private. The page opens on Teaching
+while the run has a current week and on Planning otherwise. Every figure in
+both is counted in `build.mjs` (`planning`, `teaching`).
+
 **Three sections, because a professor asks three questions.** *Course outline*
 is what the course is. *Students' progress* is how the class is doing. *Todos*
 is what is waiting — `action_inbox` plus the structural holes, ordered by the
