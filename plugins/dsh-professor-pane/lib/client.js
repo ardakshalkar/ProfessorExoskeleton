@@ -4050,11 +4050,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 className: "pp-publishtext pp-uploadnote",
                 placeholder:
                   kind === "scans"
-                    ? "Anything Claude should know — which quiz this is, how many versions, a page scanned twice."
-                    : "Anything Claude should know — which exam, which file is the key, versions.",
+                    ? "Anything the assistant should know — which quiz this is, how many versions, a page scanned twice."
+                    : "Anything the assistant should know — which exam, which file is the key, versions.",
                 value: note,
                 disabled: busy,
-                "aria-label": "A note for Claude",
+                "aria-label": "A note for the assistant",
                 onChange: (event) => setNote(event.target.value),
               }),
               h(
@@ -4067,11 +4067,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     className: "pp-segbtn",
                     disabled: busy || files.length === 0,
                     title:
-                      "Upload to the private folder outside the course, then tell Claude where " +
+                      "Upload to the private folder outside the course, then tell the assistant in the chat where " +
                       "the files are. Nothing is graded or filed without asking you.",
                     onClick: upload,
                   },
-                  busy ? "Uploading…" : "Upload and ask Claude",
+                  busy ? "Uploading…" : "Upload and send to chat",
                 ),
               ),
               phase === "idle"
@@ -4483,7 +4483,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     className: "pp-publishbtn",
                     title:
                       "The whole term in three columns over the conversation. Press a hole " +
-                      "to have Claude fill it; Esc returns to the chat.",
+                      "to have the assistant fill it; Esc returns to the chat.",
                     onClick: () => setCourseMode(true),
                   },
                   "Course mode",
@@ -4524,7 +4524,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     className: "pp-publishbtn",
                     title:
                       "Scanned papers, or an exam paper and its key. Kept outside the course; " +
-                      "Claude is told where they are and asks before filing or grading anything.",
+                      "the assistant is told where they are and asks before filing or grading anything.",
                     onClick: () => setUploading(true),
                   },
                   "Upload",
