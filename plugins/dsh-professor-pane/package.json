@@ -13,6 +13,7 @@
   "files": [
     "index.js",
     "lib/client.js",
+    "lib/course-mode.js",
     "cordis.patch.yml",
     "README.md"
   ],

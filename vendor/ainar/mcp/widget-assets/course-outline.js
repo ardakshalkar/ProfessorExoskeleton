@@ -73,10 +73,68 @@ function model(d) {
   // `assignment` is the model's word; `homework` is the professor's, and it is
   // the one on the record titles (HW1) and on the folder the work lives in.
   const ASSESS_WORD = { assignment: 'homework', oral_defense: 'defense' };
-  // What a gap is called on a chip three hundred pixels wide. The kinds are
-  // `outline.ts`'s; `module` has no entry because the week header already says
-  // Unplanned and this row never draws it.
-  const GAP_WORD = { deck: 'no deck', deadline: 'no deadline', weight: 'no weight' };
+  // What pressing a hole does, and its glyph. The kinds are `outline.ts`'s. A
+  // hole is a verb: the chip says what it will start, not only what is
+  // missing, and pressing it asks for exactly that — so "Unplanned" in the
+  // header and "Plan module" under it are a fact and the way to change it,
+  // not one fault said twice. `deadline` has no entry: undated work carries its
+  // own "set date" press, in the card at the top of the plan.
+  const GAP = {
+    module: { label: 'Plan module', icon: 'layers' },
+    deck: { label: 'Draft deck', icon: 'slides' },
+    misdated: { label: 'Check date', icon: 'calwarn' },
+    weight: { label: 'Set weight', icon: 'percent' },
+  };
+
+  /**
+   * What a hole's press asks, naming the records.
+   *
+   * Every identifier the model would otherwise spend a search on: the week,
+   * the run, the module, the meetings. Ids only, never a name — this text goes
+   * to a model, and the model should work in the record's own vocabulary.
+   */
+  function gapAsk(g, w) {
+    const module = (w.modules || [])[0];
+    const about = 'week ' + w.week + ' of ' + run.id
+      + (module ? ' (' + module.module_id + ', "' + module.title + '")' : '');
+    const ids = (g.ids || []).join(', ');
+    if (g.kind === 'deck') {
+      return 'Draft the slides for ' + about + ' with /make-materials. It meets in '
+        + (ids || 'its meetings') + ' and has no deck. Register it as a resource marked approval: draft.';
+    }
+    if (g.kind === 'module') {
+      return 'Week ' + w.week + ' of ' + run.id + ' has no module. Propose what it should teach, '
+        + 'given the weeks either side, as a draft module for me to read. Change nothing else.';
+    }
+    if (g.kind === 'misdated') {
+      return ids + ' ' + ((g.ids || []).length === 1 ? 'is' : 'are') + ' drawn under ' + about
+        + ', but dated outside that week. Which is wrong: the date, the module\'s week, or the '
+        + 'run\'s start date? Tell me what you find and change nothing until I say.';
+    }
+    if (g.kind === 'weight') {
+      return 'What should ' + ids + ' in ' + about + ' be worth? The weight is mine to set; '
+        + 'propose one and wait.';
+    }
+    return 'For ' + about + ', what is still missing?';
+  }
+
+  /**
+   * The press on work nobody has dated. The verb first, the reason after, and
+   * an explicit floor under the tool use — see the comment where the week row
+   * draws the same press.
+   */
+  function datesAsk(a) {
+    return 'Ask me this now, in your first message, before running any '
+      + 'command: what are the open and due dates for ' + a.assessment_id
+      + ' ("' + a.title + '")? Skip the usual opening validate and inbox '
+      + 'sweep, and do not read any file first: these two dates exist only '
+      + 'in my head, so nothing on disk can answer this. Once I have '
+      + 'answered, set opens_at and due_at on the ' + a.assessment_id
+      + ' entry in ' + (a.source_file || where(run) + ' (grep for the id: '
+        + 'the filename is not fixed)')
+      + ', and then just confirm what you wrote. Do not work out which week '
+      + 'the dates fall in; the Course pane places them itself and shows it.';
+  }
 
   /** `quiz` as `Quiz`. The enum is the record's spelling, not the reader's. */
   function titled(word) {
@@ -291,7 +349,11 @@ function model(d) {
     // starts the only conversation that closes it. The prompt names the record,
     // because the model answering it should not have to guess which of eight
     // assessments the professor meant.
-    for (const a of w.undated || []) {
+    //
+    // Where the holes are drawn, this work is not on the week at all: it is in
+    // the card at the top of the plan, which is where a professor planning a
+    // week looks first, and a week cannot honestly hold work with no date.
+    for (const a of showGaps ? [] : w.undated || []) {
       const type = a.type || 'assessment';
       main.push(Object.assign(brief(w, a, type), {
         label: titled(ASSESS_WORD[type] || type),
@@ -318,16 +380,7 @@ function model(d) {
         // rather than merely slow, and the preset's own opening rule — validate
         // and inbox before asking anything — is named here so it is waived on
         // purpose rather than disobeyed by accident.
-        ask: 'Ask me this now, in your first message, before running any '
-          + 'command: what are the open and due dates for ' + a.assessment_id
-          + ' ("' + a.title + '")? Skip the usual opening validate and inbox '
-          + 'sweep, and do not read any file first: these two dates exist only '
-          + 'in my head, so nothing on disk can answer this. Once I have '
-          + 'answered, set opens_at and due_at on the ' + a.assessment_id
-          + ' entry in ' + (a.source_file || where(run) + ' (grep for the id: '
-            + 'the filename is not fixed)')
-          + ', and then just confirm what you wrote. Do not work out which week '
-          + 'the dates fall in; the Course pane places them itself and shows it.',
+        ask: datesAsk(a),
         formats: [],
       }));
     }
@@ -389,11 +442,22 @@ function model(d) {
       // model's own, which is the same division every figure on this page
       // follows: the view decides how it reads, the payload decides what is
       // true.
+      //
+      // Each one a press, ranked by the payload's `urgency`: this week and next
+      // filled, later outlined, a week already taught grey — so the holes that
+      // matter before Tuesday are not one colour with the rest.
       gaps: showGaps
         ? (w.gaps || [])
-            .filter(function (g) { return g.kind !== 'module'; })
+            .filter(function (g) { return Boolean(GAP[g.kind]); })
             .map(function (g) {
-              return { kind: g.kind, label: GAP_WORD[g.kind] || g.kind, note: g.note };
+              return {
+                kind: g.kind,
+                label: GAP[g.kind].label,
+                icon: GAP[g.kind].icon,
+                note: g.note,
+                tier: w.urgency || 'later',
+                ask: gapAsk(g, w),
+              };
             })
         : [],
       // The compact header: a 38px marker carrying the week number and the
@@ -531,7 +595,67 @@ function model(d) {
     };
   });
 
+  // Runs of two or more weeks nobody has planned and nothing meets in, folded
+  // into one band — on the professor's surface only.
+  //
+  // Five identical "Unplanned" cards are a fifth of the column saying one
+  // thing, and the band still says it in as many words, with the work that
+  // falls due inside it and the one press that starts planning them. The
+  // public page and a chat client keep a card per week: there the plan is
+  // read by people who are not going to fill it in, and each week saying it
+  // is unplanned is the rule this template was written around.
+  const plan = [];
+  if (showGaps) {
+    const empty = function (i) {
+      const w = (d.weeks || [])[i];
+      return !(w.modules || []).length && !(w.meetings || []).length
+        && !(w.source_outline || []).length;
+    };
+    for (let i = 0; i < weeks.length;) {
+      let j = i;
+      while (j < weeks.length && empty(j)) j += 1;
+      if (j - i < 2) { plan.push(weeks[i]); i += 1; continue; }
+      const first = (d.weeks || [])[i];
+      const last = (d.weeks || [])[j - 1];
+      const span = 'Weeks ' + first.week + '–' + last.week;
+      plan.push({
+        band: true,
+        band_label: span,
+        band_dates: shortDate(first.starts_on) + ' – ' + shortDate(last.ends_on),
+        band_count: (j - i) + ' weeks',
+        band_items: weeks.slice(i, j).reduce(function (all, w) { return all.concat(w.items); }, []),
+        band_tier: first.urgency || 'later',
+        band_ask: span + ' of ' + run.id + ' have no module. Propose what they should teach, '
+          + 'given what comes before them and what falls due in them, as draft modules for me to read.',
+        band_verb: 'Plan ' + span.toLowerCase(),
+      });
+      i = j;
+    }
+  }
+
   const unplaced = d.unplaced || {};
+
+  // What is on no date at all, before week 1, on the professor's surface.
+  // A hole is the most actionable thing on the page, and the foot of it is the
+  // one place a professor planning a week does not look.
+  const lead = !showGaps ? [] : (d.weeks || [])
+    .reduce(function (all, w) {
+      return all.concat((w.undated || []).map(function (a) { return { a: a, w: w }; }));
+    }, [])
+    .concat((unplaced.assessments || []).map(function (a) { return { a: a, w: null }; }))
+    .map(function (entry) {
+      const a = entry.a;
+      const type = a.type || 'assessment';
+      return {
+        label: titled(ASSESS_WORD[type] || type),
+        icon: ASSESS_ICON[type] || 'doc',
+        name: a.title,
+        where: entry.w ? 'its module is week ' + entry.w.week : 'on no week',
+        draft: isDraft(a, a.assessment_id),
+        ask: datesAsk(a),
+      };
+    });
+
   const stranded = (unplaced.modules || []).map(function (m) {
     return {
       id: m.module_id,
@@ -540,7 +664,8 @@ function model(d) {
     };
   }).concat((unplaced.meetings || []).map(function (m) {
     return { id: m.activity_id, title: m.title, note: 'no date and no module' };
-  })).concat((unplaced.assessments || []).map(function (a) {
+  })).concat((showGaps ? [] : unplaced.assessments || []).map(function (a) {
+    // On the professor's surface these are in the card at the top instead.
     return { id: a.assessment_id, title: a.title, note: 'no dates' };
   }));
 
@@ -553,6 +678,8 @@ function model(d) {
   // row above drops the `module` gap, so a count taken from it would report a
   // course with six unplanned weeks as having none.
   const gapWeeks = ((d.totals || {}).gaps || {}).weeks;
+  // The same holes ranked by when they bite, as the payload counted them.
+  const urgency = (d.totals || {}).gaps_by_urgency;
 
   return {
     // The pane's run picker already names the course and the term, so the
@@ -578,9 +705,23 @@ function model(d) {
     totals: d.totals || {},
     // Empty unless this surface asked for the gaps and there are some, which is
     // what lets the strip say nothing at all on a course with none.
-    gaps_word: showGaps && gapWeeks
+    gaps_word: showGaps && gapWeeks && !urgency
       ? (gapWeeks === 1 ? '1 week needs something' : gapWeeks + ' weeks need something')
       : '',
+    // The ranked tally, where the payload carries one. Three words, not a
+    // number: "4 this week or next" is the figure a Tuesday is planned by.
+    urgency: showGaps && urgency && gapWeeks
+      // Strings, because the template's `if` reads 0 as absent and a zero is
+      // a figure worth printing.
+      ? { soon: String(urgency.soon), later: String(urgency.later), past: String(urgency.past),
+          hot: urgency.soon > 0 }
+      : null,
+    // Graded work stops being red where the holes are drawn: there red means
+    // "missing", and a quiz that exists is not missing anything.
+    pro: showGaps,
+    lead: lead,
+    lead_word: lead.length === 1 ? '1 thing is not on the calendar yet'
+      : lead.length + ' things are not on the calendar yet',
     total_weight: pct(grading.total_weight),
     grading_note: grading.note,
     assessments: (d.assessments || []).map(function (a) {
@@ -594,7 +735,7 @@ function model(d) {
         outcomes: (a.outcomes || []).join(', '),
       };
     }),
-    weeks: weeks,
+    weeks: showGaps ? plan : weeks,
     // A material becomes a link only where the payload carries somewhere to go.
     // The hosted page fills these in with the copies it published beside itself;
     // in a chat client most stay plain text, because the file is in the

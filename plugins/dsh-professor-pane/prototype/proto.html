@@ -709,8 +709,11 @@ function tierOf(weekNumber) {
 // A hole a draft already stands in for is not a hole while drafts are shown:
 // week 10 with a proposed module should offer that draft, not "Plan module".
 function openGaps(week, mode) {
-  if (!mode.drafts) return week.gaps;
-  return week.gaps.filter(function (g) {
+  // `misdated` is on the payload since outline.ts learned it, but this page
+  // draws it beside its meeting from `DATA.misdated`; counted once, there.
+  const gaps = week.gaps.filter(function (g) { return g.kind !== 'misdated'; });
+  if (!mode.drafts) return gaps;
+  return gaps.filter(function (g) {
     if (g.kind === 'module') return !DATA.proposed.modules[week.week];
     if (g.kind === 'deck') return !DATA.proposed.decks[week.week];
     return true;

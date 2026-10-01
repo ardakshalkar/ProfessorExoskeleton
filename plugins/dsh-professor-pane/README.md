@@ -17,6 +17,38 @@ and offers a picker when the workspace holds more than one offering.
 | Preferences | The DataLayer preference layers, each with its own file path and its own values | the preference files |
 | Integrations | What this run is wired to outside the workspace, and what it is not: the gradebook target, the Canvas course and host, the spreadsheet, which credentials are present, and which Canvas section feeds which subgroup | the run record, `lms.toml`, `connections.json`, the environment |
 
+## Course mode
+
+**Course mode**, beside Publish in the header, opens the whole term over the
+harness: one grid, week 1 to week N, in three columns — **Lecture** (each
+meeting with its own materials, the deck first), **Graded work** (one column,
+the type on the chip and the weight in bold) and **Outcomes** (what the week's
+module teaches, and in green what work falling due in it assesses). It is step
+four of [`COURSE-MODE.md`](COURSE-MODE.md), designed in
+[`prototype/`](prototype/README.md) first.
+
+Every hole on it is a press that names what it starts — *Draft deck*, *Plan
+module*, *Check date*, *Set weight*, *Write brief*, *Set dates* — and sends a
+prompt naming the week, the module and the records into the open session. The
+overlay then closes, so the professor lands on the turn they started: the
+conversation is underneath, not replaced, which is the "chat as a button" half.
+Holes are ranked by the payload's `weeks[].urgency` — this week and next
+filled, later outlined, weeks already taught grey — and the strip counts them
+the same way from `totals.gaps_by_urgency`. Runs of two or more unplanned weeks
+fold into one band; work with no date goes in a card before week 1.
+
+It shares the pane's Record / + drafts state, and adds **Preview as student**:
+the record alone with no hole drawn, which is what `ainar page` publishes.
+Escape, the backdrop or × closes it; a deck opened from it lands on top of it
+and closes first.
+
+Why a page of the pane's own rather than the widget: the widget is one column
+by construction — it is what ChatGPT and Claude Desktop draw beside a reply,
+and what the public page renders — and the layout declares no full-width seat,
+so this takes the material overlay's idiom. `lib/course-mode.js` draws it on
+the host, from the same payload with the same material links, into the same
+sandboxed frame, sending the same two messages (`ask`, `view`).
+
 ## Opening a deck, or a homework brief
 
 A slide deck, a handout, an exam paper or the brief for a piece of homework
@@ -419,6 +451,7 @@ lines, not before.
 | `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/`, for the pane's refresh poll |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
+| `GET /professor-pane/view/course?run=&dark=&drafts=&student=` | course mode: the term plan in three columns, drawn here from the outline payload; `student=1` draws the record alone, no hole |
 
 `drafts=1` computes the payload over the whole course, drafts included; without
 it the payload is computed over `approvedView`. The response says which in
@@ -501,10 +534,22 @@ been an error but a wrong number.
 
 ## What a week is still waiting for
 
-The four questions the Checklist asks of the course, asked of each week and
-drawn on it: a dashed amber chip under the week's title saying `no deck`, `no
-deadline` or `no weight`, with the model's own sentence behind it, and a tally
-in the strip at the top — *14 weeks need something*.
+The questions the Checklist asks of the course, asked of each week and drawn
+on it: a press under the week's title that says what it starts — *Plan
+module*, *Draft deck*, *Check date*, *Set weight* — with the model's own
+sentence behind it, and a tally under the strip ranked by when the holes bite:
+*4 this week or next · 8 later · 6 in weeks taught*.
+
+Since 2026-10-01 each chip is a button, not a label: it asks, naming the week,
+the run, the module and the records, exactly as the "set date" press always
+did. The rank is `weeks[].urgency` and the tally `totals.gaps_by_urgency`, both
+from `outline.ts`. *Check date* is the fifth question, `misdated`: a meeting
+drawn under its module's week while its own date is outside that week — four
+lectures on CSS-4008, whose run-weeks start on a Tuesday while its lectures move
+to Mondays. The model names them and moves nothing; which fact is wrong is the
+professor's to say. On this surface only, runs of two or more unplanned weeks
+fold into one band, undated work moves to a card above week 1, and graded work
+is ink rather than red, because here red means missing.
 
 The chips come from `weeks[].gaps` on the outline payload, computed in
 `ainar-node/src/outline.ts`. The view neither counts nor decides: a gap names

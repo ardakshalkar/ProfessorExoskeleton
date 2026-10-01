@@ -219,7 +219,7 @@ const grading = (assessments: any[]): Record<string, unknown> => {
 };
 
 /** The four questions, in the order a week is read. */
-const GAP_KINDS = ["module", "deck", "deadline", "weight"] as const;
+const GAP_KINDS = ["module", "deck", "misdated", "deadline", "weight"] as const;
 
 /**
  * What is missing from one week, asked of the week rather than of the course.
@@ -274,6 +274,31 @@ const weekGaps = (week: Record<string, any>): Record<string, unknown>[] => {
           `slides are registered against ${meetings.length === 1 ? "it" : "any of them"}.`,
       });
     }
+  }
+
+  // A meeting drawn under a week its own date is not in. A meeting takes its
+  // module's week first and its date only as a fallback, so the two can
+  // disagree — and then the page prints a date range and, inside it, a class
+  // dated outside it. On CSS-4008 that is four lectures: the run starts on a
+  // Tuesday, its weeks run Tuesday to Monday, and from week 6 the lectures are
+  // on Mondays. Which fact is wrong — the date, the module's week or the run's
+  // start — is the professor's to say, so this names the meetings and moves
+  // nothing.
+  const misdated = meetings.filter(
+    (activity) => activity.on && (activity.on < week.starts_on || activity.on > week.ends_on),
+  );
+  if (misdated.length) {
+    gaps.push({
+      kind: "misdated",
+      ids: misdated.map((activity) => activity.activity_id),
+      note:
+        misdated
+          .map((activity) => `${activity.activity_id} is dated ${activity.on}`)
+          .join("; ") +
+        `, outside ${week.starts_on} – ${week.ends_on}, though its module puts it in ` +
+        `week ${week.week}. Which of the date, the module's week or the run's start ` +
+        "is wrong is the professor's to say.",
+    });
   }
 
   const undated = (week.undated as any[]).map((a) => a.assessment_id as string);
@@ -444,6 +469,12 @@ export const outlinePayload = (
     // Computed from the week rather than passed the records again, so a gap and
     // the thing it is about cannot disagree about what is in this week.
     week.gaps = weekGaps(week);
+    // When this week's holes bite. `soon` is this week and the next — the ones
+    // still fixable before the class meets; `past` is a week already taught,
+    // whose missing deck is next year's work. Said here rather than in a view,
+    // so every surface ranking the holes ranks them the same way.
+    week.urgency =
+      week.when === "past" ? "past" : current >= 1 && number <= current + 1 ? "soon" : "later";
     weeks.push(week);
   }
 
@@ -456,6 +487,12 @@ export const outlinePayload = (
     gapTotals[kind] = weeks.filter((week) =>
       (week.gaps as Record<string, unknown>[]).some((gap) => gap.kind === kind),
     ).length;
+  }
+  // Holes — one per week and kind — by when they bite. The figure a strip
+  // ranks by, counted here because a view that counted would be deriving one.
+  const urgency: Record<string, number> = { soon: 0, later: 0, past: 0 };
+  for (const week of weeks) {
+    urgency[week.urgency as string] += (week.gaps as unknown[]).length;
   }
 
   return {
@@ -512,6 +549,7 @@ export const outlinePayload = (
       // the gaps needs the tally without counting the weeks itself, because a
       // view that counted would be deriving a figure no command produced.
       gaps: gapTotals,
+      gaps_by_urgency: urgency,
     },
     placement: PLACEMENT,
   };
