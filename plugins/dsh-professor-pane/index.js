@@ -6434,12 +6434,42 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
           ],
         );
       }
+      // Three readings of the same term. `planning` and `term` are structure
+      // only. `teaching` adds class figures — a concept's class mean, what has
+      // been handed in, the open signals — so it alone reads the two private
+      // payloads, and only when asked for by name.
+      const mode = ["planning", "teaching"].includes(url.searchParams.get("mode"))
+        ? url.searchParams.get("mode")
+        : "term";
+      let evidence = null;
+      if (mode === "teaching") {
+        const on = url.searchParams.get("date");
+        const progress = viewPayload(workspace, "class_progress", runId, on, withDrafts).payload;
+        const inbox = viewPayload(workspace, "action_inbox", runId, on, withDrafts).payload;
+        const concepts = {};
+        for (const c of progress.concepts ?? []) {
+          concepts[c.concept_id] = { class_mean: c.class_mean ?? null, coverage: c.coverage ?? null };
+        }
+        const handedIn = {};
+        for (const a of inbox.assessments ?? []) {
+          handedIn[a.assessment_id] = { enrolled: a.enrolled ?? null, received: a.submissions_received ?? null };
+        }
+        // The signal's sentence and nothing that names a student: this text is
+        // drawn, and a pseudonym is the most a page in this pane carries.
+        const signals = (inbox.open_signals ?? []).map((s) => ({ description: s.description ?? "" }));
+        evidence = { concepts, handed_in: handedIn, signals };
+      }
       res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
       return send(
         res,
         200,
         "text/html; charset=utf-8",
-        courseModeDocument(data, { dark, student: url.searchParams.get("student") === "1" }),
+        courseModeDocument(data, {
+          dark,
+          student: mode !== "teaching" && url.searchParams.get("student") === "1",
+          mode,
+          evidence,
+        }),
       );
     }
 

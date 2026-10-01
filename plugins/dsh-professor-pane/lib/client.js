@@ -3020,6 +3020,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           (props.drafts ? "&drafts=1" : "") +
           // Course mode's "Preview as student": the record alone, no hole.
           (props.student ? "&student=1" : "") +
+          // Course mode's reading: planning, teaching, or the full term table.
+          (props.mode ? "&mode=" + encodeURIComponent(props.mode) : "") +
           // Only ever sent affirmatively, and only by the class list. Every
           // other view's URL is unchanged, so nothing else can start naming
           // people because a parameter leaked into a shared link.
@@ -3253,9 +3255,34 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * own state, so this and the column never disagree about which half they
      * show; Preview as student is this view's alone.
      */
+    /**
+     * The two modes a professor is in, and the full table either can drop
+     * into. Planning asks whether the term holds together; Teaching is this
+     * week between the last and the next, and alone carries class figures.
+     */
+    const COURSE_MODES = [
+      { id: "planning", label: "Planning", hint: "Does the term hold together: topics, quizzes, homework, weights" },
+      { id: "teaching", label: "Teaching", hint: "This week, between the last and the next. Carries class figures" },
+      { id: "term", label: "All weeks", hint: "Every week in full, three columns" },
+    ];
+
+    /**
+     * Teaching while the run is under way, Planning before it starts or after
+     * it ends. The run's own dates, compared as the ISO strings they are, and
+     * today in the machine's local calendar — no arithmetic, no time zone.
+     */
+    const defaultCourseMode = (start, end) => {
+      const now = new Date();
+      const today =
+        now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" +
+        String(now.getDate()).padStart(2, "0");
+      return start && end && today >= start && today <= end ? "teaching" : "planning";
+    };
+
     function CourseMode(props) {
       const close = props.onClose;
       const [student, setStudent] = React.useState(false);
+      const [mode, setMode] = React.useState(() => defaultCourseMode(props.start, props.end));
       React.useEffect(() => {
         const onKey = (event) => {
           // A deck opened from the term plan sits on top and owns Escape: it
@@ -3288,6 +3315,21 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               "div",
               { className: "pp-modalhead pp-coursehead" },
               h("div", { className: "pp-modaltitle" }, props.title + " · course mode"),
+              COURSE_MODES.map((entry) =>
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    "aria-pressed": mode === entry.id,
+                    title: entry.hint,
+                    onClick: () => setMode(entry.id),
+                    key: entry.id,
+                  },
+                  entry.label,
+                ),
+              ),
+              h("span", { className: "pp-segspacer" }),
               DRAFT_MODES.map((entry) =>
                 h(
                   "button",
@@ -3302,16 +3344,20 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   entry.label,
                 ),
               ),
-              h(
-                "label",
-                { title: "The record alone, with no hole drawn — what ainar page publishes" },
-                h("input", {
-                  type: "checkbox",
-                  checked: student,
-                  onChange: (event) => setStudent(event.target.checked),
-                }),
-                "Preview as student",
-              ),
+              // Not on Teaching: a student is never shown class figures, so
+              // there is no student version of that page to preview.
+              mode === "teaching"
+                ? null
+                : h(
+                    "label",
+                    { title: "The record alone, with no hole drawn — what ainar page publishes" },
+                    h("input", {
+                      type: "checkbox",
+                      checked: student,
+                      onChange: (event) => setStudent(event.target.checked),
+                    }),
+                    "Preview as student",
+                  ),
               h(
                 "button",
                 {
@@ -3334,7 +3380,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 sessionId: props.sessionId,
                 dark: props.dark,
                 drafts: props.drafts,
-                student,
+                student: student && mode !== "teaching",
+                mode: mode,
                 title: "Course mode",
               }),
             ),
@@ -4275,6 +4322,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           ? h(CourseMode, {
               title: current.title || current.label,
               runId: current.runId,
+              start: current.start,
+              end: current.end,
               sessionId: props.sessionId,
               dark: dark,
               drafts: drafts,

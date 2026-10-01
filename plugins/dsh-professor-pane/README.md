@@ -37,6 +37,24 @@ filled, later outlined, weeks already taught grey — and the strip counts them
 the same way from `totals.gaps_by_urgency`. Runs of two or more unplanned weeks
 fold into one band; work with no date goes in a card before week 1.
 
+Three readings, switched in its header, opening on **Teaching** while the run
+is under way (today between its start and end dates) and on **Planning**
+otherwise:
+
+* **Planning** — does the term hold together. The weights by kind of work
+  against 100%, the faults as sentences with one press each (weeks with no
+  topic, runs of weeks nothing graded touches, work with no dates, weights that
+  do not add up), and one row per week with its topic and the graded work as
+  lanes from the week it opens to the week it is due. Structure only.
+* **Teaching** — this week between the last and the next. The week in focus
+  (meetings and materials, a date off its week in plain words, the missing
+  deck, what is due with how much is handed in, and *Revisit first*: concepts
+  from the two weeks before under a 60% class mean, and the open signals),
+  with its neighbours either side and ‹ › through the term. The only reading
+  that carries class figures — it reads `class_progress` and `action_inbox`
+  as well as the outline, says it is private, and offers no student preview.
+* **All weeks** — the three-column term table described above.
+
 It shares the pane's Record / + drafts state, and adds **Preview as student**:
 the record alone with no hole drawn, which is what `ainar page` publishes.
 Escape, the backdrop or × closes it; a deck opened from it lands on top of it
@@ -451,7 +469,7 @@ lines, not before.
 | `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/`, for the pane's refresh poll |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
-| `GET /professor-pane/view/course?run=&dark=&drafts=&student=` | course mode: the term plan in three columns, drawn here from the outline payload; `student=1` draws the record alone, no hole |
+| `GET /professor-pane/view/course?run=&dark=&drafts=&student=&mode=` | course mode, drawn here: `mode=planning` (structure), `mode=teaching` (this week, with class figures), otherwise the three-column term table; `student=1` draws the record alone, no hole, and is ignored for teaching |
 
 `drafts=1` computes the payload over the whole course, drafts included; without
 it the payload is computed over `approvedView`. The response says which in

@@ -305,6 +305,93 @@ for (const a of outline.assessments) {
 }
 
 
+// ------------------------------------------------------------ planning mode
+//
+// What "does the term hold together" is answered from, counted here.
+//
+// Weights by kind of work, against the model's own total and verdict. A span
+// for every piece of graded work — the week it opens to the week it falls due
+// — so the page draws the load across the term without placing anything
+// itself. And the runs of weeks no graded work touches at all, which is the
+// one structural fault a list of assessments cannot show.
+
+const KIND_OF = { quiz: "Quizzes", assignment: "Homework", project: "Project", exam: "Exams" };
+const weekOfDate = (date) =>
+  date ? outline.weeks.find((w) => date >= w.starts_on && date <= w.ends_on)?.week ?? null : null;
+
+const weightGroups = [];
+for (const a of outline.assessments) {
+  const name = KIND_OF[a.type] ?? "Other";
+  let group = weightGroups.find((g) => g.name === name);
+  if (!group) weightGroups.push((group = { name, weight: 0, count: 0, unweighted: 0 }));
+  group.count += 1;
+  if (a.weight === null || a.weight === undefined) group.unweighted += 1;
+  else group.weight += a.weight;
+}
+
+const spans = outline.assessments.map((a) => {
+  const end = weekOfDate(a.due_on);
+  const start = weekOfDate(a.opens_on) ?? end;
+  return {
+    assessment_id: a.assessment_id, title: a.title, type: a.type,
+    lane: KIND_OF[a.type] ?? "Other", weight: a.weight ?? null,
+    start, end, opens_on: a.opens_on ?? null, due_on: a.due_on ?? null,
+  };
+});
+
+// Weeks inside the teaching span (first module to last) that no graded work
+// opens in, runs through, or falls due in — reported as runs of two or more.
+const graded = new Set();
+for (const s of spans) {
+  if (s.start === null || s.end === null) continue;
+  for (let w = s.start; w <= s.end; w += 1) graded.add(w);
+}
+const quiet = [];
+for (let i = 0; i < outline.weeks.length; ) {
+  if (graded.has(outline.weeks[i].week)) { i += 1; continue; }
+  let j = i;
+  while (j < outline.weeks.length && !graded.has(outline.weeks[j].week)) j += 1;
+  if (j - i >= 2) quiet.push({ from: outline.weeks[i].week, to: outline.weeks[j - 1].week });
+  i = j;
+}
+
+const planning = {
+  weights: weightGroups,
+  total_weight: outline.grading?.total_weight ?? null,
+  complete: outline.grading?.complete === true,
+  note: outline.grading?.note ?? null,
+  spans,
+  quiet,
+};
+
+// ------------------------------------------------------------ teaching mode
+//
+// What "this week, given last week and next" is answered from. Class figures —
+// a concept's class mean over approved evidence, and how many students it has
+// been observed on — keyed by concept, straight from `class_progress`; and how
+// much of each piece of graded work has been handed in, from `action_inbox`.
+// Private, like everything under Students: these are figures derived from
+// student work, and the page labels the mode that draws them.
+
+const classConcepts = {};
+for (const c of progress.concepts ?? []) {
+  classConcepts[c.concept_id] = {
+    title: c.title, class_mean: c.class_mean ?? null, coverage: c.coverage ?? null,
+  };
+}
+const handedIn = {};
+for (const a of inbox.assessments ?? []) {
+  handedIn[a.assessment_id] = {
+    enrolled: a.enrolled ?? null, received: a.submissions_received ?? null, missing: (a.missing ?? []).length,
+  };
+}
+// The line under which a concept is worth revisiting before building on it.
+// A presentation threshold, said once here so the page applies it and does
+// not choose it.
+const REVISIT_BELOW = 0.6;
+
+const teaching = { concepts: classConcepts, handed_in: handedIn, revisit_below: REVISIT_BELOW };
+
 // --------------------------------------------------- meetings off their week
 //
 // The outline places a meeting on its MODULE's week first and on its own date
@@ -454,6 +541,8 @@ const data = {
   names_are_fixture: students.some((s) => s.name !== null),
   todos,
   misdated,
+  planning,
+  teaching,
   inbox: {
     assessments: (inbox.assessments ?? []).map((a) => ({
       assessment_id: a.assessment_id, title: a.title, type: a.type, status: a.status,

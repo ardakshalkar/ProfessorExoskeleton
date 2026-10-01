@@ -9,6 +9,7 @@
   --accent:#2f6b3c; --accent-ink:#245231; --accent-line:#bcd8c2; --accent-tint:#eef5ef;
   --flag:#a4362f; --flag-line:#f0c4c0; --flag-tint:#fdf1f0;
   --draft:#2f5b8a; --draft-line:#bdd0e4; --draft-tint:#eef3f9;
+  --hw:#a46a1f;
   --on-fg:#ffffff;
   /* Five sizes, and nothing under 12px. Every font-size below is one of them. */
   --fs-xs:12px; --fs-s:13px; --fs-m:14px; --fs-l:16px; --fs-xl:20px;
@@ -22,7 +23,7 @@
     --line:#2b312c; --rule:#222722;
     --accent:#7fc98d; --accent-ink:#a6dcaf; --accent-line:#33513a; --accent-tint:#18231a;
     --flag:#e08c85; --flag-line:#6b3a37; --flag-tint:#2a1c1b;
-    --draft:#8fb6de; --draft-line:#37506b; --draft-tint:#171f27;
+    --draft:#8fb6de; --draft-line:#37506b; --draft-tint:#171f27; --hw:#d9a35b;
     --on-fg:#0d100d;
   }
 }
@@ -31,7 +32,7 @@
   --line:#2b312c; --rule:#222722;
   --accent:#7fc98d; --accent-ink:#a6dcaf; --accent-line:#33513a; --accent-tint:#18231a;
   --flag:#e08c85; --flag-line:#6b3a37; --flag-tint:#2a1c1b;
-  --draft:#8fb6de; --draft-line:#37506b; --draft-tint:#171f27;
+  --draft:#8fb6de; --draft-line:#37506b; --draft-tint:#171f27; --hw:#d9a35b;
   --on-fg:#0d100d;
 }
 
@@ -426,6 +427,80 @@ button.chip.gap.past:hover { background: var(--sunk); }
      padding: 2px 6px; border-radius: 6px; }
 .x:hover { background: var(--sunk); color: var(--ink); }
 
+/* ------------------------------------------------- planning and teaching */
+.mode { margin: 16px 20px 24px; display: flex; flex-direction: column; gap: 14px; max-width: 1180px; }
+.mode .listing { margin: 0; }
+button.link { border: 0; background: none; padding: 0; color: var(--accent-ink); text-align: left;
+              text-decoration: underline; text-decoration-color: var(--accent-line); text-underline-offset: 2px; }
+.calm { margin: 0; color: var(--muted); font-size: var(--fs-s); display: flex; gap: 6px; align-items: center; }
+/* The weights against a whole: the first thing checked when building a course. */
+.weights { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.wcard { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 13px;
+         display: flex; flex-direction: column; gap: 2px; }
+.wcard small { color: var(--muted); font-size: var(--fs-xs); }
+.wcard b { font-size: var(--fs-xl); font-weight: 600; font-variant-numeric: tabular-nums; }
+.wcard.ok { background: var(--accent-tint); border-color: var(--accent-line); }
+.wcard.ok b, .wcard.ok small { color: var(--accent-ink); }
+.wcard.bad { background: var(--flag-tint); border-color: var(--flag-line); }
+.wcard.bad b, .wcard.bad small { color: var(--flag); }
+/* Faults as sentences, one press each. Red is a hole; amber is a judgement. */
+.faults { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.faults li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px;
+             background: var(--surface); border: 1px dashed var(--flag-line); color: var(--flag); }
+.faults li.warn { border-color: var(--line); color: var(--ink); }
+.faults li span { flex: 1; }
+.faults li .ghost { flex: none; }
+/* The term as rows, the graded work as lanes running down them. */
+table.plan td, table.plan th { vertical-align: middle; }
+table.plan tr.now td { background: var(--accent-tint); }
+table.plan .wkn { width: 64px; white-space: nowrap; }
+table.plan .wkn b { font-size: var(--fs-l); margin-right: 6px; font-variant-numeric: tabular-nums; }
+table.plan .wkn small { display: inline; }
+table.plan .topic span { font-weight: 500; }
+table.plan .topic small { display: inline; margin-left: 8px; }
+.notopic { color: var(--flag); font-style: italic; }
+.draftword { color: var(--draft); }
+table.plan td.lane { width: 15%; min-width: 140px; padding: 0 6px; }
+.lanehead { border-bottom-width: 3px; }
+.lseg { display: flex; flex-direction: column; justify-content: center; gap: 1px; width: 100%; min-height: 30px;
+       border: 0; border-left: 3px solid; text-align: left; padding: 3px 8px; font-size: var(--fs-xs);
+       border-radius: 0; }
+.lseg.first { border-top-left-radius: 6px; border-top-right-radius: 6px; }
+.lseg.last { border-bottom-left-radius: 6px; border-bottom-right-radius: 6px; }
+.lseg .segt { font-weight: 600; }
+.lseg .segd { font-variant-numeric: tabular-nums; }
+.lseg.q, .lanehead.q { --lane: var(--draft); } .lseg.hw, .lanehead.hw { --lane: var(--hw); }
+.lseg.pj, .lanehead.pj { --lane: var(--accent); } .lseg.ex, .lanehead.ex, .lseg.ot, .lanehead.ot { --lane: var(--muted); }
+.lseg { border-left-color: var(--lane); background: color-mix(in srgb, var(--lane) 12%, var(--surface)); color: var(--ink); }
+.lanehead { border-bottom-color: var(--lane); }
+/* Teaching: the week in focus, between the one before and the one after. */
+.stepper { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.stepper b { font-size: var(--fs-m); }
+.stepper .private { margin-left: auto; font-size: var(--fs-xs); color: var(--muted); }
+.trio { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(0, 1fr); gap: 12px;
+        align-items: start; }
+@media (max-width: 900px) { .trio { grid-template-columns: 1fr; } .trio .focus { order: -1; } }
+.side, .focus { border-radius: 12px; padding: 13px 15px; display: flex; flex-direction: column; gap: 8px; }
+.side { background: var(--sunk); }
+.side.empty p { margin: 0; color: var(--muted); }
+.side > small, .focus > small { color: var(--muted); font-size: var(--fs-xs); }
+.side > b { font-size: var(--fs-m); }
+.focus { background: var(--surface); border: 2px solid var(--accent-line); }
+.focus h2 { margin: 0; font-size: var(--fs-xl); font-weight: 600; }
+.facts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px;
+         font-size: var(--fs-s); }
+.facts li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.facts li small { color: var(--muted); font-size: var(--fs-xs); }
+.facts.big { font-size: var(--fs-m); }
+.need { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+        background: var(--flag-tint); color: var(--flag); font-size: var(--fs-s); }
+.need span { flex: 1; }
+.need.warn { background: var(--sunk); color: var(--ink); }
+.revisit { border-left: 3px solid var(--hw); padding: 6px 10px; background: var(--sunk); font-size: var(--fs-s); }
+.revisit b { display: block; margin-bottom: 2px; }
+.revisit p { margin: 2px 0 0; }
+.focus .primary { align-self: flex-start; }
+
 .legend { max-width: 1180px; padding: 4px 20px 26px; }
 .legend h2 { font-size: var(--fs-l); margin: 20px 0 6px; font-weight: 600; }
 .legend p { margin: 0 0 8px; color: var(--muted); font-size: var(--fs-s); max-width: 76ch; }
@@ -620,8 +695,15 @@ const MARKUP = /[<>]|@import|url\s*\(/i;
 // Three sections, and the outline's five ways of being read. The split is the
 // professor's own question rather than the model's shape: what is the course,
 // how is the class doing, and what is waiting for me.
+// Planning and Teaching come first: they are the two modes a professor is in.
+// Planning is the term as a structure — topics, quizzes, homework, weights —
+// and asks whether it holds together. Teaching is one week between the one
+// before and the one after, and asks what to do now. The outline below them
+// is the full detail either mode can drop into.
 const SECTIONS = [
-  { id: 'outline', label: 'Course outline', hint: 'what the course is', icon: 'outline' },
+  { id: 'planning', label: 'Planning', hint: 'does the term hold together', icon: 'calendar' },
+  { id: 'teaching', label: 'Teaching', hint: 'this week, between the last and the next', icon: 'lecture' },
+  { id: 'outline', label: 'Course outline', hint: 'every week in full', icon: 'outline' },
   { id: 'students', label: "Students' progress", hint: 'how the class is doing', icon: 'seminar' },
   { id: 'todos', label: 'Todos', hint: 'what is waiting for you', icon: 'inbox' },
 ];
@@ -1016,6 +1098,12 @@ function promptFor(sel) {
   const w = sel.week.week;
   const title = (sel.week.modules[0] || {}).title || 'this week';
   if (sel.kind === 'gap') {
+    if (sel.id === 'quiet' && sel.weeks) return 'Weeks ' + sel.weeks[0] + '–' +
+      sel.weeks[sel.weeks.length - 1] + ' have no graded work opening, running or falling due. ' +
+      'Should something be assessed there, given what those weeks teach? Propose it as a draft; ' +
+      'change nothing else.';
+    if (sel.id === 'weights') return 'The weights in ' + DATA.run.id + ' do not settle the grading ' +
+      'policy: ' + (DATA.planning.note || 'see the grading section') + ' Propose a correction and wait.';
     if (sel.id === 'misdated') return sel.ref + ' — ' + misdatedNote(sel.ref, OUTLINE_MODE.prof) +
       ' Which is wrong: its date, its module’s week, or the run’s start date? Change nothing until I say.';
     if (sel.id === 'brief') return sel.ref + ' has no brief students can read. Draft one from its ' +
@@ -1610,6 +1698,297 @@ function nameOf(studentId) {
 }
 
 // ------------------------------------------------------------------- todos
+// ------------------------------------------------------------ planning mode
+/**
+ * Does the term hold together.
+ *
+ * Asked at the start of a term, of the term as a structure: is every week
+ * teaching something, in an order that builds, with quizzes and homework
+ * spread across it, weighted to a whole. So the page is three things and
+ * nothing else — the weights against 100%, one row per week with its topic
+ * and the graded work running through it as lanes, and the faults said as
+ * sentences with one press each. No room, no meeting time, no deck, no
+ * student: those are teaching questions, asked later.
+ *
+ * Every figure is `DATA.planning`'s, counted in `build.mjs`.
+ */
+const LANE_ORDER = ['Quizzes', 'Homework', 'Project', 'Exams', 'Other'];
+const LANE_TONE = { Quizzes: 'q', Homework: 'hw', Project: 'pj', Exams: 'ex', Other: 'ot' };
+const pctOf = function (v) { return v == null ? '—' : Math.round(v * 100) + '%'; };
+
+function Planning(props) {
+  const P = DATA.planning;
+  const lanes = LANE_ORDER.filter(function (l) { return P.spans.some(function (s) { return s.lane === l; }); });
+  const weekAt = function (n) { return DATA.weeks.filter(function (w) { return w.week === n; })[0]; };
+
+  // Faults, as sentences. Unplanned runs from the payload's own gaps; quiet
+  // runs and the weight verdict from `DATA.planning`; undated work from the
+  // same card the outline draws.
+  const faults = [];
+  const unplanned = [];
+  DATA.weeks.forEach(function (w) {
+    if (openGaps(w, OUTLINE_MODE.prof).some(function (g) { return g.kind === 'module'; })) unplanned.push(w.week);
+  });
+  const runs = [];
+  unplanned.forEach(function (n) {
+    const last = runs[runs.length - 1];
+    if (last && last[last.length - 1] === n - 1) last.push(n); else runs.push([n]);
+  });
+  runs.forEach(function (r) {
+    faults.push({ tone: 'flag', icon: 'module',
+      text: (r.length === 1 ? 'Week ' + r[0] + ' has' : 'Weeks ' + r[0] + '–' + r[r.length - 1] + ' have') + ' no topic',
+      verb: r.length === 1 ? 'Plan week ' + r[0] : 'Plan these weeks',
+      sel: { kind: 'gap', id: 'module', weeks: r.length > 1 ? r : null, week: weekAt(r[0]), view: 'planning' } });
+  });
+  P.quiet.forEach(function (q) {
+    const weeks = [];
+    for (let n = q.from; n <= q.to; n += 1) weeks.push(n);
+    faults.push({ tone: 'warn', icon: 'quiz',
+      text: 'Weeks ' + q.from + '–' + q.to + ': nothing graded opens, runs or falls due',
+      verb: 'Suggest an assessment',
+      sel: { kind: 'gap', id: 'quiet', weeks: weeks, week: weekAt(q.from), view: 'planning' } });
+  });
+  undatedWork(OUTLINE_MODE.prof).forEach(function (x) {
+    faults.push({ tone: 'flag', icon: 'calendar', text: x.title + ' has no dates',
+      verb: 'Set dates',
+      sel: { kind: 'gap', id: 'deadline', ref: x.id, week: weekAt(x.week) || DATA.weeks[0], view: 'planning' } });
+  });
+  if (!P.complete) {
+    faults.push({ tone: 'flag', icon: 'weight', text: P.note || 'The weights do not add up to 100%',
+      verb: 'Fix the weights', sel: { kind: 'gap', id: 'weights', week: DATA.weeks[0], view: 'planning' } });
+  }
+
+  const cell = function (w, lane) {
+    const here = P.spans.filter(function (s) {
+      return s.lane === lane && s.start !== null && s.end !== null && w.week >= s.start && w.week <= s.end;
+    });
+    if (!here.length) return h('td', { key: lane, className: 'lane' });
+    return h('td', { key: lane, className: 'lane' }, here.map(function (s) {
+      const first = w.week === s.start, last = w.week === s.end;
+      return h('button', {
+        key: s.assessment_id, type: 'button',
+        className: 'lseg ' + LANE_TONE[lane] + (first ? ' first' : '') + (last ? ' last' : ''),
+        title: s.title + (s.opens_on ? ' · opens ' + shortDate(s.opens_on) : '') +
+          (s.due_on ? ' · due ' + shortDate(s.due_on) : '') + ' · ' + pctOf(s.weight),
+        onClick: function () { props.onSelect({ kind: 'work', id: s.assessment_id, week: w, view: 'planning' }); },
+      },
+        first ? h('span', { className: 'segt' }, s.title) : null,
+        last ? h('span', { className: 'segd' }, 'due ' + shortDate(s.due_on) + ' · ' + pctOf(s.weight)) : null);
+    }));
+  };
+
+  return h('div', { className: 'mode' },
+    h('div', { className: 'weights' },
+      P.weights.map(function (g) {
+        return h('div', { key: g.name, className: 'wcard' },
+          h('small', null, g.name),
+          h('b', null, pctOf(g.weight)),
+          h('small', null, g.count + (g.count === 1 ? ' item' : ' items') +
+            (g.unweighted ? ' · ' + g.unweighted + ' with no weight' : '')));
+      }),
+      h('div', { className: 'wcard ' + (P.complete ? 'ok' : 'bad') },
+        h('small', null, 'Total'),
+        h('b', null, pctOf(P.total_weight)),
+        h('small', null, P.complete ? 'weights add up' : 'does not add up'))),
+    faults.length
+      ? h('ul', { className: 'faults' }, faults.map(function (f, i) {
+          return h('li', { key: i, className: f.tone },
+            icon(f.icon), h('span', null, f.text),
+            h('button', { type: 'button', className: 'ghost', onClick: function () { props.onAsk(f.sel); } },
+              icon('ask'), f.verb));
+        }))
+      : h('p', { className: 'calm' }, icon('approve'), ' Every week has a topic, the graded work is spread, and the weights add up.'),
+    h('div', { className: 'listing' }, h('div', { className: 'scroll' },
+      h('table', { className: 'plan' },
+        h('thead', null, h('tr', null,
+          h('th', null, 'Week'), h('th', null, 'Topic'),
+          lanes.map(function (l) { return h('th', { key: l, className: 'lanehead ' + LANE_TONE[l] }, l); }))),
+        h('tbody', null, DATA.weeks.map(function (w) {
+          const proposed = DATA.proposed.modules[w.week];
+          const title = w.modules.map(function (m) { return m.title; }).join(' · ');
+          const concepts = w.modules.reduce(function (n, m) { return n + m.concepts.length; }, 0);
+          return h('tr', { key: w.week, className: w.week === DATA.current_week ? 'now' : '' },
+            h('td', { className: 'wkn' }, h('b', null, w.week), h('small', null, shortDate(w.starts_on))),
+            h('td', { className: 'topic' },
+              title
+                ? [h('span', { key: 't' }, title),
+                   concepts ? h('small', { key: 'c' }, concepts + (concepts === 1 ? ' concept' : ' concepts')) : null]
+                : proposed
+                  ? [h('span', { key: 't', className: 'draftword' }, proposed.title), h('small', { key: 'd' }, 'draft')]
+                  : h('span', { className: 'notopic' }, 'No topic yet')),
+            lanes.map(function (l) { return cell(w, l); }));
+        })))),
+      h('p', { className: 'foot' }, 'Each bar runs from the week a piece of work opens to the week it is due. ' +
+        'Press one to see it. Rooms, times and decks are teaching questions — they are in Teaching.')));
+}
+
+// ------------------------------------------------------------ teaching mode
+/**
+ * This week, between the last one and the next.
+ *
+ * Asked during the term, of one week at a time: what am I teaching, is it
+ * ready, what is due, and what from last week do I build on or repair. So
+ * the week in focus is the large card in the middle, and its neighbours are
+ * the context it needs — what was taught and handed in before it, what has to
+ * be ready after it. ‹ › moves the focus through the term.
+ *
+ * Private: the class figures — a concept's class mean over approved evidence,
+ * and what has been handed in — are derived from student work, which is why
+ * this is a mode of its own and not a layer on the outline a student may see.
+ */
+function Teaching(props) {
+  const [focus, setFocus] = useState(DATA.current_week || 1);
+  const T = DATA.teaching;
+  const weekAt = function (n) { return DATA.weeks.filter(function (w) { return w.week === n; })[0] || null; };
+  const cur = weekAt(focus), prev = weekAt(focus - 1), next = weekAt(focus + 1);
+  if (!cur) return h('p', { className: 'calm' }, 'No week ' + focus + ' in this run.');
+
+  const titleOf = function (w) {
+    const t = w.modules.map(function (m) { return m.title; }).join(' · ');
+    const p = DATA.proposed.modules[w.week];
+    return t || (p ? p.title + ' (draft)' : 'No topic yet');
+  };
+  const conceptsOf = function (w) {
+    return w.modules.reduce(function (all, m) { return all.concat(m.concepts); }, []);
+  };
+  const hasDeck = function (w) {
+    return w.meetings.some(function (m) { return (m.resources || []).some(function (r) { return r.kind === 'slides'; }); });
+  };
+  const handed = function (a) {
+    const x = T.handed_in[a.assessment_id];
+    return x && x.enrolled ? x.received + ' of ' + x.enrolled + ' handed in' : '';
+  };
+  const workLine = function (a, verb, date, w) {
+    const brief = DATA.briefs[a.assessment_id] || {};
+    return h('li', { key: verb + a.assessment_id },
+      icon(WORK_ICON[a.type] || 'file'),
+      h('button', { type: 'button', className: 'link',
+        onClick: function () {
+          props.onSelect({ kind: 'work', id: a.assessment_id, week: w, view: 'teaching' });
+          if (!brief.none) props.onOpen({ kind: 'brief', id: a.assessment_id });
+        } }, a.title),
+      h('small', null, verb + ' ' + shortDate(date) + (a.weight != null ? ' · ' + pctOf(a.weight) : '') +
+        (verb === 'due' && handed(a) ? ' · ' + handed(a) : '')));
+  };
+  const deckRow = function (w) {
+    if (hasDeck(w) || !w.meetings.length) return null;
+    return h('div', { className: 'need' }, icon('slides'), h('span', null, 'No slides yet'),
+      h('button', { type: 'button', className: 'ghost',
+        onClick: function () { props.onAsk({ kind: 'gap', id: 'deck', week: w, view: 'teaching' }); } },
+        icon('ask'), 'Draft slides'));
+  };
+
+  // What to repair before building on it: concepts taught in the two weeks
+  // before the focus whose class mean sits under the line `build.mjs` set.
+  const revisit = [];
+  [focus - 1, focus - 2].forEach(function (n) {
+    const w = weekAt(n);
+    if (!w) return;
+    conceptsOf(w).forEach(function (c) {
+      const x = T.concepts[c.id];
+      if (x && x.class_mean !== null && x.class_mean < T.revisit_below) {
+        revisit.push({ id: c.id, title: c.title, mean: x.class_mean, coverage: x.coverage, week: n });
+      }
+    });
+  });
+  const signals = DATA.todos.filter(function (t) { return t.kind === 'signal'; });
+
+  const side = function (w, label) {
+    if (!w) return h('div', { className: 'side empty' }, h('small', null, label), h('p', null, 'Outside the run.'));
+    const evidence = conceptsOf(w).map(function (c) {
+      const x = T.concepts[c.id];
+      return h('li', { key: c.id }, icon('concept'), h('span', null, c.title),
+        h('small', null, x && x.class_mean !== null ? 'class ' + pctOf(x.class_mean) + ' · ' + x.coverage : 'not assessed yet'));
+    });
+    return h('div', { className: 'side' },
+      h('small', null, label + ' · week ' + w.week),
+      h('b', null, titleOf(w)),
+      h('ul', { className: 'facts' },
+        w.meetings.map(function (m) {
+          return h('li', { key: m.activity_id }, icon(MEETING_ICON[m.type] || 'lecture'),
+            h('span', null, shortDate(m.on) + ' · ' + m.type), h('small', null, m.location || ''));
+        }),
+        w.opens.map(function (a) { return workLine(a, 'opens', a.opens_on, w); }),
+        w.due.map(function (a) { return workLine(a, 'due', a.due_on, w); }),
+        w.week < (DATA.current_week || 0) ? evidence : null),
+      deckRow(w),
+      h('button', { type: 'button', className: 'link', onClick: function () { setFocus(w.week); } },
+        'Make this the focus ›'));
+  };
+
+  const misdated = (cur.gaps || []).filter(function (g) { return g.kind === 'misdated'; })[0];
+
+  return h('div', { className: 'mode' },
+    h('div', { className: 'stepper' },
+      h('button', { type: 'button', className: 'ghost', disabled: !prev, onClick: function () { setFocus(focus - 1); } }, '‹ Week ' + (focus - 1)),
+      h('b', null, 'Week ' + focus + ' of ' + DATA.weeks.length),
+      focus !== DATA.current_week && DATA.current_week
+        ? h('button', { type: 'button', className: 'ghost', onClick: function () { setFocus(DATA.current_week); } }, 'Back to this week')
+        : null,
+      h('button', { type: 'button', className: 'ghost', disabled: !next, onClick: function () { setFocus(focus + 1); } }, 'Week ' + (focus + 1) + ' ›'),
+      h('span', { className: 'private' }, 'Private — class figures from approved evidence only')),
+    h('div', { className: 'trio' },
+      side(prev, 'Before'),
+      h('div', { className: 'focus' },
+        h('small', null, (focus === DATA.current_week ? 'This week' : 'Week ' + focus) + ' · ' +
+          shortDate(cur.starts_on) + ' – ' + shortDate(cur.ends_on)),
+        h('h2', null, titleOf(cur)),
+        conceptsOf(cur).length
+          ? h('div', { className: 'row' }, conceptsOf(cur).map(function (c) {
+              return h('span', { key: c.id, className: 'chip concept' }, c.title);
+            }))
+          : null,
+        h('ul', { className: 'facts big' },
+          cur.meetings.map(function (m) {
+            const mats = (m.resources || []).filter(function (r) { return r.kind !== 'slides'; });
+            const deck = (m.resources || []).filter(function (r) { return r.kind === 'slides'; })[0];
+            return h('li', { key: m.activity_id }, icon(MEETING_ICON[m.type] || 'lecture'),
+              h('span', null, shortDate(m.on) + ' · ' + m.type + (m.location ? ' · ' + m.location : '')),
+              deck ? h('button', { type: 'button', className: 'chip deck',
+                onClick: function () { if (deck.document_id) props.onOpen({ kind: 'doc', id: deck.document_id }); } },
+                icon('slides'), 'Slides') : null,
+              mats.map(function (r) {
+                return h('button', { key: r.resource_id, type: 'button', className: 'chip',
+                  onClick: function () { if (r.document_id) props.onOpen({ kind: 'doc', id: r.document_id }); } },
+                  icon(RESOURCE_ICON[r.kind] || 'file'), r.title);
+              }));
+          })),
+        // Said in the week's own terms, not the model's: the model's sentence
+        // stays on the title for anyone who wants the record ids.
+        misdated
+          ? h('div', { className: 'need warn', title: misdated.note }, icon('misdated'),
+              h('span', null, misdated.ids.map(function (id) {
+                const m = cur.meetings.filter(function (x) { return x.activity_id === id; })[0] || {};
+                return (m.type ? m.type.charAt(0).toUpperCase() + m.type.slice(1) : 'A meeting') +
+                  ' dated ' + shortDate(m.on) + ', ' + (m.on < cur.starts_on
+                    ? 'before this week starts (' + shortDate(cur.starts_on) + ')'
+                    : 'after this week ends (' + shortDate(cur.ends_on) + ')');
+              }).join('; ')),
+              h('button', { type: 'button', className: 'ghost',
+                onClick: function () { props.onAsk({ kind: 'gap', id: 'misdated', ref: misdated.ids[0], week: cur, view: 'teaching' }); } },
+                icon('ask'), 'Check date'))
+          : null,
+        deckRow(cur),
+        cur.opens.length || cur.due.length
+          ? h('ul', { className: 'facts' },
+              cur.opens.map(function (a) { return workLine(a, 'opens', a.opens_on, cur); }),
+              cur.due.map(function (a) { return workLine(a, 'due', a.due_on, cur); }))
+          : h('p', { className: 'calm' }, 'Nothing graded opens or falls due this week.'),
+        revisit.length
+          ? h('div', { className: 'revisit' }, h('b', null, 'Revisit first'),
+              revisit.map(function (r) {
+                return h('p', { key: r.id }, r.title + ' — class ' + pctOf(r.mean) + ' on ' + r.coverage +
+                  ' observed, taught in week ' + r.week);
+              }),
+              signals.length ? h('p', null, signals.length + (signals.length === 1 ? ' open signal: ' : ' open signals: ') +
+                signals[0].title) : null)
+          : null,
+        h('button', { type: 'button', className: 'primary',
+          onClick: function () { props.onAsk({ kind: 'week', id: String(focus), week: cur, view: 'teaching' }); } },
+          icon('ask'), 'Prepare this week')),
+      side(next, 'After')));
+}
+
 function Todos(props) {
   return h('div', { className: 'listing' },
     h('ul', { className: 'todos' }, DATA.todos.map(function (t) {
@@ -1639,7 +2018,9 @@ function Todos(props) {
 // ------------------------------------------------------------------- app
 function App() {
   const [mode, setMode] = useState(function () { return recall('proto.mode', 'course'); });
-  const [section, setSection] = useState('outline');
+  // Teaching while the run is under way, Planning before it starts or after
+  // it ends — decided by whether the run has a current week at all.
+  const [section, setSection] = useState(DATA.current_week ? 'teaching' : 'planning');
   // Two separate questions the old row of five buttons asked as one: what the
   // outline is read by, and whether it is being previewed as a student sees it.
   // The second only means something when it is read by week.
@@ -1769,8 +2150,13 @@ function App() {
 
   const named = section === 'students' || section === 'todos';
 
+  // A press in either mode is the term table's own: select, then ask.
+  const askAbout = function (selection) { setSel(selection); setAsking(true); };
+
   let body;
-  if (section === 'students') body = h(Students, { onSelect: setSel, names: names });
+  if (section === 'planning') body = h(Planning, { onAsk: askAbout, onSelect: setSel });
+  else if (section === 'teaching') body = h(Teaching, { onAsk: askAbout, onSelect: setSel, onOpen: setOpened });
+  else if (section === 'students') body = h(Students, { onSelect: setSel, names: names });
   else if (section === 'todos') body = h(Todos, { onSelect: setSel, names: names });
   else if (view === 'lectures') body = h(Lectures, { onSelect: setSel });
   else if (view === 'assessment') body = h(Assessments, { only: 'other', onSelect: setSel,
@@ -1882,7 +2268,8 @@ function whereOf(sel) {
     (sel.week.modules[0] ? ' · ' + sel.week.modules[0].title : '');
 }
 
-const GAP_SAID = { deck: 'no deck', module: 'no module', deadline: 'undated work',
+const GAP_SAID = { quiet: 'nothing graded', weights: 'weights that do not add up',
+                   deck: 'no deck', module: 'no module', deadline: 'undated work',
                    weight: 'unweighted work', brief: 'no brief',
                    misdated: 'a meeting dated outside the week' };
 
