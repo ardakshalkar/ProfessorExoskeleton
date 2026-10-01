@@ -30,13 +30,13 @@ const RUN = "CSS-4008-2026-FALL";
 /** Six weeks: 2026-09-01 is a Tuesday and the run ends on a Monday. */
 const ON = "2026-09-10";
 
-const activity = (id: string, moduleId: string, resources: string[]) => ({
+const activity = (id: string, moduleId: string, resources: string[], on = "2026-09-08") => ({
   activity_id: id,
   course_version_id: RUN,
   module_id: moduleId,
   type: "lecture",
   title: id,
-  scheduled_at: "2026-09-08T10:00:00+05:00",
+  scheduled_at: `${on}T10:00:00+05:00`,
   group: null,
   outcomes: [],
   concepts: [],
@@ -83,7 +83,8 @@ const fixture = (): CourseBundle =>
       },
     ],
     enrollments: [],
-    activities: [activity("ACT-1", "M-1", ["RES-DECK"]), activity("ACT-2", "M-2", [])],
+    // Each meeting dated inside its module's week: week 1 is Sep 1 – 7.
+    activities: [activity("ACT-1", "M-1", ["RES-DECK"], "2026-09-02"), activity("ACT-2", "M-2", [])],
     documents: [],
     resources: [
       { resource_id: "RES-DECK", title: "Week 1", kind: "slides", required: false, url: "a.pdf" },
@@ -173,6 +174,44 @@ test("the tally counts weeks, not faults", () => {
     { module: gaps.module, deck: gaps.deck, deadline: gaps.deadline, weight: gaps.weight },
     { module: 4, deck: 1, deadline: 1, weight: 1 },
   );
+});
+
+test("a meeting dated outside the week its module puts it in is named, and not moved", () => {
+  // ACT-1 belongs to M-1, which is week 1 (Sep 1 – 7), but is dated Sep 8 —
+  // the CSS-4008 shape, where Monday lectures fall on the last day of the
+  // run-week before their module's.
+  const bundle = fixture() as any;
+  bundle.activities[0] = activity("ACT-1", "M-1", ["RES-DECK"], "2026-09-08");
+  const payload = outlinePayload(bundle, RUN, ON) as Record<string, any>;
+  const [first, second] = payload.weeks;
+  const gap = gapOf(first, "misdated")!;
+  assert.deepEqual(gap.ids, ["ACT-1"]);
+  assert.match(gap.note, /ACT-1 is dated 2026-09-08/);
+  assert.match(gap.note, /professor's to say/);
+  // Still drawn under its module's week: the gap reports the disagreement and
+  // decides nothing about which half is right.
+  assert.deepEqual(first.meetings.map((m: any) => m.activity_id), ["ACT-1"]);
+  assert.equal(kindsOf(second).includes("misdated"), false);
+  assert.equal(payload.totals.gaps.misdated, 1);
+});
+
+test("a meeting dated inside its week is not misdated", () => {
+  for (const week of plan().weeks) {
+    assert.equal(kindsOf(week).includes("misdated"), false, `week ${week.week}`);
+  }
+  assert.equal(plan().totals.gaps.misdated, 0);
+});
+
+test("a hole is ranked by when it bites, and the ranks are counted for the strip", () => {
+  // ON is 2026-09-10, week 2: week 1 is taught, weeks 2 and 3 are this week and
+  // next, and the rest are later.
+  const { weeks, totals } = plan();
+  assert.deepEqual(
+    weeks.map((w: any) => w.urgency),
+    ["past", "soon", "soon", "later", "later", "later"],
+  );
+  // Week 1: deadline (1). Weeks 2–3: deck + weight, module (3). Weeks 4–6: module each (3).
+  assert.deepEqual(totals.gaps_by_urgency, { past: 1, soon: 3, later: 3 });
 });
 
 test("a gap says what is wrong in a sentence, and nothing about a student", () => {

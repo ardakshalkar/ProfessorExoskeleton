@@ -40,6 +40,9 @@
 <symbol id="i-clock" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M8 4.4V8l2.4 1.6"/></symbol>
 <symbol id="i-meet" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2"/><path d="M6.7 5.5l4 2.5-4 2.5z"/></symbol>
 <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3.6v8.8M3.6 8h8.8"/></symbol>
+<symbol id="i-layers" viewBox="0 0 16 16"><path d="M8 1.8l6.2 3.1L8 8 1.8 4.9z"/><path d="M1.8 11.1L8 14.2l6.2-3.1"/><path d="M1.8 8L8 11.1 14.2 8"/></symbol>
+<symbol id="i-calwarn" viewBox="0 0 16 16"><rect x="2" y="2.8" width="12" height="11.4" rx="1.4"/><path d="M5.2 1.4v2.6M10.8 1.4v2.6M2 6.6h12"/><path d="M8 8.6v2.2M8 12.6h.01"/></symbol>
+<symbol id="i-percent" viewBox="0 0 16 16"><path d="M12.6 3.4L3.4 12.6"/><circle cx="4.6" cy="4.6" r="1.7"/><circle cx="11.4" cy="11.4" r="1.7"/></symbol>
 </defs></svg>
 
 {% if show_header %}
@@ -50,6 +53,12 @@
 {% endif %}
 {% endif %}
 <p class="strip">{{ totals.weeks }} weeks · {{ totals.weeks_planned }} with a module · {{ totals.meetings }} meetings · {{ totals.assessments }} assessments · weights total {% if total_weight %}<span class="{% if weights_short %}flag{% endif %}">{{ total_weight }}</span>{% else %}<span class="flag">weight not set</span>{% endif %}{% if gaps_word %} · <span class="flag">{{ gaps_word }}</span>{% endif %}</p>
+{% if urgency %}<p class="tally"><span class="{% if urgency.hot %}soon{% else %}zero{% endif %}">{{ urgency.soon }} this week or next</span><span>{{ urgency.later }} later</span><span class="past">{{ urgency.past }} in weeks taught</span></p>{% endif %}
+{% if lead %}
+<div class="lead"><b><svg class="ico" aria-hidden="true"><use href="#i-clock"></use></svg>{{ lead_word }}</b>
+{% for l in lead %}<span class="it"><span class="itc" title="{{ l.where }}"><svg class="ico" aria-hidden="true"><use href="#i-{{ l.icon }}"></use></svg><span class="itk">{{ l.label }} · {{ l.name }}</span>{% if l.draft %}<span class="itd">draft</span>{% endif %}</span><button type="button" class="wkgap soon" data-ask="{{ l.ask }}"><svg class="ico" aria-hidden="true"><use href="#i-clock"></use></svg>Set dates</button></span>{% endfor %}
+</div>
+{% endif %}
 
 {% if show_assessments %}
 <h2>Assessment</h2>
@@ -65,9 +74,15 @@
 {% endif %}
 
 <h2>Week by week</h2>
+<div class="weeks{% if pro %} pro{% endif %}">
 {% for w in weeks %}
+{% if w.band %}
+<div class="wk band"><div class="wk-hd"><div class="wk-name"><b>{{ w.band_label }}</b><small><span>{{ w.band_dates }} · unplanned · {{ w.band_count }}</span></small></div></div>
+<div class="mats"><div class="ind">{% for i in w.band_items %}<span class="it it-{{ i.tone }}" title="{{ i.name }}"><span class="itc"><svg class="ico" aria-hidden="true"><use href="#i-{{ i.icon }}"></use></svg><span class="itk">{{ i.label }}</span>{% if i.when %}<span class="itdot">·</span><span class="itw">{{ i.when }}</span>{% endif %}</span></span>{% endfor %}<button type="button" class="wkgap {{ w.band_tier }}" data-ask="{{ w.band_ask }}"><svg class="ico" aria-hidden="true"><use href="#i-layers"></use></svg>{{ w.band_verb }}</button></div></div>
+</div>
+{% else %}
 <div class="wk {{ w.classes }}">
-<div class="wk-hd"><div class="wk-mark"><b>{{ w.week_label }}</b><small>{{ w.mark }}</small></div><div class="wk-name">{% if w.title %}<b>{{ w.title }}</b>{% else %}<b class="unplanned">Unplanned</b>{% endif %}{% if w.is_current %}<span class="now">now</span>{% endif %}{% if w.subtitle %}<small><svg class="ico" aria-hidden="true"><use href="#i-meet"></use></svg><span>{{ w.subtitle }}</span></small>{% endif %}{% if w.gaps %}<small class="wkgaps">{% for g in w.gaps %}<span class="wkgap" title="{{ g.note }}">{{ g.label }}</span>{% endfor %}</small>{% endif %}</div>{% if w.is_current %}<button class="ask" data-ask="For week {{ w.week }} of {{ run.id }}, what should I teach and what should I revisit first?">Prepare →</button>{% endif %}{% if w.details %}<button type="button" class="dots" data-wkbtn aria-label="Week {{ w.week }} details" title="Week details">···</button>{% endif %}</div>
+<div class="wk-hd"><div class="wk-mark"><b>{{ w.week_label }}</b><small>{{ w.mark }}</small></div><div class="wk-name">{% if w.title %}<b>{{ w.title }}</b>{% else %}<b class="unplanned">Unplanned</b>{% endif %}{% if w.is_current %}<span class="now">now</span>{% endif %}{% if w.subtitle %}<small><svg class="ico" aria-hidden="true"><use href="#i-meet"></use></svg><span>{{ w.subtitle }}</span></small>{% endif %}{% if w.gaps %}<small class="wkgaps">{% for g in w.gaps %}<button type="button" class="wkgap {{ g.tier }}" data-ask="{{ g.ask }}" title="{{ g.note }}"><svg class="ico" aria-hidden="true"><use href="#i-{{ g.icon }}"></use></svg>{{ g.label }}</button>{% endfor %}</small>{% endif %}</div>{% if w.is_current %}<button class="ask" data-ask="For week {{ w.week }} of {{ run.id }}, what should I teach and what should I revisit first?">Prepare →</button>{% endif %}{% if w.details %}<button type="button" class="dots" data-wkbtn aria-label="Week {{ w.week }} details" title="Week details">···</button>{% endif %}</div>
 <div class="wk-body">
 {% if w.planned %}
 {% for t in w.topics %}
@@ -117,7 +132,9 @@
 {% endif %}
 </div>
 </div>
+{% endif %}
 {% endfor %}
+</div>
 
 {% if materials %}
 <h2>Required materials</h2>

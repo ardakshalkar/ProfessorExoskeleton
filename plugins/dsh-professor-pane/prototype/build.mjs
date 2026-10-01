@@ -141,21 +141,22 @@ const students = (progress.students ?? []).map((id) => {
 
 // ------------------------------------------------------------------ proposed
 //
-// Illustrative. This workspace has no `work/<RUN>/`, so there is nothing for
-// `loadDrafts` to merge and the Proposed overlay would otherwise be identical
-// to Plan. The prototype says so on the banner rather than passing these off.
+// Illustrative. Since 2026-09-29 a draft is a record in the course marked
+// `approval: draft`, and the example course holds none — so the drafts view
+// would otherwise be identical to the record. These three are shaped like
+// such records (ordinary ids, `approval: draft`) and the page labels them.
 
 const proposed = {
   note:
-    "Illustrative. This workspace has no work/CSS-4008-2026-FALL/, so nothing here " +
-    "came from loadDrafts — these three stand in for what a merge would add.",
+    "Illustrative. The example course holds no record marked approval: draft, so these " +
+    "three stand in for what drafted records would look like.",
   modules: {
-    10: { module_id: "MODULE-10-DRAFT-01", title: "Ethics, deployment and failure",
+    10: { module_id: "MODULE-10", approval: "draft", title: "Ethics, deployment and failure",
           concepts: ["Model cards", "Failure modes in deployment"] },
   },
-  decks: { 2: { title: "Search and problem formulation", resource_id: "RES-DRAFT-02" } },
+  decks: { 2: { title: "Search and problem formulation", resource_id: "RES-0202", approval: "draft" } },
   assessments: {
-    12: { assessment_id: "ASSESSMENT-06-DRAFT-01", title: "Project checkpoint",
+    12: { assessment_id: "ASSESSMENT-06", approval: "draft", title: "Project checkpoint",
           type: "project", weight: null, due_on: null },
   },
 };
@@ -304,6 +305,33 @@ for (const a of outline.assessments) {
 }
 
 
+// --------------------------------------------------- meetings off their week
+//
+// The outline places a meeting on its MODULE's week first and on its own date
+// only as a fallback (`outline.ts`, meetingsByWeek). So a lecture dated Oct 5
+// whose module is week 6 sits under "Oct 6 – Oct 12", and the page states two
+// facts that cannot both be true. This course's weeks run Tuesday to Monday,
+// because the run starts on Tuesday 1 September, and from week 6 the lectures
+// move to Mondays: each one is the last day of the run-week before its module.
+//
+// Which fact is wrong — the run's start date, the meeting's date, or the
+// module's week — is the professor's to say, so this does not move anything.
+// It finds every case, prints it, and hands it to the page, which draws it as
+// a hole like any other: a press asks which is right.
+
+const misdated = [];
+for (const week of outline.weeks) {
+  for (const m of week.meetings) {
+    if (!m.on || (m.on >= week.starts_on && m.on <= week.ends_on)) continue;
+    const byDate = outline.weeks.find((w) => m.on >= w.starts_on && m.on <= w.ends_on);
+    misdated.push({ activity_id: m.activity_id, on: m.on, week: week.week, date_week: byDate?.week ?? null });
+  }
+}
+for (const m of misdated) {
+  console.warn(`warning: ${m.activity_id} is on ${m.on}, which is week ${m.date_week ?? "none"}, ` +
+    `but its module puts it in week ${m.week}`);
+}
+
 // ---------------------------------------------------------------- the payload
 
 // --------------------------------------------------------------------- todos
@@ -313,6 +341,7 @@ for (const a of outline.assessments) {
 // view, because "what needs me first" is a judgement about the course and a
 // view that sorted would be making it.
 
+const RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
 const todos = [];
 for (const item of inbox.existing_action_items ?? []) {
   todos.push({
@@ -352,9 +381,14 @@ for (const a of inbox.assessments ?? []) {
   }
 }
 // The structural half: holes in the course as built, counted off the same
-// `weeks[].gaps` the outline colours a week with.
+// `weeks[].gaps` the outline colours a week with — less the ones a draft
+// already stands in for, the rule the page's `openGaps` applies to its chips,
+// so this list and the outline cannot count the same course differently.
+const covered = (week, kind) =>
+  (kind === "module" && proposed.modules[week]) || (kind === "deck" && proposed.decks[week]);
 for (const kind of ["module", "deck", "deadline", "weight"]) {
-  const weeks = outline.weeks.filter((w) => w.gaps.some((g) => g.kind === kind));
+  const weeks = outline.weeks.filter((w) =>
+    w.gaps.some((g) => g.kind === kind) && !covered(w.week, kind));
   if (!weeks.length) continue;
   todos.push({
     kind: "gap", id: kind,
@@ -366,7 +400,34 @@ for (const kind of ["module", "deck", "deadline", "weight"]) {
   });
 }
 
-const RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
+if (misdated.length) {
+  const weeks = [...new Set(misdated.map((m) => m.week))];
+  todos.push({
+    kind: "gap", id: "misdated",
+    title: misdated.length + " meeting" + (misdated.length === 1 ? " is" : "s are") +
+      " dated outside the week " + (misdated.length === 1 ? "it sits" : "they sit") + " in",
+    detail: misdated.map((m) => `${m.activity_id} on ${m.on}`).join(", "),
+    priority: "medium", due: null, weeks,
+  });
+}
+
+// One thing to do, said once. A stored `review_grades` action and the live
+// count of pending suggestions are the same request when the action names the
+// assessment — and they disagree, because the action counted once (24) and the
+// gradebook counts now (1). The live figure wins; the action keeps its due date
+// and is named in the detail, so nothing it asked for is lost.
+for (const action of bundle.action_items ?? []) {
+  if (action.course_version_id !== RUN || action.type !== "review_grades") continue;
+  const live = todos.find((t) => t.kind === "approve" && (action.source_refs ?? []).includes(t.id));
+  const stored = todos.findIndex((t) => t.kind === "action" && t.id === action.action_id);
+  if (!live || stored < 0) continue;
+  const was = todos[stored];
+  live.due = live.due ?? was.due;
+  live.detail = `${live.detail} · asked for by ${was.id}${was.due ? ` by ${was.due}` : ""}`;
+  live.priority = (RANK[was.priority] ?? 9) < (RANK[live.priority] ?? 9) ? was.priority : live.priority;
+  todos.splice(stored, 1);
+}
+
 todos.sort((a, b) => (RANK[a.priority] ?? 9) - (RANK[b.priority] ?? 9));
 
 const data = {
@@ -392,6 +453,7 @@ const data = {
   // lying about its own contents.
   names_are_fixture: students.some((s) => s.name !== null),
   todos,
+  misdated,
   inbox: {
     assessments: (inbox.assessments ?? []).map((a) => ({
       assessment_id: a.assessment_id, title: a.title, type: a.type, status: a.status,

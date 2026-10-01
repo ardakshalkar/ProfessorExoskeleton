@@ -136,6 +136,41 @@ small.flag [data-rest][hidden] { display: none; }
 .wkgap { border: 1px dashed var(--flag-line); border-radius: 999px;
          padding: .02rem .4rem; font-size: .64rem; letter-spacing: .01em;
          color: var(--flag); white-space: nowrap; }
+/* A hole is a press: it says what it starts and asks for it. Ranked by the
+ * payload's `urgency` — this week and next filled, later dashed as before, a
+ * week already taught grey — so what matters before the class meets is not
+ * one colour with everything else. */
+button.wkgap { display: inline-flex; align-items: center; gap: .25rem; cursor: pointer;
+               background: none; font-size: .68rem; font-weight: 600;
+               padding: .12rem .45rem; border-radius: 7px; }
+button.wkgap:hover { background: var(--flag-tint); border-style: solid; }
+button.wkgap.soon { background: var(--flag-tint); border-style: solid; }
+button.wkgap.past { color: var(--muted); border-color: var(--line); font-weight: 400; }
+button.wkgap.past:hover { background: var(--panel); }
+button.wkgap .ico { width: 11px; height: 11px; }
+/* The ranked tally under the strip, in the same three ranks. */
+.tally { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0 0 .55rem;
+         font-size: .68rem; font-variant-numeric: tabular-nums; }
+.tally span { border: 1px dashed var(--flag-line); color: var(--flag); border-radius: 999px;
+              padding: .05rem .45rem; }
+.tally .soon { border-style: solid; background: var(--flag-tint); font-weight: 600; }
+.tally .past, .tally .zero { border: 1px solid var(--line); color: var(--muted); }
+/* What is on no date at all, before week 1. */
+.lead { margin: 0 0 .6rem; padding: .5rem .6rem; border: 1px dashed var(--flag-line);
+        border-radius: 10px; background: var(--card); display: flex; flex-direction: column;
+        gap: .35rem; }
+.lead > b { display: inline-flex; align-items: center; gap: .3rem; font-size: .76rem; }
+.lead .it { gap: .3rem; }
+/* A run of unplanned weeks, as one card. */
+.wk.band { background: var(--panel); border-style: dashed; }
+.wk.band .wk-name b { color: var(--muted); }
+/* Where the holes are drawn, red means missing — so graded work that exists
+ * is ink, with the date beside it, rather than the colour of a fault. The
+ * public page and chat clients keep their red deadline: there it is the only
+ * cue on the row, and nothing else is red. */
+.pro .it-due .itc { border-color: var(--line); background: var(--card); color: var(--fg); }
+.pro .it-due .itc .ico { color: var(--fg); }
+.pro .it-due .itw { color: var(--fg); font-weight: 600; }
 .wk-body { min-width: 0; margin-top: .4rem; }
 /* The details control: a circle, because it opens rather than acts. */
 .dots { flex: none; align-self: flex-start; cursor: pointer; font: inherit;

@@ -556,6 +556,16 @@ window.__ModuleLoader__.load({
 button.pp-modallink{cursor:pointer;font-family:inherit;background:none;border:0;padding:0}
 button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-modalframe{flex:1;min-height:0;width:100%;border:0;display:block;background:#fff}
+/* Course mode: the term plan as the page, over the harness.
+   One layer under the material overlay (4000), because a deck opened FROM
+   the term plan must land on top of it, and narrower margins than a deck,
+   because three columns of sixteen weeks want the width. */
+.pp-veil.pp-coursemode{z-index:3900;padding:14px clamp(10px,2vw,28px) 16px}
+.pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column}
+.pp-coursebody .pp-frame{background:transparent}
+.pp-coursehead{flex-wrap:wrap}
+.pp-coursehead label{display:inline-flex;gap:5px;align-items:center;font-size:11px;
+  color:var(--dsw-alias-label-secondary,#555);cursor:pointer}
 /* The publish dialog's body. Unlike the material modal there is no frame to
    fill, so the plan scrolls and the controls stay put above it. */
 .pp-publishbody{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;
@@ -3008,6 +3018,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           encodeURIComponent(props.runId) +
           (props.dark ? "&dark=1" : "") +
           (props.drafts ? "&drafts=1" : "") +
+          // Course mode's "Preview as student": the record alone, no hole.
+          (props.student ? "&student=1" : "") +
           // Only ever sent affirmatively, and only by the class list. Every
           // other view's URL is unchanged, so nothing else can start naming
           // people because a parameter leaked into a shared link.
@@ -3223,6 +3235,115 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * a `.pptx` reaches the frame as a download prompt or as a blank panel,
      * and the tab is the answer for every format the browser will not paint.
      */
+    /**
+     * Course mode: the whole term as the page, over the harness.
+     *
+     * Step four of `COURSE-MODE.md` — the spine as a page, chat as a button —
+     * taken in the one shape this harness offers. Its layout declares no
+     * full-width seat (`sidebar`, `conversation`, `details`, `shell.overlay`),
+     * so this is the material overlay's own idiom: portalled to the body,
+     * fixed over everything, closed with Escape, the backdrop or ×. The
+     * conversation is underneath it, not replaced, and that is the "chat as a
+     * button" half: a press on the page sends its prompt into the open session
+     * and closes this, so the professor lands on the turn they started.
+     *
+     * The document is `/view/course`, drawn by the pane (`lib/course-mode.js`)
+     * from the same outline payload the Weeks tab gets, in the same sandboxed
+     * frame, posting the same two messages. Record / + drafts is the pane's
+     * own state, so this and the column never disagree about which half they
+     * show; Preview as student is this view's alone.
+     */
+    function CourseMode(props) {
+      const close = props.onClose;
+      const [student, setStudent] = React.useState(false);
+      React.useEffect(() => {
+        const onKey = (event) => {
+          // A deck opened from the term plan sits on top and owns Escape: it
+          // closes first, and this stays where the professor was reading.
+          if (event.key === "Escape" && !props.covered) close();
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [close, props.covered]);
+
+      return ReactDOM.createPortal(
+        h(
+          "div",
+          {
+            className: "pp-veil pp-coursemode",
+            onMouseDown: (event) => {
+              if (event.target === event.currentTarget) close();
+            },
+          },
+          h(
+            "div",
+            {
+              className: "pp-modal",
+              role: "dialog",
+              "aria-modal": "true",
+              "aria-label": "Course mode — " + props.title,
+              onMouseDown: (event) => event.stopPropagation(),
+            },
+            h(
+              "div",
+              { className: "pp-modalhead pp-coursehead" },
+              h("div", { className: "pp-modaltitle" }, props.title + " · course mode"),
+              DRAFT_MODES.map((entry) =>
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    "aria-pressed": props.drafts === entry.drafts,
+                    title: entry.hint,
+                    onClick: () => props.setDrafts(entry.drafts),
+                    key: entry.label,
+                  },
+                  entry.label,
+                ),
+              ),
+              h(
+                "label",
+                { title: "The record alone, with no hole drawn — what ainar page publishes" },
+                h("input", {
+                  type: "checkbox",
+                  checked: student,
+                  onChange: (event) => setStudent(event.target.checked),
+                }),
+                "Preview as student",
+              ),
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-close",
+                  "aria-label": "Close course mode",
+                  title: "Back to the conversation (Esc)",
+                  onClick: close,
+                },
+                "×",
+              ),
+            ),
+            h(
+              "div",
+              { className: "pp-coursebody" },
+              h(WidgetFrame, {
+                key: props.reload,
+                view: "course",
+                runId: props.runId,
+                sessionId: props.sessionId,
+                dark: props.dark,
+                drafts: props.drafts,
+                student,
+                title: "Course mode",
+              }),
+            ),
+          ),
+        ),
+        document.body,
+      );
+    }
+
     function MaterialModal(props) {
       const close = props.onClose;
       React.useEffect(() => {
@@ -3693,6 +3814,13 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       // any of them; an overlay owned by one of those would vanish mid-slide
       // because the OS went dark. It closes when the professor closes it.
       const [material, setMaterial] = React.useState(null);
+      // Course mode open or not. Not persisted: like the column itself, it
+      // opens on a press, and a reload is back in the conversation.
+      const [courseMode, setCourseMode] = React.useState(false);
+      // Read by the message handler, which is registered once per `ask` and
+      // would otherwise see the value from when it was registered.
+      const courseModeRef = React.useRef(false);
+      courseModeRef.current = courseMode;
 
       // Open the column this pane lives in, once per session.
       //
@@ -3758,6 +3886,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           if (data.kind === "ask") {
             if (typeof data.prompt !== "string" || data.prompt.trim() === "") return;
             props.ask(data.prompt);
+            // Chat as a button: a press in course mode starts the turn and
+            // gets out of its way, so the professor watches it answer.
+            if (courseModeRef.current) setCourseMode(false);
             return;
           }
           if (data.kind === "publish") {
@@ -3962,6 +4093,22 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             "div",
             { className: "pp-titlerow" },
             h("div", { className: "pp-title" }, current ? current.title : "Course"),
+            // The term plan as the page, over the harness. Beside Publish
+            // because, like it, it is about the run rather than about the tab.
+            current
+              ? h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-publishbtn",
+                    title:
+                      "The whole term in three columns over the conversation. Press a hole " +
+                      "to have Claude fill it; Esc returns to the chat.",
+                    onClick: () => setCourseMode(true),
+                  },
+                  "Course mode",
+                )
+              : null,
             // Publishing is not a tab and not a sub-view, and putting it here
             // is the argument: every other control in this header chooses what
             // to LOOK at, and this one is the only thing in the pane a person
@@ -4124,6 +4271,19 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               setField: setPublishField,
               onClose: () => setPublishing(null),
             }),
+        courseMode && current
+          ? h(CourseMode, {
+              title: current.title || current.label,
+              runId: current.runId,
+              sessionId: props.sessionId,
+              dark: dark,
+              drafts: drafts,
+              setDrafts: setDrafts,
+              reload: reload,
+              covered: material !== null || publishing !== null,
+              onClose: () => setCourseMode(false),
+            })
+          : null,
         material === null
           ? null
           : h(MaterialModal, {

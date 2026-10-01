@@ -94,6 +94,7 @@ import { parse as parseYaml, parseDocument as parseYamlDocument } from "yaml";
 // only part of the server half a test can call with no workspace and no
 // harness — see `test/pane-markdown.test.mjs`.
 import { MARKDOWN_STYLE, escapeText, renderMarkdown } from "./lib/markdown.js";
+import { courseModeDocument } from "./lib/course-mode.js";
 
 export const name = "professor-pane";
 
@@ -6399,6 +6400,46 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
               url.searchParams.get("date"),
             )
           : readyDocument(workspace, root, runId, dark),
+      );
+    }
+
+    // Course mode: the term plan as a page, over the harness. The outline
+    // payload exactly as the Weeks tab gets it — same drafts rule, same
+    // material links, same record paths — drawn by the pane in three columns
+    // rather than by the one-column widget. See `lib/course-mode.js`.
+    if (view === "course") {
+      if (!runId) return sendErrorPage(res, "No run chosen.");
+      const withDrafts = url.searchParams.get("drafts") === "1";
+      const dark = url.searchParams.get("dark") === "1";
+      let data = viewPayload(workspace, "course_outline", runId, url.searchParams.get("date"), withDrafts).payload;
+      const host = req.headers.host;
+      data = withMaterialLinks(
+        data,
+        host ? `http://${host}` : "",
+        url.searchParams.get("session") ?? "",
+        workspace,
+        dark,
+        withDrafts,
+      );
+      const run = data?.run ?? {};
+      if (run.course_id && run.term) {
+        data = withRecordPaths(
+          data,
+          root,
+          run.course_id,
+          run.term,
+          [
+            ...(data.weeks ?? []).flatMap((week) => week.undated ?? []),
+            ...(data.unplaced?.assessments ?? []),
+          ],
+        );
+      }
+      res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
+      return send(
+        res,
+        200,
+        "text/html; charset=utf-8",
+        courseModeDocument(data, { dark, student: url.searchParams.get("student") === "1" }),
       );
     }
 
