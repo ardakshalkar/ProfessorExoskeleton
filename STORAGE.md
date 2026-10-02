@@ -37,7 +37,9 @@ yes/no:
    or `records/` must carry its state explicitly**; `validate` refuses one that
    does not.
 2. Only the professor writes `approval: approved`, a `professor_decision`, or
-   an approved status. An agent never does, on anyone's work.
+   an approved status — by hand, or by a press in the pane, which runs the CLI
+   on their behalf (`ainar grade decide` records how it was pressed: one
+   answer, a group, or Accept all). An agent never does, on anyone's work.
 3. **A changed record is a new proposal.** When an agent or a generator rewrites
    an approved record and its content changes, `approval` goes back to `draft`.
    A byte-identical rebuild keeps it. For a material, "content" is the
@@ -306,10 +308,14 @@ pseudonymous record of it. `ainar scans` does the deterministic half
 │  ├─ _crops/                     the name line of each paper, drawn for the pane's Scans tab
 │  ├─ _unplaced/                  a placement taken back by `scans assign`, kept rather than deleted
 │  └─ done/                       a batch every page of which has been placed
+├─ groups.yaml                    each written question's answers grouped by meaning, a
+│                                 proposed score per group (pseudonyms; the Grade view's)
 └─ STUDENT-4F2A7Q/                one folder per matched student
    ├─ scan.pdf                    that student's pages, split out and turned upright
    ├─ scan.json                   where they came from: batch checksum, page range
-   └─ transcript.yaml             the answers read off the pages, per question
+   ├─ transcript.yaml             the answers read off the pages, per question
+   ├─ reading.json                the reader model's reply, kept beside what it filled
+   └─ _pages/                     pages drawn for the pane's Grade view
 ```
 
 | Step | Command | What it does |
@@ -324,8 +330,9 @@ pseudonymous record of it. `ainar scans` does the deterministic half
 | match | `scans assign RUN --assessment A --pages P (--student S \| --reject S \| --skip WHY)`, or `--assignments '[…]'` for many; the pane's Scans tab and its review | the professor's answer per paper — a match confirmed, one turned down (`not:`, held until named), a held one named, a wrong one moved (its placement taken back, its transcript carried) — then one apply |
 | read | the reader | fills each `transcript.yaml`: `chosen` or `text`, `page`, `confidence`, or `blank` |
 | record | `scans record RUN --assessment A` | a complete transcript becomes item responses, `approval: draft` |
-| rubric | `scans answers RUN --assessment A` | every recorded answer per question, identical ones counted together; `/import-assessment` proposes a written question's criterion and levels from it |
-| grade | `score-items`, then `/grade-batch` | choice items against the key; written items against the rubric |
+| rubric | `scans answers RUN --assessment A` | every recorded answer per question, identical ones counted together; `/import-assessment` proposes a written question's criterion and levels from it, and groups the answers in `groups.yaml` |
+| accept | `grade accept-rubric RUN --assessment A`, or `grade points-only` for no written rubric; the pane's Grade view | the professor's: the rubric's `approval: draft` becomes `approved`; `grade move` puts a group at another level first |
+| grade | `score-items`; `grade decide RUN --assessment A --decisions '[…]'` from the pane's Grade view; `/grade-batch` for per-answer suggestions | choice items against the key; each written answer's mark is the professor's press, written as `professor_decision` beside the group's or grader's suggestion, an earlier decision kept in `extensions.history` |
 
 **Workflows it covers:** one PDF per student; one batch split every N pages
 (duplex: N counts back sides too); one batch whose papers differ in length,

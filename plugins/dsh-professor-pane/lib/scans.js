@@ -77,7 +77,9 @@ const stagesOf = ({ papers, status, assessment, rubric, items, responses, evalua
   const expected = placed * items;
   const graded = new Set(evaluations.map((entry) => entry.submission_id)).size;
   const decided = evaluations.filter((entry) => entry.professor_decision).length;
-  const rubricState = rubric === null ? "none" : rubric.approval === "draft" ? "draft" : "accepted";
+  // An inline rubric is accepted with its assessment: the word is on the assessment.
+  const rubricState =
+    rubric === null ? "none" : rubric.approval === "draft" || assessment.approval === "draft" ? "draft" : "accepted";
 
   const stages = [
     { id: "identify", label: "Identify", done: true, detail: assessment.title ?? assessment.assessment_id },
@@ -203,6 +205,8 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
     papers,
     class: classList,
     missing: status.missing.length,
+    // How many answers are recorded: grading opens at the first one.
+    answers: responses,
   };
 };
 

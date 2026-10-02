@@ -2,8 +2,8 @@
 
 [`FUTURE.md`](FUTURE.md) argues the direction. This is the same thirteen aspects
 cut into work items, so they can be ordered, cut, or handed to somebody — plus
-`E14`, which arrived after that document was written and has no section in it
-yet.
+`E14` onwards, which arrived after that document was written and have no
+section in it yet. `E25` holds the items first dictated in chat.
 
 Nothing here is scheduled. The ranks are a proposal to argue with, not a plan.
 
@@ -363,6 +363,561 @@ is worth building.
       — the only files with that field are its own tests. Either a keyed export
       that is explicitly not the student paper, or say in the README that the
       exporter is fed by hand. `S` · depends: —
+
+## E15 · The to-do list: what each thing is owed, and what is done — no `FUTURE.md` section yet
+
+> **Rank: unranked.** Asked for on 2026-09-30. The system works out what to do,
+> checks what has been done, and the professor sees both in the UI.
+>
+> Every piece of work in a course has a lifecycle. An assignment goes: drafted →
+> accepted → published (course page, Telegram, Canvas) → deadline passes →
+> submissions in → graded (every evaluation decided) → grades synced to the LMS
+> → feedback returned. Today each of those facts is recorded somewhere — the
+> `approval` word, the publication ledger (`Publication` in
+> `ainar-node/src/lms/ledger.ts`), the deadline on the assessment, the
+> evaluations' `status` beside `professor_decision`, the LMS ledger for a grade
+> push — but nothing reads them in a row. So "did I post homework 3 to Telegram,
+> and has it been graded?" means reading five places.
+>
+> **The design choice that matters: ticks are computed, not typed.** A list the
+> professor ticks by hand is one more place to be wrong. A list computed from the
+> record cannot drift from it: "published to Telegram" is ticked because the
+> ledger has the post, with its date. Only the few steps nothing can see
+> ("announced in lecture") get a hand tick, stored as the professor's own fact
+> with a date.
+>
+> **The line holds.** The list may say "graded: 12 of 30 decided" and point at
+> `/grade-batch`. It never ticks "graded" itself, because accepting is the
+> professor's edit. Push steps (Canvas, Telegram) show the command and are never
+> run from the list.
+>
+> **Nearest kin:** REC-1. `readiness` already answers "what to build next" for
+> the course's *structure* (outcomes, concepts, weeks, materials), and its
+> vocabulary (`importance`, `timing: due_now | soon | overdue`, `next` skill) is
+> what this should speak. Its `reminders` array is empty in every fixture and may
+> be where some of this goes. The grade-sync step connects to grading by the
+> professor (history, and sync behind `--confirm`).
+
+- [ ] **TODO-1** Write the lifecycles down as a table: for each kind of item
+      (assessment, a week's material, an announcement, the run itself), its
+      steps; which steps apply given the run's wiring (no Telegram channel means
+      no Telegram step); and the evidence that ticks each one. A table, not
+      code, and the rest depends on it. `S` · depends: —
+- [ ] **TODO-2** `ainar todo <run>`: for each item, every step as `done` /
+      `due` / `overdue` / `blocked` / `n/a`, each `done` with its evidence (which
+      ledger entry, which record, when). Read-only and deterministic, with no
+      model turn. `M` · depends: TODO-1, and share vocabulary with REC-1
+- [ ] **TODO-3** Done, then changed: a step reopens when what it recorded has
+      moved on, for example an assignment posted to Telegram whose deadline was
+      edited afterwards. `publish update` and `src/freshness.ts` already compare
+      against the ledger; reuse them. `M` · depends: TODO-2
+- [ ] **TODO-4** Hand ticks for steps nothing can see: a record the professor
+      writes (what, when, an optional note), with no drafted half. `S` ·
+      depends: TODO-1
+- [ ] **TODO-5** The pane view: the list per run, grouped by item or by date,
+      each open step carrying the button that moves it forward (the skill or
+      command). A press should carry the item, which is UI-1's context packet.
+      `M` · depends: TODO-2, UI-1
+- [ ] **TODO-6** A `todo` MCP tool, and `/action-inbox` reads it instead of
+      working the same answer out again. `S` · depends: TODO-2
+- [ ] **TODO-7** Items that should exist and don't ("the plan says an
+      assignment every fortnight; weeks 9–10 have none"). That belongs to
+      `readiness`. Decide whether it goes into REC-1 or into this list, and
+      don't build it in both. `decision` · depends: —
+
+> **Added 2026-09-30: something that already happened, postponing, and
+> cancelling.** A quiz is often held on paper in class, or a homework is
+> collected outside the system, and none of it leaves a trace the list can see.
+> Without that trace the list would nag about a quiz that was sat last Tuesday.
+> This applies to every kind of item (quiz, homework, lab, midterm), not only
+> quizzes. Two buttons belong on every open item as well: **Postpone** and
+> **Cancel**.
+>
+> What is in the record today: `Assessment` has `opens_at` and `due_at` and no
+> state at all, so it cannot say "held on 24 Sep" or "cancelled".
+> `ActionItem` (`ainar-node/src/model/harness.ts`) has `pending | in_progress |
+> done | dismissed` and no postponed. Its default `available_actions` still
+> offers `approve`, which predates approval-is-a-field and should go.
+>
+> A postpone or a cancel is not a small edit, because of what hangs off it.
+> Postponing moves `due_at`, and anything already published with the old date
+> is now wrong. That is TODO-3's job, and the list should say "re-announce on
+> Telegram" rather than stay quiet. Cancelling an assessment that carries weight
+> breaks the grading policy's sum, so the button has to ask where the weight
+> goes (spread over the rest, onto one other assessment, or excused), and the
+> validator has to agree afterwards. Both are the professor's own decisions, so
+> they are professor-authored with no draft stage. Both stay on the record as
+> history, with the old date or the old state, when, and an optional reason,
+> the way grade changes are kept.
+
+- [ ] **TODO-8** A held state on an assessment: `held_at`, how it was held
+      (`in_class | paper | outside_system | lms`), and an optional note. Once
+      set, the steps up to "sat" read as done, and the list moves on to "collect
+      or scan submissions" (`/grade-scans`) and "grade". `S` · depends: TODO-1
+- [ ] **TODO-9** A **Mark as already held** control on each quiz or assessment
+      row in the pane: pick the date, pick how, save. It is the professor's own
+      fact, so the pane may write it, like LMS ids. `S` · depends: TODO-8,
+      TODO-5
+- [ ] **TODO-10** **Postpone**: a new date (and optionally a reason), with the
+      old one kept in history. The list then shows every publication the move
+      made stale (page, Telegram, Canvas), each with its re-publish command, and
+      never re-sends anything itself. `M` · depends: TODO-3, TODO-5
+- [ ] **TODO-11** **Cancel**: a `cancelled` state with a date and a reason. For
+      an assessment with weight, a choice of where the weight goes, checked by
+      the validator. Its remaining steps turn to `n/a`, and the steps already
+      published turn into "announce the cancellation". `M` · depends: TODO-8,
+      TODO-5
+- [ ] **TODO-12** Bring `ActionItem` in line: add `postponed` (with a new
+      `due_at`) and `cancelled`, and drop `approve` from
+      `available_actions`. Or retire the record in favour of TODO-2's computed
+      list. Decide this first, because having both is two lists. `decision` ·
+      depends: TODO-1
+
+## E16 · A task list for each student, drawn on the concept graph — no `FUTURE.md` section yet
+
+> **Rank: unranked. The professor's half can start now; the student's half is
+> gated on STU-1.** Asked for on 2026-09-30. Each student has a list of what
+> they still have to do, shown as a graph. The professor can view it and add to
+> it, and the student gets a path through the course that is their own.
+>
+> E15 asks what the *course* still owes. This asks what one *student* still
+> owes, and what would help them.
+>
+> **Most of the record already exists.** `StudentConceptState` holds each
+> student's state per concept (`not_observed` … `needs_review`) with its
+> evidence. The concept graph has its prerequisite edges. `StudentSignal` holds
+> what `/find-gaps` noticed. `Intervention` (in `ainar-node/src/model/learning.ts`)
+> is already a per-student task in all but name: `student_id`, `type`,
+> `description`, `proposed_by`, `approved_by`, and a status running `proposed →
+> approved → scheduled → completed | cancelled`. Only
+> `workspace/courses/CSS-4008/samples/interventions.yaml` writes one, and no
+> view draws them.
+>
+> **The graph is the course's concept graph, coloured for one student.** Each
+> node is coloured by that student's state. The student's tasks hang off the
+> node they serve: the course's own assessments, plus the extras made for this
+> student. The frontier is the concepts whose prerequisites are demonstrated
+> and that the student hasn't demonstrated yet. That is "what to do next",
+> computed from the graph. A task on a concept whose prerequisite is
+> `needs_review` is drawn as blocked, and the prerequisite is drawn as the
+> thing to do first. `/student-dashboard` already draws capability levels and
+> the prerequisites under each gap, so this extends it rather than starting
+> over.
+>
+> **Who writes what.** When the professor adds an item, it is their own record
+> and has no draft stage. When the system proposes an item (from a signal, a
+> low score, or a stalled frontier), it is a draft: `approval: draft`, carrying
+> the evidence it cites. It reaches a student only after the professor accepts
+> it. Personalising what a student is told to do is a judgement about that
+> student, so it sits on the same side of the line as a grade.
+>
+> **Privacy.** The records key on the pseudonym and never on a name. Views that
+> name a student follow `/student-report`'s rule and are written outside the
+> repository. PRI-1's presentation toggle has to cover this view.
+
+- [ ] **STP-1** Decide whether a student's task *is* an `Intervention`, perhaps
+      with `concept_ids` and a due date added, or a new collection. It probably
+      is one: a second record for "something this student should do" is how the
+      schema ends up saying it twice. `decision` · blocks: STP-2 … STP-6
+- [ ] **STP-2** `ainar student-path <run> <student>`: the concept graph with this
+      student's states, the frontier, blocked tasks, and every task on its node.
+      Read-only and deterministic. `M` · depends: STP-1
+- [ ] **STP-3** The graph view in the pane: open it from a student's row, see
+      the coloured graph and the list beside it, and add a task on a node. The
+      press carries the student and the concept (UI-1). `M` · depends: STP-2,
+      UI-1
+- [ ] **STP-4** Proposals: `/find-gaps` writes a draft task beside each signal
+      it raises, for example a revisit exercise on the prerequisite or a
+      targeted practice set. Always marked `approval: draft`, with its evidence
+      and provenance (PRV-1). `M` · depends: STP-1, PRV-1
+- [ ] **STP-5** Closing a task from the record: a task on a concept is done when
+      new evidence moves that concept's state, not when someone ticks it. This
+      is E15's "computed, not typed" rule applied to one student. Keep
+      `effectiveness_note` for what the professor thought of it. `M` ·
+      depends: STP-2, TODO-2
+- [ ] **STP-6** The same graph across a class: which frontier nodes most
+      students are stuck on. That points at the course, not the student, so it
+      feeds `/prepare-lesson`. `S` · depends: STP-2
+- [ ] **STP-6b** Postpone, Cancel and Mark as already done on a student's task,
+      as E15 does for the course's items (TODO-9 … TODO-11). `Intervention`
+      already has `cancelled` and `scheduled_at`. Postponing moves
+      `scheduled_at` and keeps the old one. A task done outside the system
+      needs the professor's note, because no evidence will arrive to close it.
+      `S` · depends: STP-3, TODO-10
+- [ ] **STP-7** The student's side: they see their own graph and their accepted
+      tasks, and nothing else. Read-only first, pseudonymous, and only the
+      professor decides what appears. `L` · depends: STU-1, STU-2, STU-3
+
+## E17 · One change history for every professor edit — no `FUTURE.md` section yet
+
+> **Rank: first of E17–E24, because it makes three other epics smaller.**
+> Proposed 2026-09-30. Four items each describe their own "what changed, when,
+> and why": grade changes (E25's GRH), postpone and cancel (TODO-10, TODO-11),
+> a student task's postponement (STP-6b), and provenance on drafts (E9). Built
+> separately, that is four histories that disagree.
+>
+> The record already has the shape. `CourseEvent` in
+> `ainar-node/src/model/harness.ts` has `event_type`, `entity_type`,
+> `entity_id`, `occurred_at` and a free `payload`. Nothing in the real course
+> writes one (`recent_events` is empty in its inbox).
+
+- [ ] **HIS-1** Decide what an edit event carries: record and field, the old
+      and new value, who, when, and an optional reason. Decide whether it is a
+      `CourseEvent` or a separate log. `decision` · blocks: HIS-2 … HIS-4
+- [ ] **HIS-2** Every professor-side write (the pane, `ainar` commands,
+      accepting a draft by changing `approval`) appends one. An edit made by
+      hand in a YAML file is caught on the next load by comparing against the
+      last known version, as `freshness.ts` already does for materials. `M` ·
+      depends: HIS-1
+- [ ] **HIS-3** `ainar history <record>`, plus a History tab on any record in
+      the pane. `S` · depends: HIS-2
+- [ ] **HIS-4** Re-point GRH-1, TODO-10, TODO-11 and STP-6b at this, and cut
+      their own history halves. EVA-1's "accepted unchanged / edited / rejected"
+      becomes a query over it. `S` · depends: HIS-2
+
+## E18 · Tell the professor, don't wait to be asked — no `FUTURE.md` section yet
+
+> **Rank: second.** Proposed 2026-09-30. E15 computes what is owed, but a list
+> nobody opens changes nothing. A digest sent to the professor, never to
+> students: "Quiz 3 is in 5 days and has no questions; HW2's results are not
+> entered; the Final Project (40%) has no rubric."
+
+- [ ] **NOT-1** `ainar digest <run> [--since D]`: what became due, overdue,
+      stale or newly done since the last digest, ordered by weight times days
+      left (see NOT-4). Read-only. `S` · depends: TODO-2
+- [ ] **NOT-2** Delivery to the professor's own private channel (a Telegram
+      chat with the bot, or email), on a schedule the professor sets. It is a
+      message to the professor, not a publication, so it never goes to the
+      course channel. `M` · depends: NOT-1
+- [ ] **NOT-3** Quiet rules: nothing new means no message, and the same item is
+      not repeated daily unless it got worse. `S` · depends: NOT-2
+- [ ] **NOT-4** Importance scaled by weight and time left, so a 40% project
+      with no rubric eleven weeks out outranks a 0.57% quiz with no questions
+      next week only when it should. Share this with REC-1's `importance`
+      rather than inventing a second one. `S` · depends: TODO-2
+
+## E19 · Tick things from the phone after class — no `FUTURE.md` section yet
+
+> **Rank: third, with E18.** Proposed 2026-09-30. "Mark as already held"
+> (TODO-9) happens right after a lecture, away from the laptop. The same bot as
+> NOT-2, talking only to the professor, answers with buttons: *Quiz 2 held
+> today? ✅ held · postpone · cancel*.
+
+- [ ] **MOB-1** Inline buttons on digest items for the professor's own facts
+      (held, postpone, cancel, hand tick). Each one writes the same record the
+      pane would, and an event through HIS-2. `M` · depends: NOT-2, TODO-8,
+      HIS-2
+- [ ] **MOB-2** The bot answers only the professor's own chat id, and says so
+      when anyone else writes to it. It never accepts a grade or a draft; those
+      stay at the desk. `S` · depends: MOB-1
+- [ ] **MOB-3** Voice notes to the bot ("Quiz 3 moved to Thursday"), turned
+      into a *proposed* change the professor confirms with one button. This
+      shares its transcription with AUD-1. `M` · depends: MOB-1, AUD-1
+
+## E20 · A teaching team — no `FUTURE.md` section yet
+
+> **Rank: unranked.** Proposed 2026-09-30. Every record assumes one professor
+> (the real course has one user for 74 students). `ActionItem` already has
+> `assigned_to` and a `delegate` action that nothing uses.
+
+- [ ] **TEA-1** Roles on a run: instructor and teaching assistant. For each
+      role, what it may write. A TA may enter scores and hand ticks, and may
+      never accept an evaluation or a draft. `decision` · depends: —
+- [ ] **TEA-2** Assign a to-do item or a grading batch to a person, and see it
+      on their list. `M` · depends: TEA-1, TODO-2
+- [ ] **TEA-3** Test the line, as GRD-3 does for the agent: no TA path can
+      accept a grade. `S` · depends: TEA-1
+
+## E21 · Getting results back to students — no `FUTURE.md` section yet
+
+> **Rank: after E17.** Proposed 2026-09-30. E15's lifecycle ends at "feedback
+> returned", and no epic produces it. It should be per student, from accepted
+> evaluations only, and private to that student, never the course channel.
+
+- [ ] **FBK-1** Draft each student's feedback from their accepted criterion
+      decisions and cited evidence: what they earned, where, and the next thing
+      to work on (from E16's frontier once it exists). Marked `approval: draft`.
+      `M` · depends: —
+- [ ] **FBK-2** Delivery routes: a comment on the student's homework fork, a
+      Canvas submission comment, or a private file. Plan, then `--confirm`, as
+      every publication is. `M` · depends: FBK-1, INT-1
+- [ ] **FBK-3** "Feedback returned" becomes a step E15 can see. `S` · depends:
+      FBK-2, TODO-2
+
+## E22 · Next year's course from this year's — no `FUTURE.md` section yet
+
+> **Rank: before summer 2027.** Proposed 2026-09-30. REC-4 and REC-5 compare two
+> terms, but nothing creates the next one.
+
+- [ ] **ROL-1** `ainar new run --from <run>`: copy modules, meetings and
+      assessments with their dates shifted to the new term's calendar, reset
+      every `approval` to `draft`, and leave student data behind. `M` ·
+      depends: —
+- [ ] **ROL-2** Carry over the changes `/course-reflection` recommended as
+      to-do items on the new run. `S` · depends: ROL-1, TODO-2
+- [ ] **ROL-3** Report what the shift could not place: holidays, a week that
+      disappeared, two assessments that now collide. `S` · depends: ROL-1
+
+## E23 · Homework integrity across forks — no `FUTURE.md` section yet
+
+> **Rank: unranked.** Proposed 2026-09-30. Homework repos are public forks, so a
+> class's submissions are already in one place, in the open. The output is a
+> signal for the professor with the evidence beside it. The system never makes
+> an accusation, and nothing is said to a student by the system.
+
+- [ ] **ITG-1** Similarity across a class's forks for one assignment,
+      excluding the starter code, as `StudentSignal` records marked
+      `approval: draft`. `M` · depends: INT-8
+- [ ] **ITG-2** The pair view: the two submissions side by side, the shared
+      parts marked, and commit times. `M` · depends: ITG-1
+
+## E24 · A question bank across quizzes and years — no `FUTURE.md` section yet
+
+> **Rank: with E14.** Proposed 2026-09-30. Fourteen quizzes a term, and the
+> answer keys already keep surplus questions (for example
+> `QUIZ-02-surplus-items.md`) that nothing can find again.
+
+- [ ] **QB-1** Questions reusable by concept, cognitive level and item type,
+      across quizzes and across runs, with the history of where each was used
+      and how it performed. `M` · depends: VAR-1
+- [ ] **QB-2** Draw a quiz from the bank for a week's concepts, avoiding
+      questions this class has already seen. `M` · depends: QB-1
+- [ ] **QB-3** Import the surplus files into the bank. `S` · depends: QB-1
+
+## E25 · Carried in from the chat backlog (2026-09-29)
+
+> Items dictated as "for future tasks" before they had a place here. Moved in on
+> 2026-09-30 so that this file is the one list.
+
+- AUD-1 (student audio answers) moved to [E26](#e26--one-assessment-several-ways-to-answer-it--no-futuremd-section-yet)
+  on 2026-09-30. The ID is unchanged, so MOB-3 still points at it.
+- [ ] **DL-1** Datalayer: fewer big files, split by parts. Research whether that
+      is actually easier to use before committing. `decision` · depends: —
+- [x] **MF-1** Per-material folders: the result file up front, its assets in
+      subfolders. Done 2026-09-29 (`ainar organize-materials`), and the real
+      course was migrated.
+- [ ] **JEV-1** Jev's alternative (from Stanford and Carnegie Mellon), brought
+      into decision making. Scope still to be written down. `decision` ·
+      depends: —
+- [ ] **TOP-1** Topic generation: show the generated md files' content while
+      they are being generated, so the professor can judge each one as it
+      lands. `M` · depends: —
+- [ ] **GRH-1** Grading by the professor, in chat or with a button in the UI.
+      Every grade change is remembered (what, when, optional reason, the
+      criterion), as history and never an overwrite. The history itself is
+      E17. `M` · depends: HIS-2
+- [ ] **GRH-2** Sync a grade to Canvas, Moodle and the course site as an
+      explicit, confirmed step. A grade pushed to an LMS can't be recalled.
+      `M` · depends: GRH-1, INT-6
+
+## E26 · One assessment, several ways to answer it — no `FUTURE.md` section yet
+
+> **Rank: unranked.** Proposed 2026-09-30. An assessment should accept more
+> than one way of answering: a file, a homework fork, a recorded audio answer,
+> or a live spoken exchange with the system. The late rule and the rubric
+> should apply to all of them the same way. The system may also ask the student
+> questions about their own homework.
+>
+> Some of this is already recorded and used by nothing.
+> `submission_type` is already a list (`[pdf, notebook]` on ASSESSMENT-02 of
+> CSS-4008). `settings.allow_late_submission` and
+> `settings.late_penalty_per_day` are stored, exported to the bundle and SQL,
+> and read by no code. `gradebook.ts` picks the counting attempt by
+> `submitted_at` and never compares it to `due_at`. So a late report is scored
+> as if it were on time.
+>
+> Every score produced here, whether live or afterwards, is an `Evaluation`
+> marked `approval: draft`. That includes a late penalty. The professor accepts
+> it, as GRD-3 already requires.
+
+**Several ways to submit**
+
+- [ ] **ASM-1** Decide what "several possibilities" means in the record. Is it
+      one assessment with a list of allowed modes, all graded on one rubric? Or
+      is it sibling assessments where the student picks one (a written report
+      *or* an oral defence)? Or a required pair (code plus a short oral check)?
+      The answer also settles whether a rubric criterion can be marked as
+      applying to some modes only. `decision` · blocks: ASM-2, AUD-2, VIV-1
+- [ ] **ASM-2** Name the modes in the schema: `file`, `repo`, `audio`, `live`.
+      Each submission carries the mode it came in by, and the brief and the
+      course page say which modes are open. `S` · depends: ASM-1
+
+**Late submission**
+
+- [ ] **LAT-1** Decide the late policy shape. The current field is per day.
+      Real policies also have a grace period (for example 15 minutes), a cap
+      ("at most 50% off"), a hard cutoff after which nothing is accepted, a
+      per-student extension, and a rule for hours versus calendar days. Decide
+      which of these the schema holds, and whether the course-level grading
+      policy sets a default that an assessment can override. `decision` ·
+      blocks: LAT-2 … LAT-4
+- [ ] **LAT-2** Compute lateness from `submitted_at` against `due_at` plus any
+      extension, in the course's time zone. For a homework fork, use the time
+      of the last commit before the hand-in (or the time the fork's hand-in tag
+      was pushed), and not the time we pulled it. `M` · depends: LAT-1
+- [ ] **LAT-3** Apply the penalty in `gradebook.ts` as its own visible line on
+      the evaluation: raw score, penalty, final score, and the rule that
+      produced it. Never apply it silently to the raw score. It is a draft like
+      the rest of the grade. `M` · depends: LAT-2
+- [ ] **LAT-4** Extensions and waivers: the professor grants one to a student
+      for an assessment, with an optional reason, recorded through HIS-2 so it
+      shows in the history. The late list in E15 honours it. `S` · depends:
+      LAT-1, HIS-2
+
+**Audio answers, graded afterwards**
+
+- [ ] **AUD-1** Student audio answers: record, transcribe, and evaluate against
+      the rubric like any other submission. The transcript is the evidence that
+      grading cites, with timestamps into the recording so the professor can
+      listen to the exact moment. `L` · depends: —
+- [ ] **AUD-2** Where the recording comes from: an upload, a Telegram voice
+      message to the course bot, or a browser recorder on the course page.
+      Decide which one first. `decision` · depends: ASM-1
+- [ ] **AUD-3** Language and accents. The real course is not English-only
+      (see E12), so measure transcription errors on real samples before the
+      grader is trusted with them. A low-confidence stretch of the transcript is
+      flagged for the professor and never scored silently. `M` · depends:
+      AUD-1, LNG-1
+
+**Live oral answers, scored in real time**
+
+- [ ] **LIV-1** A live session: the student speaks, the system transcribes as
+      they go, asks the next question, and keeps a running draft score per
+      criterion. The draft score is shown to the professor only, never to the
+      student during the session. `L` · depends: AUD-1, ASM-2
+- [ ] **LIV-2** Decide what "real time" is allowed to decide. Proposal: live
+      scoring only chooses the next question. The score that counts is produced
+      afterwards from the full recording by the same path as AUD-1, and the
+      professor accepts it. `decision` · depends: —
+- [ ] **LIV-3** Keep the whole session (audio, transcript, the questions asked
+      and why each was chosen) as the submission. A regrade or an appeal can
+      then replay it. `M` · depends: LIV-1
+
+**The system asks the student about their homework**
+
+- [ ] **VIV-1** Generate follow-up questions from the student's own
+      submission: "why did you drop these rows?", "what happens to your split if
+      the data were sorted by date?". The questions are tied to rubric criteria
+      and to concepts, so an answer is evidence for a criterion and not a
+      general impression. `M` · depends: ASM-1
+- [ ] **VIV-2** Delivery: in writing (a comment on the fork, a Canvas comment),
+      or spoken, through LIV-1. The student's answers become part of the same
+      submission. `M` · depends: VIV-1, FBK-2 or LIV-1
+- [ ] **VIV-3** Use it as an authorship check next to E23. A student who cannot
+      explain their own code becomes a `StudentSignal` for the professor, with
+      the question and the answer beside it. As in E23, the system never makes
+      an accusation. `S` · depends: VIV-2, ITG-1
+- [ ] **VIV-4** Ask the professor first. Before any question goes to a student,
+      the professor sees the proposed questions for the class and can edit or
+      cut them. The whole batch is marked `approval: draft`. `S` · depends:
+      VIV-1
+
+## E27 · Spreadsheets both ways: Google Sheets and Excel — no `FUTURE.md` section yet
+
+> **Rank: unranked.** Proposed 2026-09-30. Half of this exists, and it goes one
+> way only. `ainar lms push --target sheets-api` (`src/lms/sheets.ts`) writes
+> the gradebook into a Google Sheet. It reads the tab first and refuses to
+> overwrite a cell it did not write. `--target sheet` (`src/lms/sheet.ts`) writes
+> a CSV with the same layout (`grid.ts`). Three things are missing. Nothing
+> reads the sheet back. Nothing writes a real `.xlsx`. And nothing reaches Excel
+> on OneDrive, which is where the real course workspace already lives.
+>
+> The rule from `sheets.ts` stays: the sheet is a view, and the record is the
+> source of truth. A value typed into the sheet becomes a *proposed* change the
+> professor accepts. It never becomes a grade silently.
+
+- [ ] **SHT-1** Decide what syncs besides grades. Candidates: the roster, hand
+      ticks and attendance (E15), extensions (LAT-4), and item-level scores
+      entered by hand for paper exams. For each one, decide whether the sheet
+      may propose changes to it or only display it. `decision` · blocks: SHT-3
+- [ ] **SHT-2** Native `.xlsx` output from the same `grid.ts` table: one tab per
+      assessment plus the summary tab, with criteria as columns, comments beside
+      them, and formulas left out on purpose so that nothing drifts from the
+      record. `M` · depends: —
+- [ ] **SHT-3** Pull: read the Sheet (or an `.xlsx` the professor saved) and
+      compare it against the ledger. Every cell that changed since our last push
+      becomes a proposed change, showing its old value, its new value, the cell
+      and the criterion. The professor accepts them through GRH-1, so each one
+      shows up in the history (HIS-2). `M` · depends: SHT-1, INT-2, GRH-1
+- [ ] **SHT-4** Excel on OneDrive and SharePoint through Microsoft Graph: the
+      same plan, diff and `--confirm` push as `sheets-api`, and the same pull as
+      SHT-3. Authentication goes through `connections/`, beside the Sheets key.
+      `L` · depends: SHT-2, SHT-3, INT-1
+- [ ] **SHT-5** Conflicts: a cell edited in the sheet *and* changed in the
+      record since the last sync. Report both values and choose neither, as
+      Canvas drift is handled today. `S` · depends: SHT-3
+- [ ] **SHT-6** A sheet the professor already keeps. Map its columns onto
+      students and criteria once, save the mapping to the run, and reuse it.
+      Nobody should have to adopt our layout to get sync. `M` · depends: SHT-3
+
+## E28 · Grading in the pane, question by question — no `FUTURE.md` section yet
+
+> **Rank: in progress.** Proposed and started 2026-10-02, on Quiz 1 of CSS-4007
+> (61 papers placed, 4 short-answer questions, no rubric). The Scans tab drew
+> Identify and Match in full and offered a chat prompt for the rest, so the
+> rubric, every mark and every acceptance happened in chat and in YAML.
+>
+> **The line moved, on purpose.** Until now the pane had no route that wrote a
+> `professor_decision`. Here it does, because the press *is* the professor
+> deciding. The invariant GRD-3 tests is unchanged: nothing writes a decision
+> unless a person pressed for it. An **Accept all** button is allowed (decided
+> 2026-10-02). What keeps it honest is the history, not a missing button: every
+> decision records whether it was made one card at a time or in bulk, and a
+> changed decision keeps the one it replaced.
+>
+> **Grade by question, not by student.** One rubric in mind at a time, and
+> answers that say the same thing sit together. The grouping by meaning is the
+> assistant's judgement, so it is kept as a draft in the private folder
+> (`groups.yaml` beside the scans), where the pane can draw it and the professor
+> can move it.
+
+- [x] **GRA-1** `groups.yaml`: the assistant's grouping of a question's
+      answers by meaning, each group with a proposed score and a label, kept
+      in the private folder. `/import-assessment` §7 writes it with the
+      rubric. `S` · depends: —
+- [x] **GRA-2** `ainar grade status|decide|move|accept-rubric|points-only`. One
+      write path for the CLI and the pane. `decide` writes
+      `professor_decision` with `decided_by`/`decided_at`, sets `approved` or
+      `overridden` against the suggestion, keeps the group's suggestion as
+      `ai_suggestion`, and pushes any earlier decision onto
+      `extensions.history`. `M` · depends: GRA-1
+- [x] **GRA-3** The Rubric step in the pane: levels with the groups placed
+      under them, move a group to another level, accept the rubric. Or skip
+      the rubric and grade by points only. `M` · depends: GRA-2
+- [x] **GRA-4** The Grade step in the pane: one question at a time, groups
+      with their answer cards (the page image, the text as read, the
+      confidence, the suggestion), 0…max buttons, a comment, Accept group,
+      Accept all. `M` · depends: GRA-2
+- [x] **GRA-11** Several rubrics proposed over one grouping — always one from
+      the marking scheme the exam already carries (`marking_guidance`, the key),
+      one from what the class wrote — compared per question in the pane by the
+      class mean and the count at each level; chosen per question
+      (`grade choose`), then accepted. Done 2026-10-02. `M` · depends: GRA-3
+- [x] **GRA-13** Rethink while grading: the rubric open beside the cards, a
+      group moved re-suggests at once, the assistant asked to revise adds a
+      proposal the view picks up live, applied with marks kept and the ones
+      that now disagree flagged and re-markable in one press. Marks shown as
+      badges with a per-question picture, no dashes. Done 2026-10-02. `M` ·
+      depends: GRA-11
+- [ ] **GRA-12** Mark one question by points while others use a rubric
+      (`points-only --item`). Today points-only is all questions or none.
+      `S` · depends: GRA-11
+- [ ] **GRA-5** Edit a level's wording and points in the pane, and split or
+      merge groups (moving one answer between groups). Today the wording is
+      changed in chat. `M` · depends: GRA-3
+- [ ] **GRA-6** Where on the page each answer is. Ask the reader for a region
+      per answer (`scans read` already bands the page), and crop to it instead
+      of drawing the whole page. `M` · depends: —
+- [ ] **GRA-7** Fix a misread in place: edit the transcript text from the card,
+      which rewrites the transcript and the ItemResponse. A correction of fact,
+      not a grade. `S` · depends: GRA-4
+- [ ] **GRA-8** After the last question: the score distribution per question,
+      the papers with a changed mark, then the gradebook and `lms push` as an
+      explicit, previewed step (GRH-2). `M` · depends: GRA-4, GRH-2
+- [ ] **GRA-9** Feedback to each student from the decisions and comments, as
+      drafts for E21. `M` · depends: GRA-4
+- [ ] **GRA-10** Fold `extensions.history` into E17's one history when HIS-1
+      decides its shape. `S` · depends: HIS-1
 
 ---
 

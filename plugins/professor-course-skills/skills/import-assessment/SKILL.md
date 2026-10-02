@@ -18,11 +18,12 @@ writes: drafts
 >   word for word, marks as printed, the key as given. Never work out a key from
 >   what most of the class wrote, never fill in a mark the paper does not print,
 >   and never invent an outcome or a weight: leave them empty and say so.
-> - **A rubric here is proposed from evidence, not invented.** One criterion per
->   written question, its maximum the marks printed on the paper, its levels
->   described from the answers students actually gave, each with how many gave
->   it. Proposed, marked draft, and nothing is graded against it until the
->   professor has answered.
+> - **A rubric here is proposed from evidence, not invented** — from the
+>   marking scheme the exam already carries, and from the answers students
+>   actually gave. Usually two or three of them, side by side, for the professor
+>   to choose between; one criterion per written question, its maximum the
+>   marks printed on the paper. Nothing is graded against any of them until the
+>   professor has chosen and accepted one.
 > - **Never accept your own work.** Do not write `approval: approved`, a
 >   `professor_decision`, or an approved status.
 > - **No student name, email or institutional number in any file under the
@@ -198,7 +199,7 @@ for every PDF of this exam, and hand over to `/grade-scans` from its step 1:
 plan, apply, read the answers, `scans record`. The choice items are then
 `score-items`'s. Come back here for the written ones.
 
-## 7. A rubric, from what the class wrote
+## 7. Rubrics, from the marking key and from what the class wrote
 
 Once the answers are recorded:
 
@@ -208,47 +209,114 @@ bin/ainar scans answers CSS-4008-2026-FALL --assessment ASSESSMENT-QUIZ-03 --jso
 
 lists every question with its answers, identical ones collapsed and counted,
 blanks counted separately, pseudonyms only. That collapse is exact; the rest is
-yours. For each **written** question:
+yours. Two things, kept apart: **what the answers say** (the grouping, one for
+the class) and **what each is worth** (a rubric, of which you propose several).
 
-1. **Group by meaning.** Merge the answers that say the same thing in different
-   words. Name each group by what it does: *names overfitting and gives a train /
-   test gap example*; *defines it, no example*; *confuses it with underfitting*;
-   *off the question*. Keep the count of each.
-2. **Propose a criterion.** `CRIT-<SHORT>-<NN>` (with variants:
-   `CRIT-<SHORT>-<V>-<NN>`, unless the professor says two versions' question N
-   test the same thing — then one criterion serves both). Title: what the
-   question checks. `maximum_score`: the question's marks, from the paper.
-   Never more, never fewer.
-3. **Levels from the groups**, top to bottom, ending at 0. Each level's
-   description says what an answer at that level contains, in terms a second
-   marker could apply without you — and beside it, how many answers fell there
-   ("9 of 24"). A level no answer reached is still worth having if the marks
-   imply it; a group that fits no level is a level you are missing.
-4. **Use the model answer** from the key, where there is one, to set the top
-   level — and say where the class's best answers differ from it.
+**Check first whether a marking scheme already exists.** An exam generated in
+this project usually carries one — each item's `marking_guidance`, and the
+key in `assessments/<ID>/keys/`. Quiz 1 of CSS-4007 has a full scheme there
+and no rubric record. That scheme is the professor's; it is the first proposal,
+not something to improve on quietly.
 
-Show the professor the whole proposal at once, compactly — per question: the
-criterion, its levels with counts, and the one or two groups you were least sure
-how to place. Ask what to change. Ask the outcome each criterion measures; do
-not pick it.
+1. **Group by meaning**, per written question. Merge the answers that say the
+   same thing in different words. Name each group by what it does: *names
+   overfitting and gives a train / test gap example*; *defines it, no example*;
+   *confuses it with underfitting*; *off the question*. A group is about content,
+   not marks — the same groups serve every proposal.
+2. **Propose two or three rubrics over those groups** — each one, per question,
+   a set of levels and the level each group sits at:
+   - **"From your marking key"** whenever the items carry `marking_guidance` or
+     the key has a scheme: its levels are that scheme, split into levels as
+     written (1 for the cause + 1 for a consequence → 2 / 1 / 0; Q4's parts
+     added up, halves included). Nothing added that the scheme does not say.
+   - **"From what the class wrote"**: levels drawn from the groups — what the
+     answers actually contain, where the class went beyond or around the key.
+   - A third only when it differs in a way worth choosing between — stricter,
+     kinder on a common partial answer, half marks — never a near-copy.
 
-Then write it:
+   Each level's description says what an answer at that level contains, in
+   terms a second marker could apply without you. Every proposal has a level at
+   the question's full marks and one at 0, and no level above the marks. Say
+   in the proposal's `summary`, in a sentence, how it differs from the others.
+   Proposals that would mark the class the same way are one proposal.
+3. **Mark what you are unsure of**: in a proposal, the groups you could not
+   place with confidence (`unsure`, by their position in the question's list).
 
-- the rubric into the assessment, `assessments/<ID>/assessment.yaml` — inline
-  `rubric: { rubric_id: RUBRIC-<SHORT>, criteria: [...] }`, each criterion with
-  `rubric_id`, `title`, `maximum_score`, `levels`;
-- each written item's `criterion_id`, in `items.yaml` — the one field you add
-  there by hand, and the one a re-import keeps;
-- the assessment's `approval: draft`. If it was already accepted, the rubric is a
-  change to it, so it goes back to draft — say so in your report.
+Write all of it in the private folder beside the scans,
+`~/.ainar/submissions/<RUN>/<ASSESSMENT>/groups.yaml` (the folder `scans status`
+prints). Every answered student of every written question in exactly one group;
+a blank answer in none. `scores` is one entry per group, in the groups' order:
 
-Validate. A criterion whose items do not add up to its maximum is a warning that
-means a mark is wrong somewhere; fix it before grading.
+```yaml
+assessment_id: ASSESSMENT-QUIZ-03
+proposed_by: <the model you are>
+created_at: '2026-10-02T15:00:00+05:00'
+items:
+  - item_id: ITEM-Q3-02
+    groups:
+      - label: names overfitting and gives a train/test gap example
+        students: [STUDENT-4F2A7Q, STUDENT-9KX2PL]
+      - label: defines it, no example
+        students: [STUDENT-B7Q1ZZ]
+      - label: confuses it with underfitting
+        students: [STUDENT-QQ81AB]
+proposals:
+  - id: key
+    title: From your marking key
+    summary: 1 mark for the definition, 1 for an example that shows the gap.
+    items:
+      - item_id: ITEM-Q3-02
+        title: Overfitting, defined and shown
+        levels:
+          - {score: 2, description: Defines it and gives a train/test gap example}
+          - {score: 1, description: Defines it without an example, or the reverse}
+          - {score: 0, description: Neither, or describes underfitting}
+        scores: [2, 1, 0]
+        unsure: [1]
+  - id: class
+    title: From what the class wrote
+    summary: Treats the common "defines it, no example" as worth the full mark when the definition names unseen data.
+    items:
+      - item_id: ITEM-Q3-02
+        levels: [...]
+        scores: [2, 2, 0]
+```
 
+Pseudonyms only. **Write nothing into the course for the rubric** — no
+`rubric` on the assessment, no `criterion_id` on the items. The professor's
+choice does that: `ainar grade choose` writes the chosen proposal's levels as
+that question's criterion, with the item's `outcome_id` and `concepts`, and
+puts the assessment to `approval: draft` until they accept it. Then run
+
+```bash
+bin/ainar grade status RUN --assessment A
+```
+
+which reads it all back — each proposal's class mean and how many answers it
+puts at each level — and reports a student in two groups, a score that is not
+one of the proposal's levels, or a proposal with no full-marks level. Fix every
+problem it lists.
+
+Then hand it to the professor: **the pane's Scans tab → Grade the answers**
+shows, per question, the proposals side by side — levels, how many answers
+each puts there, the class mean — with **Use for Q1** and **Use for every
+question**. They can mix: Q1 from the key, Q4 from the class. What they chose
+then opens as a draft they can adjust (move a group to another level) and
+accept. In chat, say per question how the proposals differ in effect ("the key
+gives the class a mean of 0.9 of 2, the class-based one 1.7, because 20
+answers name morphology without the vocabulary"), and the groups you were least
+sure how to place. Ask the outcome a criterion measures if the item had none.
 ## 8. Hand over
 
-Once the professor has answered on the rubric, the written items go to
-`/grade-batch`. Report:
+Once the professor has accepted the rubric, they grade in the same view: each
+group's answers as cards beside the page, the group's score as the suggestion,
+a mark per card, Accept per group, or Accept all. Every press is
+`ainar grade decide`, which writes the `professor_decision` — never write one
+yourself, and never run `grade decide` or `grade accept-rubric` unless the
+professor has told you the marks or the decision in so many words. Answers that
+need more than a group's score — a long written answer, a criterion with parts —
+go to `/grade-batch`, whose per-answer suggestions the view shows the same way.
+Report:
 
 - which assessment the pile was, and what the professor confirmed;
 - questions and marks per variant, and anything in the paper you could not copy

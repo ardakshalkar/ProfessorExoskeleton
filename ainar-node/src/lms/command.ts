@@ -1235,7 +1235,7 @@ const runImportSubmissions = async (
  * professor run it twice is how CS-401 and CS-402 end up saying different
  * things to two halves of one class.
  */
-const assignmentTargets = (
+export const assignmentTargets = (
   run: any,
   group: string | null,
 ): [group: string | null, courseId: string][] => {

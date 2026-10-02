@@ -46,7 +46,8 @@ export const WITHHELD: Record<string, string> = {
     "read-only, but they reach a third party and need a token. Keeping them out is what lets this server hold no credential at all.",
   "roster whois / roster show":
     "resolves a pseudonym to a real person. The mapping lives outside the repository on purpose; a tool that returns names would move it back in.",
-  "roster import": "writes enrollments, and reads a file full of real names.",
+  "roster import / roster sync":
+    "write enrollments and the private roster, and read real names — from a file, or from Canvas with a token this server does not hold.",
   "extract-evidence / roll-up":
     "deterministic and safe to run, but they write records into courses/. Run them from the CLI after approving.",
   "score-items": "rewrites draft files in place.",

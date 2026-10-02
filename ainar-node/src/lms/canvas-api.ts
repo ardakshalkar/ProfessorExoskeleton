@@ -356,6 +356,21 @@ export class CanvasClient {
     });
   }
 
+  /**
+   * The class list: students who are enrolled or still only invited.
+   *
+   * `students()` reads `active` alone, which is right for a grade join and wrong
+   * for a roster — a student added this week who has not accepted the course
+   * invitation is `invited`, and leaving them out would read as "not in Canvas".
+   */
+  classList(courseId: string): Promise<Record<string, any>[]> {
+    return this.getAll(`/courses/${courseId}/users`, {
+      "enrollment_type[]": "student",
+      "enrollment_state[]": ["active", "invited"],
+      "include[]": "email",
+    });
+  }
+
   submissions(courseId: string, assignmentId: string): Promise<Record<string, any>[]> {
     return this.getAll(`/courses/${courseId}/assignments/${assignmentId}/submissions`);
   }

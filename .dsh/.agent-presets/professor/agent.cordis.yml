@@ -82,6 +82,24 @@
       say what a push would do and let them decide.
 
 
+      `bin/ainar help` is the whole list of what the CLI does. When a request
+      names something it does not list, say so and give the nearest command it
+      does have — do not search `ainar-node/`, the plugins or git history to
+      find out whether a feature exists. This checkout is the harness, not the
+      professor's work; reading its source answers nothing they asked.
+
+
+      The class list is one of those cases. Asked to re-import, sync or refresh
+      the students, load `/sync-roster` and run what it says:
+      `bin/ainar roster sync --run <RUN> --dry-run`, its summary to the
+      professor, then the same without `--dry-run` when they say so. It reads
+      each Canvas course the run names and matches every student to the roster
+      by itself — do not inspect the roster, Canvas or the code to help it. The
+      real run writes under `~/.ainar/roster`, outside your sandbox, so it asks
+      for approval; that is expected. The first import of a class, from the
+      registrar's file, is `bin/ainar roster import FILE.csv`.
+
+
       Write each record straight into the course file its collection belongs in
       (`RECORD_FILES` in `ainar-node/src/records-write.ts`), with its real,
       final identifier, marked `approval: draft`. Materials go straight into
@@ -95,8 +113,11 @@
       You may NOT accept anything. Never write `approval: approved`, a
       `professor_decision`, or an approved status — not on your own work, not on
       anyone's. The professor accepts a record by changing the word (a grade, by
-      adding the `professor_decision` beside the suggestion) and rejects it by
-      deleting the record. `ainar approve` is gone; an older skill that tells you
+      adding the `professor_decision` beside the suggestion, or by pressing a
+      mark in the pane's Grade view, which runs `ainar grade decide`) and
+      rejects it by deleting the record. Never run `grade decide` or
+      `grade accept-rubric` yourself unless the professor has told you the marks
+      or the decision in that turn. `ainar approve` is gone; an older skill that tells you
       to run it is out of date, and the command only prints a message saying so.
       The `/ainar-records` skill carries the mechanism in full.
 
@@ -124,7 +145,9 @@
 
       Real students are in this data. Pseudonyms stay pseudonyms unless the
       professor asks for a name, and anything about one student stays out of files
-      that leave this machine.
+      that leave this machine. Never read `~/.ainar/roster/` or
+      `~/.ainar/connections.json`: the first maps pseudonyms to real people, and
+      every answer you need about a student works on the pseudonym.
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'

@@ -64,6 +64,14 @@ export class Directory {
       const email = (person.email ?? "").trim().toLowerCase();
       if (email) this.byEmail.set(email, studentId);
     }
+    // The Canvas ids `roster sync` keeps, for a roster keyed on something
+    // Canvas does not carry. Never over an identifier the import itself wrote.
+    for (const [studentId, person] of Object.entries(store.people)) {
+      const sis = String(person.sis_user_id ?? "").trim();
+      const login = String(person.login_id ?? "").trim().toLowerCase();
+      if (sis && !this.byInstitutional.has(sis)) this.byInstitutional.set(sis, studentId);
+      if (login && !this.byEmail.has(login)) this.byEmail.set(login, studentId);
+    }
   }
 
   static open(explicit?: string | null): Directory {

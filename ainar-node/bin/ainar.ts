@@ -23,8 +23,10 @@
  * live `lms` targets take `--confirm` instead, because a dry run of a grade post
  * is a plan and this file already prints one.
  *
- * `lms` is the only command that reaches a third party, and the whole of it lives
- * in `src/lms/` — this file parses its arguments and nothing else.
+ * `lms` is the only command that reaches a third party with a record, and the
+ * whole of it lives in `src/lms/` — this file parses its arguments and nothing
+ * else. `scans read` sends page images to a vision model and brings back only a
+ * draft transcript, kept in the private folder; it lives in `src/scan-read.ts`.
  */
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -53,6 +55,15 @@ import { renderHtml } from "../src/dashboard.ts";
 import { TARGETS } from "../src/lms/index.ts";
 import { MATCH_KEYS } from "../src/lms/base.ts";
 import { runLms } from "../src/lms/command.ts";
+import { CanvasClient, loadCanvasConfig } from "../src/lms/canvas-api.ts";
+import {
+  matchSections,
+  parseLinks,
+  readSections,
+  recordCanvasIds,
+  syncRows,
+} from "../src/lms/roster-sync.ts";
+import type { ImportResult } from "../src/roster.ts";
 import { runConnections } from "../src/connections/command.ts";
 import { outlinePayload } from "../src/outline.ts";
 import { loadStructure, loadStyle } from "../src/templates.ts";
@@ -137,6 +148,21 @@ import {
   writePlan,
   type Shape,
 } from "../src/scans.ts";
+import { DEFAULT_MODEL, deepseekKey, deepseekReader, EFFORTS, readScans, readTargets, type Effort } from "../src/scan-read.ts";
+import {
+  acceptRubric,
+  checkGroups,
+  chooseProposal,
+  decideGrades,
+  gradeBoard,
+  moveAnswer,
+  moveGroup,
+  pointsOnlyRubric,
+  readGroups,
+  writeGroups,
+  type DecidedVia,
+} from "../src/grade-board.ts";
+import { fileURLToPath } from "node:url";
 import { importPaper, paperFiles, parseKey, parsePaper, readText, type Paper } from "../src/paper-import.ts";
 import {
   // `TARGETS` is taken by the gradebook targets above, and these are a
@@ -194,6 +220,7 @@ const BOOLEAN_FLAGS = new Set([
   "json",
   "verbose",
   "keep-absent",
+  "drop-absent",
   "partial",
   "rescore",
   "ddl",
@@ -321,6 +348,10 @@ const HELP = `ainar — the AINAR course model CLI
   roster import FILE.csv [--run RUN] [--id-column C] [--name-column C]
                          [--email-column C] [--group-column C]
                          [--delimiter D] [--group G] [--keep-absent] [--dry-run]
+  roster sync [--run RUN] [--group G] [--link CANVAS_ID=STUDENT-X ...]
+              [--drop-absent] [--dry-run] [--connection NAME]
+                                           the class list from each Canvas course
+                                           the run names; adds who is new
   roster show [--run RUN] [--out PATH]     PRIVATE: names, to a terminal
   roster whois STUDENT-XXXXXX              PRIVATE: one identity
   roster groups [--run RUN]                the subgroups, and who is in them
@@ -338,11 +369,39 @@ const HELP = `ainar — the AINAR course model CLI
                                            list _inbox/*.pdf, propose the split
   scans apply RUN --assessment A [--replace] [--dry-run]
                                            split, match to the roster, record
+  scans read RUN --assessment A [--effort off|low|high|max] [--student S]
+             [--force] [--all-pages] [--model M] [--concurrency N] [--dry-run]
+                                           fill unread transcripts with a vision
+                                           model (DeepSeek, effort low) — the one
+                                           scans step that leaves the machine
   scans record RUN --assessment A [--dry-run]
                                            complete transcripts -> item responses
   scans answers RUN --assessment A [--item ITEM] [--json]
                                            every recorded answer per question,
                                            identical ones grouped and counted
+
+  Grading a written exam, question by question (the pane's Grade view). The
+  grouping of answers is groups.yaml beside the scans; marks go to the course:
+
+  grade status RUN --assessment A [--json] the rubric, the groups, and how many
+                                           answers per question are decided
+  grade decide RUN --assessment A --decisions '[{"student":"STUDENT-…","item":"ITEM-…","score":2}, …]'
+               [--via one|group|all] [--by USER-…]
+                                           the professor's marks: writes
+                                           professor_decision, keeps the one it
+                                           replaces in extensions.history
+  grade move RUN --assessment A --item ITEM --group N (--score S | --unscored)
+                                           put a group of answers at a level
+  grade move RUN --assessment A --item ITEM --student S (--to N | --ungroup)
+                                           move one answer to another group
+  grade choose RUN --assessment A --proposal ID [--item ITEM[,ITEM]] [--keep-marks] [--accept]
+                                           take one of the proposed rubrics, for
+                                           one question or all; a draft unless
+                                           --accept; --keep-marks to revise one
+                                           that already has marks
+  grade accept-rubric RUN --assessment A   the rubric's approval: draft -> approved
+  grade points-only RUN --assessment A     no written rubric: one criterion per
+                                           question, worth its marks
 
   import-paper RUN --assessment A --paper PAPER.md [--paper PAPER-B.md]
                [--key KEY.md] [--title T] [--type exam] [--dry-run]
@@ -393,6 +452,12 @@ const HELP = `ainar — the AINAR course model CLI
   \`status: dropped\`, and every count in the model reads only \`active\`.
   --group G restricts that to one subgroup, for a class whose exports arrive
   one subgroup at a time; --keep-absent turns the marking off entirely.
+  \`roster sync\` is the same import with Canvas as the export. Each Canvas
+  student is matched by a link an earlier sync kept, an id the roster holds,
+  or their name (the scans matcher); a close spelling is listed to check, an
+  ambiguous one is left out until --link settles it, and the rest are new.
+  Known students keep the roster's names, and nobody is marked dropped unless
+  --drop-absent says so.
 
   --group narrows gradebook, class-progress and inbox to one subgroup, and
   the term plan to the meetings that subgroup attends — an activity with no
@@ -1813,6 +1878,163 @@ try {
       break;
     }
 
+    case "grade": {
+      // Grading a written exam question by question: see src/grade-board.ts.
+      // `decide` is the one command that writes a professor_decision, and it
+      // runs only because the professor said so — typed here, or pressed in the
+      // pane, which spawns it. An earlier decision is kept, never overwritten.
+      const sub = rest[0] ?? "";
+      const runId = rest[1];
+      const assessmentId = flag("assessment");
+      const SUBS = ["status", "decide", "move", "choose", "accept-rubric", "points-only"];
+      if (!SUBS.includes(sub) || !runId || !assessmentId) {
+        console.error(
+          "usage: grade status RUN --assessment A [--json]\n" +
+            "       grade decide RUN --assessment A --decisions '[{\"student\":\"STUDENT-…\",\"item\":\"ITEM-…\",\"score\":2}]' [--via one|group|all] [--by USER-…]\n" +
+            "       grade move RUN --assessment A --item ITEM (--group N (--score S | --unscored) | --student S (--to N | --ungroup))\n" +
+            "       grade choose RUN --assessment A --proposal ID [--item ITEM]\n" +
+            "       grade {accept-rubric|points-only} RUN --assessment A",
+        );
+        process.exit(2);
+      }
+      const bundle = forRun(runId);
+      const run = runById(bundle).get(runId) as { timezone?: string; instructors?: string[] };
+      const base = submissionsDir(flag("submissions-dir"));
+      refuseInsideRepo(base, root);
+      const place = scanPlace(base, runId, assessmentId);
+      const board = gradeBoard({ bundle, runId, assessmentId, place });
+      const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
+
+      if (sub === "status") {
+        if (args.includes("--json")) {
+          out(board);
+          break;
+        }
+        out(`${assessmentId} — ${board.assessment.title}`);
+        out(`  rubric   ${board.rubric === "accepted" ? "accepted" : board.rubric === "draft" ? "proposed, not accepted" : "none"}`);
+        out(`  groups   ${board.grouped ? place.base + "/groups.yaml" : "none proposed"}`);
+        for (const problem of board.group_problems) out(`  PROBLEM  ${problem}`);
+        out(`  papers   ${board.totals.papers}`);
+        for (const item of board.items) {
+          const c = item.counts;
+          out(
+            `\n  Q${item.number ?? "?"} ${item.item_id}  ${item.maximum_score} mark(s)  ` +
+              `${item.criterion ? item.criterion.criterion_id : "no criterion"}  ` +
+              `${c.decided} of ${c.answers} decided${c.changed ? `, ${c.changed} changed from the suggestion` : ""}` +
+              `${c.blank ? `, ${c.blank} blank` : ""}${c.unread ? `, ${c.unread} not read yet` : ""}` +
+              `${c.ungrouped ? `, ${c.ungrouped} in no group` : ""}`,
+          );
+          for (const group of item.groups) {
+            out(`      ${group.score ?? "?"}  ${String(group.count).padStart(3)}×  ${group.label}${group.unsure ? "  (unsure)" : ""}`);
+          }
+          for (const proposal of item.proposals) {
+            const spread = proposal.levels.map((level) => `${level.score}:${proposal.spread.at[String(level.score)] ?? 0}`).join(" ");
+            out(
+              `    proposal ${proposal.id}${item.chosen === proposal.id ? " (in use)" : ""}  ${proposal.title}  ` +
+                `mean ${proposal.spread.mean ?? "—"}  [${spread}]`,
+            );
+          }
+        }
+        break;
+      }
+
+      if (sub === "decide") {
+        const given = flag("decisions");
+        if (!given) throw new Error("--decisions is a JSON list of {student, item, score, comment?}");
+        const decisions = JSON.parse(given);
+        if (!Array.isArray(decisions) || !decisions.length) throw new Error("--decisions is a JSON list of {student, item, score, comment?}");
+        const via = (flag("via") ?? "one") as DecidedVia;
+        if (!["one", "group", "all"].includes(via)) throw new Error(`--via is one, group or all, not ${via}`);
+        const result = decideGrades({
+          board,
+          bundle,
+          decisions,
+          by: flag("by") ?? run?.instructors?.[0] ?? "",
+          at: decidedAt(run?.timezone),
+          via,
+        });
+        if (result.evaluations.length) {
+          for (const path of writeRecords(courseDir, { evaluations: result.evaluations as never[] })) {
+            out(`wrote ${relative(root, path)}`);
+          }
+        }
+        out(
+          `${result.written} decided` +
+            (result.replaced ? ` (${result.replaced} replacing an earlier decision, kept in its history)` : "") +
+            (result.unchanged ? `, ${result.unchanged} already decided the same way` : ""),
+        );
+        break;
+      }
+
+      if (sub === "move") {
+        const groups = readGroups(place);
+        if (!groups) throw new Error(`no groups.yaml in ${place.base} — the answers have not been grouped yet`);
+        const itemId = flag("item");
+        if (!itemId) throw new Error("--item names the question");
+        if (flag("student")) {
+          const to = args.includes("--ungroup") ? null : Number(flag("to")) - 1;
+          if (to !== null && !Number.isInteger(to)) throw new Error("--to takes a group number (1, 2, …), or pass --ungroup");
+          moveAnswer(groups, itemId, flag("student")!, to);
+          out(`  ${flag("student")} → ${to === null ? "no group" : `group ${to + 1}`}`);
+        } else {
+          const group = Number(flag("group")) - 1;
+          if (!Number.isInteger(group) || group < 0) throw new Error("--group takes a group number (1, 2, …)");
+          const score = args.includes("--unscored") ? null : Number(flag("score"));
+          if (score !== null && !Number.isFinite(score)) throw new Error("--score takes a number, or pass --unscored");
+          moveGroup(groups, itemId, group, score);
+          out(`  ${itemId} group ${group + 1} → ${score ?? "unscored"}`);
+        }
+        const items = (bundle.items as any[]).filter((item) => item.assessment_id === assessmentId);
+        const problems = checkGroups(groups, items);
+        if (problems.length) throw new Error(`not written: ${problems.join("; ")}`);
+        writeGroups(place, groups);
+        out(`wrote ${place.base}/groups.yaml`);
+        break;
+      }
+
+      if (sub === "choose") {
+        // One of the proposed rubrics, for one question or all of them. The
+        // rubric goes to draft; Accept rubric is still the professor's press.
+        const groups = readGroups(place);
+        if (!groups?.proposals?.length) throw new Error(`no rubric proposals in ${place.base}/groups.yaml — ask the assistant for them`);
+        const items = (bundle.items as any[]).filter((item) => item.assessment_id === assessmentId);
+        const problems = checkGroups(groups, items);
+        if (problems.length) throw new Error(`groups.yaml has problems: ${problems.join("; ")}`);
+        const proposalId = flag("proposal");
+        if (!proposalId) throw new Error("--proposal names the proposal to use");
+        const only = flag("item") ? flag("item")!.split(",").map((id) => id.trim()).filter(Boolean) : undefined;
+        const result = chooseProposal({
+          root, bundle, board, groups, proposalId, itemIds: only,
+          saveGroups: (saved) => writeGroups(place, saved),
+          keepMarks: args.includes("--keep-marks"),
+          accept: args.includes("--accept"),
+        });
+        for (const path of result.written) out(`wrote ${relative(root, path)}`);
+        out(
+          `${assessmentId}: ${result.items.join(", ")} from proposal ${proposalId}` +
+            (args.includes("--accept") ? " — accepted" : " — the rubric is a draft until you accept it"),
+        );
+        break;
+      }
+
+      if (sub === "accept-rubric") {
+        out(
+          acceptRubric({ root, bundle, board })
+            ? `${assessmentId}: rubric accepted (approval: approved)`
+            : `${assessmentId}: the rubric was already accepted`,
+        );
+        break;
+      }
+
+      if (sub === "points-only") {
+        const items = (bundle.items as any[]).filter((item) => item.assessment_id === assessmentId);
+        for (const path of pointsOnlyRubric({ root, bundle, board, items })) out(`wrote ${relative(root, path)}`);
+        out(`${assessmentId}: one criterion per question, worth its marks — mark each answer by points`);
+        break;
+      }
+      break;
+    }
+
     case "score-items": {
       // Ported from `cmd_score_items` in `ainar/cli.py`.
       //
@@ -1981,13 +2203,14 @@ try {
       let sub = rest[0] ?? "";
       const runId = rest[1];
       const assessmentId = flag("assessment");
-      const SUBS = ["identify", "file", "status", "plan", "apply", "assign", "record", "answers"];
+      const SUBS = ["identify", "file", "status", "plan", "apply", "assign", "read", "record", "answers"];
       if (!SUBS.includes(sub) || !runId || (sub !== "identify" && !assessmentId)) {
         console.error(
           "usage: scans identify RUN [--title TEXT] [--date YYYY-MM-DD]\n" +
             "       scans file RUN FILE.pdf --assessment ASSESSMENT-ID\n" +
             "       scans assign RUN --assessment ASSESSMENT-ID --pages 13-14 [--file F.pdf] (--student STUDENT-ID | --skip WHY | --reject STUDENT-ID)\n" +
             "       scans assign RUN --assessment ASSESSMENT-ID --assignments '[{\"pages\":\"13-14\",\"student\":\"STUDENT-…\"}, …]'\n" +
+            "       scans read RUN --assessment ASSESSMENT-ID [--effort off|low|high|max] [--student STUDENT-ID] [--force] [--dry-run]\n" +
             "       scans {status|plan|apply|record|answers} RUN --assessment ASSESSMENT-ID",
         );
         process.exit(2);
@@ -2088,7 +2311,7 @@ try {
         break;
       }
 
-      if (!items.length && (sub === "plan" || sub === "apply" || sub === "assign")) {
+      if (!items.length && (sub === "plan" || sub === "apply" || sub === "assign" || sub === "read")) {
         // Every transcript is built from the questions; with none, each paper
         // would be placed with an empty transcript and nothing would say so.
         throw new Error(
@@ -2114,6 +2337,66 @@ try {
           const shown = status.missing.slice(0, 8).join(", ");
           out(`  no scan yet     ${status.missing.length}: ${shown}${status.missing.length > 8 ? ", …" : ""}`);
         }
+        break;
+      }
+
+      if (sub === "read") {
+        // The one scans step that calls a model: see src/scan-read.ts. Page
+        // images and readings stay in the private folder; the model provider is
+        // the only thing outside this machine that sees a page.
+        const effort = (flag("effort") ?? "low") as Effort;
+        if (!EFFORTS.includes(effort)) throw new Error(`--effort is one of ${EFFORTS.join(", ")}, not ${effort}`);
+        const model = flag("model") ?? DEFAULT_MODEL;
+        const concurrency = Number(flag("concurrency") ?? 6);
+        if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error(`--concurrency takes a whole number, not ${flag("concurrency")}`);
+        const only = flag("student");
+        const options = { students: only ? only.split(",").map((id) => id.trim()) : undefined, force: args.includes("--force") };
+        if (dryRun) {
+          const { targets, skipped } = readTargets(place, options);
+          for (const student of targets) out(`  would read  ${student}`);
+          for (const entry of skipped) out(`  left alone  ${entry.student}: ${entry.why}`);
+          out(`\n--dry-run: ${targets.length} paper(s) would be sent to ${model} at effort ${effort}; nothing sent or written.`);
+          break;
+        }
+        const apiKey = deepseekKey(fileURLToPath(new URL("../../", import.meta.url)));
+        if (!apiKey) throw new Error("no DeepSeek key: set DEEPSEEK_API_KEY, or add it to the harness (.dsh/.credentials.yaml)");
+        out(`reading ${assessmentId} papers with ${model}, effort ${effort}`);
+        const { results, skipped } = await readScans({
+          place,
+          title: assessment.title,
+          courseId: (bundle.course as { course_id: string }).course_id,
+          items,
+          reader: deepseekReader({ apiKey, model, effort }),
+          model,
+          effort,
+          ...options,
+          allPages: args.includes("--all-pages"),
+          concurrency,
+          now,
+          onPaper: (entry) =>
+            out(
+              `  ${entry.status.padEnd(11)} ${entry.student}` +
+                (entry.ms ? `  ${(entry.ms / 1000).toFixed(0)}s` : "") +
+                (entry.usage ? `  ${entry.usage.completion_tokens ?? 0} out` : "") +
+                (entry.blank_pages ? `  ${entry.blank_pages} blank page(s) not sent` : "") +
+                (entry.name_confidence && entry.name_confidence !== "high" ? `  name read: ${entry.name_confidence}` : "") +
+                (entry.problems.length ? `  — ${entry.problems.join("; ")}` : ""),
+            ),
+        });
+        if (skipped.length) out(`  left alone  ${skipped.length} paper(s) already read or not placed — --dry-run lists them`);
+        const sent = results.filter((entry) => entry.usage);
+        const tokens = (key: "prompt_tokens" | "completion_tokens") => sent.reduce((sum, entry) => sum + (entry.usage?.[key] ?? 0), 0);
+        const usd = sent.reduce((sum, entry) => sum + (entry.usd ?? 0), 0);
+        out(
+          `\n${results.filter((entry) => entry.status === "read").length} read, ` +
+            `${results.filter((entry) => entry.status === "partly read").length} partly, ` +
+            `${results.filter((entry) => entry.status === "unparsed" || entry.status === "failed").length} not read. ` +
+            `${tokens("prompt_tokens")} tokens in, ${tokens("completion_tokens")} out, about $${usd.toFixed(3)} at list price.`,
+        );
+        out(
+          "Each transcript says read_by; the reply is kept beside it in reading.json. " +
+            `Next: \`scans record ${runId} --assessment ${assessmentId}\` — a misread is the professor's to catch, so every answer is recorded as a draft.`,
+        );
         break;
       }
 
@@ -2585,39 +2868,20 @@ try {
         break;
       }
 
-      if (sub === "import") {
-        const file = rest[1];
-        if (!file) {
-          throw new Error(
-            "usage: roster import FILE.csv [--run RUN] [--group G] [--keep-absent] [--dry-run]",
-          );
-        }
-        const courseVersionId = flag("run") ?? flag("course-version");
-        const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
-        const resolvedRun = courseVersionId ?? soleRun(bundle);
-        const courseId = (bundle.course as { course_id: string }).course_id;
-
-        const salt = loadSalt(directory);
-        const store = RosterStore.load(directory);
-        const rows = readRows(resolve(file), flag("delimiter"));
-        const result = buildRoster(rows, {
-          courseVersionId: resolvedRun,
-          store,
-          salt,
-          idColumn: flag("id-column"),
-          nameColumn: flag("name-column"),
-          emailColumn: flag("email-column"),
-          groupColumn: flag("group-column"),
-          today: today(),
-        });
-
-        const chosen = Object.entries(result.columns)
-          .filter(([, value]) => value)
-          .map(([key, value]) => `${key}=${value}`)
-          .join(", ");
-        out(`Read ${rows.length} row(s) from ${file}`);
-        out(`  columns: ${chosen}`);
-        out(`  ${result.added.length} new, ${result.known.length} already known`);
+      /**
+       * Reconcile one run's imported enrollments with the file, report, write.
+       *
+       * Shared by `import` and `sync`, which differ only in where the rows
+       * came from and in whether absence means a drop.
+       */
+      const writeRoster = (
+        bundle: ReturnType<typeof forRun>,
+        resolvedRun: string,
+        store: RosterStore,
+        result: ImportResult,
+        { groups, markDropped }: { groups: string[]; markDropped: boolean },
+      ): void => {
+        out(`  ${result.added.length} new to the roster, ${result.known.length} already known`);
         for (const note of result.skipped) out(`  skipped ${note}`);
         if (!result.enrollments.length) {
           console.error("\nnothing to write");
@@ -2625,6 +2889,7 @@ try {
         }
 
         // The course directory, where the loader reads enrollments.
+        const courseId = (bundle.course as { course_id: string }).course_id;
         const courseDir = join(root, "courses", courseId);
         const path = join(courseDir, "enrollments.yaml");
 
@@ -2638,11 +2903,7 @@ try {
         const mine = onDisk.filter((entry) => entry.course_version_id === resolvedRun);
         const others = onDisk.filter((entry) => entry.course_version_id !== resolvedRun);
 
-        const groups = flagList("group");
-        const merged = reconcileEnrollments(mine, result.enrollments, {
-          groups,
-          markDropped: !args.includes("--keep-absent"),
-        });
+        const merged = reconcileEnrollments(mine, result.enrollments, { groups, markDropped });
 
         const say = (label: string, ids: string[]): void => {
           if (!ids.length) return;
@@ -2668,7 +2929,7 @@ try {
           if (merged.enrollments.length > 5) {
             out(`  … and ${merged.enrollments.length - 5} more`);
           }
-          break;
+          return;
         }
 
         const written = [...others, ...merged.enrollments];
@@ -2692,6 +2953,123 @@ try {
           for (const issue of issues.errors) console.error(`    ${describe(issue)}`);
           process.exit(1);
         }
+      };
+
+      if (sub === "import") {
+        const file = rest[1];
+        if (!file) {
+          throw new Error(
+            "usage: roster import FILE.csv [--run RUN] [--group G] [--keep-absent] [--dry-run]",
+          );
+        }
+        const courseVersionId = flag("run") ?? flag("course-version");
+        const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
+        const resolvedRun = courseVersionId ?? soleRun(bundle);
+
+        const salt = loadSalt(directory);
+        const store = RosterStore.load(directory);
+        const rows = readRows(resolve(file), flag("delimiter"));
+        const result = buildRoster(rows, {
+          courseVersionId: resolvedRun,
+          store,
+          salt,
+          idColumn: flag("id-column"),
+          nameColumn: flag("name-column"),
+          emailColumn: flag("email-column"),
+          groupColumn: flag("group-column"),
+          today: today(),
+        });
+
+        const chosen = Object.entries(result.columns)
+          .filter(([, value]) => value)
+          .map(([key, value]) => `${key}=${value}`)
+          .join(", ");
+        out(`Read ${rows.length} row(s) from ${file}`);
+        out(`  columns: ${chosen}`);
+        writeRoster(bundle, resolvedRun, store, result, {
+          groups: flagList("group"),
+          markDropped: !args.includes("--keep-absent"),
+        });
+        break;
+      }
+
+      /*
+       * The same import, with Canvas as the export.
+       *
+       * Each Canvas course the run names is read, every student is placed — by
+       * a recorded link, an identifier the roster holds, or their name — and
+       * the rows go through `buildRoster` and `reconcileEnrollments` exactly as
+       * a file's would. `roster-sync.ts` has the matching and why.
+       *
+       * Absence is NOT marked by default, unlike `import`: a Canvas course
+       * routinely lacks someone the registrar lists — not yet added, or added
+       * to the wrong shell — and a sync is run often, so `--drop-absent` is the
+       * deliberate act.
+       */
+      if (sub === "sync") {
+        const courseVersionId = flag("run") ?? flag("course-version");
+        const bundle = courseVersionId ? forRun(courseVersionId) : onlyCourse();
+        const resolvedRun = courseVersionId ?? soleRun(bundle);
+        const run = runById(bundle).get(resolvedRun);
+        if (!run) throw new Error(`no course run '${resolvedRun}' in this workspace`);
+        const links = parseLinks(flagList("link"));
+
+        const config = loadCanvasConfig(directory, {
+          baseUrl: flag("canvas-url"),
+          connection: flag("connection"),
+          connectionsPath: flag("connections"),
+        });
+        const client = new CanvasClient(config, new FetchTransport());
+        const sections = await readSections(client, run, flag("group") ?? null);
+
+        const salt = loadSalt(directory);
+        const store = RosterStore.load(directory);
+        const enrolled = new Set(
+          enrollmentsOf(bundle, resolvedRun)
+            .filter((entry) => entry.status === "active" || entry.status === "dropped")
+            .map((entry) => entry.student_id),
+        );
+        const matches = matchSections(sections, { store, salt, enrolled, links });
+
+        out(`Canvas ${config.base_url} (from ${config.source})`);
+        for (const section of sections) {
+          out(`  ${(section.group ?? resolvedRun).padEnd(16)} course ${section.courseId.padEnd(8)} ${String(section.users.length).padStart(3)} student(s)`);
+        }
+        const count = (how: string) => matches.filter((match) => match.how === how).length;
+        out(
+          `  matched ${count("linked")} by recorded link, ${count("id")} by id, ` +
+            `${count("name")} by name, ${count("close")} by a close spelling; ${count("new")} new`,
+        );
+        // The two lists a professor acts on. Pseudonym and Canvas id only: the
+        // Canvas id is what `--link` takes and what Canvas's People page shows.
+        for (const match of matches.filter((entry) => entry.how === "close")) {
+          out(`  check   Canvas user ${match.canvasId} → ${match.student}  (close spelling, ${match.group ?? ""})`);
+        }
+        const unplaced = matches.filter((entry) => !entry.student);
+        for (const match of unplaced) {
+          out(`  left out Canvas user ${match.canvasId}${match.group ? ` in ${match.group}` : ""}: ${match.problem}`);
+        }
+        if (unplaced.length) {
+          out("  settle one with --link CANVAS_USER_ID=STUDENT-XXXXXX (`roster whois` says who a pseudonym is)");
+        }
+
+        const result = buildRoster(syncRows(matches), {
+          courseVersionId: resolvedRun,
+          store,
+          salt,
+          idColumn: "id",
+          nameColumn: "name",
+          emailColumn: "email",
+          groupColumn: "group",
+          today: today(),
+        });
+        // After `buildRoster`, which is what creates the newcomers' entries.
+        recordCanvasIds(matches, store);
+        writeRoster(bundle, resolvedRun, store, result, {
+          // Only the sections read can speak for who is absent from them.
+          groups: sections.map((section) => section.group).filter((label): label is string => !!label),
+          markDropped: args.includes("--drop-absent"),
+        });
         break;
       }
 

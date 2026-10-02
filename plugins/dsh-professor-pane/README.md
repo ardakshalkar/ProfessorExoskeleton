@@ -245,6 +245,68 @@ is never suggested for it again, so it waits in Held for the professor to name.
 On Pseudonyms the cards keep their buttons but drop the written names and the
 crops, because the crop *is* the handwritten name, and the review is not offered.
 
+### Grading, question by question
+
+**Grade the answers** appears in the Scans tab once one answer is recorded,
+and opens over the conversation (`GradeBoard` in `lib/client.js`, the payload
+in `lib/grade.js`, which is `ainar grade status --json` with names added).
+Questions are tabs across the top, each with how many of its answers are
+decided. What the body draws depends on where the rubric stands:
+
+* **No rubric** — the question, its marking guidance, and every answer as
+  read. Ask the assistant to propose rubrics: it groups the answers into
+  `groups.yaml` beside the scans and proposes two or three rubrics over those
+  groups (`/import-assessment` §7) — one from the marking scheme the exam
+  already carries, one from what the class wrote. Or ask for just one, or
+  **Grade by points only**, which writes one criterion per question worth its
+  marks, accepted.
+* **Rubrics proposed** — per question, the proposals side by side: each one's
+  levels, how many answers it puts at each, and the class mean it would give.
+  **Use for Q1** writes that proposal as Q1's criterion (`grade choose`);
+  **Use for every question** does them all. Questions can come from different
+  proposals. The rubric is a draft until accepted, and a question that already
+  has marks decided cannot have its rubric swapped.
+* **Rubric proposed** — the levels top down, each with the groups of answers
+  the assistant placed there and their counts; an unsure group is outlined.
+  Open a group to read its answers; move it with its select (`grade move`).
+  **Accept rubric** turns the assessment's `approval: draft` into `approved`.
+* **Rubric accepted** — the question opens with its picture: per mark, how
+  many answers sit there (decided in green, still only suggested in grey) and
+  the class mean. Each group is headed by the mark it is at. Each card carries
+  its mark as a badge — green with a tick once decided, grey "suggested"
+  before — then the answer as read, the reading's confidence and note, and a
+  row of marks (the levels, or 0…max in halves for a short question). No
+  dashes: unsure is a word, not an outline.
+
+  **Rubric and rethink** opens the rubric beside the page while grading. Move
+  a group to another mark and every suggestion in it, the picture and the mean
+  recalculate. Type what should change and **Ask the assistant to rethink**:
+  it adds a revision as a new proposal in `groups.yaml`, which the view polls
+  (`/api/grade/stamp`) and shows as soon as it is written — with what it would
+  move, how many suggestions change and how many decided marks it would
+  disagree with. **Use this** applies and accepts it in one press
+  (`grade choose --keep-marks --accept`). Decided marks stay; each one the
+  rubric now suggests differently says so, with *Give N*, and the picture
+  offers **Re-mark all N at the rubric's suggestion** — every old mark kept
+  in its history. On the right, the page of the answer in focus, large
+  enough to read the handwriting; press it to enlarge. Then blanks, then
+  papers not read yet — which are never suggested a zero. `j`/`k` move, a
+  digit gives that mark, Enter takes the suggestion on an undecided answer
+  (on a decided one it only moves on), and each moves to the next undecided
+  answer. Each group has **Accept N**; the foot has **Accept all** for the
+  question and for every question.
+
+Every mark is `ainar grade decide`, spawned like `scans assign`. It writes
+`professor_decision` with `decided_by` (the run's first instructor) and
+`decided_at`, sets `approved` or `overridden` against the suggestion, keeps
+the group's suggestion as `ai_suggestion` so agreement can be measured later,
+and records `extensions.decided_via` — `one`, `group` or `all`. A decision it
+changes is moved onto `extensions.history`, never overwritten. Accept all is
+allowed (2026-10-02); the history is what keeps it honest.
+
+On Pseudonyms the first page is drawn from below the name line — the same two
+inches the name crop shows — and the cards carry pseudonyms.
+
 ## Integrations
 
 The tab exists because the facts are scattered. A professor asking "will a push
@@ -511,6 +573,13 @@ lines, not before.
 | `GET /professor-pane/api/scans/crop?run=&assessment=&file=&pages=` | the top of a paper's first page — the name line — as PNG, drawn by `pdftoppm` and kept in the private `_inbox/_crops/` |
 | `POST /professor-pane/api/scans/assign?run=&assessment=` | say who papers are; body is one `{pages, file, student \| reject \| skip}`, or `{papers: [...]}` of them from the review. Spawns `ainar scans assign --assignments` |
 | `POST /professor-pane/api/scans/apply?run=&assessment=` | spawn `ainar scans apply` again, after a hand edit of the plan |
+| `GET /professor-pane/api/grade?run=&assessment=&names=` | the Grade view: per written question its criterion and levels, its groups, and every answer with its reading, suggestion and decision. Names only with `names=1` |
+| `GET /professor-pane/api/grade/page?run=&assessment=&student=&page=&names=` | one page of a student's scan as PNG, kept in their private `_pages/`; without `names=1` page 1 starts below the name line |
+| `POST /professor-pane/api/grade/decide?run=&assessment=` | the professor's marks; body is `{decisions: [{student, item, score, comment?}], via: one\|group\|all}`. Spawns `ainar grade decide` |
+| `POST /professor-pane/api/grade/move?run=&assessment=` | a group to a level, `{item, group, score}`, or one answer to a group, `{item, student, to}`. Spawns `ainar grade move` |
+| `POST /professor-pane/api/grade/choose?run=&assessment=` | one of the proposed rubrics for one question or all, `{proposal, item?}`. Spawns `ainar grade choose` |
+| `POST /professor-pane/api/grade/accept-rubric?run=&assessment=` | the rubric accepted. Spawns `ainar grade accept-rubric` |
+| `POST /professor-pane/api/grade/points-only?run=&assessment=` | no written rubric: one criterion per question. Spawns `ainar grade points-only` |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
 | `GET /professor-pane/view/course?run=&dark=&drafts=&student=&mode=` | course mode, drawn here: `mode=planning` (structure), `mode=teaching` (this week, with class figures), otherwise the three-column term table; `student=1` draws the record alone, no hole, and is ignored for teaching |
@@ -533,12 +602,20 @@ and four routes are not:
 * `POST /api/canvas/catalogue` writes nothing here, but is the one route that
   reaches off this machine.
 
-**None of them is an approval path**, which is the property that matters.
-Accepting a record is the professor changing `approval: draft` in its file, or
-writing their `professor_decision` beside a grade's suggestion, and the pane
-has no route that does either — `/api/approve`, which once spawned
-`ainar approve`, was removed with that command on 2026-09-29 and answers 410. A
-preference is not a claim about a student — it is how the professor wants the
+The Scans and Grade writes (`/api/scans/assign|apply`, `/api/grade/…`) spawn
+the CLI and are described with their tabs above.
+
+**None of the four above is an approval path.** Accepting a record is the
+professor changing `approval: draft` in its file, or writing their
+`professor_decision` beside a grade's suggestion. `/api/approve`, which once
+spawned `ainar approve`, was removed with that command on 2026-09-29 and
+answers 410. **The Grade view is the deliberate exception (2026-10-02):** its
+marks and its Accept rubric are the professor deciding, so they write the
+decision — through `ainar grade`, which stamps who and when, records whether
+it was one answer, a group or Accept all, and keeps any decision it replaces.
+The assistant has no tool that calls them, and the professor preset tells it
+never to run `grade decide` or `grade accept-rubric` without the professor's
+word in that turn. A preference is not a claim about a student — it is how the professor wants the
 skills to behave. And a Canvas section id is a fact about the professor's own
 LMS that only they know: no skill drafts it and no agent can propose it, so it
 has no drafted half for anyone to accept, and refusing it would only mean the

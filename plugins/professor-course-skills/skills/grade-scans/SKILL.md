@@ -159,8 +159,26 @@ tell them which file and which pages, never the name.
 
 ## 4. Read the answers
 
-Fill `<STUDENT>/transcript.yaml` for every placed student. It already lists the
-questions of that student's variant, in order. For each:
+Let the CLI read them. It renders each placed `scan.pdf` at 200 dpi into
+overlapping bands, skips blank backs, sends each paper to DeepSeek's vision
+route once at reasoning effort `low`, and fills every transcript nobody has
+read yet — keeping the model's reply beside it in `reading.json`:
+
+```bash
+bin/ainar scans read CSS-4008-2026-FALL --assessment ASSESSMENT-MIDTERM --dry-run
+bin/ainar scans read CSS-4008-2026-FALL --assessment ASSESSMENT-MIDTERM
+```
+
+Do not read the pages yourself with `read_image` or a workflow of subagents:
+that costs more and is no better (measured on Quiz 1, 2026-10-02). The command
+prints each paper's status. A paper `partly read`, `unparsed` or `failed` keeps
+its unread entries, with a `note` saying why; read those few by hand, below, or
+re-run with `--student STUDENT-… --effort high`. Already-read transcripts are
+left alone unless `--force` is passed — never pass it over one the professor
+corrected.
+
+To fill a transcript by hand: it already lists the questions of that student's
+variant, in order. For each:
 
 - **Choice items:** `chosen: [b]` — the options marked. Two marked, or one
   crossed out and another circled: write what you see in `note`, put the final
@@ -195,9 +213,14 @@ bin/ainar score-items CSS-4008-2026-FALL
 scores the choice items against the key — never score them yourself. A written
 question with no rubric criterion yet — always the case for an imported exam —
 gets one proposed from the class's answers first: `/import-assessment` §7,
-`scans answers`, and the professor's reply. Then the
-written items, by `/grade-batch`: criterion by criterion, from the recorded
-`raw_response`, checked against the page itself when the transcript was `low`.
+`scans answers`, the answers grouped into `groups.yaml`, and the professor's
+reply. The professor reviews and grades in the pane — **Scans → Grade the
+answers**: the rubric with the groups under its levels, then every answer as a
+card beside its page, one question at a time. `bin/ainar grade status RUN
+--assessment A` says where each question stands. Where a group's score is not
+enough, the written items go to `/grade-batch`: criterion by criterion, from the
+recorded `raw_response`, checked against the page itself when the transcript was
+`low`.
 Cite the scan by reference, never by copying it:
 
 ```yaml
