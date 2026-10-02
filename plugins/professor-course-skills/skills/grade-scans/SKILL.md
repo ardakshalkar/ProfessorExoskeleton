@@ -116,7 +116,12 @@ For a large batch read the likely covers first, not every page.
 
 - **Who.** Prefer the student number: it resolves exactly. A name is matched
   against the enrolled students with case, punctuation and word order ignored,
-  and must match exactly one. If you cannot read either, leave both out and
+  then across scripts (Latin handwriting finds a Cyrillic roster name, and a
+  patronymic left off is fine), then by a close spelling when nobody else in
+  the run is near it — and must match exactly one. Write the name as you read
+  it, in the script it is written in; do not transliterate it yourself. A paper
+  placed on a close spelling gets `match: close` in the plan: those are the
+  ones the professor checks first. If you cannot read either, leave both out and
   write a `note` — `apply` will hold that paper and say why. **Never** guess a
   student, and never look names up in the roster yourself to "help" a match.
 - **Variant.** Read it off the cover. If the cover does not say, compare the
@@ -141,8 +146,10 @@ fact). A batch every page of which is placed moves to `_inbox/done/`.
 
 A paper that does not resolve — nobody matches, two people match, two papers
 resolve to one student, a student already has a different scan — stays in the
-plan with a `problem:` beside it. Fix what you can from the pages; the rest is
-the professor's: tell them which file and which pages, never the name.
+plan with a `problem:` beside it. A near miss names the nearest pseudonym; that
+is a lead for the professor to confirm with `ainar roster whois`, not one for
+you to write in. Fix what you can from the pages; the rest is the professor's:
+tell them which file and which pages, never the name.
 
 ## 4. Read the answers
 

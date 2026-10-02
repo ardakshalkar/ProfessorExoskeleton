@@ -102,7 +102,9 @@ const PLAN_HEADER =
   "# `student` if you already know the pseudonym. `variant` when the exam has\n" +
   "# versions. A page that is nobody's — the question sheet, a blank — is its\n" +
   "# own entry with `skip: <why>`. Every page of every file is used exactly once.\n" +
-  "# `ainar scans apply` writes `resolved` or `problem` beside each entry.\n\n";
+  "# `ainar scans apply` writes `resolved` or `problem` beside each entry, and\n" +
+  "# `match: words` (same words, other script, patronymic left off) or\n" +
+  "# `match: close` (a near spelling — check it) when a name was not exact.\n\n";
 
 const TRANSCRIPT_HEADER =
   "# PRIVATE — the answers as read off this student's pages. Outside the\n" +
@@ -129,6 +131,8 @@ export interface PlanPaper {
   rotate?: Record<string, number>;
   note?: string;
   resolved?: string;
+  /** Beside `resolved` when the name was not matched word for word. */
+  match?: NameMatch;
   problem?: string;
 }
 
@@ -327,15 +331,104 @@ export const nameKey = (name: string): string =>
     .sort()
     .join(" ");
 
-export type Identity = { student: string } | { problem: string };
+/**
+ * How a name was matched when it was not word for word: `words` — every word
+ * written is one of the roster's once script and romanisation are set aside
+ * (a patronymic left off is fine); `close` — the spelling differs a little,
+ * and nobody else in the run is near it. A `close` paper is the one to check.
+ */
+export type NameMatch = "words" | "close";
+
+export type Identity = { student: string; match?: NameMatch } | { problem: string };
+
+// Kazakh and Russian Cyrillic, and the Kazakh Latin letters, onto plain Latin.
+// Lossy on purpose: what is kept is what both spellings of one name share.
+const CYRILLIC: Record<string, string> = {
+  а: "a", ә: "a", б: "b", в: "v", г: "g", ғ: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z",
+  и: "i", й: "i", і: "i", к: "k", қ: "k", л: "l", м: "m", н: "n", ң: "n", о: "o", ө: "o",
+  п: "p", р: "r", с: "s", т: "t", у: "u", ұ: "u", ү: "u", ф: "f", х: "h", һ: "h", ц: "ts",
+  ч: "ch", ш: "sh", щ: "sh", ъ: "", ы: "i", ь: "", э: "e", ю: "iu", я: "ia",
+  ş: "sh", ç: "ch", ğ: "g", ñ: "n", ı: "i",
+};
+
+/**
+ * One word of a name, spelled so that its Cyrillic and its romanisations
+ * agree: "Ерменбаева", "Yermenbayeva" and "Ermenbaeva" all give "ermenbaeva".
+ */
+export const nameSkeleton = (word: string): string =>
+  [...word.toLocaleLowerCase()]
+    .map((letter) => CYRILLIC[letter] ?? letter)
+    .join("")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/kh|x/g, "h")
+    .replace(/zh/g, "j")
+    .replace(/q/g, "k")
+    .replace(/w/g, "u")
+    .replace(/y/g, "i")
+    .replace(/(^|[aeiou])ie/g, "$1e")
+    .replace(/(.)\1+/g, "$1")
+    .replace(/[^a-z]/g, "");
+
+const nameWords = (text: string): string[] =>
+  text.split(/[^\p{L}]+/u).map(nameSkeleton).filter(Boolean);
+
+/** The spellings a person is known by: their name, and an email made of their name. */
+const knownAs = (person: { name?: string; email?: string }): string[][] => {
+  const ways = person.name ? [nameWords(person.name)] : [];
+  const local = (person.email ?? "").split("@")[0]!;
+  if (/[a-z][._-][a-z]/i.test(local)) ways.push(nameWords(local.replace(/\d+/g, " ")));
+  return ways.filter((words) => words.length > 0);
+};
+
+const editDistance = (a: string, b: string): number => {
+  let row = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i += 1) {
+    const next = [i];
+    for (let j = 1; j <= b.length; j += 1) {
+      next[j] = Math.min(row[j]! + 1, next[j - 1]! + 1, row[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    row = next;
+  }
+  return row[b.length]!;
+};
+
+/**
+ * How far the words written are from one spelling of a person: each written
+ * word paired with a different roster word, the pairing that fits best. The
+ * mean and the worst word, each as a share of the longer word's letters.
+ */
+const nameDistance = (written: string[], roster: string[]): { mean: number; worst: number } => {
+  let best = { mean: Infinity, worst: Infinity };
+  const pair = (index: number, used: Set<number>, sum: number, worst: number): void => {
+    if (index === written.length) {
+      if (sum / written.length < best.mean) best = { mean: sum / written.length, worst };
+      return;
+    }
+    roster.forEach((word, j) => {
+      if (used.has(j)) return;
+      const d = editDistance(written[index]!, word) / Math.max(written[index]!.length, word.length);
+      pair(index + 1, new Set([...used, j]), sum + d, Math.max(worst, d));
+    });
+  };
+  pair(0, new Set(), 0, 0);
+  return best;
+};
+
+/** A close name: the mean, the worst word, and the gap to the next nearest person. */
+const CLOSE = { mean: 0.25, worst: 0.4, margin: 0.15, hint: 0.4 };
 
 /**
  * The pseudonym a paper belongs to, from what is written on it.
  *
  * A student number is exact: it is hashed with the roster's salt exactly as
- * `roster import` did, and must be someone the roster knows. A name must match
- * exactly one person enrolled in this run once case, punctuation and word order
- * are set aside; two matches is a problem to show, not a coin to toss.
+ * `roster import` did, and must be someone the roster knows. A name is tried
+ * three ways, each only if the one before found nobody: word for word, once
+ * case, punctuation and word order are set aside; by its words, once script
+ * and romanisation are too — Latin handwriting against a Cyrillic roster, a
+ * patronymic not written; and by a close spelling, when one person is near it
+ * and nobody else is. The last two need at least two words written. Two
+ * matches is a problem to show, not a coin to toss.
  */
 export const identify = (
   paper: PlanPaper,
@@ -355,12 +448,40 @@ export const identify = (
     return enrolled.has(student) ? { student } : { problem: `${student} is in the roster but not enrolled in this run` };
   }
   if (paper.name) {
+    const people = Object.entries(store.people).filter(([id]) => enrolled.has(id));
+    const several = (count: number) => ({ problem: `the name matches ${count} enrolled students` });
+
     const key = nameKey(paper.name);
-    const matches = Object.entries(store.people)
-      .filter(([id, person]) => enrolled.has(id) && person.name && nameKey(person.name) === key)
-      .map(([id]) => id);
-    if (matches.length === 1) return { student: matches[0]! };
-    return { problem: matches.length ? `the name matches ${matches.length} enrolled students` : "the name matches no enrolled student" };
+    const exact = people.filter(([, person]) => person.name && nameKey(person.name) === key).map(([id]) => id);
+    if (exact.length === 1) return { student: exact[0]! };
+    if (exact.length) return several(exact.length);
+
+    const written = nameWords(paper.name);
+    if (written.length < 2) return { problem: "the name matches no enrolled student" };
+    const nearest = people
+      .map(([id, person]) => {
+        const fits = knownAs(person).map((words) => nameDistance(written, words));
+        return { id, ...fits.reduce((a, b) => (b.mean < a.mean ? b : a), { mean: Infinity, worst: Infinity }) };
+      })
+      .sort((a, b) => a.mean - b.mean);
+
+    const same = nearest.filter((candidate) => candidate.mean === 0);
+    if (same.length === 1) return { student: same[0]!.id, match: "words" };
+    if (same.length) return several(same.length);
+
+    const [first, second] = nearest;
+    if (first && first.mean <= CLOSE.mean && first.worst <= CLOSE.worst && (second?.mean ?? Infinity) - first.mean >= CLOSE.margin) {
+      return { student: first.id, match: "close" };
+    }
+    if (first && first.mean <= CLOSE.hint) {
+      return {
+        problem:
+          `the name matches no enrolled student closely enough; nearest is ${first.id}` +
+          (second && second.mean <= CLOSE.hint ? `, then ${second.id}` : "") +
+          ` — check with \`ainar roster whois\`, then write student: beside the paper`,
+      };
+    }
+    return { problem: "the name matches no enrolled student" };
   }
   return { problem: "no number, name or student given" };
 };
@@ -383,7 +504,7 @@ interface ScanMeta {
 }
 
 export interface ApplyResult {
-  placed: { student: string; pages: number; variant: string | null; replaced: boolean }[];
+  placed: { student: string; pages: number; variant: string | null; replaced: boolean; match: NameMatch | null }[];
   unchanged: string[];
   problems: { file: string; pages: string | null; problem: string }[];
   skipped: number;
@@ -468,6 +589,7 @@ export const applyScans = async (plan: ScanPlan, context: ApplyContext): Promise
   for (const source of plan.sources) {
     for (const paper of source.papers) {
       delete paper.resolved;
+      delete paper.match;
       delete paper.problem;
       if (paper.skip) continue;
       const identity = identify(paper, context);
@@ -518,8 +640,9 @@ export const applyScans = async (plan: ScanPlan, context: ApplyContext): Promise
         open += 1;
         continue;
       }
-      const student = (who.get(paper) as { student: string }).student;
+      const { student, match } = who.get(paper) as { student: string; match?: NameMatch };
       paper.resolved = student;
+      if (match) paper.match = match;
       const pages = parsePages(paper.pages);
 
       const out = await PDFDocument.create();
@@ -545,6 +668,7 @@ export const applyScans = async (plan: ScanPlan, context: ApplyContext): Promise
         if (previous && !context.replace) {
           paper.problem = `${student} already has a different scan — pass --replace to use this one`;
           delete paper.resolved;
+          delete paper.match;
           result.problems.push({ file: source.file, pages: paper.pages, problem: paper.problem });
           open += 1;
           continue;
@@ -570,7 +694,13 @@ export const applyScans = async (plan: ScanPlan, context: ApplyContext): Promise
             result.transcripts.push(student);
           }
         }
-        result.placed.push({ student, pages: pages.length, variant: paper.variant ?? null, replaced: previous !== null });
+        result.placed.push({
+          student,
+          pages: pages.length,
+          variant: paper.variant ?? null,
+          replaced: previous !== null,
+          match: match ?? null,
+        });
       }
 
       const record = {

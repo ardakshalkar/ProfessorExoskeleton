@@ -2168,9 +2168,12 @@ try {
           out(
             `  placed    ${entry.student}  ${entry.pages} page(s)` +
               (entry.variant ? `  variant ${entry.variant}` : "") +
-              (entry.replaced ? "  (replaced an earlier scan)" : ""),
+              (entry.replaced ? "  (replaced an earlier scan)" : "") +
+              (entry.match === "close" ? "  (close spelling — check)" : entry.match === "words" ? "  (by its words)" : ""),
           );
         }
+        const close = result.placed.filter((entry) => entry.match === "close").length;
+        if (close) out(`  ${close} placed on a close spelling of the name — marked match: close in the plan; check those first`);
         if (result.unchanged.length) out(`  unchanged ${result.unchanged.length} already placed from the same pages`);
         if (result.skipped) out(`  skipped   ${result.skipped} page range(s) marked skip`);
         for (const problem of result.problems) {

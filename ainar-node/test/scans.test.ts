@@ -23,6 +23,7 @@ import {
   identify,
   itemsForVariant,
   nameKey,
+  nameSkeleton,
   parsePages,
   planScans,
   proposePapers,
@@ -180,6 +181,47 @@ test("two people with one name are shown, not chosen between", () => {
   s.enrolled.add(pseudonym("220009", SALT));
   const result = identify({ pages: "1", name: "Alice Adams" }, { store: s.store, salt: SALT, enrolled: s.enrolled });
   assert.match((result as any).problem, /matches 2 enrolled students/);
+});
+
+test("a name in Latin finds its Cyrillic roster entry, with or without the patronymic", () => {
+  const s = setting();
+  const aigerim = pseudonym("220010", SALT);
+  const yerlan = pseudonym("220011", SALT);
+  s.store.people[aigerim] = { name: "Ерменбаева Айгерим Қайратқызы", runs: [RUN] };
+  s.store.people[yerlan] = { name: "Жақсылықов Ерлан Нұрланұлы", runs: [RUN] };
+  s.enrolled.add(aigerim).add(yerlan);
+  const known = { store: s.store, salt: SALT, enrolled: s.enrolled };
+  assert.deepEqual(identify({ pages: "1", name: "Yermenbayeva Aigerim" }, known), { student: aigerim, match: "words" });
+  assert.deepEqual(identify({ pages: "1", name: "Erlan Zhaksylykov" }, known), { student: yerlan, match: "words" });
+  assert.deepEqual(identify({ pages: "1", name: "Ермeнбаева Айгерим" }, known), { student: aigerim, match: "words" }, "a Latin e among Cyrillic");
+  assert.equal(nameSkeleton("Ерменбаева"), nameSkeleton("Yermenbayeva"));
+  assert.equal(nameSkeleton("Қасымова"), nameSkeleton("Kassymova"));
+  assert.match((identify({ pages: "1", name: "Aigerim" }, known) as any).problem, /matches no/, "one word is not enough");
+});
+
+test("a close spelling is placed only when nobody else is near it", () => {
+  const s = setting();
+  const aigerim = pseudonym("220010", SALT);
+  s.store.people[aigerim] = { name: "Ерменбаева Айгерим Қайратқызы", runs: [RUN] };
+  s.enrolled.add(aigerim);
+  const known = { store: s.store, salt: SALT, enrolled: s.enrolled };
+  assert.deepEqual(identify({ pages: "1", name: "Yermenbaeya Aigerin" }, known), { student: aigerim, match: "close" });
+
+  const twin = pseudonym("220012", SALT);
+  s.store.people[twin] = { name: "Ерменбаева Айгерін", runs: [RUN] };
+  s.enrolled.add(twin);
+  assert.match((identify({ pages: "1", name: "Yermenbaeva Aigeri" }, known) as any).problem, /nearest is .*then/);
+  assert.match((identify({ pages: "1", name: "Bob Brownstone" }, known) as any).problem, /nearest is/);
+  assert.match((identify({ pages: "1", name: "Zhuldyz Omarova" }, known) as any).problem, /^the name matches no enrolled student$/);
+});
+
+test("an email made of the name is a second way to find someone", () => {
+  const s = setting();
+  const dana = pseudonym("220013", SALT);
+  s.store.people[dana] = { name: "Д. С.", email: "dana.seitkali@narxoz.kz", runs: [RUN] };
+  s.enrolled.add(dana);
+  const known = { store: s.store, salt: SALT, enrolled: s.enrolled };
+  assert.deepEqual(identify({ pages: "1", name: "Seitkali Dana" }, known), { student: dana, match: "words" });
 });
 
 // ------------------------------------------------------------------ apply
