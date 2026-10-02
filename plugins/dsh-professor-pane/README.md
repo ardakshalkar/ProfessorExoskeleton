@@ -207,9 +207,9 @@ frame.
 
 ## Scans
 
-A scanned pile goes through six steps — Identify, Match, Read, Rubric, Grade,
-Approve — and each is already a command or a skill. The tab says where a pile
-stands and whose move it is, as a bar of six with the one that is yours in
+A scanned pile goes through seven steps — Identify, Match, Read, Rubric, Grade,
+Approve, Canvas — and each is already a command or a skill. The tab says where a pile
+stands and whose move it is, as a bar of seven with the one that is yours in
 amber, and draws one step in full: **Match**, because who a paper belongs to is
 the one question only the professor can answer. The others are the
 assistant's to draft, so when one of them is next the tab offers a press that
@@ -312,6 +312,25 @@ with no second step. A changed mark refreshes the evidence it had derived.
 On Pseudonyms the first page is drawn from below the name line — the same two
 inches the name crop shows — and the cards carry pseudonyms.
 
+### Sending the marks to Canvas
+
+The bar's last step, **Canvas**, counts the whole marks the gradebook would
+export against what Canvas has confirmed — *61 not sent*, *58 sent · 3 changed
+since sent*, *61 of 61 sent*. It reads the sync ledger in `~/.ainar/sync/`,
+which `lms push --target canvas-api` writes only once Canvas reports the job
+done, so drawing the tab asks Canvas nothing.
+
+Under **Grade the answers** sits the send, as soon as one mark is whole.
+**Preview the Canvas send** runs `ainar lms plan --target canvas-api` once per
+subgroup's Canvas course and shows each plan; only then does the red **Send N
+marks to Canvas** appear, which runs `lms push … --confirm` for every subgroup.
+A course with no assignment bound for this assessment is answered first, in
+place: **Link one already in Canvas…** lists that course's assignments and
+binds the one picked (for a quiz made by hand in Canvas — the planner cannot
+tell it from no quiz and would make a second), or **Preview creating it** and
+then **Create it in …**, which is `lms assignment-push` for that subgroup. The
+send stays unavailable while any subgroup is unbound.
+
 ## Integrations
 
 The tab exists because the facts are scattered. A professor asking "will a push
@@ -366,7 +385,8 @@ refuse it and to tell the professor to reissue.
 **Links** ends with the one control in this pane that changes something a class
 can see: it sends an assessment's *definition* — title, points, dates, what may
 be handed in, and the brief as the Canvas description. Not the marks; those are
-`ainar lms push` and are not reachable from here at all.
+sent from the Scans tab, beside the pile they were graded from (see *Sending the
+marks to Canvas*).
 
 It spawns `ainar lms assignment-plan` / `assignment-push`, the way the Publish
 button spawns `ainar publish`, and for the same reason: what counts as drift,
@@ -571,6 +591,7 @@ lines, not before.
 | `POST /professor-pane/api/credentials?run=` | store one credential; body is `{ref, value}`, an empty value clears it. Write-only: the response carries presence, never a value |
 | `POST /professor-pane/api/canvas/catalogue?run=` | ask Canvas for this course's sections and student groups |
 | `POST /professor-pane/api/canvas/selection?run=` | write `extensions.lms.canvas_sections`; body is `{selections}` |
+| `POST /professor-pane/api/canvas/marks?run=` | an assessment's marks, per subgroup's Canvas course: `lms plan`, or `lms push --confirm` with `confirm: true`; `link: {group, assignmentId}` binds an existing Canvas assignment first. Body is `{assessment, confirm?, link?}` |
 | `POST /professor-pane/api/publish?run=` | plan or perform one publication; body is `{target, assessment, repo, group, message, edit, confirm}`. Without `confirm` it reads and writes nothing |
 | `POST /professor-pane/api/approve` | gone since 2026-09-29: answers 410 and says where approval went |
 | `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/`, for the pane's refresh poll |

@@ -4147,6 +4147,174 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     }
 
     /**
+     * The marks of one assessment, sent to Canvas from beside the pile.
+     *
+     * Two presses, as everywhere a class can feel the result: **Preview** asks
+     * Canvas what it holds for each subgroup's course and changes nothing;
+     * only then does the red **Send N marks** exist, and any other press
+     * throws the preview away. A subgroup whose course has no assignment for
+     * this assessment yet is answered first — link the one already in Canvas,
+     * or create it from the course record — because the planner cannot tell a
+     * hand-made "Quiz 1" from no Quiz 1 and would otherwise make a second.
+     */
+    function CanvasMarks(props) {
+      const [plan, setPlan] = React.useState(null);
+      const [phase, setPhase] = React.useState("idle");
+      const [failed, setFailed] = React.useState(null);
+      const [lists, setLists] = React.useState({});
+      const [picks, setPicks] = React.useState({});
+      const [creating, setCreating] = React.useState({});
+
+      const endpoint = (path) => scoped(BASE + path + "?run=" + encodeURIComponent(props.runId || ""), props.sessionId);
+      const postJson = (path, body) =>
+        fetch(endpoint(path), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((response) =>
+          response.json(),
+        );
+
+      const marks = (extra, label) => {
+        setPhase(label);
+        setFailed(null);
+        postJson("/api/canvas/marks", Object.assign({ assessment: props.assessmentId }, extra || {}))
+          .then((body) => {
+            setPhase("idle");
+            if (body.error) return setFailed(body.error);
+            setPlan(body);
+            setCreating({});
+            if (body.confirmed) props.onSent();
+          })
+          .catch((error) => {
+            setPhase("idle");
+            setFailed(String((error && error.message) || error));
+          });
+      };
+
+      const listFor = (entry) => {
+        postJson("/api/canvas/assignments", { courseId: entry.courseId })
+          .then((body) => setLists((all) => Object.assign({}, all, { [entry.group]: body.error ? { error: body.error } : body.assignments || [] })))
+          .catch((error) => setLists((all) => Object.assign({}, all, { [entry.group]: { error: String(error) } })));
+      };
+
+      const create = (entry, confirm) => {
+        setPhase("creating");
+        setFailed(null);
+        postJson("/api/canvas/assignment", { assessment: props.assessmentId, group: entry.group || "", confirm })
+          .then((body) => {
+            setPhase("idle");
+            if (body.error) return setFailed(body.error);
+            if (confirm && body.ok) return marks({}, "planning");
+            setCreating((all) => Object.assign({}, all, { [entry.group]: body }));
+          })
+          .catch((error) => {
+            setPhase("idle");
+            setFailed(String((error && error.message) || error));
+          });
+      };
+
+      const groups = (plan && plan.groups) || [];
+      const unlinked = groups.filter((entry) => entry.unlinked);
+      const sendable = plan && !plan.confirmed && groups.length > 0 && !unlinked.length && groups.every((entry) => entry.ok);
+      const name = (entry) => entry.group || "the run's Canvas course";
+      const busy = phase !== "idle";
+      const c = props.canvas || { ready: 0, unsent: 0, changed: 0 };
+      const toSend = c.unsent + c.changed;
+
+      return h(
+        "div",
+        { className: "pp-next" },
+        h(
+          "div",
+          { className: "pp-approverow" },
+          h(
+            "span",
+            null,
+            c.ready === 0
+              ? "No whole marks to send yet."
+              : toSend === 0
+                ? "Canvas has every mark (" + c.ready + ")."
+                : toSend + " of " + c.ready + " marks are not in Canvas. ",
+          ),
+          c.ready > 0
+            ? h(
+                "button",
+                { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => marks({}, "planning") },
+                phase === "planning" ? "Asking Canvas…" : plan ? "Preview again" : "Preview the Canvas send",
+              )
+            : null,
+          sendable
+            ? h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-segbtn pp-danger",
+                  disabled: busy,
+                  title: "Students see a posted grade within seconds",
+                  onClick: () => marks({ confirm: true }, "sending"),
+                },
+                phase === "sending" ? "Sending…" : "Send " + (toSend || c.ready) + " marks to Canvas",
+              )
+            : null,
+        ),
+        failed ? h("pre", { className: "pp-approveout pp-approveerr" }, failed) : null,
+        groups.map((entry) =>
+          h(
+            "div",
+            { key: entry.group || "run" },
+            h("p", { className: "pp-factgroup" }, name(entry) + (entry.courseId ? " · course " + entry.courseId : "")),
+            entry.unlinked
+              ? h(
+                  "div",
+                  { className: "pp-approverow" },
+                  h("span", null, "No Canvas assignment is linked here. If you made one by hand, link it; otherwise create it."),
+                  lists[entry.group] === undefined
+                    ? h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => listFor(entry) }, "Link one already in Canvas…")
+                    : lists[entry.group].error
+                      ? h("span", { className: "pp-as" }, lists[entry.group].error)
+                      : h(
+                          React.Fragment,
+                          null,
+                          h(
+                            "select",
+                            {
+                              className: "pp-bindsel",
+                              value: picks[entry.group] || "",
+                              onChange: (event) => setPicks((all) => Object.assign({}, all, { [entry.group]: event.target.value })),
+                            },
+                            h("option", { value: "" }, "Choose the assignment…"),
+                            lists[entry.group].map((assignment) =>
+                              h(
+                                "option",
+                                { value: assignment.id, key: assignment.id },
+                                assignment.name + (assignment.points != null ? " (" + assignment.points + " pts)" : ""),
+                              ),
+                            ),
+                          ),
+                          h(
+                            "button",
+                            {
+                              type: "button",
+                              className: "pp-segbtn",
+                              disabled: busy || !picks[entry.group],
+                              onClick: () => marks({ link: { group: entry.group || "", assignmentId: picks[entry.group] } }, "planning"),
+                            },
+                            "Link",
+                          ),
+                        ),
+                  creating[entry.group]
+                    ? h(
+                        "button",
+                        { type: "button", className: "pp-segbtn pp-danger", disabled: busy, onClick: () => create(entry, true) },
+                        phase === "creating" ? "Creating…" : "Create it in " + name(entry),
+                      )
+                    : h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => create(entry, false) }, "Preview creating it"),
+                )
+              : null,
+            h("pre", { className: "pp-approveout" + (entry.ok || entry.unlinked ? "" : " pp-approveerr") }, (creating[entry.group] || {}).output || entry.output),
+          ),
+        ),
+      );
+    }
+
+    /**
      * Grading a written exam, one question at a time, over the conversation.
      *
      * The document is lib/grade.js — `ainar grade status --json` with names
@@ -5463,6 +5631,19 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 "Grade the answers",
               ),
             )
+          : null,
+        doc.canvas && doc.canvas.ready > 0
+          ? h(CanvasMarks, {
+              key: assessmentId,
+              runId: props.runId,
+              sessionId: props.sessionId,
+              assessmentId: assessmentId,
+              canvas: doc.canvas,
+              onSent: () => {
+                setTick((value) => value + 1);
+                props.onWrite();
+              },
+            })
           : null,
         grading
           ? h(GradeBoard, {

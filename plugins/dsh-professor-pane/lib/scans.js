@@ -1,9 +1,9 @@
 /**
  * Paper exams: what the Scans tab draws, and the one picture it shows.
  *
- * A scanned pile goes through six steps — identify, match, read, rubric, grade,
- * approve — and each one is already a command (`ainar scans …`, then the
- * grading skills). What was missing is a place that says where a pile stands
+ * A scanned pile goes through seven steps — identify, match, read, rubric,
+ * grade, approve, canvas — and each one is already a command (`ainar scans …`,
+ * then the grading skills, then `ainar lms push`). What was missing is a place that says where a pile stands
  * and whose move it is, and a way to answer the one question only the
  * professor can: who is this paper. This module answers the first as a
  * document the browser half prints, and serves the evidence for the second —
@@ -24,7 +24,10 @@ import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
+import { approvedView } from "@ainar/core/src/approval.ts";
 import { enrolledIn } from "@ainar/core/src/bundle.ts";
+import { exportable, gradeRows } from "@ainar/core/src/gradebook.ts";
+import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { RosterStore } from "@ainar/core/src/roster.ts";
 import {
   nameCandidates,
@@ -67,10 +70,33 @@ const laneOf = (paper) => {
 };
 
 /**
- * Six steps, each with how far it has got. `state` is done, current, waiting
+ * Where the marks stand against Canvas: how many are ready to send (a whole
+ * score from approved decisions, as the gradebook exports it), and how many of
+ * those Canvas has confirmed at the same value.
+ *
+ * Read from the sync ledger in `~/.ainar/sync/`, which `lms push --target
+ * canvas-api` writes only after Canvas reports the job done — so drawing the
+ * tab never asks Canvas anything, and "sent" means landed, not attempted.
+ */
+export const canvasMarks = ({ bundle, runId, assessmentId, ledger }) => {
+  const rows = gradeRows(approvedView(bundle), runId, { assessmentId }).get(assessmentId) ?? [];
+  const ready = rows.filter(exportable);
+  const sent = ledger.prepared("canvas-api", assessmentId);
+  let unsent = 0;
+  let changed = 0;
+  for (const row of ready) {
+    const value = sent[row.student_id];
+    if (value === undefined) unsent += 1;
+    else if (Math.abs(value - row.score) > 1e-9) changed += 1;
+  }
+  return { ready: ready.length, sent: ready.length - unsent - changed, unsent, changed };
+};
+
+/**
+ * Seven steps, each with how far it has got. `state` is done, current, waiting
  * (yours to decide) or todo; the first one not done is current.
  */
-const stagesOf = ({ papers, status, assessment, rubric, items, responses, evaluations, low }) => {
+const stagesOf = ({ papers, status, assessment, rubric, items, responses, evaluations, low, canvas }) => {
   const placed = status.placed.length;
   const held = papers.filter((paper) => paper.lane === "held").length;
   const check = papers.filter((paper) => paper.lane === "check").length;
@@ -120,6 +146,24 @@ const stagesOf = ({ papers, status, assessment, rubric, items, responses, evalua
       waiting: evaluations.length > decided && evaluations.length > 0,
       detail: `${decided} of ${evaluations.length} decided`,
     },
+    {
+      id: "canvas",
+      label: "Canvas",
+      done: canvas.ready > 0 && canvas.unsent === 0 && canvas.changed === 0,
+      waiting: canvas.unsent > 0 || canvas.changed > 0,
+      detail:
+        canvas.ready === 0
+          ? "nothing to send yet"
+          : canvas.unsent === 0 && canvas.changed === 0
+            ? `${canvas.sent} of ${canvas.ready} sent`
+            : [
+                canvas.sent ? `${canvas.sent} sent` : null,
+                canvas.unsent ? `${canvas.unsent} not sent` : null,
+                canvas.changed ? `${canvas.changed} changed since sent` : null,
+              ]
+                .filter(Boolean)
+                .join(" · "),
+    },
   ];
   const current = stages.findIndex((stage) => !stage.done);
   return stages.map((stage, index) => ({
@@ -137,7 +181,7 @@ const stagesOf = ({ papers, status, assessment, rubric, items, responses, evalua
  * placement is not a draft and neither is an answer read off paper, and the
  * professor is the reader here). `submissions` is the private folder.
  */
-export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, assessmentId, names }) => {
+export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, assessmentId, names, syncDirectory = null }) => {
   const bundle = loaded.bundle;
   const assessments = bundle.assessments.filter((entry) => entry.course_version_id === runId);
   const piles = pilesOf(submissions, runId, assessments);
@@ -196,11 +240,14 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
     .map((student) => ({ student, name: nameOf(student), placed: placedSet.has(student) }));
   if (names) classList.sort((a, b) => (a.name ?? a.student).localeCompare(b.name ?? b.student));
 
+  const canvas = canvasMarks({ bundle, runId, assessmentId: chosen.id, ledger: Ledger.load(runId, syncDirectory) });
+
   const count = (lane) => papers.filter((paper) => paper.lane === lane).length;
   return {
     ...base,
     assessment: { id: chosen.id, title: chosen.title, questions: items },
-    stages: stagesOf({ papers, status, assessment, rubric, items, responses, evaluations, low }),
+    stages: stagesOf({ papers, status, assessment, rubric, items, responses, evaluations, low, canvas }),
+    canvas,
     lanes: { check: count("check"), held: count("held"), placed: count("placed"), skipped: count("skipped") },
     papers,
     class: classList,

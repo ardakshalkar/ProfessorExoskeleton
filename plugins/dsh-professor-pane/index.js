@@ -5425,6 +5425,64 @@ const runAssignmentPush = (res, root, runId, body) => {
 };
 
 /**
+ * Send an assessment's MARKS to Canvas, one subgroup's course at a time, by
+ * spawning `ainar lms plan` / `lms push --target canvas-api`.
+ *
+ * The same two presses as the definition above: a plan, which asks Canvas what
+ * it holds and changes nothing, and then a send, which is a separate request
+ * the professor makes after reading it. A run taught as several Canvas
+ * courses is pushed per subgroup, because each course numbers its assignments
+ * separately; this loops over them so one press covers the class.
+ *
+ * `link` binds an existing Canvas assignment to one subgroup before the plan —
+ * the answer to "Quiz 1 is already in Canvas, I made it by hand" — merged into
+ * the subgroups already bound, since the writer replaces the whole mapping.
+ */
+const runMarksPush = async (workspace, root, runId, body) => {
+  const assessment = String(body.assessment ?? "").trim();
+  if (!/^[A-Z0-9][A-Z0-9-]*$/.test(assessment)) return { error: "Not an assessment id." };
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId);
+  const record = assessmentsOf(bundle, runId).find((entry) => entry.assessment_id === assessment);
+  if (!run || !record) return { error: `${assessment} is not an assessment of ${runId}.` };
+
+  const courses = lmsLinkage(run)[CANVAS_COURSES_KEY];
+  const courseOf = courses && typeof courses === "object" && !Array.isArray(courses) ? courses : {};
+  const groups = Object.keys(courseOf).sort();
+
+  if (body.link) {
+    const group = String(body.link.group ?? "");
+    const id = String(body.link.assignmentId ?? "").trim();
+    if (groups.length && !groups.includes(group)) return { error: `${runId} has no Canvas course for '${group}'.` };
+    const current = lmsLinkage(record)[CANVAS_ASSIGNMENTS_KEY];
+    const merged = Object.assign({}, current && typeof current === "object" && !Array.isArray(current) ? current : {});
+    merged[group] = id;
+    const saved = recordAssessmentLinks(workspace, root, runId, { [assessment]: groups.length ? merged : id });
+    if (saved.error) return saved;
+  }
+
+  const confirm = body.confirm === true;
+  const results = [];
+  for (const group of groups.length ? groups : [null]) {
+    const args = ["lms", confirm ? "push" : "plan", runId, "--assessment", assessment, "--target", "canvas-api"];
+    if (group) args.push("--group", group);
+    if (confirm) args.push("--confirm");
+    const result = await runScans(args, root);
+    results.push({
+      group,
+      courseId: group ? String(courseOf[group] ?? "") : lmsString(run, "canvas_course_id"),
+      ok: result.ok,
+      // No assignment bound for this course: it is linked or created first,
+      // and the send stays unavailable until it is.
+      unlinked: /has no Canvas assignment/.test(result.output ?? ""),
+      command: result.command,
+      output: result.output ?? result.error ?? "",
+    });
+  }
+  return { confirmed: confirm, groups: results };
+};
+
+/**
  * Write one connection into the registry, by spawning the CLI.
  *
  * Spawned rather than written here, for the reason `runPublish` gives about
@@ -6454,6 +6512,26 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
             return sendJson(res, 200, { error: "The request body must be an object." });
           }
           return runAssignmentPush(res, root, runId, body);
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // The marks. POST only: a plan makes Canvas answer, and a push changes what
+    // every student in the class sees.
+    if (path === "/api/canvas/marks") {
+      if (req.method !== "POST") {
+        return sendJson(res, 405, { error: "marks are POST only" });
+      }
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then(async (raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          return sendJson(res, 200, await runMarksPush(workspace, root, runId, body ?? {}));
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
