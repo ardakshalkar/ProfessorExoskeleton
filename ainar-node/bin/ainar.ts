@@ -327,6 +327,50 @@ const soleRun = (bundle: ReturnType<typeof onlyCourse>): string => {
   return runs[0]!;
 };
 
+/**
+ * Derive evidence from what the professor has accepted, validate the merged
+ * bundle, and write it unless this is a dry run. Shared by `extract-evidence`
+ * and by `grade decide`, which runs it after every decision so concept
+ * progress follows the marks without a second command.
+ *
+ * Writing before validating would leave records in `courses/` that `ainar
+ * validate` then rejects, with nothing to say which of them were mechanical —
+ * so a failed validation writes nothing and returns the errors.
+ */
+const deriveEvidence = (
+  bundle: ReturnType<typeof forRun>,
+  runId: string,
+  { dryRun = false, list = true }: { dryRun?: boolean; list?: boolean } = {},
+): { produced: Record<string, unknown>[]; refreshed: number; errors: string[] } => {
+  const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
+  const produced = extractEvidence(approvedView(bundle), runId);
+  const existing = new Set((bundle.evidence as any[]).map((e) => e.evidence_id as string));
+  const refreshed = produced.filter((e) => existing.has(e.evidence_id as string)).length;
+  if (!produced.length) return { produced, refreshed, errors: [] };
+
+  if (list) {
+    for (const item of produced) {
+      const target = item.outcome_id ?? item.capability_id ?? item.concept_id;
+      const level =
+        item.demonstrated_level === null || item.demonstrated_level === undefined
+          ? ""
+          : ` level ${item.demonstrated_level}`;
+      const again = existing.has(item.evidence_id as string) ? "  (refreshed)" : "";
+      out(`  ${item.evidence_id}  ${item.student_id}  ${target}${level}  from ${item.source_id}${again}`);
+    }
+  }
+
+  const issues = new IssueList();
+  issues.extend(validate(withRecords(bundle, { evidence: produced }), { root }));
+  if (issues.errors.length) return { produced: [], refreshed: 0, errors: issues.errors.map(describe) };
+  if (!dryRun) {
+    for (const path of writeRecords(courseDir, { evidence: produced as never[] })) {
+      out(`wrote ${relative(root, path)}`);
+    }
+  }
+  return { produced, refreshed, errors: [] };
+};
+
 const HELP = `ainar — the AINAR course model CLI
 
   validate [COURSE]        referential checks, ${coverage().implemented} of ${coverage().total}
@@ -957,47 +1001,29 @@ try {
       const asked = rest[0] ?? flag("course-version") ?? flag("run");
       const bundle = asked ? forRun(asked) : onlyCourse();
       const resolvedRun = asked ?? soleRun(bundle);
-      const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
 
       // Evidence is derived from what the professor has accepted — a decided
       // evaluation, an approved scored response — never from a draft.
-      const produced = extractEvidence(approvedView(bundle), resolvedRun);
+      const dryRun = args.includes("--dry-run");
+      const { produced, refreshed, errors } = deriveEvidence(bundle, resolvedRun, { dryRun });
+      if (errors.length) {
+        console.error("\nvalidation failed; nothing was written");
+        for (const error of errors) console.error(`    ${error}`);
+        process.exit(1);
+      }
       if (produced.length === 0) {
         out("no new evidence — every approved decision is already recorded");
         break;
       }
 
-      for (const item of produced) {
-        const target = item.outcome_id ?? item.capability_id ?? item.concept_id;
-        const level =
-          item.demonstrated_level === null || item.demonstrated_level === undefined
-            ? ""
-            : ` level ${item.demonstrated_level}`;
-        out(`  ${item.evidence_id}  ${item.student_id}  ${target}${level}  from ${item.source_id}`);
-      }
-
-      const issues = new IssueList();
-      const merged = withRecords(bundle, { evidence: produced });
-      issues.extend(validate(merged, { root }));
-      if (issues.errors.length) {
-        console.error("\nvalidation failed; nothing was written");
-        for (const issue of issues.errors) console.error(`    ${describe(issue)}`);
-        process.exit(1);
-      }
-
       const { implemented, total: allChecks } = coverage();
       out(`\nchecked against ${implemented} of ${allChecks} validator checks`);
-
-      if (args.includes("--dry-run")) {
-        out(`\ndry run — ${produced.length} record(s) would be written`);
-        break;
-      }
-
-      out("");
-      for (const path of writeRecords(courseDir, { evidence: produced as never[] })) {
-        out(`wrote ${relative(root, path)}`);
-      }
-      out(`\n${produced.length} evidence record(s) derived.`);
+      const again = refreshed ? ` (${refreshed} refreshing a changed decision)` : "";
+      out(
+        dryRun
+          ? `\ndry run — ${produced.length} record(s) would be written${again}`
+          : `\n${produced.length} evidence record(s) derived${again}.`,
+      );
       break;
     }
 
@@ -1963,6 +1989,20 @@ try {
             (result.replaced ? ` (${result.replaced} replacing an earlier decision, kept in its history)` : "") +
             (result.unchanged ? `, ${result.unchanged} already decided the same way` : ""),
         );
+        // The evidence follows the marks: concept progress and the gap view read
+        // evidence, not evaluations. A failure here leaves the decisions written
+        // and says so — `extract-evidence` can be run once the cause is fixed.
+        if (result.evaluations.length) {
+          const evidence = deriveEvidence(forRun(runId), runId, { list: false });
+          if (evidence.errors.length) {
+            out(`evidence not derived — validation failed: ${evidence.errors.join("; ")}`);
+          } else if (evidence.produced.length) {
+            out(
+              `${evidence.produced.length} evidence record(s) derived` +
+                (evidence.refreshed ? ` (${evidence.refreshed} refreshed)` : ""),
+            );
+          }
+        }
         break;
       }
 

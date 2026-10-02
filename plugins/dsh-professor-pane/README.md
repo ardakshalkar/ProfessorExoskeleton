@@ -304,6 +304,11 @@ and records `extensions.decided_via` — `one`, `group` or `all`. A decision it
 changes is moved onto `extensions.history`, never overwritten. Accept all is
 allowed (2026-10-02); the history is what keeps it honest.
 
+The same command then derives the evidence, as `ainar extract-evidence` does:
+one record for the criterion's outcome, carrying the rubric band, and one per
+concept the criterion lists, so class progress and the gap view follow the marks
+with no second step. A changed mark refreshes the evidence it had derived.
+
 On Pseudonyms the first page is drawn from below the name line — the same two
 inches the name crop shows — and the cards carry pseudonyms.
 

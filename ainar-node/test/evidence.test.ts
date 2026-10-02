@@ -284,6 +284,68 @@ test("evidence for a different target from the same source is still derived", ()
   assert.equal(produced.length, 1, "a different outcome is a different fact");
 });
 
+// ── concept evidence from a criterion ───────────────────────────────────────
+
+test("a criterion's concepts become one concept record each, after the outcome record", () => {
+  const produced = fromEvaluation({}, { concepts: ["CON-1", "CON-2"] });
+  assert.deepEqual(
+    produced.map((record) => [record.evidence_id, record.outcome_id, record.concept_id]),
+    [
+      ["EVID-1", "OUT-1", undefined],
+      ["EVID-1-C1", undefined, "CON-1"],
+      ["EVID-1-C2", undefined, "CON-2"],
+    ],
+  );
+  const concept = produced[1]!;
+  assert.ok(!("demonstrated_level" in concept), "a criterion is weak evidence of one concept");
+  assert.equal(concept.verified_by, "USER-1");
+  const extensions = concept.extensions as Record<string, unknown>;
+  assert.equal(extensions.proportion, 0.8);
+  assert.equal(extensions.outcome_id, "OUT-1", "the outcome is kept, but not as a target");
+  assert.ok(!("capability_id" in extensions), "an absent capability is omitted");
+});
+
+test("a criterion naming only concepts still produces concept evidence", () => {
+  const produced = fromEvaluation({}, { outcome_id: null, concepts: ["CON-1"] });
+  assert.deepEqual(produced.map((record) => record.evidence_id), ["EVID-1-C1"]);
+});
+
+test("a criterion scored through its items does not derive its concepts twice", () => {
+  const produced = evidenceFromEvaluations(
+    bundle({
+      rubrics: [rubricWith({ concepts: ["CON-1"] })],
+      assessments: [assessment],
+      submissions: [submission],
+      evaluations: [evaluation()],
+      items: [{ item_id: "ITEM-1", criterion_id: "CRIT-1", concepts: ["CON-1"] }],
+      item_responses: [{ response_id: "RESP-1", submission_id: "SUB-1", item_id: "ITEM-1", score: 3 }],
+    }),
+    "C-2026-FALL",
+  );
+  assert.deepEqual(produced.map((record) => record.evidence_id), ["EVID-1"]);
+});
+
+test("derived evidence is refreshed when the decision behind it changes", () => {
+  const first = fromEvaluation({}, { concepts: ["CON-1"] });
+  const again = (score: number) =>
+    evidenceFromEvaluations(
+      bundle({
+        rubrics: [rubricWith({ concepts: ["CON-1"] })],
+        assessments: [assessment],
+        submissions: [submission],
+        evaluations: [
+          evaluation({ professor_decision: { score, decided_by: "USER-1", decided_at: "2026-09-01T10:00:00+06:00" } }),
+        ],
+        evidence: first,
+      }),
+      "C-2026-FALL",
+    );
+  assert.deepEqual(again(8), [], "the same decision derives nothing new");
+  const changed = again(4);
+  assert.deepEqual(changed.map((record) => record.evidence_id), ["EVID-1", "EVID-1-C1"]);
+  assert.equal((changed[1]!.extensions as { proportion: number }).proportion, 0.4);
+});
+
 // ── evidence from item responses ────────────────────────────────────────────
 
 const item = (over: Record<string, unknown> = {}) => ({

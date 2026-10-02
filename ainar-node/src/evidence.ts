@@ -120,10 +120,56 @@ const recordedAlready = (b: CourseBundle) => {
 };
 
 /**
- * One evidence record per approved criterion decision that names a target.
+ * What a derived record says, as one comparable string: the fields that move
+ * when the professor changes a decision.
+ */
+const stance = (record: any): string =>
+  JSON.stringify([
+    record.demonstrated_level ?? null,
+    record.verified_by ?? null,
+    record.recorded_at ?? null,
+    record.extensions?.score ?? null,
+    record.extensions?.proportion ?? null,
+  ]);
+
+/**
+ * Whether a candidate derived from a decision should be written.
  *
- * A criterion with no `outcome_id` and no `capability_id` produces nothing here
- * — which is the "marks but no evidence" warning made concrete.
+ * New: yes. Already recorded by a person, under their own id or for the same
+ * target: no, as `recordedAlready` says. Already derived by us under the same
+ * id: only if the decision behind it has since changed — a professor who
+ * re-marks a question would otherwise leave the old mark standing in the
+ * evidence while the gradebook shows the new one.
+ */
+const toWrite = (b: CourseBundle) => {
+  const ours = new Map<string, any>();
+  for (const existing of b.evidence as any[]) {
+    if (existing.provenance?.produced_by === "evidence-extractor") ours.set(existing.evidence_id, existing);
+  }
+  const already = recordedAlready(b);
+  return (candidate: any): boolean => {
+    const derived = ours.get(candidate.evidence_id);
+    if (derived !== undefined) return stance(derived) !== stance(candidate);
+    return !already(candidate);
+  };
+};
+
+/**
+ * Evidence from approved criterion decisions: one record for the outcome or
+ * capability the criterion names, and one per concept it lists.
+ *
+ * The outcome record carries the rubric band. The concept records carry the
+ * proportion only, like an item response's: one criterion is weak evidence of
+ * any single concept it touches. They name the concept and nothing else — the
+ * outcome and capability go in `extensions` — so a per-outcome summary or a
+ * capability roll-up does not count one decision several times.
+ *
+ * A criterion that is scored through its items already yields concept evidence
+ * from those scored responses, so its concept list is not derived a second time
+ * for that submission.
+ *
+ * A criterion that names no outcome, capability or concept produces nothing —
+ * which is the "marks but no evidence" warning made concrete.
  */
 export const evidenceFromEvaluations = (
   b: CourseBundle,
@@ -134,7 +180,15 @@ export const evidenceFromEvaluations = (
   const submissions = new Map(
     (b.submissions as any[]).map((submission) => [submission.submission_id, submission]),
   );
-  const already = recordedAlready(b);
+  const items = itemById(b);
+  const scoredThroughItems = new Set<string>();
+  for (const response of b.item_responses as any[]) {
+    if (response.score === null || response.score === undefined) continue;
+    const item = items.get(response.item_id) as any;
+    if (!item?.criterion_id || !((item.concepts ?? []) as string[]).length) continue;
+    scoredThroughItems.add(JSON.stringify([response.submission_id, item.criterion_id]));
+  }
+  const wanted = toWrite(b);
   const produced: Record<string, unknown>[] = [];
 
   for (const evaluation of b.evaluations as any[]) {
@@ -148,47 +202,70 @@ export const evidenceFromEvaluations = (
 
     const assessment = assessments.get(submission.assessment_id);
     if (assessment === undefined || assessment.course_version_id !== courseVersionId) continue;
-    if (
-      (criterion.outcome_id ?? null) === null &&
-      (criterion.capability_id ?? null) === null
-    ) {
-      continue;
+
+    // Bounded replacement, like Python's `replace(old, new, 1)`. A string first
+    // argument replaces only the first occurrence in JavaScript too; a regex
+    // would need /g withheld and is easy to get wrong later.
+    const evidenceId = String(evaluation.evaluation_id).replace("EVAL-", "EVID-");
+    const provenance = compact({
+      produced_by: "evidence-extractor",
+      workflow_version: EVIDENCE_WORKFLOW,
+      input_refs: [evaluation.evaluation_id, evaluation.criterion_id, submission.submission_id],
+      created_at: decision.decided_at,
+    });
+    // Banker's rounding, because Python's `round` was. `Math.round` breaks ties
+    // upward, so a proportion landing exactly on a half at the third decimal
+    // would come out 0.001 higher — and the gradebook reads this field.
+    const proportion = roundHalfEven(decision.score / criterion.maximum_score, 3);
+
+    if ((criterion.outcome_id ?? null) !== null || (criterion.capability_id ?? null) !== null) {
+      const candidate = compact({
+        evidence_id: evidenceId,
+        student_id: submission.student_id,
+        course_version_id: courseVersionId,
+        source_type: "assessment",
+        source_id: submission.submission_id,
+        outcome_id: criterion.outcome_id,
+        capability_id: criterion.capability_id,
+        demonstrated_level: band(criterion, decision.score),
+        verified_by: decision.decided_by,
+        recorded_at: decision.decided_at,
+        provenance,
+        extensions: {
+          score: decision.score,
+          maximum_score: criterion.maximum_score,
+          proportion,
+          criterion_id: criterion.criterion_id,
+          assessment_id: assessment.assessment_id,
+        },
+      });
+      if (wanted(candidate)) produced.push(candidate);
     }
 
-    const candidate = compact({
-      // Bounded replacement, like Python's `replace(old, new, 1)`. A string
-      // first argument replaces only the first occurrence in JavaScript too;
-      // a regex would need /g withheld and is easy to get wrong later.
-      evidence_id: String(evaluation.evaluation_id).replace("EVAL-", "EVID-"),
-      student_id: submission.student_id,
-      course_version_id: courseVersionId,
-      source_type: "assessment",
-      source_id: submission.submission_id,
-      outcome_id: criterion.outcome_id,
-      capability_id: criterion.capability_id,
-      demonstrated_level: band(criterion, decision.score),
-      verified_by: decision.decided_by,
-      recorded_at: decision.decided_at,
-      provenance: compact({
-        produced_by: "evidence-extractor",
-        workflow_version: EVIDENCE_WORKFLOW,
-        input_refs: [evaluation.evaluation_id, evaluation.criterion_id, submission.submission_id],
-        created_at: decision.decided_at,
-      }),
-      extensions: {
-        score: decision.score,
-        maximum_score: criterion.maximum_score,
-        // Banker's rounding, because Python's `round` is. `Math.round` breaks
-        // ties upward, so a proportion landing exactly on a half at the third
-        // decimal would differ from the Python record by 0.001 — and the
-        // gradebook reads this field.
-        proportion: roundHalfEven(decision.score / criterion.maximum_score, 3),
-        criterion_id: criterion.criterion_id,
-        assessment_id: assessment.assessment_id,
-      },
+    if (scoredThroughItems.has(JSON.stringify([submission.submission_id, criterion.criterion_id]))) continue;
+    ((criterion.concepts ?? []) as string[]).forEach((conceptId, offset) => {
+      const candidate = compact({
+        evidence_id: `${evidenceId}-C${offset + 1}`,
+        student_id: submission.student_id,
+        course_version_id: courseVersionId,
+        source_type: "assessment",
+        source_id: submission.submission_id,
+        concept_id: conceptId,
+        verified_by: decision.decided_by,
+        recorded_at: decision.decided_at,
+        provenance,
+        extensions: compact({
+          score: decision.score,
+          maximum_score: criterion.maximum_score,
+          proportion,
+          criterion_id: criterion.criterion_id,
+          assessment_id: assessment.assessment_id,
+          outcome_id: criterion.outcome_id,
+          capability_id: criterion.capability_id,
+        }),
+      });
+      if (wanted(candidate)) produced.push(candidate);
     });
-
-    if (!already(candidate)) produced.push(candidate);
   }
   return produced;
 };
