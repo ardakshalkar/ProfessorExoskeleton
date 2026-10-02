@@ -168,10 +168,11 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
         problem: paper.problem ?? null,
         skip: paper.skip ?? null,
         note: names ? paper.note ?? null : null,
+        not: paper.not ?? [],
         candidates: [],
       };
       if ((lane === "held" || lane === "check") && paper.name) {
-        entry.candidates = nameCandidates(String(paper.name), { store, enrolled })
+        entry.candidates = nameCandidates(String(paper.name), { store, enrolled, not: paper.not ?? [] })
           .filter((candidate) => candidate.student !== paper.resolved)
           .map((candidate) => ({ ...candidate, name: nameOf(candidate.student) }));
       }

@@ -321,7 +321,7 @@ pseudonymous record of it. `ainar scans` does the deterministic half
 | plan | `scans plan RUN --assessment A [--per-file \| --pages-per-student N]` | lists the inbox and proposes the split; additive, so a late batch keeps earlier work |
 | fill | the reader | one entry per paper: `pages`, `number` or `name`, `variant`, `skip`, `rotate` |
 | apply | `scans apply RUN --assessment A [--replace] [--dry-run]` | checks every page is used once and the variant exists, matches each paper to a pseudonym through the roster, splits it out, writes `records/submissions.yaml` |
-| match | `scans assign RUN --assessment A --pages P (--student S \| --skip WHY)`, or the pane's Scans tab | the professor's answer for one paper — a close match confirmed, a held one named, a wrong one moved (its placement taken back, its transcript carried) — then the same apply |
+| match | `scans assign RUN --assessment A --pages P (--student S \| --reject S \| --skip WHY)`, or `--assignments '[…]'` for many; the pane's Scans tab and its review | the professor's answer per paper — a match confirmed, one turned down (`not:`, held until named), a held one named, a wrong one moved (its placement taken back, its transcript carried) — then one apply |
 | read | the reader | fills each `transcript.yaml`: `chosen` or `text`, `page`, `confidence`, or `blank` |
 | record | `scans record RUN --assessment A` | a complete transcript becomes item responses, `approval: draft` |
 | rubric | `scans answers RUN --assessment A` | every recorded answer per question, identical ones counted together; `/import-assessment` proposes a written question's criterion and levels from it |

@@ -133,6 +133,12 @@ export interface PlanPaper {
   resolved?: string;
   /** Beside `resolved` when the name was not matched word for word. */
   match?: NameMatch;
+  /**
+   * Students the professor said this paper is not. Once there is one, the name
+   * no longer places the paper — only a `student:` does — and those people are
+   * never suggested for it again.
+   */
+  not?: string[];
   problem?: string;
 }
 
@@ -436,11 +442,12 @@ const rankByName = (name: string, people: [string, Person][]): { id: string; mea
  */
 export const nameCandidates = (
   name: string,
-  context: { store: RosterStore; enrolled: Set<string> },
+  context: { store: RosterStore; enrolled: Set<string>; not?: string[] },
   limit = 3,
 ): { student: string; distance: number }[] => {
   if (!nameWords(name).length) return [];
-  const people = Object.entries(context.store.people).filter(([id]) => context.enrolled.has(id));
+  const not = new Set(context.not ?? []);
+  const people = Object.entries(context.store.people).filter(([id]) => context.enrolled.has(id) && !not.has(id));
   return rankByName(name, people)
     .filter((candidate) => candidate.mean <= CLOSE.hint)
     .slice(0, limit)
@@ -475,6 +482,10 @@ export const identify = (
     const student = pseudonym(String(paper.number), salt);
     if (!store.people[student]) return { problem: "no student in the roster has that number" };
     return enrolled.has(student) ? { student } : { problem: `${student} is in the roster but not enrolled in this run` };
+  }
+  if (paper.not?.length) {
+    // The professor turned a match down: the name has had its chance.
+    return { problem: `not ${paper.not.join(" or ")}, said the professor — pick who it is` };
   }
   if (paper.name) {
     const people = Object.entries(store.people).filter(([id]) => enrolled.has(id));
@@ -761,7 +772,7 @@ export const applyScans = async (plan: ScanPlan, context: ApplyContext): Promise
 // Saying who a paper is, by hand
 // --------------------------------------------------------------------------
 
-export type Assignment = { student: string } | { skip: string };
+export type Assignment = { student: string } | { skip: string } | { reject: string };
 
 /**
  * The professor's answer for one paper: this is that student, or this is
@@ -791,6 +802,14 @@ export const assignPaper = (
     if (!/^STUDENT-[A-Z0-9]+$/.test(to.student)) throw new Error(`${to.student} is not a pseudonym`);
     paper.student = to.student;
     delete paper.skip;
+    if (paper.not) paper.not = paper.not.filter((id) => id !== to.student);
+    if (paper.not && !paper.not.length) delete paper.not;
+  } else if ("reject" in to) {
+    // "Not this one": the paper is held until somebody says who it is.
+    if (!/^STUDENT-[A-Z0-9]+$/.test(to.reject)) throw new Error(`${to.reject} is not a pseudonym`);
+    paper.not = [...new Set([...(paper.not ?? []), to.reject])];
+    if (paper.student === to.reject) delete paper.student;
+    return { paper, previous: before };
   } else {
     if (!to.skip.trim()) throw new Error("say why the paper is nobody's");
     paper.skip = to.skip.trim();

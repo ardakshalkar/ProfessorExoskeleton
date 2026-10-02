@@ -5812,21 +5812,28 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
             const body = text ? JSON.parse(text) : {};
             const args = ["scans", path.endsWith("assign") ? "assign" : "apply", runId, "--assessment", assessmentId];
             if (path.endsWith("assign")) {
-              const pages = String(body.pages ?? "");
-              if (!/^[\d ,-]{1,40}$/.test(pages)) throw new Error("No paper given.");
-              args.push("--pages", pages);
-              if (body.file) {
-                if (!/^[\w.-]+\.pdf$/i.test(String(body.file))) throw new Error("Not a scan's file name.");
-                args.push("--file", String(body.file));
-              }
-              if (body.student) {
-                if (!/^STUDENT-[A-Z0-9]+$/.test(String(body.student))) throw new Error("Not a pseudonym.");
-                args.push("--student", String(body.student));
-              } else if (body.skip) {
-                args.push("--skip", String(body.skip).slice(0, 200));
-              } else {
-                throw new Error("Say who the paper is, or that it is nobody's.");
-              }
+              // One answer, or `papers: [...]` from the review's Confirm — sent
+              // to the CLI as one list, so it is checked whole and applied once.
+              const answers = (Array.isArray(body.papers) ? body.papers : [body]).map((entry) => {
+                const pages = String(entry.pages ?? "");
+                if (!/^[\d ,-]{1,40}$/.test(pages)) throw new Error("No paper given.");
+                const answer = { pages };
+                if (entry.file) {
+                  if (!/^[\w.-]+\.pdf$/i.test(String(entry.file))) throw new Error("Not a scan's file name.");
+                  answer.file = String(entry.file);
+                }
+                const pseudonym = (value) => {
+                  if (!/^STUDENT-[A-Z0-9]+$/.test(String(value))) throw new Error("Not a pseudonym.");
+                  return String(value);
+                };
+                if (entry.student) answer.student = pseudonym(entry.student);
+                else if (entry.reject) answer.reject = pseudonym(entry.reject);
+                else if (entry.skip) answer.skip = String(entry.skip).slice(0, 200);
+                else throw new Error("Say who the paper is, who it is not, or that it is nobody's.");
+                return answer;
+              });
+              if (!answers.length || answers.length > 500) throw new Error("No papers given.");
+              args.push("--assignments", JSON.stringify(answers));
             }
             return runScans(args, root).then((result) => sendJson(res, 200, result));
           })

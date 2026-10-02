@@ -129,6 +129,7 @@ import {
   runInbox,
   scanPlace,
   scanStatus,
+  scanSubmissionId,
   submissionsDir,
   unfiledScans,
   unplaceScan,
@@ -1985,7 +1986,8 @@ try {
         console.error(
           "usage: scans identify RUN [--title TEXT] [--date YYYY-MM-DD]\n" +
             "       scans file RUN FILE.pdf --assessment ASSESSMENT-ID\n" +
-            "       scans assign RUN --assessment ASSESSMENT-ID --pages 13-14 [--file F.pdf] (--student STUDENT-ID | --skip WHY)\n" +
+            "       scans assign RUN --assessment ASSESSMENT-ID --pages 13-14 [--file F.pdf] (--student STUDENT-ID | --skip WHY | --reject STUDENT-ID)\n" +
+            "       scans assign RUN --assessment ASSESSMENT-ID --assignments '[{\"pages\":\"13-14\",\"student\":\"STUDENT-…\"}, …]'\n" +
             "       scans {status|plan|apply|record|answers} RUN --assessment ASSESSMENT-ID",
         );
         process.exit(2);
@@ -2149,34 +2151,45 @@ try {
       // Who one paper is, said by hand — the professor confirming a close match,
       // naming a held paper, or saying it is nobody's. Then the same apply as
       // always, so the paper is placed by the rules every other one was.
-      let carry: { from: string; student: string } | null = null;
+      // One paper from the flags, or many from --assignments (a JSON list of
+      // {pages, file?, student | skip | reject}) — the pane's "confirm all" —
+      // checked whole before anything moves, and applied once at the end.
+      const carries: { from: string; student: string }[] = [];
       if (sub === "assign") {
-        const pages = flag("pages");
-        const student = flag("student");
-        const skip = flag("skip");
-        if (!pages || !student === !skip) {
-          throw new Error("scans assign takes --pages and one of --student STUDENT-ID or --skip WHY");
-        }
         if (dryRun) throw new Error("scans assign has no --dry-run: it moves a wrong placement aside");
+        const given = flag("assignments");
+        const answers: any[] = given
+          ? JSON.parse(given)
+          : [{ pages: flag("pages"), file: flag("file"), student: flag("student"), skip: flag("skip"), reject: flag("reject") }];
+        if (!Array.isArray(answers) || !answers.length) throw new Error("--assignments is a JSON list of answers");
         const plan = readPlan(place);
         if (!plan) throw new Error(`no plan at ${place.plan} — run \`scans plan\` first`);
-        if (student && !enrolled.has(student)) throw new Error(`${student} is not enrolled in ${runId}`);
-        const { previous } = assignPaper(plan, { pages, file: flag("file") }, student ? { student } : { skip: skip! });
-        if (previous) {
-          const undone = unplaceScan(
-            place,
-            previous,
-            assessmentId!,
-            { evaluations: bundle.evaluations as any[], item_responses: bundle.item_responses as any[] },
-            now,
-          );
-          const answers = removeRecords(courseDir, "item_responses", undone.responses);
+        const undo: { previous: string; student: string | null }[] = [];
+        for (const answer of answers) {
+          const kinds = ["student", "skip", "reject"].filter((key) => answer[key]);
+          if (!answer.pages || kinds.length !== 1) {
+            throw new Error("each answer takes pages and one of --student STUDENT-ID, --skip WHY or --reject STUDENT-ID");
+          }
+          if (answer.student && !enrolled.has(answer.student)) throw new Error(`${answer.student} is not enrolled in ${runId}`);
+          const to = answer.student ? { student: answer.student } : answer.skip ? { skip: answer.skip } : { reject: answer.reject };
+          const { previous } = assignPaper(plan, { pages: String(answer.pages), file: answer.file || undefined }, to);
+          if (previous) undo.push({ previous, student: answer.student ?? null });
+          out(`  assigned  pages ${answer.pages} → ${answer.student ?? (answer.skip ? `skip: ${answer.skip}` : `not ${answer.reject}`)}`);
+        }
+        // Every refusal before any move: a paper already graded stops the lot.
+        const records = { evaluations: bundle.evaluations as any[], item_responses: bundle.item_responses as any[] };
+        for (const { previous } of undo) {
+          const graded = records.evaluations.some((entry) => entry.submission_id === scanSubmissionId(previous, assessmentId!));
+          if (graded) throw new Error(`${previous}'s paper is already graded — that is a grade to reconsider, not a placement to undo`);
+        }
+        for (const { previous, student } of undo) {
+          const undone = unplaceScan(place, previous, assessmentId!, records, now);
+          const taken = removeRecords(courseDir, "item_responses", undone.responses);
           const papers = removeRecords(courseDir, "submissions", [undone.submission_id]);
-          out(`  unplaced  ${previous}: ${papers} submission, ${answers} answer(s) taken back; folder kept at ${undone.moved_to ?? "(none)"}`);
-          if (student && undone.moved_to) carry = { from: undone.moved_to, student };
+          out(`  unplaced  ${previous}: ${papers} submission, ${taken} answer(s) taken back; folder kept at ${undone.moved_to ?? "(none)"}`);
+          if (student && undone.moved_to) carries.push({ from: undone.moved_to, student });
         }
         writePlan(place, plan);
-        out(`  assigned  pages ${pages} → ${student ?? `skip: ${skip}`}`);
         sub = "apply";
       }
 
@@ -2229,10 +2242,11 @@ try {
           }
         }
         out(`wrote ${place.plan}`);
-        if (carry && result.placed.some((entry) => entry.student === carry!.student)) {
+        for (const carry of carries) {
+          if (!result.placed.some((entry) => entry.student === carry.student)) continue;
           if (carryTranscript(carry.from, place, carry.student)) {
             out(`carried the transcript read off this paper to ${carry.student} — \`scans record\` records it`);
-            result.transcripts = result.transcripts.filter((student) => student !== carry!.student);
+            result.transcripts = result.transcripts.filter((student) => student !== carry.student);
           }
         }
         if (result.transcripts.length) {

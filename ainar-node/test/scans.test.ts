@@ -235,6 +235,14 @@ test("candidates for a written name are suggestions, nearest first, within reach
   assert.deepEqual(nameCandidates("Brown Bobby", known).map((entry) => entry.student), [s.bob]);
   assert.deepEqual(nameCandidates("Zhuldyz Omarova", known), []);
   assert.deepEqual(nameCandidates("", known), []);
+  assert.deepEqual(nameCandidates("Bob Browne", { ...known, not: [s.bob] }), [], "never the one turned down");
+});
+
+test("a match turned down is never made from the name again", () => {
+  const s = setting();
+  const known = { store: s.store, salt: SALT, enrolled: s.enrolled };
+  assert.match((identify({ pages: "1", name: "Bob Brown", not: [s.carol] }, known) as any).problem, /said the professor/);
+  assert.deepEqual(identify({ pages: "1", name: "Bob Brown", not: [s.carol], student: s.bob }, known), { student: s.bob });
 });
 
 test("assigning a paper pins it, and says whose placement it takes back", () => {
@@ -249,6 +257,13 @@ test("assigning a paper pins it, and says whose placement it takes back", () => 
   assignPaper(plan, { pages: "3-4" }, { skip: "a visiting student" });
   assert.equal(plan.sources[0]!.papers[1]!.skip, "a visiting student");
   assert.throws(() => assignPaper(plan, { pages: "5-6" }, { skip: "x" }), /no paper on pages 5-6/);
+
+  const rejected = assignPaper(plan, { pages: "1-2" }, { reject: "STUDENT-CAROL" });
+  assert.equal(rejected.previous, "STUDENT-BOB", "the placement it had is taken back");
+  assert.deepEqual(plan.sources[0]!.papers[0]!.not, ["STUDENT-CAROL"]);
+  assert.equal(plan.sources[0]!.papers[0]!.student, undefined);
+  assignPaper(plan, { pages: "1-2" }, { student: "STUDENT-DAN" });
+  assert.deepEqual(plan.sources[0]!.papers[0]!.not, ["STUDENT-CAROL"], "who it is not is remembered");
   assert.throws(() => assignPaper(plan, { pages: "1-2" }, { student: "bob" }), /not a pseudonym/);
 });
 

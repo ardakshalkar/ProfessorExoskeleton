@@ -151,8 +151,10 @@ is a lead for the professor to confirm — in the pane's **Scans** tab, which
 shows each paper's name line beside its candidates, or with `ainar roster
 whois` — not one for you to write in. Their answer is
 `scans assign RUN --assessment … --pages 13-14 --student STUDENT-…` (or
-`--skip WHY`), which also takes back a paper placed on the wrong student and
-carries its transcript to the right one; run it only on their word. Fix what you can from the pages; the rest is the professor's:
+`--reject STUDENT-…`, or `--skip WHY`), which also takes back a paper placed on
+the wrong student and carries its transcript to the right one; run it only on
+their word. For a whole class, point them at **Review all name matches** in the
+Scans tab — every correspondence as cards, confirmed in one press. Fix what you can from the pages; the rest is the professor's:
 tell them which file and which pages, never the name.
 
 ## 4. Read the answers

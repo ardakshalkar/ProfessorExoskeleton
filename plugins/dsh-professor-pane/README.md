@@ -231,8 +231,19 @@ the submission and its drafted answers are removed, and what was read off the
 paper follows it to the right student. It is refused once there is an
 evaluation on it: then it is a grade to reconsider, not a placement to undo.
 
+**Review all name matches** opens every correspondence at once, as big cards
+over the conversation: the name line, the name as read, the roster name. Two
+sections. *Matched by name* is every paper the roster placed and nobody has
+confirmed, close spellings first; each starts as "them", and pressing a card
+turns it to "not them". *Suggested* is every held paper with a nearest student;
+each starts as "leave held", and pressing turns it to "them". One press —
+Confirm 44, or Confirm 43 · reject 1 — sends the whole list to `scans assign
+--assignments`, which checks it whole and applies once. A rejected paper keeps
+`not: [STUDENT-…]` in the plan: the name no longer places it and that student
+is never suggested for it again, so it waits in Held for the professor to name.
+
 On Pseudonyms the cards keep their buttons but drop the written names and the
-crops, because the crop *is* the handwritten name.
+crops, because the crop *is* the handwritten name, and the review is not offered.
 
 ## Integrations
 
@@ -498,7 +509,7 @@ lines, not before.
 | `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/`, for the pane's refresh poll |
 | `GET /professor-pane/api/scans?run=&assessment=&names=` | the Scans tab: the run's scanned piles, the six steps with how far each has got, every planned paper with its lane and candidates. Written and roster names only with `names=1` |
 | `GET /professor-pane/api/scans/crop?run=&assessment=&file=&pages=` | the top of a paper's first page — the name line — as PNG, drawn by `pdftoppm` and kept in the private `_inbox/_crops/` |
-| `POST /professor-pane/api/scans/assign?run=&assessment=` | say who one paper is; body is `{pages, file, student}` or `{pages, file, skip}`. Spawns `ainar scans assign` |
+| `POST /professor-pane/api/scans/assign?run=&assessment=` | say who papers are; body is one `{pages, file, student \| reject \| skip}`, or `{papers: [...]}` of them from the review. Spawns `ainar scans assign --assignments` |
 | `POST /professor-pane/api/scans/apply?run=&assessment=` | spawn `ainar scans apply` again, after a hand edit of the plan |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |

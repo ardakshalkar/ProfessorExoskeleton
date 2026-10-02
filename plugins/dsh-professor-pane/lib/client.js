@@ -609,6 +609,39 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 /* The upload dialog: a drop box, the files, a note. Not the full-height sheet the
    publish dialog is — there is no long plan to read — so it sizes to content. */
 .pp-uploadmodal{flex:none;max-height:100%;width:min(640px,100%);margin:auto}
+/* The match review: every name the pile was matched on, as big cards, so a
+   class's worth can be read at a glance and confirmed in one press. A card is
+   a toggle — pressed means "not them" for a match, "yes" for a suggestion. */
+.pp-review{flex:1;min-height:0;overflow:auto;padding:12px 14px 18px}
+.pp-reviewsec{display:flex;align-items:baseline;gap:8px;margin:14px 0 8px;font-size:12px;font-weight:600}
+.pp-reviewsec:first-child{margin-top:0}
+.pp-reviewsec span{font-weight:400;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-reviewgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:10px}
+.pp-rcard{display:flex;flex-direction:column;gap:5px;text-align:left;font:inherit;cursor:pointer;
+  padding:9px 10px;border-radius:10px;background:var(--dsw-alias-bg-l1,#fff);color:inherit;
+  border:2px solid #2f8a4e}
+.pp-rcard:focus-visible{outline:2px solid var(--dsw-alias-label-primary,#111);outline-offset:2px}
+.pp-rcard img{display:block;width:100%;height:auto;border-radius:6px;background:#fff}
+.pp-rcard .pp-rwritten{font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);font-size:12px;
+  color:var(--dsw-alias-label-secondary,#444)}
+.pp-rcard .pp-rname{font-size:14px;font-weight:600;line-height:1.3}
+.pp-rcard .pp-rid{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-rbadges{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.pp-rbadge{font-size:10.5px;padding:1px 7px;border-radius:20px;
+  background:var(--dsw-alias-fill-secondary,#f0f0f2);color:var(--dsw-alias-label-secondary,#444)}
+.pp-rbadge-close{background:rgba(165,86,31,.12);color:#a5561f}
+.pp-rbadge-yes{background:rgba(47,138,78,.12);color:#2f8a4e;margin-left:auto}
+.pp-rbadge-no{background:rgba(180,52,42,.12);color:#b4342a;margin-left:auto}
+.pp-rcard-no{border-color:#b4342a}
+.pp-rcard-no img,.pp-rcard-no .pp-rname{opacity:.45}
+.pp-rcard-no .pp-rname{text-decoration:line-through}
+.pp-rcard-off{border-color:var(--dsw-alias-border-l2,#e3e3e6);border-style:dashed}
+.pp-reviewfoot{flex:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 12px;
+  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-reviewfoot .pp-as{flex:1;min-width:0}
+.pp-primary{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:6px 14px;border-radius:20px;
+  color:#fff;background:#2f8a4e;border:1px solid #2f8a4e}
+.pp-primary:disabled{opacity:.5;cursor:default}
 .pp-uploadmodal .pp-publishbody{overflow:auto}
 .pp-drop{flex:none;display:flex;align-items:center;justify-content:center;min-height:96px;
   padding:14px;border-radius:8px;cursor:pointer;text-align:center;font-size:12px;
@@ -3828,6 +3861,178 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     };
 
     /**
+     * Every name correspondence in the pile, as big cards over the conversation.
+     *
+     * Two sections. **Matched** is every paper the roster placed by its name and
+     * nobody has confirmed — a close spelling first, since that is where a wrong
+     * match would be. They start as yes, because the matcher already decided;
+     * pressing a card turns it to "not them". **Suggested** is every held paper
+     * with a nearest student; those start as no, because the matcher refused
+     * them, and pressing one turns it to yes. One press of Confirm sends the
+     * lot: a yes pins the student, a "not them" takes the placement back and
+     * holds the paper for the professor to name in the tab.
+     */
+    function MatchReview(props) {
+      const matched = props.papers.filter(
+        (paper) => paper.resolved && !paper.pinned && paper.has_name && (paper.lane === "check" || paper.lane === "placed"),
+      );
+      matched.sort((a, b) => (a.lane === "check" ? 0 : 1) - (b.lane === "check" ? 0 : 1));
+      const suggested = props.papers.filter((paper) => paper.lane === "held" && paper.candidates.length);
+      const keyOf = (paper) => paper.file + "|" + paper.pages;
+      // key → true (yes) or false (not them / leave). Absent means the default.
+      const [choice, setChoice] = React.useState({});
+      const isYes = (paper, fallback) => (keyOf(paper) in choice ? choice[keyOf(paper)] : fallback);
+      const close = props.onClose;
+      const busy = props.busy;
+
+      React.useEffect(() => {
+        const onKey = (event) => {
+          if (event.key === "Escape" && !busy) {
+            event.stopPropagation();
+            close();
+          }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [close, busy]);
+
+      const yesMatched = matched.filter((paper) => isYes(paper, true));
+      const notMatched = matched.filter((paper) => !isYes(paper, true));
+      const yesSuggested = suggested.filter((paper) => isYes(paper, false));
+      const setAll = (list, value) =>
+        setChoice((current) => {
+          const next = Object.assign({}, current);
+          list.forEach((paper) => {
+            next[keyOf(paper)] = value;
+          });
+          return next;
+        });
+
+      const submit = () => {
+        const papers = []
+          .concat(yesMatched.map((paper) => ({ pages: paper.pages, file: paper.file, student: paper.resolved })))
+          .concat(notMatched.map((paper) => ({ pages: paper.pages, file: paper.file, reject: paper.resolved })))
+          .concat(yesSuggested.map((paper) => ({ pages: paper.pages, file: paper.file, student: paper.candidates[0].student })));
+        if (papers.length) props.onSubmit(papers);
+      };
+
+      const rcard = (paper, student, name, yes, kind) =>
+        h(
+          "button",
+          {
+            type: "button",
+            key: keyOf(paper),
+            className: "pp-rcard" + (yes ? "" : kind === "matched" ? " pp-rcard-no" : " pp-rcard-off"),
+            "aria-pressed": yes,
+            disabled: busy,
+            title: yes
+              ? kind === "matched" ? "Press if this is not them" : "Press to leave it held"
+              : kind === "matched" ? "Press to keep the match" : "Press if this is them",
+            onClick: () => setChoice((current) => Object.assign({}, current, { [keyOf(paper)]: !yes })),
+          },
+          props.crops ? h("img", { src: props.cropUrl(paper), alt: "Name line, page " + paper.pages.split("-")[0], loading: "lazy" }) : null,
+          h("div", { className: "pp-rwritten" }, paper.written ? "“" + paper.written + "”" : "pages " + paper.pages),
+          h("div", { className: "pp-rname" }, name || student),
+          h("div", { className: "pp-rid" }, student + " · pp. " + paper.pages),
+          h(
+            "div",
+            { className: "pp-rbadges" },
+            kind === "suggested"
+              ? h("span", { className: "pp-rbadge pp-rbadge-close" }, "suggested · not placed")
+              : paper.lane === "check"
+                ? h("span", { className: "pp-rbadge pp-rbadge-close" }, "close spelling")
+                : h("span", { className: "pp-rbadge" }, paper.match === "words" ? "same words" : "exact"),
+            h(
+              "span",
+              { className: "pp-rbadge " + (yes ? "pp-rbadge-yes" : kind === "matched" ? "pp-rbadge-no" : "") },
+              yes ? "✓ them" : kind === "matched" ? "✗ not them" : "leave held",
+            ),
+          ),
+        );
+
+      const label =
+        "Confirm " + (yesMatched.length + yesSuggested.length) +
+        (notMatched.length ? " · reject " + notMatched.length : "");
+
+      return ReactDOM.createPortal(
+        h(
+          "div",
+          {
+            className: "pp-veil",
+            onMouseDown: (event) => {
+              if (event.target === event.currentTarget && !busy) close();
+            },
+          },
+          h(
+            "div",
+            { className: "pp-modal", role: "dialog", "aria-modal": "true", "aria-label": "Review name matches" },
+            h(
+              "div",
+              { className: "pp-modalhead" },
+              h("div", { className: "pp-modaltitle" }, "Who wrote each paper · " + props.title),
+              h("button", { type: "button", className: "pp-close", "aria-label": "Close", disabled: busy, onClick: close }, "×"),
+            ),
+            h(
+              "div",
+              { className: "pp-review" },
+              matched.length
+                ? h(
+                    "div",
+                    { className: "pp-reviewsec" },
+                    "Matched by name",
+                    h("span", null, matched.length + " — every one is them unless you press it"),
+                    h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => setAll(matched, true) }, "All them"),
+                  )
+                : null,
+              h("div", { className: "pp-reviewgrid" }, matched.map((paper) => rcard(paper, paper.resolved, paper.resolved_name, isYes(paper, true), "matched"))),
+              suggested.length
+                ? h(
+                    "div",
+                    { className: "pp-reviewsec" },
+                    "Suggested",
+                    h("span", null, suggested.length + " held — the nearest student, placed only if you press it"),
+                    h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => setAll(suggested, true) }, "All them"),
+                    h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => setAll(suggested, false) }, "None"),
+                  )
+                : null,
+              h(
+                "div",
+                { className: "pp-reviewgrid" },
+                suggested.map((paper) =>
+                  rcard(paper, paper.candidates[0].student, paper.candidates[0].name, isYes(paper, false), "suggested"),
+                ),
+              ),
+              !matched.length && !suggested.length ? h(Message, null, "Nothing to review: every paper is confirmed or set aside.") : null,
+            ),
+            h(
+              "div",
+              { className: "pp-reviewfoot" },
+              h(
+                "span",
+                { className: "pp-as" },
+                busy
+                  ? "Placing — every answer at once, then one apply…"
+                  : "A rejected paper is taken back and held for you to name in the tab. Nothing here is graded.",
+              ),
+              h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: close }, "Cancel"),
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-primary",
+                  disabled: busy || yesMatched.length + notMatched.length + yesSuggested.length === 0,
+                  onClick: submit,
+                },
+                busy ? "Placing…" : label,
+              ),
+            ),
+          ),
+        ),
+        document.body,
+      );
+    }
+
+    /**
      * Paper exams: where a pile stands, and who each paper is.
      *
      * Drawn here rather than in the frame for Integrations' reason — it calls
@@ -3843,6 +4048,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const [busy, setBusy] = React.useState(null);
       const [said, setSaid] = React.useState(null);
       const [focus, setFocus] = React.useState(0);
+      const [reviewing, setReviewing] = React.useState(false);
       const names = props.names;
 
       const query = (path) =>
@@ -3868,7 +4074,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const doc = state.value;
       const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
 
-      const post = (path, body, label) => {
+      const post = (path, body, label, done) => {
         if (busy) return;
         setBusy(label);
         setSaid(null);
@@ -3889,6 +4095,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             });
             setTick((value) => value + 1);
             props.onWrite();
+            if (done && !result.error && result.ok) done();
           })
           .catch((error) => {
             setBusy(null);
@@ -3918,6 +4125,16 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       }
 
       const who = (id, name) => (name ? name + " · " + id : id);
+      const cropUrl = (paper) =>
+        query("/api/scans/crop").replace(/assessment=[^&]*/, "") +
+        "&assessment=" + encodeURIComponent(assessmentId) +
+        "&file=" + encodeURIComponent(paper.file) +
+        "&pages=" + encodeURIComponent(paper.pages);
+      const reviewable = doc.papers.filter(
+        (paper) =>
+          (paper.resolved && !paper.pinned && paper.has_name && (paper.lane === "check" || paper.lane === "placed")) ||
+          (paper.lane === "held" && paper.candidates.length),
+      ).length;
       const work = doc.papers.filter((paper) => paper.lane === "check" || paper.lane === "held");
       const at = Math.min(focus, Math.max(0, work.length - 1));
       const unplaced = doc.class.filter((entry) => !entry.placed);
@@ -3972,11 +4189,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 className: "pp-crop",
                 alt: "The top of page " + paper.pages.split("-")[0] + ", where the name is written",
                 loading: "lazy",
-                src:
-                  query("/api/scans/crop").replace(/assessment=[^&]*/, "") +
-                  "&assessment=" + encodeURIComponent(assessmentId) +
-                  "&file=" + encodeURIComponent(paper.file) +
-                  "&pages=" + encodeURIComponent(paper.pages),
+                src: cropUrl(paper),
               })
             : null,
           h(
@@ -4114,6 +4327,34 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               null,
               "Pseudonyms are showing, so the handwritten names and their crops are hidden. Press Names to match papers.",
             )
+          : reviewable
+            ? h(
+                "div",
+                { className: "pp-actions", style: { marginBottom: "4px" } },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-primary",
+                    disabled: Boolean(busy),
+                    title: "Every name the pile was matched on, as big cards — confirm them all at once, reject the wrong ones",
+                    onClick: () => setReviewing(true),
+                  },
+                  "Review all " + reviewable + " name matches",
+                ),
+              )
+            : null,
+        reviewing && names
+          ? h(MatchReview, {
+              papers: doc.papers,
+              title: doc.assessment.title,
+              crops: doc.crops,
+              cropUrl: cropUrl,
+              busy: busy === "review",
+              onClose: () => setReviewing(false),
+              onSubmit: (papers) =>
+                post("/api/scans/assign", { papers: papers }, "review", () => setReviewing(false)),
+            })
           : null,
         check.length
           ? h(
