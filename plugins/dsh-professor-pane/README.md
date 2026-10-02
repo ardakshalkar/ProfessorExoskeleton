@@ -205,6 +205,35 @@ overlay for nothing: a repository-relative key is served by the route a deck is
 served by, and a PDF, an image, a text file or a markdown report paints in the
 frame.
 
+## Scans
+
+A scanned pile goes through six steps — Identify, Match, Read, Rubric, Grade,
+Approve — and each is already a command or a skill. The tab says where a pile
+stands and whose move it is, as a bar of six with the one that is yours in
+amber, and draws one step in full: **Match**, because who a paper belongs to is
+the one question only the professor can answer. The others are the
+assistant's to draft, so when one of them is next the tab offers a press that
+asks it, with the prompt already written.
+
+Match has two lanes. **Check** holds the papers placed on a close spelling
+(`match: close`): Confirm pins the student, Someone else picks from the class.
+**Held** holds the ones not placed: the nearest students as one-press answers,
+the whole class in a picker, and Not a student. Every card shows the top of
+the paper — the printed title and the Name line — because a transcription the
+professor cannot see is one they are asked to trust. `j`/`k` move between
+cards and Enter takes the first answer.
+
+Every answer goes through `ainar scans assign`, which writes `student:` (or
+`skip:`) into the plan and places the paper by the same rules `scans apply`
+places every paper. Moving a paper that was placed on the wrong student takes
+that placement back first — the folder is kept aside in `_inbox/_unplaced/`,
+the submission and its drafted answers are removed, and what was read off the
+paper follows it to the right student. It is refused once there is an
+evaluation on it: then it is a grade to reconsider, not a placement to undo.
+
+On Pseudonyms the cards keep their buttons but drop the written names and the
+crops, because the crop *is* the handwritten name.
+
 ## Integrations
 
 The tab exists because the facts are scattered. A professor asking "will a push
@@ -467,6 +496,10 @@ lines, not before.
 | `POST /professor-pane/api/publish?run=` | plan or perform one publication; body is `{target, assessment, repo, group, message, edit, confirm}`. Without `confirm` it reads and writes nothing |
 | `POST /professor-pane/api/approve` | gone since 2026-09-29: answers 410 and says where approval went |
 | `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/`, for the pane's refresh poll |
+| `GET /professor-pane/api/scans?run=&assessment=&names=` | the Scans tab: the run's scanned piles, the six steps with how far each has got, every planned paper with its lane and candidates. Written and roster names only with `names=1` |
+| `GET /professor-pane/api/scans/crop?run=&assessment=&file=&pages=` | the top of a paper's first page — the name line — as PNG, drawn by `pdftoppm` and kept in the private `_inbox/_crops/` |
+| `POST /professor-pane/api/scans/assign?run=&assessment=` | say who one paper is; body is `{pages, file, student}` or `{pages, file, skip}`. Spawns `ainar scans assign` |
+| `POST /professor-pane/api/scans/apply?run=&assessment=` | spawn `ainar scans apply` again, after a hand edit of the plan |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
 | `GET /professor-pane/view/course?run=&dark=&drafts=&student=&mode=` | course mode, drawn here: `mode=planning` (structure), `mode=teaching` (this week, with class figures), otherwise the three-column term table; `student=1` draws the record alone, no hole, and is ignored for teaching |

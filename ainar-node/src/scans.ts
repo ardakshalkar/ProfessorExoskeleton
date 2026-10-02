@@ -46,7 +46,7 @@ import { join, resolve } from "node:path";
 import { degrees, PDFDocument } from "pdf-lib";
 import { parse, stringify } from "yaml";
 import { ItemResponse, Submission } from "./model/assessment.ts";
-import { pseudonym, RosterStore } from "./roster.ts";
+import { pseudonym, RosterStore, type Person } from "./roster.ts";
 
 // --------------------------------------------------------------------------
 // Where
@@ -418,6 +418,35 @@ const nameDistance = (written: string[], roster: string[]): { mean: number; wors
 /** A close name: the mean, the worst word, and the gap to the next nearest person. */
 const CLOSE = { mean: 0.25, worst: 0.4, margin: 0.15, hint: 0.4 };
 
+/** Everyone, nearest first, by how far the written name is from each way they are known. */
+const rankByName = (name: string, people: [string, Person][]): { id: string; mean: number; worst: number }[] => {
+  const written = nameWords(name);
+  return people
+    .map(([id, person]) => {
+      const fits = knownAs(person).map((words) => nameDistance(written, words));
+      return { id, ...fits.reduce((a, b) => (b.mean < a.mean ? b : a), { mean: Infinity, worst: Infinity }) };
+    })
+    .sort((a, b) => a.mean - b.mean || a.id.localeCompare(b.id));
+};
+
+/**
+ * The enrolled students a written name could be, nearest first — for a person
+ * choosing, not for `identify`: it suggests, it decides nothing. Only those
+ * within the distance a near miss is reported at.
+ */
+export const nameCandidates = (
+  name: string,
+  context: { store: RosterStore; enrolled: Set<string> },
+  limit = 3,
+): { student: string; distance: number }[] => {
+  if (!nameWords(name).length) return [];
+  const people = Object.entries(context.store.people).filter(([id]) => context.enrolled.has(id));
+  return rankByName(name, people)
+    .filter((candidate) => candidate.mean <= CLOSE.hint)
+    .slice(0, limit)
+    .map((candidate) => ({ student: candidate.id, distance: Math.round(candidate.mean * 100) / 100 }));
+};
+
 /**
  * The pseudonym a paper belongs to, from what is written on it.
  *
@@ -456,14 +485,8 @@ export const identify = (
     if (exact.length === 1) return { student: exact[0]! };
     if (exact.length) return several(exact.length);
 
-    const written = nameWords(paper.name);
-    if (written.length < 2) return { problem: "the name matches no enrolled student" };
-    const nearest = people
-      .map(([id, person]) => {
-        const fits = knownAs(person).map((words) => nameDistance(written, words));
-        return { id, ...fits.reduce((a, b) => (b.mean < a.mean ? b : a), { mean: Infinity, worst: Infinity }) };
-      })
-      .sort((a, b) => a.mean - b.mean);
+    if (nameWords(paper.name).length < 2) return { problem: "the name matches no enrolled student" };
+    const nearest = rankByName(paper.name, people);
 
     const same = nearest.filter((candidate) => candidate.mean === 0);
     if (same.length === 1) return { student: same[0]!.id, match: "words" };
@@ -732,6 +755,102 @@ export const applyScans = async (plan: ScanPlan, context: ApplyContext): Promise
   }
   if (!context.dryRun) writePlan(place, plan);
   return result;
+};
+
+// --------------------------------------------------------------------------
+// Saying who a paper is, by hand
+// --------------------------------------------------------------------------
+
+export type Assignment = { student: string } | { skip: string };
+
+/**
+ * The professor's answer for one paper: this is that student, or this is
+ * nobody's (`skip`). Written into the plan, where `apply` reads it — a
+ * `student:` beside a name outranks the name, so a close match confirmed
+ * this way is no longer `match: close`.
+ *
+ * Returns who the paper was placed for before when that changes, because
+ * their placement is now wrong and has to be taken back (`unplaceScan`)
+ * before the paper is placed again.
+ */
+export const assignPaper = (
+  plan: ScanPlan,
+  ref: { pages: string; file?: string },
+  to: Assignment,
+): { paper: PlanPaper; previous: string | null } => {
+  const found = plan.sources.flatMap((source) =>
+    source.papers
+      .filter((paper) => String(paper.pages) === ref.pages && (!ref.file || source.file === ref.file))
+      .map((paper) => paper),
+  );
+  if (!found.length) throw new Error(`no paper on pages ${ref.pages}${ref.file ? ` of ${ref.file}` : ""} in the plan`);
+  if (found.length > 1) throw new Error(`pages ${ref.pages} are in ${found.length} files — say which with --file`);
+  const paper = found[0]!;
+  const before = paper.resolved ?? null;
+  if ("student" in to) {
+    if (!/^STUDENT-[A-Z0-9]+$/.test(to.student)) throw new Error(`${to.student} is not a pseudonym`);
+    paper.student = to.student;
+    delete paper.skip;
+  } else {
+    if (!to.skip.trim()) throw new Error("say why the paper is nobody's");
+    paper.skip = to.skip.trim();
+    delete paper.student;
+  }
+  const after = "student" in to ? to.student : null;
+  return { paper, previous: before && before !== after ? before : null };
+};
+
+/**
+ * Take back a placement that was wrong: the student's private folder is moved
+ * aside, not deleted, and the caller removes the submission and the answers it
+ * recorded for them. Refused once anything was built on it — an evaluation, or
+ * an answer the professor accepted — because then it is not a placement to
+ * undo but a grade to reconsider, and that is theirs.
+ */
+export const unplaceScan = (
+  place: ScanPlace,
+  student: string,
+  assessmentId: string,
+  records: { evaluations: any[]; item_responses: any[] },
+  now: string,
+): { moved_to: string | null; submission_id: string; responses: string[] } => {
+  const submissionId = scanSubmissionId(student, assessmentId);
+  const graded = records.evaluations.filter((entry) => entry.submission_id === submissionId);
+  if (graded.length) {
+    throw new Error(`${student}'s paper is already graded (${graded.length} evaluation(s)) — that is a grade to reconsider, not a placement to undo`);
+  }
+  const responses = records.item_responses.filter((entry) => entry.submission_id === submissionId);
+  if (responses.some((entry) => entry.approval !== "draft")) {
+    throw new Error(`answers recorded for ${student} on this paper were accepted — not undone by moving the paper`);
+  }
+  const folder = join(place.base, student);
+  let moved: string | null = null;
+  if (existsSync(folder)) {
+    const aside = join(place.inbox, "_unplaced");
+    mkdirSync(aside, { recursive: true });
+    moved = join(aside, `${student}-${now.replace(/\D/g, "").slice(0, 14)}`);
+    renameSync(folder, moved);
+  }
+  return { moved_to: moved, submission_id: submissionId, responses: responses.map((entry) => entry.response_id) };
+};
+
+/**
+ * A transcript describes a paper, not a person: when a paper moves to the
+ * student it really belongs to, what was read off it goes with it — unless
+ * the new folder's transcript has been filled in already.
+ */
+export const carryTranscript = (from: string, place: ScanPlace, student: string): boolean => {
+  const source = join(from, "transcript.yaml");
+  const target = join(place.base, student, "transcript.yaml");
+  if (!existsSync(source) || !existsSync(target)) return false;
+  const current = parse(readFileSync(target, "utf-8")) ?? {};
+  if ((current.answers ?? []).some((answer: any) => answer.text != null || answer.blank || (answer.chosen ?? []).length)) return false;
+  const raw = readFileSync(source, "utf-8");
+  const header = raw.slice(0, Math.max(0, raw.indexOf("student_id:")));
+  const carried = parse(raw) ?? {};
+  carried.student_id = student;
+  writeFileSync(target, header + stringify(carried, { lineWidth: 0 }), "utf-8");
+  return true;
 };
 
 // --------------------------------------------------------------------------

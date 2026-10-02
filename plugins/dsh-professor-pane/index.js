@@ -98,6 +98,7 @@ import { parse as parseYaml, parseDocument as parseYamlDocument } from "yaml";
 import { MARKDOWN_STYLE, escapeText, renderMarkdown } from "./lib/markdown.js";
 import { courseModeDocument } from "./lib/course-mode.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./lib/upload.js";
+import { paperCrop, scansDocument } from "./lib/scans.js";
 
 export const name = "professor-pane";
 
@@ -5214,6 +5215,31 @@ const sendMaterial = (res, workspace, root, documentId, dark, asPdf) => {
  */
 const AINAR_CLI = fileURLToPath(new URL("../../ainar-node/bin/ainar.ts", import.meta.url));
 
+/** `ainar scans …`, for the Scans tab's two writes. The output is the answer. */
+const runScans = (args, root) =>
+  new Promise((resolveRun) => {
+    if (!existsSync(AINAR_CLI)) {
+      resolveRun({ ok: false, error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.` });
+      return;
+    }
+    execFile(
+      process.execPath,
+      ["--experimental-strip-types", AINAR_CLI, ...args, "--root", root],
+      { cwd: root, timeout: 300000, maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        const code = error && typeof error.code === "number" ? error.code : error ? 1 : 0;
+        const output = [stdout, stderr]
+          .filter(Boolean)
+          .join("\n")
+          .split("\n")
+          .filter((line) => !/NO_COLOR|trace-warnings|ExperimentalWarning/.test(line))
+          .join("\n")
+          .trim();
+        resolveRun({ ok: code === 0, exitCode: code, command: `bin/ainar ${args.join(" ")}`, output });
+      },
+    );
+  });
+
 /**
  * Publish, by spawning the CLI.
  *
@@ -5726,6 +5752,87 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
           }),
         )
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
+     * Paper exams — see lib/scans.js. One read, one picture, two writes.
+     *
+     * The writes spawn the CLI, as Publish does: `scans assign` says who one
+     * paper is (taking back a wrong placement first), then places it by the
+     * same rules `scans apply` places every paper. None of them is an approval
+     * path — a paper handed in is a fact, its answers stay `approval: draft`,
+     * and a placement with an evaluation on it is refused, not undone.
+     */
+    if (path === "/api/scans" || path.startsWith("/api/scans/")) {
+      const assessmentId = url.searchParams.get("assessment") ?? "";
+      if (assessmentId && !/^[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) {
+        return sendJson(res, 200, { error: `${assessmentId} is not an assessment id.` });
+      }
+      let submissions;
+      try {
+        submissions = submissionsDir(null);
+        refuseInsideRepo(submissions, root);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      if (path === "/api/scans") {
+        return sendJson(
+          res,
+          200,
+          scansDocument({
+            loaded: loadedRun(workspace, runId),
+            runId,
+            submissions,
+            rosterDirectory: rosterDir(),
+            assessmentId,
+            names: url.searchParams.get("names") === "1",
+          }),
+        );
+      }
+      if (path === "/api/scans/crop") {
+        try {
+          const png = paperCrop({
+            submissions,
+            runId,
+            assessmentId,
+            file: url.searchParams.get("file") ?? "",
+            pages: url.searchParams.get("pages") ?? "",
+          });
+          return send(res, 200, "image/png", png);
+        } catch (error) {
+          return send(res, 404, "text/plain; charset=utf-8", String(error?.message ?? error));
+        }
+      }
+      if (path === "/api/scans/assign" || path === "/api/scans/apply") {
+        if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+        if (!assessmentId) return sendJson(res, 200, { error: "No assessment given." });
+        loadedRun(workspace, runId); // the run has to be this workspace's
+        return readBody(req)
+          .then((text) => {
+            const body = text ? JSON.parse(text) : {};
+            const args = ["scans", path.endsWith("assign") ? "assign" : "apply", runId, "--assessment", assessmentId];
+            if (path.endsWith("assign")) {
+              const pages = String(body.pages ?? "");
+              if (!/^[\d ,-]{1,40}$/.test(pages)) throw new Error("No paper given.");
+              args.push("--pages", pages);
+              if (body.file) {
+                if (!/^[\w.-]+\.pdf$/i.test(String(body.file))) throw new Error("Not a scan's file name.");
+                args.push("--file", String(body.file));
+              }
+              if (body.student) {
+                if (!/^STUDENT-[A-Z0-9]+$/.test(String(body.student))) throw new Error("Not a pseudonym.");
+                args.push("--student", String(body.student));
+              } else if (body.skip) {
+                args.push("--skip", String(body.skip).slice(0, 200));
+              } else {
+                throw new Error("Say who the paper is, or that it is nobody's.");
+              }
+            }
+            return runScans(args, root).then((result) => sendJson(res, 200, result));
+          })
+          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+      }
+      return sendJson(res, 200, { error: `no route ${path}` });
     }
 
     if (path === "/api/preferences") {

@@ -174,6 +174,8 @@ window.__ModuleLoader__.load({
       { id: "students", label: "Students", hint: "The class list, by subgroup", view: "students" },
       { id: "progress", label: "Progress", hint: "The class, by concept", view: "progress" },
       { id: "tasks", label: "Tasks", hint: "What is waiting for you", view: "tasks" },
+      // `view: null` for Integrations' reason: it calls back, to say who a paper is.
+      { id: "scans", label: "Scans", hint: "Paper exams: who each paper is, and where the pile stands", view: null },
       { id: "preferences", label: "Preferences", hint: "What the skills assume", view: null },
       // Last, deliberately. It is the tab a professor opens twice a term —
       // when a course is wired up, and when a push does not arrive — rather
@@ -267,7 +269,7 @@ window.__ModuleLoader__.load({
      * there is no proposed half of an LMS linkage anywhere for a `+ drafts`
      * press to reveal.
      */
-    const NO_DRAFT_PAIR = new Set(["preferences", "students", "integrations"]);
+    const NO_DRAFT_PAIR = new Set(["preferences", "students", "integrations", "scans"]);
 
     /** Tabs with no segmented row of any kind. */
     const NO_SEGMENTED_ROW = new Set(["preferences"]);
@@ -280,7 +282,7 @@ window.__ModuleLoader__.load({
      * gradebook and the concept grid are about the class, and a parameter that
      * reached them would be a parameter with nothing to do.
      */
-    const NAMED_TABS = new Set(["students", "tasks"]);
+    const NAMED_TABS = new Set(["students", "tasks", "scans"]);
 
     /**
      * Pseudonyms or real names, on the tabs that name people.
@@ -408,6 +410,36 @@ window.__ModuleLoader__.load({
   color:var(--dsw-alias-label-secondary,#3a3a3a)}
 .pp-approveerr{color:#b4342a}
 .pp-body{flex:1;min-height:0;display:flex;flex-direction:column}
+/* Scans: the step bar, then one card per paper that needs the professor. Three
+   steps a row, because six do not fit a column this narrow and a row that
+   scrolled sideways would hide the step the pile is on. */
+.pp-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:0 0 12px}
+.pp-step{padding:5px 7px;border-radius:6px;font-size:10.5px;line-height:1.35;min-width:0;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b);background:var(--dsw-alias-fill-secondary,#f5f5f7);
+  border:1px solid transparent}
+.pp-step b{display:block;font-size:11.5px;font-weight:600;color:var(--dsw-alias-label-secondary,#444)}
+.pp-step-done b::after{content:" \\2713";font-weight:400}
+.pp-step-current{border-color:var(--dsw-alias-label-primary,#111)}
+.pp-step-current b{color:var(--dsw-alias-label-primary,#111)}
+.pp-step-yours{border-color:#a5561f;background:rgba(165,86,31,.08)}
+.pp-step-yours b{color:#a5561f}
+.pp-lane{display:flex;align-items:baseline;gap:6px;margin:14px 0 6px;font-size:11px;
+  letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-lane span{text-transform:none;letter-spacing:0}
+.pp-card{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:8px;padding:8px 9px;
+  margin:0 0 6px;font-size:12px;line-height:1.45;outline:0}
+.pp-card:focus,.pp-card.pp-focus{border-color:var(--dsw-alias-label-primary,#111)}
+.pp-crop{display:block;width:100%;height:auto;border-radius:4px;margin:0 0 6px;background:#fff}
+.pp-cardmeta{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b);word-break:break-word}
+.pp-written{font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);font-size:11.5px}
+.pp-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center}
+.pp-actions select{font:inherit;font-size:11px;max-width:100%;padding:2px 4px;border-radius:6px;
+  color:inherit;background:0 0;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-folded{font-size:11.5px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-folded summary{cursor:pointer;margin:12px 0 4px}
+.pp-folded li{margin:1px 0}
+.pp-next{margin:0 0 10px;padding:7px 9px;border-radius:6px;font-size:11.5px;line-height:1.45;
+  background:var(--dsw-alias-fill-secondary,#f5f5f7)}
 .pp-frame{flex:1;min-height:0;width:100%;border:0;display:block}
 .pp-scroll{flex:1;min-height:0;overflow:auto;padding:12px 14px 32px}
 .pp-prefwrap{flex:1;min-height:0;display:flex;flex-direction:column}
@@ -3773,6 +3805,372 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    // ---------------------------------------------------------------- scans
+
+    /**
+     * What the assistant is asked for at each step the pane does not draw.
+     * Pseudonyms and ids only: this is a prompt, and the model works in the
+     * record's own vocabulary.
+     */
+    const STEP_PROMPTS = {
+      read: (runId, id) =>
+        "Continue the scanned " + id + " for " + runId + " with /grade-scans: fill any transcript.yaml " +
+        "still unread, then run `scans record` and list the answers read with low confidence for me to check.",
+      rubric: (runId, id) =>
+        "/import-assessment for " + id + " (" + runId + "): the answers are recorded. Run `scans answers` " +
+        "and propose a rubric for the written questions from what the class wrote. Bring it to me before grading anything.",
+      grade: (runId, id) =>
+        "Grade " + id + " for " + runId + " with /grade-batch against its accepted rubric. Every grade " +
+        "stays status: suggested; tell me which few to look at first.",
+      approve: (runId, id) =>
+        "Which suggested grades on " + id + " (" + runId + ") are still waiting for my decision, " +
+        "least confident first?",
+    };
+
+    /**
+     * Paper exams: where a pile stands, and who each paper is.
+     *
+     * Drawn here rather than in the frame for Integrations' reason — it calls
+     * back. The document is lib/scans.js; every figure in it arrived computed.
+     * Match is the one step drawn in full, because it is the one only the
+     * professor can do; the others are a sentence and a press that asks the
+     * assistant, since reading, proposing a rubric and grading are its work.
+     */
+    function ScansTab(props) {
+      const [pile, setPile] = React.useState("");
+      const [tick, setTick] = React.useState(0);
+      const [state, setState] = React.useState({ phase: "loading", value: null });
+      const [busy, setBusy] = React.useState(null);
+      const [said, setSaid] = React.useState(null);
+      const [focus, setFocus] = React.useState(0);
+      const names = props.names;
+
+      const query = (path) =>
+        scoped(
+          BASE + path + "?run=" + encodeURIComponent(props.runId) +
+            (pile ? "&assessment=" + encodeURIComponent(pile) : ""),
+          props.sessionId,
+        );
+
+      React.useEffect(() => {
+        let live = true;
+        fetch(query("/api/scans") + (names ? "&names=1" : "") + "&r=" + props.revision + "." + tick, {
+          headers: { accept: "application/json" },
+        })
+          .then((response) => response.json())
+          .then((value) => live && setState({ phase: "ready", value }))
+          .catch((error) => live && setState({ phase: "ready", value: { error: String(error) } }));
+        return () => {
+          live = false;
+        };
+      }, [props.runId, pile, names, props.revision, tick]);
+
+      const doc = state.value;
+      const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
+
+      const post = (path, body, label) => {
+        if (busy) return;
+        setBusy(label);
+        setSaid(null);
+        fetch(query(path).replace(/assessment=[^&]*/, "") + "&assessment=" + encodeURIComponent(assessmentId), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body || {}),
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            setBusy(null);
+            const stale = /no route \/api\/scans/.test(String(result.error || ""));
+            setSaid({
+              error: Boolean(result.error) || !result.ok,
+              text: stale
+                ? "The harness was started before this tab existed. Restart it, then try again."
+                : result.error || result.output || "Done.",
+            });
+            setTick((value) => value + 1);
+            props.onWrite();
+          })
+          .catch((error) => {
+            setBusy(null);
+            setSaid({ error: true, text: String(error) });
+          });
+      };
+      const assign = (paper, to, label) =>
+        post("/api/scans/assign", Object.assign({ pages: paper.pages, file: paper.file }, to), label);
+
+      if (state.phase === "loading") return h(Message, null, "Reading the pile…");
+      if (doc.error) {
+        return h(
+          Message,
+          { error: true },
+          /no route \/api\/scans/.test(doc.error)
+            ? "The harness was started before this tab existed. Restart it to see scanned papers here."
+            : doc.error,
+        );
+      }
+      if (!doc.assessment) {
+        return h(
+          Message,
+          null,
+          "No scanned pile for " + props.runId + " yet. Upload the scans; the assistant works out " +
+            "which assessment they are and files them, and they appear here.",
+        );
+      }
+
+      const who = (id, name) => (name ? name + " · " + id : id);
+      const work = doc.papers.filter((paper) => paper.lane === "check" || paper.lane === "held");
+      const at = Math.min(focus, Math.max(0, work.length - 1));
+      const unplaced = doc.class.filter((entry) => !entry.placed);
+      const placedPeople = doc.class.filter((entry) => entry.placed);
+
+      const picker = (paper, label) => {
+        const id = "pick-" + paper.file + "-" + paper.pages;
+        return h(
+          "select",
+          {
+            key: id,
+            "aria-label": label,
+            value: "",
+            disabled: Boolean(busy),
+            onChange: (event) => {
+              if (event.target.value) assign(paper, { student: event.target.value }, paper.pages);
+            },
+          },
+          h("option", { value: "" }, label + "…"),
+          h(
+            "optgroup",
+            { label: "No paper yet" },
+            unplaced.map((entry) => h("option", { value: entry.student, key: entry.student }, who(entry.student, entry.name))),
+          ),
+          h(
+            "optgroup",
+            { label: "Already have a paper" },
+            placedPeople.map((entry) => h("option", { value: entry.student, key: entry.student }, who(entry.student, entry.name))),
+          ),
+        );
+      };
+
+      const card = (paper, index) => {
+        const key = paper.file + "|" + paper.pages;
+        const primary =
+          paper.lane === "check"
+            ? () => assign(paper, { student: paper.resolved }, paper.pages)
+            : paper.candidates.length
+              ? () => assign(paper, { student: paper.candidates[0].student }, paper.pages)
+              : null;
+        const pending = busy === paper.pages;
+        return h(
+          "div",
+          {
+            key,
+            className: "pp-card" + (index === at ? " pp-focus" : ""),
+            tabIndex: 0,
+            onFocus: () => setFocus(index),
+          },
+          names && doc.crops
+            ? h("img", {
+                className: "pp-crop",
+                alt: "The top of page " + paper.pages.split("-")[0] + ", where the name is written",
+                loading: "lazy",
+                src:
+                  query("/api/scans/crop").replace(/assessment=[^&]*/, "") +
+                  "&assessment=" + encodeURIComponent(assessmentId) +
+                  "&file=" + encodeURIComponent(paper.file) +
+                  "&pages=" + encodeURIComponent(paper.pages),
+              })
+            : null,
+          h(
+            "div",
+            null,
+            names
+              ? paper.written
+                ? h("span", null, "Written: ", h("span", { className: "pp-written" }, paper.written))
+                : h("span", null, paper.has_name ? "A number is written" : "No name written")
+              : h("span", null, "Pages " + paper.pages),
+          ),
+          paper.lane === "check"
+            ? h("div", { className: "pp-cardmeta" }, "Placed on a close spelling: " + who(paper.resolved, paper.resolved_name))
+            : h("div", { className: "pp-cardmeta" }, paper.problem || "Not placed yet"),
+          paper.lane === "held" && paper.candidates.length
+            ? h(
+                "div",
+                { className: "pp-cardmeta" },
+                "Nearest: " + paper.candidates.map((entry) => who(entry.student, entry.name)).join("; "),
+              )
+            : null,
+          h(
+            "div",
+            { className: "pp-actions" },
+            paper.lane === "check"
+              ? h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: primary },
+                  "Confirm",
+                )
+              : null,
+            paper.lane === "held"
+              ? paper.candidates.map((entry) =>
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-segbtn",
+                      key: entry.student,
+                      disabled: Boolean(busy),
+                      onClick: () => assign(paper, { student: entry.student }, paper.pages),
+                    },
+                    "It's " + (entry.name ? entry.name.split(/\s+/).slice(0, 2).join(" ") : entry.student),
+                  ),
+                )
+              : null,
+            picker(paper, paper.lane === "check" ? "Someone else" : "Pick from class"),
+            paper.lane === "held"
+              ? h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    disabled: Boolean(busy),
+                    title: "Not one of this run's students — a visitor, or a sheet that is nobody's",
+                    onClick: () => assign(paper, { skip: "not a student of this run" }, paper.pages),
+                  },
+                  "Not a student",
+                )
+              : null,
+            pending ? h("span", { className: "pp-as" }, "Placing…") : null,
+          ),
+        );
+      };
+
+      const onKey = (event) => {
+        if (event.target.tagName === "SELECT" || event.target.tagName === "INPUT") return;
+        if (event.key === "j" || event.key === "ArrowDown") {
+          setFocus((value) => Math.min(value + 1, work.length - 1));
+          event.preventDefault();
+        } else if (event.key === "k" || event.key === "ArrowUp") {
+          setFocus((value) => Math.max(value - 1, 0));
+          event.preventDefault();
+        } else if (event.key === "Enter" && event.target.classList.contains("pp-card")) {
+          const paper = work[at];
+          if (!paper) return;
+          if (paper.lane === "check") assign(paper, { student: paper.resolved }, paper.pages);
+          else if (paper.candidates.length) assign(paper, { student: paper.candidates[0].student }, paper.pages);
+          event.preventDefault();
+        }
+      };
+
+      const current = doc.stages.find((stage) => stage.state === "current" || stage.state === "yours");
+      const ask = current && STEP_PROMPTS[current.id] ? STEP_PROMPTS[current.id](props.runId, assessmentId) : null;
+      const check = work.filter((paper) => paper.lane === "check");
+      const held = work.filter((paper) => paper.lane === "held");
+      const placed = doc.papers.filter((paper) => paper.lane === "placed");
+      const skipped = doc.papers.filter((paper) => paper.lane === "skipped");
+
+      return h(
+        "div",
+        { className: "pp-scroll", onKeyDown: onKey },
+        doc.piles.length > 1
+          ? h(
+              "select",
+              {
+                className: "pp-runs",
+                value: assessmentId,
+                "aria-label": "Which pile",
+                onChange: (event) => setPile(event.target.value),
+              },
+              doc.piles.map((entry) => h("option", { value: entry.id, key: entry.id }, entry.title)),
+            )
+          : null,
+        h(
+          "div",
+          { className: "pp-steps", role: "list", "aria-label": doc.assessment.title + ": where the pile stands" },
+          doc.stages.map((stage) =>
+            h(
+              "div",
+              { className: "pp-step pp-step-" + stage.state, role: "listitem", key: stage.id, title: stage.detail },
+              h("b", null, stage.label),
+              stage.detail,
+            ),
+          ),
+        ),
+        current && current.id !== "match" && ask
+          ? h(
+              "div",
+              { className: "pp-next" },
+              current.label + " is next, and it is the assistant's to draft. ",
+              h(
+                "button",
+                { type: "button", className: "pp-segbtn", onClick: () => props.ask(ask) },
+                "Ask the assistant",
+              ),
+            )
+          : null,
+        said
+          ? h("pre", { className: "pp-approveout" + (said.error ? " pp-approveerr" : "") }, said.text)
+          : null,
+        !names
+          ? h(
+              Message,
+              null,
+              "Pseudonyms are showing, so the handwritten names and their crops are hidden. Press Names to match papers.",
+            )
+          : null,
+        check.length
+          ? h(
+              "div",
+              { className: "pp-lane" },
+              "Check",
+              h("span", null, "· " + check.length + " placed on a close spelling — confirm, or say who it is"),
+            )
+          : null,
+        check.map((paper) => card(paper, work.indexOf(paper))),
+        held.length
+          ? h(
+              "div",
+              { className: "pp-lane" },
+              "Held",
+              h("span", null, "· " + held.length + " not placed"),
+            )
+          : null,
+        held.map((paper) => card(paper, work.indexOf(paper))),
+        !work.length ? h(Message, null, "Every paper in this pile is placed or set aside.") : null,
+        h(
+          "details",
+          { className: "pp-folded" },
+          h("summary", null, placed.length + " placed" + (skipped.length ? " · " + skipped.length + " set aside" : "")),
+          h(
+            "ul",
+            null,
+            placed.map((paper) =>
+              h(
+                "li",
+                { key: paper.file + paper.pages },
+                "pp. " + paper.pages + " → " + who(paper.resolved, paper.resolved_name) +
+                  (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : ""),
+              ),
+            ),
+            skipped.map((paper) => h("li", { key: paper.file + paper.pages }, "pp. " + paper.pages + " — " + paper.skip)),
+          ),
+        ),
+        h(
+          "div",
+          { className: "pp-actions" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              disabled: Boolean(busy),
+              title: "Run `scans apply` again — after editing plan.yaml by hand, say",
+              onClick: () => post("/api/scans/apply", {}, "apply"),
+            },
+            busy === "apply" ? "Applying…" : "Re-apply the plan",
+          ),
+          h("span", { className: "pp-as" }, doc.missing + " enrolled with no paper · j/k to move, Enter to confirm"),
+        ),
+      );
+    }
+
     // --------------------------------------------------------------- upload
 
     /**
@@ -4414,6 +4812,18 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 ". A run needs version.yaml with start_date and end_date. " +
                 "Run `python -m ainar validate` for the specifics.",
           );
+        }
+        if (tab === "scans") {
+          return h(ScansTab, {
+            runId: current.runId,
+            sessionId: props.sessionId,
+            names: names,
+            ask: props.ask,
+            // A placement writes a submission into the course, which other tabs draw.
+            onWrite: () => setReload((value) => value + 1),
+            revision: reload,
+            key: current.runId,
+          });
         }
         if (tab === "integrations") {
           return h(Integrations, {

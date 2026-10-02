@@ -115,9 +115,11 @@ import { deckForDocument, recordFor, type RecordedDeck } from "../src/slides/rec
 import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../src/slides/timing.ts";
 import { buildMaterials, documentRecord, producerFor, readProducers } from "../src/materials.ts";
 import { importMaterial } from "../src/materials-import.ts";
-import { decidedAt, floatPaths, stampDocument, writeRecords } from "../src/records-write.ts";
+import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
 import {
   applyScans,
+  assignPaper,
+  carryTranscript,
   fileScan,
   groupAnswers,
   planScans,
@@ -129,7 +131,9 @@ import {
   scanStatus,
   submissionsDir,
   unfiledScans,
+  unplaceScan,
   variantsOf,
+  writePlan,
   type Shape,
 } from "../src/scans.ts";
 import { importPaper, paperFiles, parseKey, parsePaper, readText, type Paper } from "../src/paper-import.ts";
@@ -1972,14 +1976,16 @@ try {
       // The deterministic half of grading a scanned exam: see src/scans.ts.
       // Everything this reads or writes about a named person stays under
       // --submissions-dir; what reaches courses/ is pseudonymous.
-      const sub = rest[0] ?? "";
+      // `let`, for `assign`: it says who one paper is, then carries on as `apply`.
+      let sub = rest[0] ?? "";
       const runId = rest[1];
       const assessmentId = flag("assessment");
-      const SUBS = ["identify", "file", "status", "plan", "apply", "record", "answers"];
+      const SUBS = ["identify", "file", "status", "plan", "apply", "assign", "record", "answers"];
       if (!SUBS.includes(sub) || !runId || (sub !== "identify" && !assessmentId)) {
         console.error(
           "usage: scans identify RUN [--title TEXT] [--date YYYY-MM-DD]\n" +
             "       scans file RUN FILE.pdf --assessment ASSESSMENT-ID\n" +
+            "       scans assign RUN --assessment ASSESSMENT-ID --pages 13-14 [--file F.pdf] (--student STUDENT-ID | --skip WHY)\n" +
             "       scans {status|plan|apply|record|answers} RUN --assessment ASSESSMENT-ID",
         );
         process.exit(2);
@@ -2080,7 +2086,7 @@ try {
         break;
       }
 
-      if (!items.length && (sub === "plan" || sub === "apply")) {
+      if (!items.length && (sub === "plan" || sub === "apply" || sub === "assign")) {
         // Every transcript is built from the questions; with none, each paper
         // would be placed with an empty transcript and nothing would say so.
         throw new Error(
@@ -2140,6 +2146,40 @@ try {
         break;
       }
 
+      // Who one paper is, said by hand — the professor confirming a close match,
+      // naming a held paper, or saying it is nobody's. Then the same apply as
+      // always, so the paper is placed by the rules every other one was.
+      let carry: { from: string; student: string } | null = null;
+      if (sub === "assign") {
+        const pages = flag("pages");
+        const student = flag("student");
+        const skip = flag("skip");
+        if (!pages || !student === !skip) {
+          throw new Error("scans assign takes --pages and one of --student STUDENT-ID or --skip WHY");
+        }
+        if (dryRun) throw new Error("scans assign has no --dry-run: it moves a wrong placement aside");
+        const plan = readPlan(place);
+        if (!plan) throw new Error(`no plan at ${place.plan} — run \`scans plan\` first`);
+        if (student && !enrolled.has(student)) throw new Error(`${student} is not enrolled in ${runId}`);
+        const { previous } = assignPaper(plan, { pages, file: flag("file") }, student ? { student } : { skip: skip! });
+        if (previous) {
+          const undone = unplaceScan(
+            place,
+            previous,
+            assessmentId!,
+            { evaluations: bundle.evaluations as any[], item_responses: bundle.item_responses as any[] },
+            now,
+          );
+          const answers = removeRecords(courseDir, "item_responses", undone.responses);
+          const papers = removeRecords(courseDir, "submissions", [undone.submission_id]);
+          out(`  unplaced  ${previous}: ${papers} submission, ${answers} answer(s) taken back; folder kept at ${undone.moved_to ?? "(none)"}`);
+          if (student && undone.moved_to) carry = { from: undone.moved_to, student };
+        }
+        writePlan(place, plan);
+        out(`  assigned  pages ${pages} → ${student ?? `skip: ${skip}`}`);
+        sub = "apply";
+      }
+
       if (sub === "apply") {
         const plan = readPlan(place);
         if (!plan) {
@@ -2189,6 +2229,12 @@ try {
           }
         }
         out(`wrote ${place.plan}`);
+        if (carry && result.placed.some((entry) => entry.student === carry!.student)) {
+          if (carryTranscript(carry.from, place, carry.student)) {
+            out(`carried the transcript read off this paper to ${carry.student} — \`scans record\` records it`);
+            result.transcripts = result.transcripts.filter((student) => student !== carry!.student);
+          }
+        }
         if (result.transcripts.length) {
           out(`\n${result.transcripts.length} transcript(s) to fill: ${join(place.base, "<STUDENT>", "transcript.yaml")}`);
         }

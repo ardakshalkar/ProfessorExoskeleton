@@ -312,6 +312,31 @@ export const upsertRecords = (
 };
 
 /**
+ * Take records out of one collection's written file, by id. For a placement
+ * undone — a scan put on the wrong student — whose submission and drafted
+ * answers were written by ainar into `records/`, never for anything authored.
+ * Returns how many went.
+ */
+export const removeRecords = (courseDir: string, collection: string, ids: Iterable<string>): number => {
+  const file = RECORD_FILES[collection];
+  const field = ID_FIELDS[collection];
+  if (typeof file !== "string" || !file.startsWith("records/") || !field) {
+    throw new Error(`${collection} is not a collection records can be removed from`);
+  }
+  const path = join(courseDir, file);
+  if (!existsSync(path)) return 0;
+  const wanted = new Set(ids);
+  const payload = loadExisting(path, collection);
+  const kept = payload.filter((entry) => !wanted.has((entry as Record_ | null)?.[field] as string));
+  const removed = payload.length - kept.length;
+  if (!removed) return 0;
+  const schema = (AGENT_WRITABLE as Record<string, z.ZodTypeAny>)[collection];
+  const floats = schema ? floatPaths(schema, [collection]) : new Set<string>();
+  writeFileSync(path, HEADER + dump({ [collection]: kept }, (path_) => floats.has(path_.join("."))), { encoding: "utf-8" });
+  return removed;
+};
+
+/**
  * Which of these records already live in a file other than `target` — a
  * hand-authored `documents.yaml`, say — keyed by id.
  *

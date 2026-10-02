@@ -17,11 +17,14 @@ import { pseudonym, RosterStore } from "../src/roster.ts";
 import {
   answerKey,
   applyScans,
+  assignPaper,
+  carryTranscript,
   checkSource,
   fileScan,
   groupAnswers,
   identify,
   itemsForVariant,
+  nameCandidates,
   nameKey,
   nameSkeleton,
   parsePages,
@@ -35,6 +38,7 @@ import {
   scanStatus,
   scanSubmissionId,
   unfiledScans,
+  unplaceScan,
   variantsOf,
   writePlan,
   type ApplyContext,
@@ -222,6 +226,58 @@ test("an email made of the name is a second way to find someone", () => {
   s.enrolled.add(dana);
   const known = { store: s.store, salt: SALT, enrolled: s.enrolled };
   assert.deepEqual(identify({ pages: "1", name: "Seitkali Dana" }, known), { student: dana, match: "words" });
+});
+
+test("candidates for a written name are suggestions, nearest first, within reach only", () => {
+  const s = setting();
+  const known = { store: s.store, enrolled: s.enrolled };
+  assert.deepEqual(nameCandidates("Bob Browne", known).map((entry) => entry.student), [s.bob], "Carol Brown is too far");
+  assert.deepEqual(nameCandidates("Brown Bobby", known).map((entry) => entry.student), [s.bob]);
+  assert.deepEqual(nameCandidates("Zhuldyz Omarova", known), []);
+  assert.deepEqual(nameCandidates("", known), []);
+});
+
+test("assigning a paper pins it, and says whose placement it takes back", () => {
+  const plan: ScanPlan = {
+    course_version_id: RUN,
+    assessment_id: EXAM,
+    sources: [{ file: "b.pdf", page_count: 4, checksum: "x", papers: [{ pages: "1-2", name: "Bob Browne", resolved: "STUDENT-BOB" }, { pages: "3-4" }] }],
+  } as any;
+  assert.deepEqual(assignPaper(plan, { pages: "1-2" }, { student: "STUDENT-BOB" }).previous, null, "confirming is not a change");
+  assert.equal(plan.sources[0]!.papers[0]!.student, "STUDENT-BOB");
+  assert.equal(assignPaper(plan, { pages: "1-2" }, { student: "STUDENT-CAROL" }).previous, "STUDENT-BOB");
+  assignPaper(plan, { pages: "3-4" }, { skip: "a visiting student" });
+  assert.equal(plan.sources[0]!.papers[1]!.skip, "a visiting student");
+  assert.throws(() => assignPaper(plan, { pages: "5-6" }, { skip: "x" }), /no paper on pages 5-6/);
+  assert.throws(() => assignPaper(plan, { pages: "1-2" }, { student: "bob" }), /not a pseudonym/);
+});
+
+test("a wrong placement is moved aside, unless something was built on it", () => {
+  const s = setting();
+  const folder = join(s.place.base, s.bob);
+  mkdirSync(folder, { recursive: true });
+  writeFileSync(join(folder, "transcript.yaml"), "student_id: " + s.bob + "\nanswers:\n  - item: ITEM-MID-02\n    text: the answer\n");
+  const submission = scanSubmissionId(s.bob, EXAM);
+  const responses = [{ response_id: "RESP-1", submission_id: submission, approval: "draft" }];
+  assert.throws(
+    () => unplaceScan(s.place, s.bob, EXAM, { evaluations: [{ submission_id: submission }], item_responses: responses }, NOW),
+    /already graded/,
+  );
+  assert.throws(
+    () => unplaceScan(s.place, s.bob, EXAM, { evaluations: [], item_responses: [{ ...responses[0], approval: undefined }] }, NOW),
+    /accepted/,
+  );
+  const undone = unplaceScan(s.place, s.bob, EXAM, { evaluations: [], item_responses: responses }, NOW);
+  assert.deepEqual([undone.submission_id, undone.responses], [submission, ["RESP-1"]]);
+  assert.ok(!existsSync(folder) && existsSync(join(undone.moved_to!, "transcript.yaml")));
+
+  mkdirSync(join(s.place.base, s.carol), { recursive: true });
+  writeFileSync(join(s.place.base, s.carol, "transcript.yaml"), "# head\nstudent_id: x\nanswers:\n  - item: ITEM-MID-02\n    text: null\n");
+  assert.equal(carryTranscript(undone.moved_to!, s.place, s.carol), true);
+  const carried = parse(readFileSync(join(s.place.base, s.carol, "transcript.yaml"), "utf-8"));
+  assert.equal(carried.student_id, s.carol);
+  assert.equal(carried.answers[0].text, "the answer");
+  assert.equal(carryTranscript(undone.moved_to!, s.place, s.carol), false, "never over a filled one");
 });
 
 // ------------------------------------------------------------------ apply
