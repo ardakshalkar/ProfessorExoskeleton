@@ -57,6 +57,12 @@ export interface AssignmentSpec {
   submission_types: string[];
   allowed_extensions: string[];
   description: string | null;
+  /**
+   * The Canvas assignment group its grading component maps to in THIS course —
+   * per course, so `runAssignment` fills it per target and `specFor` leaves it
+   * null. Null says nothing, and the group stays what Canvas has.
+   */
+  assignment_group_id?: string | null;
 }
 
 export type FieldAction = "new" | "unchanged" | "change" | "drift";
@@ -442,6 +448,14 @@ export const planAssignment = ({
     last.description ?? null,
     (a, b) => descriptionText(a) === descriptionText(b),
     (value) => ({ description: String(value) }),
+  );
+  field(
+    "assignment_group_id",
+    spec.assignment_group_id ?? null,
+    held.assignment_group_id === null || held.assignment_group_id === undefined ? null : String(held.assignment_group_id),
+    last.assignment_group_id ?? null,
+    (a, b) => String(a) === String(b),
+    (value) => ({ assignment_group_id: String(value) }),
   );
 
   return plan;

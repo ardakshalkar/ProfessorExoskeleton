@@ -177,6 +177,12 @@ export const TOTAL_CODES = 94;
  * continues to compare like for like.
  */
 export const ADDED = [
+  "grading.component_sum",
+  "grading.cycle",
+  "grading.duplicate_component",
+  "grading.unassigned",
+  "grading.unknown_component",
+  "grading.unknown_parent",
   "lms.both_course_forms",
   "lms.unknown_subgroup",
   "lms.unmapped_subgroup",
@@ -192,7 +198,7 @@ export const coverage = () => ({
       ? ", the complete set. Held to `validate.py` by the 98 mutations in `workspace/golden/validator/`."
       : ". The rest are not implemented; this number is the gate, so it is printed rather than assumed.") +
     (ADDED.length
-      ? ` Plus ${ADDED.length} check${ADDED.length === 1 ? "" : "s"} added beyond it: ` +
+      ? ` Plus ${ADDED.length} check${(ADDED.length as number) === 1 ? "" : "s"} added beyond it: ` +
         `${ADDED.join(", ")}.`
       : ""),
 });
@@ -556,6 +562,87 @@ const checkAssessments = (b: CourseBundle, issues: IssueList): void => {
         "weight.partial",
         `${weighted.length} of ${assessments.length} assessments declare a weight`,
         run.course_version_id,
+      );
+    }
+    gradingSchemeIssues(run, assessments, issues);
+  }
+};
+
+/**
+ * The run's grading scheme against itself and its assessments.
+ *
+ * Structure is an error — a component named twice, a parent or a component
+ * that does not exist, a cycle — because the gradebook cannot total a tree it
+ * cannot build. Arithmetic is a warning, as `weight.sum` is: a block whose
+ * members add up to 31% instead of 30% is a decision the professor has not made
+ * yet, not a record that fails to load.
+ */
+const gradingSchemeIssues = (run: any, assessments: any[], issues: IssueList): void => {
+  const where = run.course_version_id;
+  const components = (run.grading_scheme?.components ?? []) as any[];
+  const byId = new Map<string, any>();
+  for (const component of components) {
+    if (byId.has(component.component_id)) {
+      issues.error("grading.duplicate_component", `component ${component.component_id} is defined twice`, where);
+    }
+    byId.set(component.component_id, component);
+  }
+
+  for (const assessment of assessments) {
+    if (assessment.component && !byId.has(assessment.component)) {
+      issues.error(
+        "grading.unknown_component",
+        components.length
+          ? `component ${assessment.component} is not in the run's grading_scheme`
+          : `component ${assessment.component}, but the run has no grading_scheme`,
+        assessment.assessment_id,
+      );
+    } else if (!assessment.component && components.length && assessment.weight != null) {
+      issues.warn("grading.unassigned", "counts in the grade but names no component of the grading scheme", assessment.assessment_id);
+    }
+  }
+  if (!components.length) return;
+
+  let broken = false;
+  for (const component of components) {
+    if (component.parent && !byId.has(component.parent)) {
+      issues.error("grading.unknown_parent", `parent ${component.parent} of ${component.component_id} is not a component`, where);
+      broken = true;
+      continue;
+    }
+    const seen = new Set<string>([component.component_id]);
+    for (let up = component.parent; up; up = byId.get(up)?.parent) {
+      if (seen.has(up)) {
+        issues.error("grading.cycle", `${component.component_id} is inside itself through its parents`, where);
+        broken = true;
+        break;
+      }
+      seen.add(up);
+    }
+  }
+  if (broken) return;
+
+  const close = (a: number, b: number) => Math.abs(a - b) <= WEIGHT_TOLERANCE;
+  const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
+  const top = components.filter((component) => !component.parent);
+  const topSum = top.reduce((sum, component) => sum + component.weight, 0);
+  if (!close(topSum, 1)) {
+    issues.warn("grading.component_sum", `the top-level components add up to ${pct(topSum)}, expected 100%`, where);
+  }
+  for (const component of components) {
+    const children = components.filter((child) => child.parent === component.component_id);
+    const members = assessments.filter((a) => a.component === component.component_id);
+    if (!children.length && !members.length) continue;
+    if (members.some((a) => a.weight == null)) continue; // `weight.partial` already says so
+    const sum =
+      children.reduce((total, child) => total + child.weight, 0) +
+      members.reduce((total, a) => total + (a.weight as number), 0);
+    if (!close(sum, component.weight)) {
+      issues.warn(
+        "grading.component_sum",
+        `${component.component_id} (${component.title}) is ${pct(component.weight)} of the grade, ` +
+          `but what is in it adds up to ${pct(sum)}`,
+        where,
       );
     }
   }

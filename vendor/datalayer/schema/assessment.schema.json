@@ -461,6 +461,20 @@
       "description": "Share of the final grade; run weights should sum to 1.0.",
       "title": "Weight"
     },
+    "component": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z][A-Z0-9-]{0,31}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The block of the run's grading_scheme this counts in — `VSK1`, `FINAL`.",
+      "title": "Component"
+    },
     "opens_at": {
       "anyOf": [
         {

@@ -9,6 +9,7 @@ import {
   CourseId,
   ActivityId,
   ActivityType,
+  ComponentId,
   ConceptId,
   CourseVersionId,
   DocumentId,
@@ -23,6 +24,7 @@ import {
   StudentId,
   TermId,
   UserId,
+  Weight,
   awareDatetime,
   entity,
   plainDate,
@@ -34,6 +36,31 @@ export const User = entity({
   email: z.string().nullish(),
   role: z.string().nullish(),
   external_ids: z.record(z.string(), z.string()).default({}),
+});
+
+/**
+ * One block of the final grade: Narxoz's ВСК1 at 30%, a "Homework" category at
+ * 25%, a "First half" period. `weight` is its share of the WHOLE grade, the
+ * same unit an assessment's `weight` is in, so a block's members add up to it
+ * and the top-level blocks add up to 1. `parent` nests a block inside another —
+ * "ВСК1 = homework 10% + midterm 20%" is three components, two of them with
+ * `parent: VSK1` — so any depth an institution uses is one list.
+ */
+export const GradingComponent = entity({
+  component_id: ComponentId,
+  title: z.string(),
+  weight: Weight,
+  parent: ComponentId.nullish(),
+  description: z.string().nullish(),
+});
+
+/**
+ * How this run's final grade is divided, when the institution divides it.
+ * Absent, the grade is the flat sum of assessment weights, as it always was.
+ */
+export const GradingScheme = entity({
+  components: z.array(GradingComponent).min(1),
+  description: z.string().nullish(),
 });
 
 export const CourseVersion = entity({
@@ -52,6 +79,7 @@ export const CourseVersion = entity({
   approved_by: z.string().nullish(),
   syllabus_document_id: DocumentId.nullish(),
   notes: z.string().nullish(),
+  grading_scheme: GradingScheme.nullish(),
 });
 
 export const Enrollment = entity({

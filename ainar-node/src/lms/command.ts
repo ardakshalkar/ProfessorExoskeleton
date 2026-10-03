@@ -23,8 +23,10 @@ import { allRubrics, assessmentById, assessmentsOf, enrollmentsOf, runById } fro
 import { type CourseBundle } from "../bundle.ts";
 import { type GradeRow, gradeRows, gradebookPayload } from "../gradebook.ts";
 import {
+  CANVAS_ASSIGNMENT_GROUPS_KEY,
   LIVE_TARGETS,
   canvasAssignmentFor,
+  canvasAssignmentGroupFor,
   canvasAssignments,
   canvasCourseFor,
   canvasCourseId,
@@ -59,6 +61,8 @@ import {
   willWrite,
 } from "./assignment.ts";
 import { type AssignmentLink, writeAssessmentLinks } from "./link.ts";
+import { COLLECTIONS } from "../loader.ts";
+import { editRecords } from "../record-edit.ts";
 import {
   type CanvasExport,
   columnFor,
@@ -139,6 +143,10 @@ export interface LmsArgs {
   overwriteDrift: boolean;
   summary: boolean;
   allTabs: boolean;
+  /** `lms groups --link COMPONENT=GROUP_ID`, repeated. */
+  links?: string[];
+  /** `lms groups --accept`: record every unambiguous suggestion. */
+  accept?: boolean;
 }
 
 /** Everything a gradebook target needs, gathered before anything is decided. */
@@ -1364,6 +1372,7 @@ const runAssignment = async (
   // would unbind it.
   const created = new Map<string, string>(canvasAssignments(assessment));
   let anyCreated = false;
+  const specs = new Map<AssignmentPlan, AssignmentSpec>();
 
   for (const [group, courseId] of targets) {
     const linked = args.canvasAssignment || canvasAssignmentFor(assessment, group);
@@ -1382,6 +1391,19 @@ const runAssignment = async (
     }
 
     const notes = brief.note ? [brief.note] : [];
+    // The assignment group is per Canvas course: the run's grading component,
+    // mapped to this course's group by `lms groups --link`.
+    const targetSpec: AssignmentSpec = {
+      ...spec,
+      assignment_group_id: canvasAssignmentGroupFor(run, assessment.component, group),
+    };
+    if (assessment.component && !targetSpec.assignment_group_id) {
+      notes.push(
+        `${assessment.assessment_id} counts in ${assessment.component}, which has no Canvas ` +
+          `assignment group recorded for ${group ?? "this course"} — it goes where Canvas puts it. ` +
+          "`ainar lms groups` maps the components.",
+      );
+    }
     const remembered = ledger.preparedAssignment(assessment.assessment_id, courseId);
     const plan = planAssignment({
       courseVersionId: args.run,
@@ -1389,12 +1411,13 @@ const runAssignment = async (
       group,
       canvasCourseId: courseId,
       canvasAssignmentId: linked,
-      spec,
+      spec: targetSpec,
       current,
       prepared: remembered ? (remembered.spec as any) : null,
       notes,
     });
     result.plans.push(plan);
+    specs.set(plan, targetSpec);
   }
 
   if (!args.json) {
@@ -1428,10 +1451,11 @@ const runAssignment = async (
     // `--overwrite-drift` puts the drifted fields back in, which is the only
     // thing the flag does: without it the plan already excluded them.
     const send = { ...plan.send };
+    const planSpec = specs.get(plan) ?? spec;
     if (args.overwriteDrift) {
       for (const row of plan.fields) {
         if (row.action !== "drift") continue;
-        const encoded = fieldValue(spec, row.field);
+        const encoded = fieldValue(planSpec, row.field);
         if (encoded) Object.assign(send, encoded);
       }
     }
@@ -1458,7 +1482,7 @@ const runAssignment = async (
         `assignment ${newId} (${Object.keys(send).length} field(s))`,
     );
 
-    ledger.recordAssignment(plan.assessment_id, plan.canvas_course_id, newId, { ...spec }, at);
+    ledger.recordAssignment(plan.assessment_id, plan.canvas_course_id, newId, { ...planSpec }, at);
     if (plan.operation === "create" && newId) {
       anyCreated = true;
       if (plan.group === null) created.set("", newId);
@@ -1507,6 +1531,8 @@ const fieldValue = (
       return { allowed_extensions: spec.allowed_extensions };
     case "description":
       return spec.description === null ? null : { description: spec.description };
+    case "assignment_group_id":
+      return spec.assignment_group_id ? { assignment_group_id: spec.assignment_group_id } : null;
     default:
       return null;
   }
@@ -1691,6 +1717,170 @@ const runLink = async (args: LmsArgs, bundle: CourseBundle, root: string, deps: 
 };
 
 // --------------------------------------------------------------------------
+// Grading components and Canvas assignment groups
+// --------------------------------------------------------------------------
+
+/** Letters and digits only, lower case: "САБ-2/ВСК-2", "ВСК 2" and "VSK2" all hold "вск2"/"vsk2". */
+const squash = (text: string): string => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+/**
+ * Which component a Canvas assignment group looks like, with the reasons.
+ * Weight agreement is the strong signal — Canvas weights groups in percent —
+ * and a name that contains the component's title or id is the other.
+ */
+const suggestComponent = (components: any[], group: Record<string, any>): { component: string; why: string[] } | null => {
+  const scored = components
+    .map((component) => {
+      const why: string[] = [];
+      let score = 0;
+      const weight = Number(group.group_weight);
+      if (Number.isFinite(weight) && weight > 0 && Math.abs(weight - component.weight * 100) < 0.05) {
+        score += 1;
+        why.push(`both ${weight}%`);
+      }
+      const name = squash(String(group.name ?? ""));
+      if (name && [component.title, component.component_id].some((label) => squash(String(label)) && name.includes(squash(String(label))))) {
+        score += 2;
+        why.push(`"${group.name}" names ${component.title}`);
+      }
+      return { component: component.component_id as string, score, why };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+  const [best, next] = scored;
+  if (!best || (next && next.score === best.score)) return null;
+  return { component: best.component, why: best.why };
+};
+
+/**
+ * `lms groups RUN [--group G] [--json] [--link COMPONENT=ID …] [--accept]` —
+ * each Canvas course's assignment groups beside the run's grading components,
+ * the suggested pairing, and what is already recorded. Reads Canvas. With
+ * `--link` (needs `--group` on a run of several courses) or `--accept` (every
+ * unambiguous suggestion, every course), records the pairing on the run;
+ * nothing in Canvas changes.
+ */
+const runGroups = async (args: LmsArgs, bundle: CourseBundle, root: string, deps: Deps): Promise<number> => {
+  const run = runOf(bundle, args.run);
+  if (!run) throw new Error(`no course run '${args.run}' in this workspace`);
+  const components = (run.grading_scheme?.components ?? []) as any[];
+  if (!components.length) {
+    throw new Error(
+      `${args.run} has no grading_scheme, so there are no components to map. Add one to the run ` +
+        "(version.yaml): grading_scheme.components, each with component_id, title and weight.",
+    );
+  }
+  const targets = assignmentTargets(run, args.group);
+  if (!targets.length) throw new Error(`${args.run} has no Canvas course recorded.`);
+  const known = new Set(components.map((c) => c.component_id as string));
+
+  const { client, host } = canvasFor(args, deps);
+  const courses = [];
+  for (const [group, courseId] of targets) {
+    const groups = await client.assignmentGroups(courseId);
+    courses.push({
+      group,
+      course_id: courseId,
+      groups: groups.map((entry) => ({
+        id: String(entry.id),
+        name: String(entry.name ?? ""),
+        weight: entry.group_weight ?? null,
+        suggested: suggestComponent(components, entry),
+      })),
+      recorded: Object.fromEntries(components.map((c) => [c.component_id, canvasAssignmentGroupFor(run, c.component_id, group)])),
+    });
+  }
+
+  // What to write: explicit --link pairs, or every unambiguous suggestion.
+  const writes = new Map<string, Map<string, string>>(); // component -> (subgroup or "" -> id)
+  const put = (component: string, group: string | null, id: string) => {
+    if (!writes.has(component)) writes.set(component, new Map());
+    writes.get(component)!.set(group ?? "", id);
+  };
+  for (const pair of args.links ?? []) {
+    const [component, id] = pair.split("=");
+    if (!component || !known.has(component)) throw new Error(`--link ${pair}: ${component} is not a component of the grading scheme`);
+    if (!/^[0-9]+$/.test(id ?? "")) throw new Error(`--link ${pair}: the Canvas assignment group id is a number`);
+    if (targets.length !== 1) throw new Error("--link names one course's group; add --group");
+    const [[group, courseId]] = targets as [[string | null, string]];
+    const course = courses.find((c) => c.course_id === courseId)!;
+    if (!course.groups.some((g) => g.id === id)) throw new Error(`course ${courseId} has no assignment group ${id}`);
+    put(component, group, id);
+  }
+  if (args.accept) {
+    for (const course of courses) {
+      const taken = new Map<string, string>();
+      for (const entry of course.groups) {
+        if (!entry.suggested) continue;
+        if (taken.has(entry.suggested.component)) {
+          throw new Error(
+            `course ${course.course_id}: groups ${taken.get(entry.suggested.component)} and ${entry.id} both look like ` +
+              `${entry.suggested.component}; link one by hand with --link`,
+          );
+        }
+        taken.set(entry.suggested.component, entry.id);
+        put(entry.suggested.component, course.group, entry.id);
+      }
+    }
+  }
+
+  if (args.json) {
+    deps.out(JSON.stringify({ host, components, courses }, null, 2));
+  } else {
+    deps.out("Canvas: " + host);
+    deps.out(
+      "Components: " +
+        components.map((c) => `${c.component_id} "${c.title}" ${+(c.weight * 100).toFixed(2)}%${c.parent ? ` in ${c.parent}` : ""}`).join(" · "),
+    );
+    for (const course of courses) {
+      deps.out(`\n${course.group ?? "the run"} · course ${course.course_id}`);
+      for (const entry of course.groups) {
+        const recordedAs = Object.entries(course.recorded).find(([, id]) => id === entry.id)?.[0];
+        deps.out(
+          `    ${entry.id.padEnd(8)} "${entry.name}"` +
+            (entry.weight !== null ? `  ${entry.weight}%` : "") +
+            (recordedAs ? `  ← ${recordedAs} (recorded)` : entry.suggested ? `  likely ${entry.suggested.component} — ${entry.suggested.why.join(", ")}` : ""),
+        );
+      }
+      const missing = components.filter((c) => !course.recorded[c.component_id]).map((c) => c.component_id);
+      if (missing.length) deps.out(`  not mapped here yet: ${missing.join(", ")}`);
+    }
+  }
+
+  if (!writes.size) {
+    if (!args.json) deps.out("\nNothing was changed. --accept records the suggestions; --link COMPONENT=ID --group G records one.");
+    return 0;
+  }
+
+  // Merge into what the run already records, then write the run's linkage.
+  const perSubgroup = isPerSubgroup(run);
+  const existing = (run.extensions?.lms?.[CANVAS_ASSIGNMENT_GROUPS_KEY] ?? {}) as Record<string, any>;
+  const value: Record<string, unknown> = { ...existing };
+  for (const [component, byGroup] of writes) {
+    if (!perSubgroup) value[component] = Number(byGroup.get("")!);
+    else {
+      const merged: Record<string, number> = { ...(typeof existing[component] === "object" ? existing[component] : {}) };
+      for (const [group, id] of byGroup) merged[group] = Number(id);
+      value[component] = merged;
+    }
+  }
+  const recorded = editRecords({
+    root,
+    courseId: run.course_id,
+    patterns: COLLECTIONS.versions,
+    idField: "course_version_id",
+    collection: "versions",
+    edits: new Map([[run.course_version_id, (node: any) => node.setIn(["extensions", "lms", CANVAS_ASSIGNMENT_GROUPS_KEY], value)]]),
+  });
+  for (const [component, byGroup] of writes) {
+    for (const [group, id] of byGroup) deps.out(`linked ${component} → ${group || "the run"} group ${id}`);
+  }
+  for (const file of recorded.written) deps.out(`wrote ${file}`);
+  deps.out("Nothing in Canvas was changed.");
+  return 0;
+};
+
+// --------------------------------------------------------------------------
 // The entry point
 // --------------------------------------------------------------------------
 
@@ -1728,6 +1918,7 @@ export const runLms = async (
   }
   if (args.subcommand === "assignments") return runAssignmentList(args, bundle, deps);
   if (args.subcommand === "link") return runLink(args, bundle, root, deps);
+  if (args.subcommand === "groups") return runGroups(args, bundle, root, deps);
 
   const context = await openContext(args, bundle, root, deps);
   switch (args.subcommand) {
@@ -1742,7 +1933,7 @@ export const runLms = async (
     default:
       throw new Error(
         `unknown lms subcommand '${args.subcommand}'. It is one of: plan, push, ` +
-          "diff, import-submissions, assignment-plan, assignment-push, assignments, link",
+          "diff, import-submissions, assignment-plan, assignment-push, assignments, link, groups",
       );
   }
 };

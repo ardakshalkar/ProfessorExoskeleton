@@ -562,6 +562,11 @@ const HELP = `ainar — the AINAR course model CLI
   lms link RUN --assessment A [--group G] --canvas-assignment ID
                          record that Canvas assignment ID is A in that
                          subgroup's course; changes nothing in Canvas
+  lms groups RUN [--group G] [--json] [--accept | --link COMPONENT=ID ...]
+                         each course's assignment groups beside the run's
+                         grading_scheme components, and the suggested pairing;
+                         --accept / --link record it on the run. An assignment
+                         push then puts each assessment in its component's group
 
   The assignment pair moves the DEFINITION — title, points, dates, what may be
   handed in, and the brief as the description — not the marks. It fans out to
@@ -1129,7 +1134,7 @@ try {
       if (!subcommand || !rest[1]) {
         console.error(
           "usage: lms {plan|push|diff|import-submissions|assignment-plan|" +
-            "assignment-push|assignments|link} RUN --assessment A [--target T]",
+            "assignment-push|assignments|link|groups} RUN --assessment A [--target T]",
         );
         process.exit(1);
       }
@@ -1173,6 +1178,8 @@ try {
           overwriteDrift: args.includes("--overwrite-drift"),
           summary: args.includes("--summary"),
           allTabs: args.includes("--all"),
+          links: flagList("link"),
+          accept: args.includes("--accept"),
         },
         forRun(rest[1]!),
         root,

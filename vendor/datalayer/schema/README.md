@@ -19,6 +19,18 @@ looks like it would. A change belongs in `ainar-node/src/model/`; closing the
 gap means teaching `src/schema.ts` the entity names and the envelope, which is
 about an afternoon and has not been done.
 
+**Carried forward since, from the zod model rather than by hand-writing them:**
+
+- **2026-10-03 — the grading scheme.** `CourseVersion.grading_scheme`
+  (`GradingScheme`, a list of `GradingComponent`s: id, title, weight in the
+  whole grade, optional `parent`) and `Assessment.component`. The JSON was taken
+  from what `bin/ainar schema` emits for those fields, restyled to these files'
+  conventions, and inserted into `course_version`, `assessment` and the bundle;
+  nothing else in those files changed. It is how an institution's own division
+  of the final grade — Narxoz's ВСК1 30 / ВСК2 30 / Final 40, a category split,
+  terms within a year — is stated once and read by the gradebook, `validate` and
+  the Canvas sync.
+
 ## Conventions
 
 **`additionalProperties: false`.** A misspelled field is an error, not a field

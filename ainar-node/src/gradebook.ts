@@ -330,6 +330,25 @@ const totals = (
   const assessments = new Map(assessmentsOf(b, courseVersionId).map((a) => [a.assessment_id as string, a]));
   const perStudent = new Map<string, any>();
 
+  // The grading scheme, when the run has one: each assessment counts in its
+  // component and in every component above it, so ВСК1's line includes the
+  // homework block nested inside it.
+  const components = ((runById(b).get(courseVersionId) as any)?.grading_scheme?.components ?? []) as any[];
+  const parentOf = new Map(components.map((c) => [c.component_id as string, (c.parent ?? null) as string | null]));
+  const chain = (componentId: string | null | undefined): string[] => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (let at = componentId ?? null; at && parentOf.has(at) && !seen.has(at); at = parentOf.get(at) ?? null) {
+      seen.add(at);
+      out.push(at);
+    }
+    return out;
+  };
+  const bucket = (entry: any, componentId: string) => {
+    entry.components[componentId] ??= { earned_weighted: 0, weight_graded: 0, counted: 0, outstanding: 0 };
+    return entry.components[componentId];
+  };
+
   for (const [assessmentId, rows] of rowsByAssessment) {
     const assessment = assessments.get(assessmentId) as any;
     if (!assessment || assessment.weight === null || assessment.weight === undefined) continue;
@@ -342,22 +361,32 @@ const totals = (
           weight_graded: 0.0,
           assessments_counted: [],
           assessments_outstanding: [],
+          components: {},
         };
         perStudent.set(row.student_id, entry);
       }
+      const within = chain(assessment.component);
       if (row.status === "graded" && row.score !== null && row.maximum) {
-        entry.earned_weighted += (row.score / row.maximum) * assessment.weight;
+        const earned = (row.score / row.maximum) * assessment.weight;
+        entry.earned_weighted += earned;
         entry.weight_graded += assessment.weight;
         entry.assessments_counted.push(assessmentId);
+        for (const componentId of within) {
+          const into = bucket(entry, componentId);
+          into.earned_weighted += earned;
+          into.weight_graded += assessment.weight;
+          into.counted += 1;
+        }
       } else {
         entry.assessments_outstanding.push(assessmentId);
+        for (const componentId of within) bucket(entry, componentId).outstanding += 1;
       }
     }
   }
 
   return [...perStudent.values()]
     .sort((a, c) => a.student_id.localeCompare(c.student_id))
-    .map((entry) => ({
+    .map(({ components: byComponent, ...entry }) => ({
       ...entry,
       earned_weighted: roundHalfEven(entry.earned_weighted, 4),
       weight_graded: roundHalfEven(entry.weight_graded, 4),
@@ -365,6 +394,26 @@ const totals = (
         ? roundHalfEven((entry.earned_weighted / entry.weight_graded) * 100, 1)
         : null,
       complete: !entry.assessments_outstanding.length,
+      // In the scheme's own order, and only when the run has a scheme — a
+      // component nothing was graded in yet still gets its line, with nulls.
+      ...(components.length
+        ? {
+            components: components.map((component) => {
+              const got = byComponent[component.component_id] ?? { earned_weighted: 0, weight_graded: 0, counted: 0, outstanding: 0 };
+              return {
+                component_id: component.component_id,
+                title: component.title,
+                weight: component.weight,
+                earned_weighted: roundHalfEven(got.earned_weighted, 4),
+                weight_graded: roundHalfEven(got.weight_graded, 4),
+                percent_of_graded: got.weight_graded
+                  ? roundHalfEven((got.earned_weighted / got.weight_graded) * 100, 1)
+                  : null,
+                complete: got.counted > 0 && got.outstanding === 0,
+              };
+            }),
+          }
+        : {}),
     }));
 };
 
@@ -391,6 +440,7 @@ export const gradebookPayload = (
       title: assessment.title,
       type: assessment.type,
       weight: assessment.weight ?? null,
+      component: assessment.component ?? null,
       maximum: assessment.maximum_score,
       due_at: assessment.due_at ?? null,
       criteria: (rubric?.criteria ?? []).map((c: any) => ({

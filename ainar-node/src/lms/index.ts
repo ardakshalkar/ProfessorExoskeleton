@@ -178,6 +178,30 @@ export const canvasAssignmentFor = (
 };
 
 /**
+ * Which Canvas assignment group each grading component lands in, on the run:
+ * `{VSK1: {CSS4007-ENG-8: 39945, …}}` for a course per subgroup, `{VSK1: 39945}`
+ * for one Canvas course. Written by `lms groups --link`.
+ */
+export const CANVAS_ASSIGNMENT_GROUPS_KEY = "canvas_assignment_groups";
+
+/** The Canvas assignment group for one component in one subgroup's course, or null. */
+export const canvasAssignmentGroupFor = (
+  run: any,
+  component: string | null | undefined,
+  group: string | null,
+): string | null => {
+  if (!component) return null;
+  const found = linkage(run)[CANVAS_ASSIGNMENT_GROUPS_KEY];
+  if (!found || typeof found !== "object" || Array.isArray(found)) return null;
+  const entry = (found as Record<string, unknown>)[component];
+  if (entry === null || entry === undefined) return null;
+  if (typeof entry !== "object") return group === null ? String(entry) : null;
+  if (group === null) return null;
+  const id = (entry as Record<string, unknown>)[group];
+  return id === null || id === undefined ? null : String(id);
+};
+
+/**
  * Whether this run is several Canvas courses rather than one.
  *
  * The question every caller that fans out has to ask first, and worth a name

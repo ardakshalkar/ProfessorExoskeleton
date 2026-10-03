@@ -12,6 +12,7 @@ import {
   AssessmentId,
   AssessmentType,
   CapabilityId,
+  ComponentId,
   ConceptId,
   Confidence,
   CourseVersionId,
@@ -120,6 +121,8 @@ export const Assessment = entity({
   module_id: ModuleId.nullish(),
   maximum_score: z.number().gt(0).default(100),
   weight: Weight.nullish(),
+  /** The block of the run's `grading_scheme` this counts in — `VSK1`, `FINAL`. */
+  component: ComponentId.nullish(),
   opens_at: awareDatetime().nullish(),
   due_at: awareDatetime().nullish(),
   outcomes: z.array(OutcomeId).default([]),

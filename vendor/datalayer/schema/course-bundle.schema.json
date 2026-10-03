@@ -281,6 +281,20 @@
           "description": "Share of the final grade; run weights should sum to 1.0.",
           "title": "Weight"
         },
+        "component": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9-]{0,31}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The block of the run's grading_scheme this counts in — `VSK1`, `FINAL`.",
+          "title": "Component"
+        },
         "opens_at": {
           "anyOf": [
             {
@@ -1224,6 +1238,18 @@
           "default": null,
           "description": "What changed relative to the previous offering.",
           "title": "Notes"
+        },
+        "grading_scheme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GradingScheme"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The blocks the final grade is divided into — ВСК1/ВСК2/Final, categories, periods."
         }
       },
       "required": [
@@ -1693,6 +1719,102 @@
         }
       },
       "title": "EvidenceRef",
+      "type": "object"
+    },
+    "GradingComponent": {
+      "additionalProperties": false,
+      "description": "One block of the final grade: Narxoz's ВСК1 at 30%, a \"Homework\" category at\n25%, a \"First half\" period. `weight` is its share of the WHOLE grade, the\nsame unit an assessment's `weight` is in, so a block's members add up to it\nand the top-level blocks add up to 1. `parent` nests a block inside another —\n\"ВСК1 = homework 10% + midterm 20%\" is three components, two of them with\n`parent: VSK1` — so any depth an institution uses is one list.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "component_id": {
+          "pattern": "^[A-Z][A-Z0-9-]{0,31}$",
+          "title": "Component Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "weight": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Weight",
+          "type": "number"
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9-]{0,31}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "component_id",
+        "title",
+        "weight"
+      ],
+      "title": "GradingComponent",
+      "type": "object"
+    },
+    "GradingScheme": {
+      "additionalProperties": false,
+      "description": "How this run's final grade is divided, when the institution divides it.\nAbsent, the grade is the flat sum of assessment weights, as it always was.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/GradingComponent"
+          },
+          "minItems": 1,
+          "title": "Components",
+          "type": "array"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "components"
+      ],
+      "title": "GradingScheme",
       "type": "object"
     },
     "Intervention": {

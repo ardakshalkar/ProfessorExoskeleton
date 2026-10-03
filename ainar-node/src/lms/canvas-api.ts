@@ -380,6 +380,11 @@ export class CanvasClient {
     return this.getAll(`/courses/${courseId}/assignments`);
   }
 
+  /** The course's assignment groups — where a grading component lands. */
+  assignmentGroups(courseId: string): Promise<Record<string, any>[]> {
+    return this.getAll(`/courses/${courseId}/assignment_groups`);
+  }
+
   // ------------------------------------------------------------------ writes
 
   /**

@@ -52,6 +52,12 @@ export const SignalId = id("SIGNAL-[A-Z0-9][A-Z0-9-]*");
 export const InterventionId = id("INT-[A-Z0-9][A-Z0-9-]*");
 export const ActionId = id("ACTION-[A-Z0-9][A-Z0-9-]*");
 export const EventId = id("EVENT-[A-Z0-9][A-Z0-9-]*");
+/**
+ * A block of the final grade in the run's grading scheme — `VSK1`, `FINAL`,
+ * `HOMEWORK`, `MIDTERM-PERIOD`. No prefix, because the names are the
+ * institution's, and short because they are written on every assessment.
+ */
+export const ComponentId = id("[A-Z][A-Z0-9-]{0,31}");
 
 export const Weight = z.number().min(0).max(1);
 export const Confidence = z.number().min(0).max(1);
