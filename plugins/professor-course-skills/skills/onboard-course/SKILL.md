@@ -143,10 +143,26 @@ value ever passing through you. If `ainar connections list` reports a literal
 token in a file, say so and tell them to revoke it at the provider; do not offer
 to move it for them.
 
-**The grading policy.** Narxoz policy is **midterm 1: 30, midterm 2: 30, final:
-40**. Offer it as the starting point and let them confirm or replace it. Do not
-write any weight now — assessments do not exist yet, and `/plan-term` is where
-those three shells get created.
+**The grading policy.** Ask how their institution divides the final grade —
+into periods, categories, or not at all. At Narxoz it is **ВСК1 30, ВСК2 30,
+final 40**, each a block every assessment of that period counts in; offer that
+as the starting point and let them confirm or replace it. Whatever they say is
+written once, on the run, as its `grading_scheme` — one component per block,
+`weight` its share of the whole grade, `parent` for a block inside a block:
+
+```yaml
+grading_scheme:
+  components:
+    - { component_id: VSK1, title: ВСК 1, weight: 0.3 }
+    - { component_id: VSK2, title: ВСК 2, weight: 0.3 }
+    - { component_id: FINAL, title: Final, weight: 0.4 }
+```
+
+No scheme is a valid answer: the grade is then the flat sum of assessment
+weights. Do not write any assessment weight now — assessments do not exist yet;
+`/plan-term` creates the shells and puts each in its component. If the run has a
+Canvas course, `bin/ainar lms groups RUN` then shows its assignment groups beside
+these components, and `--accept` records the pairing once the professor agrees.
 
 **The term's shape.** How many teaching weeks and meetings per week; 15 weeks with
 one lecture and one practice is the local norm. You need this so `/plan-term` does

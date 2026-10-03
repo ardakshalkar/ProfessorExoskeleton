@@ -256,6 +256,15 @@ policy, which is why it may be proposed at all: it is a source rather than a
 guess. It is still not a statement about *this* course, and a professor may
 depart from it.
 
+**When the run has a `grading_scheme`, it replaces that split.** The blocks and
+their weights are already the professor's, recorded on the run. Put every
+assessment you create — shells, and anything dated — in the block it falls in
+with `component:` (by period, for a scheme divided by period), and propose no
+weight that would make a block's members exceed it. `ainar validate` reports a
+block whose members do not add up to it (`grading.component_sum`) and an
+assessment in no block (`grading.unassigned`); read both out, never silence
+them by changing an existing weight.
+
 The conditions on that, and none of them is optional:
 
 - **Propose a split only when these three are the whole scheme.** Read the run's

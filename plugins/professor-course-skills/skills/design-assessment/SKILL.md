@@ -501,6 +501,10 @@ concepts, list what the items and criteria name, subtract.
   and read the existing items before writing new ones.
 - **Do not set the weight yourself.** Take it from the professor. If they have
   not said, write `TODO` and ask — a weight is a claim about what matters.
+- **The block it counts in.** If the run has a `grading_scheme` (ВСК1/ВСК2/Final
+  at Narxoz, categories elsewhere), set `component:` to the block this falls in
+  — by its due date for a scheme divided by period — and say which, and what
+  that block's members then add up to against its weight.
 - **Do not invent context.** No fabricated datasets, citations, company names
   or scenarios presented as real. A constructed scenario is fine when it reads
   as constructed.
