@@ -100,6 +100,7 @@ import { courseModeDocument } from "./lib/course-mode.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./lib/upload.js";
 import { paperCrop, scansDocument } from "./lib/scans.js";
 import { unpublishedDocument } from "./lib/unpublished.js";
+import { schemeHtml, schemeStyle } from "./lib/grading-view.js";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { answerPage, gradeDocument, groupsStamp } from "./lib/grade.js";
 
@@ -2498,6 +2499,21 @@ const gradingDocument = (workspace, root, runId, dark, withDrafts, on) => {
   const note = grading.note
     ? '<section><p class="empty">' + escapeText(grading.note) + "</p></section>"
     : "";
+
+  // A run with a grading scheme is drawn as the blocks it is built from — see
+  // lib/grading-view.js — and the written policy follows as the reference.
+  // Without one, the flat list of weights is still the whole truth.
+  if (run.grading_scheme?.components?.length) {
+    const shown = withDrafts ? bundle : approvedView(bundle);
+    const ours = (shown.assessments ?? []).filter((a) => a.course_version_id === runId);
+    const graded = new Set(
+      (gradebookPayload(approvedView(bundle), runId, {}).assessments ?? [])
+        .filter((a) => (a.summary?.graded ?? 0) > 0 || (a.summary?.partially_graded ?? 0) > 0)
+        .map((a) => a.assessment_id),
+    );
+    const scheme = schemeHtml({ run, assessments: ours, graded });
+    return documentPage(schemeStyle(dark) + scheme + note + policy + facts, dark);
+  }
 
   return documentPage(policy + facts + weights + note, dark);
 };
