@@ -411,6 +411,8 @@ window.__ModuleLoader__.load({
    Scans bar gives a step that is yours. */
 .pp-behind{font-size:12px;color:#a15c00}
 .pp-bookstatus{flex:0 0 auto;max-height:35%;overflow:auto;margin:8px 14px 0}
+.pp-linkask{margin:8px 0;padding:8px 10px;border-left:3px solid #a15c00}
+.pp-linkask p{margin:0 0 6px}
 .pp-approveout{margin:8px 0 0;padding:8px 10px;max-height:180px;overflow:auto;
   white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;
   border-radius:6px;background:var(--dsw-alias-fill-secondary,#f5f5f7);
@@ -4219,6 +4221,27 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 
       const groups = (plan && plan.groups) || [];
       const unlinked = groups.filter((entry) => entry.unlinked);
+      const title = props.title || props.assessmentId;
+
+      /**
+       * The mapping, handed to the assistant as a turn in the open session.
+       * It may read Canvas and propose; it may link only what the professor
+       * confirms in the chat, and it may not send a mark — those stay this
+       * component's red button.
+       */
+      const askToLink = () => {
+        const run = props.runId;
+        const a = props.assessmentId;
+        const where = unlinked.map((entry) => (entry.group ? entry.group + " (Canvas course " + entry.courseId + ")" : "the run's Canvas course")).join(", ");
+        props.ask(
+          "Link " + a + " (" + title + ") to its Canvas assignment in each course that has none yet: " + where + ".\n\n" +
+            "1. Run `bin/ainar lms assignments " + run + " --assessment " + a + "`. It only reads Canvas. Show me, per course, the assignment you think is " + title + " and why — or say that nothing there looks like it.\n" +
+            "2. Ask me to confirm each pairing, one line per course. Link nothing I have not confirmed.\n" +
+            "3. For each one I confirm, run `bin/ainar lms link " + run + " --assessment " + a + " --group <GROUP> --canvas-assignment <ID>`. It changes nothing in Canvas; it records the id in the course.\n" +
+            "4. Where no assignment exists, say so and offer to create it: `bin/ainar lms assignment-plan " + run + " --assessment " + a + " --group <GROUP>` shows what would be created; run `bin/ainar lms assignment-push … --confirm` only when I say yes.\n\n" +
+            "Do not send any marks — I send those from the pane once every course is linked.",
+        );
+      };
       const sendable = plan && !plan.confirmed && groups.length > 0 && !unlinked.length && groups.every((entry) => entry.ok);
       const name = (entry) => entry.group || "the run's Canvas course";
       const busy = phase !== "idle";
@@ -4262,6 +4285,32 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             : null,
         ),
         failed ? h("pre", { className: "pp-approveout pp-approveerr" }, failed) : null,
+        unlinked.length && props.ask
+          ? h(
+              "div",
+              { className: "pp-linkask" },
+              h(
+                "p",
+                null,
+                unlinked.length === groups.length
+                  ? "None of the Canvas courses has " + title + " linked, so there is nowhere to put these marks yet."
+                  : unlinked.map((entry) => entry.group).join(", ") + " " + (unlinked.length === 1 ? "has" : "have") + " no " + title + " linked yet.",
+              ),
+              h(
+                "p",
+                { className: "pp-as" },
+                "The assistant will read each course's assignment list in Canvas (nothing changes there), say which one it thinks is " +
+                  title +
+                  " and why, and ask you. Only the pairings you confirm are recorded — in the course record, not in Canvas. " +
+                  "Where none exists it offers to create it, again only on your yes. It does not send marks.",
+              ),
+              h(
+                "button",
+                { type: "button", className: "pp-primary", disabled: busy, onClick: askToLink },
+                "Ask the assistant to link " + title,
+              ),
+            )
+          : null,
         groups.map((entry) =>
           h(
             "div",
@@ -4271,7 +4320,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               ? h(
                   "div",
                   { className: "pp-approverow" },
-                  h("span", null, "No Canvas assignment is linked here. If you made one by hand, link it; otherwise create it."),
+                  h("span", null, "Or by hand:"),
                   lists[entry.group] === undefined
                     ? h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => listFor(entry) }, "Link one already in Canvas…")
                     : lists[entry.group].error
@@ -4315,7 +4364,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     : h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => create(entry, false) }, "Preview creating it"),
                 )
               : null,
-            h("pre", { className: "pp-approveout" + (entry.ok || entry.unlinked ? "" : " pp-approveerr") }, (creating[entry.group] || {}).output || entry.output),
+            // An unlinked course's own message is the CLI explaining its data
+            // model; the sentence above says the same in the professor's terms.
+            (creating[entry.group] || {}).output || !entry.unlinked
+              ? h("pre", { className: "pp-approveout" + (entry.ok || entry.unlinked ? "" : " pp-approveerr") }, (creating[entry.group] || {}).output || entry.output)
+              : null,
           ),
         ),
       );
@@ -4444,6 +4497,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     runId: props.runId,
                     sessionId: props.sessionId,
                     assessmentId: entry.id,
+                    title: entry.title,
+                    ask: props.ask,
                     canvas: entry.canvas,
                     onSent: props.onWrite,
                   })
@@ -5819,6 +5874,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               runId: props.runId,
               sessionId: props.sessionId,
               assessmentId: assessmentId,
+              title: doc.assessment.title,
+              ask: props.ask,
               canvas: doc.canvas,
               onSent: () => {
                 setTick((value) => value + 1);
@@ -6619,6 +6676,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             revision: reload,
             onWrite: () => setReload((value) => value + 1),
             openPublish: openPublish,
+            ask: props.ask,
             key: current.runId,
           });
         }

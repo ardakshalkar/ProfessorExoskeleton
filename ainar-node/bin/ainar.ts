@@ -556,6 +556,12 @@ const HELP = `ainar — the AINAR course model CLI
 
   lms assignment-plan RUN --assessment A [--group G]        what Canvas would get
   lms assignment-push RUN --assessment A [--group G] --confirm [--overwrite-drift]
+  lms assignments RUN [--assessment A] [--group G] [--json]
+                         each Canvas course's assignments, what each is linked
+                         to, and the likeliest match for A; reads only
+  lms link RUN --assessment A [--group G] --canvas-assignment ID
+                         record that Canvas assignment ID is A in that
+                         subgroup's course; changes nothing in Canvas
 
   The assignment pair moves the DEFINITION — title, points, dates, what may be
   handed in, and the brief as the description — not the marks. It fans out to
@@ -1123,7 +1129,7 @@ try {
       if (!subcommand || !rest[1]) {
         console.error(
           "usage: lms {plan|push|diff|import-submissions|assignment-plan|" +
-            "assignment-push} RUN --assessment A [--target T]",
+            "assignment-push|assignments|link} RUN --assessment A [--target T]",
         );
         process.exit(1);
       }

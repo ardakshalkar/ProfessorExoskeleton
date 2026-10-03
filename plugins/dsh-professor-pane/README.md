@@ -332,6 +332,15 @@ tell it from no quiz and would make a second), or **Preview creating it** and
 then **Create it in …**, which is `lms assignment-push` for that subgroup. The
 send stays unavailable while any subgroup is unbound.
 
+Above those, **Ask the assistant to link …** hands the mapping to the open
+session, and says first what it will do. The prompt has it run `ainar lms
+assignments` (each course's assignments, what each is already linked to, and the
+likeliest match with its reasons — reads only), ask the professor to confirm
+each pairing, and record only the confirmed ones with `ainar lms link`, which
+reads the assignment back from Canvas before writing its id and changes nothing
+there. Where no assignment exists it offers `assignment-plan`, and pushes only
+on a yes. It may not send marks; those stay the red button's.
+
 ## Integrations
 
 The tab exists because the facts are scattered. A professor asking "will a push

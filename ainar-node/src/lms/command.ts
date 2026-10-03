@@ -1504,6 +1504,184 @@ const fieldValue = (
 };
 
 // --------------------------------------------------------------------------
+// Linking an assignment that already exists in Canvas
+// --------------------------------------------------------------------------
+
+/** "Quiz", "HW", "Midterm" and the number after it, from an id or a title. */
+const kindAndNumber = (text: string): { kind: string; number: number } | null => {
+  const words = text.toLowerCase().replace(/[^a-z0-9а-яё]+/gi, " ");
+  const found = words.match(
+    /\b(quiz|quizz|test|hw|homework|assignment|lab|midterm|mid|exam|project|квиз|тест)\s*(\d+)/i,
+  );
+  if (!found) return null;
+  const kinds: Record<string, string> = {
+    quizz: "quiz", test: "quiz", "квиз": "quiz", "тест": "quiz",
+    homework: "hw", assignment: "hw", mid: "midterm",
+  };
+  const kind = found[1]!.toLowerCase();
+  return { kind: kinds[kind] ?? kind, number: Number(found[2]) };
+};
+
+/**
+ * How well a Canvas assignment matches an assessment, with the reasons, or null
+ * when nothing does. A suggestion, never a decision: the professor confirms it.
+ */
+const matchAssignment = (
+  assessment: any,
+  assignment: Record<string, any>,
+): { score: number; why: string[] } | null => {
+  const why: string[] = [];
+  let score = 0;
+  const ours = kindAndNumber(assessment.assessment_id) ?? kindAndNumber(String(assessment.title ?? ""));
+  const theirs = kindAndNumber(String(assignment.name ?? ""));
+  if (ours && theirs && ours.kind === theirs.kind && ours.number === theirs.number) {
+    score += 2;
+    why.push(`both are ${ours.kind} ${ours.number}`);
+  }
+  const plain = (text: string) => text.toLowerCase().replace(/\s+/g, " ").trim();
+  if (assessment.title && plain(String(assignment.name ?? "")) === plain(String(assessment.title))) {
+    score += 2;
+    why.push("same title");
+  }
+  if (score === 0) return null;
+  const points = Number(assignment.points_possible);
+  if (assessment.maximum_score != null && Number.isFinite(points) && points === Number(assessment.maximum_score)) {
+    score += 1;
+    why.push(`${points} points on both`);
+  }
+  return { score, why };
+};
+
+const canvasFor = (args: LmsArgs, deps: Deps): { client: CanvasClient; host: string } => {
+  const config = loadCanvasConfig(rosterDir(args.rosterDir), {
+    baseUrl: args.canvasUrl,
+    connection: args.connection,
+    connectionsPath: args.connections,
+  });
+  return { client: new CanvasClient(config, deps.transport ?? new FetchTransport()), host: config.base_url };
+};
+
+/**
+ * `lms assignments RUN [--assessment A] [--group G] [--json]` — every
+ * assignment in each Canvas course the run names, which of them is already
+ * linked to which assessment, and, for `--assessment`, the likeliest match in
+ * each course where it is not linked yet. Reads Canvas, writes nothing.
+ */
+const runAssignmentList = async (args: LmsArgs, bundle: CourseBundle, deps: Deps): Promise<number> => {
+  const run = runOf(bundle, args.run);
+  if (!run) throw new Error(`no course run '${args.run}' in this workspace`);
+  const assessments = assessmentsOf(bundle, args.run) as any[];
+  const wanted = args.assessment ? assessments.find((entry) => entry.assessment_id === args.assessment) : null;
+  if (args.assessment && !wanted) throw new Error(`${args.assessment} is not an assessment of ${args.run}`);
+  const targets = assignmentTargets(run, args.group);
+  if (!targets.length) throw new Error(`${args.run} has no Canvas course recorded.`);
+
+  const { client, host } = canvasFor(args, deps);
+  const courses = [];
+  for (const [group, courseId] of targets) {
+    const linkedTo = new Map<string, string>();
+    for (const entry of assessments) {
+      const id = canvasAssignmentFor(entry, group);
+      if (id) linkedTo.set(String(id), entry.assessment_id);
+    }
+    const raw = await client.assignments(courseId);
+    const listed = raw.map((assignment) => ({
+      id: String(assignment.id),
+      name: String(assignment.name ?? ""),
+      points: assignment.points_possible ?? null,
+      due_at: assignment.due_at ?? null,
+      linked_to: linkedTo.get(String(assignment.id)) ?? null,
+    }));
+    let linked: string | null = null;
+    let candidates: { id: string; name: string; score: number; why: string[] }[] = [];
+    if (wanted) {
+      linked = canvasAssignmentFor(wanted, group) ?? null;
+      if (!linked) {
+        candidates = raw
+          .map((assignment) => ({ assignment, found: matchAssignment(wanted, assignment) }))
+          .filter((entry) => entry.found && !linkedTo.has(String(entry.assignment.id)))
+          .map((entry) => ({
+            id: String(entry.assignment.id),
+            name: String(entry.assignment.name ?? ""),
+            score: entry.found!.score,
+            why: entry.found!.why,
+          }))
+          .sort((a, b) => b.score - a.score);
+      }
+    }
+    courses.push({ group, course_id: courseId, assignments: listed, linked, candidates });
+  }
+
+  if (args.json) {
+    deps.out(JSON.stringify({ host, assessment: wanted?.assessment_id ?? null, courses }, null, 2));
+    return 0;
+  }
+  deps.out("Canvas: " + host);
+  for (const course of courses) {
+    deps.out(`\n${course.group ?? "the run"} · course ${course.course_id} — ${course.assignments.length} assignment(s)`);
+    for (const entry of course.assignments) {
+      deps.out(
+        `    ${entry.id.padEnd(9)} ${entry.name}` +
+          (entry.points !== null ? `  (${entry.points} pts)` : "") +
+          (entry.due_at ? `  due ${String(entry.due_at).slice(0, 10)}` : "") +
+          (entry.linked_to ? `  ← ${entry.linked_to}` : ""),
+      );
+    }
+    if (wanted) {
+      if (course.linked) deps.out(`  ${wanted.assessment_id} is linked to ${course.linked}.`);
+      else if (!course.candidates.length) deps.out(`  ${wanted.assessment_id}: nothing here looks like it — create it, or pick one by hand.`);
+      else {
+        const [best, next] = course.candidates;
+        const sure = !next || best!.score > next.score;
+        deps.out(
+          `  ${wanted.assessment_id}: ${sure ? "likely" : "unsure between the first two:"} ${best!.id} "${best!.name}" — ${best!.why.join(", ")}` +
+            (sure ? "" : `; ${next!.id} "${next!.name}" — ${next!.why.join(", ")}`),
+        );
+      }
+    }
+  }
+  deps.out("\nNothing was changed. `ainar lms link RUN --assessment A --group G --canvas-assignment ID` records one.");
+  return 0;
+};
+
+/**
+ * `lms link RUN --assessment A [--group G] --canvas-assignment ID` — record
+ * that an assignment already in Canvas is this assessment, for one subgroup's
+ * course. Reads the assignment first, so a wrong id is refused rather than
+ * written; changes nothing in Canvas. The other subgroups' links are kept.
+ */
+const runLink = async (args: LmsArgs, bundle: CourseBundle, root: string, deps: Deps): Promise<number> => {
+  const run = runOf(bundle, args.run);
+  if (!run) throw new Error(`no course run '${args.run}' in this workspace`);
+  const assessment = (assessmentsOf(bundle, args.run) as any[]).find((entry) => entry.assessment_id === args.assessment);
+  if (!assessment) throw new Error("lms link needs --assessment, an assessment of " + args.run);
+  const id = String(args.canvasAssignment ?? "").trim();
+  if (!/^[0-9]+$/.test(id)) throw new Error("lms link needs --canvas-assignment, the assignment's number in Canvas");
+  const targets = assignmentTargets(run, args.group);
+  if (targets.length !== 1) {
+    throw new Error(`${args.run} has a Canvas course per subgroup; name one with --group (${targets.map(([g]) => g).join(", ")}).`);
+  }
+  const [[group, courseId]] = targets as [[string | null, string]];
+
+  const { client, host } = canvasFor(args, deps);
+  let found: Record<string, any>;
+  try {
+    found = await client.assignment(courseId, id);
+  } catch (error) {
+    throw new Error(`Canvas course ${courseId} has no assignment ${id} this token can read: ${String((error as Error).message)}`);
+  }
+  const value: AssignmentLink = group === null ? id : Object.fromEntries([...canvasAssignments(assessment), [group, id]]);
+  const recorded = writeAssessmentLinks(root, run.course_id, { [assessment.assessment_id]: value });
+  deps.out(
+    `Canvas: ${host}\n${assessment.assessment_id} → ${group ?? "the run"} · course ${courseId} · ` +
+      `assignment ${id} "${found.name ?? ""}"` + (found.points_possible != null ? ` (${found.points_possible} pts)` : ""),
+  );
+  for (const file of recorded.written) deps.out(`linked: ${file}`);
+  deps.out("Nothing in Canvas was changed.");
+  return 0;
+};
+
+// --------------------------------------------------------------------------
 // The entry point
 // --------------------------------------------------------------------------
 
@@ -1539,6 +1717,8 @@ export const runLms = async (
   if (args.subcommand === "assignment-plan" || args.subcommand === "assignment-push") {
     return runAssignment(args, bundle, root, deps, args.subcommand === "assignment-push");
   }
+  if (args.subcommand === "assignments") return runAssignmentList(args, bundle, deps);
+  if (args.subcommand === "link") return runLink(args, bundle, root, deps);
 
   const context = await openContext(args, bundle, root, deps);
   switch (args.subcommand) {
@@ -1553,7 +1733,7 @@ export const runLms = async (
     default:
       throw new Error(
         `unknown lms subcommand '${args.subcommand}'. It is one of: plan, push, ` +
-          "diff, import-submissions, assignment-plan, assignment-push",
+          "diff, import-submissions, assignment-plan, assignment-push, assignments, link",
       );
   }
 };
