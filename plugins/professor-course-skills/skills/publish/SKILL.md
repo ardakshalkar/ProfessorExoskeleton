@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Publish something a student sees — the course page, a Telegram announcement, a homework starter repository, or an assessment's definition in Canvas — carrying only what the professor has accepted. Use when the user asks to publish, post, put up, push out, release or send something to students, asks to refresh the course site, or says to go ahead with a publication that was planned. Composing the announcement's wording is /publish-telegram; building the page without publishing it is /course-page; accepting a draft or a grade is the professor changing its record, and stays theirs.
+description: Publish something a student sees — the course page, a Telegram announcement, a homework starter repository, or an assessment's definition in Canvas — carrying only what the professor has accepted; and, for grades, preview what Canvas would receive and hand the send to the professor's press in the pane. Use when the user asks to publish, post, put up, push out, release or send something to students, asks to publish, send or release grades or marks to Canvas, asks to refresh the course site, or says to go ahead with a publication that was planned. Composing the announcement's wording is /publish-telegram; building the page without publishing it is /course-page; accepting a draft or a grade is the professor changing its record, and stays theirs.
 stage: render
 requires: [modules, activities, assessments]
 produces: [documents, resources]
@@ -141,6 +141,42 @@ other.
 - A **repository** may have been created public.
 - A **Canvas** definition is live for the class, and a field somebody edited
   there was reported and left alone unless `--overwrite-drift` was asked for.
+
+## Grades: preview here, send from the pane
+
+Asked to publish, send or release an assessment's grades, you do everything but
+the send. A posted grade is in front of the student within seconds and cannot be
+recalled by anything here, so that press is the professor's, in the pane — the
+same rule as above, and the reason it is the one red button the pane has.
+
+1. **Is every Canvas course linked?** For each subgroup the run names:
+
+   ```bash
+   bin/ainar lms plan RUN --assessment A --target canvas-api --group G
+   ```
+
+   It only reads. `has no Canvas assignment for G` means that course has none
+   linked: run `bin/ainar lms assignments RUN --assessment A` (reads only),
+   propose the match per course with its reason, and on the professor's yes
+   `bin/ainar lms link RUN --assessment A --group G --canvas-assignment ID`,
+   which changes nothing in Canvas. Where none exists, `lms assignment-plan`
+   shows what would be created; `assignment-push … --confirm` only on a yes.
+2. **Read the plans back**, one line per course: how many marks are `new` or
+   `changed`, how many `skip` (no paper — nothing to send), and how many
+   `unmatched` with the pseudonyms — a student the roster has and that Canvas
+   course does not, fixed by adding them in Canvas and `/sync-roster`, never by
+   guessing. Then the two notes, in the plan's words: *unpublished* (the send
+   publishes it first) and *posts automatically* (students see each grade at
+   once; to release later, set the column's Grade Posting Policy to Manually in
+   Canvas first).
+3. **Hand over the press:** in the pane, **Tasks → Unpublished** (or **Scans**),
+   **Send…** beside the assessment, **Preview the Canvas send**, then the red
+   **Send N marks to Canvas**. Afterwards the Scans bar's Canvas step and Tasks
+   · Unpublished say how many landed.
+
+Never run `lms push --target canvas-api` yourself, whatever the wording of the
+request: the pane's Preview is a fresh read of Canvas, and the professor reads
+it before pressing.
 
 ## When it refuses
 

@@ -243,6 +243,10 @@ evidence:
 Hand over plainly: the item responses are `approval: draft`, the evaluations
 `status: suggested`; `bin/ainar drafts CSS-4008-2026-FALL` lists them.
 
+Once every answer is decided, the last step is the marks reaching Canvas — the
+Scans bar's seventh step. That is `/publish`'s *Grades* section: you preview and
+link, the professor presses Send in the pane.
+
 ## Rules
 
 - **Scans, page images and transcripts stay in the private folder.** Nothing
