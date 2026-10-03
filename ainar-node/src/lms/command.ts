@@ -428,7 +428,9 @@ const openCanvas = async (args: LmsArgs, context: LmsContext, deps: Deps): Promi
   );
   if (context.canvasAssignment.published === false) {
     context.notes.push(
-      "It is unpublished in Canvas, which usually means grades cannot be entered.",
+      args.target === "canvas-api"
+        ? "It is unpublished in Canvas, which does not take grades for it; sending publishes it first."
+        : "It is unpublished in Canvas, which usually means grades cannot be entered.",
     );
   }
   context.notes.push(visibilityNote(context.canvasAssignment));
@@ -706,6 +708,13 @@ const pushToCanvas = async (
 
   let final;
   try {
+    // Canvas does not take grades on an unpublished assignment, and the plan
+    // said this send would publish it — so the confirmed send does, first,
+    // and nothing else about the assignment is touched.
+    if (grades.size && context.canvasAssignment?.published === false) {
+      await context.client!.writeAssignment(context.courseId!, context.assignmentId!, { published: "true" });
+      deps.out(`published Canvas assignment ${context.assignmentId}`);
+    }
     const progress = await context.client!.updateGrades(
       context.courseId!,
       context.assignmentId!,
