@@ -99,6 +99,8 @@ import { MARKDOWN_STYLE, escapeText, renderMarkdown } from "./lib/markdown.js";
 import { courseModeDocument } from "./lib/course-mode.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./lib/upload.js";
 import { paperCrop, scansDocument } from "./lib/scans.js";
+import { unpublishedDocument } from "./lib/unpublished.js";
+import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { answerPage, gradeDocument, groupsStamp } from "./lib/grade.js";
 
 export const name = "professor-pane";
@@ -5822,6 +5824,24 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
      * path — a paper handed in is a fact, its answers stay `approval: draft`,
      * and a placement with an evaluation on it is refused, not undone.
      */
+    /**
+     * What is not out yet — see lib/unpublished.js. A read of local files
+     * only: the gradebook, the sync ledger, the record's drafts and the
+     * checksums of what was last published. Canvas is not asked.
+     */
+    if (path === "/api/unpublished") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      try {
+        return sendJson(
+          res,
+          200,
+          unpublishedDocument({ bundle: loadedRun(workspace, runId).bundle, runId, root, ledger: Ledger.load(runId) }),
+        );
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+    }
+
     if (path === "/api/scans" || path.startsWith("/api/scans/")) {
       const assessmentId = url.searchParams.get("assessment") ?? "";
       if (assessmentId && !/^[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) {

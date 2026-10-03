@@ -12,8 +12,9 @@ and offers a picker when the workspace holds more than one offering.
 | Course outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines. Every piece of graded work carries a link to the brief students read, or says it has none — and every week says what it is still waiting for | `course_outline` |
 | Students | The class list by subgroup, named or pseudonymous, with each student's marks so far, and under each row what they actually handed in | the enrollments, `gradebook` for the marks, and the run's submissions and item responses |
 | Progress · Concepts | Concepts in teaching order against students by pseudonym, with the mean proportion of marks earned on evidence tagged with each | `class_progress` |
-| Progress · Gradebook | One score per student per assessment, from approved decisions only, with the rows that must not be exported and the reason for each | `gradebook` |
+| Progress · Gradebook | One score per student per assessment, from approved decisions only, with the rows that must not be exported and the reason for each. Above it, one line per assessment something was handed in for: how many are graded, and how many of those marks Canvas has | `gradebook`; the line is `/api/unpublished` |
 | Tasks | Work with no date and a button that sets one, grades awaiting approval, outstanding submissions, open signals, interventions | `action_inbox` |
+| Tasks · Unpublished | What the course holds that has not gone out: marks not in Canvas (and whether a Canvas assignment exists for them), materials changed since they were published, and drafts a publication leaves out — each with the press that sends it | `/api/unpublished` (`lib/unpublished.js`) |
 | Preferences | The DataLayer preference layers, each with its own file path and its own values | the preference files |
 | Integrations | What this run is wired to outside the workspace, and what it is not: the gradebook target, the Canvas course and host, the spreadsheet, which credentials are present, and which Canvas section feeds which subgroup | the run record, `lms.toml`, `connections.json`, the environment |
 
@@ -591,6 +592,7 @@ lines, not before.
 | `POST /professor-pane/api/credentials?run=` | store one credential; body is `{ref, value}`, an empty value clears it. Write-only: the response carries presence, never a value |
 | `POST /professor-pane/api/canvas/catalogue?run=` | ask Canvas for this course's sections and student groups |
 | `POST /professor-pane/api/canvas/selection?run=` | write `extensions.lms.canvas_sections`; body is `{selections}` |
+| `GET /professor-pane/api/unpublished?run=` | per assessment: graded, and marks sent to / not in / changed since Canvas; drafts a publication leaves out; materials changed since published. Local files only — the gradebook, the sync ledger, the checksums of what was sent; Canvas is not asked |
 | `POST /professor-pane/api/canvas/marks?run=` | an assessment's marks, per subgroup's Canvas course: `lms plan`, or `lms push --confirm` with `confirm: true`; `link: {group, assignmentId}` binds an existing Canvas assignment first. Body is `{assessment, confirm?, link?}` |
 | `POST /professor-pane/api/publish?run=` | plan or perform one publication; body is `{target, assessment, repo, group, message, edit, confirm}`. Without `confirm` it reads and writes nothing |
 | `POST /professor-pane/api/approve` | gone since 2026-09-29: answers 410 and says where approval went |

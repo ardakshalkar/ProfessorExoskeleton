@@ -226,6 +226,9 @@ window.__ModuleLoader__.load({
         { id: "tasks", label: "Pending" },
         { id: "ready", label: "Ready" },
         { id: "checklist", label: "Checklist" },
+        // Last: not work to do on the course but what has not left it yet —
+        // marks Canvas does not have, materials changed since publishing.
+        { id: "unpublished", label: "Unpublished" },
       ],
       // Targets first, because "where would a grade go" is the question that
       // brings a professor here; Credentials second, because it is the usual
@@ -404,6 +407,10 @@ window.__ModuleLoader__.load({
 /* The writing button is the only red thing in the pane, and it is red only
    once a preview has been read. */
 .pp-danger{color:#b4342a;border-color:#b4342a}
+/* Behind: something decided here that has not gone out. Amber, the colour the
+   Scans bar gives a step that is yours. */
+.pp-behind{font-size:12px;color:#a15c00}
+.pp-bookstatus{flex:0 0 auto;max-height:35%;overflow:auto;margin:8px 14px 0}
 .pp-approveout{margin:8px 0 0;padding:8px 10px;max-height:180px;overflow:auto;
   white-space:pre-wrap;word-break:break-word;font-size:11px;line-height:1.5;
   border-radius:6px;background:var(--dsw-alias-fill-secondary,#f5f5f7);
@@ -4314,6 +4321,180 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    /** `/api/unpublished` for one run, re-read whenever the course is written. */
+    function useUnpublished(runId, sessionId, revision) {
+      const [state, setState] = React.useState({ phase: "loading", value: null });
+      React.useEffect(() => {
+        let live = true;
+        fetch(scoped(BASE + "/api/unpublished?run=" + encodeURIComponent(runId) + "&r=" + revision, sessionId), {
+          headers: { accept: "application/json" },
+        })
+          .then((response) => response.json())
+          .then((value) => live && setState({ phase: "ready", value }))
+          .catch((error) => live && setState({ phase: "ready", value: { error: String(error) } }));
+        return () => {
+          live = false;
+        };
+      }, [runId, sessionId, revision]);
+      return state;
+    }
+
+    /** One assessment's marking and Canvas, as the few words a row has room for. */
+    const markState = (entry) => {
+      const c = entry.canvas;
+      const marking =
+        entry.submitted === 0 && entry.graded === 0
+          ? "nothing handed in"
+          : entry.graded + " of " + entry.submitted + " graded" + (entry.partial ? " · " + entry.partial + " part-graded" : "");
+      let canvas = null;
+      if (c.ready > 0) {
+        canvas =
+          c.unsent === 0 && c.changed === 0
+            ? "all " + c.ready + " in Canvas"
+            : [c.unsent ? c.unsent + " not in Canvas" : null, c.changed ? c.changed + " changed since sent" : null].filter(Boolean).join(" · ");
+      }
+      return { marking, canvas, behind: c.unsent > 0 || c.changed > 0 };
+    };
+
+    const dueOrder = (a, b) => String(a.due_at || "9999").localeCompare(String(b.due_at || "9999"));
+
+    /**
+     * Above Progress · Gradebook: per assessment, how far its marking has got
+     * and how much of it Canvas has. The gradebook widget is shared with the
+     * chat clients and knows nothing of Canvas, so this line is the pane's.
+     * Only assessments something was handed in for — a strip of twenty rows
+     * saying "nothing handed in" would bury the two that matter.
+     */
+    function GradebookStatus(props) {
+      const state = useUnpublished(props.runId, props.sessionId, props.revision);
+      if (state.phase === "loading" || !state.value || state.value.error) return null;
+      const rows = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0).sort(dueOrder);
+      if (!rows.length) return null;
+      return h(
+        "div",
+        { className: "pp-next pp-bookstatus" },
+        rows.map((entry) => {
+          const said = markState(entry);
+          return h(
+            "div",
+            { className: "pp-approverow", key: entry.id },
+            h("b", null, entry.title),
+            h("span", null, said.marking),
+            said.canvas ? h("span", { className: said.behind ? "pp-behind" : "pp-as" }, said.canvas) : null,
+            said.behind
+              ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.openUnpublished() }, "Send…")
+              : null,
+          );
+        }),
+      );
+    }
+
+    /**
+     * Tasks · Unpublished: everything the course holds that has not gone out.
+     * Each line carries the press that sends it — the marks as the Scans tab
+     * sends them, a moved material through the Publish dialog — except a
+     * draft, which only the professor's edit to its record can accept.
+     */
+    function Unpublished(props) {
+      const state = useUnpublished(props.runId, props.sessionId, props.revision);
+      const [open, setOpen] = React.useState(null);
+      if (state.phase === "loading") return h(Message, null, "Reading what has gone out…");
+      const doc = state.value;
+      if (doc.error) return h(Message, { error: true }, doc.error);
+      const nothing = !doc.marks.length && !doc.drafts.length && !doc.moved.length;
+      const section = (title, rows) => (rows.length ? h(React.Fragment, null, h("p", { className: "pp-factgroup" }, title), rows) : null);
+
+      return h(
+        "div",
+        { className: "pp-scroll" },
+        h(
+          "p",
+          { className: "pp-as" },
+          "Read from this machine: the gradebook, what Canvas confirmed receiving, and what was last published. Canvas is not asked, so an edit made there by hand does not show.",
+        ),
+        nothing ? h(Message, null, "Everything decided here is out: no marks waiting for Canvas, no drafts held back, no material changed since it was published.") : null,
+        section(
+          "Marks not in Canvas",
+          doc.marks.sort(dueOrder).map((entry) => {
+            const said = markState(entry);
+            const binding =
+              entry.binding.state === "none"
+                ? "no Canvas assignment yet"
+                : entry.binding.state === "some"
+                  ? "no Canvas assignment in " + entry.binding.missing.join(", ")
+                  : null;
+            return h(
+              "div",
+              { key: entry.id },
+              h(
+                "div",
+                { className: "pp-approverow" },
+                h("b", null, entry.title),
+                h("span", null, said.canvas),
+                binding ? h("span", { className: "pp-behind" }, binding) : null,
+                h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", onClick: () => setOpen(open === entry.id ? null : entry.id) },
+                  open === entry.id ? "Close" : "Send…",
+                ),
+              ),
+              open === entry.id
+                ? h(CanvasMarks, {
+                    key: entry.id,
+                    runId: props.runId,
+                    sessionId: props.sessionId,
+                    assessmentId: entry.id,
+                    canvas: entry.canvas,
+                    onSent: props.onWrite,
+                  })
+                : null,
+            );
+          }),
+        ),
+        section(
+          "Changed since published",
+          doc.moved.map((entry) =>
+            h(
+              "div",
+              { className: "pp-approverow", key: entry.documentId + "|" + entry.target + "|" + entry.scope },
+              h("b", null, entry.title),
+              h("span", null, "changed since it went to " + entry.where + " on " + String(entry.at).slice(0, 10)),
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-segbtn",
+                  onClick: () => props.openPublish(entry.target, entry.target === "page" || entry.target === "telegram" ? {} : { assessment: entry.scope }),
+                },
+                "Publish again…",
+              ),
+            ),
+          ),
+        ),
+        section(
+          "Drafts a publication leaves out",
+          doc.drafts.length
+            ? [
+                h(
+                  "p",
+                  { className: "pp-as", key: "how" },
+                  "Accepting one is your edit: change approval: draft to approved in its record, then publish.",
+                ),
+              ].concat(
+                doc.drafts.map((entry) =>
+                  h(
+                    "div",
+                    { className: "pp-approverow", key: entry.collection + "|" + entry.id },
+                    h("b", null, entry.title || entry.id),
+                    h("span", { className: "pp-as" }, entry.collection + " · " + entry.id),
+                  ),
+                ),
+              )
+            : [],
+        ),
+      );
+    }
+
     /**
      * Grading a written exam, one question at a time, over the conversation.
      *
@@ -6431,8 +6612,18 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             key: current.runId,
           });
         }
+        if (tab === "tasks" && subView(tab) === "unpublished") {
+          return h(Unpublished, {
+            runId: current.runId,
+            sessionId: props.sessionId,
+            revision: reload,
+            onWrite: () => setReload((value) => value + 1),
+            openPublish: openPublish,
+            key: current.runId,
+          });
+        }
         const view = SUBVIEWS[tab] ? subView(tab) : TABS.find((t) => t.id === tab).view;
-        return h(WidgetFrame, {
+        const frame = h(WidgetFrame, {
           view: view,
           runId: current.runId,
           dark: dark,
@@ -6462,6 +6653,24 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             "|" +
             reload,
         });
+        if (tab === "progress" && view === "gradebook") {
+          return h(
+            React.Fragment,
+            null,
+            h(GradebookStatus, {
+              runId: current.runId,
+              sessionId: props.sessionId,
+              revision: reload,
+              key: "status|" + current.runId,
+              openUnpublished: () => {
+                setTab("tasks");
+                setSubViews((value) => Object.assign({}, value, { tasks: "unpublished" }));
+              },
+            }),
+            frame,
+          );
+        }
+        return frame;
       };
 
       return h(
