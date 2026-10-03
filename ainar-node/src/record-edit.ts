@@ -31,6 +31,11 @@
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseDocument } from "yaml";
+import { AGENT_WRITABLE } from "./approval.ts";
+// A cycle — records-write imports this file — that is safe because neither
+// side uses the other at load time, only inside functions.
+import { HEADER, floatPaths } from "./records-write.ts";
+import { dump } from "./yaml-out.ts";
 
 export interface EditResult {
   /** The files that were rewritten. */
@@ -189,7 +194,27 @@ export const editRecords = (options: {
     // Line wrapping is left at the default, which is the lesser of two evils
     // and the reason `setRecordFields` exists below. See its header.
     const padded = / \S/.test(original.match(/\[\s?\S/)?.[0] ?? "");
-    const rendered = document.toString({ flowCollectionPadding: padded });
+    // A file the record writer produced — it opens with its header — is
+    // written again by the same emitter, `yaml-out.ts`, which reproduces every
+    // line it did not change byte for byte. Rendering it through `yaml`
+    // instead re-indented every list and re-folded every long description:
+    // adding one field to a quiz rewrote 280 of its lines.
+    //
+    // A hand-authored file keeps the document API, which keeps its comments,
+    // and whether its block lists put `- ` at the key's column is read off it.
+    // The width stays the library's 80: what was folded in such a file was
+    // folded by an earlier edit through this same API, and a guessed width
+    // re-folded it.
+    const normalised = original.replace(/\r\n/g, "\n");
+    let rendered: string;
+    if (normalised.startsWith(HEADER)) {
+      const schema = (AGENT_WRITABLE as Record<string, any>)[collection];
+      const floats = schema ? floatPaths(schema, [collection]) : new Set<string>();
+      rendered = HEADER + dump(document.toJS(), (path_: string[]) => floats.has(path_.join(".")));
+    } else {
+      const indentSeq = !/^( *)[^\s#-][^\n]*:[ \t]*\n\1- /m.test(normalised);
+      rendered = document.toString({ flowCollectionPadding: padded, indentSeq });
+    }
     const text = /\r\n/.test(original) ? rendered.replace(/\r?\n/g, "\r\n") : rendered;
     writeFileSync(path, text, "utf-8");
     written.push(path);
