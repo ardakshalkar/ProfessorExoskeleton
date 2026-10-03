@@ -2953,7 +2953,10 @@ try {
 
         const say = (label: string, ids: string[]): void => {
           if (!ids.length) return;
-          const shown = ids.slice(0, 5).join(", ") + (ids.length > 5 ? ", …" : "");
+          // Twenty, not five: these are the pseudonyms somebody acts on — whom
+          // to add in Canvas, whose mark has nowhere to go — and a list cut at
+          // five hid exactly the two a push could not deliver.
+          const shown = ids.slice(0, 20).join(", ") + (ids.length > 20 ? ", …" : "");
           out(`  ${label.padEnd(19)}${String(ids.length).padStart(4)}  ${shown}`);
         };
         out("");
