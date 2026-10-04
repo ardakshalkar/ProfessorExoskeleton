@@ -9,6 +9,15 @@
         "bin\\sample.cmd"
       ],
       "port": 3080
+    },
+    {
+      "name": "harness-v1",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": [
+        "/c",
+        "set AINAR_WORKSPACE=C:\\Users\\Ardak Shalkar\\OneDrive\\Documents\\AI Course 2026 v1&& bin\\sample.cmd"
+      ],
+      "port": 3080
     }
   ]
 }

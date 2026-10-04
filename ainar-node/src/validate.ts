@@ -185,6 +185,7 @@ export const ADDED = [
   "grading.unscaled",
   "grading.unknown_component",
   "grading.unknown_parent",
+  "item.variant_imbalance",
   "lms.both_course_forms",
   "lms.unknown_subgroup",
   "lms.unmapped_subgroup",
@@ -2051,6 +2052,84 @@ const checkItems = (b: CourseBundle, issues: IssueList): void => {
       said.add(`${code} ${where} ${message}`);
       issues.warn(code, message, where);
     };
+
+    // Versions of one exam have to be equally hard, or the version a student
+    // happens to be handed decides part of their grade. What the record can
+    // compare, it compares: a question that differs by version must carry the
+    // same marks, the same declared difficulty, the same item type and the same
+    // criterion in every version — and every version must hold the same mix of
+    // difficulties across the paper, so the hard questions are not all on B.
+    // Said as a warning, not an error: the professor may mean it, and the
+    // record is theirs. A version-specific item with no `difficulty` is said
+    // too, because "equally hard" cannot be checked against a blank.
+    if (variants.length > 1) {
+      const own = all.filter((item) => typeof item.extensions?.variant === "string" && item.number != null);
+      const byNumber = new Map<string, Map<string, any>>();
+      for (const item of own) {
+        const key = String(item.number);
+        if (!byNumber.has(key)) byNumber.set(key, new Map());
+        byNumber.get(key)!.set(item.extensions.variant, item);
+      }
+      for (const [number, versions] of [...byNumber].sort(([a], [b]) => Number(a) - Number(b))) {
+        for (const variant of variants) {
+          if (!versions.has(variant)) {
+            warnOnce(
+              "item.variant_imbalance",
+              `question ${number} has a version-specific item in ${[...versions.keys()].join(", ")} but none in variant ${variant}`,
+              assessment.assessment_id,
+            );
+          }
+        }
+        const present = [...versions.entries()];
+        for (const [field, label] of [
+          ["maximum_score", "marks"],
+          ["difficulty", "difficulty"],
+          ["type", "item type"],
+          ["criterion_id", "criterion"],
+        ] as const) {
+          const values = new Set(present.map(([, item]) => String(item[field] ?? "—")));
+          if (values.size > 1) {
+            warnOnce(
+              "item.variant_imbalance",
+              `question ${number} differs in ${label} between versions (` +
+                present.map(([variant, item]) => `${variant}: ${item[field] ?? "—"}`).join(", ") +
+                ") — versions of one exam should be equally hard",
+              assessment.assessment_id,
+            );
+          }
+        }
+        for (const [variant, item] of present) {
+          if (!item.difficulty) {
+            warnOnce(
+              "item.variant_imbalance",
+              `question ${number} of variant ${variant} declares no difficulty, so the versions cannot be compared`,
+              item.item_id,
+            );
+          }
+        }
+      }
+      // The paper as a whole: marks at each difficulty, per version.
+      const profile = (variant: string): string => {
+        const marks = new Map<string, number>();
+        for (const item of all) {
+          const v = item.extensions?.variant;
+          if (v != null && v !== variant) continue;
+          const level = item.difficulty ?? "undeclared";
+          marks.set(level, (marks.get(level) ?? 0) + (item.maximum_score as number));
+        }
+        return [...marks].sort(([a], [b]) => a.localeCompare(b)).map(([level, m]) => `${level} ${g(m)}`).join(", ");
+      };
+      const profiles = variants.map((variant) => [variant, profile(variant)] as const);
+      if (new Set(profiles.map(([, p]) => p)).size > 1) {
+        warnOnce(
+          "item.variant_imbalance",
+          "the versions carry different mixes of difficulty (marks per level: " +
+            profiles.map(([variant, p]) => `${variant} — ${p}`).join("; ") +
+            ") — spread the harder questions evenly",
+          assessment.assessment_id,
+        );
+      }
+    }
 
     for (const [label, items] of papers) {
       const total = items.reduce((sum, item) => sum + (item.maximum_score as number), 0);

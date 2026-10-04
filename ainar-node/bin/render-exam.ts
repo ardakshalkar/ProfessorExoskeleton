@@ -46,6 +46,15 @@ type ExamInput = {
    */
   candidateFields?: string[];
   questions: ExamQuestion[];
+  /** `a4` or `letter` (the default, as before). Kazakhstan prints on A4. */
+  pageSize?: "a4" | "letter";
+  /**
+   * The most pages the PDF may take. When the full layout runs over, the
+   * renderer tightens the margins and then gives each question fewer ruled
+   * lines — never fewer than one, never smaller type — until it fits, and
+   * refuses rather than overflow when it cannot.
+   */
+  maxPages?: number;
 };
 
 type CliOptions = {
@@ -138,7 +147,10 @@ function questionHeading(question: ExamQuestion): string {
   // line. `marks` is a score and may be fractional; only exactly 1 is singular.
   const marks =
     question.marks === undefined ? "" : ` (${question.marks} mark${question.marks === 1 ? "" : "s"})`;
-  return `Question ${question.number}${name}${marks}`;
+  // `Q1`, not `Question 1` on a line of its own: on a one-page quiz the
+  // heading row was a line of answer space spent on a word. The label now runs
+  // into the question's first line.
+  return `Q${question.number}${name}${marks}`;
 }
 
 function defaultResponseLines(question: ExamQuestion): number {
@@ -187,15 +199,17 @@ async function renderDocx(exam: ExamInput, output: string, answers: AnswerLayout
   }
 
   for (const question of exam.questions) {
-    pageChildren.push(new Paragraph({
-      style: "QuestionHeading",
-      keepNext: true,
-      children: [new TextRun({ text: questionHeading(question), bold: true })],
-    }));
+    // The label and the question in one paragraph, label bold, so `Q1 (2 marks)`
+    // does not take a line of its own. Each line of the prompt keeps its break.
+    const promptLines = question.prompt.split("\n");
     pageChildren.push(new Paragraph({
       style: "ExamBody",
       keepNext: Boolean(question.options?.length),
-      children: [new TextRun(question.prompt)],
+      spacing: { before: 200 },
+      children: [
+        new TextRun({ text: `${questionHeading(question)}  `, bold: true }),
+        ...promptLines.map((line, at) => new TextRun({ text: line, break: at === 0 ? 0 : 1 })),
+      ],
     }));
 
     for (const option of question.options ?? []) {
@@ -233,7 +247,7 @@ async function renderDocx(exam: ExamInput, output: string, answers: AnswerLayout
       pageChildren.push(new Paragraph({
         style: "QuestionHeading",
         keepNext: true,
-        children: [new TextRun({ text: `Question ${question.number}`, bold: true })],
+        children: [new TextRun({ text: `Q${question.number}`, bold: true })],
       }));
       if (question.options?.length) {
         pageChildren.push(new Paragraph({
@@ -344,7 +358,42 @@ function responseLine(Paragraph: any, BorderStyle: any, keepNext: boolean): any 
   });
 }
 
+/** How a PDF is laid out: the full layout is `{ lineScale: 1, compact: false }`. */
+type Fit = { lineScale: number; compact: boolean };
+
+/** The layouts tried, in order, when a paper must fit a number of pages. */
+const FITS: Fit[] = [
+  { lineScale: 1, compact: false },
+  { lineScale: 1, compact: true },
+  { lineScale: 0.75, compact: true },
+  { lineScale: 0.6, compact: true },
+  { lineScale: 0.5, compact: true },
+  { lineScale: 0.4, compact: true },
+  { lineScale: 0.3, compact: true },
+  { lineScale: 0, compact: true },
+];
+
 async function renderPdf(exam: ExamInput, output: string, answers: AnswerLayout): Promise<void> {
+  const limit = exam.maxPages;
+  for (const fit of limit ? FITS : [FITS[0]!]) {
+    const { bytes, pages } = await layoutPdf(exam, answers, fit);
+    if (!limit || pages <= limit) {
+      await mkdir(dirname(output), { recursive: true });
+      await writeFile(output, bytes);
+      return;
+    }
+  }
+  throw new Error(
+    `the paper does not fit on ${limit} page(s) even with one ruled line per question and tight margins — ` +
+      "shorten the questions, or allow another page",
+  );
+}
+
+async function layoutPdf(
+  exam: ExamInput,
+  answers: AnswerLayout,
+  fit: Fit,
+): Promise<{ bytes: Uint8Array; pages: number }> {
   const { PDFDocument, StandardFonts, rgb } = loadDependency("pdf-lib");
   const pdf = await PDFDocument.create();
   pdf.setCreator("ProfessorHarness");
@@ -353,9 +402,12 @@ async function renderPdf(exam: ExamInput, output: string, answers: AnswerLayout)
 
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  const pageWidth = 612;
-  const pageHeight = 792;
-  const margin = 72;
+  const [pageWidth, pageHeight] = exam.pageSize === "a4" ? [595.28, 841.89] : [612, 792];
+  const margin = fit.compact ? 50 : 72;
+  // Fewer ruled lines, never none: a question with nowhere to write is not a
+  // question on paper. Scale 0 is the floor — one line each.
+  const responseLinesFor = (question: ExamQuestion): number =>
+    Math.max(1, Math.round(defaultResponseLines(question) * fit.lineScale));
   const contentWidth = pageWidth - 2 * margin;
   const bodySize = 11;
   const bodyLeading = 15;
@@ -410,24 +462,54 @@ async function renderPdf(exam: ExamInput, output: string, answers: AnswerLayout)
     y -= 4;
   };
 
+  /**
+   * The prompt's lines with the label running into the first: `Q1 (2 marks)`
+   * in bold, then the question on the same line. The first line is wrapped to
+   * what is left beside the label, the rest to the full width.
+   */
+  const labelledLines = (question: ExamQuestion): { label: string; labelWidth: number; lines: string[] } => {
+    const label = `${questionHeading(question)}  `;
+    const labelWidth = bold.widthOfTextAtSize(label, bodySize);
+    const [first = "", ...others] = question.prompt.replace(/\r/g, "").split("\n");
+    const opening = wrapText(first, regular, bodySize, contentWidth - labelWidth);
+    const head = opening[0] ?? "";
+    const remainder = first.slice(head.length).trim();
+    const lines = [
+      head,
+      ...(remainder ? wrapText(remainder, regular, bodySize, contentWidth) : []),
+      ...others.flatMap((paragraph) => wrapText(paragraph, regular, bodySize, contentWidth)),
+    ];
+    return { label, labelWidth, lines };
+  };
+
   const drawQuestion = (question: ExamQuestion, includeAnswerSpace: boolean): void => {
-    const headingLines = wrapText(questionHeading(question), bold, headingSize, contentWidth).length;
-    const promptLines = wrapText(question.prompt, regular, bodySize, contentWidth).length;
+    const labelled = labelledLines(question);
+    const headingLines = 0;
+    const promptLines = labelled.lines.length;
     const optionsHeight = (question.options ?? []).reduce(
       (sum, option) => sum +
         wrapText(`${option.label}. ${option.text}`, regular, bodySize, contentWidth - 18).length * bodyLeading + 3,
       0,
     );
     const answerHeight = includeAnswerSpace
-      ? (question.options?.length ? 25 : defaultResponseLines(question) * 22 + 4)
+      ? (question.options?.length ? 25 : responseLinesFor(question) * 22 + 4)
       : 8;
     const fullBlockHeight =
-      headingLines * bodyLeading + 5 +
+      headingLines * bodyLeading + 8 +
       promptLines * bodyLeading + 6 +
       optionsHeight + answerHeight;
     ensure(Math.min(fullBlockHeight, pageHeight - 2 * margin - 36));
-    drawWrapped(questionHeading(question), bold, headingSize, headingInk, 0, 5);
-    drawWrapped(question.prompt, regular, bodySize, ink, 0, 6);
+    y -= 8;
+    labelled.lines.forEach((line, at) => {
+      if (at === 0) {
+        page.drawText(labelled.label, { x: margin, y, size: bodySize, font: bold, color: headingInk });
+        page.drawText(line, { x: margin + labelled.labelWidth, y, size: bodySize, font: regular, color: ink });
+      } else {
+        page.drawText(line, { x: margin, y, size: bodySize, font: regular, color: ink });
+      }
+      y -= bodyLeading;
+    });
+    y -= 6;
     for (const option of question.options ?? []) {
       drawWrapped(`${option.label}. ${option.text}`, regular, bodySize, ink, 18, 3);
     }
@@ -435,7 +517,7 @@ async function renderPdf(exam: ExamInput, output: string, answers: AnswerLayout)
       if (question.options?.length) {
         drawWrapped("Answer: ____________________", bold, bodySize, ink, 0, 10);
       } else {
-        drawResponseLines(defaultResponseLines(question));
+        drawResponseLines(responseLinesFor(question));
       }
     } else {
       y -= 8;
@@ -467,13 +549,13 @@ async function renderPdf(exam: ExamInput, output: string, answers: AnswerLayout)
     for (const question of exam.questions) {
       const responseHeight = question.options?.length
         ? 42
-        : 19 + defaultResponseLines(question) * 22 + 4;
+        : 19 + responseLinesFor(question) * 22 + 4;
       ensure(responseHeight);
-      drawWrapped(`Question ${question.number}`, bold, headingSize, headingInk, 0, 4);
+      drawWrapped(`Q${question.number}`, bold, headingSize, headingInk, 0, 4);
       if (question.options?.length) {
         drawWrapped("Answer: ____________________", bold, bodySize, ink, 0, 12);
       } else {
-        drawResponseLines(defaultResponseLines(question));
+        drawResponseLines(responseLinesFor(question));
       }
     }
   }
@@ -491,8 +573,7 @@ async function renderPdf(exam: ExamInput, output: string, answers: AnswerLayout)
     });
   });
 
-  await mkdir(dirname(output), { recursive: true });
-  await writeFile(output, await pdf.save());
+  return { bytes: await pdf.save(), pages: pages.length };
 }
 
 function wrapText(text: string, font: any, size: number, width: number): string[] {
@@ -518,15 +599,92 @@ function wrapText(text: string, font: any, size: number, width: number): string[
   return lines;
 }
 
+/**
+ * Render one paper, in this process.
+ *
+ * Exported so `exam-paper.ts` can call it rather than spawn this file. A
+ * spawned renderer whose output is captured talks over a pipe, and a DSH
+ * session under `workspace-write` refuses to open one — so every printed quiz
+ * asked the professor to escalate the sandbox. Nothing here starts a process:
+ * `docx` and `pdf-lib` write the file directly.
+ */
+export async function renderExam(
+  value: unknown,
+  output: string,
+  format: OutputFormat,
+  answers: AnswerLayout,
+): Promise<void> {
+  const exam = validateExam(value);
+  if (format === "docx") return renderDocx(exam, output, answers);
+  try {
+    await renderPdf(withWinAnsi(exam), output, answers);
+  } catch (error) {
+    const message = String((error as Error)?.message ?? error);
+    const found = /cannot encode "(.)"/.exec(message);
+    if (!found) throw error;
+    // pdf-lib's standard Helvetica holds WinAnsi and nothing else. Say which
+    // character, and what to do, instead of pdf-lib's one-line refusal.
+    throw new Error(
+      `the PDF font cannot print "${found[1]}" (U+${found[1]!.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}). ` +
+        "The built-in font covers Latin text only — Cyrillic or Kazakh text needs an embedded Unicode font, which this " +
+        "renderer does not have yet. Print the DOCX (--format docx), or replace the character in the item.",
+    );
+  }
+}
+
+/**
+ * Symbols a question paper uses that the built-in PDF font cannot print, as
+ * the nearest thing it can. A paper asking for |x1 − x2| should print, not
+ * fail; the DOCX keeps the real characters.
+ */
+const WINANSI_SUBSTITUTES: Record<string, string> = {
+  "−": "-", // minus sign
+  "≤": "<=",
+  "≥": ">=",
+  "≠": "!=",
+  "≈": "~",
+  "→": "->",
+  "←": "<-",
+  "⇒": "=>",
+  "′": "'",
+  "″": "\"",
+  " ": " ",
+  " ": " ",
+  " ": " ",
+};
+
+const winAnsiText = (text: string): string =>
+  text.replace(/[−≤≥≠≈→←⇒′″   ]/g, (c) => WINANSI_SUBSTITUTES[c] ?? c);
+
+function withWinAnsi(exam: ExamInput): ExamInput {
+  const fix = (value: string | undefined) => (value === undefined ? value : winAnsiText(value));
+  return {
+    ...exam,
+    title: fix(exam.title),
+    subtitle: fix(exam.subtitle),
+    candidateFields: exam.candidateFields?.map((field) => winAnsiText(field)),
+    questions: exam.questions.map((question) => ({
+      ...question,
+      title: fix(question.title),
+      prompt: winAnsiText(question.prompt),
+      options: question.options?.map((option) => ({ ...option, text: winAnsiText(option.text) })),
+    })),
+  };
+}
+
 async function main(): Promise<void> {
   const options = parseArguments(process.argv.slice(2));
-  const exam = validateExam(JSON.parse(await readFile(options.input, "utf8")));
-  if (options.format === "docx") await renderDocx(exam, options.output, options.answers);
-  else await renderPdf(exam, options.output, options.answers);
+  await renderExam(JSON.parse(await readFile(options.input, "utf8")), options.output, options.format, options.answers);
   process.stdout.write(`${options.output}\n`);
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
-  process.exitCode = 1;
-});
+// The CLI only when this file is the one being run, so importing it renders
+// nothing. `import.meta.main` would say this, but not on Node 22.
+const invokedDirectly =
+  !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  main().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}

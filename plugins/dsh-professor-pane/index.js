@@ -95,7 +95,7 @@ import { parse as parseYaml, parseDocument as parseYamlDocument } from "yaml";
 // serves a brief and a deck through. Separate from this file because it is the
 // only part of the server half a test can call with no workspace and no
 // harness — see `test/pane-markdown.test.mjs`.
-import { MARKDOWN_STYLE, escapeText, renderMarkdown } from "./lib/markdown.js";
+import { MARKDOWN_STYLE, escapeAttribute, escapeText, renderMarkdown } from "./lib/markdown.js";
 import { courseModeDocument } from "./lib/course-mode.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./lib/upload.js";
 import { paperCrop, scansDocument } from "./lib/scans.js";
@@ -2144,7 +2144,10 @@ window.openai = {
       kind: 'view',
       url: material && material.url,
       label: material && material.label,
-      format: material && material.format
+      format: material && material.format,
+      // The versions of an exam, as the JSON the chip carried; the browser
+      // half checks every URL in it exactly as it checks \`url\`.
+      papers: material && material.papers
     }, '*');
   }
 };
@@ -2236,7 +2239,7 @@ const VIEW_SCRIPT =
   "e.preventDefault();" +
   "parent.postMessage({source:'professor-pane',kind:'view'," +
   "url:a.getAttribute('href'),label:a.getAttribute('data-view')," +
-  "format:a.getAttribute('data-format')},'*');" +
+  "format:a.getAttribute('data-format'),papers:a.getAttribute('data-papers')},'*');" +
   "});})();<\/script>";
 
 /**
@@ -2533,6 +2536,27 @@ const gradingDocument = (workspace, root, runId, dark, withDrafts, on) => {
  * tab it always opened. See VIEW_SCRIPT.
  */
 const briefChip = (assessment) => {
+  // An exam with versions: one chip, one overlay, every version in it as a tab
+  // — and side by side, which is how a professor checks two versions really
+  // ask different questions. The first version's address is the plain link, so
+  // a modified click still opens a tab with something in it.
+  const papers = Array.isArray(assessment.papers) ? assessment.papers : [];
+  if (papers.length > 1) {
+    return (
+      '<a class="chip-link" href="' +
+      escapeText(papers[0].url) +
+      '" target="_blank" rel="noopener" data-view="' +
+      escapeText(assessment.title ?? assessment.assessment_id ?? "Paper") +
+      '" data-format="' +
+      escapeText(papers[0].format ?? "") +
+      '" data-papers="' +
+      // JSON is full of `"`, so this one value needs the quote escaped too.
+      escapeAttribute(JSON.stringify(papers.map(({ label, url, format }) => ({ label, url, format })))) +
+      '">open · ' +
+      papers.length +
+      " versions</a>"
+    );
+  }
   const href = assessment.url;
   if (!href) return '<span class="todo">no brief</span>';
   // `open`, not the extension. The Slides list names formats — `PDF`, `PPTX` —
@@ -4519,6 +4543,17 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
    * empty — the fault this whole line of work has been correcting.
    */
   const hasPlan = new Set();
+  /**
+   * Every printed paper of a piece of graded work, by the assessment it prints.
+   *
+   * `extensions.renders` is the edge: `ainar paper render` writes it on each
+   * paper, and an exam with versions has one paper per version, told apart by
+   * `extensions.variant` (`form`, on papers written before the convention had
+   * a name). The assessment itself names only one of them as its
+   * `instructions_document_id`, so without this the second version of a quiz
+   * existed on disk and nowhere on screen.
+   */
+  const papersOf = new Map();
   for (const courseId of workspace.courseIds()) {
     let loaded;
     try {
@@ -4545,6 +4580,15 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
       const plan = document.presentation_plan;
       if (plan && Array.isArray(plan.slides) && plan.slides.length > 0) {
         hasPlan.add(document.document_id);
+      }
+      const renders = document.extensions?.renders;
+      if (typeof renders === "string" && renders !== "") {
+        const version = document.extensions?.variant ?? document.extensions?.form ?? null;
+        if (!papersOf.has(renders)) papersOf.set(renders, []);
+        papersOf.get(renders).push({
+          id: document.document_id,
+          variant: typeof version === "string" && version !== "" ? version : null,
+        });
       }
       const key = String(document.storage_key ?? "");
       if (!key || key.includes("://")) continue;
@@ -4718,8 +4762,47 @@ const withMaterialLinks = (data, origin, sessionId, workspace, dark, withDrafts)
     (withDrafts ? "&drafts=1" : "") +
     (dark ? "&dark=1" : "");
 
+  /**
+   * The papers of one assessment that the overlay can paint, one per version.
+   *
+   * A version printed in several formats is offered once, in the format a
+   * frame paints best: the PDF a student is handed, else the markdown it was
+   * written in, else whatever else is showable. Sorted by version so A comes
+   * before B on every screen.
+   */
+  //
+  // Ranked by the file's OWN format, not the format it is served as: a `.docx`
+  // this machine converts is served as a PDF too, and ranking by that let a
+  // LibreOffice rendering of the DOCX — two pages, nothing fitted — stand in
+  // for the one-page PDF printed beside it.
+  const RANK = { pdf: 0, md: 1, markdown: 1, html: 2 };
+  const papersFor = (assessmentId) => {
+    const byVersion = new Map();
+    for (const paper of papersOf.get(assessmentId) ?? []) {
+      if (!showable(paper.id)) continue;
+      const rank = RANK[extensionOf.get(paper.id) ?? ""] ?? 9;
+      const held = byVersion.get(paper.variant ?? "");
+      if (held === undefined || rank < held.rank) byVersion.set(paper.variant ?? "", { ...paper, rank });
+    }
+    return [...byVersion.values()]
+      .sort((a, b) => String(a.variant ?? "").localeCompare(String(b.variant ?? "")))
+      .map((paper) => ({
+        label: paper.variant ? `Variant ${paper.variant}` : "Paper",
+        url: address(paper.id),
+        format: servedFormat(paper.id),
+      }));
+  };
+
   const linkAssessment = (assessment) => {
     if (!assessment || typeof assessment !== "object") return assessment;
+    const papers = assessment.assessment_id ? papersFor(assessment.assessment_id) : [];
+    // Only when there is a choice to make. One paper is what the chip already
+    // opens; a list of one would be a second way to say the same thing.
+    if (papers.length > 1) return { ...linkOne(assessment), papers };
+    return linkOne(assessment);
+  };
+
+  const linkOne = (assessment) => {
     // The record's own text, when it has any. This is what the chip opens, and
     // it is the usual case: most assessments in this model carry no brief
     // document at all, so without it the chip names work nobody can read.

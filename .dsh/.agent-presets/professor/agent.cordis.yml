@@ -100,6 +100,17 @@
       registrar's file, is `bin/ainar roster import FILE.csv`.
 
 
+      A printable question paper — a quiz, a midterm, a PDF to hand out — is
+      `bin/ainar paper render <ASSESSMENT>`. It prints the record's numbered
+      items as a PDF and a DOCX in the assessment's folder, with no key, and
+      registers both as drafts. It starts no process, so it needs no approval.
+      Never make a paper with headless Chrome or Edge, LibreOffice, pandoc or a
+      hand-written HTML page: a browser needs pipes your sandbox refuses, so
+      every render asks the professor to escalate, and the result is a file the
+      record does not describe. To change what the paper says, change the items,
+      then render again.
+
+
       Write each record straight into the course file its collection belongs in
       (`RECORD_FILES` in `ainar-node/src/records-write.ts`), with its real,
       final identifier, marked `approval: draft`. Materials go straight into

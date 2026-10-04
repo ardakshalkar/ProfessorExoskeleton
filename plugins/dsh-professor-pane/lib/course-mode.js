@@ -261,7 +261,7 @@ document.addEventListener('click',function(e){
   var a=e.target.closest&&e.target.closest('a[data-view]');if(!a)return;
   if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
   e.preventDefault();
-  parent.postMessage({source:'professor-pane',kind:'view',url:a.getAttribute('href'),label:a.getAttribute('data-view'),format:a.getAttribute('data-format')},'*');
+  parent.postMessage({source:'professor-pane',kind:'view',url:a.getAttribute('href'),label:a.getAttribute('data-view'),format:a.getAttribute('data-format'),papers:a.getAttribute('data-papers')},'*');
 });})();<\/script>`;
 
 // ------------------------------------------------------------------ prompts
@@ -360,6 +360,14 @@ const workChip = (a, when) => {
     `${esc(a.title)}${a.draft ? ' <span class="k">draft</span>' : ""}<span class="wt">${esc(pct(a.weight))}</span>`;
   // The brief document when there is one the harness can paint, else the
   // record's own text as the page the pane serves it as.
+  // An exam with versions opens all of them in one overlay — tabs, or side by
+  // side — rather than the one its record happens to name.
+  const papers = Array.isArray(a.papers) && a.papers.length > 1 ? a.papers : null;
+  if (papers) {
+    return `<a class="${cls}" href="${esc(papers[0].url)}" target="_blank" rel="noopener" data-view="${esc(a.title)}" ` +
+      `data-format="${esc(papers[0].format)}" data-papers="${esc(JSON.stringify(papers))}" ` +
+      `title="open the ${papers.length} versions">${body}</a>`;
+  }
   const href = a.viewable && a.url ? a.url : a.brief_url;
   if (href) {
     const format = a.viewable && a.url ? a.format : "html";

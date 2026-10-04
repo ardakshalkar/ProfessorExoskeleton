@@ -189,6 +189,11 @@ output. Then run it without `--dry-run`. It writes:
 `--title` only for a new assessment, as printed on the paper. Everything is
 `approval: draft`. Then `bin/ainar validate <COURSE>`.
 
+To print it again from the record — a reprint, or a clean PDF of a paper that
+only exists as a scan — run `bin/ainar paper render <ASSESSMENT>`: one PDF and
+DOCX per variant, no key, no browser, no process the sandbox would refuse. Never
+render a paper through headless Chrome, Edge or LibreOffice.
+
 ## 6. Back to the scans
 
 ```bash

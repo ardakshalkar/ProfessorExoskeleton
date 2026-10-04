@@ -597,6 +597,22 @@ window.__ModuleLoader__.load({
 button.pp-modallink{cursor:pointer;font-family:inherit;background:none;border:0;padding:0}
 button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-modalframe{flex:1;min-height:0;width:100%;border:0;display:block;background:#fff}
+/* An exam with versions: one tab per version, and a side-by-side view, which
+   is how anyone checks that two versions ask different questions rather than
+   the same one reworded. Two frames share the body; on a narrow screen they
+   stack, because two half-width PDFs at 360px are two unreadable ones. */
+.pp-modaltabs{flex:none;display:flex;gap:4px;align-items:center}
+.pp-modaltab{cursor:pointer;font:inherit;font-size:11.5px;padding:3px 9px;border-radius:999px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:none;
+  color:var(--dsw-alias-label-secondary,#444)}
+.pp-modaltab[aria-pressed="true"]{background:var(--dsw-alias-label-primary,#111);
+  border-color:var(--dsw-alias-label-primary,#111);color:var(--dsw-alias-bg-l1,#fff)}
+.pp-modalbody{flex:1;min-height:0;display:flex;gap:1px;background:var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-modalpane{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;
+  background:var(--dsw-alias-bg-l1,#fff)}
+.pp-modalpanelabel{flex:none;font-size:11px;font-weight:600;padding:4px 10px;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+@media (max-width:720px){.pp-modalbody{flex-direction:column}}
 /* Course mode: the term plan as the page, over the harness.
    One layer under the material overlay (4000), because a deck opened FROM
    the term plan must land on top of it, and narrower margins than a deck,
@@ -3595,6 +3611,26 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 
     function MaterialModal(props) {
       const close = props.onClose;
+      // An exam with versions arrives as a list; everything else as one
+      // document, which is a list of one and draws exactly as it always did.
+      const papers =
+        Array.isArray(props.papers) && props.papers.length > 1
+          ? props.papers
+          : [{ label: props.label, url: props.url, format: props.format }];
+      const [index, setIndex] = React.useState(0);
+      const [together, setTogether] = React.useState(false);
+      const current = papers[Math.min(index, papers.length - 1)];
+      const several = papers.length > 1;
+      const frame = (paper, key) =>
+        h("iframe", {
+          key: key,
+          className: "pp-modalframe",
+          src: paper.url,
+          // Undefined omits the attribute, which is the whole point for a
+          // PDF; see the table above.
+          sandbox: MEDIA.has(paper.format) ? undefined : "allow-same-origin",
+          title: several ? props.label + " — " + paper.label : props.label,
+        });
       React.useEffect(() => {
         const onKey = (event) => {
           if (event.key === "Escape") {
@@ -3628,6 +3664,39 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               "div",
               { className: "pp-modalhead" },
               h("div", { className: "pp-modaltitle" }, props.label),
+              several
+                ? h(
+                    "div",
+                    { className: "pp-modaltabs", role: "group", "aria-label": "Versions" },
+                    papers.map((paper, at) =>
+                      h(
+                        "button",
+                        {
+                          key: paper.url,
+                          type: "button",
+                          className: "pp-modaltab",
+                          "aria-pressed": !together && at === index ? "true" : "false",
+                          onClick: () => {
+                            setIndex(at);
+                            setTogether(false);
+                          },
+                        },
+                        paper.label,
+                      ),
+                    ),
+                    h(
+                      "button",
+                      {
+                        type: "button",
+                        className: "pp-modaltab",
+                        "aria-pressed": together ? "true" : "false",
+                        title: "Every version at once",
+                        onClick: () => setTogether(!together),
+                      },
+                      "Side by side",
+                    ),
+                  )
+                : null,
               // Name this in the composer, and let the professor type the
               // question. The alternative — a button that SENDS something —
               // would be the pane writing their sentence for them, and every
@@ -3636,7 +3705,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               // Rendered only when the composition actually provides the
               // draft-writing seam and this material has an identifier worth
               // carrying. A control that does nothing is worse than no control.
-              props.mention && mentionOf(props.url, props.label)
+              props.mention && mentionOf(current.url, props.label)
                 ? h(
                     "button",
                     {
@@ -3644,7 +3713,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                       className: "pp-modallink",
                       title: "Put this in the message box, then type your question",
                       onClick: () => {
-                        if (props.mention(mentionOf(props.url, props.label))) close();
+                        if (props.mention(mentionOf(current.url, props.label))) close();
                       },
                     },
                     "Ask about this ↩",
@@ -3654,7 +3723,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 "a",
                 {
                   className: "pp-modallink",
-                  href: props.url,
+                  href: current.url,
                   target: "_blank",
                   rel: "noopener",
                 },
@@ -3671,14 +3740,20 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 "×",
               ),
             ),
-            h("iframe", {
-              className: "pp-modalframe",
-              src: props.url,
-              // Undefined omits the attribute, which is the whole point for a
-              // PDF; see the table above.
-              sandbox: MEDIA.has(props.format) ? undefined : "allow-same-origin",
-              title: props.label,
-            }),
+            together
+              ? h(
+                  "div",
+                  { className: "pp-modalbody" },
+                  papers.map((paper) =>
+                    h(
+                      "div",
+                      { key: paper.url, className: "pp-modalpane" },
+                      h("div", { className: "pp-modalpanelabel" }, paper.label),
+                      frame(paper),
+                    ),
+                  ),
+                )
+              : frame(current, current.url),
           ),
         ),
         document.body,
@@ -6515,7 +6590,27 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             // The extension decides how the frame is sandboxed and nothing
             // else; an unrecognised one takes the stricter branch.
             const format = typeof data.format === "string" ? data.format.toLowerCase() : "";
-            setMaterial({ url, label, format });
+            // The versions of an exam, when the chip carried them. Each URL
+            // passes the same `materialUrl` check the single one does, so a list
+            // is no wider a door than a link: an entry that fails is dropped,
+            // and a list that ends up with one paper is just that paper.
+            let papers = [];
+            try {
+              const listed = typeof data.papers === "string" ? JSON.parse(data.papers) : data.papers;
+              papers = (Array.isArray(listed) ? listed : [])
+                .slice(0, 8)
+                .map((paper) => ({
+                  url: materialUrl(paper && paper.url),
+                  label: paper && typeof paper.label === "string" && paper.label.trim() !== ""
+                    ? paper.label.trim()
+                    : "Paper",
+                  format: paper && typeof paper.format === "string" ? paper.format.toLowerCase() : "",
+                }))
+                .filter((paper) => paper.url !== null);
+            } catch {
+              papers = [];
+            }
+            setMaterial({ url, label, format, papers });
           }
         };
         window.addEventListener("message", onMessage);
@@ -6965,6 +7060,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               url: material.url,
               label: material.label,
               format: material.format,
+              papers: material.papers,
               mention: props.mention,
               onClose: () => setMaterial(null),
             }),

@@ -107,3 +107,37 @@ test("coverage says the set is complete only when it is", () => {
   assert.equal(reported.implemented, reported.total);
   assert.match(reported.note, /94 of 94 checks, the complete set/);
 });
+
+/** One assessment of five marks: question 1 differs by version, question 2 is shared. */
+const withVersions = (a: Record<string, unknown>, b: Record<string, unknown>): CourseBundle => {
+  const bundle = withDocument("x.md") as any;
+  bundle.documents = [];
+  bundle.assessments = [{ assessment_id: "ASSESSMENT-Q", title: "Q", maximum_score: 5, outcomes: [] }];
+  const item = (id: string, number: number, marks: number, extra: Record<string, unknown>) => ({
+    item_id: id, assessment_id: "ASSESSMENT-Q", type: "short_answer", prompt: id, number,
+    maximum_score: marks, role: "main", concepts: [], options: [], ...extra,
+  });
+  bundle.items = [
+    item("ITEM-Q-A-01", 1, 3, { difficulty: "medium", extensions: { variant: "A" }, ...a }),
+    item("ITEM-Q-B-01", 1, 3, { difficulty: "medium", extensions: { variant: "B" }, ...b }),
+    item("ITEM-Q-02", 2, 2, { difficulty: "easy" }),
+  ];
+  return bundle as CourseBundle;
+};
+
+test("versions equally hard: no variant_imbalance", () => {
+  assert.ok(!codesOf(withVersions({}, {})).includes("item.variant_imbalance"));
+});
+
+test("an easier version A is said: per question and for the paper", () => {
+  const issues = validate(withVersions({ difficulty: "easy" }, { difficulty: "complex" })).items
+    .filter((issue: any) => issue.code === "item.variant_imbalance");
+  assert.ok(issues.some((issue: any) => /question 1 differs in difficulty/.test(issue.message)));
+  assert.ok(issues.some((issue: any) => /different mixes of difficulty/.test(issue.message)));
+});
+
+test("a version-specific item with no difficulty cannot be compared, and says so", () => {
+  const issues = validate(withVersions({ difficulty: undefined }, {})).items
+    .filter((issue: any) => issue.code === "item.variant_imbalance");
+  assert.ok(issues.some((issue: any) => /declares no difficulty/.test(issue.message)));
+});

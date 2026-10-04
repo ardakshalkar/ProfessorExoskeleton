@@ -291,6 +291,40 @@ several controlled instances should measure the same construct—for equivalent
 exam forms, later reuse, or systematic variation of difficulty. The model owns
 the construct and evidence; the item owns the actual wording and answer.
 
+### Versions, when the professor asks for them
+
+One paper is the default. Write versions only when the professor asks for them
+("two versions", "variant A and B"), and ask how many if they did not say.
+
+A version is not a rephrasing: each asks a different question on the same
+concept, at the same level and for the same marks, so a student who sees a
+neighbour's paper learns nothing.
+
+**Versions are equally hard.** The version a student is handed must not
+decide part of their grade. So question N of every version does the same kind
+of work — recall against recall, a calculation against a calculation of the same
+size, an explanation against an explanation — carries the same marks, and
+declares the same `difficulty`. Never put the easier question on A and the
+harder one on B; if one topic only has a harder question, give every version a
+question of that weight, or move the hard one to a shared item. Declare
+`difficulty` on every version's item: `validate` compares them
+(`item.variant_imbalance`) per question and as a mix across the paper, and a
+blank cannot be compared. Record them the way `import-paper` does —
+the record has one convention for this, and a second is how a quiz becomes
+ungradable:
+
+- a question that differs by version is one item **per version**, each with
+  `extensions.variant: A` (or `B`, …) and an id that says so
+  (`ITEM-QUIZ-03-A-01`, `ITEM-QUIZ-03-B-01`), the same `number` on both;
+- a question every version shares is one item with no `variant`;
+- never two versions inside one item's prompt or `marking_guidance`.
+
+Do not worry that six items "sum to twice the paper": `validate` checks marks,
+numbering and criterion totals **per version** — the shared items plus that
+version's own — exactly as a student sat it. `bin/ainar paper render` then prints
+one paper per version (`QUIZ-03-student-A.pdf`, `-B.pdf`), and the pane shows them
+side by side.
+
 ## 4. Write the brief students actually read
 
 The YAML is the model; it is not a document anybody can be handed. Write the
@@ -321,6 +355,22 @@ Markdown, not `.docx` or `.pdf`: it diffs, it reviews, and it converts afterward
 The file stays where you wrote it — nothing moves it on approval, so the
 `storage_key` is final from the start. Never write `size_bytes` or `checksum`
 yourself; they are computed from the file.
+
+**A paper that is sat** — a quiz, a midterm, anything printed and handed out —
+is printed from the items, not written by hand:
+
+```bash
+bin/ainar paper render ASSESSMENT-06
+```
+
+It writes `<STEM>-student.pdf` and `.docx` into the assessment's folder, never
+the key, and registers both as `approval: draft` Documents carrying
+`extensions.renders: ASSESSMENT-06`. It starts no process, so it runs in the
+sandbox without asking. Do not render a paper through headless Chrome or Edge,
+LibreOffice, pandoc or an HTML page of your own: a browser needs pipes the
+sandbox refuses, so every render asks the professor to escalate, and the file it
+makes is one the record does not describe. To change the paper, change the
+items and render again.
 
 What the brief contains: the task, what to hand in, when, how it is marked. **The
 rubric goes in it** — a criterion a student cannot read before starting is a
@@ -433,7 +483,9 @@ items serve it. Then, separately:
 - anything from `never_assessed` still uncovered;
 - the resulting total weight if it is not 1.0;
 - the brief, the repository scaffold if you built one, and the commands that
-  publish them — with a sentence on what each command does before it runs.
+  publish them — with a sentence on what each command does before it runs;
+- for a paper that is sat, the printed paper from `bin/ainar paper render`, and
+  the `instructions_document_id` line it printed for the professor to record.
 
 Say explicitly that nothing has been published. Name what is marked
 `approval: draft` and where — the assessment in `assessments/generated.yaml`, the

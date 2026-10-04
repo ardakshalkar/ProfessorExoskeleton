@@ -125,6 +125,7 @@ import { canRender, describeRender, PAGE, renderDeck, workspaceOf } from "../src
 import { deckForDocument, recordFor, type RecordedDeck } from "../src/slides/recorded.ts";
 import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../src/slides/timing.ts";
 import { buildMaterials, documentRecord, producerFor, readProducers } from "../src/materials.ts";
+import { printPaper, type AnswerLayout, type PaperFormat } from "../src/exam-paper.ts";
 import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
 import {
@@ -451,6 +452,13 @@ const HELP = `ainar — the AINAR course model CLI
                [--key KEY.md] [--title T] [--type exam] [--dry-run]
                                            an exam that already exists: the
                                            paper as markdown, its items derived
+  paper render ASSESSMENT [--format pdf|docx|both] [--answers under-question|separate-sheet]
+               [--variant V] [--page a4|letter] [--pages N] [--out DIR] [--doc-id DOC-X] [--no-register]
+                                           print the question paper from the
+                                           record (no key), one per variant,
+                                           registered as drafts; no browser, no
+                                           LibreOffice, no subprocess — runs in
+                                           the sandbox
 
   schema [ENTITY] [--json] [--out DIR]     what a record must look like
   new course COURSE_ID [--title T] [--credits N] [--department D]
@@ -2635,6 +2643,38 @@ try {
      * has no record of — the assessment itself is written as a draft with the
      * claims only the professor can make (weight, outcomes) left empty.
      */
+    case "paper": {
+      // The printed question paper, from the record. Exists as a command so an
+      // agent finds it in `--help` instead of reaching for headless Chrome,
+      // which needs pipes a sandboxed session refuses — and every paper it
+      // printed that way asked the professor to escalate. `printPaper` starts
+      // no process at all.
+      const assessmentId = rest[1];
+      if (rest[0] !== "render" || !assessmentId) {
+        console.error(
+          "usage: paper render ASSESSMENT [--format pdf|docx|both] [--answers under-question|separate-sheet]\n" +
+            "                    [--variant V] [--page a4|letter] [--pages N] [--out DIR] [--doc-id DOC-X] [--no-register]",
+        );
+        process.exit(1);
+      }
+      const report = await printPaper({
+        assessmentId,
+        root,
+        rootSource: rootFlag ? "flag" : "cwd",
+        format: (flag("format") ?? "both") as PaperFormat | "both",
+        answers: (flag("answers") ?? "under-question") as AnswerLayout,
+        out: flag("out") ?? null,
+        docId: flag("doc-id") ?? null,
+        register: !args.includes("--no-register"),
+        variant: flag("variant") ?? null,
+        pageSize: (flag("page") ?? null) as "a4" | "letter" | null,
+        maxPages: flag("pages") ? Number(flag("pages")) : null,
+      });
+      for (const line of report.warnings) console.error(line);
+      for (const line of report.lines) console.log(line);
+      break;
+    }
+
     case "import-paper": {
       const runId = rest[0];
       const assessmentId = flag("assessment");

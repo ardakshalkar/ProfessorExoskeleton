@@ -192,6 +192,26 @@ function model(d) {
    * interpolation and has no raw construct, so a `<br>` could not be smuggled
    * through anyway — paragraphs are how a shape survives the crossing.
    */
+  /**
+   * An exam's versions, for the `open` link: every version in one overlay.
+   *
+   * The pane puts `papers` on a piece of graded work when more than one printed
+   * paper names it (`extensions.renders`). Carried as JSON on the link because
+   * that is all an attribute can hold; each URL is passed through `safeUrl`
+   * here and checked again by the host before anything is framed. Empty — the
+   * plain `open` it always was — on every other surface, and for one paper.
+   */
+  function versions(a) {
+    const list = (Array.isArray(a.papers) ? a.papers : [])
+      .map(function (p) {
+        return { label: String((p && p.label) || 'Paper'), url: safeUrl(p && p.url), format: String((p && p.format) || '') };
+      })
+      .filter(function (p) { return p.url; });
+    return list.length > 1
+      ? { papers: JSON.stringify(list), open_label: 'open · ' + list.length + ' versions' }
+      : { papers: '', open_label: 'open' };
+  }
+
   function brief(w, a, type) {
     const text = String(a.description == null ? '' : a.description).trim();
     if (!text) return { brief_id: '' };
@@ -322,7 +342,7 @@ function model(d) {
       for (const a of list || []) {
         const on = shortDate(a.due_on || a.opens_on);
         const type = a.type || 'assessment';
-        main.push(Object.assign(brief(w, a, type), {
+        main.push(Object.assign(brief(w, a, type), versions(a), {
           label: titled(ASSESS_WORD[type] || type),
           icon: ASSESS_ICON[type] || 'doc',
           tone: verb === 'due' ? 'due' : 'task',
@@ -355,7 +375,7 @@ function model(d) {
     // week looks first, and a week cannot honestly hold work with no date.
     for (const a of showGaps ? [] : w.undated || []) {
       const type = a.type || 'assessment';
-      main.push(Object.assign(brief(w, a, type), {
+      main.push(Object.assign(brief(w, a, type), versions(a), {
         label: titled(ASSESS_WORD[type] || type),
         icon: ASSESS_ICON[type] || 'doc',
         tone: 'todo',

@@ -64,13 +64,17 @@ function ask(question) {
 // message does not, and neither does the published page, where the link IS the
 // navigation. So this is a capability test rather than a preference: false
 // means the click was not handled, and must be left alone to follow its href.
-function showMaterial(url, label, format) {
+function showMaterial(url, label, format, papers) {
   if (typeof api.openMaterial !== 'function') return false;
   if (!url) return false;
   // `format` is the file's extension, and the host needs it: a PDF and an
   // image are painted by a viewer the browser will not run inside a sandboxed
   // frame, and an HTML handout is a document that must be.
-  api.openMaterial({ url: url, label: label, format: format || '' });
+  //
+  // `papers` is an exam's versions, as JSON, when it has more than one: the
+  // host opens them in one overlay, as tabs or side by side. A host that does
+  // not know the field opens `url`, the first version, which is still right.
+  api.openMaterial({ url: url, label: label, format: format || '', papers: papers || '' });
   return true;
 }
 
@@ -177,7 +181,7 @@ function paint() {
     link.addEventListener('click', function (event) {
       if (event.defaultPrevented || event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-      if (showMaterial(link.getAttribute('href'), link.dataset.view, link.dataset.format)) {
+      if (showMaterial(link.getAttribute('href'), link.dataset.view, link.dataset.format, link.dataset.papers)) {
         event.preventDefault();
       }
     });
