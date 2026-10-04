@@ -263,7 +263,10 @@ with `component:` (by period, for a scheme divided by period), and propose no
 weight that would make a block's members exceed it. `ainar validate` reports a
 block whose members do not add up to it (`grading.component_sum`) and an
 assessment in no block (`grading.unassigned`); read both out, never silence
-them by changing an existing weight.
+them by changing an existing weight. If a block has `points`, a shell's weight
+also decides what it is out of in Canvas: 0.06 inside a 0.3 block out of 100
+is out of 20. An assessment with no weight under `points` cannot be sent at
+all (`grading.unscaled`).
 
 The conditions on that, and none of them is optional:
 

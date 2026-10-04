@@ -158,6 +158,14 @@ grading_scheme:
     - { component_id: FINAL, title: Final, weight: 0.4 }
 ```
 
+Then ask what the LMS counts them out of. At Narxoz each block is out of 100
+whatever its weight, so every component gets `points: 100`. A quiz worth 6% of
+the course inside ВСК1 is then out of 20 in Canvas. Elsewhere it is often the
+whole course that is out of 100, which is `points: 100` on the scheme itself.
+Neither means Canvas gets the raw mark out of the assessment's own maximum.
+Marks are always recorded out of the assessment's own maximum. `points` only
+changes what is sent, and the block totals the gradebook reports.
+
 No scheme is a valid answer: the grade is then the flat sum of assessment
 weights. Do not write any assessment weight now — assessments do not exist yet;
 `/plan-term` creates the shells and puts each in its component. If the run has a

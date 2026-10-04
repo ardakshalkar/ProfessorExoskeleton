@@ -30,6 +30,13 @@ about an afternoon and has not been done.
   of the final grade — Narxoz's ВСК1 30 / ВСК2 30 / Final 40, a category split,
   terms within a year — is stated once and read by the gradebook, `validate` and
   the Canvas sync.
+- **2026-10-04 — the LMS scale.** `points` on `GradingScheme` and on
+  `GradingComponent`: what the course, or a block, is out of in the LMS. ВСК1
+  with `points: 100` puts a quiz worth 6% of the course inside its 30% out of 20
+  in Canvas; a scheme with `points: 100` puts every assessment out of its share
+  of a hundred. Marks stay recorded out of `maximum_score`; only what is sent
+  and the gradebook's block totals are converted. `components` may now be empty,
+  so a course with no blocks can still say it is out of 100.
 
 ## Conventions
 

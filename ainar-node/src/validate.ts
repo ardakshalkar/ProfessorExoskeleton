@@ -50,6 +50,7 @@ import {
 import { statSync } from "node:fs";
 import { join } from "node:path";
 import { IssueList, type Issue } from "./issues.ts";
+import { lmsScale } from "./lms-scale.ts";
 
 /** Whether a repository-relative storage key names an existing file. */
 const isFile = (root: string, key: string): boolean => {
@@ -181,6 +182,7 @@ export const ADDED = [
   "grading.cycle",
   "grading.duplicate_component",
   "grading.unassigned",
+  "grading.unscaled",
   "grading.unknown_component",
   "grading.unknown_parent",
   "lms.both_course_forms",
@@ -599,6 +601,14 @@ const gradingSchemeIssues = (run: any, assessments: any[], issues: IssueList): v
       );
     } else if (!assessment.component && components.length && assessment.weight != null) {
       issues.warn("grading.unassigned", "counts in the grade but names no component of the grading scheme", assessment.assessment_id);
+    }
+  }
+  // A scale the LMS cannot be given: the scheme counts this assessment out of
+  // a share of some block's points, and that share is not known.
+  if (run.grading_scheme) {
+    for (const assessment of assessments) {
+      const problem = lmsScale(run, assessment).problem;
+      if (problem) issues.warn("grading.unscaled", `${problem}; nothing can be sent to the LMS for it`, assessment.assessment_id);
     }
   }
   if (!components.length) return;

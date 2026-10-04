@@ -51,15 +51,28 @@ export const GradingComponent = entity({
   title: z.string(),
   weight: Weight,
   parent: ComponentId.nullish(),
+  /**
+   * What this block is out of in the LMS, when the institution counts it on
+   * its own scale: Narxoz's ВСК1 is out of 100 whatever its weight, so a quiz
+   * worth 6% of the course inside ВСК1's 30% is out of 20 there. Absent, the
+   * block sets no scale and the one above it (or the scheme's) decides.
+   */
+  points: z.number().positive().nullish(),
   description: z.string().nullish(),
 });
 
 /**
  * How this run's final grade is divided, when the institution divides it.
  * Absent, the grade is the flat sum of assessment weights, as it always was.
+ *
+ * `points` is what the whole course is out of in the LMS — 100 when every
+ * assessment is out of its share of a hundred-point course. With no `points`
+ * on the scheme or on any block above an assessment, the LMS gets the raw
+ * score out of the assessment's own `maximum_score`.
  */
 export const GradingScheme = entity({
-  components: z.array(GradingComponent).min(1),
+  components: z.array(GradingComponent).default([]),
+  points: z.number().positive().nullish(),
   description: z.string().nullish(),
 });
 

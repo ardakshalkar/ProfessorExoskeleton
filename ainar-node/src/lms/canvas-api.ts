@@ -513,10 +513,13 @@ const g = (value: number): string => String(Number(value.toPrecision(6)));
  *
  * Canvas stores a raw score against `points_possible`. Sending 80 to an
  * assignment worth 50 shows the student 160%, and Canvas will not object.
+ * `maximum` is what the grading scheme says Canvas should have it out of,
+ * which `lmsScale` works out; the score sent is already on that scale.
  */
 export const scaleProblem = (
   assignment: Record<string, any>,
   maximum: number,
+  why: string | null = null,
 ): string | null => {
   const points = assignment.points_possible;
   if (points === null || points === undefined) {
@@ -525,7 +528,7 @@ export const scaleProblem = (
   if (Math.abs(Number(points) - Number(maximum)) > 0.01) {
     return (
       `Canvas has this assignment out of ${g(Number(points))} but the assessment ` +
-      `here is out of ${g(Number(maximum))}. Sending a raw score would misreport ` +
+      `here is out of ${g(Number(maximum))}${why ? ` (${why})` : ""}. Sending a score would misreport ` +
       "it — change one of the two rather than scaling"
     );
   }

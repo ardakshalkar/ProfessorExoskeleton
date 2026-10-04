@@ -38,6 +38,20 @@
           "default": null,
           "title": "Parent"
         },
+        "points": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What this block is out of in the LMS, when the institution counts it on\nits own scale: Narxoz's ВСК1 is out of 100 whatever its weight, so a quiz\nworth 6% of the course inside ВСК1's 30% is out of 20 there. Absent, the\nblock sets no scale and the one above it (or the scheme's) decides.",
+          "title": "Points"
+        },
         "description": {
           "anyOf": [
             {
@@ -61,7 +75,7 @@
     },
     "GradingScheme": {
       "additionalProperties": false,
-      "description": "How this run's final grade is divided, when the institution divides it.\nAbsent, the grade is the flat sum of assessment weights, as it always was.",
+      "description": "How this run's final grade is divided, when the institution divides it.\nAbsent, the grade is the flat sum of assessment weights, as it always was.\n\n`points` is what the whole course is out of in the LMS — 100 when every\nassessment is out of its share of a hundred-point course. With no `points`\non the scheme or on any block above an assessment, the LMS gets the raw\nscore out of the assessment's own `maximum_score`.",
       "properties": {
         "extensions": {
           "additionalProperties": true,
@@ -73,9 +87,22 @@
           "items": {
             "$ref": "#/$defs/GradingComponent"
           },
-          "minItems": 1,
           "title": "Components",
-          "type": "array"
+          "type": "array",
+          "default": []
+        },
+        "points": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Points"
         },
         "description": {
           "anyOf": [
@@ -90,9 +117,6 @@
           "title": "Description"
         }
       },
-      "required": [
-        "components"
-      ],
       "title": "GradingScheme",
       "type": "object"
     },

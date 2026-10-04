@@ -22,6 +22,7 @@ import { decidedAt, upsertRecords, writeRecords, zoneOffsetMinutes } from "../re
 import { allRubrics, assessmentById, assessmentsOf, enrollmentsOf, runById } from "../bundle.ts";
 import { type CourseBundle } from "../bundle.ts";
 import { type GradeRow, gradeRows, gradebookPayload } from "../gradebook.ts";
+import { type LmsScale, lmsScale, rescales, toLms } from "../lms-scale.ts";
 import {
   CANVAS_ASSIGNMENT_GROUPS_KEY,
   LIVE_TARGETS,
@@ -166,6 +167,8 @@ interface LmsContext {
   notes: string[];
   unmatched: string[];
   scaleProblem: string | null;
+  /** What Canvas has the assessment out of, which the grading scheme may make other than its maximum_score. */
+  scale: LmsScale | null;
   sheets: SheetsClient | null;
   spreadsheetId: string | null;
   tab: string | null;
@@ -226,6 +229,7 @@ const openContext = async (
     notes: [],
     unmatched: [],
     scaleProblem: null,
+    scale: assessment ? lmsScale(runOf(bundle, args.run), assessment) : null,
     sheets: null,
     spreadsheetId: null,
     tab: null,
@@ -258,11 +262,13 @@ const openContext = async (
     const possible = (context.exported.points_possible[context.column] ?? "").trim();
     if (possible) {
       const parsed = Number(possible);
-      if (Number.isFinite(parsed) && Math.abs(parsed - assessment.maximum_score) > 0.01) {
+      const expected = context.scale!.maximum;
+      if (Number.isFinite(parsed) && Math.abs(parsed - expected) > 0.01) {
         context.scaleProblem =
           `the export says this column is out of ${g(parsed)} but ` +
-          `the assessment here is out of ${g(assessment.maximum_score)} — ` +
-          "a raw score would misreport it";
+          `the assessment here is out of ${g(expected)}` +
+          (rescales(context.scale!) ? ` in Canvas (${context.scale!.why})` : "") +
+          " — a score would be misreported";
       }
     }
   }
@@ -429,7 +435,8 @@ const openCanvas = async (args: LmsArgs, context: LmsContext, deps: Deps): Promi
     context.courseId,
     context.assignmentId,
   );
-  context.scaleProblem = scaleProblem(context.canvasAssignment, context.assessment.maximum_score);
+  context.scaleProblem =
+    context.scale!.problem ?? scaleProblem(context.canvasAssignment, context.scale!.maximum, rescales(context.scale!) ? context.scale!.why : null);
   context.notes.push(
     `Canvas assignment ${context.assignmentId}: ` +
       `${context.canvasAssignment.name || "untitled"}`,
@@ -459,7 +466,7 @@ const makePlan = (
   context: LmsContext,
 ): { plan: PushPlan; ledger: Ledger; rows: GradeRow[] } => {
   const assessment = context.assessment;
-  const rows =
+  const recorded =
     gradeRows(context.bundle, args.run, {
       assessmentId: assessment.assessment_id,
       allowPartial: args.allowPartial,
@@ -468,6 +475,16 @@ const makePlan = (
       // a file addressed to this one's Canvas course.
       groups: args.group ? [args.group] : null,
     }).get(assessment.assessment_id) ?? [];
+  // Canvas counts on the institution's scale, which the grading scheme may
+  // make other than the marks here: the rows a Canvas target sees are
+  // converted, and only those — a sheet is the professor's own copy, and its
+  // criteria add up to the marks as recorded.
+  const scale = context.scale!;
+  const toCanvas = args.target.startsWith("canvas") && rescales(scale) && !scale.problem;
+  if (args.target.startsWith("canvas") && scale.problem) context.scaleProblem ??= scale.problem;
+  const rows = toCanvas
+    ? recorded.map((row) => ({ ...row, score: row.score === null ? null : toLms(row.score, scale), maximum: scale.maximum }))
+    : recorded;
 
   // Each target is asked about its own state. A sheet is a regenerated view and
   // has none — comparing it against a Canvas export would report one target's
@@ -513,6 +530,12 @@ const makePlan = (
   if (context.exported !== null && context.column) {
     plan.notes.push(planSummaryNote(context.exported, context.column));
   }
+  if (toCanvas) {
+    plan.notes.push(
+      `Canvas has this out of ${g(scale.maximum)}, not ${g(assessment.maximum_score)}: ${scale.why}. ` +
+        "Every score below is converted to that scale; the marks here are unchanged.",
+    );
+  }
   if (context.scaleProblem) plan.notes.push(`! ${context.scaleProblem}`);
 
   // A live target can only be written to for students Canvas knows by id.
@@ -526,7 +549,7 @@ const makePlan = (
       }
     }
   }
-  return { plan, ledger, rows };
+  return { plan, ledger, rows: recorded };
 };
 
 const printPlan = (plan: PushPlan, out: (line: string) => void, verbose = true): void => {
@@ -1053,7 +1076,8 @@ const runPush = async (args: LmsArgs, context: LmsContext, deps: Deps): Promise<
   if (context.scaleProblem) {
     throw new Error(
       `\nrefusing to send a score: ${context.scaleProblem}.\nFix the ` +
-        "assessment's maximum_score or the assignment in Canvas, then run again.",
+        "assessment's maximum_score, its weight or the grading scheme's points, " +
+        "or the assignment in Canvas, then run again.",
     );
   }
   if (args.dryRun) {
@@ -1348,7 +1372,8 @@ const runAssignment = async (
 
   // The brief, read once: it is the same document for every subgroup.
   const brief = briefHtml(bundle, assessment, root);
-  const spec = specFor(assessment, brief.html);
+  const scale = lmsScale(run, assessment);
+  const spec = specFor(assessment, brief.html, scale.problem ? null : scale.maximum);
 
   const config = loadCanvasConfig(rosterDir(args.rosterDir), {
     baseUrl: args.canvasUrl,
@@ -1391,6 +1416,11 @@ const runAssignment = async (
     }
 
     const notes = brief.note ? [brief.note] : [];
+    if (scale.problem) {
+      notes.push(`! ${scale.problem} — points_possible stays at maximum_score, ${g(assessment.maximum_score)}.`);
+    } else if (rescales(scale)) {
+      notes.push(`points_possible is ${g(scale.maximum)}, not ${g(assessment.maximum_score)}: ${scale.why}.`);
+    }
     // The assignment group is per Canvas course: the run's grading component,
     // mapped to this course's group by `lms groups --link`.
     const targetSpec: AssignmentSpec = {
@@ -1564,6 +1594,7 @@ const kindAndNumber = (text: string): { kind: string; number: number } | null =>
 const matchAssignment = (
   assessment: any,
   assignment: Record<string, any>,
+  outOf: number | null = assessment.maximum_score ?? null,
 ): { score: number; why: string[] } | null => {
   const why: string[] = [];
   let score = 0;
@@ -1580,7 +1611,7 @@ const matchAssignment = (
   }
   if (score === 0) return null;
   const points = Number(assignment.points_possible);
-  if (assessment.maximum_score != null && Number.isFinite(points) && points === Number(assessment.maximum_score)) {
+  if (outOf != null && Number.isFinite(points) && Math.abs(points - Number(outOf)) <= 0.01) {
     score += 1;
     why.push(`${points} points on both`);
   }
@@ -1633,7 +1664,7 @@ const runAssignmentList = async (args: LmsArgs, bundle: CourseBundle, deps: Deps
       linked = canvasAssignmentFor(wanted, group) ?? null;
       if (!linked) {
         candidates = raw
-          .map((assignment) => ({ assignment, found: matchAssignment(wanted, assignment) }))
+          .map((assignment) => ({ assignment, found: matchAssignment(wanted, assignment, lmsScale(run, wanted).maximum) }))
           .filter((entry) => entry.found && !linkedTo.has(String(entry.assignment.id)))
           .map((entry) => ({
             id: String(entry.assignment.id),

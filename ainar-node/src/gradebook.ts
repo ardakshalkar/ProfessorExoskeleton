@@ -24,6 +24,7 @@ import {
   type CourseBundle,
 } from "./bundle.ts";
 import { roundHalfEven } from "./grading.ts";
+import { lmsScale, rescales } from "./lms-scale.ts";
 
 export const GRADEBOOK_VERSION = "gradebook/2026.08.1";
 const TOLERANCE = 0.01;
@@ -333,7 +334,8 @@ const totals = (
   // The grading scheme, when the run has one: each assessment counts in its
   // component and in every component above it, so ВСК1's line includes the
   // homework block nested inside it.
-  const components = ((runById(b).get(courseVersionId) as any)?.grading_scheme?.components ?? []) as any[];
+  const scheme = (runById(b).get(courseVersionId) as any)?.grading_scheme ?? null;
+  const components = (scheme?.components ?? []) as any[];
   const parentOf = new Map(components.map((c) => [c.component_id as string, (c.parent ?? null) as string | null]));
   const chain = (componentId: string | null | undefined): string[] => {
     const out: string[] = [];
@@ -394,6 +396,11 @@ const totals = (
         ? roundHalfEven((entry.earned_weighted / entry.weight_graded) * 100, 1)
         : null,
       complete: !entry.assessments_outstanding.length,
+      // The course on the institution's scale, when the scheme gives it one:
+      // earned so far out of `points`, not a share of what was graded.
+      ...(scheme?.points != null
+        ? { points: scheme.points, score: roundHalfEven(entry.earned_weighted * scheme.points, 2) }
+        : {}),
       // In the scheme's own order, and only when the run has a scheme — a
       // component nothing was graded in yet still gets its line, with nulls.
       ...(components.length
@@ -410,11 +417,24 @@ const totals = (
                   ? roundHalfEven((got.earned_weighted / got.weight_graded) * 100, 1)
                   : null,
                 complete: got.counted > 0 && got.outstanding === 0,
+                // ВСК1 out of 100, as the institution's journal takes it.
+                ...(component.points != null && component.weight > 0
+                  ? {
+                      points: component.points,
+                      score: roundHalfEven((got.earned_weighted / component.weight) * component.points, 2),
+                    }
+                  : {}),
               };
             }),
           }
         : {}),
     }));
+};
+
+const lmsOut = (run: any, assessment: any): Record<string, unknown> => {
+  const scale = lmsScale(run, assessment);
+  if (scale.problem) return { lms: { maximum: null, problem: scale.problem } };
+  return rescales(scale) ? { lms: { maximum: scale.maximum, factor: roundHalfEven(scale.factor, 6), why: scale.why } } : {};
 };
 
 export const gradebookPayload = (
@@ -442,6 +462,8 @@ export const gradebookPayload = (
       weight: assessment.weight ?? null,
       component: assessment.component ?? null,
       maximum: assessment.maximum_score,
+      // What the LMS has it out of, when the grading scheme rescales it.
+      ...(lmsOut(run, assessment)),
       due_at: assessment.due_at ?? null,
       criteria: (rubric?.criteria ?? []).map((c: any) => ({
         criterion_id: c.criterion_id,
@@ -464,6 +486,15 @@ export const gradebookPayload = (
       "final grade. No letter grade is computed — a grading scheme is a claim " +
       "and this model has no field for one.",
   ];
+  const scheme = run?.grading_scheme;
+  if (scheme?.points != null || (scheme?.components ?? []).some((c: any) => c.points != null)) {
+    notes.push(
+      "A total's `score` is earned so far out of the block's (or the course's) " +
+        "`points`, the scale the institution's journal takes; it grows as more is " +
+        "graded, so it is final only when `complete`. An assessment's `lms.maximum` " +
+        "is what Canvas has it out of; the marks here stay out of `maximum`.",
+    );
+  }
   if (assessmentId !== null) {
     notes.push(
       `Only ${assessmentId} is in scope, so the totals cover that assessment ` +

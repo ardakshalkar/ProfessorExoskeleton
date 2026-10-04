@@ -225,8 +225,11 @@ export const briefHtml = (
 // The spec
 // ---------------------------------------------------------------------------
 
-/** What Canvas should hold for this assessment. */
-export const specFor = (assessment: any, description: string | null): AssignmentSpec => {
+/**
+ * What Canvas should hold for this assessment. `points` is what Canvas has it
+ * out of when the grading scheme says other than its maximum_score.
+ */
+export const specFor = (assessment: any, description: string | null, points: number | null = null): AssignmentSpec => {
   const formats: string[] = Array.isArray(assessment.submission_type)
     ? assessment.submission_type
     : [];
@@ -240,7 +243,7 @@ export const specFor = (assessment: any, description: string | null): Assignment
   return {
     name: String(assessment.title ?? assessment.assessment_id),
     points_possible:
-      typeof assessment.maximum_score === "number" ? assessment.maximum_score : null,
+      points ?? (typeof assessment.maximum_score === "number" ? assessment.maximum_score : null),
     due_at: assessment.due_at ?? null,
     unlock_at: assessment.opens_at ?? null,
     submission_types: types,
