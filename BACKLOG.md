@@ -346,9 +346,15 @@ is worth building.
       can be marked against the key it was actually sat under. Without this the
       rest of the epic is a way to print papers nobody can grade. `M` ·
       depends: VAR-1
-- [ ] **VAR-4** `exam-paper.ts --variants N` — N student papers per assessment,
+- [x] **VAR-4** `exam-paper.ts --variants N` — N student papers per assessment,
       each carrying its variant where a marker will look for it, and still
       carrying no key. `S` · depends: VAR-3
+      *Done 2026-10-04 as `ainar paper render` (and `exam-paper.ts`), on
+      `import-paper`'s convention rather than a count: one paper per
+      `extensions.variant` found on the items, shared items on every paper,
+      `Variant X` leading the header, `--variant V` for one. Rendered in process
+      — the spawned renderer needed a pipe a DSH sandbox refuses. The pane's
+      chip opens every version in one overlay, tabs or side by side.*
 - [ ] **VAR-5** `score-items` against a per-variant key, including the
       misconception tally, which is only meaningful per variant. `M` ·
       depends: VAR-3
@@ -918,6 +924,43 @@ is worth building.
       drafts for E21. `M` · depends: GRA-4
 - [ ] **GRA-10** Fold `extensions.history` into E17's one history when HIS-1
       decides its shape. `S` · depends: HIS-1
+
+## E29 · Agentic vision for reading exams — no `FUTURE.md` section yet
+
+> **Rank: research first.** Raised 2026-10-03. Gemini's newer vision work runs
+> as a loop rather than one look: the model plans, zooms or crops with code,
+> looks again, and only then answers; and its video understanding reads long
+> footage with timestamps. Nothing in the harness uses Gemini today, and
+> `scans read` reads each page in one pass. The question is whether that loop
+> reads handwriting better than one pass, and whether video can stand in for
+> a scanner.
+>
+> **The line does not move.** Whatever reads the page produces a transcript and
+> a confidence, as `scans read` does now. It never writes a score or a
+> `professor_decision`; grading stays on the GRA path.
+
+- [ ] **VIS-1** Research note: what Gemini's agentic vision and video
+      understanding actually do (the think–act–observe loop, code-execution
+      crops, frame sampling, timestamps), which models and APIs carry it, the
+      cost per page and per minute of video, and the data terms for student
+      work. Written to `docs/`, sources cited. `S` · depends: —
+- [ ] **VIS-2** Benchmark against what we have: the Quiz 1 scans of CSS-4007
+      (61 papers, transcripts already checked by the professor) read again by
+      an agentic loop, compared on misreads per answer and on how well the
+      confidence flags the bad ones. The answer decides the rest of the epic.
+      `M` · depends: VIS-1
+- [ ] **VIS-3** A zoom-and-reread pass on low-confidence answers only: crop to
+      the answer's region, read again, keep both readings when they disagree.
+      Shares its regions with GRA-6. `M` · depends: VIS-2, GRA-6
+- [ ] **VIS-4** A phone video of the stack instead of a scanner: the professor
+      films the papers being turned, the reader picks the sharpest frame per
+      page and hands pages to `grade-scans` as if scanned. `L` · depends: VIS-2
+- [ ] **VIS-5** Video answers: a recorded presentation or oral defence read
+      with timestamps, so each rubric criterion cites the moment it rests on.
+      Belongs with E26's oral answers. `L` · depends: VIS-1, E26
+- [ ] **VIS-6** `decision` Which provider reads student work. A second model
+      vendor means a second data agreement and a second key in
+      `connections/`; decide only if VIS-2 shows it reads better. · depends: VIS-2
 
 ---
 
