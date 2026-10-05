@@ -33,6 +33,11 @@ dist/
 .dsh/.credentials*
 .dsh/settings*
 
+# Images sent in a chat, and which of them were uploaded to a model provider.
+# These are students' scanned papers: never committed.
+.dsh/attachments/
+.dsh/llm-*/
+
 # Per-machine telemetry id, written by dsh at boot.
 .dsh/.anonymous-user-id
 
