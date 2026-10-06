@@ -925,6 +925,9 @@ is worth building.
       that is not the student's counts. A professor reading the question
       aloud is heard as the answer, so hands-free asks for the question to be
       read off the screen until AGT-4 (student screen) and AGT-6 (two voices).
+      With AGT-4 the student reads the question on their own screen, or hears
+      it read aloud before listening starts, so the professor need not speak.
+      Their interjections still count until AGT-6.
 - [x] **AGT-2** The model chooses the next question. After each answer it
       gets the questions, the rubric criteria, everything said so far and
       the code digest (a fixed prefix, so it is cached and cheap to resend).
@@ -948,12 +951,21 @@ is worth building.
       choice and override is kept in `session.yaml` under `decisions` (the
       AGT-7 record; consent is still open). A *model chooses* switch turns
       the model off, and the desk then walks the prepared questions.
-- [ ] **AGT-4** The student's screen: a second window, opened for the
+- [x] **AGT-4** The student's screen: a second window, opened for the
       projector or a second monitor, showing the current question and a
       recording light, and nothing else: no draft scores, no reasons, no
       remaining questions (LIV-1). Optionally the question read aloud
       (`speechSynthesis`, or ElevenLabs voices where a Kazakh voice is
-      wanted). `S` · depends: AGT-1
+      wanted). `S` · depends: AGT-1 Done 2026-10-06: *Open student screen* on
+      the desk opens `lib/student-screen.js`, a page that fetches nothing and
+      is told what to show over a BroadcastChannel: the question by number,
+      and whether it is recording. Between questions it shows only "the next
+      question is coming", since the proposal may still be edited or skipped.
+      *Read each question aloud there* uses the browser's `speechSynthesis`, and
+      the desk starts listening only after the screen reports it has finished
+      speaking (or after a reading-time timeout). A heartbeat every 2 s tells
+      the desk when the screen has been closed. ElevenLabs voices for Kazakh
+      are still open.
 - [ ] **AGT-5** Live captions, not only at the end of an answer: Scribe v2
       Realtime over a WebSocket (about $0.39/hr), or the local server's
       streaming route. They let AGT-2 start deciding before the student

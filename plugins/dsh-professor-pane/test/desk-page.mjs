@@ -12,6 +12,7 @@
 
 import http from "node:http";
 import { readFileSync } from "node:fs";
+import { studentScreenPage } from "../lib/student-screen.js";
 
 const PORT = Number(process.env.PORT ?? 3091);
 const client = new URL("../lib/client.js", import.meta.url);
@@ -83,10 +84,14 @@ http
     if (url.pathname === "/") return res.writeHead(200, { "content-type": "text/html" }), res.end(page);
     if (url.pathname === "/client.js") return res.writeHead(200, { "content-type": "text/javascript" }), res.end(readFileSync(client));
     if (url.pathname === "/received") return json(res, received);
+    if (url.pathname === "/professor-pane/defence/screen") {
+      return res.writeHead(200, { "content-type": "text/html" }), res.end(studentScreenPage({ assessmentId: "ASSESSMENT-HW1", studentId: "STUDENT-TEST01" }));
+    }
     if (url.pathname === "/professor-pane/api/defence/session") {
       return json(res, {
         assessment: { id: "ASSESSMENT-HW1", title: "Homework 1" },
         student: "STUDENT-TEST01",
+        languages: ["en"],
         criteria: [{ id: "CRIT-HW1-SPLIT", title: "Train/test split" }, { id: "CRIT-HW1-EVAL", title: "Evaluation" }],
         pin: { commit: "abc1234def", pinned_by: "submitted_at" },
         questions,

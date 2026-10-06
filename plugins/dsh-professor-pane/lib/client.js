@@ -6438,6 +6438,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * model the professor is talking to reads what was said and appends one
      * question, which arrives here on the next redraw.
      */
+    /** Kept in step with `screenChannel` in lib/student-screen.js by hand. */
+    const screenChannelName = (assessmentId, studentId) => "professor-pane-defence:" + assessmentId + ":" + studentId;
+
     function DefenceDesk(props) {
       const close = props.onClose;
       const [data, setData] = React.useState(null);
@@ -6457,6 +6460,15 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       proposalRef.current = proposal;
       const [chooser, setChooser] = React.useState(true);
       const [now, setNow] = React.useState(Date.now());
+      // AGT-4: the student's screen, over a BroadcastChannel. `ready` once the
+      // professor has clicked it (browsers speak only after a click), `last`
+      // the state to repeat to a screen opened late, `said` a counter naming
+      // each read-aloud so its "spoken" reply can be matched.
+      const screen = React.useRef({ channel: null, open: false, ready: false, last: null, said: 0, waiting: null, onSpoken: null });
+      const [screenState, setScreenState] = React.useState("closed"); // closed | open | ready
+      const [readAloud, setReadAloud] = React.useState(false);
+      const readAloudRef = React.useRef(false);
+      readAloudRef.current = readAloud && screenState === "ready";
       const recorder = React.useRef(null);
       // The hands-free loop's own state, outside React: it runs ten times a
       // second and must see the latest of everything without re-subscribing.
@@ -6558,6 +6570,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               stream.getTracks().forEach((track) => track.stop());
               recorder.current = null;
               setRecording(null);
+              showOnScreen(null, "idle");
               const blob = new Blob(chunks, { type: (media.mimeType || type || "audio/webm").split(";")[0] });
               if (!blob.size) {
                 setSaid({ error: true, text: "Nothing was recorded." });
@@ -6570,6 +6583,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             media.start(1000);
             setElapsed(0);
             setRecording({ question: questionId, started });
+            showOnScreen(questionId, "listening");
           })
           .catch((error) => setSaid({ error: true, text: "No microphone: " + String(error && error.message ? error.message : error) }));
       };
@@ -6598,7 +6612,93 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         return found ? found.id : null;
       };
 
-      const releaseMicrophone = () => {
+      /*
+       * What the student's screen shows. Only the question being asked, by
+       * number, and whether it is recording: never a reason, a criterion, a
+       * proposal still waiting, or what comes next. Returns the text sent,
+       * for the read-aloud timeout.
+       */
+      const showOnScreen = (questionId, phase, speak) => {
+        const questions = (dataRef.current && dataRef.current.questions) || [];
+        const entry = questionId ? questions.find((q) => q.id === questionId) : null;
+        const prepared = questions.filter((q) => q.kind !== "follow_up");
+        const label = !entry
+          ? ""
+          : entry.kind === "follow_up"
+            ? "Follow-up question"
+            : "Question " + (prepared.findIndex((q) => q.id === entry.id) + 1) + " of " + prepared.length;
+        const languages = (dataRef.current && dataRef.current.languages) || [];
+        const state = {
+          type: "state",
+          title: (dataRef.current && dataRef.current.assessment && dataRef.current.assessment.title) || "",
+          label,
+          text: entry ? entry.text : "",
+          phase,
+          lang: languages.length === 1 ? languages[0] : undefined,
+        };
+        if (speak) {
+          screen.current.said += 1;
+          state.speak = true;
+          state.id = screen.current.said;
+        }
+        // A late screen is told where things stand, but never asked to speak again.
+        screen.current.last = Object.assign({}, state, { speak: false });
+        if (screen.current.channel) screen.current.channel.postMessage(state);
+        return state.text;
+      };
+
+      React.useEffect(() => {
+        if (typeof BroadcastChannel === "undefined") return undefined;
+        const channel = new BroadcastChannel(screenChannelName(props.assessment, props.student));
+        screen.current.channel = channel;
+        channel.onmessage = (event) => {
+          const message = event.data || {};
+          screen.current.seen = Date.now();
+          if (message.type === "alive") {
+            const ready = screen.current.ready || Boolean(message.ready);
+            if (!screen.current.open || ready !== screen.current.ready) {
+              screen.current.open = true;
+              screen.current.ready = ready;
+              setScreenState(ready ? "ready" : "open");
+            }
+          } else if (message.type === "hello") {
+            screen.current.open = true;
+            screen.current.ready = screen.current.ready || Boolean(message.ready);
+            setScreenState(screen.current.ready ? "ready" : "open");
+            channel.postMessage(screen.current.last || { type: "state", phase: "idle" });
+          } else if (message.type === "bye") {
+            screen.current.open = false;
+            screen.current.ready = false;
+            setScreenState("closed");
+          } else if (message.type === "spoken" && screen.current.onSpoken) {
+            screen.current.onSpoken(message.id);
+          }
+        };
+        // A screen silent for five seconds has been closed, whatever it said.
+        const watch = setInterval(() => {
+          if (screen.current.open && Date.now() - (screen.current.seen || 0) > 5000) {
+            screen.current.open = false;
+            screen.current.ready = false;
+            setScreenState("closed");
+          }
+        }, 1000);
+        return () => {
+          clearInterval(watch);
+          channel.postMessage({ type: "state", phase: "idle" });
+          channel.close();
+          screen.current.channel = null;
+        };
+      }, [props.assessment, props.student]);
+
+      const openScreen = () =>
+        window.open(
+          scoped(BASE + "/defence/screen?assessment=" + encodeURIComponent(props.assessment) + "&student=" + encodeURIComponent(props.student), props.sessionId),
+          "defence-screen-" + props.student,
+          "popup,width=1100,height=700",
+        );
+
+      const releaseMicrophone = (final) => {
+        showOnScreen(null, final === "done" ? "done" : "paused");
         const running = loop.current;
         if (!running) return;
         clearInterval(running.timer);
@@ -6613,19 +6713,45 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         const running = loop.current;
         if (!running) return;
         if (!questionId) {
-          releaseMicrophone();
+          releaseMicrophone("done");
           setSaid({ error: false, text: "Every question has an answer. Follow-up questions, if you ask for them, appear below." });
           return;
         }
-        const media = new MediaRecorder(running.stream, running.type ? { mimeType: running.type } : undefined);
-        const chunks = [];
-        media.ondataavailable = (event) => {
-          if (event.data && event.data.size) chunks.push(event.data);
-        };
-        running.take = { question: questionId, media, chunks, started: Date.now(), turn: null, keep: true, spoke: false };
         running.asked.add(questionId);
-        media.start(1000);
-        setHandsFree({ question: questionId, phase: "waiting", level: 0, threshold: 0 });
+        const record = () => {
+          // Paused, or moved on, while the question was being read.
+          if (loop.current !== running || running.take) return;
+          const media = new MediaRecorder(running.stream, running.type ? { mimeType: running.type } : undefined);
+          const chunks = [];
+          media.ondataavailable = (event) => {
+            if (event.data && event.data.size) chunks.push(event.data);
+          };
+          running.take = { question: questionId, media, chunks, started: Date.now(), turn: null, keep: true, spoke: false, shown: "listening" };
+          media.start(1000);
+          setHandsFree({ question: questionId, phase: "waiting", level: 0, threshold: 0 });
+          showOnScreen(questionId, "listening");
+        };
+        // Read aloud first, and listen only once the screen says it has
+        // finished: the microphone would take the synthetic voice for the
+        // student's. A screen that never answers is given until a generous
+        // reading time has passed.
+        if (readAloudRef.current && screen.current.ready) {
+          setHandsFree({ question: questionId, phase: "reading", level: 0, threshold: 0 });
+          const text = showOnScreen(questionId, "reading", true);
+          const id = screen.current.said;
+          const timer = setTimeout(() => {
+            if (screen.current.waiting === id) record();
+          }, Math.max(4000, text.length * 90) + 2000);
+          screen.current.waiting = id;
+          screen.current.onSpoken = (spoken) => {
+            if (spoken !== id) return;
+            clearTimeout(timer);
+            screen.current.waiting = null;
+            record();
+          };
+          return;
+        }
+        record();
       };
 
       /** End the take in hand: keep it or not, then put up the next question or stop. */
@@ -6643,6 +6769,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           // for the transcript, then ask. A skipped question, or a desk told
           // not to ask the model, goes straight to the next prepared one.
           else if (running.chooser && keep) {
+            showOnScreen(null, "between");
             setHandsFree({ question: null, phase: "thinking", level: 0, threshold: 0 });
             sent.then(() => propose(take.question));
           } else beginTake(nextUnanswered(take.question));
@@ -6713,7 +6840,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         }
         if (current.decision.action === "done" || !question) {
           if (how === "ask_now") override("ask_now");
-          releaseMicrophone();
+          releaseMicrophone("done");
           const reason = current.decision.why || "nothing left to ask";
           setSaid({ error: false, text: "The desk thinks the defence is complete: " + reason + (/[.!?]$/.test(reason) ? "" : ".") });
           return;
@@ -6777,6 +6904,10 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               const step = turnStep(take.turn, level, Date.now());
               take.turn = step.state;
               if (step.state.phase === "speaking") take.spoke = true;
+              if (take.spoke && take.shown !== "hearing") {
+                take.shown = "hearing";
+                showOnScreen(take.question, "hearing");
+              }
               setHandsFree({ question: take.question, phase: step.state.phase, level, threshold: step.threshold, silent: step.silentFor });
               if (step.end) endTake(step.end);
             }, 100);
@@ -6835,6 +6966,37 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 answer.transcript.timed ? null : h("span", { className: "pp-dim" }, " (no timestamps from this model)"),
               )
             : h("div", { className: "pp-dim" }, answer.error ? "Not transcribed: " + answer.error : "Transcribing…"),
+        );
+
+      // The student's screen: open it, see that it is ready, and choose
+      // whether it reads each question aloud.
+      const screenRow = () =>
+        h(
+          "div",
+          { className: "pp-approverow" },
+          h("button", { type: "button", className: "pp-segbtn", onClick: openScreen }, screenState === "closed" ? "Open student screen" : "Show student screen"),
+          h(
+            "span",
+            { className: screenState === "ready" ? "pp-dim" : "pp-dwarn" },
+            screenState === "closed"
+              ? typeof BroadcastChannel === "undefined"
+                ? "this browser cannot drive a second window"
+                : "not open — the question is then only on this screen"
+              : screenState === "open"
+                ? "open — click it once, then move it to the screen the student sees"
+                : "ready: it shows the question being asked and nothing else",
+          ),
+          h(
+            "label",
+            { className: "pp-dim pp-dchooser" },
+            h("input", {
+              type: "checkbox",
+              checked: readAloud,
+              disabled: screenState !== "ready",
+              onChange: (event) => setReadAloud(event.target.checked),
+            }),
+            " read each question aloud there",
+          ),
         );
 
       const startRow = () =>
@@ -6919,6 +7081,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             ? proposalPanel()
             : handsFree.phase === "thinking" || handsFree.phase === "proposing"
               ? h("div", { className: "pp-dhandsline" }, "Transcribing the answer and choosing what to ask next…")
+              : handsFree.phase === "reading"
+              ? h("div", { className: "pp-dhandsline" }, h("b", null, handsFree.question), " · being read aloud on the student's screen — listening starts when it finishes")
               : h(
                   React.Fragment,
                   null,
@@ -7057,6 +7221,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 : null,
               // Hands-free: one press starts it, and from then on the desk
               // listens, notices the end of each answer and moves on.
+              data && !data.error && data.questions.length ? screenRow() : null,
               data && !data.error && data.questions.length ? (handsFree ? handsPanel() : startRow()) : null,
               said ? h("div", { className: said.error ? "pp-dwarn" : "pp-dim" }, said.text) : null,
               data === null

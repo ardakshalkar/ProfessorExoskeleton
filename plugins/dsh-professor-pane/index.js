@@ -120,6 +120,7 @@ import { MARKDOWN_STYLE, escapeAttribute, escapeText, renderMarkdown } from "./l
 import { courseModeDocument } from "./lib/course-mode.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./lib/upload.js";
 import { paperCrop, scansDocument } from "./lib/scans.js";
+import { studentScreenPage } from "./lib/student-screen.js";
 import { unpublishedDocument } from "./lib/unpublished.js";
 import { schemeHtml, schemeStyle } from "./lib/grading-view.js";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
@@ -3932,6 +3933,9 @@ const defenceSessionPayload = (target) => {
   return {
     assessment: { id: target.assessmentId, title: target.assessment?.title ?? target.assessmentId },
     student: target.studentId,
+    // For reading a question aloud on the student's screen: the course's one
+    // language when it has one; with several the browser's voice is left to it.
+    languages: target.bundle.course?.language ?? [],
     criteria: (rubric?.criteria ?? []).map((criterion) => ({ id: criterion.criterion_id, title: criterion.title })),
     pin: readPin(target.place.pin),
     questions: readDefence(target.place.questions)?.questions ?? [],
@@ -6312,6 +6316,18 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     // folder, which is why it is the pane's and not the session's. The answer
     // is transcribed in this process too — no judgement in it, and the
     // provider is the professor's `transcription` connection.
+    // The student's screen (AGT-4): a page with no data in it. Everything it
+    // shows arrives from the desk over a BroadcastChannel; see
+    // lib/student-screen.js for why it fetches nothing.
+    if (path === "/defence/screen") {
+      const assessmentId = url.searchParams.get("assessment") ?? "";
+      const studentId = url.searchParams.get("student") ?? "";
+      if (!/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId) || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(studentId)) {
+        return send(res, 400, "text/plain; charset=utf-8", "An assessment and a student id, please.");
+      }
+      return send(res, 200, "text/html; charset=utf-8", studentScreenPage({ assessmentId, studentId }));
+    }
+
     // The hands-free desk's two writes: what to ask next, chosen by the
     // session's model (AGT-2), and what the professor did instead (AGT-3).
     if (path === "/api/defence/next" || path === "/api/defence/override") {
