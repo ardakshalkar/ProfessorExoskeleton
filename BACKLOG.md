@@ -970,6 +970,8 @@ is worth building.
       Realtime over a WebSocket (about $0.39/hr), or the local server's
       streaming route. They let AGT-2 start deciding before the student
       stops, which turns a 6–10 s gap into 2–4 s. `M` · depends: AGT-2
+      Asked for 2026-10-06 ("whilst recording it should transcribe, if
+      possible"); next.
 - [x] **AGT-6** Two voices, one microphone. The professor will interject, so
       diarize (Scribe has it) and keep the professor's words out of the
       student's evidence. A take where the speakers could not be separated
@@ -1023,10 +1025,42 @@ is worth building.
       named. Whether a defence may instead be an assessment of its own is
       still ASM-1. They arrive in the inbox's pending evaluations like any
       suggestion.
-- [ ] **DEF-6** Batch mode: upload recordings, see the total minutes and the
+- [x] **DEF-6** Batch mode: upload recordings, see the total minutes and the
       transcription cost per provider before anything is sent, then confirm.
       Each recording is matched to a student and graded as DEF-5 does.
-      `M` · depends: AUD-1, AUD-2
+      `M` · depends: AUD-1, AUD-2 Done 2026-10-06. Upload kind *Recorded oral
+      defences* puts files in `~/.ainar/submissions/<RUN>/_recordings/`,
+      renamed `rec-<sha>` like scans. The *Recorded defences* dialog runs
+      `ainar defence batch` in the pane's process:
+      * **plan** reads each length here (ffprobe, else the WAV or M4A header),
+        matches by pseudonym, number or name with the scans' `identify`,
+        holds two recordings of one student, and quotes every transcription
+        connection;
+      * **apply** needs the professor to confirm the students agreed, writes
+        that as each one's consent, and files each recording as the student's
+        `Q0`;
+      * **transcribe** quotes, and sends only with `--confirm`.
+      Grading is the desk's *Propose the grade*, per student.
+- [x] **DEF-7** The whole defence in one recording. Dictated 2026-10-06: the
+      professor presses defence, records, asks as they go, and it is all one
+      audio. On the desk, *Record the whole defence* records `Q0` with no cap,
+      and P still marks the professor. Such a take is never labelled by "who
+      spoke most": it stays *unclear* until the professor's voice is known
+      from a P stretch or from *"…" is me* on the desk, which relabels it
+      with no provider call. A provider that does not separate voices
+      (Whisper) leaves an unmarked whole defence uncitable, and says to use
+      Scribe. The evidence shows it as the dialogue it was: the professor's
+      questions for context, the student's answers citable. The same path
+      serves recordings uploaded with DEF-6.
+- [x] **DEF-8** The dots. Dictated 2026-10-06, from dotsui.dev: while
+      listening, the desk shows `DotSwarm` from `dots-swarm` (MIT). It is a
+      microphone while waiting, an equalizer that quickens with the voice
+      while the student speaks, a thought bubble while the next question is
+      chosen, then pause or check. It is bundled once into
+      `plugins/dsh-professor-pane/vendor/` by `vendor/build-dots.mjs`
+      against the harness's own React (a shared instance, or hooks break),
+      loaded only when a desk opens, with nothing shown if it fails. The
+      package is `0.1.0-alpha`: a rebuild after an upgrade is one command.
 
 ## E27 · Spreadsheets both ways: Google Sheets and Excel — no `FUTURE.md` section yet
 

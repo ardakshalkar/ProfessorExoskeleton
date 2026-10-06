@@ -31,9 +31,9 @@
  * name as written, into the private plan; it lives in `src/scan-names.ts`.
  */
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
 import { parse } from "yaml";
 import {
   allRubrics,
@@ -132,6 +132,7 @@ import { printPaper, type AnswerLayout, type PaperFormat } from "../src/exam-pap
 import {
   briefText,
   checkDefenceGrade,
+  consentStatement,
   checkQuestions,
   cloneAtHandIn,
   codeDigest,
@@ -139,6 +140,10 @@ import {
   defenceEvaluations,
   defenceEvidence,
   defencePlace,
+  ensureWholeDefence,
+  recordConsent,
+  saveAnswer,
+  WHOLE_DEFENCE,
   readDefence,
   readPin,
   readSession,
@@ -147,7 +152,18 @@ import {
   writeDefence,
   writePin,
 } from "../src/defence.ts";
-import { configFromRegistry, estimate, transcriber } from "../src/transcribe.ts";
+import { configFromRegistry, describeTranscription, estimate, transcriber } from "../src/transcribe.ts";
+import {
+  RECORDING_TYPES,
+  batchStatement,
+  costTable,
+  planFile,
+  planLength,
+  planRecordings,
+  readRecordingPlan,
+  recordingsInbox,
+  writeRecordingPlan,
+} from "../src/recordings.ts";
 import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
 import {
@@ -2774,6 +2790,204 @@ try {
       // the pane's half (no model); `code` and `questions` are the session's,
       // through /defend-submission.
       const sub = rest[0] ?? "";
+
+      if (sub === "batch") {
+        // DEF-6: recordings uploaded afterwards, a whole defence each. Plan
+        // (lengths read here, students matched, the cost on every provider —
+        // nothing sent), apply (filed as each student's Q0, with the consent
+        // the professor confirms), transcribe (only with --confirm).
+        const step = rest[1] ?? "";
+        const batchRun = rest[2];
+        const batchAssessment = flag("assessment");
+        if (!["plan", "apply", "transcribe"].includes(step) || !batchRun || !batchAssessment) {
+          console.error(
+            "usage: defence batch plan RUN --assessment A [--json]\n" +
+              "       defence batch apply RUN --assessment A --consent-confirmed\n" +
+              "       defence batch transcribe RUN --assessment A [--connection NAME] [--confirm]",
+          );
+          process.exit(2);
+        }
+        const bundle = forRun(batchRun);
+        const assessment = (bundle.assessments as any[]).find(
+          (entry) => entry.assessment_id === batchAssessment && entry.course_version_id === batchRun,
+        );
+        if (!assessment) throw new Error(`${batchRun} has no assessment ${batchAssessment}`);
+        const base = submissionsDir(flag("submissions-dir"));
+        refuseInsideRepo(base, root);
+        const inbox = recordingsInbox(base, batchRun);
+        const enrolled = new Set(enrolledIn(bundle, batchRun).map((entry) => entry.student_id as string));
+        const submissionOf = (student: string) =>
+          (bundle.submissions as any[])
+            .filter((entry) => entry.assessment_id === batchAssessment && entry.student_id === student)
+            .sort((a, b) => (b.attempt ?? 1) - (a.attempt ?? 1))[0];
+
+        if (step === "plan") {
+          const directory = rosterDir(flag("roster-dir"));
+          let salt: Buffer | null = null;
+          try {
+            salt = loadSalt(directory, { create: false });
+          } catch {
+            salt = null;
+          }
+          const plan = planRecordings({
+            inbox,
+            runId: batchRun,
+            assessmentId: batchAssessment,
+            store: RosterStore.load(directory),
+            salt,
+            enrolled,
+          });
+          for (const entry of plan.entries) {
+            if (entry.student && !submissionOf(entry.student)) {
+              entry.problem = `${entry.student} has no submission for ${batchAssessment}: the defence belongs to one`;
+              delete entry.student;
+            }
+          }
+          writeRecordingPlan(inbox, plan);
+          const length = planLength(plan);
+          const costs = costTable(length.seconds);
+          if (args.includes("--json")) {
+            out({ plan, length, costs });
+            break;
+          }
+          out(`${plan.entries.length} recording(s) in ${inbox}`);
+          for (const entry of plan.entries) {
+            const minutes = entry.seconds === null ? "length unknown" : `${(entry.seconds / 60).toFixed(1)} min`;
+            out(
+              `  ${entry.file}  ${minutes}  ` +
+                (entry.filed ? `filed: ${entry.filed}` : entry.skip ? `skip: ${entry.skip}` : entry.student ? `${entry.student}${entry.match ? ` (match: ${entry.match})` : ""}` : `UNPLACED — ${entry.problem}`),
+            );
+          }
+          out(
+            `\n${(length.seconds / 60).toFixed(1)} minutes in ${length.files} placed recording(s)` +
+              (length.unknown ? `, ${length.unknown} of them of a length that could not be read` : "") +
+              (length.unplaced ? `; ${length.unplaced} unplaced (${(length.unplacedSeconds / 60).toFixed(1)} min more once placed)` : "") +
+              ". Nothing has been sent.",
+          );
+          if (!costs.length) out("No transcription connection is configured: `ainar connections add NAME --type transcription …`.");
+          for (const line of costs) {
+            out(
+              `  ${line.default ? "*" : " "} ${line.connection.padEnd(16)} ${line.provider} ${line.model}  ` +
+                (line.local ? "on this machine, free" : line.cost === null ? "no price set" : `about $${line.cost.toFixed(2)}`),
+            );
+          }
+          out(`\nPlace any unplaced one with \`student:\` in ${planFile(inbox)}, then: defence batch apply ${batchRun} --assessment ${batchAssessment} --consent-confirmed`);
+          break;
+        }
+
+        const plan = readRecordingPlan(inbox);
+        if (!plan || plan.assessment !== batchAssessment) {
+          throw new Error(`no plan for ${batchAssessment}: defence batch plan ${batchRun} --assessment ${batchAssessment}`);
+        }
+
+        if (step === "apply") {
+          if (!args.includes("--consent-confirmed")) {
+            throw new Error(
+              "--consent-confirmed: say that every student in this batch agreed to be recorded. It is written as each one's consent.",
+            );
+          }
+          const described = describeTranscription();
+          const statement = batchStatement(consentStatement(described));
+          const at = new Date().toISOString();
+          mkdirSync(join(inbox, "done"), { recursive: true });
+          let filed = 0;
+          for (const entry of plan.entries) {
+            if (entry.filed || entry.skip || !entry.student) continue;
+            const submission = submissionOf(entry.student);
+            if (!submission) {
+              entry.problem = `${entry.student} has no submission for ${batchAssessment}`;
+              continue;
+            }
+            const place = defencePlace(base, root, batchRun, batchAssessment, entry.student);
+            const ids = { submission_id: submission.submission_id, assessment_id: batchAssessment, student_id: entry.student };
+            const session = readSession(place.session);
+            if (!session?.consent?.agreed || session.consent.withdrawn_at) {
+              recordConsent(place, ids, { agreed: true, at, statement, provider: described?.name ?? null });
+            }
+            const pin = readPin(place.pin);
+            ensureWholeDefence(place.questions, ids, { url: submission.url ?? "", commit: pin?.commit ?? "" });
+            const from = join(inbox, entry.file);
+            const { answer } = saveAnswer({
+              place,
+              ids,
+              questionId: WHOLE_DEFENCE,
+              bytes: readFileSync(from),
+              mime: RECORDING_TYPES[extname(entry.file).toLowerCase()]!,
+              seconds: entry.seconds,
+            });
+            renameSync(from, join(inbox, "done", entry.file));
+            entry.filed = `${entry.student} ${WHOLE_DEFENCE} take ${answer.take}`;
+            filed += 1;
+            out(`  filed ${entry.file} → ${entry.filed}`);
+          }
+          writeRecordingPlan(inbox, plan);
+          const waiting = plan.entries.filter((entry) => !entry.filed && !entry.skip);
+          out(`\nfiled ${filed}; ${waiting.length} still unplaced or refused${waiting.length ? `: ${waiting.map((e) => e.file).join(", ")}` : ""}`);
+          out(`Next: defence batch transcribe ${batchRun} --assessment ${batchAssessment} — it says what it costs before anything is sent.`);
+          break;
+        }
+
+        // transcribe
+        const due: { student: string; place: ReturnType<typeof defencePlace>; answer: any }[] = [];
+        for (const student of new Set(plan.entries.filter((entry) => entry.filed).map((entry) => entry.filed!.split(" ")[0]!))) {
+          const place = defencePlace(base, root, batchRun, batchAssessment, student);
+          for (const answer of readSession(place.session)?.answers ?? []) {
+            if (answer.question_id === WHOLE_DEFENCE && !answer.transcript && !answer.withdrawn) due.push({ student, place, answer });
+          }
+        }
+        if (!due.length) {
+          out("every filed recording already has a transcript");
+          break;
+        }
+        const seconds = due.reduce((sum, entry) => sum + (entry.answer.seconds ?? 0), 0);
+        // The quote comes from the configuration alone, so it is shown even
+        // while the key is missing; the key is needed only to send.
+        const lines = costTable(seconds);
+        const chosen = flag("connection")
+          ? lines.find((line) => line.connection === flag("connection"))
+          : lines.find((line) => line.default) ?? (lines.length === 1 ? lines[0] : undefined);
+        if (!chosen) {
+          throw new Error(
+            lines.length
+              ? `which connection? --connection ${lines.map((line) => line.connection).join(" | ")}`
+              : "no transcription connection is configured: `ainar connections add NAME --type transcription …`",
+          );
+        }
+        out(
+          `${due.length} recording(s), ${(seconds / 60).toFixed(1)} min, through ${chosen.connection} (${chosen.provider} ${chosen.model}): ` +
+            (chosen.local ? "on this machine, free" : chosen.cost === null ? "no price set for this connection" : `about $${chosen.cost.toFixed(2)}`),
+        );
+        if (!args.includes("--confirm")) {
+          let ready = "";
+          try {
+            configFromRegistry(chosen.connection);
+          } catch (error) {
+            ready = ` Before it can: ${(error as Error).message}`;
+          }
+          out(`Nothing has been sent. Add --confirm to send ${chosen.local ? "them to the local server" : `them to ${chosen.connection}`}.${ready}`);
+          break;
+        }
+        const { config } = configFromRegistry(chosen.connection);
+        const transcribe = transcriber(config);
+        const languages = ((bundle.course as any).language ?? []) as string[];
+        for (const entry of due) {
+          const done = await transcribeTake({
+            place: entry.place,
+            answer: entry.answer,
+            transcribe,
+            language: languages.length === 1 ? languages[0] : null,
+          });
+          out(
+            `  ${entry.student}: ` +
+              (done.transcript
+                ? `${done.transcript.segments.length} segment(s)${done.transcript.speakers?.unclear ? " — say which voice is yours on the desk" : ""}`
+                : `failed — ${done.error}`),
+          );
+        }
+        out(`\nThen, per student: /defend-submission ${batchAssessment} ${batchRun} STUDENT — propose the grade`);
+        break;
+      }
+
       const runId = rest[1];
       const assessmentId = flag("assessment");
       const studentId = flag("student");

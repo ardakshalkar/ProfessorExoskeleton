@@ -87,6 +87,9 @@ http
     if (url.pathname === "/") return res.writeHead(200, { "content-type": "text/html" }), res.end(page);
     if (url.pathname === "/client.js") return res.writeHead(200, { "content-type": "text/javascript" }), res.end(readFileSync(client));
     if (url.pathname === "/received") return json(res, received);
+    if (url.pathname === "/professor-pane/vendor/dots-swarm.js") {
+      return res.writeHead(200, { "content-type": "text/javascript" }), res.end(readFileSync(new URL("../vendor/dots-swarm.js", import.meta.url)));
+    }
     if (url.pathname === "/professor-pane/defence/screen") {
       return res.writeHead(200, { "content-type": "text/html" }), res.end(studentScreenPage({ assessmentId: "ASSESSMENT-HW1", studentId: "STUDENT-TEST01" }));
     }

@@ -354,7 +354,8 @@ export interface Criterion {
 export interface Question {
   id: string;
   /** `follow_up`: asked after an answer, about that answer; `follows` names the question. */
-  kind: "opening" | "probe" | "follow_up";
+  /** `whole`: Q0, the whole defence in one recording, the professor asking as they go. */
+  kind: "opening" | "probe" | "follow_up" | "whole";
   follows?: string;
   text: string;
   criterion_id: string | null;
@@ -707,7 +708,7 @@ export const transcribeTake = async (options: {
       { language: options.language ?? null, prompt: transcriptionPrompt(options.question) },
     );
     return setTranscript(place, answer.question_id, answer.take, {
-      transcript: labelSpeakers(transcript, answer.professor_spoke ?? []),
+      transcript: labelSpeakers(transcript, answer.professor_spoke ?? [], { wholeDefence: answer.question_id === WHOLE_DEFENCE }),
     });
   } catch (error) {
     return setTranscript(place, answer.question_id, answer.take, { error: (error as Error).message });
@@ -1095,9 +1096,24 @@ export const defenceEvidence = (context: {
       );
     return lines.length ? lines : ["  (nothing citable)"];
   };
+  // A whole defence is shown as the dialogue it was: the professor's
+  // questions for context, never citable; the student's answers citable.
+  const dialogue = (question: Question): string[] => {
+    const lines: string[] = [];
+    for (const answer of answers.filter((entry) => entry.question_id === question.id && entry.transcript && !entry.withdrawn)) {
+      if (answer.transcript!.speakers?.unclear) continue;
+      for (const segment of answer.transcript!.segments) {
+        const at = `${answer.question_id} take ${answer.take} @ ${segment.start.toFixed(1)}s`;
+        if (segment.speaker === "professor") lines.push(`  (professor asks, @ ${segment.start.toFixed(1)}s) ${segment.text}`);
+        else if (segment.speaker === "unknown") lines.push(`  (another voice, @ ${segment.start.toFixed(1)}s — not citable) ${segment.text}`);
+        else lines.push(`  [${at}] ${segment.text}${segment.confidence === "low" ? "   (unsure transcription — listen before citing)" : ""}`);
+      }
+    }
+    return lines.length ? lines : ["  (nothing citable)"];
+  };
   const block = (question: Question): string[] => [
     `${question.id}${question.follows ? ` (follow-up on ${question.follows})` : ""}: ${question.text}`,
-    ...said(question),
+    ...(question.kind === "whole" ? dialogue(question) : said(question)),
   ];
   const consent = context.session?.consent;
   return [
@@ -1274,4 +1290,62 @@ export const defenceEvaluations = (context: {
     });
   }
   return { evaluations, decided };
+};
+
+// --------------------------------------------------------------------------
+// The whole defence in one recording (DEF-6, and the desk's "Record the whole defence")
+// --------------------------------------------------------------------------
+
+/** The question a whole recording answers: the professor asked as they went. */
+export const WHOLE_DEFENCE = "Q0";
+
+/**
+ * Make sure the questions file has Q0, the whole defence, first — creating
+ * the file when no questions were ever drafted, as for a defence recorded on
+ * a phone. Returns the questions.
+ */
+export const ensureWholeDefence = (
+  file: string,
+  ids: { submission_id: string; assessment_id: string; student_id: string },
+  repo: { url: string; commit: string },
+): Question[] => {
+  const drafted = readDefence(file);
+  const questions = drafted?.questions ?? [];
+  if (questions.some((question) => question.id === WHOLE_DEFENCE)) return questions;
+  const whole: Question = {
+    id: WHOLE_DEFENCE,
+    kind: "whole",
+    text: "The whole defence, recorded in one piece: the professor's questions and the student's answers as they came.",
+    criterion_id: null,
+    why: "",
+    evidence: [],
+    approval: "draft",
+  };
+  const next = [whole, ...questions];
+  writeDefence(file, {
+    ...(drafted ?? { ...ids, repo, drafted: { at: new Date().toISOString() } }),
+    questions: next,
+  } as DefenceFile);
+  return next;
+};
+
+/**
+ * "This voice is me": the professor names their own voice among the ones the
+ * provider separated, and the take is labelled again — theirs, the student's
+ * (the main voice left), and anyone else's. No provider call: the words and
+ * the voices are already in the transcript.
+ */
+export const assignVoices = (place: DefencePlace, questionId: string, take: number, voices: string[]): Answer => {
+  const session = readSession(place.session);
+  const answer = session?.answers.find((entry) => entry.question_id === questionId && entry.take === take);
+  if (!session || !answer?.transcript) throw new Error(`no transcribed take ${take} of ${questionId}`);
+  const known = new Set(answer.transcript.segments.map((segment) => segment.speaker_id).filter(Boolean));
+  const unknown = voices.filter((voice) => !known.has(voice));
+  if (unknown.length) throw new Error(`${unknown.join(", ")} is not a voice in this take`);
+  answer.transcript = labelSpeakers(answer.transcript, answer.professor_spoke ?? [], {
+    wholeDefence: questionId === WHOLE_DEFENCE,
+    professorVoices: voices,
+  });
+  writeSession(place.session, session);
+  return answer;
 };

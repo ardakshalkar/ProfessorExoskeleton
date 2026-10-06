@@ -88,6 +88,9 @@ import { dashboardPayload } from "@ainar/core/src/progress.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
 import {
   NEXT_SYSTEM,
+  WHOLE_DEFENCE,
+  assignVoices,
+  ensureWholeDefence,
   briefText,
   codeDigest,
   collectCode,
@@ -5692,6 +5695,9 @@ const sendMaterial = (res, workspace, root, documentId, dark, asPdf) => {
  */
 const AINAR_CLI = fileURLToPath(new URL("../../ainar-node/bin/ainar.ts", import.meta.url));
 
+/** The bundled `dots-swarm` animation the defence desk loads; see vendor/build-dots.mjs. */
+const DOTS_BUNDLE = fileURLToPath(new URL("./vendor/dots-swarm.js", import.meta.url));
+
 /** `ainar scans …`, for the Scans tab's two writes. The output is the answer. */
 const runScans = (args, root, timeout = 300000) =>
   new Promise((resolveRun) => {
@@ -6333,6 +6339,16 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     // folder, which is why it is the pane's and not the session's. The answer
     // is transcribed in this process too — no judgement in it, and the
     // provider is the professor's `transcription` connection.
+    // The dots animation on the defence desk: `dots-swarm` (MIT), bundled once
+    // into vendor/ by vendor/build-dots.mjs. A script with no data in it.
+    if (path === "/vendor/dots-swarm.js") {
+      try {
+        return send(res, 200, "text/javascript; charset=utf-8", readFileSync(DOTS_BUNDLE));
+      } catch {
+        return send(res, 404, "text/plain; charset=utf-8", "the dots bundle is not built");
+      }
+    }
+
     // The student's screen (AGT-4): a page with no data in it. Everything it
     // shows arrives from the desk over a BroadcastChannel; see
     // lib/student-screen.js for why it fetches nothing.
@@ -6343,6 +6359,66 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
         return send(res, 400, "text/plain; charset=utf-8", "An assessment and a student id, please.");
       }
       return send(res, 200, "text/html; charset=utf-8", studentScreenPage({ assessmentId, studentId }));
+    }
+
+    // DEF-6, recorded defences uploaded afterwards. The steps are `ainar
+    // defence batch`, run here because they write the private folder: plan
+    // (lengths and costs, nothing sent), apply (with the consent the
+    // professor confirms), transcribe (a quote, and only with confirm a send).
+    if (path === "/api/defence/batch") {
+      let loaded;
+      try {
+        loaded = loadedRun(workspace, runId);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      if (req.method !== "POST") {
+        return sendJson(res, 200, {
+          assessments: assessmentsOf(loaded.bundle, runId).map((entry) => ({ id: entry.assessment_id, title: entry.title })),
+        });
+      }
+      const step = url.searchParams.get("step") ?? "";
+      const assessmentId = url.searchParams.get("assessment") ?? "";
+      if (!["plan", "apply", "transcribe"].includes(step) || !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) {
+        return sendJson(res, 200, { error: "A step (plan, apply, transcribe) and an assessment, please." });
+      }
+      const extra =
+        step === "apply" && url.searchParams.get("consent") === "1"
+          ? ["--consent-confirmed"]
+          : step === "transcribe" && url.searchParams.get("confirm") === "1"
+            ? ["--confirm"]
+            : [];
+      return runScans(["defence", "batch", step, runId, "--assessment", assessmentId, ...extra], root, step === "transcribe" ? 1800000 : 300000)
+        .then((result) => sendJson(res, 200, result))
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // The whole defence in one recording: make sure Q0 exists, so the desk can
+    // record into it; and "this voice is me", which labels a take's voices
+    // again with no provider call.
+    if (path === "/api/defence/whole" || path === "/api/defence/voices") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      let target;
+      try {
+        target = defenceTarget(workspace, root, runId, url.searchParams);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      return readBody(req)
+        .then((text) => {
+          const body = text ? JSON.parse(text) : {};
+          if (path === "/api/defence/whole") {
+            const submission = (target.bundle.submissions ?? []).find((entry) => entry.submission_id === target.ids.submission_id);
+            const pin = readPin(target.place.pin);
+            ensureWholeDefence(target.place.questions, target.ids, { url: submission?.url ?? "", commit: pin?.commit ?? "" });
+            return sendJson(res, 200, { ok: true, question: WHOLE_DEFENCE });
+          }
+          const voices = Array.isArray(body.voices) ? body.voices.map(String).filter((voice) => /^[\w-]{1,40}$/.test(voice)) : [];
+          if (!voices.length) throw new Error("name at least one voice");
+          const answer = assignVoices(target.place, String(body.question ?? ""), Number(body.take), voices);
+          return sendJson(res, 200, { answer });
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
     // AGT-7: the student's answer to the consent statement, as the professor

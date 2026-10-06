@@ -142,6 +142,13 @@ are already left out, and are listed under *Not citable*. A stretch marked
 *unsure transcription* is one to listen to before resting a mark on it.
 `code` is the homework itself.
 
+A defence recorded in one piece — on the desk with *Record the whole defence*,
+or uploaded afterwards — is question `Q0`, shown as the dialogue it was: the
+professor's questions as `(professor asks, @ 12.0s)`, never citable, and the
+student's answers as `[Q0 take 1 @ 15.0s]`. If `Q0` is listed under *Not
+citable* as *voices unclear*, stop: ask the professor to open the desk and say
+which voice is theirs. Until then, nothing in it is the student's for certain.
+
 For each criterion the defence and the code let you judge:
 
 - the score, from the rubric's levels, out of its maximum;

@@ -77,6 +77,8 @@ export interface Speakers {
   method: "diarized" | "marked" | "assumed";
   unclear: boolean;
   note?: string;
+  /** The provider's labels the professor said were their own voice ("this voice is me"). */
+  professor_voices?: string[];
 }
 
 export interface Transcript {
@@ -408,7 +410,21 @@ export const UNCLEAR_SHARE = 0.4;
  * says it was assumed. An untimed transcript cannot have marked stretches cut
  * out of it, so marking one makes the take unclear.
  */
-export const labelSpeakers = (transcript: Transcript, professor: Range[] = []): Transcript => {
+export const labelSpeakers = (
+  transcript: Transcript,
+  professor: Range[] = [],
+  options: {
+    /**
+     * A whole defence in one recording: the professor talks at length too,
+     * so the voice that spoke most is not taken for the student's. Until the
+     * professor's voice is known — a stretch marked with P, or
+     * `professorVoices` — the take is unclear and asks which voice is theirs.
+     */
+    wholeDefence?: boolean;
+    /** The provider's labels the professor said are their own voice. */
+    professorVoices?: string[];
+  } = {},
+): Transcript => {
   const length = (segment: Segment): number => Math.max(0, segment.end - segment.start);
   const marked = transcript.segments.map((segment) => {
     if (!professor.length || !transcript.timed) return false;
@@ -435,6 +451,20 @@ export const labelSpeakers = (transcript: Transcript, professor: Range[] = []): 
   }
 
   const ids = transcript.segments.map((segment) => segment.speaker_id).filter((id): id is string => !!id);
+  // A whole defence with no separated voices and nothing marked: the
+  // professor's questions are in there with the answers, and nothing says
+  // which are which. Kept, and never cited.
+  if (!ids.length && options.wholeDefence && !professor.length) {
+    return {
+      ...transcript,
+      segments: transcript.segments.map((segment) => ({ ...segment, speaker: "unknown" as const })),
+      speakers: {
+        method: "assumed",
+        unclear: true,
+        note: "a whole defence, but this provider does not separate voices and nothing was marked with P — the questions cannot be told from the answers; transcribe it with Scribe",
+      },
+    };
+  }
   if (!ids.length) {
     return {
       ...transcript,
@@ -448,7 +478,11 @@ export const labelSpeakers = (transcript: Transcript, professor: Range[] = []): 
     };
   }
 
-  const professorIds = new Set(transcript.segments.filter((segment, at) => marked[at] && segment.speaker_id).map((s) => s.speaker_id!));
+  const professorIds = new Set([
+    ...transcript.segments.filter((segment, at) => marked[at] && segment.speaker_id).map((s) => s.speaker_id!),
+    ...(options.professorVoices ?? []),
+  ]);
+  const told = (options.professorVoices ?? []).length > 0;
   const time = new Map<string, number>();
   transcript.segments.forEach((segment, at) => {
     if (!segment.speaker_id || marked[at] || professorIds.has(segment.speaker_id)) return;
@@ -462,7 +496,9 @@ export const labelSpeakers = (transcript: Transcript, professor: Range[] = []): 
 
   let note: string | undefined;
   if (!student) note = "only the professor's voice was heard";
-  else if (total > 0 && second / total >= UNCLEAR_SHARE) {
+  else if (options.wholeDefence && !professorIds.size) {
+    note = "a whole defence in one recording: say which voice is yours, and the other is taken for the student's";
+  } else if (!told && total > 0 && second / total >= UNCLEAR_SHARE) {
     note = `two voices spoke about as much (${Math.round((ranked[0]![1] / total) * 100)}% and ${Math.round((second / total) * 100)}%), so which is the student's is not clear`;
   }
   return {
@@ -478,8 +514,25 @@ export const labelSpeakers = (transcript: Transcript, professor: Range[] = []): 
               ? ("student" as const)
               : others,
     })),
-    speakers: { method: "diarized", unclear: !!note, ...(note ? { note } : {}) },
+    speakers: {
+      method: "diarized",
+      unclear: !!note,
+      ...(note ? { note } : {}),
+      ...(told ? { professor_voices: [...options.professorVoices!] } : {}),
+    },
   };
+};
+
+/** The provider's voice labels in a take, with how long each spoke: what "this voice is me" chooses from. */
+export const voicesIn = (transcript: Transcript | null): { voice: string; seconds: number; first: string }[] => {
+  const voices = new Map<string, { seconds: number; first: string }>();
+  for (const segment of transcript?.segments ?? []) {
+    if (!segment.speaker_id) continue;
+    const entry = voices.get(segment.speaker_id) ?? { seconds: 0, first: segment.text };
+    entry.seconds += Math.max(0, segment.end - segment.start);
+    voices.set(segment.speaker_id, entry);
+  }
+  return [...voices].map(([voice, entry]) => ({ voice, ...entry })).sort((a, b) => b.seconds - a.seconds);
 };
 
 /**

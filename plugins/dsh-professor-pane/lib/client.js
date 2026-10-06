@@ -839,6 +839,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-dstatement{margin:0;padding:6px 10px;border-left:3px solid #c43030;font-size:13px;line-height:1.5}
 .pp-dspeaking{background:#2f6fd6;border-color:#2f6fd6;color:#fff;font-weight:600}
 .pp-dchooser{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.pp-dhandsdots{display:flex;align-items:flex-start;gap:12px}
+.pp-dhandsbody{flex:1;min-width:0}
+.pp-ddots{flex:none;display:block;width:64px;height:64px}
 .pp-dproposal{display:flex;flex-direction:column;gap:4px}
 .pp-dcount{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600;color:#c43030}
 .pp-dedit{font:inherit;font-size:13px;width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;
@@ -6335,6 +6338,15 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           "The paper you set, and its key — so the questions can be recorded exactly as " +
           "printed. Kept outside the course until they are imported.",
       },
+      {
+        id: "recordings",
+        label: "Recorded oral defences",
+        accept: ".m4a,.mp4,.mp3,.wav,.webm,.ogg,audio/*",
+        hint:
+          "Defences recorded elsewhere — on a phone, in another room — one file per student. Kept " +
+          "outside the course, renamed so no name travels with them; matched to students and priced " +
+          "before anything is sent.",
+      },
     ];
 
     /**
@@ -6443,6 +6455,79 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * model the professor is talking to reads what was said and appends one
      * question, which arrives here on the next redraw.
      */
+    /*
+     * The desk's dots: `dots-swarm` (MIT, dotsui.dev), bundled into
+     * vendor/dots-swarm.js by vendor/build-dots.mjs and loaded the first time a
+     * desk opens. The bundle uses this pane's React — it must be the same
+     * instance the harness renders with, or its hooks fail — handed over on a
+     * global before the script runs. If it cannot load, the desk simply has no
+     * animation; the level meter still says what the microphone hears.
+     */
+    let dotsLoading = null;
+    const loadDots = () => {
+      if (window.__professorPaneDots) return Promise.resolve(window.__professorPaneDots);
+      if (dotsLoading) return dotsLoading;
+      window.__professorPaneReact = React;
+      dotsLoading = new Promise((resolve) => {
+        const script = document.createElement("script");
+        script.src = BASE + "/vendor/dots-swarm.js";
+        script.async = true;
+        script.onload = () => resolve(window.__professorPaneDots || null);
+        script.onerror = () => resolve(null);
+        document.head.appendChild(script);
+      });
+      return dotsLoading;
+    };
+
+    /** Which shape the dots take for what the desk is doing. */
+    const DOT_SHAPES = {
+      waiting: "microphone",
+      reading: "message",
+      speaking: "equalizer",
+      professor: "headphones",
+      thinking: "thought-bubble",
+      proposing: "thought-bubble",
+      paused: "pause",
+      done: "check",
+    };
+
+    /**
+     * The dots: a microphone while the desk waits for the student, an
+     * equalizer while they speak, a thought bubble while the next question is
+     * chosen. Their colour follows the recording light, so the animation and
+     * the light never disagree about whether the desk is listening.
+     */
+    function ListeningDots(props) {
+      const [dots, setDots] = React.useState(window.__professorPaneDots || null);
+      React.useEffect(() => {
+        if (dots) return undefined;
+        let live = true;
+        loadDots().then((loaded) => live && setDots(loaded));
+        return () => {
+          live = false;
+        };
+      }, []);
+      if (!dots || !dots.DotSwarm) return null;
+      const shape = DOT_SHAPES[props.phase] || "orb";
+      const listening = props.phase === "waiting" || props.phase === "speaking";
+      return h(
+        "span",
+        { className: "pp-ddots", "aria-hidden": "true" },
+        h(dots.DotSwarm, {
+          shape,
+          count: 140,
+          dotSize: 2,
+          color: listening ? "#c43030" : props.phase === "professor" ? "#2f6fd6" : "#8d8f96",
+          // The student's voice drives the swarm: louder is livelier.
+          speed: props.phase === "speaking" ? 1 + Math.min(2, (props.level || 0) * 20) : 0.6,
+          choreography: "flow",
+          transitionDuration: 0.6,
+          style: { width: props.size || 64, height: props.size || 64 },
+          label: shape,
+        }),
+      );
+    }
+
     /** Kept in step with `screenChannel` in lib/student-screen.js by hand. */
     const screenChannelName = (assessmentId, studentId) => "professor-pane-defence:" + assessmentId + ":" + studentId;
 
@@ -6454,6 +6539,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const [said, setSaid] = React.useState(null);
       const [tick, setTick] = React.useState(0);
       const [elapsed, setElapsed] = React.useState(0);
+      const [manualLevel, setManualLevel] = React.useState(0);
       // Uploads still on the wire; the desk does not close while any are.
       const [pending, setPending] = React.useState(0);
       // Hands-free (AGT-1): { question, phase, level, threshold } while running.
@@ -6669,6 +6755,27 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               (candidate) => MediaRecorder.isTypeSupported(candidate),
             );
             const media = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+            // The level, for the dots: a manual take has no detector, but the
+            // swarm should still show whether someone is speaking.
+            let meter = null;
+            try {
+              const audio = new AudioContext();
+              const analyser = audio.createAnalyser();
+              analyser.fftSize = 2048;
+              audio.createMediaStreamSource(stream).connect(analyser);
+              const samples = new Float32Array(analyser.fftSize);
+              meter = {
+                audio,
+                timer: setInterval(() => {
+                  analyser.getFloatTimeDomainData(samples);
+                  let sum = 0;
+                  for (let index = 0; index < samples.length; index += 1) sum += samples[index] * samples[index];
+                  setManualLevel(Math.sqrt(sum / samples.length));
+                }, 150),
+              };
+            } catch {
+              meter = null;
+            }
             const chunks = [];
             const started = Date.now();
             media.ondataavailable = (event) => {
@@ -6676,6 +6783,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             };
             media.onstop = () => {
               stream.getTracks().forEach((track) => track.stop());
+              if (meter) {
+                clearInterval(meter.timer);
+                if (meter.audio.state !== "closed") meter.audio.close();
+              }
+              setManualLevel(0);
               recorder.current = null;
               setRecording(null);
               showOnScreen(null, "idle");
@@ -6722,7 +6834,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         const asked = loop.current ? loop.current.asked : new Set();
         const from = after ? questions.findIndex((entry) => entry.id === after) + 1 : 0;
         const ordered = questions.slice(from).concat(questions.slice(0, from));
-        const found = ordered.find((entry) => !answered.has(entry.id) && !asked.has(entry.id));
+        const found = ordered.find((entry) => entry.kind !== "whole" && !answered.has(entry.id) && !asked.has(entry.id));
         return found ? found.id : null;
       };
 
@@ -6735,18 +6847,21 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const showOnScreen = (questionId, phase, speak) => {
         const questions = (dataRef.current && dataRef.current.questions) || [];
         const entry = questionId ? questions.find((q) => q.id === questionId) : null;
-        const prepared = questions.filter((q) => q.kind !== "follow_up");
+        const prepared = questions.filter((q) => q.kind !== "follow_up" && q.kind !== "whole");
         const label = !entry
           ? ""
           : entry.kind === "follow_up"
             ? "Follow-up question"
-            : "Question " + (prepared.findIndex((q) => q.id === entry.id) + 1) + " of " + prepared.length;
+            : entry.kind === "whole"
+              ? "The defence"
+              : "Question " + (prepared.findIndex((q) => q.id === entry.id) + 1) + " of " + prepared.length;
         const languages = (dataRef.current && dataRef.current.languages) || [];
         const state = {
           type: "state",
           title: (dataRef.current && dataRef.current.assessment && dataRef.current.assessment.title) || "",
           label,
-          text: entry ? entry.text : "",
+          // The whole defence has no one question to show: the professor asks aloud.
+          text: entry ? (entry.kind === "whole" ? "Answer the professor's questions as they come." : entry.text) : "",
           phase,
           lang: languages.length === 1 ? languages[0] : undefined,
         };
@@ -7102,6 +7217,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           answer.transcript && answer.transcript.speakers && answer.transcript.speakers.unclear
             ? h("div", { className: "pp-dwarn" }, "Voices unclear — not cited as the student's: " + (answer.transcript.speakers.note || ""))
             : null,
+          voicePicker(answer),
           answer.transcript
             ? h(
                 "div",
@@ -7229,10 +7345,116 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         );
       };
 
+      /*
+       * "This voice is me". Offered on a take whose voices were separated but
+       * not settled — a whole defence always, an ordinary take when two voices
+       * spoke about as much — and on one already settled, to correct it. Each
+       * voice is shown by the first thing it said, which is how a professor
+       * recognises their own question.
+       */
+      const assignVoice = (answer, voice) =>
+        fetch(endpoint("/api/defence/voices"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: answer.question_id, take: answer.take, voices: [voice] }),
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error) setSaid({ error: true, text: result.error });
+            setTick((value) => value + 1);
+          });
+      const voicePicker = (answer) => {
+        const transcript = answer.transcript;
+        if (!transcript) return null;
+        const voices = [];
+        for (const segment of transcript.segments) {
+          if (!segment.speaker_id || voices.some((voice) => voice.id === segment.speaker_id)) continue;
+          voices.push({ id: segment.speaker_id, first: segment.text });
+        }
+        const settled = transcript.speakers && transcript.speakers.professor_voices;
+        if (voices.length < 2 || (!transcript.speakers.unclear && !settled)) return null;
+        return h(
+          "div",
+          { className: "pp-approverow pp-dvoices" },
+          h("span", { className: "pp-dim" }, settled ? "Your voice:" : "Which voice is yours?"),
+          voices.map((voice) =>
+            h(
+              "button",
+              {
+                type: "button",
+                key: voice.id,
+                className: "pp-segbtn",
+                "aria-pressed": !!settled && settled.includes(voice.id),
+                title: voice.id,
+                onClick: () => assignVoice(answer, voice.id),
+              },
+              "“" + (voice.first.length > 48 ? voice.first.slice(0, 46) + "…" : voice.first) + "” is me",
+            ),
+          ),
+        );
+      };
+
+      // The whole defence in one recording: Q0 is made if it is not there, and
+      // recorded like any take — no cap, P still marks the professor, and the
+      // voices are told apart afterwards.
+      const recordWhole = () =>
+        fetch(endpoint("/api/defence/whole"), { method: "POST" })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error) {
+              setSaid({ error: true, text: result.error });
+              return;
+            }
+            setTick((value) => value + 1);
+            start(result.question);
+          });
+
+      // A manual take in progress — one question, or the whole defence — with
+      // the same dots as hands-free, following the level of the voice.
+      const recordingPanel = () => {
+        const whole = recording.question === "Q0";
+        const phase = professorTalking ? "professor" : manualLevel > 0.02 ? "speaking" : "waiting";
+        return h(
+          "div",
+          { className: "pp-dhands pp-dhandsdots" },
+          h(ListeningDots, { phase, level: manualLevel }),
+          h(
+            "div",
+            { className: "pp-dhandsbody" },
+            h(
+              "div",
+              { className: "pp-dhandsline" },
+              h("b", null, whole ? "The whole defence" : recording.question),
+              " · recording " + clock(elapsed) + (phase === "speaking" ? " · hearing a voice" : phase === "professor" ? " · you are speaking" : ""),
+            ),
+            h(
+              "div",
+              { className: "pp-approverow" },
+              h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: stop }, "■ Stop"),
+              speakButton(),
+            ),
+            whole
+              ? h("div", { className: "pp-dim" }, "Ask as you go. Hold P while you speak, or say which voice is yours once it is transcribed.")
+              : null,
+          ),
+        );
+      };
+
       const startRow = () =>
         h(
           "div",
           { className: "pp-approverow" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              disabled: Boolean(recording || sending),
+              title: "One recording of the whole defence: ask your questions as you go. Hold P while you speak, or say which voice is yours afterwards.",
+              onClick: recordWhole,
+            },
+            "● Record the whole defence",
+          ),
           h(
             "button",
             {
@@ -7306,7 +7528,14 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const handsPanel = () =>
         h(
           "div",
-          { className: "pp-dhands" },
+          { className: "pp-dhands pp-dhandsdots" },
+          // One swarm for the whole defence, so it morphs between shapes
+          // rather than starting over at each question.
+          h(ListeningDots, { phase: proposal ? "proposing" : handsFree.phase, level: handsFree.level }),
+          h("div", { className: "pp-dhandsbody" }, handsBody()),
+        );
+
+      const handsBody = () =>
           proposal
             ? proposalPanel()
             : handsFree.phase === "thinking" || handsFree.phase === "proposing"
@@ -7350,8 +7579,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     { className: "pp-dim" },
                     "Hold P (or the button) whenever you speak, so your words are not taken for the answer.",
                   ),
-                ),
-        );
+                );
 
       const question = (entry) => {
         const takes = answers.filter((answer) => answer.question_id === entry.id);
@@ -7459,7 +7687,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               // listens, notices the end of each answer and moves on.
               data && !data.error && data.questions.length ? screenRow() : null,
               data && !data.error && data.questions.length ? consentPanel() : null,
-              data && !data.error && data.questions.length && consented ? (handsFree ? handsPanel() : startRow()) : null,
+              data && !data.error && data.questions.length && consented ? (handsFree ? handsPanel() : recording ? recordingPanel() : startRow()) : null,
               data && !data.error ? gradeRow() : null,
               said ? h("div", { className: said.error ? "pp-dwarn" : "pp-dim" }, said.text) : null,
               data === null
@@ -7469,6 +7697,151 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   : !data.questions.length
                     ? h("div", { className: "pp-dim" }, "No questions drafted yet — Start defence drafts them.")
                     : h("ol", { className: "pp-dlist" }, data.questions.map(question)),
+            ),
+          ),
+        ),
+        document.body,
+      );
+    }
+
+    /**
+     * Recorded defences uploaded afterwards (DEF-6): plan, file, transcribe —
+     * each a press, each answered by `ainar defence batch` in the pane's own
+     * process, its output shown as it is. The plan prices the batch on every
+     * transcription connection before anything leaves; filing needs the
+     * professor to confirm the students agreed to be recorded; sending needs a
+     * second press after the quote.
+     */
+    function BatchModal(props) {
+      const close = props.onClose;
+      const [assessments, setAssessments] = React.useState([]);
+      const [assessment, setAssessment] = React.useState("");
+      const [consent, setConsent] = React.useState(false);
+      const [quoted, setQuoted] = React.useState(false);
+      const [busy, setBusy] = React.useState(null);
+      const [output, setOutput] = React.useState("");
+      const url = (extra) => scoped(BASE + "/api/defence/batch?run=" + encodeURIComponent(props.runId) + (extra || ""), props.sessionId);
+
+      React.useEffect(() => {
+        fetch(url(), { cache: "no-store" })
+          .then((response) => response.json())
+          .then((result) => {
+            const list = result.assessments || [];
+            setAssessments(list);
+            if (list.length) setAssessment((current) => current || list[0].id);
+            if (result.error) setOutput(result.error);
+          })
+          .catch((error) => setOutput(String(error)));
+      }, [props.runId]);
+
+      React.useEffect(() => {
+        const onKey = (event) => {
+          if (event.key === "Escape" && !busy) {
+            event.stopPropagation();
+            close();
+          }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [close, busy]);
+
+      const run = (step, extra) => {
+        if (!assessment || busy) return;
+        const sending = step === "transcribe" && /confirm/.test(extra || "");
+        setBusy(step);
+        setOutput(sending ? "Sending and transcribing — this takes a while for a long batch…" : "Working…");
+        fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" })
+          .then((response) => response.json())
+          .then((result) => {
+            setBusy(null);
+            setOutput(result.error || result.output || "(nothing said)");
+            if (step === "transcribe") setQuoted(!sending && !!result.ok);
+          })
+          .catch((error) => {
+            setBusy(null);
+            setOutput(String(error));
+          });
+      };
+
+      return ReactDOM.createPortal(
+        h(
+          "div",
+          { className: "pp-veil", onMouseDown: (event) => event.target === event.currentTarget && !busy && close() },
+          h(
+            "div",
+            {
+              className: "pp-modal pp-deskmodal",
+              role: "dialog",
+              "aria-modal": "true",
+              "aria-label": "Recorded defences",
+              onMouseDown: (event) => event.stopPropagation(),
+            },
+            h(
+              "div",
+              { className: "pp-modalhead" },
+              h("div", { className: "pp-modaltitle" }, "Recorded defences"),
+              h("button", { type: "button", className: "pp-close", "aria-label": "Close", disabled: Boolean(busy), onClick: close }, "×"),
+            ),
+            h(
+              "div",
+              { className: "pp-publishbody" },
+              h(
+                "div",
+                { className: "pp-approverow" },
+                h("span", { className: "pp-dim" }, "Assessment"),
+                h(
+                  "select",
+                  {
+                    className: "pp-input",
+                    value: assessment,
+                    disabled: Boolean(busy),
+                    onChange: (event) => {
+                      setAssessment(event.target.value);
+                      setQuoted(false);
+                    },
+                  },
+                  assessments.map((entry) => h("option", { key: entry.id, value: entry.id }, entry.title + " · " + entry.id)),
+                ),
+              ),
+              h(
+                "div",
+                { className: "pp-approverow" },
+                h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => run("plan") }, "1 · Plan: who, how long, what it costs"),
+              ),
+              h(
+                "div",
+                { className: "pp-approverow" },
+                h(
+                  "label",
+                  { className: "pp-dim pp-dchooser" },
+                  h("input", { type: "checkbox", checked: consent, onChange: (event) => setConsent(event.target.checked) }),
+                  " every student in these recordings agreed to be recorded",
+                ),
+                h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", disabled: Boolean(busy) || !consent, onClick: () => run("apply", "&consent=1") },
+                  "2 · File them as their defences",
+                ),
+              ),
+              h(
+                "div",
+                { className: "pp-approverow" },
+                h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => run("transcribe") }, "3 · Quote the transcription"),
+                quoted
+                  ? h(
+                      "button",
+                      { type: "button", className: "pp-segbtn pp-drec", disabled: Boolean(busy), onClick: () => run("transcribe", "&confirm=1") },
+                      "Send them and transcribe",
+                    )
+                  : null,
+              ),
+              h(
+                "div",
+                { className: "pp-dim" },
+                "A recording the plan could not place is named there: give it a student in the plan file it shows, and plan again. " +
+                  "Once transcribed, open each student's defence desk: say which voice is yours, then Propose the grade.",
+              ),
+              output ? h("pre", { className: "pp-publishout" }, output) : null,
             ),
           ),
         ),
@@ -7524,7 +7897,10 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         const stored = [];
         const next = (index) => {
           if (index >= files.length) {
-            props.ask(uploadPrompt(kind, props.runId, stored, note));
+            // Recordings are the pane's to file — they go to the private folder,
+            // which the session cannot write — so they open the batch dialog.
+            if (kind === "recordings" && props.onRecordings) props.onRecordings();
+            else props.ask(uploadPrompt(kind, props.runId, stored, note));
             close();
             return;
           }
@@ -7858,6 +8234,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const currentRunRef = React.useRef(null);
       // The defence desk, open on one student or not.
       const [desk, setDesk] = React.useState(null);
+      // The recorded-defences dialog (DEF-6), open or not.
+      const [batch, setBatch] = React.useState(false);
 
       // Open the column this pane lives in, once per session.
       //
@@ -8454,11 +8832,19 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               onClose: () => setDesk(null),
             })
           : null,
+        batch && current
+          ? h(BatchModal, {
+              runId: current.runId,
+              sessionId: props.sessionId,
+              onClose: () => setBatch(false),
+            })
+          : null,
         uploading && current
           ? h(UploadModal, {
               runId: current.runId,
               sessionId: props.sessionId,
               ask: props.ask,
+              onRecordings: () => setBatch(true),
               onClose: () => setUploading(false),
             })
           : null,

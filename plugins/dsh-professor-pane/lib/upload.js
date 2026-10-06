@@ -12,6 +12,9 @@
  *           the professor (/import-assessment §1) before anything is filed.
  *   paper   ~/.ainar/submissions/<RUN>/_papers/  a question paper or a key, to
  *           be read and imported (/import-assessment §3–§5).
+ *   recordings  ~/.ainar/submissions/<RUN>/_recordings/  oral defences recorded
+ *           elsewhere — a phone, a room the harness was not in — to be matched
+ *           to students and transcribed (`ainar defence batch`, DEF-6).
  *
  * Both are under the private submissions folder (`AINAR_SUBMISSIONS_DIR`
  * honoured), never inside the workspace: a scan carries names and handwriting,
@@ -35,7 +38,11 @@ import { basename, extname, join } from "node:path";
 export const KINDS = {
   scans: { folder: "_inbox", extensions: [".pdf"] },
   paper: { folder: "_papers", extensions: [".pdf", ".docx", ".odt", ".md", ".txt", ".png", ".jpg", ".jpeg"] },
+  recordings: { folder: "_recordings", extensions: [".m4a", ".mp4", ".mp3", ".wav", ".webm", ".ogg"] },
 };
+
+/** Kinds renamed by their content, because their names carry a student's: `scan-…`, `rec-…`. */
+const RENAMED = { scans: "scan", recordings: "rec" };
 
 /** Per file. A class's scans in one batch at 300 dpi is tens of MB, not hundreds. */
 export const UPLOAD_LIMIT = 200 * 1024 * 1024;
@@ -46,7 +53,7 @@ const RUN_ID = /^[A-Z0-9][A-Z0-9-]*$/;
 export const uploadFolder = (submissions, runId, kind) => {
   if (!RUN_ID.test(runId)) throw new Error(`"${runId}" is not a course run id`);
   const spec = KINDS[kind];
-  if (!spec) throw new Error(`upload kind is scans or paper, not "${kind}"`);
+  if (!spec) throw new Error(`upload kind is scans, paper or recordings, not "${kind}"`);
   return join(submissions, runId, spec.folder);
 };
 
@@ -68,12 +75,14 @@ export const safeName = (original) => {
 /** Refuse what the kind does not take, before a byte is written. */
 export const checkUpload = (kind, original) => {
   const spec = KINDS[kind];
-  if (!spec) return `upload kind is scans or paper, not "${kind}"`;
+  if (!spec) return `upload kind is scans, paper or recordings, not "${kind}"`;
   const extension = extname(String(original || "")).toLowerCase();
   if (!spec.extensions.includes(extension)) {
     return kind === "scans"
       ? `${original}: scanned papers are uploaded as PDF`
-      : `${original}: a question paper or key is one of ${spec.extensions.join(", ")}`;
+      : kind === "recordings"
+        ? `${original}: a recording is one of ${spec.extensions.join(", ")}`
+        : `${original}: a question paper or key is one of ${spec.extensions.join(", ")}`;
   }
   return null;
 };
@@ -140,8 +149,7 @@ export const storeUpload = ({ kind, folder, original, received, now }) => {
     rmSync(temporary, { force: true });
     throw new Error(`${original} does not start like a PDF — was it saved as something else?`);
   }
-  let name =
-    kind === "scans" ? `scan-${sha256.slice(0, 10)}.pdf` : safeName(original);
+  let name = RENAMED[kind] ? `${RENAMED[kind]}-${sha256.slice(0, 10)}${extname(original).toLowerCase()}` : safeName(original);
   let target = join(folder, name);
   let duplicate = false;
   if (existsSync(target)) {
@@ -159,7 +167,7 @@ export const storeUpload = ({ kind, folder, original, received, now }) => {
   if (duplicate) rmSync(temporary, { force: true });
   else renameSync(temporary, target);
 
-  if (kind === "scans" && !duplicate) {
+  if (RENAMED[kind] && !duplicate) {
     // The private map back to what the file was called. Names may be in it;
     // it is beside the scans, outside the repository, and nowhere else.
     const ledger = join(folder, "uploads.json");

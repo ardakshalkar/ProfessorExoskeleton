@@ -20,6 +20,8 @@
     "lib/course-mode.js",
     "lib/upload.js",
     "lib/student-screen.js",
+    "vendor/dots-swarm.js",
+    "vendor/dots-swarm.LICENSE",
     "cordis.patch.yml",
     "README.md"
   ],
