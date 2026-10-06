@@ -966,12 +966,24 @@ is worth building.
       speaking (or after a reading-time timeout). A heartbeat every 2 s tells
       the desk when the screen has been closed. ElevenLabs voices for Kazakh
       are still open.
-- [ ] **AGT-5** Live captions, not only at the end of an answer: Scribe v2
+- [x] **AGT-5** Live captions, not only at the end of an answer: Scribe v2
       Realtime over a WebSocket (about $0.39/hr), or the local server's
       streaming route. They let AGT-2 start deciding before the student
       stops, which turns a 6–10 s gap into 2–4 s. `M` · depends: AGT-2
-      Asked for 2026-10-06 ("whilst recording it should transcribe, if
-      possible"); next.
+      Done 2026-10-06, the provider-agnostic way first. A second recorder on
+      the same microphone restarts every 5 s, so each piece is a whole file
+      any connection reads. A piece in which someone spoke (and the professor
+      was not holding P) goes to `/api/defence/caption`, and the caption
+      appears under the live panel about a second after the piece ends.
+      `captionAudio` needs consent, keeps nothing, and removes its temporary
+      file whatever happens. The take's own transcript is still the one that
+      counts. Each answer is transcribed twice (on Scribe, about $0.22/hr
+      more), and a switch turns captions off.
+- [ ] **AGT-8** True streaming captions where the provider has them: Scribe v2
+      Realtime through a single-use token the server mints, so the key never
+      reaches the browser; PCM through an AudioWorklet. Captions word by
+      word instead of every five seconds, and AGT-2 able to start choosing
+      before the answer ends. `M` · depends: AGT-5
 - [x] **AGT-6** Two voices, one microphone. The professor will interject, so
       diarize (Scribe has it) and keep the professor's words out of the
       student's evidence. A take where the speakers could not be separated

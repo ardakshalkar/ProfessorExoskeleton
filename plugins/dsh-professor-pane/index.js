@@ -92,6 +92,7 @@ import {
   assignVoices,
   ensureWholeDefence,
   briefText,
+  captionAudio,
   codeDigest,
   collectCode,
   consentStatement,
@@ -6480,6 +6481,37 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
             override === "edit" ? editQuestion(target.place.questions, String(body.question ?? ""), String(body.text ?? "")) : null;
           if (Number.isInteger(body.index)) overrideDecision(target.place, body.index, override);
           return sendJson(res, 200, { ok: true, question });
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // AGT-5: a caption for a few seconds of an answer still being given. The
+    // piece is transcribed through the same connection and forgotten; see
+    // `captionAudio` for why nothing of it is kept.
+    if (path === "/api/defence/caption") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      let target;
+      try {
+        target = defenceTarget(workspace, root, runId, url.searchParams);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      const mime = String(req.headers["content-type"] ?? "");
+      return readBytes(req, 8 * 1024 * 1024)
+        .then(async (bytes) => {
+          const transcribe = transcriber(configFromRegistry(null).config);
+          const languages = target.bundle.course?.language ?? [];
+          const questionId = url.searchParams.get("question") ?? "";
+          const question = (readDefence(target.place.questions)?.questions ?? []).find((q) => q.id === questionId);
+          const caption = await captionAudio({
+            place: target.place,
+            bytes,
+            mime,
+            transcribe,
+            language: languages.length === 1 ? languages[0] : null,
+            prompt: question && question.kind !== "whole" ? question.text : null,
+          });
+          return sendJson(res, 200, caption);
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }

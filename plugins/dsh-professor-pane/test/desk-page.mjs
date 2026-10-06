@@ -27,6 +27,7 @@ const answers = [];
 const received = [];
 const decisions = [];
 let consent = null;
+const captioned = [];
 const STATEMENT = "This oral defence will be recorded: your spoken answers, as audio. The recordings are transcribed on this machine (mock) and do not leave it. You may ask to stop at any time.";
 const overrides = [];
 
@@ -143,6 +144,18 @@ http
       });
       return;
     }
+    // AGT-5: a caption for a piece of an answer still being given.
+    if (url.pathname === "/professor-pane/api/defence/caption" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        if (!consent?.agreed || consent.withdrawn_at) return json(res, { error: "no recorded consent" });
+        captioned.push({ question: url.searchParams.get("question"), bytes: Buffer.concat(chunks).length });
+        setTimeout(() => json(res, { text: `(heard piece ${captioned.length}, ${Buffer.concat(chunks).length} bytes)`, segments: [] }), 300);
+      });
+      return;
+    }
+    if (url.pathname === "/captioned") return json(res, captioned);
     if (url.pathname === "/decisions") return json(res, { decisions, overrides, consent, answers: answers.map((a) => [a.question_id, !!a.withdrawn]) });
     if (url.pathname === "/professor-pane/api/defence/consent" && req.method === "POST") {
       const chunks = [];

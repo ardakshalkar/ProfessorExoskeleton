@@ -1349,3 +1349,47 @@ export const assignVoices = (place: DefencePlace, questionId: string, take: numb
   writeSession(place.session, session);
   return answer;
 };
+
+// --------------------------------------------------------------------------
+// Live captions (AGT-5)
+// --------------------------------------------------------------------------
+
+/**
+ * Transcribe a few seconds of a take still being recorded, for the captions
+ * the desk shows while the student is answering.
+ *
+ * Provider-agnostic: the desk sends short, self-contained pieces of audio,
+ * and each goes through the same connection as a whole take, so captions work
+ * with Scribe, Groq and a Whisper server on campus alike. Nothing is kept. The
+ * piece is written to a temporary file in the private folder only because a
+ * transcriber reads a file, and removed whatever happens. The transcript that
+ * counts — cited, graded, replayed — is still the whole take's, made when the
+ * answer ends. Consent is checked as for a take: no agreement, no captions.
+ */
+export const captionAudio = async (options: {
+  place: DefencePlace;
+  bytes: Uint8Array;
+  mime: string;
+  transcribe: Transcriber;
+  language?: string | null;
+  prompt?: string | null;
+}): Promise<{ text: string; segments: Segment[] }> => {
+  if (!consentGiven(readSession(options.place.session))) {
+    throw new Error("no recorded consent: nothing is transcribed, not even a caption");
+  }
+  const extension = audioExtension(options.mime);
+  if (!extension) throw new Error(`${options.mime} is not an audio type this transcribes`);
+  const folder = join(options.place.dir, "captions");
+  mkdirSync(folder, { recursive: true });
+  const path = join(folder, `piece-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`);
+  writeFileSync(path, options.bytes);
+  try {
+    const transcript = await options.transcribe(
+      { path, mime: options.mime.split(";")[0]!.trim() },
+      { language: options.language ?? null, prompt: options.prompt ?? null },
+    );
+    return { text: transcript.text, segments: transcript.segments };
+  } finally {
+    rmSync(path, { force: true });
+  }
+};

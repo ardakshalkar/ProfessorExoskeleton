@@ -839,6 +839,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-dstatement{margin:0;padding:6px 10px;border-left:3px solid #c43030;font-size:13px;line-height:1.5}
 .pp-dspeaking{background:#2f6fd6;border-color:#2f6fd6;color:#fff;font-weight:600}
 .pp-dchooser{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.pp-dcaption{margin:2px 0 6px;font-size:13px;line-height:1.45;font-style:italic;overflow-wrap:anywhere}
 .pp-dhandsdots{display:flex;align-items:flex-start;gap:12px}
 .pp-dhandsbody{flex:1;min-width:0}
 .pp-ddots{flex:none;display:block;width:64px;height:64px}
@@ -6540,6 +6541,12 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const [tick, setTick] = React.useState(0);
       const [elapsed, setElapsed] = React.useState(0);
       const [manualLevel, setManualLevel] = React.useState(0);
+      // AGT-5: live captions for the take in hand, and whether to make them.
+      const [captions, setCaptions] = React.useState(null); // { question, pieces: [{ index, text }] }
+      const [liveCaptions, setLiveCaptions] = React.useState(true);
+      const liveCaptionsRef = React.useRef(true);
+      liveCaptionsRef.current = liveCaptions;
+      const captionLoop = React.useRef(null);
       // Uploads still on the wire; the desk does not close while any are.
       const [pending, setPending] = React.useState(0);
       // Hands-free (AGT-1): { question, phase, level, threshold } while running.
@@ -6741,6 +6748,93 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           });
       };
 
+      /*
+       * AGT-5, live captions. A second recorder on the same microphone,
+       * restarted every few seconds so each piece is a whole little file any
+       * provider can read; a piece in which somebody spoke is sent for a
+       * caption, a silent one is not, and nothing is sent while the
+       * professor holds P. Captions are provisional and kept nowhere: the
+       * transcript that counts is the take's, when it ends.
+       */
+      const CAPTION_MS = 5000;
+      const startCaptions = (stream, questionId, type) => {
+        stopCaptions();
+        setCaptions({ question: questionId, pieces: [] });
+        if (!liveCaptionsRef.current) return;
+        const loop = { active: true, index: 0, loud: false, recorder: null, timer: null };
+        captionLoop.current = loop;
+        const cycle = () => {
+          if (!loop.active) return;
+          let piece;
+          try {
+            piece = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+          } catch {
+            return;
+          }
+          const chunks = [];
+          piece.ondataavailable = (event) => {
+            if (event.data && event.data.size) chunks.push(event.data);
+          };
+          piece.onstop = () => {
+            const index = loop.index;
+            loop.index += 1;
+            const spoke = loop.loud;
+            loop.loud = false;
+            const blob = new Blob(chunks, { type: (piece.mimeType || type || "audio/webm").split(";")[0] });
+            if (spoke && blob.size) caption(questionId, index, blob);
+            if (loop.active && stream.active) cycle();
+          };
+          loop.recorder = piece;
+          piece.start();
+          loop.timer = setTimeout(() => piece.state !== "inactive" && piece.stop(), CAPTION_MS);
+        };
+        cycle();
+      };
+      const stopCaptions = () => {
+        const loop = captionLoop.current;
+        if (!loop) return;
+        loop.active = false;
+        clearTimeout(loop.timer);
+        // The last piece is still captioned: the answer's final words.
+        if (loop.recorder && loop.recorder.state !== "inactive") loop.recorder.stop();
+        captionLoop.current = null;
+      };
+      /** Someone is audibly speaking — not the professor holding P — so this piece is worth a caption. */
+      const heard = (level, threshold) => {
+        const loop = captionLoop.current;
+        if (loop && level > threshold && marks.current.held === null) loop.loud = true;
+      };
+      const caption = (questionId, index, blob) =>
+        fetch(endpoint("/api/defence/caption", "&question=" + encodeURIComponent(questionId)), {
+          method: "POST",
+          headers: { "Content-Type": blob.type },
+          body: blob,
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error || !String(result.text || "").trim()) return;
+            setCaptions((current) =>
+              current && current.question === questionId
+                ? {
+                    question: questionId,
+                    pieces: current.pieces.concat([{ index, text: String(result.text).trim() }]).sort((a, b) => a.index - b.index),
+                  }
+                : current,
+            );
+          })
+          .catch(() => {});
+
+      /** The captions, under whatever is recording. */
+      const captionsView = (questionId) =>
+        captions && captions.question === questionId && captions.pieces.length
+          ? h(
+              "div",
+              { className: "pp-dcaption", "aria-live": "polite" },
+              h("span", { className: "pp-dim" }, "Live, provisional: "),
+              captions.pieces.map((piece) => piece.text).join(" "),
+            )
+          : null;
+
       const start = (questionId) => {
         if (recording || sending || handsFree || !consented) return;
         setSaid(null);
@@ -6770,7 +6864,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   analyser.getFloatTimeDomainData(samples);
                   let sum = 0;
                   for (let index = 0; index < samples.length; index += 1) sum += samples[index] * samples[index];
-                  setManualLevel(Math.sqrt(sum / samples.length));
+                  const level = Math.sqrt(sum / samples.length);
+                  setManualLevel(level);
+                  heard(level, 0.02);
                 }, 150),
               };
             } catch {
@@ -6782,6 +6878,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               if (event.data && event.data.size) chunks.push(event.data);
             };
             media.onstop = () => {
+              stopCaptions();
               stream.getTracks().forEach((track) => track.stop());
               if (meter) {
                 clearInterval(meter.timer);
@@ -6810,6 +6907,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             setRecording({ question: questionId, started });
             openMarks(started);
             showOnScreen(questionId, "listening");
+            startCaptions(stream, questionId, type);
           })
           .catch((error) => setSaid({ error: true, text: "No microphone: " + String(error && error.message ? error.message : error) }));
       };
@@ -6927,6 +7025,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         );
 
       const releaseMicrophone = (final) => {
+        stopCaptions();
         showOnScreen(null, final === "done" ? "done" : "paused");
         const running = loop.current;
         if (!running) return;
@@ -6956,6 +7055,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             if (event.data && event.data.size) chunks.push(event.data);
           };
           running.take = { question: questionId, media, chunks, started: Date.now(), turn: null, keep: true, spoke: false, shown: "listening" };
+          startCaptions(running.stream, questionId, running.type);
           openMarks(running.take.started);
           media.start(1000);
           setHandsFree({ question: questionId, phase: "waiting", level: 0, threshold: 0 });
@@ -6990,6 +7090,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         const take = running && running.take;
         if (!take || take.media.state === "inactive") return;
         running.take = null;
+        stopCaptions();
         const ranges = closeMarks();
         const keep = how !== "skip" && how !== "withdraw" && (take.spoke || how === "space");
         take.media.onstop = () => {
@@ -7147,6 +7248,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               const step = turnStep(take.turn, level, Date.now());
               take.turn = step.state;
               if (step.state.phase === "speaking") take.spoke = true;
+              heard(level, step.threshold);
               if (take.spoke && take.shown !== "hearing") {
                 take.shown = "hearing";
                 showOnScreen(take.question, "hearing");
@@ -7427,6 +7529,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               h("b", null, whole ? "The whole defence" : recording.question),
               " · recording " + clock(elapsed) + (phase === "speaking" ? " · hearing a voice" : phase === "professor" ? " · you are speaking" : ""),
             ),
+            captionsView(recording.question),
             h(
               "div",
               { className: "pp-approverow" },
@@ -7471,6 +7574,15 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             { className: "pp-dim pp-dchooser" },
             h("input", { type: "checkbox", checked: chooser, onChange: (event) => setChooser(event.target.checked) }),
             " the session's model chooses each next question — a follow-up, or the next prepared one",
+          ),
+          h(
+            "label",
+            {
+              className: "pp-dim pp-dchooser",
+              title: "Every few seconds of speech is transcribed as it is said, through the same provider. Each answer is then transcribed twice: the captions are not kept.",
+            },
+            h("input", { type: "checkbox", checked: liveCaptions, onChange: (event) => setLiveCaptions(event.target.checked) }),
+            " live captions while the student answers",
           ),
           pending > 0 ? h("span", { className: "pp-dim" }, pending + " answer(s) transcribing…") : null,
         );
@@ -7539,7 +7651,12 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           proposal
             ? proposalPanel()
             : handsFree.phase === "thinking" || handsFree.phase === "proposing"
-              ? h("div", { className: "pp-dhandsline" }, "Transcribing the answer and choosing what to ask next…")
+              ? h(
+                  React.Fragment,
+                  null,
+                  h("div", { className: "pp-dhandsline" }, "Transcribing the answer and choosing what to ask next…"),
+                  captions ? captionsView(captions.question) : null,
+                )
               : handsFree.phase === "reading"
               ? h("div", { className: "pp-dhandsline" }, h("b", null, handsFree.question), " · being read aloud on the student's screen — listening starts when it finishes")
               : h(
@@ -7566,6 +7683,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                       }),
                     ),
                   ),
+                  captionsView(handsFree.question),
                   h(
                     "div",
                     { className: "pp-approverow" },

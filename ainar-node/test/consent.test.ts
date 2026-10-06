@@ -5,6 +5,7 @@ import { describeTranscription } from "../src/transcribe.ts";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  captionAudio,
   consentGiven,
   consentStatement,
   defencePlace,
@@ -52,6 +53,28 @@ test("the statement says where the voice goes, from the provider actually config
   assert.match(consentStatement({ name: "whisper-local", provider: "openai", model: "whisper-turbo-ksc2", local: true }), /on this machine \(whisper-turbo-ksc2\) and do not leave it/);
   assert.match(consentStatement(null), /No transcription service is set up yet/);
   assert.match(consentStatement(null), /You may ask to stop at any time/);
+});
+
+test("a live caption needs consent, and leaves nothing behind — even when the provider fails", async () => {
+  const { place, ids } = fresh();
+  const bytes = Buffer.from("opus");
+  const seen: string[] = [];
+  const transcribe = async (audio: { path: string }) => {
+    seen.push(audio.path);
+    assert.ok(existsSync(audio.path), "the piece is on disk while it is transcribed");
+    return { text: "it trains a model", language: "en", seconds: 5, segments: [{ start: 0, end: 5, text: "it trains a model" }], timed: true, provider: "p", model: "m", at: "t", cost_usd: null };
+  };
+  await assert.rejects(captionAudio({ place, bytes, mime: "audio/webm", transcribe }), /no recorded consent/);
+  recordConsent(place, ids, { agreed: true, at: "t", statement: "s", provider: null });
+  const caption = await captionAudio({ place, bytes, mime: "audio/webm;codecs=opus", transcribe });
+  assert.equal(caption.text, "it trains a model");
+  assert.equal(existsSync(seen[0]!), false, "the piece is removed");
+  await assert.rejects(
+    captionAudio({ place, bytes, mime: "audio/webm", transcribe: async (audio) => { seen.push(audio.path); throw new Error("provider down"); } }),
+    /provider down/,
+  );
+  assert.equal(existsSync(seen[1]!), false, "removed when the provider fails too");
+  assert.equal(readSession(place.session)!.answers.length, 0, "a caption is not a take");
 });
 
 test("a provider set up without its key is still the one named: the student is not told their voice stays here", () => {
