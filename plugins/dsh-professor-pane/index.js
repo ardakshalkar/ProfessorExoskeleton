@@ -6382,6 +6382,16 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
       const questionId = url.searchParams.get("question") ?? "";
       const mime = String(req.headers["content-type"] ?? "");
       const seconds = Number(url.searchParams.get("seconds") ?? "");
+      // Where the professor held the speak key, as `1.2-3.4,8-9.5` seconds
+      // from the start of the take (AGT-6). Anything malformed is dropped,
+      // not guessed at.
+      const professorSpoke = String(url.searchParams.get("professor") ?? "")
+        .split(",")
+        .map((part) => /^(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)$/.exec(part.trim()))
+        .filter(Boolean)
+        .map((match) => [Number(match[1]), Number(match[2])])
+        .filter(([from, to]) => to > from)
+        .slice(0, 200);
       return readBytes(req, 64 * 1024 * 1024)
         .then(async (bytes) => {
           const { answer } = saveAnswer({
@@ -6391,6 +6401,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
             bytes,
             mime,
             seconds: Number.isFinite(seconds) ? seconds : null,
+            professorSpoke,
           });
           let transcribe;
           try {

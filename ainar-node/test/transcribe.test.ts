@@ -126,6 +126,7 @@ test("Scribe is asked for word timestamps, with its own key header", async () =>
   assert.equal(seen[0]!.fields.model_id, "scribe_v1");
   assert.equal(seen[0]!.fields.language_code, "kk");
   assert.equal(seen[0]!.fields.timestamps_granularity, "word");
+  assert.equal(seen[0]!.fields.diarize, "true");
   assert.equal(transcript.language, "kaz");
   assert.equal(transcript.seconds, 0.5);
 });

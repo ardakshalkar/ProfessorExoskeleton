@@ -833,6 +833,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-dmeterfill{display:block;height:100%;background:#9a9aa0;transition:width .1s linear}
 .pp-dmeteron{background:#2f8a4e}
 .pp-dlivemark{font-size:11.5px;font-weight:600}
+.pp-dother{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-dspeaking{background:#2f6fd6;border-color:#2f6fd6;color:#fff;font-weight:600}
 .pp-dchooser{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
 .pp-dproposal{display:flex;flex-direction:column;gap:4px}
 .pp-dcount{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600;color:#c43030}
@@ -6475,6 +6477,78 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const loop = React.useRef(null);
       const dataRef = React.useRef(null);
       dataRef.current = data;
+
+      /*
+       * AGT-6: the professor's own words. Holding P — or the button — while
+       * speaking marks the stretch as theirs, in seconds from the start of the
+       * take in hand; the server then never counts it as the student's answer,
+       * whatever the provider heard. `origin` is the take's start, `held` when
+       * the key went down, `ranges` the closed stretches.
+       */
+      const marks = React.useRef({ origin: null, held: null, ranges: [] });
+      const [professorTalking, setProfessorTalking] = React.useState(false);
+      const openMarks = (origin) => {
+        marks.current = { origin, held: marks.current.held !== null ? origin : null, ranges: [] };
+      };
+      const closeMarks = () => {
+        const current = marks.current;
+        const now = Date.now();
+        if (current.origin !== null && current.held !== null) current.ranges.push([(current.held - current.origin) / 1000, (now - current.origin) / 1000]);
+        const ranges = current.ranges;
+        marks.current = { origin: null, held: current.held !== null ? now : null, ranges: [] };
+        return ranges;
+      };
+      const speakDown = () => {
+        if (marks.current.held !== null) return;
+        marks.current.held = Date.now();
+        setProfessorTalking(true);
+      };
+      const speakUp = () => {
+        const current = marks.current;
+        if (current.held === null) return;
+        if (current.origin !== null) {
+          current.ranges.push([Math.max(0, (current.held - current.origin) / 1000), (Date.now() - current.origin) / 1000]);
+        }
+        current.held = null;
+        setProfessorTalking(false);
+      };
+      React.useEffect(() => {
+        const typing = (event) => /^(INPUT|TEXTAREA)$/.test(String(event.target && event.target.tagName));
+        const down = (event) => {
+          if ((event.key === "p" || event.key === "P") && !event.repeat && !typing(event)) speakDown();
+        };
+        const up = (event) => {
+          if (event.key === "p" || event.key === "P") speakUp();
+        };
+        // Letting go anywhere, or leaving the window, ends the stretch: a key
+        // stuck "down" would hand the rest of the answer to the professor.
+        window.addEventListener("keydown", down, true);
+        window.addEventListener("keyup", up, true);
+        window.addEventListener("blur", speakUp);
+        return () => {
+          window.removeEventListener("keydown", down, true);
+          window.removeEventListener("keyup", up, true);
+          window.removeEventListener("blur", speakUp);
+        };
+      }, []);
+
+      /** The hold-to-speak button, for a professor without a free hand on the keyboard. */
+      const speakButton = () =>
+        h(
+          "button",
+          {
+            type: "button",
+            className: "pp-segbtn" + (professorTalking ? " pp-dspeaking" : ""),
+            onPointerDown: (event) => {
+              event.currentTarget.setPointerCapture && event.currentTarget.setPointerCapture(event.pointerId);
+              speakDown();
+            },
+            onPointerUp: speakUp,
+            onPointerCancel: speakUp,
+            title: "Hold while you speak, so your words are not taken for the student's answer.",
+          },
+          professorTalking ? "You are speaking — not the answer" : "Hold to speak (P)",
+        );
       const query =
         "?run=" + encodeURIComponent(props.runId) +
         "&assessment=" + encodeURIComponent(props.assessment) +
@@ -6526,9 +6600,10 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       }, []);
 
       /** Send one take; transcribed by the server. Resolves either way, having said what went wrong. */
-      const upload = (questionId, blob, seconds) => {
+      const upload = (questionId, blob, seconds, ranges) => {
+        const spoke = (ranges || []).map((range) => range[0].toFixed(1) + "-" + range[1].toFixed(1)).join(",");
         setPending((count) => count + 1);
-        return fetch(endpoint("/api/defence/answer", "&question=" + encodeURIComponent(questionId) + "&seconds=" + seconds.toFixed(1)), {
+        return fetch(endpoint("/api/defence/answer", "&question=" + encodeURIComponent(questionId) + "&seconds=" + seconds.toFixed(1) + (spoke ? "&professor=" + spoke : "")), {
           method: "POST",
           headers: { "Content-Type": blob.type },
           body: blob,
@@ -6577,12 +6652,13 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 return;
               }
               setSending(questionId);
-              upload(questionId, blob, (Date.now() - started) / 1000).then(() => setSending(null));
+              upload(questionId, blob, (Date.now() - started) / 1000, closeMarks()).then(() => setSending(null));
             };
             recorder.current = media;
             media.start(1000);
             setElapsed(0);
             setRecording({ question: questionId, started });
+            openMarks(started);
             showOnScreen(questionId, "listening");
           })
           .catch((error) => setSaid({ error: true, text: "No microphone: " + String(error && error.message ? error.message : error) }));
@@ -6727,6 +6803,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             if (event.data && event.data.size) chunks.push(event.data);
           };
           running.take = { question: questionId, media, chunks, started: Date.now(), turn: null, keep: true, spoke: false, shown: "listening" };
+          openMarks(running.take.started);
           media.start(1000);
           setHandsFree({ question: questionId, phase: "waiting", level: 0, threshold: 0 });
           showOnScreen(questionId, "listening");
@@ -6760,10 +6837,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         const take = running && running.take;
         if (!take || take.media.state === "inactive") return;
         running.take = null;
+        const ranges = closeMarks();
         const keep = how !== "skip" && (take.spoke || how === "space");
         take.media.onstop = () => {
           const blob = new Blob(take.chunks, { type: (take.media.mimeType || running.type || "audio/webm").split(";")[0] });
-          const sent = keep && blob.size ? upload(take.question, blob, (Date.now() - take.started) / 1000) : Promise.resolve();
+          const sent = keep && blob.size ? upload(take.question, blob, (Date.now() - take.started) / 1000, ranges) : Promise.resolve();
           if (how === "pause") releaseMicrophone();
           // An answer was given and the model may choose what follows it: wait
           // for the transcript, then ask. A skipped question, or a desk told
@@ -6901,6 +6979,18 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               let sum = 0;
               for (let index = 0; index < running.samples.length; index += 1) sum += running.samples[index] * running.samples[index];
               const level = Math.sqrt(sum / running.samples.length);
+              // The professor is speaking: not the answer, and not a silence
+              // either. The detector waits, and the pause after it counts
+              // from when they let go.
+              if (marks.current.held !== null) {
+                take.resumed = true;
+                setHandsFree({ question: take.question, phase: "professor", level, threshold: 0 });
+                return;
+              }
+              if (take.resumed && take.turn) {
+                take.turn = Object.assign({}, take.turn, { silentSince: null, voicedSince: null });
+                take.resumed = false;
+              }
               const step = turnStep(take.turn, level, Date.now());
               take.turn = step.state;
               if (step.state.phase === "speaking") take.spoke = true;
@@ -6948,21 +7038,29 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             "Take " + answer.take + (answer.seconds ? " · " + clock(answer.seconds) : ""),
             h("audio", { controls: true, preload: "none", src: endpoint("/api/defence/audio", "&file=" + encodeURIComponent(answer.audio)) }),
           ),
+          // Whose words: the professor's are marked and dimmed, another voice
+          // likewise, and a take whose voices could not be told apart says so
+          // above its words — it is kept, and never cited as the answer.
+          answer.transcript && answer.transcript.speakers && answer.transcript.speakers.unclear
+            ? h("div", { className: "pp-dwarn" }, "Voices unclear — not cited as the student's: " + (answer.transcript.speakers.note || ""))
+            : null,
           answer.transcript
             ? h(
                 "div",
                 { className: "pp-dtranscript" },
-                answer.transcript.segments.map((segment, index) =>
-                  h(
+                answer.transcript.segments.map((segment, index) => {
+                  const other = segment.speaker === "professor" ? "You: " : segment.speaker === "unknown" ? "Other voice: " : "";
+                  return h(
                     "span",
                     {
                       key: index,
-                      className: segment.confidence === "low" ? "pp-dlow" : null,
+                      className: (other ? "pp-dother " : "") + (segment.confidence === "low" ? "pp-dlow" : ""),
                       title: clock(segment.start) + (segment.confidence === "low" ? " · low confidence — listen to it" : ""),
                     },
+                    other ? h("b", null, other) : null,
                     segment.text + " ",
-                  ),
-                ),
+                  );
+                }),
                 answer.transcript.timed ? null : h("span", { className: "pp-dim" }, " (no timestamps from this model)"),
               )
             : h("div", { className: "pp-dim" }, answer.error ? "Not transcribed: " + answer.error : "Transcribing…"),
@@ -7091,7 +7189,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     { className: "pp-dhandsline" },
                     h("b", null, handsFree.question),
                     " · ",
-                    handsFree.phase === "speaking"
+                    handsFree.phase === "professor"
+                      ? "you are speaking — the answer waits"
+                      : handsFree.phase === "speaking"
                       ? handsFree.silent
                         ? "pause " + (handsFree.silent / 1000).toFixed(1) + " s"
                         : "hearing the answer"
@@ -7111,11 +7211,12 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     h("button", { type: "button", className: "pp-segbtn", onClick: () => endTake("space") }, "End answer (Space)"),
                     h("button", { type: "button", className: "pp-segbtn", onClick: () => endTake("skip") }, "Skip, no answer"),
                     h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: () => endTake("pause") }, "Pause"),
+                    speakButton(),
                   ),
                   h(
                     "div",
                     { className: "pp-dim" },
-                    "Let the student read the question here — anything said aloud now counts as the answer, yours included.",
+                    "Hold P (or the button) whenever you speak, so your words are not taken for the answer.",
                   ),
                 ),
         );
@@ -7150,7 +7251,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             handsFree && handsFree.question === entry.id
               ? h("span", { className: "pp-drec pp-dlivemark" }, "● being asked — hands-free")
               : live
-              ? h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: stop }, "■ Stop · " + clock(elapsed))
+              ? h(React.Fragment, null, h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: stop }, "■ Stop · " + clock(elapsed)), speakButton())
               : h(
                   "button",
                   {

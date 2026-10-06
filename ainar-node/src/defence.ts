@@ -46,7 +46,7 @@ import { dirname, extname, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { parse, stringify } from "yaml";
 import { parseReply } from "./scan-read.ts";
-import { type Transcriber, type Transcript } from "./transcribe.ts";
+import { type Range, type Transcriber, type Transcript, labelSpeakers } from "./transcribe.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -493,6 +493,11 @@ export interface Answer {
   recorded_at: string;
   seconds: number | null;
   transcript: Transcript | null;
+  /**
+   * Where the professor held the speak key during this take, in seconds from
+   * its start (AGT-6): those stretches are theirs, never the student's.
+   */
+  professor_spoke?: Range[];
   /** Why there is no transcript: no provider configured, or the provider refused. */
   error?: string;
 }
@@ -547,6 +552,7 @@ export const saveAnswer = (options: {
   bytes: Uint8Array;
   mime: string;
   seconds?: number | null;
+  professorSpoke?: Range[];
   now?: Date;
 }): { answer: Answer; path: string } => {
   if (!/^Q\d+$/.test(options.questionId)) throw new Error(`${options.questionId} is not a question id`);
@@ -566,6 +572,7 @@ export const saveAnswer = (options: {
     recorded_at: (options.now ?? new Date()).toISOString(),
     seconds: typeof options.seconds === "number" && options.seconds > 0 ? Math.round(options.seconds * 10) / 10 : null,
     transcript: null,
+    ...(options.professorSpoke?.length ? { professor_spoke: options.professorSpoke } : {}),
   };
   session.answers.push(answer);
   writeSession(options.place.session, session);
@@ -617,7 +624,9 @@ export const transcribeTake = async (options: {
       { path: join(place.dir, answer.audio), mime: answer.mime, seconds: answer.seconds },
       { language: options.language ?? null, prompt: transcriptionPrompt(options.question) },
     );
-    return setTranscript(place, answer.question_id, answer.take, { transcript });
+    return setTranscript(place, answer.question_id, answer.take, {
+      transcript: labelSpeakers(transcript, answer.professor_spoke ?? []),
+    });
   } catch (error) {
     return setTranscript(place, answer.question_id, answer.take, { error: (error as Error).message });
   }
@@ -686,14 +695,22 @@ export const nextPrompt = (context: {
     const takes = context.answers.filter((answer) => answer.question_id === id);
     if (!takes.length) return "  (not asked yet)";
     return takes
-      .map((take) =>
-        take.transcript
-          ? "  " +
-            take.transcript.segments
-              .map((segment) => (segment.confidence === "low" ? `[unsure: ${segment.text}]` : segment.text))
-              .join(" ")
-          : "  (recorded, no transcript)",
-      )
+      .map((take) => {
+        if (!take.transcript) return "  (recorded, no transcript)";
+        // Only the student's words are the answer. The professor's are shown
+        // as theirs, so a follow-up is never built on what the professor said.
+        const words = take.transcript.segments
+          .map((segment) => {
+            const text = segment.confidence === "low" ? `[unsure: ${segment.text}]` : segment.text;
+            if (segment.speaker === "professor") return `[professor: ${segment.text}]`;
+            if (segment.speaker === "unknown") return `[another voice: ${segment.text}]`;
+            return text;
+          })
+          .join(" ");
+        return take.transcript.speakers?.unclear
+          ? `  (voices unclear, not the student's answer for certain: ${take.transcript.speakers.note ?? ""}) ${words}`
+          : "  " + words;
+      })
       .join("\n");
   };
   const open = context.questions.filter((q) => !context.answers.some((answer) => answer.question_id === q.id));

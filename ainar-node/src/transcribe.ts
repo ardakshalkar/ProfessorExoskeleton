@@ -54,6 +54,29 @@ export interface Segment {
   end: number;
   text: string;
   confidence?: "low";
+  /** The provider's own label for a voice (`speaker_0`), where it separates voices. */
+  speaker_id?: string;
+  /** Whose words these are, as `labelSpeakers` decided (AGT-6). Only `student` is evidence. */
+  speaker?: "student" | "professor" | "unknown";
+}
+
+/**
+ * How the voices in a take were told apart (AGT-6).
+ *
+ * * `diarized` — the provider separated the voices, and the student is the
+ *   one who spoke most in their own answer;
+ * * `marked` — no separation from the provider, but the professor held the
+ *   speak key while talking, so those stretches are theirs;
+ * * `assumed` — neither: every word is taken for the student's, and the take
+ *   says so rather than claiming a separation it did not make.
+ *
+ * `unclear` is a take whose voices could not be told apart with any
+ * confidence. It is kept and shown, and never cited as the student's.
+ */
+export interface Speakers {
+  method: "diarized" | "marked" | "assumed";
+  unclear: boolean;
+  note?: string;
 }
 
 export interface Transcript {
@@ -63,6 +86,7 @@ export interface Transcript {
   segments: Segment[];
   /** False when the provider gave no timestamps and the one segment is the whole answer. */
   timed: boolean;
+  speakers?: Speakers;
   provider: string;
   model: string;
   at: string;
@@ -195,12 +219,13 @@ export const openaiTranscriber = (config: TranscriberConfig, call: typeof fetch 
 
 /**
  * Scribe's words, joined into segments a person can listen to: a sentence, or
- * twelve seconds, whichever ends first. A segment is unsure when its words'
- * mean log-probability is.
+ * twelve seconds, whichever ends first — and always a new segment when the
+ * voice changes, so no segment mixes the professor's words with the student's.
+ * A segment is unsure when its words' mean log-probability is.
  */
 export const wordsToSegments = (words: any[]): Segment[] => {
   const segments: Segment[] = [];
-  let current: { start: number; end: number; parts: string[]; logprobs: number[] } | null = null;
+  let current: { start: number; end: number; parts: string[]; logprobs: number[]; speaker: string | null } | null = null;
   const close = (): void => {
     if (!current) return;
     const text = current.parts.join("").replace(/\s+/g, " ").trim();
@@ -208,7 +233,13 @@ export const wordsToSegments = (words: any[]): Segment[] => {
       const mean = current.logprobs.length
         ? current.logprobs.reduce((a, b) => a + b, 0) / current.logprobs.length
         : 0;
-      segments.push({ start: current.start, end: current.end, text, ...(mean < LOW_LOGPROB ? { confidence: "low" } : {}) });
+      segments.push({
+        start: current.start,
+        end: current.end,
+        text,
+        ...(mean < LOW_LOGPROB ? { confidence: "low" as const } : {}),
+        ...(current.speaker ? { speaker_id: current.speaker } : {}),
+      });
     }
     current = null;
   };
@@ -221,7 +252,9 @@ export const wordsToSegments = (words: any[]): Segment[] => {
     }
     const start = Number(word?.start ?? 0);
     const end = Number(word?.end ?? start);
-    if (!current) current = { start, end, parts: [], logprobs: [] };
+    const speaker = typeof word?.speaker_id === "string" ? word.speaker_id : null;
+    if (current && speaker !== current.speaker) close();
+    if (!current) current = { start, end, parts: [], logprobs: [], speaker };
     current.parts.push(text);
     current.end = end;
     if (typeof word?.logprob === "number") current.logprobs.push(word.logprob);
@@ -242,6 +275,8 @@ export const elevenlabsTranscriber = (config: TranscriberConfig, call: typeof fe
         language_code: hints.language,
         timestamps_granularity: "word",
         tag_audio_events: "false",
+        // Separate the voices: the professor will interject (AGT-6).
+        diarize: "true",
       }),
     }));
     if (!response.ok) throw await failure("ElevenLabs", response);
@@ -304,3 +339,119 @@ export const configFromRegistry = (name?: string | null, registryFile?: string |
 /** What a batch of this many seconds would cost on this connection, or null when it has no price. */
 export const estimate = (pricePerMinute: number | null | undefined, seconds: number): number | null =>
   typeof pricePerMinute === "number" ? Math.round(pricePerMinute * (seconds / 60) * 100) / 100 : null;
+
+// --------------------------------------------------------------------------
+// Whose words (AGT-6)
+// --------------------------------------------------------------------------
+
+/** Seconds from the start of a take, `[from, to]`. */
+export type Range = [number, number];
+
+/**
+ * When the second voice in a take spoke at least this share of the time,
+ * which of the two is the student is not clear enough to cite either.
+ */
+export const UNCLEAR_SHARE = 0.4;
+
+/**
+ * Decide whose each segment is: the student's, the professor's, or unknown.
+ *
+ * `professor` is the stretches the professor marked by holding the speak key.
+ * A segment at least half inside one is theirs, whatever else is known.
+ *
+ * Where the provider separated voices, the student is the voice that spoke
+ * most in their own answer, not counting any voice heard while the
+ * professor was marked as speaking. With two voices the other one is the
+ * professor, who interjected without pressing the key. With three or more,
+ * the rest are unknown. When the second voice spoke nearly as much as the
+ * first, the take is marked `unclear`: it is kept, and never cited.
+ *
+ * Where the provider did not separate voices, only the marked stretches are
+ * the professor's and the rest is assumed to be the student's, and the take
+ * says it was assumed. An untimed transcript cannot have marked stretches cut
+ * out of it, so marking one makes the take unclear.
+ */
+export const labelSpeakers = (transcript: Transcript, professor: Range[] = []): Transcript => {
+  const length = (segment: Segment): number => Math.max(0, segment.end - segment.start);
+  const marked = transcript.segments.map((segment) => {
+    if (!professor.length || !transcript.timed) return false;
+    const overlap = professor.reduce(
+      (sum, [from, to]) => sum + Math.max(0, Math.min(to, segment.end) - Math.max(from, segment.start)),
+      0,
+    );
+    return overlap / Math.max(length(segment), 0.001) >= 0.5;
+  });
+
+  if (!transcript.timed) {
+    const unclear = professor.length > 0;
+    return {
+      ...transcript,
+      segments: transcript.segments.map((segment) => ({ ...segment, speaker: unclear ? ("unknown" as const) : ("student" as const) })),
+      speakers: {
+        method: "assumed",
+        unclear,
+        ...(unclear
+          ? { note: "this model gives no timestamps, so the professor's marked words cannot be cut out of the answer" }
+          : { note: "this model does not separate voices; every word is taken for the student's" }),
+      },
+    };
+  }
+
+  const ids = transcript.segments.map((segment) => segment.speaker_id).filter((id): id is string => !!id);
+  if (!ids.length) {
+    return {
+      ...transcript,
+      segments: transcript.segments.map((segment, at) => ({
+        ...segment,
+        speaker: marked[at] ? ("professor" as const) : ("student" as const),
+      })),
+      speakers: professor.length
+        ? { method: "marked", unclear: false }
+        : { method: "assumed", unclear: false, note: "no voices were separated and none marked; every word is taken for the student's" },
+    };
+  }
+
+  const professorIds = new Set(transcript.segments.filter((segment, at) => marked[at] && segment.speaker_id).map((s) => s.speaker_id!));
+  const time = new Map<string, number>();
+  transcript.segments.forEach((segment, at) => {
+    if (!segment.speaker_id || marked[at] || professorIds.has(segment.speaker_id)) return;
+    time.set(segment.speaker_id, (time.get(segment.speaker_id) ?? 0) + length(segment));
+  });
+  const ranked = [...time].sort((a, b) => b[1] - a[1]);
+  const total = ranked.reduce((sum, [, seconds]) => sum + seconds, 0);
+  const student = ranked[0]?.[0] ?? null;
+  const second = ranked[1]?.[1] ?? 0;
+  const others = ranked.length + professorIds.size <= 2 ? ("professor" as const) : ("unknown" as const);
+
+  let note: string | undefined;
+  if (!student) note = "only the professor's voice was heard";
+  else if (total > 0 && second / total >= UNCLEAR_SHARE) {
+    note = `two voices spoke about as much (${Math.round((ranked[0]![1] / total) * 100)}% and ${Math.round((second / total) * 100)}%), so which is the student's is not clear`;
+  }
+  return {
+    ...transcript,
+    segments: transcript.segments.map((segment, at) => ({
+      ...segment,
+      speaker:
+        marked[at] || (segment.speaker_id && professorIds.has(segment.speaker_id))
+          ? ("professor" as const)
+          : !segment.speaker_id
+            ? ("unknown" as const)
+            : segment.speaker_id === student
+              ? ("student" as const)
+              : others,
+    })),
+    speakers: { method: "diarized", unclear: !!note, ...(note ? { note } : {}) },
+  };
+};
+
+/**
+ * The student's words in a take, for anything that treats them as evidence:
+ * the next-question prompt now, the grade later. Null for a take whose voices
+ * are unclear. A transcript from before voices were labelled is all theirs.
+ */
+export const studentWords = (transcript: Transcript | null): Segment[] | null => {
+  if (!transcript) return null;
+  if (transcript.speakers?.unclear) return null;
+  return transcript.segments.filter((segment) => !segment.speaker || segment.speaker === "student");
+};

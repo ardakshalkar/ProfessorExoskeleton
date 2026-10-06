@@ -13,6 +13,7 @@
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { studentScreenPage } from "../lib/student-screen.js";
+import { labelSpeakers } from "../../../ainar-node/src/transcribe.ts";
 
 const PORT = Number(process.env.PORT ?? 3091);
 const client = new URL("../lib/client.js", import.meta.url);
@@ -143,13 +144,16 @@ http
         const question = url.searchParams.get("question");
         const seconds = Number(url.searchParams.get("seconds"));
         const bytes = Buffer.concat(chunks).length;
-        received.push({ question, bytes, seconds, type: req.headers["content-type"] });
+        const professor = (url.searchParams.get("professor") ?? "").split(",").filter(Boolean).map((p) => p.split("-").map(Number));
+        received.push({ question, bytes, seconds, type: req.headers["content-type"], professor });
         const take = answers.filter((a) => a.question_id === question).length + 1;
         const answer = {
           question_id: question, take, audio: `answers/${question}-${take}.webm`, mime: "audio/webm",
           recorded_at: new Date().toISOString(), seconds,
-          transcript: { text: "(mock)", language: "en", seconds, timed: true, provider: "openai", model: "none", at: "", cost_usd: 0,
-            segments: [{ start: 0, end: seconds / 2, text: `Mock transcript of ${bytes} bytes.` }, { start: seconds / 2, end: seconds, text: "An unsure stretch.", confidence: "low" }] },
+          // One mock segment a second, so the professor's marked stretches
+          // can be seen cut out by the real labelSpeakers.
+          transcript: labelSpeakers({ text: "(mock)", language: "en", seconds, timed: true, provider: "openai", model: "none", at: "", cost_usd: 0,
+            segments: Array.from({ length: Math.max(1, Math.ceil(seconds)) }, (_, i) => ({ start: i, end: Math.min(seconds, i + 1), text: `second${i + 1}` })) }, professor),
         };
         setTimeout(() => {
           answers.push(answer);

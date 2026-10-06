@@ -927,7 +927,7 @@ is worth building.
       read off the screen until AGT-4 (student screen) and AGT-6 (two voices).
       With AGT-4 the student reads the question on their own screen, or hears
       it read aloud before listening starts, so the professor need not speak.
-      Their interjections still count until AGT-6.
+      Since AGT-6 their interjections are theirs: hold P while speaking.
 - [x] **AGT-2** The model chooses the next question. After each answer it
       gets the questions, the rubric criteria, everything said so far and
       the code digest (a fixed prefix, so it is cached and cheap to resend).
@@ -970,10 +970,23 @@ is worth building.
       Realtime over a WebSocket (about $0.39/hr), or the local server's
       streaming route. They let AGT-2 start deciding before the student
       stops, which turns a 6–10 s gap into 2–4 s. `M` · depends: AGT-2
-- [ ] **AGT-6** Two voices, one microphone. The professor will interject, so
+- [x] **AGT-6** Two voices, one microphone. The professor will interject, so
       diarize (Scribe has it) and keep the professor's words out of the
       student's evidence. A take where the speakers could not be separated
-      is flagged, not cited. `S` · depends: AGT-1
+      is flagged, not cited. `S` · depends: AGT-1 Done 2026-10-06, two ways
+      at once. **Hold P** (or the hold-to-speak button) while speaking: the
+      stretch goes with the take, and the end-of-answer detector waits while
+      it is held, so an interjection neither ends the answer nor starts it.
+      **Scribe separates the voices** (`diarize`), and `labelSpeakers` takes
+      the student to be the voice that spoke most in their own answer. When
+      two voices spoke about as much (the second at 40% or more), the take is
+      marked *unclear*, shown with a warning and never cited. Without
+      separation (Whisper), only marked stretches are the professor's and the
+      take says the rest was assumed to be the student's. `studentWords` is
+      what DEF-5 must grade from, and the next-question prompt already shows
+      the professor's words as `[professor: …]`. Not done: OpenAI's
+      diarizing transcription model, and a local diarizer (pyannote) for
+      TRN-2.
 - [ ] **AGT-7** Consent and the record. The defence starts only after the
       professor confirms the student agreed to be recorded, and that
       confirmation is in `session.yaml`. Every decision the loop makes

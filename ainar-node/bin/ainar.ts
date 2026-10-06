@@ -2839,9 +2839,12 @@ try {
             const heard = take.transcript;
             out(`  take ${take.take}, ${take.seconds ?? "?"}s${heard ? ` (${heard.provider} ${heard.model})` : ""}:`);
             if (!heard) out(`    no transcript${take.error ? `: ${take.error}` : " yet"}`);
+            if (heard?.speakers?.unclear) out(`    VOICES UNCLEAR — not the student's for certain: ${heard.speakers.note ?? ""}`);
+            else if (heard?.speakers?.method === "assumed") out(`    (${heard.speakers.note ?? "voices not separated"})`);
             for (const segment of heard?.segments ?? []) {
+              const who = segment.speaker === "professor" ? "PROFESSOR " : segment.speaker === "unknown" ? "OTHER VOICE " : "";
               out(
-                `    [${segment.start.toFixed(1)}s] ${segment.text}` +
+                `    [${segment.start.toFixed(1)}s] ${who}${segment.text}` +
                   (segment.confidence === "low" ? "  (LOW CONFIDENCE — listen to it)" : ""),
               );
             }
