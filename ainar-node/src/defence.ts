@@ -45,6 +45,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { dirname, extname, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { parse, stringify } from "yaml";
+import { type Transcriber, type Transcript } from "./transcribe.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -57,6 +58,10 @@ export interface DefencePlace {
   dir: string;
   repo: string;
   pin: string;
+  /** The recordings, one file per take. Private: a student's voice. */
+  answers: string;
+  /** What was asked and answered, with each transcript. Private for the same reason. */
+  session: string;
   /** `<workspace>/output/<RUN>/defence/<ASSESSMENT>/<STUDENT>.yaml` */
   questions: string;
 }
@@ -73,6 +78,8 @@ export const defencePlace = (
     dir,
     repo: join(dir, "repo"),
     pin: join(dir, "pin.yaml"),
+    answers: join(dir, "answers"),
+    session: join(dir, "session.yaml"),
     questions: join(root, "output", runId, "defence", assessmentId, `${studentId}.yaml`),
   };
 };
@@ -344,7 +351,9 @@ export interface Criterion {
 
 export interface Question {
   id: string;
-  kind: "opening" | "probe";
+  /** `follow_up`: asked after an answer, about that answer; `follows` names the question. */
+  kind: "opening" | "probe" | "follow_up";
+  follows?: string;
   text: string;
   criterion_id: string | null;
   why: string;
@@ -364,6 +373,8 @@ export const checkQuestions = (
   reply: any,
   criteria: Criterion[],
   files: CodeFile[],
+  /** Questions already asked: appended ones number after them, and may follow one of them. */
+  existing: Question[] = [],
 ): { questions: Question[]; notes: string[] } => {
   const notes: string[] = [];
   const known = new Set(criteria.map((c) => c.criterion_id));
@@ -373,7 +384,7 @@ export const checkQuestions = (
   for (const entry of raw) {
     const text = String(entry?.text ?? "").trim();
     if (!text) continue;
-    const id = `Q${questions.length + 1}`;
+    const id = `Q${existing.length + questions.length + 1}`;
     let criterion = entry?.criterion_id ? String(entry.criterion_id) : null;
     if (criterion && !known.has(criterion)) {
       notes.push(`${id}: criterion ${criterion} is not in the rubric, left unset`);
@@ -393,9 +404,17 @@ export const checkQuestions = (
         evidence.push({ path, lines });
       }
     }
+    // A follow-up must follow something: a question already there, or one
+    // written earlier in the same reply.
+    const follows = entry?.follows ? String(entry.follows) : null;
+    const before = new Set([...existing, ...questions].map((question) => question.id));
+    let kind: Question["kind"] = existing.length + questions.length === 0 ? "opening" : "probe";
+    if (follows && before.has(follows)) kind = "follow_up";
+    else if (follows) notes.push(`${id}: follows ${follows}, which is not a question here — kept as a probe`);
     questions.push({
       id,
-      kind: questions.length === 0 ? "opening" : "probe",
+      kind,
+      ...(kind === "follow_up" ? { follows: follows! } : {}),
       text,
       criterion_id: criterion,
       why: String(entry?.why ?? "").trim(),
@@ -450,4 +469,153 @@ export const readDefence = (file: string): DefenceFile | null => {
 export const writeDefence = (file: string, value: DefenceFile): void => {
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, QUESTIONS_HEADER + stringify(value, { lineWidth: 0 }), "utf-8");
+};
+
+// --------------------------------------------------------------------------
+// The answers
+// --------------------------------------------------------------------------
+
+/**
+ * One recorded answer to one question.
+ *
+ * A question can be answered more than once — the student asks to start
+ * again, the professor presses record twice — and every take is kept, in
+ * order, rather than the last overwriting the first: a regrade or an appeal
+ * replays what was actually said (LIV-3).
+ */
+export interface Answer {
+  question_id: string;
+  take: number;
+  /** Relative to the defence folder: `answers/Q2-1.webm`. */
+  audio: string;
+  mime: string;
+  recorded_at: string;
+  seconds: number | null;
+  transcript: Transcript | null;
+  /** Why there is no transcript: no provider configured, or the provider refused. */
+  error?: string;
+}
+
+export interface Session {
+  submission_id: string;
+  assessment_id: string;
+  student_id: string;
+  answers: Answer[];
+}
+
+const SESSION_HEADER =
+  "# PRIVATE — what one student said at their oral defence. Outside the\n" +
+  "# repository, beside the recordings in answers/. A transcript is what a model\n" +
+  "# heard; a segment marked `confidence: low` is to be listened to, not scored.\n\n";
+
+export const readSession = (file: string): Session | null => {
+  if (!existsSync(file)) return null;
+  const value = parse(readFileSync(file, "utf-8"));
+  return value && typeof value === "object" && Array.isArray(value.answers) ? (value as Session) : null;
+};
+
+export const writeSession = (file: string, session: Session): void => {
+  mkdirSync(dirname(file), { recursive: true });
+  writeFileSync(file, SESSION_HEADER + stringify(session, { lineWidth: 0 }), "utf-8");
+};
+
+const EXTENSIONS: Record<string, string> = {
+  "audio/webm": "webm",
+  "audio/ogg": "ogg",
+  "audio/mp4": "m4a",
+  "audio/x-m4a": "m4a",
+  "audio/mpeg": "mp3",
+  "audio/wav": "wav",
+  "audio/x-wav": "wav",
+};
+
+/** The audio types a recording is accepted in: what browsers record, and what phones save. */
+export const audioExtension = (mime: string): string | null => EXTENSIONS[mime.split(";")[0]!.trim().toLowerCase()] ?? null;
+
+/**
+ * Keep one take: the audio under `answers/`, and an entry in the session with
+ * no transcript yet. The transcript is added by `setTranscript` once the
+ * provider has answered, so a provider that fails leaves the recording safe.
+ */
+export const saveAnswer = (options: {
+  place: DefencePlace;
+  ids: { submission_id: string; assessment_id: string; student_id: string };
+  questionId: string;
+  bytes: Uint8Array;
+  mime: string;
+  seconds?: number | null;
+  now?: Date;
+}): { answer: Answer; path: string } => {
+  if (!/^Q\d+$/.test(options.questionId)) throw new Error(`${options.questionId} is not a question id`);
+  const extension = audioExtension(options.mime);
+  if (!extension) throw new Error(`${options.mime} is not an audio type this keeps`);
+  const session = readSession(options.place.session) ?? { ...options.ids, answers: [] };
+  const take = session.answers.filter((answer) => answer.question_id === options.questionId).length + 1;
+  const audio = `answers/${options.questionId}-${take}.${extension}`;
+  const path = join(options.place.dir, audio);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, options.bytes);
+  const answer: Answer = {
+    question_id: options.questionId,
+    take,
+    audio,
+    mime: options.mime.split(";")[0]!.trim(),
+    recorded_at: (options.now ?? new Date()).toISOString(),
+    seconds: typeof options.seconds === "number" && options.seconds > 0 ? Math.round(options.seconds * 10) / 10 : null,
+    transcript: null,
+  };
+  session.answers.push(answer);
+  writeSession(options.place.session, session);
+  return { answer, path };
+};
+
+/** Put a transcript, or the reason there is none, on one take. */
+export const setTranscript = (
+  place: DefencePlace,
+  questionId: string,
+  take: number,
+  result: { transcript: Transcript } | { error: string },
+): Answer => {
+  const session = readSession(place.session);
+  const answer = session?.answers.find((entry) => entry.question_id === questionId && entry.take === take);
+  if (!session || !answer) throw new Error(`no take ${take} of ${questionId} in ${place.session}`);
+  if ("transcript" in result) {
+    answer.transcript = result.transcript;
+    delete answer.error;
+    if (answer.seconds === null && result.transcript.seconds !== null) answer.seconds = result.transcript.seconds;
+  } else {
+    answer.error = result.error;
+  }
+  writeSession(place.session, session);
+  return answer;
+};
+
+/** The words a provider should expect: the question, and the names it cites. */
+export const transcriptionPrompt = (question: Question | undefined): string | null =>
+  question
+    ? [question.text, ...question.evidence.map((cite) => cite.path)].join(" ").slice(0, 800)
+    : null;
+
+/**
+ * Transcribe one take and write the result onto it. A provider that fails is
+ * written down as the take's `error`, not thrown: the recording is already
+ * safe, and the professor can transcribe it again later.
+ */
+export const transcribeTake = async (options: {
+  place: DefencePlace;
+  answer: Answer;
+  transcribe: Transcriber;
+  question?: Question;
+  language?: string | null;
+}): Promise<Answer> => {
+  const { place, answer } = options;
+  try {
+    const transcript = await options.transcribe(
+      { path: join(place.dir, answer.audio), mime: answer.mime, seconds: answer.seconds },
+      { language: options.language ?? null, prompt: transcriptionPrompt(options.question) },
+    );
+    return setTranscript(place, answer.question_id, answer.take, { transcript });
+  } catch (error) {
+    return setTranscript(place, answer.question_id, answer.take, { error: (error as Error).message });
+  }
 };

@@ -92,3 +92,35 @@ already there, because the professor may have edited them.
 Reply with the questions as the professor will ask them, numbered, each with
 its criterion and one line of why. Say they are drafts in the pane under the
 student's submission. Do not grade anything.
+
+## A follow-up: `… — follow-up on Qn`
+
+The defence desk sends this when the professor wants one more question about
+an answer the student just gave. The professor is mid-defence with the student
+in front of them: be quick, and write **one** question.
+
+```bash
+bin/ainar defence session RUN --assessment ASSESSMENT --student STUDENT
+```
+
+It prints every question with what the student said, timestamped. A stretch
+marked LOW CONFIDENCE is what the transcriber was unsure of: do not build the
+follow-up on a word there. Run `defence code` as well if the answer points at
+code you need to see again.
+
+Ask about the gap in **this** answer: the claim they made and did not justify,
+the step they skipped, the thing they said that the code does not do. Do not
+repeat a question already asked. Then:
+
+```json
+{"questions": [{"text": "…", "follows": "Qn", "criterion_id": "CRIT-…", "why": "…", "evidence": []}]}
+```
+
+```bash
+bin/ainar defence questions RUN --assessment ASSESSMENT --student STUDENT --from output/defence-follow-up.json --append
+```
+
+It is numbered after the others and appears on the desk. Reply with the
+question alone and one line of why. Never `--force` once the student has
+answered: the command refuses, because the answers would then point at
+different questions.

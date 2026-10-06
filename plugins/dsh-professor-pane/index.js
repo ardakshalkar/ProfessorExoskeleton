@@ -86,7 +86,16 @@ import { outlinePayload } from "@ainar/core/src/outline.ts";
 import { dump as dumpYaml } from "@ainar/core/src/yaml-out.ts";
 import { dashboardPayload } from "@ainar/core/src/progress.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
-import { defencePlace, readDefence, readPin } from "@ainar/core/src/defence.ts";
+import {
+  defencePlace,
+  readDefence,
+  readPin,
+  readSession,
+  saveAnswer,
+  setTranscript,
+  transcribeTake,
+} from "@ainar/core/src/defence.ts";
+import { configFromRegistry, transcriber } from "@ainar/core/src/transcribe.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 // `parseDocument` alongside `parse`, for one caller: `writeCanvasSelection`
 // edits a file a professor also writes by hand, and the plain parse would hand
@@ -3740,6 +3749,83 @@ const defenceReader = (root, runId) => {
   };
 };
 
+/** A request body as bytes, refused past `limit`. For a recorded answer. */
+const readBytes = (req, limit) =>
+  new Promise((resolveBody, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) {
+        reject(new Error(`the recording is larger than ${Math.round(limit / 1024 / 1024)} MB`));
+        req.destroy?.();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => (size ? resolveBody(Buffer.concat(chunks)) : reject(new Error("the recording is empty"))));
+    req.on("error", reject);
+  });
+
+/**
+ * One student's defence, from a request: checked ids, their submission, and
+ * where the files are. Throws a sentence for anything that does not resolve.
+ */
+const defenceTarget = (workspace, root, runId, params) => {
+  const assessmentId = params.get("assessment") ?? "";
+  const studentId = params.get("student") ?? "";
+  if (!/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId) || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(studentId)) {
+    throw new Error("An assessment and a student id, please.");
+  }
+  const { bundle } = loadedRun(workspace, runId);
+  const submission = (bundle.submissions ?? [])
+    .filter((entry) => entry.assessment_id === assessmentId && entry.student_id === studentId)
+    .sort((a, b) => (b.attempt ?? 1) - (a.attempt ?? 1))[0];
+  if (!submission) throw new Error(`${studentId} has no submission for ${assessmentId}`);
+  const submissions = submissionsDir(null);
+  refuseInsideRepo(submissions, root);
+  return {
+    bundle,
+    assessmentId,
+    studentId,
+    assessment: (bundle.assessments ?? []).find((entry) => entry.assessment_id === assessmentId) ?? null,
+    ids: { submission_id: submission.submission_id, assessment_id: assessmentId, student_id: studentId },
+    place: defencePlace(submissions, root, runId, assessmentId, studentId),
+  };
+};
+
+/**
+ * What the defence desk draws: the questions, every take with its transcript,
+ * and which provider will hear the next one — or why none will. The provider is
+ * named so the professor knows, before pressing record, where the student's
+ * voice is about to be sent.
+ */
+const defenceSessionPayload = (target) => {
+  let transcription;
+  try {
+    const { config, connection } = configFromRegistry(null);
+    transcription = {
+      name: connection.name,
+      provider: config.provider,
+      model: config.model,
+      local: !!config.baseUrl && /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(config.baseUrl),
+      pricePerMinute: config.pricePerMinute ?? null,
+    };
+  } catch (error) {
+    transcription = { error: String(error?.message ?? error) };
+  }
+  const rubric = allRubrics(target.bundle).get(target.assessment?.rubric_id ?? "") ?? target.assessment?.rubric;
+  return {
+    assessment: { id: target.assessmentId, title: target.assessment?.title ?? target.assessmentId },
+    student: target.studentId,
+    criteria: (rubric?.criteria ?? []).map((criterion) => ({ id: criterion.criterion_id, title: criterion.title })),
+    pin: readPin(target.place.pin),
+    questions: readDefence(target.place.questions)?.questions ?? [],
+    answers: readSession(target.place.session)?.answers ?? [],
+    transcription,
+  };
+};
+
 const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId, defenceOf = null) => {
   const { bundle, issues } = loadedRun(workspace, runId);
   const enrolled = enrollmentsOf(bundle, runId);
@@ -4074,7 +4160,14 @@ const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId, 
           "</span>"
         : "") +
       " " +
-      (questions.length ? press("Draft again") : press("Start defence")) +
+      (questions.length
+        ? '<button type="button" class="chip" data-desk="' +
+          escapeText(submission.assessment_id) +
+          '" data-student="' +
+          escapeText(submission.student_id) +
+          '">Open defence desk</button>' +
+          press("Draft again")
+        : press("Start defence")) +
       "</p>" +
       (questions.length
         ? "<ol class=\"dq\">" +
@@ -4456,6 +4549,9 @@ const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId, 
   const defenceScript =
     "<script>(function(){if(parent===window)return;" +
     "document.addEventListener('click',function(e){" +
+    "var d=e.target.closest&&e.target.closest('button[data-desk]');" +
+    "if(d){parent.postMessage({source:'professor-pane',kind:'defence-desk'," +
+    "assessment:d.getAttribute('data-desk'),student:d.getAttribute('data-student')},'*');return;}" +
     "var b=e.target.closest&&e.target.closest('button[data-defence]');if(!b||b.disabled)return;" +
     "b.disabled=true;b.textContent='Cloning…';" +
     "parent.postMessage({source:'professor-pane',kind:'defence'," +
@@ -6095,6 +6191,70 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }
+    }
+
+    // The defence desk: what was asked and answered, a recorded answer, and
+    // its audio played back. Everything here reads or writes the private
+    // folder, which is why it is the pane's and not the session's. The answer
+    // is transcribed in this process too — no judgement in it, and the
+    // provider is the professor's `transcription` connection.
+    if (path === "/api/defence/session" || path === "/api/defence/answer" || path === "/api/defence/audio") {
+      let target;
+      try {
+        target = defenceTarget(workspace, root, runId, url.searchParams);
+      } catch (error) {
+        return path === "/api/defence/audio"
+          ? send(res, 404, "text/plain; charset=utf-8", String(error?.message ?? error))
+          : sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      if (path === "/api/defence/session") return sendJson(res, 200, defenceSessionPayload(target));
+      if (path === "/api/defence/audio") {
+        const file = url.searchParams.get("file") ?? "";
+        const entry = (readSession(target.place.session)?.answers ?? []).find((answer) => answer.audio === file);
+        // Only a file the session names, so the query cannot walk the folder.
+        if (!entry || !existsSync(join(target.place.dir, entry.audio))) {
+          return send(res, 404, "text/plain; charset=utf-8", "no such recording");
+        }
+        return send(res, 200, entry.mime, readFileSync(join(target.place.dir, entry.audio)));
+      }
+      // The answer itself: POST, the audio as the body.
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      const questionId = url.searchParams.get("question") ?? "";
+      const mime = String(req.headers["content-type"] ?? "");
+      const seconds = Number(url.searchParams.get("seconds") ?? "");
+      return readBytes(req, 64 * 1024 * 1024)
+        .then(async (bytes) => {
+          const { answer } = saveAnswer({
+            place: target.place,
+            ids: target.ids,
+            questionId,
+            bytes,
+            mime,
+            seconds: Number.isFinite(seconds) ? seconds : null,
+          });
+          let transcribe;
+          try {
+            transcribe = transcriber(configFromRegistry(null).config);
+          } catch (error) {
+            // Kept, and said: the recording is safe, and `defence transcribe`
+            // reads it once a provider is configured.
+            const kept = setTranscript(target.place, answer.question_id, answer.take, {
+              error: String(error?.message ?? error),
+            });
+            return sendJson(res, 200, { answer: kept });
+          }
+          const languages = (target.bundle.course?.language ?? []);
+          const question = (readDefence(target.place.questions)?.questions ?? []).find((q) => q.id === questionId);
+          const done = await transcribeTake({
+            place: target.place,
+            answer,
+            transcribe,
+            question,
+            language: languages.length === 1 ? languages[0] : null,
+          });
+          return sendJson(res, 200, { answer: done });
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
     // *Start defence*: clone the fork a student handed in, pinned to the hand-in

@@ -68,6 +68,10 @@ export interface ConnectionsArgs {
   forumId?: string | null;
   keyFile?: string | null;
   tokenEnv?: string | null;
+  /** `add`, a `transcription` connection: the protocol, the model, and the price per minute. */
+  provider?: string | null;
+  model?: string | null;
+  pricePerMinute?: number | null;
   /** `add --default`: make this the one its type resolves to. */
   makeDefault?: boolean;
 }
@@ -369,7 +373,9 @@ export const runConnections = async (
      */
     case "add": {
       if (!args.name) {
-        sink.out("usage: connections add NAME --type canvas|sheets|moodle|telegram [--base-url URL]");
+        sink.out(
+          "usage: connections add NAME --type canvas|sheets|moodle|telegram|github|transcription [--base-url URL]",
+        );
         return 1;
       }
       if (registry.error) {
@@ -389,6 +395,10 @@ export const runConnections = async (
         chatId: args.chatId ?? existing?.chatId ?? null,
         forumId: args.forumId ?? existing?.forumId ?? null,
         keyFile: args.keyFile ?? existing?.keyFile ?? null,
+        owner: existing?.owner ?? null,
+        provider: args.provider ?? existing?.provider ?? null,
+        model: args.model ?? existing?.model ?? null,
+        pricePerMinute: args.pricePerMinute ?? existing?.pricePerMinute ?? null,
       });
 
       if (!usable(merged)) {

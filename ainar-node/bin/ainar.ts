@@ -137,9 +137,12 @@ import {
   defencePlace,
   readDefence,
   readPin,
+  readSession,
+  transcribeTake,
   writeDefence,
   writePin,
 } from "../src/defence.ts";
+import { configFromRegistry, estimate, transcriber } from "../src/transcribe.ts";
 import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
 import {
@@ -454,8 +457,15 @@ const HELP = `ainar — the AINAR course model CLI
   defence code RUN --assessment A --student S
                                            the brief, the rubric and the code,
                                            lines numbered — what to draft from
-  defence questions RUN --assessment A --student S --from FILE.json [--force]
-                                           check drafted questions and write them
+  defence questions RUN --assessment A --student S --from FILE.json [--append | --force]
+                                           check drafted questions and write them;
+                                           --append adds a follow-up
+  defence session RUN --assessment A --student S [--json]
+                                           PRIVATE: the questions with what was
+                                           said, timestamped, low confidence marked
+  defence transcribe RUN --assessment A --student S [--question Q] [--all]
+                     [--connection NAME]   transcribe recorded takes through the
+                                           \`transcription\` connection
 
   Grading a written exam, question by question (the pane's Grade view). The
   grouping of answers is groups.yaml beside the scans; marks go to the course:
@@ -639,6 +649,8 @@ const HELP = `ainar — the AINAR course model CLI
   connections doctor [NAME] [--json]       ask each provider whether it agrees
   connections add NAME --type T [--base-url URL] [--course-id N] [--chat-id C]
                        [--forum-id F] [--key-file P] [--token-env VAR]
+                       [--provider openai|elevenlabs] [--model M]
+                       [--price-per-minute USD]   (transcription)
                        [--default] [--dry-run]
   connections migrate [--dry-run]          build it from what is already here
   connections path                         where the registry lives
@@ -1155,6 +1167,9 @@ try {
           forumId: flag("forum-id") ?? null,
           keyFile: flag("key-file") ?? null,
           tokenEnv: flag("token-env") ?? null,
+          provider: flag("provider") ?? null,
+          model: flag("model") ?? null,
+          pricePerMinute: flag("price-per-minute") ? Number(flag("price-per-minute")) : null,
           makeDefault: args.includes("--default"),
         },
         { out: (line) => out(line) },
@@ -2747,11 +2762,13 @@ try {
       const runId = rest[1];
       const assessmentId = flag("assessment");
       const studentId = flag("student");
-      if (!["prepare", "code", "questions"].includes(sub) || !runId || !assessmentId || !studentId) {
+      if (!["prepare", "code", "questions", "session", "transcribe"].includes(sub) || !runId || !assessmentId || !studentId) {
         console.error(
           "usage: defence prepare RUN --assessment A --student S [--refresh]\n" +
             "       defence code RUN --assessment A --student S\n" +
-            "       defence questions RUN --assessment A --student S --from FILE.json [--force]",
+            "       defence questions RUN --assessment A --student S --from FILE.json [--append | --force]\n" +
+            "       defence session RUN --assessment A --student S [--json]\n" +
+            "       defence transcribe RUN --assessment A --student S [--question Q] [--all] [--connection NAME]",
         );
         process.exit(2);
       }
@@ -2801,6 +2818,81 @@ try {
         break;
       }
 
+      if (sub === "session") {
+        // What was asked and what the student said, for a follow-up or a grade.
+        // Reads the private folder; writes nothing.
+        const drafted = readDefence(place.questions);
+        const session = readSession(place.session);
+        if (args.includes("--json")) {
+          out({ questions: drafted?.questions ?? [], answers: session?.answers ?? [] });
+          break;
+        }
+        out(`${assessment.title} (${assessmentId}) — ${studentId}, oral defence`);
+        if (!drafted?.questions?.length) out("no questions drafted yet");
+        for (const question of drafted?.questions ?? []) {
+          out(`\n${question.id}${question.follows ? ` (follows ${question.follows})` : ""}: ${question.text}`);
+          if (question.criterion_id) out(`  criterion ${question.criterion_id}`);
+          const takes = (session?.answers ?? []).filter((answer) => answer.question_id === question.id);
+          if (!takes.length) out("  not answered");
+          for (const take of takes) {
+            const heard = take.transcript;
+            out(`  take ${take.take}, ${take.seconds ?? "?"}s${heard ? ` (${heard.provider} ${heard.model})` : ""}:`);
+            if (!heard) out(`    no transcript${take.error ? `: ${take.error}` : " yet"}`);
+            for (const segment of heard?.segments ?? []) {
+              out(
+                `    [${segment.start.toFixed(1)}s] ${segment.text}` +
+                  (segment.confidence === "low" ? "  (LOW CONFIDENCE — listen to it)" : ""),
+              );
+            }
+          }
+        }
+        break;
+      }
+
+      if (sub === "transcribe") {
+        // Takes without a transcript, or every take with --all, through the
+        // configured transcription connection. It writes the private folder, so
+        // it is the pane's or the professor's to run, not the sandboxed session's.
+        const session = readSession(place.session);
+        if (!session?.answers.length) throw new Error(`nothing recorded for ${studentId} on ${assessmentId}`);
+        const questions = new Map((readDefence(place.questions)?.questions ?? []).map((q) => [q.id, q]));
+        const only = flag("question");
+        const due = session.answers.filter(
+          (answer) => (!only || answer.question_id === only) && (args.includes("--all") || !answer.transcript),
+        );
+        if (!due.length) {
+          out("every take already has a transcript; --all transcribes them again");
+          break;
+        }
+        const { config, connection } = configFromRegistry(flag("connection"));
+        const languages = ((bundle.course as any).language ?? []) as string[];
+        const seconds = due.reduce((sum, answer) => sum + (answer.seconds ?? 0), 0);
+        const price = estimate(config.pricePerMinute, seconds);
+        out(
+          `${due.length} take(s), ${Math.round(seconds)}s, through ${connection.name} ` +
+            `(${config.provider} ${config.model})` +
+            (price === null ? "" : `, about $${price.toFixed(2)}`),
+        );
+        const transcribe = transcriber(config);
+        for (const answer of due) {
+          const done = await transcribeTake({
+            place,
+            answer,
+            transcribe,
+            question: questions.get(answer.question_id),
+            language: languages.length === 1 ? languages[0] : null,
+          });
+          const low = done.transcript?.segments.some((segment) => segment.confidence === "low");
+          out(
+            `  ${answer.question_id} take ${answer.take}: ` +
+              (done.transcript
+                ? `${done.transcript.segments.length} segment(s)${low ? ", some low confidence" : ""}`
+                : `failed — ${done.error}`),
+          );
+        }
+        break;
+      }
+
       const pin = readPin(place.pin);
       if (!pin || !existsSync(place.repo)) {
         throw new Error(`not cloned yet: defence prepare ${runId} --assessment ${assessmentId} --student ${studentId}`);
@@ -2837,14 +2929,31 @@ try {
       const from = flag("from");
       if (!from) throw new Error("--from FILE.json: {\"questions\": [{text, criterion_id, why, evidence: [{path, lines}]}]}");
       const existing = readDefence(place.questions);
-      if (existing?.questions?.length && !args.includes("--force")) {
+      const append = args.includes("--append");
+      if (append && !existing?.questions?.length) {
+        throw new Error("--append adds to drafted questions, and there are none yet");
+      }
+      if (existing?.questions?.length && !append && !args.includes("--force")) {
         throw new Error(
           `${relative(root, place.questions)} already has ${existing.questions.length} question(s), ` +
-            "which may carry the professor's edits. --force replaces them.",
+            "which may carry the professor's edits. --append adds a follow-up; --force replaces them.",
         );
       }
-      const { questions, notes } = checkQuestions(JSON.parse(readFileSync(from, "utf-8")), criteria, files);
-      if (!questions.length) throw new Error(`${from} holds no questions; nothing was written`);
+      if (!append && readSession(place.session)?.answers.length) {
+        throw new Error(
+          "this student has already answered: replacing the questions would leave those answers " +
+            "pointing at different ones. --append adds a follow-up instead.",
+        );
+      }
+      const kept = append ? existing!.questions : [];
+      const { questions: added, notes } = checkQuestions(
+        JSON.parse(readFileSync(from, "utf-8")),
+        criteria,
+        files,
+        kept,
+      );
+      if (!added.length) throw new Error(`${from} holds no questions; nothing was written`);
+      const questions = [...kept, ...added];
       writeDefence(place.questions, {
         submission_id: submission.submission_id,
         assessment_id: assessmentId,
@@ -2858,7 +2967,10 @@ try {
         },
         questions,
       });
-      out(`wrote ${questions.length} question(s), each approval: draft: ${relative(root, place.questions)}`);
+      out(
+        (append ? `added ${added.length}, ` : "wrote ") +
+          `${questions.length} question(s), each approval: draft: ${relative(root, place.questions)}`,
+      );
       for (const note of notes) out(`  ${note}`);
       break;
     }

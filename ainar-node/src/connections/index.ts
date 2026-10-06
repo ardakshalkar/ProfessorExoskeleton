@@ -48,7 +48,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { type Source, credentialsPath, resolveVariable } from "./store.ts";
 
-export const TYPES = ["canvas", "sheets", "moodle", "telegram", "github"] as const;
+export const TYPES = ["canvas", "sheets", "moodle", "telegram", "github", "transcription"] as const;
 export type ConnectionType = (typeof TYPES)[number];
 
 /** Where the registry lives when nothing says otherwise. */
@@ -69,7 +69,18 @@ export const DEFAULT_TOKEN_ENV: Record<ConnectionType, string> = {
   moodle: "AINAR_MOODLE_TOKEN",
   telegram: "AINAR_TELEGRAM_BOT_TOKEN",
   github: "AINAR_GITHUB_TOKEN",
+  transcription: "AINAR_TRANSCRIPTION_TOKEN",
 };
+
+/**
+ * The speech-to-text wire protocols a `transcription` connection can speak.
+ *
+ * Two, because two cover the field: OpenAI's `/audio/transcriptions` is also
+ * what Groq and every self-hosted Whisper server (speaches, faster-whisper-server,
+ * LocalAI) answer, and ElevenLabs' Scribe is the one that reads Kazakh well.
+ * See `src/transcribe.ts`.
+ */
+export const TRANSCRIPTION_PROVIDERS = ["openai", "elevenlabs"] as const;
 
 /** What is wrong with a connection, and whether it can still be used. */
 export interface Issue {
@@ -97,6 +108,12 @@ export interface Connection {
   keyFile: string | null;
   /** Where a repository this connection creates would land. `github` only. */
   owner: string | null;
+  /** `transcription` only: the wire protocol, one of TRANSCRIPTION_PROVIDERS. */
+  provider: string | null;
+  /** `transcription` only: the model that endpoint knows, e.g. `whisper-large-v3`. */
+  model: string | null;
+  /** `transcription` only: US dollars per minute of audio, for the cost shown before a batch. */
+  pricePerMinute: number | null;
   issues: Issue[];
 }
 
@@ -255,6 +272,33 @@ export const readConnection = (name: string, raw: unknown): Connection => {
     });
   }
 
+  const provider = text(source.provider);
+  const model = text(source.model);
+  const price = typeof source.pricePerMinute === "number" ? source.pricePerMinute : null;
+  if (type === "transcription") {
+    if (!provider || !(TRANSCRIPTION_PROVIDERS as readonly string[]).includes(provider)) {
+      issues.push({
+        code: "bad_provider",
+        severity: "error",
+        message: `transcription needs a provider, one of ${TRANSCRIPTION_PROVIDERS.join(", ")}`,
+      });
+    }
+    if (!model) {
+      issues.push({ code: "no_model", severity: "error", message: "transcription needs a model" });
+    }
+    if (baseUrl) {
+      const problem = baseUrlIssue(baseUrl);
+      if (problem) issues.push({ code: "bad_host", severity: "error", message: problem });
+    }
+    if (price === null) {
+      issues.push({
+        code: "no_price",
+        severity: "warn",
+        message: "no pricePerMinute, so a batch cannot say what it will cost before it runs",
+      });
+    }
+  }
+
   const keyFile = text(source.keyFile);
   if (type === "sheets" && keyFile && !existsSync(expand(keyFile))) {
     issues.push({
@@ -274,6 +318,9 @@ export const readConnection = (name: string, raw: unknown): Connection => {
     forumId: text(source.forumId),
     keyFile,
     owner,
+    provider,
+    model,
+    pricePerMinute: price,
     issues,
   };
 };
@@ -341,6 +388,8 @@ export const hintFor = (connection: Connection): string =>
       "An access token from `gcloud auth print-access-token`, or set keyFile to a service-account key and share the spreadsheet with its address.",
     moodle: "Moodle → Preferences → Security keys, for a web-service token.",
     telegram: "The bot token @BotFather gave you when the bot was created.",
+    transcription:
+      "The API key of the speech-to-text provider this connection names. A local Whisper server needs none: set tokenEnv to a variable you leave unset.",
     github:
       "A fine-grained personal access token with Contents: read and write, and Administration: read and write if it must create the repository. github.com → Settings → Developer settings → Personal access tokens.",
   })[connection.type];
@@ -459,6 +508,12 @@ export const connectionAsJson = (connection: Connection): Record<string, unknown
   if (connection.chatId) stored.chatId = connection.chatId;
   if (connection.forumId) stored.forumId = connection.forumId;
   if (connection.keyFile) stored.keyFile = connection.keyFile;
+  if (connection.owner) stored.owner = connection.owner;
+  if (connection.provider) stored.provider = connection.provider;
+  if (connection.model) stored.model = connection.model;
+  if (connection.pricePerMinute !== null && connection.pricePerMinute !== undefined) {
+    stored.pricePerMinute = connection.pricePerMinute;
+  }
   return stored;
 };
 

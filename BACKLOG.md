@@ -848,10 +848,37 @@ is worth building.
       `ainar defence questions` checks and writes them to
       `output/<RUN>/defence/` — the sandbox cannot write `~/.ainar`. Editing is
       in that file for now; editing from the pane is open.
-- [ ] **DEF-4** Microphone in the pane: record per question, transcribe, save
+- [x] **DEF-4** Microphone in the pane: record per question, transcribe, save
       the audio and a timestamped transcript as part of the student's
       `oral_defense` submission. *Follow-up* asks the agent for the next
       question from what was just said. `L` · depends: DEF-3, AUD-1, LIV-2
+      Done 2026-10-06 without live scoring, so LIV-2 did not have to be
+      settled first. The defence desk (Students → Open defence desk) records
+      each take into `~/.ainar/submissions/…/defence/answers/` and transcribes
+      it in the pane's process through a `transcription` connection
+      (`src/transcribe.ts`: `openai` protocol for OpenAI, Groq and self-hosted
+      Whisper; `elevenlabs` for Scribe). Takes are kept, never overwritten,
+      and a low-confidence stretch is highlighted. *Follow-up* appends one
+      question via `/defend-submission … follow-up on Qn`. Still open: the
+      session is not yet a `Submission` record with `oral_defense` format —
+      that comes with DEF-5, which needs the transcript as cited evidence.
+- [ ] **TRN-1** Confirm the course's transcription provider from a measured
+      sample (AUD-3): ten real answers in Kazakh and Russian through Scribe
+      and a Kazakh Whisper (TRN-2), word error rate counted by hand. Scribe
+      (`scribe_v2`) is the default meanwhile, set 2026-10-06. `decision` ·
+      depends: DEF-4
+- [ ] **TRN-2** A Kazakh Whisper on a machine of our own, so voices need not
+      leave campus. Candidates from Hugging Face:
+      `abilmansplus/whisper-turbo-ksc2` (9.2% WER, KSC2 test),
+      `olzhasAl/whisper-large-v3-tulpar` (10.6%, KSC),
+      `shyngys879/kazakh-whisper-large-v3-turbo` (11.8%, FLEURS), and
+      `KRASR/kazakh-russian-asr-whisper-small-full-ft` for mixed Kazakh and
+      Russian. Serve one with an OpenAI-compatible Whisper server (speaches
+      takes CTranslate2 models, so a Transformers checkpoint is converted
+      once with `ct2-transformers-converter`), then `connections add
+      --provider openai --base-url http://localhost:8000/v1`. Nothing in
+      ainar-node changes. Needs a GPU machine, and a decision on where it
+      runs. `M` · depends: —
 - [ ] **DEF-5** The proposed grade from the whole session, by the AUD-1 path,
       as an `Evaluation` marked `approval: draft` citing transcript timestamps.
       `M` · depends: DEF-4

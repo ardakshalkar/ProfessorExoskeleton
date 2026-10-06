@@ -811,6 +811,21 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-veil.pp-gbig{z-index:4100;align-items:center;justify-content:center;cursor:zoom-out;overflow:auto}
 .pp-gbigimg{max-width:100%;height:auto;background:#fff;border-radius:6px}
 .pp-uploadmodal .pp-publishbody{overflow:auto}
+.pp-deskmodal{max-width:900px;width:100%;margin:0 auto}
+.pp-deskmodal .pp-publishbody{overflow:auto;font-size:12.5px}
+.pp-dlist{margin:0;padding-left:22px}
+.pp-dq{margin:0 0 14px;padding:6px 8px;border-radius:8px}
+.pp-dlive{background:rgba(196,48,48,.07);outline:1px solid rgba(196,48,48,.35)}
+.pp-dqtext{font-size:13.5px;line-height:1.45;margin-bottom:2px}
+.pp-dim{color:var(--dsw-alias-label-tertiary,#6b6b6b);font-size:11.5px}
+.pp-dwarn{color:#9a5b00;font-size:11.5px}
+.pp-drec{color:#c43030;border-color:#c43030;font-weight:600}
+.pp-dtake{margin:6px 0 0;padding:6px 0 0;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-dtakehead{display:flex;align-items:center;gap:10px;font-size:11px;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-dtakehead audio{height:28px;max-width:320px}
+.pp-dtranscript{margin-top:4px;line-height:1.5;white-space:pre-wrap}
+.pp-dlow{background:rgba(230,160,0,.22);border-radius:3px}
 .pp-drop{flex:none;display:flex;align-items:center;justify-content:center;min-height:96px;
   padding:14px;border-radius:8px;cursor:pointer;text-align:center;font-size:12px;
   color:var(--dsw-alias-label-secondary,#444);
@@ -6333,6 +6348,288 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     };
 
+    /**
+     * The defence desk: one student's oral defence, question by question.
+     *
+     * Here and not in a frame, because a frame sandboxed without
+     * `allow-same-origin` may not ask for the microphone. The professor presses
+     * Record, the student answers, Stop sends the take to the server, which keeps
+     * it in the private folder and transcribes it through the `transcription`
+     * connection. Every take is kept; a second press is a second take, never an
+     * overwrite.
+     *
+     * The header says where the voice goes before anyone presses record — the
+     * provider by name, and whether it leaves this machine — because a
+     * student's voice is the most personal thing this pane has handled.
+     *
+     * Follow-up asks the session (`/defend-submission … follow-up on Qn`): the
+     * model the professor is talking to reads what was said and appends one
+     * question, which arrives here on the next redraw.
+     */
+    function DefenceDesk(props) {
+      const close = props.onClose;
+      const [data, setData] = React.useState(null);
+      const [recording, setRecording] = React.useState(null); // { question, started }
+      const [sending, setSending] = React.useState(null);
+      const [said, setSaid] = React.useState(null);
+      const [tick, setTick] = React.useState(0);
+      const [elapsed, setElapsed] = React.useState(0);
+      const recorder = React.useRef(null);
+      const query =
+        "?run=" + encodeURIComponent(props.runId) +
+        "&assessment=" + encodeURIComponent(props.assessment) +
+        "&student=" + encodeURIComponent(props.student);
+      const endpoint = (path, extra) => scoped(BASE + path + query + (extra || ""), props.sessionId);
+
+      React.useEffect(() => {
+        let live = true;
+        fetch(endpoint("/api/defence/session"), { cache: "no-store" })
+          .then((response) => response.json())
+          .then((value) => live && setData(value))
+          .catch((error) => live && setData({ error: String(error) }));
+        return () => {
+          live = false;
+        };
+      }, [props.reload, tick, props.assessment, props.student]);
+
+      // A running clock while recording, so the professor sees it is live.
+      React.useEffect(() => {
+        if (!recording) return undefined;
+        const timer = setInterval(() => setElapsed((Date.now() - recording.started) / 1000), 250);
+        return () => clearInterval(timer);
+      }, [recording]);
+
+      // Closing mid-answer would lose it, so Escape does nothing then.
+      React.useEffect(() => {
+        const onKey = (event) => {
+          if (event.key === "Escape" && !recording && !sending) {
+            event.stopPropagation();
+            close();
+          }
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [close, recording, sending]);
+
+      // Release the microphone if the desk goes away while it is held.
+      React.useEffect(() => () => {
+        const held = recorder.current;
+        if (held && held.state !== "inactive") held.stop();
+      }, []);
+
+      const start = (questionId) => {
+        if (recording || sending) return;
+        setSaid(null);
+        if (!navigator.mediaDevices || typeof MediaRecorder === "undefined") {
+          setSaid({ error: true, text: "This browser cannot record here: the page has to be served over https or from localhost." });
+          return;
+        }
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((stream) => {
+            const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find(
+              (candidate) => MediaRecorder.isTypeSupported(candidate),
+            );
+            const media = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+            const chunks = [];
+            const started = Date.now();
+            media.ondataavailable = (event) => {
+              if (event.data && event.data.size) chunks.push(event.data);
+            };
+            media.onstop = () => {
+              stream.getTracks().forEach((track) => track.stop());
+              recorder.current = null;
+              setRecording(null);
+              const blob = new Blob(chunks, { type: (media.mimeType || type || "audio/webm").split(";")[0] });
+              if (!blob.size) {
+                setSaid({ error: true, text: "Nothing was recorded." });
+                return;
+              }
+              const seconds = (Date.now() - started) / 1000;
+              setSending(questionId);
+              fetch(endpoint("/api/defence/answer", "&question=" + encodeURIComponent(questionId) + "&seconds=" + seconds.toFixed(1)), {
+                method: "POST",
+                headers: { "Content-Type": blob.type },
+                body: blob,
+              })
+                .then((response) => response.json())
+                .then((result) => {
+                  setSending(null);
+                  if (result.error) setSaid({ error: true, text: result.error });
+                  else if (result.answer && result.answer.error) {
+                    setSaid({ error: true, text: "Kept, not transcribed: " + result.answer.error });
+                  }
+                  setTick((value) => value + 1);
+                })
+                .catch((error) => {
+                  setSending(null);
+                  setSaid({ error: true, text: String(error) });
+                });
+            };
+            recorder.current = media;
+            media.start(1000);
+            setElapsed(0);
+            setRecording({ question: questionId, started });
+          })
+          .catch((error) => setSaid({ error: true, text: "No microphone: " + String(error && error.message ? error.message : error) }));
+      };
+
+      const stop = () => {
+        const media = recorder.current;
+        if (media && media.state !== "inactive") media.stop();
+      };
+
+      const followUp = (questionId) =>
+        props.ask("/defend-submission " + props.assessment + " " + props.runId + " " + props.student + " — follow-up on " + questionId);
+
+      const clock = (seconds) => Math.floor(seconds / 60) + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
+
+      const criteria = new Map(((data && data.criteria) || []).map((criterion) => [criterion.id, criterion.title]));
+      const answers = (data && data.answers) || [];
+      const where = data && data.transcription;
+
+      const take = (answer) =>
+        h(
+          "div",
+          { className: "pp-dtake", key: answer.audio },
+          h(
+            "div",
+            { className: "pp-dtakehead" },
+            "Take " + answer.take + (answer.seconds ? " · " + clock(answer.seconds) : ""),
+            h("audio", { controls: true, preload: "none", src: endpoint("/api/defence/audio", "&file=" + encodeURIComponent(answer.audio)) }),
+          ),
+          answer.transcript
+            ? h(
+                "div",
+                { className: "pp-dtranscript" },
+                answer.transcript.segments.map((segment, index) =>
+                  h(
+                    "span",
+                    {
+                      key: index,
+                      className: segment.confidence === "low" ? "pp-dlow" : null,
+                      title: clock(segment.start) + (segment.confidence === "low" ? " · low confidence — listen to it" : ""),
+                    },
+                    segment.text + " ",
+                  ),
+                ),
+                answer.transcript.timed ? null : h("span", { className: "pp-dim" }, " (no timestamps from this model)"),
+              )
+            : h("div", { className: "pp-dim" }, answer.error ? "Not transcribed: " + answer.error : "Transcribing…"),
+        );
+
+      const question = (entry) => {
+        const takes = answers.filter((answer) => answer.question_id === entry.id);
+        const live = recording && recording.question === entry.id;
+        return h(
+          "li",
+          { className: "pp-dq" + (live ? " pp-dlive" : ""), key: entry.id },
+          h(
+            "div",
+            { className: "pp-dqtext" },
+            h("b", null, entry.id + (entry.follows ? " ↳ " + entry.follows : "") + " "),
+            entry.text,
+          ),
+          h(
+            "div",
+            { className: "pp-dim" },
+            [
+              entry.kind === "opening" ? "opening" : entry.kind === "follow_up" ? "follow-up" : null,
+              entry.criterion_id ? criteria.get(entry.criterion_id) || entry.criterion_id : null,
+              (entry.evidence || []).map((cite) => cite.path + (cite.lines ? ":" + cite.lines : "")).join(", ") || null,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+            entry.why ? h("div", null, entry.why) : null,
+          ),
+          h(
+            "div",
+            { className: "pp-approverow" },
+            live
+              ? h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: stop }, "■ Stop · " + clock(elapsed))
+              : h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    disabled: Boolean(recording || sending),
+                    onClick: () => start(entry.id),
+                  },
+                  sending === entry.id ? "Transcribing…" : takes.length ? "● Record again" : "● Record answer",
+                ),
+            takes.length
+              ? h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", disabled: Boolean(recording), onClick: () => followUp(entry.id) },
+                  "Follow-up question",
+                )
+              : null,
+          ),
+          takes.map(take),
+        );
+      };
+
+      return ReactDOM.createPortal(
+        h(
+          "div",
+          {
+            className: "pp-veil",
+            onMouseDown: (event) => {
+              if (event.target === event.currentTarget && !recording && !sending) close();
+            },
+          },
+          h(
+            "div",
+            {
+              className: "pp-modal pp-deskmodal",
+              role: "dialog",
+              "aria-modal": "true",
+              "aria-label": "Defence desk",
+              onMouseDown: (event) => event.stopPropagation(),
+            },
+            h(
+              "div",
+              { className: "pp-modalhead" },
+              h(
+                "div",
+                { className: "pp-modaltitle" },
+                "Defence · " + props.student + (data && data.assessment ? " · " + data.assessment.title : ""),
+              ),
+              h("button", { type: "button", className: "pp-close", "aria-label": "Close", disabled: Boolean(recording || sending), onClick: close }, "×"),
+            ),
+            h(
+              "div",
+              { className: "pp-publishbody" },
+              // Where the voice goes, said before anything is recorded.
+              where
+                ? h(
+                    "div",
+                    { className: where.error ? "pp-dwarn" : "pp-dim" },
+                    where.error
+                      ? "No transcription provider — answers are recorded and kept, and transcribed once one is set up. " + where.error
+                      : "Transcribed by " + where.name + " (" + where.provider + " " + where.model + ")" +
+                          (where.local ? ", on this machine." : ": the recording is sent to that provider.") +
+                          (typeof where.pricePerMinute === "number" ? " $" + where.pricePerMinute + "/min." : ""),
+                  )
+                : null,
+              data && data.pin
+                ? h("div", { className: "pp-dim" }, "Code at " + String(data.pin.commit).slice(0, 7) + (data.pin.pinned_by === "submitted_at" ? ", as handed in." : "."))
+                : null,
+              said ? h("div", { className: said.error ? "pp-dwarn" : "pp-dim" }, said.text) : null,
+              data === null
+                ? h("div", { className: "pp-dim" }, "Loading…")
+                : data.error
+                  ? h("div", { className: "pp-dwarn" }, data.error)
+                  : !data.questions.length
+                    ? h("div", { className: "pp-dim" }, "No questions drafted yet — Start defence drafts them.")
+                    : h("ol", { className: "pp-dlist" }, data.questions.map(question)),
+            ),
+          ),
+        ),
+        document.body,
+      );
+    }
+
     function UploadModal(props) {
       const close = props.onClose;
       const [kind, setKind] = React.useState(props.kind || "scans");
@@ -6713,6 +7010,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       // The run on screen, for the same reason: *Start defence* is answered by
       // that handler, and the run is chosen after it was registered.
       const currentRunRef = React.useRef(null);
+      // The defence desk, open on one student or not.
+      const [desk, setDesk] = React.useState(null);
 
       // Open the column this pane lives in, once per session.
       //
@@ -6789,6 +7088,12 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           // with what `defence prepare` said, so the answer arrives where the
           // professor is already looking; the pane has no place of its own
           // for it, and the redraw puts the button back.
+          if (data.kind === "defence-desk") {
+            const id = /^[A-Z0-9][A-Z0-9-]*$/;
+            if (!id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+            setDesk({ assessment: data.assessment, student: data.student });
+            return;
+          }
           if (data.kind === "defence") {
             const id = /^[A-Z0-9][A-Z0-9-]*$/;
             const run = currentRunRef.current;
@@ -7290,6 +7595,17 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               reload: reload,
               covered: material !== null || publishing !== null,
               onClose: () => setCourseMode(false),
+            })
+          : null,
+        desk && current
+          ? h(DefenceDesk, {
+              runId: current.runId,
+              sessionId: props.sessionId,
+              assessment: desk.assessment,
+              student: desk.student,
+              ask: props.ask,
+              reload: reload,
+              onClose: () => setDesk(null),
             })
           : null,
         uploading && current
