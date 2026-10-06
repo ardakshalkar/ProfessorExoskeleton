@@ -910,12 +910,21 @@ is worth building.
 > is produced afterwards from the whole recording, and the professor
 > accepts it (DEF-5).
 
-- [ ] **AGT-1** Hands-free turn-taking, with no model in the loop: the
+- [x] **AGT-1** Hands-free turn-taking, with no model in the loop: the
       microphone stays open, voice activity detection in the browser ends a
       take after about 2.5 s of silence following speech (or a key press, or a
       3-minute cap), the take is transcribed, and the desk advances to the
       next prepared question. On its own, this already saves pressing Record
-      and Stop. `M` · depends: DEF-4
+      and Stop. `M` · depends: DEF-4 Done 2026-10-06: *Start hands-free* on the
+      desk; Space ends an answer, Skip drops it, Pause keeps it and releases
+      the microphone. The detector is `turnStep` in the pane's client: a
+      learnt noise floor, 0.4 s of speech to start, and the first 0.8 s of a
+      take ignored so the tail of the last answer is not the next one. It is
+      tested in `plugins/dsh-professor-pane/test/`, and `npm run desk` there
+      serves the desk alone with a scripted voice. **Known limit:** a voice
+      that is not the student's counts. A professor reading the question
+      aloud is heard as the answer, so hands-free asks for the question to be
+      read off the screen until AGT-4 (student screen) and AGT-6 (two voices).
 - [ ] **AGT-2** The model chooses the next question. After each answer it
       gets the questions, the rubric criteria, everything said so far and
       the code digest (a fixed prefix, so it is cached and cheap to resend).

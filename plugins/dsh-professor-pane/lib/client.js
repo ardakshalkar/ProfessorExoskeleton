@@ -826,6 +826,13 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-dtakehead audio{height:28px;max-width:320px}
 .pp-dtranscript{margin-top:4px;line-height:1.5;white-space:pre-wrap}
 .pp-dlow{background:rgba(230,160,0,.22);border-radius:3px}
+.pp-dhands{padding:8px 10px;border-radius:8px;background:rgba(196,48,48,.06);border:1px solid rgba(196,48,48,.3)}
+.pp-dhandsline{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:12.5px}
+.pp-dmeter{flex:none;width:120px;height:6px;margin-left:auto;border-radius:3px;overflow:hidden;
+  background:var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-dmeterfill{display:block;height:100%;background:#9a9aa0;transition:width .1s linear}
+.pp-dmeteron{background:#2f8a4e}
+.pp-dlivemark{font-size:11.5px;font-weight:600}
 .pp-drop{flex:none;display:flex;align-items:center;justify-content:center;min-height:96px;
   padding:14px;border-radius:8px;cursor:pointer;text-align:center;font-size:12px;
   color:var(--dsw-alias-label-secondary,#444);
@@ -6349,6 +6356,66 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     };
 
     /**
+     * When an answer has ended, from the microphone's level alone (AGT-1).
+     *
+     * Pure, one call per sample, so it can be tested without a microphone. It
+     * waits for speech — the level above the room's noise floor for 0.4 s,
+     * so a cough or a chair is not an answer — and then for silence: 2.5 s
+     * below the floor after speech ends the take. Thinking pauses mid-answer
+     * are shorter than that in practice; a student who needs longer presses
+     * nothing and the professor presses Space when they are done instead.
+     *
+     * The floor is learnt, not configured: it follows the level while nobody
+     * is speaking, and the threshold is three times it, never below a fixed
+     * minimum so a silent room does not make breathing an answer. Three
+     * minutes ends a take whatever happens, so a forgotten desk does not
+     * record a lecture.
+     *
+     * The first 0.8 s of a take are not listened to. Without that, the tail of
+     * the previous answer — the last word as the professor pressed Space —
+     * became the start of the next one, and the next question "ended" on the
+     * silence after it. What this cannot tell apart is a voice that is not the
+     * student's: a professor who reads the question aloud is heard as the
+     * answer. Hands-free therefore expects the question to be read off the
+     * screen (AGT-4) until AGT-6 separates the two voices.
+     */
+    const TURN = { settleMs: 800, minSpeechMs: 400, silenceMs: 2500, capMs: 180000, minThreshold: 0.012, ratio: 3 };
+    function turnStep(state, level, now, options) {
+      const o = Object.assign({}, TURN, options || {});
+      const s = state || {
+        phase: "waiting",
+        floor: Math.min(level, o.minThreshold),
+        voicedSince: null,
+        silentSince: null,
+        startedAt: now,
+      };
+      const threshold = Math.max(o.minThreshold, s.floor * o.ratio);
+      const loud = level > threshold;
+      const result = (next, end) => ({
+        state: next,
+        end: end,
+        threshold: threshold,
+        silentFor: next.silentSince === null ? 0 : now - next.silentSince,
+      });
+      if (now - s.startedAt >= o.capMs) return result(s, "cap");
+      if (now - s.startedAt < o.settleMs) return result(s, null);
+      if (s.phase === "waiting") {
+        if (!loud) {
+          // Only quiet samples teach the floor, so speech never raises it.
+          return result(Object.assign({}, s, { voicedSince: null, floor: s.floor * 0.95 + level * 0.05 }), null);
+        }
+        const voicedSince = s.voicedSince === null ? now : s.voicedSince;
+        return now - voicedSince >= o.minSpeechMs
+          ? result(Object.assign({}, s, { phase: "speaking", voicedSince: voicedSince, silentSince: null }), null)
+          : result(Object.assign({}, s, { voicedSince: voicedSince }), null);
+      }
+      if (loud) return result(Object.assign({}, s, { silentSince: null }), null);
+      const silentSince = s.silentSince === null ? now : s.silentSince;
+      const next = Object.assign({}, s, { silentSince: silentSince, floor: s.floor * 0.98 + level * 0.02 });
+      return result(next, now - silentSince >= o.silenceMs ? "silence" : null);
+    }
+
+    /**
      * The defence desk: one student's oral defence, question by question.
      *
      * Here and not in a frame, because a frame sandboxed without
@@ -6374,7 +6441,16 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const [said, setSaid] = React.useState(null);
       const [tick, setTick] = React.useState(0);
       const [elapsed, setElapsed] = React.useState(0);
+      // Uploads still on the wire; the desk does not close while any are.
+      const [pending, setPending] = React.useState(0);
+      // Hands-free (AGT-1): { question, phase, level, threshold } while running.
+      const [handsFree, setHandsFree] = React.useState(null);
       const recorder = React.useRef(null);
+      // The hands-free loop's own state, outside React: it runs ten times a
+      // second and must see the latest of everything without re-subscribing.
+      const loop = React.useRef(null);
+      const dataRef = React.useRef(null);
+      dataRef.current = data;
       const query =
         "?run=" + encodeURIComponent(props.runId) +
         "&assessment=" + encodeURIComponent(props.assessment) +
@@ -6400,25 +6476,55 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       }, [recording]);
 
       // Closing mid-answer would lose it, so Escape does nothing then.
+      const busy = Boolean(recording || sending || handsFree || pending > 0);
       React.useEffect(() => {
         const onKey = (event) => {
-          if (event.key === "Escape" && !recording && !sending) {
+          if (event.key === "Escape" && !busy) {
             event.stopPropagation();
             close();
           }
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-      }, [close, recording, sending]);
+      }, [close, busy]);
 
       // Release the microphone if the desk goes away while it is held.
       React.useEffect(() => () => {
         const held = recorder.current;
         if (held && held.state !== "inactive") held.stop();
+        const running = loop.current;
+        if (running) {
+          clearInterval(running.timer);
+          running.stream.getTracks().forEach((track) => track.stop());
+          if (running.audio.state !== "closed") running.audio.close();
+          loop.current = null;
+        }
       }, []);
 
+      /** Send one take; transcribed by the server. Resolves either way, having said what went wrong. */
+      const upload = (questionId, blob, seconds) => {
+        setPending((count) => count + 1);
+        return fetch(endpoint("/api/defence/answer", "&question=" + encodeURIComponent(questionId) + "&seconds=" + seconds.toFixed(1)), {
+          method: "POST",
+          headers: { "Content-Type": blob.type },
+          body: blob,
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error) setSaid({ error: true, text: questionId + ": " + result.error });
+            else if (result.answer && result.answer.error) {
+              setSaid({ error: true, text: questionId + " kept, not transcribed: " + result.answer.error });
+            }
+          })
+          .catch((error) => setSaid({ error: true, text: questionId + ": " + String(error) }))
+          .then(() => {
+            setPending((count) => count - 1);
+            setTick((value) => value + 1);
+          });
+      };
+
       const start = (questionId) => {
-        if (recording || sending) return;
+        if (recording || sending || handsFree) return;
         setSaid(null);
         if (!navigator.mediaDevices || typeof MediaRecorder === "undefined") {
           setSaid({ error: true, text: "This browser cannot record here: the page has to be served over https or from localhost." });
@@ -6445,26 +6551,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 setSaid({ error: true, text: "Nothing was recorded." });
                 return;
               }
-              const seconds = (Date.now() - started) / 1000;
               setSending(questionId);
-              fetch(endpoint("/api/defence/answer", "&question=" + encodeURIComponent(questionId) + "&seconds=" + seconds.toFixed(1)), {
-                method: "POST",
-                headers: { "Content-Type": blob.type },
-                body: blob,
-              })
-                .then((response) => response.json())
-                .then((result) => {
-                  setSending(null);
-                  if (result.error) setSaid({ error: true, text: result.error });
-                  else if (result.answer && result.answer.error) {
-                    setSaid({ error: true, text: "Kept, not transcribed: " + result.answer.error });
-                  }
-                  setTick((value) => value + 1);
-                })
-                .catch((error) => {
-                  setSending(null);
-                  setSaid({ error: true, text: String(error) });
-                });
+              upload(questionId, blob, (Date.now() - started) / 1000).then(() => setSending(null));
             };
             recorder.current = media;
             media.start(1000);
@@ -6478,6 +6566,126 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         const media = recorder.current;
         if (media && media.state !== "inactive") media.stop();
       };
+
+      /*
+       * Hands-free (AGT-1). The microphone is opened once and held; each
+       * question gets its own recorder on that stream, and `turnStep` watches
+       * the level ten times a second. When the student has spoken and then
+       * stopped for long enough, the take is sent in the background and the
+       * next unanswered question is put up at once — nobody presses anything.
+       * Space ends an answer early; Skip moves on without keeping the take;
+       * Pause keeps what was said and lets go of the microphone.
+       */
+      const nextUnanswered = (after) => {
+        const questions = (dataRef.current && dataRef.current.questions) || [];
+        const answered = new Set(((dataRef.current && dataRef.current.answers) || []).map((answer) => answer.question_id));
+        const asked = loop.current ? loop.current.asked : new Set();
+        const from = after ? questions.findIndex((entry) => entry.id === after) + 1 : 0;
+        const ordered = questions.slice(from).concat(questions.slice(0, from));
+        const found = ordered.find((entry) => !answered.has(entry.id) && !asked.has(entry.id));
+        return found ? found.id : null;
+      };
+
+      const releaseMicrophone = () => {
+        const running = loop.current;
+        if (!running) return;
+        clearInterval(running.timer);
+        running.stream.getTracks().forEach((track) => track.stop());
+        if (running.audio && running.audio.state !== "closed") running.audio.close();
+        loop.current = null;
+        setHandsFree(null);
+      };
+
+      const beginTake = (questionId) => {
+        const running = loop.current;
+        if (!running) return;
+        if (!questionId) {
+          releaseMicrophone();
+          setSaid({ error: false, text: "Every question has an answer. Follow-up questions, if you ask for them, appear below." });
+          return;
+        }
+        const media = new MediaRecorder(running.stream, running.type ? { mimeType: running.type } : undefined);
+        const chunks = [];
+        media.ondataavailable = (event) => {
+          if (event.data && event.data.size) chunks.push(event.data);
+        };
+        running.take = { question: questionId, media, chunks, started: Date.now(), turn: null, keep: true, spoke: false };
+        running.asked.add(questionId);
+        media.start(1000);
+        setHandsFree({ question: questionId, phase: "waiting", level: 0, threshold: 0 });
+      };
+
+      /** End the take in hand: keep it or not, then put up the next question or stop. */
+      const endTake = (how) => {
+        const running = loop.current;
+        const take = running && running.take;
+        if (!take || take.media.state === "inactive") return;
+        running.take = null;
+        const keep = how !== "skip" && (take.spoke || how === "space");
+        take.media.onstop = () => {
+          const blob = new Blob(take.chunks, { type: (take.media.mimeType || running.type || "audio/webm").split(";")[0] });
+          if (keep && blob.size) upload(take.question, blob, (Date.now() - take.started) / 1000);
+          if (how === "pause") releaseMicrophone();
+          else beginTake(nextUnanswered(take.question));
+        };
+        take.media.stop();
+      };
+
+      const startHandsFree = () => {
+        if (recording || sending || loop.current) return;
+        setSaid(null);
+        if (!navigator.mediaDevices || typeof MediaRecorder === "undefined" || typeof AudioContext === "undefined") {
+          setSaid({ error: true, text: "This browser cannot record here: the page has to be served over https or from localhost." });
+          return;
+        }
+        const first = nextUnanswered(null);
+        if (!first) {
+          setSaid({ error: false, text: "Every question already has an answer." });
+          return;
+        }
+        navigator.mediaDevices
+          .getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+          .then((stream) => {
+            const audio = new AudioContext();
+            const analyser = audio.createAnalyser();
+            analyser.fftSize = 2048;
+            audio.createMediaStreamSource(stream).connect(analyser);
+            const samples = new Float32Array(analyser.fftSize);
+            const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find(
+              (candidate) => MediaRecorder.isTypeSupported(candidate),
+            );
+            loop.current = { stream, audio, analyser, samples, type, asked: new Set(), take: null, timer: null };
+            loop.current.timer = setInterval(() => {
+              const running = loop.current;
+              const take = running && running.take;
+              if (!take) return;
+              running.analyser.getFloatTimeDomainData(running.samples);
+              let sum = 0;
+              for (let index = 0; index < running.samples.length; index += 1) sum += running.samples[index] * running.samples[index];
+              const level = Math.sqrt(sum / running.samples.length);
+              const step = turnStep(take.turn, level, Date.now());
+              take.turn = step.state;
+              if (step.state.phase === "speaking") take.spoke = true;
+              setHandsFree({ question: take.question, phase: step.state.phase, level, threshold: step.threshold, silent: step.silentFor });
+              if (step.end) endTake(step.end);
+            }, 100);
+            beginTake(first);
+          })
+          .catch((error) => setSaid({ error: true, text: "No microphone: " + String(error && error.message ? error.message : error) }));
+      };
+
+      // Space ends the answer now — the student said "that's all", or the
+      // room is too noisy for silence to be heard.
+      React.useEffect(() => {
+        if (!handsFree) return undefined;
+        const onKey = (event) => {
+          if (event.code !== "Space" || /^(INPUT|TEXTAREA|BUTTON)$/.test(String(event.target && event.target.tagName))) return;
+          event.preventDefault();
+          endTake("space");
+        };
+        window.addEventListener("keydown", onKey, true);
+        return () => window.removeEventListener("keydown", onKey, true);
+      }, [Boolean(handsFree)]);
 
       const followUp = (questionId) =>
         props.ask("/defend-submission " + props.assessment + " " + props.runId + " " + props.student + " — follow-up on " + questionId);
@@ -6520,7 +6728,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 
       const question = (entry) => {
         const takes = answers.filter((answer) => answer.question_id === entry.id);
-        const live = recording && recording.question === entry.id;
+        const live = (recording && recording.question === entry.id) || (handsFree && handsFree.question === entry.id);
         return h(
           "li",
           { className: "pp-dq" + (live ? " pp-dlive" : ""), key: entry.id },
@@ -6545,14 +6753,16 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           h(
             "div",
             { className: "pp-approverow" },
-            live
+            handsFree && handsFree.question === entry.id
+              ? h("span", { className: "pp-drec pp-dlivemark" }, "● being asked — hands-free")
+              : live
               ? h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: stop }, "■ Stop · " + clock(elapsed))
               : h(
                   "button",
                   {
                     type: "button",
                     className: "pp-segbtn",
-                    disabled: Boolean(recording || sending),
+                    disabled: Boolean(recording || sending || handsFree),
                     onClick: () => start(entry.id),
                   },
                   sending === entry.id ? "Transcribing…" : takes.length ? "● Record again" : "● Record answer",
@@ -6560,7 +6770,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             takes.length
               ? h(
                   "button",
-                  { type: "button", className: "pp-segbtn", disabled: Boolean(recording), onClick: () => followUp(entry.id) },
+                  { type: "button", className: "pp-segbtn", disabled: Boolean(recording || handsFree), onClick: () => followUp(entry.id) },
                   "Follow-up question",
                 )
               : null,
@@ -6575,7 +6785,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           {
             className: "pp-veil",
             onMouseDown: (event) => {
-              if (event.target === event.currentTarget && !recording && !sending) close();
+              if (event.target === event.currentTarget && !busy) close();
             },
           },
           h(
@@ -6595,7 +6805,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 { className: "pp-modaltitle" },
                 "Defence · " + props.student + (data && data.assessment ? " · " + data.assessment.title : ""),
               ),
-              h("button", { type: "button", className: "pp-close", "aria-label": "Close", disabled: Boolean(recording || sending), onClick: close }, "×"),
+              h("button", { type: "button", className: "pp-close", "aria-label": "Close", disabled: busy, onClick: close }, "×"),
             ),
             h(
               "div",
@@ -6614,6 +6824,62 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 : null,
               data && data.pin
                 ? h("div", { className: "pp-dim" }, "Code at " + String(data.pin.commit).slice(0, 7) + (data.pin.pinned_by === "submitted_at" ? ", as handed in." : "."))
+                : null,
+              // Hands-free: one press starts it, and from then on the desk
+              // listens, notices the end of each answer and moves on.
+              data && !data.error && data.questions.length
+                ? handsFree
+                  ? h(
+                      "div",
+                      { className: "pp-dhands" },
+                      h(
+                        "div",
+                        { className: "pp-dhandsline" },
+                        h("b", null, handsFree.question),
+                        " · ",
+                        handsFree.phase === "speaking"
+                          ? handsFree.silent
+                            ? "pause " + (handsFree.silent / 1000).toFixed(1) + " s"
+                            : "hearing the answer"
+                          : "listening — waiting for the student to speak",
+                        h(
+                          "span",
+                          { className: "pp-dmeter", "aria-hidden": "true" },
+                          h("span", {
+                            className: "pp-dmeterfill" + (handsFree.level > handsFree.threshold ? " pp-dmeteron" : ""),
+                            style: { width: Math.min(100, Math.round(handsFree.level * 400)) + "%" },
+                          }),
+                        ),
+                      ),
+                      h(
+                        "div",
+                        { className: "pp-approverow" },
+                        h("button", { type: "button", className: "pp-segbtn", onClick: () => endTake("space") }, "End answer (Space)"),
+                        h("button", { type: "button", className: "pp-segbtn", onClick: () => endTake("skip") }, "Skip, no answer"),
+                        h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: () => endTake("pause") }, "Pause"),
+                      ),
+                      h(
+                        "div",
+                        { className: "pp-dim" },
+                        "Let the student read the question here — anything said aloud now counts as the answer, yours included.",
+                      ),
+                    )
+                  : h(
+                      "div",
+                      { className: "pp-approverow" },
+                      h(
+                        "button",
+                        {
+                          type: "button",
+                          className: "pp-segbtn pp-drec",
+                          disabled: Boolean(recording || sending),
+                          title: "Listens continuously: an answer ends after a pause of about two and a half seconds, and the next question comes up by itself.",
+                          onClick: startHandsFree,
+                        },
+                        "● Start hands-free",
+                      ),
+                      pending > 0 ? h("span", { className: "pp-dim" }, pending + " answer(s) transcribing…") : null,
+                    )
                 : null,
               said ? h("div", { className: said.error ? "pp-dwarn" : "pp-dim" }, said.text) : null,
               data === null
@@ -7760,6 +8026,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 
     exports.apply = apply;
     exports.inject = inject;
+    // For the tests only: the end-of-answer detector is the one piece of the
+    // desk that is logic rather than wiring, and the desk itself is mounted
+    // alone by `test/desk-page.mjs`, against a mock API and a synthetic voice.
+    exports.turnStep = turnStep;
+    exports.DefenceDesk = DefenceDesk;
     return module.exports;
   },
 });
