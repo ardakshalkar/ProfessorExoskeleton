@@ -131,10 +131,13 @@ import { buildMaterials, documentRecord, producerFor, readProducers } from "../s
 import { printPaper, type AnswerLayout, type PaperFormat } from "../src/exam-paper.ts";
 import {
   briefText,
+  checkDefenceGrade,
   checkQuestions,
   cloneAtHandIn,
   codeDigest,
   collectCode,
+  defenceEvaluations,
+  defenceEvidence,
   defencePlace,
   readDefence,
   readPin,
@@ -469,6 +472,12 @@ const HELP = `ainar — the AINAR course model CLI
                                            PRIVATE: the whole exchange in order —
                                            consent, why each question came, the
                                            professor's overrides, what was said
+  defence evidence RUN --assessment A --student S
+                                           PRIVATE: the rubric and the student's
+                                           own words by criterion, citable
+  defence grade RUN --assessment A --student S --from FILE.json [--by MODEL]
+                                           check a proposed grade and write it
+                                           as suggested evaluations
   defence transcribe RUN --assessment A --student S [--question Q] [--all]
                      [--connection NAME]   transcribe recorded takes through the
                                            \`transcription\` connection
@@ -2768,13 +2777,15 @@ try {
       const runId = rest[1];
       const assessmentId = flag("assessment");
       const studentId = flag("student");
-      if (!["prepare", "code", "questions", "session", "transcribe", "replay"].includes(sub) || !runId || !assessmentId || !studentId) {
+      if (!["prepare", "code", "questions", "session", "transcribe", "replay", "evidence", "grade"].includes(sub) || !runId || !assessmentId || !studentId) {
         console.error(
           "usage: defence prepare RUN --assessment A --student S [--refresh]\n" +
             "       defence code RUN --assessment A --student S\n" +
             "       defence questions RUN --assessment A --student S --from FILE.json [--append | --force]\n" +
             "       defence session RUN --assessment A --student S [--json]\n" +
             "       defence replay RUN --assessment A --student S [--json]\n" +
+            "       defence evidence RUN --assessment A --student S\n" +
+            "       defence grade RUN --assessment A --student S --from FILE.json [--by MODEL]\n" +
             "       defence transcribe RUN --assessment A --student S [--question Q] [--all] [--connection NAME]",
         );
         process.exit(2);
@@ -2822,6 +2833,64 @@ try {
             ? `${drafted.questions.length} question(s) already drafted: ${relative(root, place.questions)}`
             : `Next: /defend-submission ${assessmentId} ${runId} ${studentId}`,
         );
+        break;
+      }
+
+      if (sub === "evidence" || sub === "grade") {
+        // DEF-5: the proposed grade from the defence. `evidence` is what the
+        // session's model reads; `grade --from` checks what it proposes and
+        // writes it as suggested Evaluations on the homework's submission.
+        const session = readSession(place.session);
+        const questions = readDefence(place.questions)?.questions ?? [];
+        const rubric = allRubrics(bundle).get(assessment.rubric_id ?? "") ?? assessment.rubric;
+        const criteria = (rubric?.criteria ?? []) as any[];
+        if (!criteria.length) throw new Error(`${assessmentId} has no rubric: a defence is graded against its criteria`);
+        if (!session?.consent?.agreed) throw new Error("no recorded consent for this defence: there is nothing that may be graded");
+        if (sub === "evidence") {
+          out(defenceEvidence({ title: assessment.title, assessmentId, studentId, criteria, questions, session }));
+          break;
+        }
+        const from = flag("from");
+        if (!from) {
+          throw new Error(
+            '--from FILE.json: {"criteria": [{"criterion_id", "score", "confidence", "comment", ' +
+              '"evidence": [{"question": "Q2", "take": 1, "at": 12.3, "quote": "..."} or {"path": "train.py", "lines": "3-4"}]}]}',
+          );
+        }
+        const pin = readPin(place.pin);
+        const files = pin && existsSync(place.repo) ? collectCode(place.repo).files : [];
+        const { proposed, notes } = checkDefenceGrade(JSON.parse(readFileSync(from, "utf-8")), {
+          criteria,
+          session,
+          files,
+          sourceRef: (audio) => `private://submissions/${runId}/${assessmentId}/${studentId}/defence/${audio}`,
+        });
+        for (const note of notes) out(`  ${note}`);
+        if (!proposed.length) throw new Error("no usable grade was proposed; nothing was written");
+        const { evaluations, decided } = defenceEvaluations({
+          proposed,
+          submission_id: submission.submission_id,
+          student_id: studentId,
+          existing: bundle.evaluations as any[],
+          provenance: {
+            produced_by: "defend-submission-skill",
+            model_id: flag("by") ?? null,
+            created_at: decidedAt((runById(bundle).get(runId) as { timezone?: string })?.timezone),
+            input_refs: [submission.submission_id, `private://submissions/${runId}/${assessmentId}/${studentId}/defence/session.yaml`, ...(pin ? [`${pin.url}@${pin.commit}`] : [])],
+          },
+        });
+        for (const id of decided) out(`  ${id}: already decided by the professor — left as it is`);
+        if (!evaluations.length) {
+          out("nothing to write: every criterion proposed is already decided");
+          break;
+        }
+        const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
+        const [written] = writeRecords(courseDir, { evaluations });
+        out(`wrote ${evaluations.length} suggested evaluation(s), status: suggested: ${relative(root, written!)}`);
+        for (const row of evaluations) {
+          out(`  ${row.criterion_id}  ${row.ai_suggestion.score}  (${row.ai_suggestion.evidence.length} citation(s))  ${row.evaluation_id}`);
+        }
+        out(`Check them: ainar validate ${(bundle.course as { course_id: string }).course_id}`);
         break;
       }
 

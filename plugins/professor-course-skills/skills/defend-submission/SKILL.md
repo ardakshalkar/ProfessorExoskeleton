@@ -1,6 +1,6 @@
 ---
 name: defend-submission
-description: Draft the questions for one student's oral defence of their homework — read the repository they handed in, pinned to the commit at the hand-in, against the brief and the rubric, and write an opening question and probes into their own code, each tied to a criterion and to the lines it is about, as drafts the professor edits before asking. Use when the pane's Start defence button sends `/defend-submission ASSESSMENT RUN STUDENT`, or the user asks to prepare a defence, a viva, an oral check or questions about a student's code.
+description: Draft the questions for one student's oral defence of their homework — read the repository they handed in, pinned to the commit at the hand-in, against the brief and the rubric, and write an opening question and probes into their own code, each tied to a criterion and to the lines it is about, as drafts the professor edits before asking; then, when asked, one follow-up on an answer, or the proposed grade from the whole defence as suggested evaluations citing the moments in the recording. Use when the pane sends `/defend-submission ASSESSMENT RUN STUDENT` (with `— follow-up on Qn` or `— propose the grade`), or the user asks to prepare a defence, a viva, an oral check, questions about a student's code, or to grade a defence.
 stage: assess
 requires: [assessments, submissions]
 produces: [defence questions]
@@ -121,6 +121,62 @@ bin/ainar defence questions RUN --assessment ASSESSMENT --student STUDENT --from
 ```
 
 It is numbered after the others and appears on the desk. Reply with the
-question alone and one line of why. Never `--force` once the student has
+question alone and one line of why.
+
+## The grade: `… — propose the grade`
+
+The desk's *Propose the grade* sends this once the defence is over. You
+propose; the professor decides. Nothing you write is a mark until they accept
+it.
+
+```bash
+bin/ainar defence evidence RUN --assessment ASSESSMENT --student STUDENT
+bin/ainar defence code RUN --assessment ASSESSMENT --student STUDENT
+```
+
+`evidence` is the rubric with its levels, then what the student said, grouped
+by the criterion each question was asked for, every stretch marked
+`[Q2 take 1 @ 12.3s]`. It contains only the student's own words: the
+professor's interjections, withdrawn takes and takes whose voices were unclear
+are already left out, and are listed under *Not citable*. A stretch marked
+*unsure transcription* is one to listen to before resting a mark on it.
+`code` is the homework itself.
+
+For each criterion the defence and the code let you judge:
+
+- the score, from the rubric's levels, out of its maximum;
+- `confidence` from 0 to 1: how sure the evidence makes you, not how good the
+  work is;
+- `comment`: one or two sentences the professor reads, saying what the student
+  showed they understood and where they could not explain their own code;
+- `evidence`: the moments that carry the mark, as
+  `{"question": "Q2", "take": 1, "at": 12.3, "quote": "the rows are ordered"}`
+  with the quote exactly as in the evidence, or `{"path": "train.py", "lines": "3-4"}`.
+
+Leave out a criterion nothing in the defence or the code speaks to: say so,
+and do not guess a mark for it. Grade what they demonstrated, not how fluent
+they were, and never because an answer sounded confident. If an answer
+suggests the code is not theirs, write what they could not explain and grade
+that, without accusing anyone (VIV-3).
+
+```json
+{"criteria": [
+  {"criterion_id": "CRIT-…", "score": 8, "confidence": 0.7, "comment": "…",
+   "evidence": [{"question": "Q2", "take": 1, "at": 3.2, "quote": "…"}, {"path": "train.py", "lines": "3-4"}]}
+]}
+```
+
+```bash
+bin/ainar defence grade RUN --assessment ASSESSMENT --student STUDENT --from output/defence-grade.json --by "<your model name>"
+bin/ainar validate <COURSE>
+```
+
+`grade` checks every criterion, score and citation, drops what does not hold
+with a note, and writes one evaluation per criterion with `status: suggested`
+on the homework's own submission, under the same id the other grading paths
+use. A criterion the professor has already decided is left exactly as it is.
+Reply with a table: criterion, score out of maximum, confidence, the one-line
+reason, and the notes `grade` printed. List anything below 0.6 confidence
+first, as the marks worth the professor's ear. Never `--force` once the student has
 answered: the command refuses, because the answers would then point at
 different questions.

@@ -46,7 +46,8 @@ import { dirname, extname, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { parse, stringify } from "yaml";
 import { parseReply } from "./scan-read.ts";
-import { type Range, type Transcriber, type Transcript, labelSpeakers } from "./transcribe.ts";
+import { evaluationId } from "./grade-board.ts";
+import { type Range, type Segment, type Transcriber, type Transcript, labelSpeakers, studentWords } from "./transcribe.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -1028,4 +1029,249 @@ export const replay = (session: Session | null, questions: Question[]): ReplayEn
     });
   }
   return entries.sort((a, b) => a.at.localeCompare(b.at));
+};
+
+// --------------------------------------------------------------------------
+// The proposed grade (DEF-5)
+// --------------------------------------------------------------------------
+
+export interface GradingCriterion extends Criterion {
+  maximum_score: number;
+  levels?: { score: number; label?: string | null; description: string }[];
+}
+
+/** One stretch of the student's own words that a grade may cite. */
+interface Citable {
+  question_id: string;
+  take: number;
+  audio: string;
+  segment: Segment;
+}
+
+/**
+ * The takes a grade may draw on, and the ones it may not, with the reason.
+ * Withdrawn takes, takes whose voices are unclear, and takes with no
+ * transcript are set aside; inside the rest, only the student's segments are
+ * citable, and an unsure one is shown but marked.
+ */
+const citableWords = (answers: Answer[]): { citable: Citable[]; excluded: { answer: Answer; why: string }[] } => {
+  const citable: Citable[] = [];
+  const excluded: { answer: Answer; why: string }[] = [];
+  for (const answer of answers) {
+    if (answer.withdrawn) excluded.push({ answer, why: "consent withdrawn" });
+    else if (!answer.transcript) excluded.push({ answer, why: answer.error ? `no transcript (${answer.error})` : "no transcript yet" });
+    else {
+      const words = studentWords(answer.transcript);
+      if (!words) excluded.push({ answer, why: `voices unclear: ${answer.transcript.speakers?.note ?? ""}` });
+      else for (const segment of words) citable.push({ question_id: answer.question_id, take: answer.take, audio: answer.audio, segment });
+    }
+  }
+  return { citable, excluded };
+};
+
+/**
+ * What the session's model grades from: the rubric with its levels, and what
+ * the student said, grouped by the criterion each question was asked for,
+ * every stretch marked `[Qn take k @ s]` so a grade can cite it exactly.
+ * Only the student's words appear; what may not be cited is listed with why.
+ */
+export const defenceEvidence = (context: {
+  title: string;
+  assessmentId: string;
+  studentId: string;
+  criteria: GradingCriterion[];
+  questions: Question[];
+  session: Session | null;
+}): string => {
+  const answers = context.session?.answers ?? [];
+  const { citable, excluded } = citableWords(answers);
+  const said = (question: Question): string[] => {
+    const lines = citable
+      .filter((entry) => entry.question_id === question.id)
+      .map(
+        (entry) =>
+          `  [${entry.question_id} take ${entry.take} @ ${entry.segment.start.toFixed(1)}s] ${entry.segment.text}` +
+          (entry.segment.confidence === "low" ? "   (unsure transcription — listen before citing)" : ""),
+      );
+    return lines.length ? lines : ["  (nothing citable)"];
+  };
+  const block = (question: Question): string[] => [
+    `${question.id}${question.follows ? ` (follow-up on ${question.follows})` : ""}: ${question.text}`,
+    ...said(question),
+  ];
+  const consent = context.session?.consent;
+  return [
+    `# ${context.title} (${context.assessmentId}) — ${context.studentId}, oral defence`,
+    consent?.agreed ? `Recorded with consent given ${consent.at}${consent.withdrawn_at ? `, withdrawn ${consent.withdrawn_at}` : ""}.` : "No recorded consent: nothing here may be graded.",
+    "",
+    "## Rubric",
+    ...context.criteria.flatMap((criterion) => [
+      `- ${criterion.criterion_id}: ${criterion.title} (out of ${criterion.maximum_score})${criterion.description ? ` — ${criterion.description}` : ""}`,
+      ...(criterion.levels ?? []).map((level) => `    ${level.score}${level.label ? ` ${level.label}` : ""}: ${level.description}`),
+    ]),
+    "",
+    "## What the student said, by criterion",
+    ...context.criteria.flatMap((criterion) => {
+      const asked = context.questions.filter((question) => question.criterion_id === criterion.criterion_id);
+      return [`\n### ${criterion.criterion_id} ${criterion.title}`, ...(asked.length ? asked.flatMap(block) : ["  (no question was asked for this criterion)"])];
+    }),
+    ...(() => {
+      const general = context.questions.filter((question) => !question.criterion_id);
+      return general.length ? ["\n### Not tied to a criterion", ...general.flatMap(block)] : [];
+    })(),
+    ...(excluded.length
+      ? ["", "## Not citable", ...excluded.map(({ answer, why }) => `- ${answer.question_id} take ${answer.take}: ${why}`)]
+      : []),
+  ].join("\n");
+};
+
+export interface ProposedCriterion {
+  criterion_id: string;
+  score: number;
+  confidence: number | null;
+  comment: string;
+  evidence: { document_id?: null; location: string; text_reference: string | null; source_ref: string | null }[];
+}
+
+/**
+ * The model's proposed grade, checked rather than trusted.
+ *
+ * A criterion the rubric does not have is dropped; a score outside 0 to the
+ * maximum is refused, not clamped, since a clamped mark is a mark nobody
+ * proposed. Every oral citation must name a take and a moment where the
+ * student was speaking, in a take that may be cited, and its quote must be
+ * in those words; a code citation must name a file of the commit read. A
+ * citation that fails is dropped with a note, and a criterion left with no
+ * evidence at all is kept but its confidence is lowered, so the professor
+ * sees which marks rest on nothing they can check.
+ */
+export const checkDefenceGrade = (
+  reply: any,
+  context: {
+    criteria: GradingCriterion[];
+    session: Session | null;
+    files: CodeFile[];
+    sourceRef: (audio: string) => string;
+  },
+): { proposed: ProposedCriterion[]; notes: string[] } => {
+  const notes: string[] = [];
+  const byId = new Map(context.criteria.map((criterion) => [criterion.criterion_id, criterion]));
+  const { citable } = citableWords(context.session?.answers ?? []);
+  const lengths = new Map(context.files.map((file) => [file.path, file.lines]));
+  const plain = (text: string): string => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const proposed: ProposedCriterion[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of Array.isArray(reply?.criteria) ? reply.criteria : []) {
+    const id = String(entry?.criterion_id ?? "");
+    const criterion = byId.get(id);
+    if (!criterion) {
+      notes.push(`${id || "a criterion"} is not in the rubric — dropped`);
+      continue;
+    }
+    if (seen.has(id)) {
+      notes.push(`${id} was proposed twice — the second dropped`);
+      continue;
+    }
+    const score = Number(entry?.score);
+    if (!Number.isFinite(score) || score < 0 || score > criterion.maximum_score) {
+      notes.push(`${id}: ${entry?.score} is not a score out of ${criterion.maximum_score} — dropped`);
+      continue;
+    }
+    seen.add(id);
+    const evidence: ProposedCriterion["evidence"] = [];
+    for (const cite of Array.isArray(entry?.evidence) ? entry.evidence : []) {
+      if (cite?.path) {
+        const length = lengths.get(String(cite.path));
+        const first = Number(/^(\d+)/.exec(String(cite.lines ?? ""))?.[1] ?? NaN);
+        if (length === undefined || (cite.lines && !(first >= 1 && first <= length))) {
+          notes.push(`${id}: ${cite.path}${cite.lines ? `:${cite.lines}` : ""} is not in the code read — citation dropped`);
+          continue;
+        }
+        evidence.push({ location: `${cite.path}${cite.lines ? `:${cite.lines}` : ""}`, text_reference: cite.quote ? String(cite.quote) : null, source_ref: null });
+        continue;
+      }
+      const at = Number(cite?.at);
+      const match = citable.find(
+        (entry) =>
+          entry.question_id === String(cite?.question ?? "") &&
+          entry.take === Number(cite?.take ?? 1) &&
+          at >= entry.segment.start - 0.5 &&
+          at <= entry.segment.end + 0.5,
+      );
+      if (!match) {
+        notes.push(`${id}: ${cite?.question ?? "?"} take ${cite?.take ?? 1} @ ${cite?.at ?? "?"}s is not the student speaking in a citable take — citation dropped`);
+        continue;
+      }
+      if (cite?.quote && !plain(match.segment.text).includes(plain(String(cite.quote)))) {
+        notes.push(`${id}: "${cite.quote}" is not what was said at ${match.question_id} @ ${at}s — citation dropped`);
+        continue;
+      }
+      evidence.push({
+        location: `${match.question_id} take ${match.take} @ ${match.segment.start.toFixed(1)}–${match.segment.end.toFixed(1)}s`,
+        text_reference: cite?.quote ? String(cite.quote) : match.segment.text,
+        source_ref: context.sourceRef(match.audio),
+      });
+    }
+    let confidence = typeof entry?.confidence === "number" && entry.confidence >= 0 && entry.confidence <= 1 ? entry.confidence : null;
+    if (!evidence.length) {
+      notes.push(`${id}: no citation survived — confidence lowered`);
+      confidence = Math.min(confidence ?? 0.3, 0.3);
+    }
+    proposed.push({ criterion_id: id, score, confidence, comment: String(entry?.comment ?? "").trim(), evidence });
+  }
+  for (const criterion of context.criteria) {
+    if (!seen.has(criterion.criterion_id)) notes.push(`${criterion.criterion_id}: no grade proposed (the defence may not have covered it)`);
+  }
+  return { proposed, notes };
+};
+
+/**
+ * The proposed grade as Evaluation records on the homework's own submission,
+ * one per criterion, with the id every other grading path gives that student
+ * and criterion — so the gradebook sees one evaluation, not two. A criterion
+ * the professor has already decided is left untouched and named; an earlier
+ * suggestion nobody decided is replaced, being only a draft.
+ */
+export const defenceEvaluations = (context: {
+  proposed: ProposedCriterion[];
+  submission_id: string;
+  student_id: string;
+  existing: any[];
+  provenance: { produced_by: string; model_id: string | null; created_at: string; input_refs: string[] };
+}): { evaluations: any[]; decided: string[] } => {
+  const evaluations: any[] = [];
+  const decided: string[] = [];
+  for (const entry of context.proposed) {
+    const evaluation_id = evaluationId(context.student_id, entry.criterion_id);
+    const before = context.existing.find(
+      (row) => row.evaluation_id === evaluation_id || (row.submission_id === context.submission_id && row.criterion_id === entry.criterion_id),
+    );
+    if (before && (before.professor_decision || (before.status && before.status !== "suggested"))) {
+      decided.push(entry.criterion_id);
+      continue;
+    }
+    evaluations.push({
+      evaluation_id: before?.evaluation_id ?? evaluation_id,
+      submission_id: context.submission_id,
+      criterion_id: entry.criterion_id,
+      status: "suggested",
+      ai_suggestion: {
+        score: entry.score,
+        ...(entry.confidence !== null ? { confidence: entry.confidence } : {}),
+        comment: entry.comment,
+        evidence: entry.evidence.map((cite) =>
+          Object.fromEntries(Object.entries(cite).filter(([, value]) => value !== null && value !== undefined)),
+        ),
+        provenance: {
+          produced_by: context.provenance.produced_by,
+          ...(context.provenance.model_id ? { model_id: context.provenance.model_id } : {}),
+          prompt_version: "defend-submission/grade/v1",
+          input_refs: context.provenance.input_refs,
+          created_at: context.provenance.created_at,
+        },
+      },
+    });
+  }
+  return { evaluations, decided };
 };

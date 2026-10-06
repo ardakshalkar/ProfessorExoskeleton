@@ -7060,6 +7060,26 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const followUp = (questionId) =>
         props.ask("/defend-submission " + props.assessment + " " + props.runId + " " + props.student + " — follow-up on " + questionId);
 
+      // DEF-5: once answers are in, the session's model proposes the marks,
+      // citing the moments in the recording; the professor decides them in
+      // the grading view like any other suggestion.
+      const proposeGrade = () =>
+        props.ask("/defend-submission " + props.assessment + " " + props.runId + " " + props.student + " — propose the grade");
+      const gradeRow = () => {
+        const usable = ((data && data.answers) || []).filter((answer) => answer.transcript && !answer.withdrawn);
+        if (!usable.length || handsFree || recording) return null;
+        return h(
+          "div",
+          { className: "pp-approverow" },
+          h("button", { type: "button", className: "pp-segbtn", onClick: proposeGrade }, "Propose the grade"),
+          h(
+            "span",
+            { className: "pp-dim" },
+            "the session's model reads what the student said and the code, and writes suggested marks citing the recording; you decide them",
+          ),
+        );
+      };
+
       const clock = (seconds) => Math.floor(seconds / 60) + ":" + String(Math.floor(seconds % 60)).padStart(2, "0");
 
       const criteria = new Map(((data && data.criteria) || []).map((criterion) => [criterion.id, criterion.title]));
@@ -7440,6 +7460,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               data && !data.error && data.questions.length ? screenRow() : null,
               data && !data.error && data.questions.length ? consentPanel() : null,
               data && !data.error && data.questions.length && consented ? (handsFree ? handsPanel() : startRow()) : null,
+              data && !data.error ? gradeRow() : null,
               said ? h("div", { className: said.error ? "pp-dwarn" : "pp-dim" }, said.text) : null,
               data === null
                 ? h("div", { className: "pp-dim" }, "Loading…")

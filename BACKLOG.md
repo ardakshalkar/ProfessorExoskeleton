@@ -1004,9 +1004,25 @@ is worth building.
       exchange in order: consent, each choice and its reason, overrides, and
       every take with whose words were whose. Each take now records when
       listening began (`asked_at`).
-- [ ] **DEF-5** The proposed grade from the whole session, by the AUD-1 path,
+- [x] **DEF-5** The proposed grade from the whole session, by the AUD-1 path,
       as an `Evaluation` marked `approval: draft` citing transcript timestamps.
-      `M` · depends: DEF-4
+      `M` · depends: DEF-4 Done 2026-10-06. *Propose the grade* on the desk asks the
+      session's model (`/defend-submission … — propose the grade`). It reads
+      `ainar defence evidence`: the rubric with its levels and the student's
+      own words by criterion, each marked `[Qn take k @ s]`, with the
+      professor's interjections, withdrawn takes and unclear voices left out.
+      `ainar defence grade --from` checks the proposal before writing. A score
+      outside the range is refused, not clamped. An oral citation must be the
+      student speaking in a citable take, with its quote in those words. A
+      code citation must be a file of the commit read. A mark left with no
+      citation has its confidence lowered. One `status: suggested` evaluation
+      per criterion is written on the **homework's own submission**, under
+      the id the other grading paths give that student and criterion
+      (`evaluationId`), so the gradebook sees one evaluation, not two. An
+      undecided suggestion is replaced; a decided one is left untouched and
+      named. Whether a defence may instead be an assessment of its own is
+      still ASM-1. They arrive in the inbox's pending evaluations like any
+      suggestion.
 - [ ] **DEF-6** Batch mode: upload recordings, see the total minutes and the
       transcription cost per provider before anything is sent, then confirm.
       Each recording is matched to a student and graded as DEF-5 does.
