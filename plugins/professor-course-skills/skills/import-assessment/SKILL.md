@@ -52,6 +52,23 @@ uploaded PDFs ──► <RUN>/_inbox/ ──identify──► "is it Quiz 3?" �
                                          rubric proposed from the groups ◄┘ ──► professor ──► /grade-batch
 ```
 
+## Where to start
+
+The pane calls this skill in one line — `/import-assessment ASSESSMENT RUN — what`
+— and leaves the how to this file. Do not wait to be told where the pile
+stands: `bin/ainar scans status RUN --assessment A` and
+`bin/ainar grade status RUN --assessment A` say it. Then:
+
+| Asked | Do |
+| --- | --- |
+| nothing, or a scan of an exam the course does not know | §1 onwards |
+| *propose the rubric* | §7: group, then two or three proposals |
+| *propose one rubric* | §7: group, then a single proposal |
+| *rethink the rubric for Qn (ITEM-…) as `ID`: what to change* | §7, **Rethinking one question** |
+
+If the answers are not recorded yet, say so and stop: reading them is the
+pane's **Read & record** button (`scans read`, then `scans record`), not yours.
+
 ## 1. Which exam is this?
 
 Uploads whose assessment nobody has named go to the run's unfiled inbox,
@@ -311,6 +328,17 @@ accept. In chat, say per question how the proposals differ in effect ("the key
 gives the class a mean of 0.9 of 2, the class-based one 1.7, because 20
 answers name morphology without the vocabulary"), and the groups you were least
 sure how to place. Ask the outcome a criterion measures if the item had none.
+
+**Rethinking one question.** The professor read the proposals for one
+question and says what to change; the message names the question, its item and
+the id to give the new proposal. Keep `groups.yaml`'s groups as they are — if a
+group must split, append the new group at the end of that question's groups,
+move its students there, and append a score for it to every existing proposal.
+Then add one proposal with the given id, a title saying what changed and a
+one-sentence summary, covering that item only: its levels and a score per
+group. Write nothing into the course. Run `grade status` and fix what it lists;
+the professor compares and applies it in the Grade view.
+
 ## 8. Hand over
 
 Once the professor has accepted the rubric, they grade in the same view: each

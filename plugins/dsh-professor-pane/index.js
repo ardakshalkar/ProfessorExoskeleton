@@ -5318,7 +5318,7 @@ const sendMaterial = (res, workspace, root, documentId, dark, asPdf) => {
 const AINAR_CLI = fileURLToPath(new URL("../../ainar-node/bin/ainar.ts", import.meta.url));
 
 /** `ainar scans …`, for the Scans tab's two writes. The output is the answer. */
-const runScans = (args, root) =>
+const runScans = (args, root, timeout = 300000) =>
   new Promise((resolveRun) => {
     if (!existsSync(AINAR_CLI)) {
       resolveRun({ ok: false, error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.` });
@@ -5327,7 +5327,7 @@ const runScans = (args, root) =>
     execFile(
       process.execPath,
       ["--experimental-strip-types", AINAR_CLI, ...args, "--root", root],
-      { cwd: root, timeout: 300000, maxBuffer: 4 * 1024 * 1024 },
+      { cwd: root, timeout, maxBuffer: 4 * 1024 * 1024 },
       (error, stdout, stderr) => {
         const code = error && typeof error.code === "number" ? error.code : error ? 1 : 0;
         const output = [stdout, stderr]
@@ -5341,6 +5341,18 @@ const runScans = (args, root) =>
       },
     );
   });
+
+/**
+ * What `scans read` said, without a line per paper: the papers it could not
+ * read, and its closing count. Fifty "read STUDENT-…" lines say nothing the
+ * Read step's count does not.
+ */
+const readSummary = (output) =>
+  String(output ?? "")
+    .split("\n")
+    .filter((line) => !/^\s+read\s+STUDENT-/.test(line) && !/^reading /.test(line))
+    .join("\n")
+    .trim();
 
 /**
  * Publish, by spawning the CLI.
@@ -5981,6 +5993,30 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
         } catch (error) {
           return send(res, 404, "text/plain; charset=utf-8", String(error?.message ?? error));
         }
+      }
+      // Reading and recording the answers involve no judgement: `scans read`
+      // then `scans record`, run here rather than asked of the assistant. Here
+      // they run in the harness's process, which can write the private
+      // folder; the assistant's sandbox cannot, and would ask for each call.
+      // A pile takes minutes, hence the long timeout.
+      if (path === "/api/scans/read") {
+        if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+        if (!assessmentId) return sendJson(res, 200, { error: "No assessment given." });
+        loadedRun(workspace, runId);
+        const scope = ["--assessment", assessmentId];
+        return runScans(["scans", "read", runId, ...scope], root, 1800000)
+          .then((read) =>
+            read.ok
+              ? runScans(["scans", "record", runId, ...scope], root).then((record) => ({
+                  ok: record.ok,
+                  exitCode: record.exitCode,
+                  command: `${read.command} && ${record.command}`,
+                  output: [readSummary(read.output), record.output].filter(Boolean).join("\n\n"),
+                }))
+              : read,
+          )
+          .then((result) => sendJson(res, 200, result))
+          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
       }
       if (path === "/api/scans/assign" || path === "/api/scans/apply") {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });

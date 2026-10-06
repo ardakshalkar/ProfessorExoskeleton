@@ -4043,21 +4043,16 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     // ---------------------------------------------------------------- scans
 
     /**
-     * What the assistant is asked for at each step the pane does not draw.
-     * Pseudonyms and ids only: this is a prompt, and the model works in the
-     * record's own vocabulary.
+     * What the assistant is asked for at the steps that need its judgement.
+     * A skill and a target, nothing more: DSH loads the whole skill for any
+     * `/name` in a message, and the skill finds where the pile stands itself,
+     * so a procedure restated here would only be a second copy to drift. Read
+     * is not here — it is a command, run by the pane's own button.
+     * Pseudonyms and ids only.
      */
     const STEP_PROMPTS = {
-      read: (runId, id) =>
-        "Continue the scanned " + id + " for " + runId + " with /grade-scans: fill any transcript.yaml " +
-        "still unread, then run `scans record` and list the answers read with low confidence for me to check.",
-      rubric: (runId, id) =>
-        "/import-assessment for " + id + " (" + runId + "): the answers are recorded. Run `scans answers` " +
-        "and propose a rubric for the written questions from what the class wrote, with the answers grouped " +
-        "in groups.yaml as §7 says. I will review it in the pane's Grade view before anything is graded.",
-      grade: (runId, id) =>
-        "Grade " + id + " for " + runId + " with /grade-batch against its accepted rubric. Every grade " +
-        "stays status: suggested; tell me which few to look at first.",
+      rubric: (runId, id) => "/import-assessment " + id + " " + runId + " — propose the rubric",
+      grade: (runId, id) => "/grade-batch " + id + " " + runId,
       approve: (runId, id) =>
         "Which suggested grades on " + id + " (" + runId + ") are still waiting for my decision, " +
         "least confident first?",
@@ -4868,15 +4863,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const qName = "Q" + (item.number || at + 1);
       const without = doc.items.filter((entry) => !entry.criterion).map((entry, index) => "Q" + (entry.number || index + 1));
 
+      // One line: the skill's "Where to start" maps it to §7, which holds the how.
       const ask = (several) =>
-        "/import-assessment for " + props.assessmentId + " (" + props.runId + "): group each written question's answers by " +
-        "meaning into groups.yaml beside the scans, as §7 says, and " +
-        (several
-          ? "propose two or three rubrics over that grouping as `proposals:` — one from the marking key and marking_guidance the " +
-            "items already carry, one from what the class wrote, and a third only if it differs in a way worth choosing between. " +
-            "Say in each proposal's summary how it differs. "
-          : "propose one rubric over that grouping, as a single entry under `proposals:`. ") +
-        "I will compare and choose in the pane's Grade view.";
+        "/import-assessment " + props.assessmentId + " " + props.runId + " — " + (several ? "propose the rubric" : "propose one rubric");
 
       // The proposed rubrics for this question, side by side: each one's levels
       // with how many answers it puts at each, and the mean it gives the class.
@@ -5405,14 +5394,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         : scale.slice().reverse().map((score) => ({ score: score, label: null, description: "" }));
       const others = item.proposals.filter((proposal) => proposal.id !== item.chosen);
       const nextRev = "rev-" + (doc.proposals.filter((proposal) => /^rev-\d+$/.test(proposal.id)).length + 1);
+      // The professor's words, and what the skill needs to place them: which
+      // question, and the id the Grade view will look for. The how is §7's.
       const rethinkPrompt = (text) =>
-        "/import-assessment for " + props.assessmentId + " (" + props.runId + "): rethink the rubric for " + qName + " (" + item.item_id + "). " +
-        "What I want changed: " + text.trim() + "\n\n" +
-        "Keep the groups in groups.yaml as they are — if a group must split, append the new group at the end of that question's " +
-        "groups, move its students there, and append a score for it to every proposal. Add one new proposal with id `" + nextRev +
-        "`, a title saying what changed and a one-sentence summary, covering " + item.item_id + " only: its levels and a score per group. " +
-        "Write nothing into the course. Then run `bin/ainar grade status " + props.runId + " --assessment " + props.assessmentId +
-        "` and fix any problem it lists. I will compare and apply it in the Grade view.";
+        "/import-assessment " + props.assessmentId + " " + props.runId + " — rethink the rubric for " + qName +
+        " (" + item.item_id + ") as `" + nextRev + "`: " + text.trim();
       const rubricPanel = h(
         "div",
         { className: "pp-grubric" },
@@ -5977,7 +5963,27 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             ),
           ),
         ),
-        current && current.id !== "match" && ask && !gradable
+        current && current.id === "read"
+          ? h(
+              "div",
+              { className: "pp-next" },
+              busy === "read"
+                ? "Reading the papers, then recording the answers as drafts — a few minutes for a whole class. "
+                : (gradable ? "Some placed papers are not read yet. " : "Read is next: a command, not a question. "),
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: gradable ? "pp-segbtn" : "pp-primary",
+                  disabled: Boolean(busy),
+                  title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
+                  onClick: () => post("/api/scans/read", {}, "read"),
+                },
+                busy === "read" ? "Reading…" : "Read & record the answers",
+              ),
+            )
+          : null,
+        current && current.id !== "match" && current.id !== "read" && ask && !gradable
           ? h(
               "div",
               { className: "pp-next" },
@@ -5994,7 +6000,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               "div",
               { className: "pp-next" },
               current && current.id === "read"
-                ? "Some papers are not read yet; their answers wait at the bottom of each question. "
+                ? "Unread papers' answers join each question once they are read. "
                 : "Rubric, marks and acceptance, one question at a time. ",
               h(
                 "button",
