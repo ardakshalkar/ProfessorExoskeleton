@@ -987,11 +987,23 @@ is worth building.
       the professor's words as `[professor: …]`. Not done: OpenAI's
       diarizing transcription model, and a local diarizer (pyannote) for
       TRN-2.
-- [ ] **AGT-7** Consent and the record. The defence starts only after the
+- [x] **AGT-7** Consent and the record. The defence starts only after the
       professor confirms the student agreed to be recorded, and that
       confirmation is in `session.yaml`. Every decision the loop makes
       (what it asked, why, what the professor overrode) goes there too, so
       an appeal replays the whole exchange (LIV-3). `S` · depends: AGT-2
+      Done 2026-10-06. The server writes the statement from the transcription
+      provider that is configured, naming it even while its key is missing, so
+      the student is never told their voice stays here when it would not. The
+      desk shows the statement, and so does the student's screen. Nothing
+      records until the professor confirms *The student agreed*: `saveAnswer`
+      refuses a take without consent and writes no bytes. *The student
+      withdraws* (two steps) stops at once and drops the take in progress
+      unsent. Earlier takes are kept and marked `withdrawn`, and deleting them
+      stays the professor's decision. `ainar defence replay` prints the
+      exchange in order: consent, each choice and its reason, overrides, and
+      every take with whose words were whose. Each take now records when
+      listening began (`asked_at`).
 - [ ] **DEF-5** The proposed grade from the whole session, by the AUD-1 path,
       as an `Evaluation` marked `approval: draft` citing transcript timestamps.
       `M` · depends: DEF-4

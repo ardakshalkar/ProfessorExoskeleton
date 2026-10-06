@@ -139,6 +139,7 @@ import {
   readDefence,
   readPin,
   readSession,
+  replay,
   transcribeTake,
   writeDefence,
   writePin,
@@ -464,6 +465,10 @@ const HELP = `ainar — the AINAR course model CLI
   defence session RUN --assessment A --student S [--json]
                                            PRIVATE: the questions with what was
                                            said, timestamped, low confidence marked
+  defence replay RUN --assessment A --student S [--json]
+                                           PRIVATE: the whole exchange in order —
+                                           consent, why each question came, the
+                                           professor's overrides, what was said
   defence transcribe RUN --assessment A --student S [--question Q] [--all]
                      [--connection NAME]   transcribe recorded takes through the
                                            \`transcription\` connection
@@ -2763,12 +2768,13 @@ try {
       const runId = rest[1];
       const assessmentId = flag("assessment");
       const studentId = flag("student");
-      if (!["prepare", "code", "questions", "session", "transcribe"].includes(sub) || !runId || !assessmentId || !studentId) {
+      if (!["prepare", "code", "questions", "session", "transcribe", "replay"].includes(sub) || !runId || !assessmentId || !studentId) {
         console.error(
           "usage: defence prepare RUN --assessment A --student S [--refresh]\n" +
             "       defence code RUN --assessment A --student S\n" +
             "       defence questions RUN --assessment A --student S --from FILE.json [--append | --force]\n" +
             "       defence session RUN --assessment A --student S [--json]\n" +
+            "       defence replay RUN --assessment A --student S [--json]\n" +
             "       defence transcribe RUN --assessment A --student S [--question Q] [--all] [--connection NAME]",
         );
         process.exit(2);
@@ -2816,6 +2822,20 @@ try {
             ? `${drafted.questions.length} question(s) already drafted: ${relative(root, place.questions)}`
             : `Next: /defend-submission ${assessmentId} ${runId} ${studentId}`,
         );
+        break;
+      }
+
+      if (sub === "replay") {
+        // The whole exchange in order, for an appeal: consent, each question
+        // and why it came, the professor's overrides, and what was said.
+        const entries = replay(readSession(place.session), readDefence(place.questions)?.questions ?? []);
+        if (args.includes("--json")) {
+          out(entries);
+          break;
+        }
+        out(`${assessment.title} (${assessmentId}) — ${studentId}, oral defence, as it happened`);
+        if (!entries.length) out("nothing recorded yet");
+        for (const entry of entries) out(`\n${entry.at}  ${entry.text}`);
         break;
       }
 

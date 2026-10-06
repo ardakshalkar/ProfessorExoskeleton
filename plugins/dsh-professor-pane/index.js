@@ -91,6 +91,7 @@ import {
   briefText,
   codeDigest,
   collectCode,
+  consentStatement,
   decideNext,
   defencePlace,
   editQuestion,
@@ -99,13 +100,15 @@ import {
   readDefence,
   readPin,
   readSession,
+  recordConsent,
   recordDecision,
   saveAnswer,
   setTranscript,
   transcribeTake,
+  withdrawConsent,
   writeDefence,
 } from "@ainar/core/src/defence.ts";
-import { configFromRegistry, transcriber } from "@ainar/core/src/transcribe.ts";
+import { configFromRegistry, describeTranscription, transcriber } from "@ainar/core/src/transcribe.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 // `parseDocument` alongside `parse`, for one caller: `writeCanvasSelection`
 // edits a file a professor also writes by hand, and the plain parse would hand
@@ -3915,20 +3918,30 @@ const chooseNext = async (harness, target, root, sessionId, after) => {
  * named so the professor knows, before pressing record, where the student's
  * voice is about to be sent.
  */
-const defenceSessionPayload = (target) => {
-  let transcription;
+/**
+ * The transcription connection as configured, for the desk and the consent
+ * statement. `error` when it cannot transcribe yet — no connection, or one
+ * without its key — but a configured provider is still named, so the student
+ * is never told their voice stays here when it would not.
+ */
+const transcriptionInfo = () => {
   try {
-    const { config, connection } = configFromRegistry(null);
-    transcription = {
-      name: connection.name,
-      provider: config.provider,
-      model: config.model,
-      local: !!config.baseUrl && /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(config.baseUrl),
-      pricePerMinute: config.pricePerMinute ?? null,
-    };
+    const described = describeTranscription(null);
+    if (!described) return { error: "no transcription connection is set up", configured: null };
+    const { problem, ...rest } = described;
+    return problem ? { ...rest, error: problem, configured: rest } : rest;
   } catch (error) {
-    transcription = { error: String(error?.message ?? error) };
+    return { error: String(error?.message ?? error), configured: null };
   }
+};
+
+/** What a consent statement names: the configured provider, usable or not. */
+const statementFor = (transcription) =>
+  consentStatement(transcription.error ? transcription.configured ?? null : transcription);
+
+const defenceSessionPayload = (target) => {
+  const transcription = transcriptionInfo();
+  const session = readSession(target.place.session);
   const rubric = allRubrics(target.bundle).get(target.assessment?.rubric_id ?? "") ?? target.assessment?.rubric;
   return {
     assessment: { id: target.assessmentId, title: target.assessment?.title ?? target.assessmentId },
@@ -3939,8 +3952,12 @@ const defenceSessionPayload = (target) => {
     criteria: (rubric?.criteria ?? []).map((criterion) => ({ id: criterion.criterion_id, title: criterion.title })),
     pin: readPin(target.place.pin),
     questions: readDefence(target.place.questions)?.questions ?? [],
-    answers: readSession(target.place.session)?.answers ?? [],
+    answers: session?.answers ?? [],
     transcription,
+    // AGT-7: what the student is asked to agree to — written here from the
+    // provider in use, never by the browser — and what they answered.
+    statement: statementFor(transcription),
+    consent: session?.consent ?? null,
   };
 };
 
@@ -6328,6 +6345,39 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
       return send(res, 200, "text/html; charset=utf-8", studentScreenPage({ assessmentId, studentId }));
     }
 
+    // AGT-7: the student's answer to the consent statement, as the professor
+    // confirms it. The statement is written here, from the provider in use,
+    // so what is recorded as agreed is what the student was actually told.
+    if (path === "/api/defence/consent") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      let target;
+      try {
+        target = defenceTarget(workspace, root, runId, url.searchParams);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      return readBody(req)
+        .then((text) => {
+          const action = String((text ? JSON.parse(text) : {}).action ?? "");
+          const at = new Date().toISOString();
+          if (action === "withdraw") {
+            withdrawConsent(target.place, at);
+          } else if (action === "agree" || action === "decline") {
+            const transcription = transcriptionInfo();
+            recordConsent(target.place, target.ids, {
+              agreed: action === "agree",
+              at,
+              statement: statementFor(transcription),
+              provider: transcription.error ? transcription.configured?.name ?? null : transcription.name,
+            });
+          } else {
+            throw new Error(`${action || "nothing"} is not an answer to the consent statement`);
+          }
+          return sendJson(res, 200, { consent: readSession(target.place.session)?.consent ?? null });
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
     // The hands-free desk's two writes: what to ask next, chosen by the
     // session's model (AGT-2), and what the professor did instead (AGT-3).
     if (path === "/api/defence/next" || path === "/api/defence/override") {
@@ -6402,6 +6452,10 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
             mime,
             seconds: Number.isFinite(seconds) ? seconds : null,
             professorSpoke,
+            // When listening began, for the replay; an epoch in milliseconds.
+            askedAt: /^\d{10,14}$/.test(url.searchParams.get("asked") ?? "")
+              ? new Date(Number(url.searchParams.get("asked"))).toISOString()
+              : null,
           });
           let transcribe;
           try {

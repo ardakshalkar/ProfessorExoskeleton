@@ -336,6 +336,43 @@ export const configFromRegistry = (name?: string | null, registryFile?: string |
   };
 };
 
+/**
+ * The transcription connection as it is configured, whether or not it can be
+ * used right now. What the student is told about where their voice goes
+ * (AGT-7) must name the provider that is set up, even while its key is
+ * missing — a missing key is the professor's problem to fix, not a reason to
+ * tell the student the recording stays on the machine. Null when there is no
+ * transcription connection at all.
+ */
+export const describeTranscription = (registryFile?: string | null): {
+  name: string;
+  provider: string;
+  model: string;
+  local: boolean;
+  pricePerMinute: number | null;
+  /** Why it cannot transcribe yet, if it cannot. */
+  problem: string | null;
+} | null => {
+  const registry = loadRegistry(registryFile);
+  const connection = findConnection(registry, { type: "transcription" });
+  if (!connection) return null;
+  const local = !!connection.baseUrl && /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(connection.baseUrl);
+  let problem: string | null = null;
+  try {
+    configFromRegistry(connection.name, registryFile);
+  } catch (error) {
+    problem = (error as Error).message;
+  }
+  return {
+    name: connection.name,
+    provider: connection.provider ?? "?",
+    model: connection.model ?? "?",
+    local,
+    pricePerMinute: connection.pricePerMinute,
+    problem,
+  };
+};
+
 /** What a batch of this many seconds would cost on this connection, or null when it has no price. */
 export const estimate = (pricePerMinute: number | null | undefined, seconds: number): number | null =>
   typeof pricePerMinute === "number" ? Math.round(pricePerMinute * (seconds / 60) * 100) / 100 : null;

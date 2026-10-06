@@ -834,6 +834,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-dmeteron{background:#2f8a4e}
 .pp-dlivemark{font-size:11.5px;font-weight:600}
 .pp-dother{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-dconsent{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:8px;
+  border:1px solid var(--dsw-alias-border-l2,#c9c9ce)}
+.pp-dstatement{margin:0;padding:6px 10px;border-left:3px solid #c43030;font-size:13px;line-height:1.5}
 .pp-dspeaking{background:#2f6fd6;border-color:#2f6fd6;color:#fff;font-weight:600}
 .pp-dchooser{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
 .pp-dproposal{display:flex;flex-direction:column;gap:4px}
@@ -6479,6 +6482,36 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       dataRef.current = data;
 
       /*
+       * AGT-7: consent. Nothing records until the professor confirms the
+       * student agreed to the statement the server wrote from the provider in
+       * use — the server refuses a take without it, so this is the visible
+       * half of a rule that is enforced where the file is written. Withdrawal
+       * stops everything at once and drops the take in hand unsent.
+       */
+      const consented = !!(data && data.consent && data.consent.agreed && !data.consent.withdrawn_at);
+      const [confirmWithdraw, setConfirmWithdraw] = React.useState(false);
+      const [consentBusy, setConsentBusy] = React.useState(false);
+      // A manual take in progress when consent is withdrawn is stopped and not sent.
+      const discard = React.useRef(false);
+      const answerConsent = (action) => {
+        setConsentBusy(true);
+        return fetch(endpoint("/api/defence/consent"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error) setSaid({ error: true, text: result.error });
+          })
+          .catch((error) => setSaid({ error: true, text: String(error) }))
+          .then(() => {
+            setConsentBusy(false);
+            setTick((value) => value + 1);
+          });
+      };
+
+      /*
        * AGT-6: the professor's own words. Holding P — or the button — while
        * speaking marks the stretch as theirs, in seconds from the start of the
        * take in hand; the server then never counts it as the student's answer,
@@ -6600,10 +6633,10 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       }, []);
 
       /** Send one take; transcribed by the server. Resolves either way, having said what went wrong. */
-      const upload = (questionId, blob, seconds, ranges) => {
+      const upload = (questionId, blob, seconds, ranges, askedAt) => {
         const spoke = (ranges || []).map((range) => range[0].toFixed(1) + "-" + range[1].toFixed(1)).join(",");
         setPending((count) => count + 1);
-        return fetch(endpoint("/api/defence/answer", "&question=" + encodeURIComponent(questionId) + "&seconds=" + seconds.toFixed(1) + (spoke ? "&professor=" + spoke : "")), {
+        return fetch(endpoint("/api/defence/answer", "&question=" + encodeURIComponent(questionId) + "&seconds=" + seconds.toFixed(1) + (spoke ? "&professor=" + spoke : "") + (askedAt ? "&asked=" + Math.round(askedAt) : "")), {
           method: "POST",
           headers: { "Content-Type": blob.type },
           body: blob,
@@ -6623,7 +6656,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       };
 
       const start = (questionId) => {
-        if (recording || sending || handsFree) return;
+        if (recording || sending || handsFree || !consented) return;
         setSaid(null);
         if (!navigator.mediaDevices || typeof MediaRecorder === "undefined") {
           setSaid({ error: true, text: "This browser cannot record here: the page has to be served over https or from localhost." });
@@ -6647,12 +6680,17 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               setRecording(null);
               showOnScreen(null, "idle");
               const blob = new Blob(chunks, { type: (media.mimeType || type || "audio/webm").split(";")[0] });
+              if (discard.current) {
+                discard.current = false;
+                closeMarks();
+                return;
+              }
               if (!blob.size) {
                 setSaid({ error: true, text: "Nothing was recorded." });
                 return;
               }
               setSending(questionId);
-              upload(questionId, blob, (Date.now() - started) / 1000, closeMarks()).then(() => setSending(null));
+              upload(questionId, blob, (Date.now() - started) / 1000, closeMarks(), started).then(() => setSending(null));
             };
             recorder.current = media;
             media.start(1000);
@@ -6838,11 +6876,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         if (!take || take.media.state === "inactive") return;
         running.take = null;
         const ranges = closeMarks();
-        const keep = how !== "skip" && (take.spoke || how === "space");
+        const keep = how !== "skip" && how !== "withdraw" && (take.spoke || how === "space");
         take.media.onstop = () => {
           const blob = new Blob(take.chunks, { type: (take.media.mimeType || running.type || "audio/webm").split(";")[0] });
-          const sent = keep && blob.size ? upload(take.question, blob, (Date.now() - take.started) / 1000, ranges) : Promise.resolve();
-          if (how === "pause") releaseMicrophone();
+          const sent = keep && blob.size ? upload(take.question, blob, (Date.now() - take.started) / 1000, ranges, take.started) : Promise.resolve();
+          if (how === "pause" || how === "withdraw") releaseMicrophone();
           // An answer was given and the model may choose what follows it: wait
           // for the transcript, then ask. A skipped question, or a desk told
           // not to ask the model, goes straight to the next prepared one.
@@ -6948,7 +6986,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       }, [proposal && proposal.index, proposal && proposal.editing !== null]);
 
       const startHandsFree = () => {
-        if (recording || sending || loop.current) return;
+        if (recording || sending || loop.current || !consented) return;
         setSaid(null);
         if (!navigator.mediaDevices || typeof MediaRecorder === "undefined" || typeof AudioContext === "undefined") {
           setSaid({ error: true, text: "This browser cannot record here: the page has to be served over https or from localhost." });
@@ -7096,6 +7134,80 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             " read each question aloud there",
           ),
         );
+
+      /** The student withdrew: stop everything now, send nothing more, and record it. */
+      const withdraw = () => {
+        setConfirmWithdraw(false);
+        setProposal(null);
+        const running = loop.current;
+        if (running && running.take) endTake("withdraw");
+        else if (running) releaseMicrophone();
+        if (recorder.current && recorder.current.state !== "inactive") {
+          discard.current = true;
+          recorder.current.stop();
+        }
+        answerConsent("withdraw");
+      };
+
+      // The student reads what they are agreeing to on their own screen.
+      React.useEffect(() => {
+        if (!data || data.error || consented || !screen.current.channel) return;
+        const state = {
+          type: "state",
+          phase: data.consent && data.consent.withdrawn_at ? "stopped" : "consent",
+          title: (data.assessment && data.assessment.title) || "",
+          label: data.consent && data.consent.withdrawn_at ? "Recording stopped" : "Before we begin",
+          text: data.consent && data.consent.withdrawn_at ? "You withdrew your agreement. Nothing more is recorded." : data.statement || "",
+        };
+        screen.current.last = state;
+        screen.current.channel.postMessage(state);
+      }, [data && data.statement, consented, data && data.consent && data.consent.withdrawn_at, screenState]);
+
+      const clockTime = (iso) => {
+        const at = new Date(iso);
+        return Number.isNaN(at.getTime()) ? iso : String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0");
+      };
+
+      const consentPanel = () => {
+        const previous = data.consent;
+        if (consented) {
+          return h(
+            "div",
+            { className: "pp-approverow" },
+            h("span", { className: "pp-dim", title: previous.statement }, "The student agreed to be recorded at " + clockTime(previous.at) + "."),
+            confirmWithdraw
+              ? h(
+                  React.Fragment,
+                  null,
+                  h("button", { type: "button", className: "pp-segbtn pp-drec", disabled: consentBusy, onClick: withdraw }, "Stop and record the withdrawal"),
+                  h("button", { type: "button", className: "pp-segbtn", onClick: () => setConfirmWithdraw(false) }, "Cancel"),
+                )
+              : h("button", { type: "button", className: "pp-segbtn", onClick: () => setConfirmWithdraw(true) }, "The student withdraws"),
+          );
+        }
+        return h(
+          "div",
+          { className: "pp-dconsent" },
+          h("b", null, previous && previous.withdrawn_at ? "The student withdrew at " + clockTime(previous.withdrawn_at) + "." : "Before anything is recorded"),
+          previous && previous.withdrawn_at
+            ? h("div", { className: "pp-dim" }, "Nothing more is recorded. The takes before it are kept and marked withdrawn, so nothing cites them; deleting them is your decision.")
+            : h(
+                React.Fragment,
+                null,
+                h("div", null, "Read this to the student, or let them read it on their screen:"),
+                h("blockquote", { className: "pp-dstatement" }, data.statement),
+                previous && !previous.agreed
+                  ? h("div", { className: "pp-dwarn" }, "At " + clockTime(previous.at) + " the student did not agree. Nothing is recorded unless they agree now.")
+                  : null,
+                h(
+                  "div",
+                  { className: "pp-approverow" },
+                  h("button", { type: "button", className: "pp-segbtn pp-drec", disabled: consentBusy, onClick: () => answerConsent("agree") }, "The student agreed"),
+                  h("button", { type: "button", className: "pp-segbtn", disabled: consentBusy, onClick: () => answerConsent("decline") }, "The student did not agree"),
+                ),
+              ),
+        );
+      };
 
       const startRow = () =>
         h(
@@ -7257,7 +7369,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   {
                     type: "button",
                     className: "pp-segbtn",
-                    disabled: Boolean(recording || sending || handsFree),
+                    disabled: Boolean(recording || sending || handsFree || !consented),
                     onClick: () => start(entry.id),
                   },
                   sending === entry.id ? "Transcribing…" : takes.length ? "● Record again" : "● Record answer",
@@ -7311,7 +7423,10 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     "div",
                     { className: where.error ? "pp-dwarn" : "pp-dim" },
                     where.error
-                      ? "No transcription provider — answers are recorded and kept, and transcribed once one is set up. " + where.error
+                      ? (where.configured
+                          ? where.configured.name + " (" + where.configured.provider + " " + where.configured.model + ") cannot transcribe yet: "
+                          : "No transcription provider: ") +
+                        where.error + " Answers are still recorded and kept, and transcribed once it is fixed."
                       : "Transcribed by " + where.name + " (" + where.provider + " " + where.model + ")" +
                           (where.local ? ", on this machine." : ": the recording is sent to that provider.") +
                           (typeof where.pricePerMinute === "number" ? " $" + where.pricePerMinute + "/min." : ""),
@@ -7323,7 +7438,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               // Hands-free: one press starts it, and from then on the desk
               // listens, notices the end of each answer and moves on.
               data && !data.error && data.questions.length ? screenRow() : null,
-              data && !data.error && data.questions.length ? (handsFree ? handsPanel() : startRow()) : null,
+              data && !data.error && data.questions.length ? consentPanel() : null,
+              data && !data.error && data.questions.length && consented ? (handsFree ? handsPanel() : startRow()) : null,
               said ? h("div", { className: said.error ? "pp-dwarn" : "pp-dim" }, said.text) : null,
               data === null
                 ? h("div", { className: "pp-dim" }, "Loading…")

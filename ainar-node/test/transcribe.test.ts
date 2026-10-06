@@ -15,6 +15,7 @@ import {
   checkQuestions,
   defencePlace,
   readSession,
+  recordConsent,
   saveAnswer,
   transcribeTake,
   type Question,
@@ -217,6 +218,7 @@ test("browser recordings and phone files are kept; anything else is refused", ()
 test("every take is kept, numbered, and a failed transcription leaves the recording and the reason", async () => {
   const place = defencePlace(mkdtempSync(join(tmpdir(), "subs-")), "/ws", "RUN", "ASSESSMENT-HW1", "STUDENT-JNG7SN");
   const ids = { submission_id: "SUB-1", assessment_id: "ASSESSMENT-HW1", student_id: "STUDENT-JNG7SN" };
+  recordConsent(place, ids, { agreed: true, at: "2026-10-06T10:00:00Z", statement: "s", provider: null });
   const first = saveAnswer({ place, ids, questionId: "Q2", bytes: Buffer.from("a"), mime: "audio/webm;codecs=opus", seconds: 12.34 });
   const second = saveAnswer({ place, ids, questionId: "Q2", bytes: Buffer.from("b"), mime: "audio/webm", seconds: 3 });
   assert.equal(first.answer.audio, "answers/Q2-1.webm");

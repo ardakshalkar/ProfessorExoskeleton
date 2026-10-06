@@ -491,8 +491,12 @@ export interface Answer {
   audio: string;
   mime: string;
   recorded_at: string;
+  /** When the question was put up and listening began, if the desk said. */
+  asked_at?: string;
   seconds: number | null;
   transcript: Transcript | null;
+  /** Recorded before the student withdrew consent (AGT-7): kept, never cited. */
+  withdrawn?: boolean;
   /**
    * Where the professor held the speak key during this take, in seconds from
    * its start (AGT-6): those stretches are theirs, never the student's.
@@ -509,7 +513,73 @@ export interface Session {
   answers: Answer[];
   /** What the hands-free desk chose to ask, why, and what the professor did about it (AGT-2, AGT-7). */
   decisions?: Decision[];
+  /** Whether the student agreed to be recorded, to what, and when (AGT-7). */
+  consent?: Consent;
 }
+
+/**
+ * The student's agreement to be recorded (AGT-7), as the professor confirmed
+ * it. `statement` is what the student was told, written by the server from
+ * the transcription provider actually configured, so it cannot claim the
+ * voice stays where it does not. No name: the professor confirms it, and the
+ * session already says whose defence this is.
+ */
+export interface Consent {
+  agreed: boolean;
+  at: string;
+  statement: string;
+  /** The transcription connection named in the statement. */
+  provider: string | null;
+  /** When the student withdrew it. Recording stops; what was recorded is kept and marked. */
+  withdrawn_at?: string;
+}
+
+/** Whether recording is allowed now: agreed, and not withdrawn since. */
+export const consentGiven = (session: Session | null): boolean =>
+  !!session?.consent?.agreed && !session.consent.withdrawn_at;
+
+/**
+ * What the student is told before they agree: what is recorded, who hears
+ * it, and that they may stop. Built from the provider actually in use.
+ */
+export const consentStatement = (transcription: { name: string; provider: string; model: string; local: boolean } | null): string =>
+  [
+    "This oral defence will be recorded: your spoken answers, as audio.",
+    transcription
+      ? transcription.local
+        ? `The recordings are transcribed on this machine (${transcription.model}) and do not leave it.`
+        : `The recordings are sent to ${transcription.provider === "elevenlabs" ? "ElevenLabs" : "the transcription provider"} (${transcription.name}, ${transcription.model}) to be transcribed.`
+      : "No transcription service is set up yet; the recordings are kept on this machine until one is.",
+    "Your professor reads the transcripts and decides your mark; the system only proposes.",
+    "You may ask to stop at any time.",
+  ].join(" ");
+
+/** Record the student's answer to the consent statement. A later answer replaces an earlier one. */
+export const recordConsent = (
+  place: DefencePlace,
+  ids: { submission_id: string; assessment_id: string; student_id: string },
+  consent: Omit<Consent, "withdrawn_at">,
+): Session => {
+  const session = readSession(place.session) ?? { ...ids, answers: [] };
+  session.consent = consent;
+  writeSession(place.session, session);
+  return session;
+};
+
+/**
+ * The student withdrew. Recording stops, every take so far is marked
+ * `withdrawn` so nothing cites it, and the recordings stay: deleting a
+ * student's recordings is the professor's decision under their university's
+ * rules, not something the desk does on the way past.
+ */
+export const withdrawConsent = (place: DefencePlace, at: string): Session => {
+  const session = readSession(place.session);
+  if (!session?.consent?.agreed) throw new Error("there is no consent to withdraw");
+  session.consent.withdrawn_at = at;
+  for (const answer of session.answers) answer.withdrawn = true;
+  writeSession(place.session, session);
+  return session;
+};
 
 const SESSION_HEADER =
   "# PRIVATE — what one student said at their oral defence. Outside the\n" +
@@ -553,12 +623,22 @@ export const saveAnswer = (options: {
   mime: string;
   seconds?: number | null;
   professorSpoke?: Range[];
+  askedAt?: string | null;
   now?: Date;
 }): { answer: Answer; path: string } => {
   if (!/^Q\d+$/.test(options.questionId)) throw new Error(`${options.questionId} is not a question id`);
   const extension = audioExtension(options.mime);
   if (!extension) throw new Error(`${options.mime} is not an audio type this keeps`);
   const session = readSession(options.place.session) ?? { ...options.ids, answers: [] };
+  // AGT-7: nothing is kept without the student's recorded agreement. The
+  // bytes are not written at all, so a refused take leaves no trace.
+  if (!consentGiven(session)) {
+    throw new Error(
+      session.consent?.withdrawn_at
+        ? "the student withdrew consent; nothing more is recorded"
+        : "no recorded consent: the student has to agree to be recorded first",
+    );
+  }
   const take = session.answers.filter((answer) => answer.question_id === options.questionId).length + 1;
   const audio = `answers/${options.questionId}-${take}.${extension}`;
   const path = join(options.place.dir, audio);
@@ -570,6 +650,7 @@ export const saveAnswer = (options: {
     audio,
     mime: options.mime.split(";")[0]!.trim(),
     recorded_at: (options.now ?? new Date()).toISOString(),
+    ...(options.askedAt ? { asked_at: options.askedAt } : {}),
     seconds: typeof options.seconds === "number" && options.seconds > 0 ? Math.round(options.seconds * 10) / 10 : null,
     transcript: null,
     ...(options.professorSpoke?.length ? { professor_spoke: options.professorSpoke } : {}),
@@ -863,4 +944,88 @@ export const editQuestion = (file: string, questionId: string, text: string): Qu
   question.text = text.trim();
   writeDefence(file, drafted);
   return question;
+};
+
+// --------------------------------------------------------------------------
+// The replay (AGT-7, LIV-3)
+// --------------------------------------------------------------------------
+
+export interface ReplayEntry {
+  at: string;
+  kind: "consent" | "withdrawn" | "decision" | "answer";
+  text: string;
+}
+
+const OVERRIDES: Record<NonNullable<Decision["overridden"]>, string> = {
+  skip: "the professor skipped it",
+  edit: "the professor reworded it",
+  ask_now: "the professor asked it at once",
+  pause: "the professor paused the defence",
+};
+
+/**
+ * The whole exchange in the order it happened, for an appeal: what the
+ * student agreed to, each question and why it came, what the professor did
+ * instead, and what was said — whose words were whose, and which were
+ * unclear or withdrawn. Built only from what the session recorded; nothing
+ * here is inferred after the fact.
+ */
+export const replay = (session: Session | null, questions: Question[]): ReplayEntry[] => {
+  if (!session) return [];
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  const entries: ReplayEntry[] = [];
+  if (session.consent) {
+    entries.push({
+      at: session.consent.at,
+      kind: "consent",
+      text: `${session.consent.agreed ? "The student agreed to be recorded" : "The student did not agree to be recorded"}, having been told: "${session.consent.statement}"`,
+    });
+    if (session.consent.withdrawn_at) {
+      entries.push({ at: session.consent.withdrawn_at, kind: "withdrawn", text: "The student withdrew consent. Recording stopped; the takes before it are kept and marked withdrawn." });
+    }
+  }
+  for (const decision of session.decisions ?? []) {
+    const chosen = decision.question_id ? byId.get(decision.question_id) : null;
+    const what =
+      decision.action === "done"
+        ? "chose to end the defence"
+        : decision.action === "follow_up"
+          ? `wrote a follow-up, ${decision.question_id}: "${chosen?.text ?? "?"}"`
+          : `chose ${decision.question_id}: "${chosen?.text ?? "?"}"`;
+    entries.push({
+      at: decision.at,
+      kind: "decision",
+      text:
+        `${decision.after ? `After ${decision.after}, ` : ""}${decision.by} ${what}` +
+        (decision.why ? ` — ${decision.why.replace(/[.\s]+$/, "")}` : "") +
+        (decision.overridden ? `. Then ${OVERRIDES[decision.overridden]}.` : "") +
+        (decision.notes?.length ? ` (${decision.notes.join("; ")})` : ""),
+    });
+  }
+  for (const answer of session.answers) {
+    const heard = answer.transcript;
+    const words = heard
+      ? heard.segments
+          .map((segment) =>
+            segment.speaker === "professor"
+              ? `[professor: ${segment.text}]`
+              : segment.speaker === "unknown"
+                ? `[another voice: ${segment.text}]`
+                : segment.confidence === "low"
+                  ? `[unsure: ${segment.text}]`
+                  : segment.text,
+          )
+          .join(" ")
+      : `(no transcript${answer.error ? `: ${answer.error}` : ""})`;
+    const flags = [
+      answer.withdrawn ? "WITHDRAWN" : null,
+      heard?.speakers?.unclear ? "VOICES UNCLEAR" : null,
+    ].filter(Boolean);
+    entries.push({
+      at: answer.asked_at ?? answer.recorded_at,
+      kind: "answer",
+      text: `${answer.question_id} take ${answer.take}${answer.seconds ? `, ${answer.seconds}s` : ""}${flags.length ? ` [${flags.join(", ")}]` : ""} (${answer.audio}): ${words}`,
+    });
+  }
+  return entries.sort((a, b) => a.at.localeCompare(b.at));
 };

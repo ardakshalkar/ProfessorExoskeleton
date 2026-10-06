@@ -26,6 +26,8 @@ const questions = [
 const answers = [];
 const received = [];
 const decisions = [];
+let consent = null;
+const STATEMENT = "This oral defence will be recorded: your spoken answers, as audio. The recordings are transcribed on this machine (mock) and do not leave it. You may ask to stop at any time.";
 const overrides = [];
 
 const page = `<!doctype html>
@@ -98,6 +100,8 @@ http
         questions,
         answers,
         transcription: { name: "mock", provider: "openai", model: "none", local: true, pricePerMinute: 0 },
+        statement: STATEMENT,
+        consent,
       });
     }
     if (url.pathname === "/professor-pane/api/defence/audio") return res.writeHead(404), res.end();
@@ -136,11 +140,27 @@ http
       });
       return;
     }
-    if (url.pathname === "/decisions") return json(res, { decisions, overrides });
+    if (url.pathname === "/decisions") return json(res, { decisions, overrides, consent, answers: answers.map((a) => [a.question_id, !!a.withdrawn]) });
+    if (url.pathname === "/professor-pane/api/defence/consent" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        const { action } = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+        const at = new Date().toISOString();
+        if (action === "withdraw") {
+          consent = { ...consent, withdrawn_at: at };
+          for (const a of answers) a.withdrawn = true;
+        } else consent = { agreed: action === "agree", at, statement: STATEMENT, provider: "mock" };
+        json(res, { consent });
+      });
+      return;
+    }
     if (url.pathname === "/professor-pane/api/defence/answer" && req.method === "POST") {
       const chunks = [];
       req.on("data", (chunk) => chunks.push(chunk));
       req.on("end", () => {
+        // As the real server: no take is kept without consent.
+        if (!consent?.agreed || consent.withdrawn_at) return json(res, { error: "no recorded consent: the student has to agree to be recorded first" });
         const question = url.searchParams.get("question");
         const seconds = Number(url.searchParams.get("seconds"));
         const bytes = Buffer.concat(chunks).length;

@@ -42,6 +42,7 @@ main{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;ju
 #light{width:.8em;height:.8em;border-radius:50%;background:var(--dim);flex:none}
 body[data-phase=listening] #light,body[data-phase=hearing] #light{background:var(--rec);animation:pulse 1.4s ease-in-out infinite}
 body[data-phase=hearing] #status{color:var(--fg)}
+body[data-phase=consent] #question,body[data-phase=stopped] #question{font-size:clamp(20px,2.6vw,36px);font-weight:500}
 @keyframes pulse{50%{opacity:.35}}
 @media (prefers-reduced-motion:reduce){#light{animation:none!important}}
 #begin{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(16,17,20,.92);
@@ -65,6 +66,8 @@ body[data-phase=hearing] #status{color:var(--fg)}
   var $ = function (id) { return document.getElementById(id); };
   var STATES = {
     idle: "Not recording",
+    consent: "Not recording — please tell your professor whether you agree",
+    stopped: "Not recording",
     reading: "Reading the question…",
     listening: "Recording — answer when you are ready",
     hearing: "Recording",
