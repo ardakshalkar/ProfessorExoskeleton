@@ -31,6 +31,7 @@ import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { RosterStore } from "@ainar/core/src/roster.ts";
 import {
   nameCandidates,
+  parsePages,
   readPlan,
   scanPlace,
   scanStatus,
@@ -60,11 +61,20 @@ const lowConfidence = (place, student) => {
   }
 };
 
+/** A paper's page numbers, or none when the range cannot be read. */
+const safePages = (pages) => {
+  try {
+    return parsePages(String(pages));
+  } catch {
+    return [];
+  }
+};
+
 /** Which lane a planned paper sits in. */
 const laneOf = (paper) => {
   if (paper.skip) return "skipped";
   if (paper.problem) return "held";
-  if (paper.resolved && paper.match === "close") return "check";
+  if (paper.resolved && (paper.match === "close" || paper.match === "partial")) return "check";
   if (paper.resolved) return "placed";
   return "held"; // planned but never applied
 };
@@ -165,7 +175,11 @@ const stagesOf = ({ papers, status, assessment, rubric, items, responses, evalua
                 .join(" · "),
     },
   ];
-  const current = stages.findIndex((stage) => !stage.done);
+  // A held paper waits for the professor, not the pile: once anything is
+  // placed, the step after Match is the one to work on, and Match stays
+  // marked as theirs. Quiz 2 of CSS-4007 sat with 49 papers placed and none
+  // read because one clash kept Match current.
+  const current = stages.findIndex((stage) => !stage.done && !(stage.id === "match" && placed > 0));
   return stages.map((stage, index) => ({
     id: stage.id,
     label: stage.label,
@@ -206,7 +220,8 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
         pages: String(paper.pages),
         lane,
         written: names && paper.name ? String(paper.name) : null,
-        has_name: Boolean(paper.name || paper.number),
+        also: names ? (paper.also ?? []).map(String) : [],
+        has_name: Boolean(paper.name || paper.also?.length || paper.number),
         pinned: Boolean(paper.student),
         resolved: paper.resolved ?? null,
         resolved_name: paper.resolved ? nameOf(paper.resolved) : null,
@@ -215,11 +230,30 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
         skip: paper.skip ?? null,
         note: names ? paper.note ?? null : null,
         not: paper.not ?? [],
+        // Another paper resolves to the same student: each, with its pages, so
+        // the two can be drawn side by side. Its own pages too, for the same.
+        clash: (paper.clash ?? []).map((ref) => {
+          const [clashFile, clashPages] = String(ref).split("#");
+          return { file: clashFile, pages: clashPages, page_list: safePages(clashPages) };
+        }),
+        page_list: paper.clash?.length ? safePages(paper.pages) : [],
         candidates: [],
       };
-      if ((lane === "held" || lane === "check") && paper.name) {
-        entry.candidates = nameCandidates(String(paper.name), { store, enrolled, not: paper.not ?? [] })
+      // Every name on the cover suggests; a clash does not — the name already
+      // found its student, and the question is which paper is theirs.
+      const written = [paper.name, ...(paper.also ?? [])].filter(Boolean).map(String);
+      if ((lane === "held" || lane === "check") && written.length && !entry.clash.length) {
+        const nearest = new Map();
+        for (const text of written) {
+          for (const candidate of nameCandidates(text, { store, enrolled, not: paper.not ?? [] })) {
+            const before = nearest.get(candidate.student);
+            if (!before || candidate.distance < before.distance) nearest.set(candidate.student, candidate);
+          }
+        }
+        entry.candidates = [...nearest.values()]
           .filter((candidate) => candidate.student !== paper.resolved)
+          .sort((a, b) => a.distance - b.distance || a.student.localeCompare(b.student))
+          .slice(0, 3)
           .map((candidate) => ({ ...candidate, name: nameOf(candidate.student) }));
       }
       papers.push(entry);
@@ -243,10 +277,14 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
   const canvas = canvasMarks({ bundle, runId, assessmentId: chosen.id, ledger: Ledger.load(runId, syncDirectory) });
 
   const count = (lane) => papers.filter((paper) => paper.lane === lane).length;
+  const stages = stagesOf({ papers, status, assessment, rubric, items, responses, evaluations, low, canvas });
   return {
     ...base,
     assessment: { id: chosen.id, title: chosen.title, questions: items },
-    stages: stagesOf({ papers, status, assessment, rubric, items, responses, evaluations, low, canvas }),
+    stages,
+    // The step to work on now: the first not done, past a Match that only
+    // waits on held papers. Null when every step is done.
+    next: stages.find((stage) => stage.state === "current" || (stage.state === "yours" && !(stage.id === "match" && status.placed.length > 0)))?.id ?? null,
     canvas,
     lanes: { check: count("check"), held: count("held"), placed: count("placed"), skipped: count("skipped") },
     papers,
@@ -277,27 +315,60 @@ export const cropsAvailable = () => {
  * does and nowhere else. The file is looked for in the inbox and in `done/`,
  * because a batch every page of which is placed has moved there.
  */
-export const paperCrop = ({ submissions, runId, assessmentId, file, pages }) => {
+export const paperCrop = ({ submissions, runId, assessmentId, file, pages, whole = null }) => {
   if (!ID.test(runId) || !ID.test(assessmentId)) throw new Error("not a run or an assessment id");
   if (!/^[\w.-]+\.pdf$/i.test(file)) throw new Error("not a scan's file name");
   const first = Number(String(pages).split(/[-,]/)[0]);
   if (!Number.isInteger(first) || first < 1) throw new Error("not a page range");
+  if (whole !== null) return paperPage({ submissions, runId, assessmentId, file, pages, page: whole });
   if (!cropsAvailable()) throw new Error("pdftoppm is not installed, so pages cannot be drawn");
   const place = scanPlace(submissions, runId, assessmentId);
   const pdf = [join(place.inbox, file), join(place.done, file)].find((path) => existsSync(path));
   if (!pdf) throw new Error(`${file} is not in this pile`);
   const cache = join(place.inbox, "_crops");
   // The geometry is in the name, so a change to it is not served a stale crop.
-  const stem = `${file.replace(/\.pdf$/i, "")}-p${String(first).padStart(3, "0")}-h1`;
+  const stem = `${file.replace(/\.pdf$/i, "")}-p${String(first).padStart(3, "0")}-h2`;
   const target = join(cache, `${stem}.png`);
   if (existsSync(target) && statSync(target).mtimeMs >= statSync(pdf).mtimeMs) return readFileSync(target);
   mkdirSync(cache, { recursive: true });
-  // 100 dpi, from half an inch down to about two: the title, the course line
+  // 100 dpi, from the top edge down to 2.2 inches: the title, the course line
   // and the Name / Group line under it — the printed context that says this is
-  // the right paper, and the handwriting that says whose.
+  // the right paper, and the handwriting that says whose. From the very top,
+  // because a student who misses the Name line writes above the title (two
+  // did on Quiz 2 of CSS-4007). The same band the Grade view hides on
+  // Pseudonyms, so the two agree on where a name can be.
   const drawn = spawnSync(
     "pdftoppm",
-    ["-png", "-r", "100", "-f", String(first), "-l", String(first), "-x", "0", "-y", "50", "-W", "830", "-H", "170", "-singlefile", pdf, join(cache, stem)],
+    ["-png", "-r", "100", "-f", String(first), "-l", String(first), "-x", "0", "-y", "0", "-W", "830", "-H", "220", "-singlefile", pdf, join(cache, stem)],
+    { timeout: 30000 },
+  );
+  if (drawn.error || !existsSync(target)) throw new Error("the page could not be drawn");
+  return readFileSync(target);
+};
+
+/**
+ * One whole page of a paper, small: what two papers that resolve to one
+ * student are compared by. A spoiled copy is nearly blank and the paper is
+ * not, which a glance at both settles where a name cannot. `page` is a page
+ * number in the file, and must be one of the paper's.
+ */
+const paperPage = ({ submissions, runId, assessmentId, file, pages, page }) => {
+  const own = parsePages(String(pages));
+  if (!own.includes(Number(page))) throw new Error(`page ${page} is not one of pages ${pages}`);
+  if (!cropsAvailable()) throw new Error("pdftoppm is not installed, so pages cannot be drawn");
+  const place = scanPlace(submissions, runId, assessmentId);
+  const pdf = [join(place.inbox, file), join(place.done, file)].find((path) => existsSync(path));
+  if (!pdf) throw new Error(`${file} is not in this pile`);
+  const cache = join(place.inbox, "_crops");
+  const stem = `${file.replace(/\.pdf$/i, "")}-p${String(page).padStart(3, "0")}-whole1`;
+  const target = join(cache, `${stem}.png`);
+  if (existsSync(target) && statSync(target).mtimeMs >= statSync(pdf).mtimeMs) return readFileSync(target);
+  mkdirSync(cache, { recursive: true });
+  // 45 dpi: an A4 page about 370 pixels wide — enough to see how much is
+  // written, not enough to read it, which the paper itself is for.
+  const drawn = spawnSync(
+    "pdftoppm",
+    ["-png", "-r", "45", "-f", String(page), "-l", String(page), "-singlefile", pdf, join(cache, stem)],
     { timeout: 30000 },
   );
   if (drawn.error || !existsSync(target)) throw new Error("the page could not be drawn");

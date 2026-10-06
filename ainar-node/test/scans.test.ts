@@ -373,6 +373,42 @@ test("two papers for one student are both held, wherever they are in the pile", 
   const result = await applyScans(plan, context(s));
   assert.deepEqual(result.placed, []);
   assert.equal(result.problems.filter((problem) => /2 papers resolve/.test(problem.problem)).length, 2);
+  const [first, second] = readPlan(s.place)!.sources[0]!.papers;
+  assert.deepEqual(first!.clash, ["batch.pdf#3-5"], "each names the other");
+  assert.deepEqual(second!.clash, ["batch.pdf#1-2"]);
+  assert.match(second!.problem!, /this and pages 1-2; .*skip: spoiled copy.*student:/, "and says the ways out");
+});
+
+test("a spoiled copy marked skip lets the other paper through, and the clash is cleared", async () => {
+  const s = setting();
+  const plan = await batchPlan(s, [{ pages: "1-2", number: "220001" }, { pages: "3-5", name: "Alice Adams" }]);
+  await applyScans(plan, context(s));
+  const again = readPlan(s.place)!;
+  again.sources[0]!.papers[1]!.skip = "spoiled copy";
+  const result = await applyScans(again, context(s));
+  assert.deepEqual(result.placed.map((entry) => entry.student), [s.alice]);
+  assert.equal(readPlan(s.place)!.sources[0]!.papers[0]!.clash, undefined);
+});
+
+test("one word written places a paper on the one student who has it, to check — never in roster sync", async () => {
+  const s = setting();
+  const known = { store: s.store, salt: SALT, enrolled: s.enrolled };
+  assert.deepEqual(identify({ pages: "1", name: "Alice" }, { ...known, partial: true }), { student: s.alice, match: "partial" });
+  assert.match((identify({ pages: "1", name: "Brown" }, { ...known, partial: true }) as any).problem, /one word .* 2 enrolled students/);
+  assert.match((identify({ pages: "1", name: "Alice" }, known) as any).problem, /matches no/, "off unless asked for");
+  const result = await applyScans(await batchPlan(s, [{ pages: "1-5", name: "Alice" }]), context(s));
+  assert.deepEqual(result.placed.map((entry) => entry.match), ["partial"]);
+});
+
+test("a fuller name elsewhere on the cover places the paper; two names for two students hold it", () => {
+  const s = setting();
+  const known = { store: s.store, salt: SALT, enrolled: s.enrolled, partial: true };
+  assert.deepEqual(identify({ pages: "1", name: "Brown", also: ["Bob Brown"] }, known), { student: s.bob }, "the strongest match wins");
+  assert.deepEqual(identify({ pages: "1", also: ["Alice Adams"] }, known), { student: s.alice }, "a name only above the title");
+  assert.match(
+    (identify({ pages: "1", name: "Alice", also: ["Carol Brown"] }, known) as any).problem,
+    /fit different students: "Alice" → .*, "Carol Brown" → /,
+  );
 });
 
 test("a different scan for a placed student is refused unless --replace", async () => {

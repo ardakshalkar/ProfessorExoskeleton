@@ -440,6 +440,11 @@ window.__ModuleLoader__.load({
 .pp-card:focus,.pp-card.pp-focus{border-color:var(--dsw-alias-label-primary,#111)}
 .pp-crop{display:block;width:100%;height:auto;border-radius:4px;margin:0 0 6px;background:#fff}
 .pp-cardmeta{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b);word-break:break-word}
+.pp-clash{display:flex;gap:10px;margin:6px 0;flex-wrap:wrap}
+.pp-clash figure{margin:0;flex:1 1 140px;min-width:0}
+.pp-clashpages{display:flex;gap:3px}
+.pp-clashpages img{flex:1 1 0;min-width:0;height:auto;border-radius:3px;background:#fff;border:1px solid var(--dsw-alias-border-secondary,#ddd)}
+.pp-clash figcaption{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b);margin-top:2px}
 .pp-written{font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);font-size:11.5px}
 .pp-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center}
 .pp-actions select{font:inherit;font-size:11px;max-width:100%;padding:2px 4px;border-radius:6px;
@@ -4138,7 +4143,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             kind === "suggested"
               ? h("span", { className: "pp-rbadge pp-rbadge-close" }, "suggested · not placed")
               : paper.lane === "check"
-                ? h("span", { className: "pp-rbadge pp-rbadge-close" }, "close spelling")
+                ? h("span", { className: "pp-rbadge pp-rbadge-close" }, paper.match === "partial" ? "one word" : "close spelling")
                 : h("span", { className: "pp-rbadge" }, paper.match === "words" ? "same words" : "exact"),
             h(
               "span",
@@ -5732,6 +5737,40 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         "&assessment=" + encodeURIComponent(assessmentId) +
         "&file=" + encodeURIComponent(paper.file) +
         "&pages=" + encodeURIComponent(paper.pages);
+      // A harness started before `also` and `clash` existed serves papers
+      // without them; the tab draws those as having none, not as a crash.
+      doc.papers.forEach((paper) => {
+        paper.also = paper.also || [];
+        paper.clash = (paper.clash || []).map((entry) => Object.assign({ page_list: [] }, entry));
+        paper.page_list = paper.page_list || [];
+      });
+      const pageUrl = (paper, page) =>
+        query("/api/scans/crop").replace(/assessment=[^&]*/, "") +
+        "&assessment=" + encodeURIComponent(assessmentId) +
+        "&file=" + encodeURIComponent(paper.file) +
+        "&pages=" + encodeURIComponent(paper.pages) +
+        "&whole=" + page;
+      // Two papers for one student, drawn whole and side by side: a spoiled
+      // copy is the nearly blank one, which no name on either can say.
+      const sideBySide = (paper) =>
+        h(
+          "div",
+          { className: "pp-clash" },
+          [{ file: paper.file, pages: paper.pages, page_list: paper.page_list, own: true }].concat(paper.clash).map((entry) =>
+            h(
+              "figure",
+              { key: entry.file + "#" + entry.pages },
+              h(
+                "div",
+                { className: "pp-clashpages" },
+                entry.page_list.map((page) =>
+                  h("img", { key: page, loading: "lazy", alt: "Page " + page + " of " + entry.file, src: pageUrl(entry, page) }),
+                ),
+              ),
+              h("figcaption", null, (entry.own ? "This paper" : "The other") + " · pp. " + entry.pages),
+            ),
+          ),
+        );
       const reviewable = doc.papers.filter(
         (paper) =>
           (paper.resolved && !paper.pinned && paper.has_name && (paper.lane === "check" || paper.lane === "placed")) ||
@@ -5803,9 +5842,18 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 : h("span", null, paper.has_name ? "A number is written" : "No name written")
               : h("span", null, "Pages " + paper.pages),
           ),
+          names && paper.also.length
+            ? h("div", { className: "pp-cardmeta" }, "Also written: ", paper.also.map((text) => "“" + text + "”").join(", "))
+            : null,
           paper.lane === "check"
-            ? h("div", { className: "pp-cardmeta" }, "Placed on a close spelling: " + who(paper.resolved, paper.resolved_name))
+            ? h(
+                "div",
+                { className: "pp-cardmeta" },
+                (paper.match === "partial" ? "Placed on one word of the name: " : "Placed on a close spelling: ") +
+                  who(paper.resolved, paper.resolved_name),
+              )
             : h("div", { className: "pp-cardmeta" }, paper.problem || "Not placed yet"),
+          names && doc.crops && paper.clash.length ? sideBySide(paper) : null,
           paper.lane === "held" && paper.candidates.length
             ? h(
                 "div",
@@ -5838,8 +5886,22 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   ),
                 )
               : null,
-            picker(paper, paper.lane === "check" ? "Someone else" : "Pick from class"),
-            paper.lane === "held"
+            paper.clash.length
+              ? h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    disabled: Boolean(busy),
+                    title: "This one is not their paper — a copy they started and gave up, handed in with the real one",
+                    onClick: () =>
+                      assign(paper, { skip: "spoiled copy — the paper is pp. " + paper.clash.map((entry) => entry.pages).join(", ") }, paper.pages),
+                  },
+                  "Spoiled copy",
+                )
+              : null,
+            picker(paper, paper.lane === "check" ? "Someone else" : paper.clash.length ? "Someone else's" : "Pick from class"),
+            paper.lane === "held" && !paper.clash.length
               ? h(
                   "button",
                   {
@@ -5874,7 +5936,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         }
       };
 
-      const current = doc.stages.find((stage) => stage.state === "current" || stage.state === "yours");
+      // `next` is the server's word on which step to work on; a harness from
+      // before it falls back to the first step not done.
+      const current =
+        doc.stages.find((stage) => stage.id === doc.next) ||
+        (doc.next === undefined ? doc.stages.find((stage) => stage.state === "current" || stage.state === "yours") : null);
       const ask = current && STEP_PROMPTS[current.id] ? STEP_PROMPTS[current.id](props.runId, assessmentId) : null;
       // Grading opens as soon as one answer is recorded: the rest are read
       // while the professor works, and the view says which are still waiting.
@@ -6017,7 +6083,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               "div",
               { className: "pp-lane" },
               "Check",
-              h("span", null, "· " + check.length + " placed on a close spelling — confirm, or say who it is"),
+              h("span", null, "· " + check.length + " placed on a close spelling or one word of the name — confirm, or say who it is"),
             )
           : null,
         check.map((paper) => card(paper, work.indexOf(paper))),
@@ -6043,7 +6109,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 "li",
                 { key: paper.file + paper.pages },
                 "pp. " + paper.pages + " → " + who(paper.resolved, paper.resolved_name) +
-                  (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : ""),
+                  (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : paper.match === "partial" ? " (one word)" : ""),
               ),
             ),
             skipped.map((paper) => h("li", { key: paper.file + paper.pages }, "pp. " + paper.pages + " — " + paper.skip)),

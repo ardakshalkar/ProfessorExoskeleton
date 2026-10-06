@@ -27,6 +27,8 @@
  * whole of it lives in `src/lms/` — this file parses its arguments and nothing
  * else. `scans read` sends page images to a vision model and brings back only a
  * draft transcript, kept in the private folder; it lives in `src/scan-read.ts`.
+ * `scans names` sends the top of each cover the same way and brings back the
+ * name as written, into the private plan; it lives in `src/scan-names.ts`.
  */
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -149,6 +151,7 @@ import {
   writePlan,
   type Shape,
 } from "../src/scans.ts";
+import { nameTargets, readNames } from "../src/scan-names.ts";
 import { DEFAULT_MODEL, deepseekKey, deepseekReader, EFFORTS, readScans, readTargets, type Effort } from "../src/scan-read.ts";
 import {
   acceptRubric,
@@ -412,13 +415,18 @@ const HELP = `ainar — the AINAR course model CLI
   scans status RUN --assessment A          what is in the inbox, placed, read
   scans plan RUN --assessment A [--per-file | --pages-per-student N]
                                            list _inbox/*.pdf, propose the split
+  scans names RUN --assessment A [--effort E] [--force] [--model M]
+              [--concurrency N] [--dry-run]
+                                           read who wrote each paper off its
+                                           cover into the plan (vision model)
   scans apply RUN --assessment A [--replace] [--dry-run]
                                            split, match to the roster, record
   scans read RUN --assessment A [--effort off|low|high|max] [--student S]
              [--force] [--all-pages] [--model M] [--concurrency N] [--dry-run]
                                            fill unread transcripts with a vision
-                                           model (DeepSeek, effort low) — the one
-                                           scans step that leaves the machine
+                                           model (DeepSeek, effort low) — with
+                                           names, the scans steps that leave
+                                           the machine
   scans record RUN --assessment A [--dry-run]
                                            complete transcripts -> item responses
   scans answers RUN --assessment A [--item ITEM] [--json]
@@ -2264,13 +2272,14 @@ try {
       let sub = rest[0] ?? "";
       const runId = rest[1];
       const assessmentId = flag("assessment");
-      const SUBS = ["identify", "file", "status", "plan", "apply", "assign", "read", "record", "answers"];
+      const SUBS = ["identify", "file", "status", "plan", "names", "apply", "assign", "read", "record", "answers"];
       if (!SUBS.includes(sub) || !runId || (sub !== "identify" && !assessmentId)) {
         console.error(
           "usage: scans identify RUN [--title TEXT] [--date YYYY-MM-DD]\n" +
             "       scans file RUN FILE.pdf --assessment ASSESSMENT-ID\n" +
             "       scans assign RUN --assessment ASSESSMENT-ID --pages 13-14 [--file F.pdf] (--student STUDENT-ID | --skip WHY | --reject STUDENT-ID)\n" +
             "       scans assign RUN --assessment ASSESSMENT-ID --assignments '[{\"pages\":\"13-14\",\"student\":\"STUDENT-…\"}, …]'\n" +
+            "       scans names RUN --assessment ASSESSMENT-ID [--effort off|low|high|max] [--force] [--dry-run]\n" +
             "       scans read RUN --assessment ASSESSMENT-ID [--effort off|low|high|max] [--student STUDENT-ID] [--force] [--dry-run]\n" +
             "       scans {status|plan|apply|record|answers} RUN --assessment ASSESSMENT-ID",
         );
@@ -2372,7 +2381,7 @@ try {
         break;
       }
 
-      if (!items.length && (sub === "plan" || sub === "apply" || sub === "assign" || sub === "read")) {
+      if (!items.length && (sub === "plan" || sub === "names" || sub === "apply" || sub === "assign" || sub === "read")) {
         // Every transcript is built from the questions; with none, each paper
         // would be placed with an empty transcript and nothing would say so.
         throw new Error(
@@ -2401,8 +2410,63 @@ try {
         break;
       }
 
+      if (sub === "names") {
+        // Who wrote each paper, read off its cover into the plan: see
+        // src/scan-names.ts. Only the top of each first page is sent; matching
+        // the name to the roster stays `apply`'s.
+        const effort = (flag("effort") ?? "low") as Effort;
+        if (!EFFORTS.includes(effort)) throw new Error(`--effort is one of ${EFFORTS.join(", ")}, not ${effort}`);
+        const model = flag("model") ?? DEFAULT_MODEL;
+        const concurrency = Number(flag("concurrency") ?? 6);
+        if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error(`--concurrency takes a whole number, not ${flag("concurrency")}`);
+        const force = args.includes("--force");
+        const targets = nameTargets(place, { force });
+        if (dryRun || !targets.length) {
+          for (const entry of targets) out(`  would read  ${entry.file} pages ${entry.pages}`);
+          out(
+            targets.length
+              ? `\n--dry-run: ${targets.length} cover(s) would be sent to ${model} at effort ${effort}; nothing sent or written.`
+              : "Every paper in the plan already says who it is, is placed, or is skipped — --force reads the unplaced ones again.",
+          );
+          break;
+        }
+        const apiKey = deepseekKey(fileURLToPath(new URL("../../", import.meta.url)));
+        if (!apiKey) throw new Error("no DeepSeek key: set DEEPSEEK_API_KEY, or add it to the harness (.dsh/.credentials.yaml)");
+        out(`reading ${targets.length} cover(s) of ${assessmentId} with ${model}, effort ${effort}`);
+        const results = await readNames({
+          place,
+          title: assessment.title,
+          courseId: (bundle.course as { course_id: string }).course_id,
+          variants: variantsOf(items),
+          reader: deepseekReader({ apiKey, model, effort }),
+          model,
+          effort,
+          force,
+          concurrency,
+          now,
+          // Pages and confidence only: the names stay in the plan.
+          onPaper: (entry) =>
+            out(
+              `  ${entry.status.padEnd(8)} ${entry.file} pages ${entry.pages}` +
+                (entry.confidence ? `  ${entry.confidence}` : "") +
+                (entry.problems.length ? `  — ${entry.problems.join("; ")}` : ""),
+            ),
+        });
+        const usd = results.reduce((sum, entry) => sum + (entry.usd ?? 0), 0);
+        const count = (status: string) => results.filter((entry) => entry.status === status).length;
+        out(
+          `\n${count("named")} named, ${count("check")} to check, ${count("unparsed") + count("failed")} not read; ` +
+            `about $${usd.toFixed(3)} at list price. Replies kept in ${join(place.inbox, "names.json")}.`,
+        );
+        out(
+          `Next: \`scans apply ${runId} --assessment ${assessmentId}\` matches each name to the roster. ` +
+            "A paper marked to check carries a note in the plan; the Scans tab shows its crop.",
+        );
+        break;
+      }
+
       if (sub === "read") {
-        // The one scans step that calls a model: see src/scan-read.ts. Page
+        // Reading the answers with a model: see src/scan-read.ts. Page
         // images and readings stay in the private folder; the model provider is
         // the only thing outside this machine that sees a page.
         const effort = (flag("effort") ?? "low") as Effort;
@@ -2566,11 +2630,19 @@ try {
             `  placed    ${entry.student}  ${entry.pages} page(s)` +
               (entry.variant ? `  variant ${entry.variant}` : "") +
               (entry.replaced ? "  (replaced an earlier scan)" : "") +
-              (entry.match === "close" ? "  (close spelling — check)" : entry.match === "words" ? "  (by its words)" : ""),
+              (entry.match === "close"
+                ? "  (close spelling — check)"
+                : entry.match === "partial"
+                  ? "  (one word of the name — check)"
+                  : entry.match === "words"
+                    ? "  (by its words)"
+                    : ""),
           );
         }
         const close = result.placed.filter((entry) => entry.match === "close").length;
         if (close) out(`  ${close} placed on a close spelling of the name — marked match: close in the plan; check those first`);
+        const partial = result.placed.filter((entry) => entry.match === "partial").length;
+        if (partial) out(`  ${partial} placed on one word of the name — marked match: partial in the plan; check those too`);
         if (result.unchanged.length) out(`  unchanged ${result.unchanged.length} already placed from the same pages`);
         if (result.skipped) out(`  skipped   ${result.skipped} page range(s) marked skip`);
         for (const problem of result.problems) {

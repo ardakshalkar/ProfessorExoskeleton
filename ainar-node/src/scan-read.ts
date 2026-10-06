@@ -2,7 +2,8 @@
  * Reading scanned papers with a vision model: `ainar scans read`.
  *
  * `src/scans.ts` does the deterministic half of a scanned exam and calls no
- * model. This is the other half, the one step that does: each placed paper's
+ * model. This is the other half (with `src/scan-names.ts`, which reads only
+ * who wrote each cover): each placed paper's
  * `scan.pdf` is rendered, sent to DeepSeek's vision route once, and what comes
  * back fills that student's `transcript.yaml` — which `scans record` then
  * checks rather than trusts, and records as `approval: draft`.

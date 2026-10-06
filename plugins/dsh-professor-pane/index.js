@@ -5975,6 +5975,7 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
             assessmentId,
             file: url.searchParams.get("file") ?? "",
             pages: url.searchParams.get("pages") ?? "",
+            whole: url.searchParams.has("whole") ? Number(url.searchParams.get("whole")) : null,
           });
           return send(res, 200, "image/png", png);
         } catch (error) {

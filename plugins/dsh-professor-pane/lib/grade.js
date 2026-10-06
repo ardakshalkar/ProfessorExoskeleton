@@ -58,7 +58,7 @@ export const groupsStamp = ({ submissions, runId, assessmentId }) => {
  * Without `names`, the first page is drawn from below the name line: the
  * handwritten name *is* the name, and Pseudonyms is the setting a professor
  * picks for a projector. The band cut off is the one the Scans tab's name crop
- * shows (to two inches down), so the two views agree on where the name is.
+ * shows (top edge to 2.2 inches), so the two views agree on where the name is.
  */
 export const answerPage = ({ submissions, runId, assessmentId, student, page, names }) => {
   if (!ID.test(runId) || !ID.test(assessmentId)) throw new Error("not a run or an assessment id");

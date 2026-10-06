@@ -36,7 +36,9 @@
  *    citing the scan by reference.
  *
  * Nothing here calls a model, and nothing here names a student outside the
- * private folder.
+ * private folder. The two reading steps that do call one are their own
+ * modules: `src/scan-names.ts` (`scans names`) reads the covers into the plan
+ * between 1 and 2, and `src/scan-read.ts` (`scans read`) fills step 3.
  */
 
 import { createHash } from "node:crypto";
@@ -103,8 +105,13 @@ const PLAN_HEADER =
   "# versions. A page that is nobody's — the question sheet, a blank — is its\n" +
   "# own entry with `skip: <why>`. Every page of every file is used exactly once.\n" +
   "# `ainar scans apply` writes `resolved` or `problem` beside each entry, and\n" +
-  "# `match: words` (same words, other script, patronymic left off) or\n" +
-  "# `match: close` (a near spelling — check it) when a name was not exact.\n\n";
+  "# `match: words` (same words, other script, patronymic left off),\n" +
+  "# `match: close` (a near spelling — check it) or `match: partial` (one word\n" +
+  "# written, and one enrolled student has it — check it) when a name was not\n" +
+  "# exact. `also` lists other names written on the cover. Two papers that\n" +
+  "# resolve to one student are both held, with `clash` naming the other: write\n" +
+  "# `skip: spoiled copy` on the one that is not the paper, or `student:` on the\n" +
+  "# one that is somebody else's.\n\n";
 
 const TRANSCRIPT_HEADER =
   "# PRIVATE — the answers as read off this student's pages. Outside the\n" +
@@ -123,10 +130,18 @@ export interface PlanPaper {
   pages: string;
   number?: string;
   name?: string;
+  /**
+   * Other names written on the cover, as read: above the title, in a margin.
+   * Tried when `name` alone does not place the paper, and a paper whose names
+   * point at two different students is held.
+   */
+  also?: string[];
   student?: string;
   variant?: string;
   skip?: string;
   confidence?: string;
+  /** Set by `scans names` (src/scan-names.ts): the model that read the cover, when it did. */
+  read_by?: string;
   /** Degrees to turn a page by, keyed by its page number in the file. */
   rotate?: Record<string, number>;
   note?: string;
@@ -140,6 +155,8 @@ export interface PlanPaper {
    */
   not?: string[];
   problem?: string;
+  /** Beside `problem` when another paper resolves to the same student: that paper, as `file#pages`. */
+  clash?: string[];
 }
 
 export interface PlanSource {
@@ -341,9 +358,11 @@ export const nameKey = (name: string): string =>
  * How a name was matched when it was not word for word: `words` — every word
  * written is one of the roster's once script and romanisation are set aside
  * (a patronymic left off is fine); `close` — the spelling differs a little,
- * and nobody else in the run is near it. A `close` paper is the one to check.
+ * and nobody else in the run is near it; `partial` — one word was written, and
+ * exactly one enrolled student has it. `close` and `partial` are the ones to
+ * check.
  */
-export type NameMatch = "words" | "close";
+export type NameMatch = "words" | "close" | "partial";
 
 export type Identity = { student: string; match?: NameMatch } | { problem: string };
 
@@ -463,12 +482,19 @@ export const nameCandidates = (
  * case, punctuation and word order are set aside; by its words, once script
  * and romanisation are too — Latin handwriting against a Cyrillic roster, a
  * patronymic not written; and by a close spelling, when one person is near it
- * and nobody else is. The last two need at least two words written. Two
- * matches is a problem to show, not a coin to toss.
+ * and nobody else is. The last two need at least two words written. With
+ * `partial`, one word written places the paper when exactly one enrolled
+ * student has that word (`match: partial`, to check) — a student who writes
+ * only a first name. Two matches is a problem to show, not a coin to toss.
+ *
+ * The names in `also` are tried the same way. They agree with `name` or the
+ * paper is held: two names on one cover that fit two students is someone
+ * writing for someone else, or a cover read wrong, and either is a person's
+ * call. When they agree, the strongest match places the paper.
  */
 export const identify = (
   paper: PlanPaper,
-  context: { store: RosterStore; salt: Uint8Array | null; enrolled: Set<string> },
+  context: { store: RosterStore; salt: Uint8Array | null; enrolled: Set<string>; partial?: boolean },
 ): Identity => {
   const { store, salt, enrolled } = context;
   if (paper.student) {
@@ -487,37 +513,64 @@ export const identify = (
     // The professor turned a match down: the name has had its chance.
     return { problem: `not ${paper.not.join(" or ")}, said the professor — pick who it is` };
   }
-  if (paper.name) {
+  const written = [paper.name, ...(paper.also ?? [])].filter((name): name is string => Boolean(name && String(name).trim()));
+  if (written.length) {
     const people = Object.entries(store.people).filter(([id]) => enrolled.has(id));
-    const several = (count: number) => ({ problem: `the name matches ${count} enrolled students` });
-
-    const key = nameKey(paper.name);
-    const exact = people.filter(([, person]) => person.name && nameKey(person.name) === key).map(([id]) => id);
-    if (exact.length === 1) return { student: exact[0]! };
-    if (exact.length) return several(exact.length);
-
-    if (nameWords(paper.name).length < 2) return { problem: "the name matches no enrolled student" };
-    const nearest = rankByName(paper.name, people);
-
-    const same = nearest.filter((candidate) => candidate.mean === 0);
-    if (same.length === 1) return { student: same[0]!.id, match: "words" };
-    if (same.length) return several(same.length);
-
-    const [first, second] = nearest;
-    if (first && first.mean <= CLOSE.mean && first.worst <= CLOSE.worst && (second?.mean ?? Infinity) - first.mean >= CLOSE.margin) {
-      return { student: first.id, match: "close" };
-    }
-    if (first && first.mean <= CLOSE.hint) {
+    const tried = written.map((name) => ({ name: String(name), identity: identifyName(String(name), people, context.partial === true) }));
+    const placed = tried.filter((entry): entry is { name: string; identity: { student: string; match?: NameMatch } } => "student" in entry.identity);
+    const students = [...new Set(placed.map((entry) => entry.identity.student))];
+    if (students.length > 1) {
       return {
         problem:
-          `the name matches no enrolled student closely enough; nearest is ${first.id}` +
-          (second && second.mean <= CLOSE.hint ? `, then ${second.id}` : "") +
-          ` — check with \`ainar roster whois\`, then write student: beside the paper`,
+          "the names on the cover fit different students: " +
+          placed.map((entry) => `"${entry.name}" → ${entry.identity.student}`).join(", ") +
+          " — say which with student:",
       };
     }
-    return { problem: "the name matches no enrolled student" };
+    if (students.length === 1) {
+      const strength = (match?: NameMatch) => (match ? ["words", "close", "partial"].indexOf(match) + 1 : 0);
+      return placed.map((entry) => entry.identity).sort((a, b) => strength(a.match) - strength(b.match))[0]!;
+    }
+    return tried[0]!.identity;
   }
   return { problem: "no number, name or student given" };
+};
+
+/** One written name against the run's students: exact, by its words, a close spelling, or — with `partial` — one word. */
+const identifyName = (name: string, people: [string, Person][], partial: boolean): Identity => {
+  const several = (count: number) => ({ problem: `the name matches ${count} enrolled students` });
+
+  const key = nameKey(name);
+  const exact = people.filter(([, person]) => person.name && nameKey(person.name) === key).map(([id]) => id);
+  if (exact.length === 1) return { student: exact[0]! };
+  if (exact.length) return several(exact.length);
+
+  const words = nameWords(name);
+  if (words.length === 1 && partial) {
+    const having = people.filter(([, person]) => knownAs(person).some((known) => known.includes(words[0]!))).map(([id]) => id);
+    if (having.length === 1) return { student: having[0]!, match: "partial" };
+    if (having.length) return { problem: `only one word is written, and ${having.length} enrolled students have it` };
+  }
+  if (words.length < 2) return { problem: "the name matches no enrolled student" };
+  const nearest = rankByName(name, people);
+
+  const same = nearest.filter((candidate) => candidate.mean === 0);
+  if (same.length === 1) return { student: same[0]!.id, match: "words" };
+  if (same.length) return several(same.length);
+
+  const [first, second] = nearest;
+  if (first && first.mean <= CLOSE.mean && first.worst <= CLOSE.worst && (second?.mean ?? Infinity) - first.mean >= CLOSE.margin) {
+    return { student: first.id, match: "close" };
+  }
+  if (first && first.mean <= CLOSE.hint) {
+    return {
+      problem:
+        `the name matches no enrolled student closely enough; nearest is ${first.id}` +
+        (second && second.mean <= CLOSE.hint ? `, then ${second.id}` : "") +
+        ` — check with \`ainar roster whois\`, then write student: beside the paper`,
+    };
+  }
+  return { problem: "the name matches no enrolled student" };
 };
 
 // --------------------------------------------------------------------------
@@ -619,21 +672,35 @@ export const applyScans = async (plan: ScanPlan, context: ApplyContext): Promise
   // Resolve everyone first: a student on two papers is a problem on both,
   // wherever in the pile the second one is.
   const who = new Map<PlanPaper, Identity>();
-  const owners = new Map<string, PlanPaper[]>();
+  const owners = new Map<string, { paper: PlanPaper; ref: string }[]>();
   for (const source of plan.sources) {
     for (const paper of source.papers) {
       delete paper.resolved;
       delete paper.match;
       delete paper.problem;
+      delete paper.clash;
       if (paper.skip) continue;
-      const identity = identify(paper, context);
+      const identity = identify(paper, { ...context, partial: true });
       who.set(paper, identity);
-      if ("student" in identity) owners.set(identity.student, [...(owners.get(identity.student) ?? []), paper]);
+      const ref = `${source.file}#${paper.pages}`;
+      if ("student" in identity) owners.set(identity.student, [...(owners.get(identity.student) ?? []), { paper, ref }]);
     }
   }
+  // Neither paper is placed: which one is theirs is not something a name can
+  // say. Usually one is a spoiled copy handed in with the real one, or someone
+  // wrote a classmate's name — the problem says how to say which.
   for (const [student, papers] of owners) {
     if (papers.length < 2) continue;
-    for (const paper of papers) who.set(paper, { problem: `${papers.length} papers resolve to ${student}` });
+    for (const { paper, ref } of papers) {
+      const others = papers.filter((entry) => entry.ref !== ref);
+      paper.clash = others.map((entry) => entry.ref);
+      who.set(paper, {
+        problem:
+          `${papers.length} papers resolve to ${student} — this and ` +
+          others.map((entry) => (entry.ref.split("#")[0] === ref.split("#")[0] ? `pages ${entry.paper.pages}` : entry.ref)).join(", ") +
+          `; compare them, then write skip: spoiled copy on the one that is not their paper, or student: on the one that is someone else's`,
+      });
+    }
   }
 
   for (const source of plan.sources) {

@@ -608,7 +608,7 @@ lines, not before.
 | `POST /professor-pane/api/approve` | gone since 2026-09-29: answers 410 and says where approval went |
 | `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/`, for the pane's refresh poll |
 | `GET /professor-pane/api/scans?run=&assessment=&names=` | the Scans tab: the run's scanned piles, the six steps with how far each has got, every planned paper with its lane and candidates. Written and roster names only with `names=1` |
-| `GET /professor-pane/api/scans/crop?run=&assessment=&file=&pages=` | the top of a paper's first page — the name line — as PNG, drawn by `pdftoppm` and kept in the private `_inbox/_crops/` |
+| `GET /professor-pane/api/scans/crop?run=&assessment=&file=&pages=` | the top of a paper's first page, from the edge to 2.2 inches (the title, the Name line, and a name written above the title) as PNG, drawn by `pdftoppm` and kept in the private `_inbox/_crops/`. With `whole=N`, page N of the paper whole at 45 dpi — how two papers that resolve to one student are compared |
 | `POST /professor-pane/api/scans/assign?run=&assessment=` | say who papers are; body is one `{pages, file, student \| reject \| skip}`, or `{papers: [...]}` of them from the review. Spawns `ainar scans assign --assignments` |
 | `POST /professor-pane/api/scans/apply?run=&assessment=` | spawn `ainar scans apply` again, after a hand edit of the plan |
 | `GET /professor-pane/api/grade?run=&assessment=&names=` | the Grade view: per written question its criterion and levels, its groups, and every answer with its reading, suggestion and decision. Names only with `names=1` |

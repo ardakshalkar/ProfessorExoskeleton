@@ -76,7 +76,7 @@ point you at them). Then pick the shape that matches the pile:
 
 | What arrived | Plan with | Then |
 | --- | --- | --- |
-| **One PDF per student** | `scans plan RUN --assessment A --per-file` | read each file's first page for the name or number |
+| **One PDF per student** | `scans plan RUN --assessment A --per-file` | `scans names`, then read the covers it could not |
 | **One batch, every paper the same length** | `--pages-per-student N` | check the first page of every proposed range is a cover |
 | **One batch, papers of different lengths** | `scans plan RUN --assessment A` (no shape) | read the pages, find each cover, write the ranges |
 | **Several batches** (sections scanned separately, a late paper) | run `plan` again after each arrives | it adds new files and keeps what you wrote |
@@ -111,19 +111,52 @@ sources:
         rotate: { "8": 180 }          # a page scanned upside down
 ```
 
-Read pages with the Read tool on the PDF (`pages: "1-5"`; at most 20 a call).
-For a large batch read the likely covers first, not every page.
+**Once the ranges are right, read the covers with `scans names`:**
+
+```bash
+bin/ainar scans names CSS-4008-2026-FALL --assessment ASSESSMENT-MIDTERM
+```
+
+It sends the top 2.6 inches of each paper's first page to the same vision
+model `scans read` uses, and writes `name` or `number` into the plan as
+written, `also` for any other name on the cover, with `confidence`, `read_by`,
+and a `note` when a person should look: no name found, a low-confidence read, a
+name in another hand, or a first page that is not a cover
+(where a fixed split has drifted; no name is written for that range). It
+prints pages and confidence, never a name. It reads only entries nobody has
+filled; `--force` reads the unplaced ones again. A pile of 51 covers costs
+about ten cents.
+
+It places nobody: `apply` still does the matching. On the 2026-10-05 Quiz 2
+pile of CSS-4007, every paper it placed matched a reading made by hand, and it
+left about one in four waiting that a careful look could place. Those, and every
+entry with a `note`, are what you read yourself next.
+
+**Read a cover by looking at it, never with OCR.** Use the Read tool on the PDF
+(`pages: "1-5"`; at most 20 a call). If the PDF is too large for that, render
+the one page with `pdftoppm -png -r 150 -f N -l N -singlefile` into the
+private `_inbox/` and Read the PNG. Do not try Windows OCR, Tesseract or any
+text extractor: they cannot read handwriting and return nothing useful. A name
+may be written above the title or in a margin, not only on the Name line.
 
 - **Who.** Prefer the student number: it resolves exactly. A name is matched
   against the enrolled students with case, punctuation and word order ignored,
   then across scripts (Latin handwriting finds a Cyrillic roster name, and a
   patronymic left off is fine), then by a close spelling when nobody else in
-  the run is near it — and must match exactly one. Write the name as you read
-  it, in the script it is written in; do not transliterate it yourself. A paper
-  placed on a close spelling gets `match: close` in the plan: those are the
-  ones the professor checks first. If you cannot read either, leave both out and
+  the run is near it — and must match exactly one. One word alone (a first
+  name only) places the paper when exactly one enrolled student has that word.
+  Write the name as you read it, in the script it is written in; do not
+  transliterate it yourself. A paper placed on a close spelling gets
+  `match: close`, and one placed on one word `match: partial`: those are the
+  ones the professor checks first. A second name on the cover — a full name
+  above the title, a name in a margin — goes in `also: [...]`, never merged
+  into `name`; `apply` tries it too, and holds a paper whose names fit two
+  different students. If you cannot read either, leave both out and
   write a `note` — `apply` will hold that paper and say why. **Never** guess a
-  student, and never look names up in the roster yourself to "help" a match.
+  student, and never look names up in the roster yourself to "help" a match:
+  no `student:` from you, ever — that is the professor's word, and a
+  `student:` written from a first name is how two papers on Quiz 2 of
+  CSS-4007 were pinned to one person.
 - **Variant.** Read it off the cover. If the cover does not say, compare the
   first question with each variant's items and write a `note` saying you did —
   and tell the professor, because a wrong variant grades a paper against
@@ -156,6 +189,15 @@ the wrong student and carries its transcript to the right one; run it only on
 their word. For a whole class, point them at **Review all name matches** in the
 Scans tab — every correspondence as cards, confirmed in one press. Fix what you can from the pages; the rest is the professor's:
 tell them which file and which pages, never the name.
+
+**Two papers for one student** are both held, each with `clash:` naming the
+other. Usually one is a spoiled copy handed in with the real one (nearly
+blank, a crossed-out start); sometimes someone wrote a classmate's name. Which
+it is, is the professor's call: look at both, tell them what you see (how much
+each has written, whether the hands look alike, any other name on the cover),
+and point them at the Scans tab, where the two are drawn whole side by side
+with a **Spoiled copy** button. Their answer is `--skip "spoiled copy"` on one,
+or `--student` on the one that is someone else's.
 
 ## 4. Read the answers
 
