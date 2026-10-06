@@ -95,6 +95,7 @@ import {
   captionAudio,
   codeDigest,
   collectCode,
+  consentGiven,
   consentStatement,
   decideNext,
   defencePlace,
@@ -112,7 +113,7 @@ import {
   withdrawConsent,
   writeDefence,
 } from "@ainar/core/src/defence.ts";
-import { configFromRegistry, describeTranscription, transcriber } from "@ainar/core/src/transcribe.ts";
+import { configFromRegistry, describeTranscription, realtimeSession, transcriber } from "@ainar/core/src/transcribe.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 // `parseDocument` alongside `parse`, for one caller: `writeCanvasSelection`
 // edits a file a professor also writes by hand, and the plain parse would hand
@@ -6483,6 +6484,35 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
           return sendJson(res, 200, { ok: true, question });
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // AGT-8: a streaming session for one take, where the connection can
+    // stream (Scribe). The answer is a WebSocket URL holding a single-use
+    // token, never the key; `unavailable` says why not, and the desk then
+    // falls back to the five-second captions.
+    if (path === "/api/defence/realtime") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      let target;
+      try {
+        target = defenceTarget(workspace, root, runId, url.searchParams);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      if (!consentGiven(readSession(target.place.session))) {
+        return sendJson(res, 200, { unavailable: "no recorded consent" });
+      }
+      let config;
+      try {
+        config = configFromRegistry(null).config;
+      } catch (error) {
+        return sendJson(res, 200, { unavailable: String(error?.message ?? error) });
+      }
+      const languages = target.bundle.course?.language ?? [];
+      return realtimeSession(config, { language: languages.length === 1 ? languages[0] : null })
+        .then((session) =>
+          sendJson(res, 200, session ? { session } : { unavailable: `${config.provider} does not stream; the captions come every few seconds instead` }),
+        )
+        .catch((error) => sendJson(res, 200, { unavailable: String(error?.message ?? error) }));
     }
 
     // AGT-5: a caption for a few seconds of an answer still being given. The

@@ -979,11 +979,27 @@ is worth building.
       file whatever happens. The take's own transcript is still the one that
       counts. Each answer is transcribed twice (on Scribe, about $0.22/hr
       more), and a switch turns captions off.
-- [ ] **AGT-8** True streaming captions where the provider has them: Scribe v2
+- [x] **AGT-8** True streaming captions where the provider has them: Scribe v2
       Realtime through a single-use token the server mints, so the key never
       reaches the browser; PCM through an AudioWorklet. Captions word by
       word instead of every five seconds, and AGT-2 able to start choosing
-      before the answer ends. `M` · depends: AGT-5
+      before the answer ends. `M` · depends: AGT-5 Done 2026-10-06, captions
+      only. For each take the pane asks ElevenLabs for a single-use token
+      (`POST /v1/single-use-token/realtime_scribe`, spent on connecting, void
+      after 15 minutes) and hands the browser a socket URL with the token in
+      it; the key stays on the server. The browser streams 16 kHz 16-bit PCM
+      (a ScriptProcessor, not an AudioWorklet, which would need a module URL
+      the harness may refuse) and shows partial and committed text as it
+      comes. It sends silence while the professor holds P. Anything short of
+      a stream (a provider that cannot stream, no key, a socket refused or
+      failing) falls back to AGT-5's five-second pieces for that take.
+      Tested with a mock socket on the desk test page. Not yet tried against
+      the real ElevenLabs endpoint, or inside the harness, whose page may
+      forbid outside sockets; the fallback covers that.
+- [ ] **AGT-9** Let AGT-2 start choosing while the student is still talking:
+      when a streamed sentence is committed and a pause begins, ask the
+      model on the words so far, and drop the choice if the student goes on.
+      Turns the 6–10 s gap into 2–4 s. `S` · depends: AGT-8
 - [x] **AGT-6** Two voices, one microphone. The professor will interject, so
       diarize (Scribe has it) and keep the professor's words out of the
       student's evidence. A take where the speakers could not be separated

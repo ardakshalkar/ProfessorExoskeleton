@@ -840,6 +840,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-dspeaking{background:#2f6fd6;border-color:#2f6fd6;color:#fff;font-weight:600}
 .pp-dchooser{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
 .pp-dcaption{margin:2px 0 6px;font-size:13px;line-height:1.45;font-style:italic;overflow-wrap:anywhere}
+.pp-dpartial{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-dhandsdots{display:flex;align-items:flex-start;gap:12px}
 .pp-dhandsbody{flex:1;min-width:0}
 .pp-ddots{flex:none;display:block;width:64px;height:64px}
@@ -6759,10 +6760,148 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const CAPTION_MS = 5000;
       const startCaptions = (stream, questionId, type) => {
         stopCaptions();
-        setCaptions({ question: questionId, pieces: [] });
+        setCaptions({ question: questionId, pieces: [], partial: "", mode: null });
         if (!liveCaptionsRef.current) return;
-        const loop = { active: true, index: 0, loud: false, recorder: null, timer: null };
+        const loop = { active: true, index: 0, loud: false, recorder: null, timer: null, cleanup: null };
         captionLoop.current = loop;
+        // AGT-8: stream where the connection can (Scribe), word by word; else,
+        // or if streaming fails, the five-second pieces below.
+        fetch(endpoint("/api/defence/realtime"), { method: "POST" })
+          .then((response) => response.json())
+          .then((result) => {
+            if (!loop.active) return;
+            if (result.session) startStreaming(loop, stream, result.session, questionId, type);
+            else startPieces(loop, stream, questionId, type);
+          })
+          .catch(() => loop.active && startPieces(loop, stream, questionId, type));
+      };
+
+      /** Float samples at the microphone's rate to 16-bit PCM at the stream's, as base64. */
+      const pcmBase64 = (input, ratio, silent) => {
+        const length = Math.floor(input.length / ratio);
+        const pcm = new Int16Array(length);
+        if (!silent) {
+          for (let index = 0; index < length; index += 1) {
+            // The mean of the samples this one stands for: a plain low-pass.
+            const from = Math.floor(index * ratio);
+            const to = Math.min(input.length, Math.floor((index + 1) * ratio));
+            let sum = 0;
+            for (let at = from; at < to; at += 1) sum += input[at];
+            const value = Math.max(-1, Math.min(1, sum / Math.max(1, to - from)));
+            pcm[index] = value < 0 ? value * 0x8000 : value * 0x7fff;
+          }
+        }
+        const bytes = new Uint8Array(pcm.buffer);
+        let binary = "";
+        for (let at = 0; at < bytes.length; at += 0x8000) binary += String.fromCharCode.apply(null, bytes.subarray(at, at + 0x8000));
+        return btoa(binary);
+      };
+
+      /*
+       * Streaming captions (AGT-8): the microphone, brought down to 16 kHz
+       * 16-bit PCM, straight to the provider's socket, with a single-use token
+       * the server minted; the key stays on the server. While the professor
+       * holds P, silence is sent instead, so their words are never captioned.
+       * A socket that fails before it opens hands the take to the pieces.
+       */
+      const startStreaming = (loop, stream, session, questionId, type) => {
+        let socket;
+        try {
+          socket = new WebSocket(session.url);
+        } catch {
+          startPieces(loop, stream, questionId, type);
+          return;
+        }
+        let opened = false;
+        let audio = null;
+        let source = null;
+        let node = null;
+        const teardown = () => {
+          try {
+            if (node) node.disconnect();
+            if (source) source.disconnect();
+            if (audio && audio.state !== "closed") audio.close();
+          } catch {}
+          node = source = audio = null;
+        };
+        // A socket that fails before it opens fires both error and close: one
+        // fallback, not two caption loops.
+        const fallBack = () => {
+          teardown();
+          if (loop.fellBack || opened || !loop.active) return;
+          loop.fellBack = true;
+          startPieces(loop, stream, questionId, type);
+        };
+        socket.onopen = () => {
+          opened = true;
+          setCaptions((current) => (current && current.question === questionId ? Object.assign({}, current, { mode: "streaming" }) : current));
+          try {
+            audio = new AudioContext();
+            source = audio.createMediaStreamSource(stream);
+            node = audio.createScriptProcessor(4096, 1, 1);
+            const ratio = audio.sampleRate / session.sampleRate;
+            node.onaudioprocess = (event) => {
+              if (socket.readyState !== 1) return;
+              socket.send(
+                JSON.stringify({
+                  message_type: "input_audio_chunk",
+                  audio_base_64: pcmBase64(event.inputBuffer.getChannelData(0), ratio, marks.current.held !== null),
+                  commit: false,
+                  sample_rate: session.sampleRate,
+                }),
+              );
+            };
+            source.connect(node);
+            // A script processor runs only while connected onwards; it writes
+            // nothing, so the speakers hear silence.
+            node.connect(audio.destination);
+          } catch {
+            socket.close();
+          }
+        };
+        socket.onmessage = (event) => {
+          let message;
+          try {
+            message = JSON.parse(event.data);
+          } catch {
+            return;
+          }
+          const kind = String(message.message_type || "");
+          if (kind === "partial_transcript") {
+            setCaptions((current) => (current && current.question === questionId ? Object.assign({}, current, { partial: String(message.text || "") }) : current));
+          } else if (kind === "committed_transcript") {
+            const text = String(message.text || "").trim();
+            const index = loop.index;
+            loop.index += 1;
+            setCaptions((current) =>
+              current && current.question === questionId
+                ? Object.assign({}, current, { partial: "", pieces: text ? current.pieces.concat([{ index, text }]) : current.pieces })
+                : current,
+            );
+          } else if (/error|exceeded|limited|exhausted/.test(kind)) {
+            setCaptions((current) => (current && current.question === questionId ? Object.assign({}, current, { mode: "failed:" + (message.error || kind) }) : current));
+            socket.close();
+          }
+        };
+        socket.onerror = () => fallBack();
+        socket.onclose = () => fallBack();
+        loop.cleanup = () => {
+          teardown();
+          if (socket.readyState === 1) {
+            // Ask for the last words before closing.
+            try {
+              socket.send(JSON.stringify({ message_type: "input_audio_chunk", audio_base_64: "", commit: true, sample_rate: session.sampleRate }));
+            } catch {}
+            setTimeout(() => socket.close(), 1500);
+          } else if (socket.readyState === 0) {
+            socket.close();
+          }
+        };
+      };
+
+      /** The five-second pieces (AGT-5): any provider, a caption per piece in which someone spoke. */
+      const startPieces = (loop, stream, questionId, type) => {
+        setCaptions((current) => (current && current.question === questionId ? Object.assign({}, current, { mode: "pieces" }) : current));
         const cycle = () => {
           if (!loop.active) return;
           let piece;
@@ -6795,6 +6934,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         if (!loop) return;
         loop.active = false;
         clearTimeout(loop.timer);
+        if (loop.cleanup) loop.cleanup();
         // The last piece is still captioned: the answer's final words.
         if (loop.recorder && loop.recorder.state !== "inactive") loop.recorder.stop();
         captionLoop.current = null;
@@ -6826,12 +6966,13 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 
       /** The captions, under whatever is recording. */
       const captionsView = (questionId) =>
-        captions && captions.question === questionId && captions.pieces.length
+        captions && captions.question === questionId && (captions.pieces.length || captions.partial)
           ? h(
               "div",
               { className: "pp-dcaption", "aria-live": "polite" },
-              h("span", { className: "pp-dim" }, "Live, provisional: "),
+              h("span", { className: "pp-dim" }, captions.mode === "streaming" ? "Live: " : "Live, every few seconds: "),
               captions.pieces.map((piece) => piece.text).join(" "),
+              captions.partial ? h("span", { className: "pp-dpartial" }, " " + captions.partial) : null,
             )
           : null;
 

@@ -8,6 +8,7 @@ import {
   elevenlabsTranscriber,
   estimate,
   openaiTranscriber,
+  realtimeSession,
   wordsToSegments,
 } from "../src/transcribe.ts";
 import {
@@ -130,6 +131,28 @@ test("Scribe is asked for word timestamps, with its own key header", async () =>
   assert.equal(seen[0]!.fields.diarize, "true");
   assert.equal(transcript.language, "kaz");
   assert.equal(transcript.seconds, 0.5);
+});
+
+test("a streaming session hands the browser a single-use token, never the key", async () => {
+  const asked: { url: string; headers: any }[] = [];
+  const call = (async (url: string, init: any) => {
+    asked.push({ url, headers: init.headers });
+    return new Response(JSON.stringify({ token: "sutok_123" }), { status: 200 });
+  }) as unknown as typeof fetch;
+  const session = await realtimeSession({ provider: "elevenlabs", model: "scribe_v2", apiKey: "xi-secret" }, { language: "kk" }, call);
+  assert.equal(asked[0]!.url, "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe");
+  assert.equal(asked[0]!.headers["xi-api-key"], "xi-secret");
+  const url = new URL(session!.url);
+  assert.equal(url.origin + url.pathname, "wss://api.elevenlabs.io/v1/speech-to-text/realtime");
+  assert.deepEqual(
+    Object.fromEntries(url.searchParams),
+    { model_id: "scribe_v2_realtime", token: "sutok_123", audio_format: "pcm_16000", commit_strategy: "vad", language_code: "kk" },
+  );
+  assert.doesNotMatch(session!.url, /xi-secret/);
+  assert.equal(session!.sampleRate, 16000);
+  assert.equal(await realtimeSession({ provider: "openai", model: "whisper-1", apiKey: "k" }, {}, call), null, "Whisper does not stream here");
+  const refused = (async () => new Response("no", { status: 401 })) as unknown as typeof fetch;
+  await assert.rejects(realtimeSession({ provider: "elevenlabs", model: "scribe_v2", apiKey: "bad" }, {}, refused), /ElevenLabs answered 401/);
 });
 
 test("a provider's refusal is an error naming it", async () => {

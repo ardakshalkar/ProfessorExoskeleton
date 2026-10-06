@@ -301,6 +301,58 @@ export const elevenlabsTranscriber = (config: TranscriberConfig, call: typeof fe
     };
   };
 
+// --------------------------------------------------------------------------
+// Streaming (AGT-8)
+// --------------------------------------------------------------------------
+
+/** Scribe's streaming model for a batch one: `scribe_v2` streams as `scribe_v2_realtime`. */
+export const realtimeModel = (model: string): string => (model.endsWith("_realtime") ? model : `${model}_realtime`);
+
+export interface RealtimeSession {
+  /** The WebSocket the browser opens, with a single-use token in it. */
+  url: string;
+  sampleRate: number;
+  /** The token is spent on connecting and void after this many seconds anyway. */
+  expiresInSeconds: number;
+}
+
+/**
+ * A streaming transcription session the browser can open itself, or null when
+ * this connection cannot stream (only Scribe can, of the two protocols).
+ *
+ * The API key never reaches the browser: the server asks ElevenLabs for a
+ * single-use token (`POST /v1/single-use-token/realtime_scribe`), spent on the
+ * one connection and void after fifteen minutes anyway, and hands over a URL
+ * with that token in it. One per take, since each is spent on use.
+ */
+export const realtimeSession = async (
+  config: TranscriberConfig,
+  options: { language?: string | null } = {},
+  call: typeof fetch = fetch,
+): Promise<RealtimeSession | null> => {
+  if (config.provider !== "elevenlabs") return null;
+  const base = (config.baseUrl || DEFAULT_BASE.elevenlabs).replace(/\/+$/, "");
+  const response = await post(call, `${base}/single-use-token/realtime_scribe`, () => ({
+    method: "POST",
+    headers: config.apiKey ? { "xi-api-key": config.apiKey } : undefined,
+  }));
+  if (!response.ok) throw await failure("ElevenLabs", response);
+  const token = String(((await response.json()) as any)?.token ?? "");
+  if (!token) throw new Error("ElevenLabs gave no token");
+  const params = new URLSearchParams({
+    model_id: realtimeModel(config.model),
+    token,
+    audio_format: "pcm_16000",
+    commit_strategy: "vad",
+  });
+  if (options.language) params.append("language_code", options.language);
+  return {
+    url: `${base.replace(/^http/, "ws")}/speech-to-text/realtime?${params}`,
+    sampleRate: 16000,
+    expiresInSeconds: 900,
+  };
+};
+
 export const transcriber = (config: TranscriberConfig, call: typeof fetch = fetch): Transcriber =>
   config.provider === "elevenlabs" ? elevenlabsTranscriber(config, call) : openaiTranscriber(config, call);
 

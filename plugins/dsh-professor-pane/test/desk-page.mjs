@@ -12,6 +12,7 @@
 
 import http from "node:http";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { studentScreenPage } from "../lib/student-screen.js";
 import { labelSpeakers } from "../../../ainar-node/src/transcribe.ts";
 
@@ -28,6 +29,8 @@ const received = [];
 const decisions = [];
 let consent = null;
 const captioned = [];
+let streaming = true;
+const streamed = { sessions: 0, chunks: 0, loudChunks: 0, commits: 0, sampleRates: [] };
 const STATEMENT = "This oral defence will be recorded: your spoken answers, as audio. The recordings are transcribed on this machine (mock) and do not leave it. You may ask to stop at any time.";
 const overrides = [];
 
@@ -144,6 +147,18 @@ http
       });
       return;
     }
+    // AGT-8: a streaming session — the mock Scribe socket below — unless the
+    // page was opened with ?stream=0, which tests the fallback.
+    if (url.pathname === "/professor-pane/api/defence/realtime" && req.method === "POST") {
+      if (!consent?.agreed || consent.withdrawn_at) return json(res, { unavailable: "no recorded consent" });
+      if (streaming === false) return json(res, { unavailable: "mock: streaming off" });
+      // A socket the browser cannot open, as a page's security policy would refuse it.
+      if (streaming === "broken") return json(res, { session: { url: "ws://127.0.0.1:9/nothing-here", sampleRate: 16000, expiresInSeconds: 900 } });
+      return json(res, { session: { url: `ws://localhost:${PORT}/mock-scribe?token=single-use`, sampleRate: 16000, expiresInSeconds: 900 } });
+    }
+    if (url.pathname === "/streamed") return json(res, streamed);
+    if (url.pathname === "/stream-off") return (streaming = false), json(res, { ok: true });
+    if (url.pathname === "/stream-broken") return (streaming = "broken"), json(res, { ok: true });
     // AGT-5: a caption for a piece of an answer still being given.
     if (url.pathname === "/professor-pane/api/defence/caption" && req.method === "POST") {
       const chunks = [];
@@ -200,5 +215,66 @@ http
     }
     res.writeHead(404);
     res.end();
+  })
+  .on("upgrade", (req, socket) => {
+    // A mock of Scribe's realtime socket, by hand: enough of RFC 6455 for text
+    // frames. It decodes each chunk as 16-bit PCM and captions what it hears.
+    if (!req.url.startsWith("/mock-scribe")) return socket.destroy();
+    const accept = createHash("sha1").update(req.headers["sec-websocket-key"] + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").digest("base64");
+    socket.write("HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: " + accept + "\r\n\r\n");
+    streamed.sessions += 1;
+    const send = (value) => {
+      const body = Buffer.from(JSON.stringify(value));
+      const head = body.length < 126 ? Buffer.from([0x81, body.length]) : Buffer.from([0x81, 126, body.length >> 8, body.length & 255]);
+      socket.write(Buffer.concat([head, body]));
+    };
+    send({ message_type: "session_started", session_id: "mock" });
+    let buffer = Buffer.alloc(0);
+    let heard = 0;
+    let words = 0;
+    socket.on("data", (data) => {
+      buffer = Buffer.concat([buffer, data]);
+      while (buffer.length >= 2) {
+        const opcode = buffer[0] & 15;
+        let length = buffer[1] & 127;
+        let at = 2;
+        if (length === 126) { length = buffer.readUInt16BE(2); at = 4; }
+        else if (length === 127) { length = Number(buffer.readBigUInt64BE(2)); at = 10; }
+        const masked = buffer[1] & 128;
+        const need = at + (masked ? 4 : 0) + length;
+        if (buffer.length < need) return;
+        const mask = masked ? buffer.subarray(at, at + 4) : null;
+        const payload = Buffer.from(buffer.subarray(at + (masked ? 4 : 0), need));
+        if (mask) for (let i = 0; i < payload.length; i += 1) payload[i] ^= mask[i % 4];
+        buffer = buffer.subarray(need);
+        if (opcode === 8) return socket.end();
+        if (opcode !== 1) continue;
+        const message = JSON.parse(payload.toString());
+        if (message.message_type !== "input_audio_chunk") continue;
+        streamed.sampleRates.includes(message.sample_rate) || streamed.sampleRates.push(message.sample_rate);
+        if (message.commit) {
+          streamed.commits += 1;
+          if (heard) send({ message_type: "committed_transcript", text: `(committed: ${heard} loud chunks)` });
+          heard = 0;
+          continue;
+        }
+        streamed.chunks += 1;
+        const pcm = Buffer.from(message.audio_base_64, "base64");
+        let sum = 0;
+        for (let i = 0; i + 1 < pcm.length; i += 2) sum += pcm.readInt16LE(i) ** 2;
+        const rms = Math.sqrt(sum / Math.max(1, pcm.length / 2)) / 32768;
+        if (rms > 0.05) {
+          streamed.loudChunks += 1;
+          heard += 1;
+          words += 1;
+          send({ message_type: "partial_transcript", text: `word${words}` });
+          if (heard >= 6) {
+            send({ message_type: "committed_transcript", text: `(sentence of ${heard} chunks, rms ${rms.toFixed(2)})` });
+            heard = 0;
+          }
+        }
+      }
+    });
+    socket.on("error", () => {});
   })
   .listen(PORT, () => console.log(`defence desk test page: http://localhost:${PORT}  (?voice=1 for the scripted voice)`));
