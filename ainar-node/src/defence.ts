@@ -45,6 +45,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { dirname, extname, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { parse, stringify } from "yaml";
+import { parseReply } from "./scan-read.ts";
 import { type Transcriber, type Transcript } from "./transcribe.ts";
 
 const execFileAsync = promisify(execFile);
@@ -501,6 +502,8 @@ export interface Session {
   assessment_id: string;
   student_id: string;
   answers: Answer[];
+  /** What the hands-free desk chose to ask, why, and what the professor did about it (AGT-2, AGT-7). */
+  decisions?: Decision[];
 }
 
 const SESSION_HEADER =
@@ -618,4 +621,229 @@ export const transcribeTake = async (options: {
   } catch (error) {
     return setTranscript(place, answer.question_id, answer.take, { error: (error as Error).message });
   }
+};
+
+// --------------------------------------------------------------------------
+// The brief
+// --------------------------------------------------------------------------
+
+/**
+ * The brief students were given, as text, when the course holds it as a
+ * markdown or text file in the workspace; else the assessment's description.
+ */
+export const briefText = (
+  root: string,
+  documents: { document_id: string; storage_key?: string }[],
+  assessment: { instructions_document_id?: string | null; description?: string | null },
+): string | null => {
+  const document = documents.find((entry) => entry.document_id === assessment.instructions_document_id);
+  const key = String(document?.storage_key ?? "");
+  if (key && !key.includes("://") && /\.(md|txt)$/i.test(key) && existsSync(join(root, key))) {
+    return readFileSync(join(root, key), "utf-8");
+  }
+  return assessment.description ?? null;
+};
+
+// --------------------------------------------------------------------------
+// What to ask next (AGT-2)
+// --------------------------------------------------------------------------
+
+/**
+ * One choice the hands-free desk made after an answer: ask a follow-up it
+ * wrote, ask a prepared question, or stop. Kept in the session with the reason
+ * and with what the professor did in the five seconds they had to step in, so
+ * an appeal replays not only what was said but why each question came.
+ */
+export interface Decision {
+  after: string | null;
+  action: "follow_up" | "next" | "done";
+  question_id: string | null;
+  why: string;
+  by: string;
+  at: string;
+  /** What the professor did instead, if anything. */
+  overridden?: "skip" | "edit" | "ask_now" | "pause";
+  notes?: string[];
+}
+
+/** How deep a chain of follow-ups may go before the desk moves on regardless. */
+export const FOLLOW_UP_DEPTH = 2;
+
+export const NEXT_SYSTEM = [
+  "You run a short oral defence of one student's homework, one question at a time, for a university professor who is listening.",
+  "After each answer you choose what is asked next: a follow-up on the answer just given, the next prepared question, or that the defence is done.",
+  "You never grade, never tell the student whether they were right, and never accuse. Your only output is the choice, as JSON.",
+].join(" ");
+
+/** The prompt for one choice: the code first, which does not change, then the defence so far. */
+export const nextPrompt = (context: {
+  digest: string;
+  questions: Question[];
+  answers: Answer[];
+  after: string | null;
+}): string => {
+  const said = (id: string): string => {
+    const takes = context.answers.filter((answer) => answer.question_id === id);
+    if (!takes.length) return "  (not asked yet)";
+    return takes
+      .map((take) =>
+        take.transcript
+          ? "  " +
+            take.transcript.segments
+              .map((segment) => (segment.confidence === "low" ? `[unsure: ${segment.text}]` : segment.text))
+              .join(" ")
+          : "  (recorded, no transcript)",
+      )
+      .join("\n");
+  };
+  const open = context.questions.filter((q) => !context.answers.some((answer) => answer.question_id === q.id));
+  return [
+    context.digest,
+    "",
+    "## The defence so far",
+    ...context.questions.map(
+      (question) =>
+        `${question.id}${question.follows ? ` (follow-up on ${question.follows})` : ""}` +
+        `${question.criterion_id ? ` [${question.criterion_id}]` : ""}: ${question.text}\n${said(question.id)}`,
+    ),
+    "",
+    "## Now",
+    context.after ? `The student has just answered ${context.after}.` : "The defence is starting.",
+    `Prepared questions not asked yet: ${open.map((q) => q.id).join(", ") || "none"}.`,
+    "",
+    "Return only a JSON object, one of:",
+    '{"action": "follow_up", "text": "...", "criterion_id": "CRIT-..." or null, "why": "..."}',
+    '{"action": "next", "question_id": "Q3", "why": "..."}',
+    '{"action": "done", "why": "..."}',
+    "",
+    "Rules:",
+    "- A follow-up only when the answer just given left a gap that matters for a criterion: a claim not justified, a step skipped, something said that the code does not do. Otherwise move on.",
+    "- A follow-up is one plain spoken question about that answer, in the language the student answered in. Never repeat a question already asked.",
+    "- Words marked [unsure: ...] were hard to hear: do not build a question on them.",
+    "- next names a prepared question not asked yet; prefer one whose criterion has no evidence so far.",
+    "- done when every criterion has been asked about, or nothing useful is left to ask.",
+    "- why is one sentence for the professor.",
+  ].join("\n");
+};
+
+/**
+ * The model's choice, checked rather than trusted, as the decision to record
+ * and — for a follow-up — the question to add.
+ *
+ * Anything unusable falls back to the first prepared question not yet asked,
+ * with a note: the defence must go on whatever the model replied. A follow-up
+ * on a follow-up on a follow-up is refused for the same reason a person would
+ * refuse it — the desk moves on.
+ */
+export const decideNext = (
+  text: string,
+  context: {
+    questions: Question[];
+    answers: Answer[];
+    criteria: Criterion[];
+    files: CodeFile[];
+    after: string | null;
+    by: string;
+    at: string;
+  },
+): { decision: Decision; followUp: Question | null } => {
+  const notes: string[] = [];
+  const asked = new Set(context.answers.map((answer) => answer.question_id));
+  const open = context.questions.filter((q) => !asked.has(q.id));
+  const fallback = (why: string): { decision: Decision; followUp: null } => {
+    notes.push(why);
+    const next = open[0];
+    return {
+      decision: {
+        after: context.after,
+        action: next ? "next" : "done",
+        question_id: next?.id ?? null,
+        why: next ? "the next prepared question" : "every prepared question has been asked",
+        by: context.by,
+        at: context.at,
+        notes,
+      },
+      followUp: null,
+    };
+  };
+  const reply = parseReply(text);
+  if (!reply || typeof reply.action !== "string") return fallback("the model's reply was not a choice");
+  const why = String(reply.why ?? "").trim();
+  const base = { after: context.after, why, by: context.by, at: context.at };
+
+  if (reply.action === "done") {
+    return { decision: { ...base, action: "done", question_id: null }, followUp: null };
+  }
+  if (reply.action === "next") {
+    const id = String(reply.question_id ?? "");
+    if (!open.some((q) => q.id === id)) {
+      return fallback(`the model chose ${id || "no question"}, which is not a prepared question still to ask`);
+    }
+    return { decision: { ...base, action: "next", question_id: id }, followUp: null };
+  }
+  if (reply.action === "follow_up") {
+    if (!context.after) return fallback("a follow-up before any answer");
+    let depth = 0;
+    let at = context.questions.find((q) => q.id === context.after);
+    while (at?.follows) {
+      depth += 1;
+      const parent: string = at.follows;
+      at = context.questions.find((q) => q.id === parent);
+    }
+    if (depth >= FOLLOW_UP_DEPTH) return fallback(`${context.after} is already ${depth} follow-ups deep`);
+    const { questions, notes: checked } = checkQuestions(
+      {
+        questions: [
+          { text: reply.text, criterion_id: reply.criterion_id ?? null, why, evidence: reply.evidence ?? [], follows: context.after },
+        ],
+      },
+      context.criteria,
+      context.files,
+      context.questions,
+    );
+    const followUp = questions[0];
+    if (!followUp) return fallback("the model's follow-up had no text");
+    notes.push(...checked);
+    return {
+      decision: { ...base, action: "follow_up", question_id: followUp.id, ...(notes.length ? { notes } : {}) },
+      followUp,
+    };
+  }
+  return fallback(`"${reply.action}" is not a choice the desk knows`);
+};
+
+/** Add a decision to the session, and return its index for the professor's override to point at. */
+export const recordDecision = (
+  place: DefencePlace,
+  ids: { submission_id: string; assessment_id: string; student_id: string },
+  decision: Decision,
+): number => {
+  const session = readSession(place.session) ?? { ...ids, answers: [] };
+  session.decisions = [...(session.decisions ?? []), decision];
+  writeSession(place.session, session);
+  return session.decisions.length - 1;
+};
+
+/** Mark what the professor did instead of letting a decision stand. */
+export const overrideDecision = (
+  place: DefencePlace,
+  index: number,
+  override: NonNullable<Decision["overridden"]>,
+): void => {
+  const session = readSession(place.session);
+  const decision = session?.decisions?.[index];
+  if (!session || !decision) throw new Error(`no decision ${index} in ${place.session}`);
+  decision.overridden = override;
+  writeSession(place.session, session);
+};
+
+/** Change a question's text — the professor's edit before it is asked. */
+export const editQuestion = (file: string, questionId: string, text: string): Question => {
+  const drafted = readDefence(file);
+  const question = drafted?.questions.find((entry) => entry.id === questionId);
+  if (!drafted || !question) throw new Error(`no question ${questionId} in ${file}`);
+  if (!text.trim()) throw new Error("a question needs words");
+  question.text = text.trim();
+  writeDefence(file, drafted);
+  return question;
 };

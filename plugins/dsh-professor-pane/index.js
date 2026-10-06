@@ -87,13 +87,23 @@ import { dump as dumpYaml } from "@ainar/core/src/yaml-out.ts";
 import { dashboardPayload } from "@ainar/core/src/progress.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
 import {
+  NEXT_SYSTEM,
+  briefText,
+  codeDigest,
+  collectCode,
+  decideNext,
   defencePlace,
+  editQuestion,
+  nextPrompt,
+  overrideDecision,
   readDefence,
   readPin,
   readSession,
+  recordDecision,
   saveAnswer,
   setTranscript,
   transcribeTake,
+  writeDefence,
 } from "@ainar/core/src/defence.ts";
 import { configFromRegistry, transcriber } from "@ainar/core/src/transcribe.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
@@ -3795,6 +3805,110 @@ const defenceTarget = (workspace, root, runId, params) => {
 };
 
 /**
+ * The provider and model a session is talking to: the route its last request
+ * was logged with, as `dsh-session-title-llm` reads it; else the deployment
+ * default a new session would get. Null when neither is known.
+ */
+const modelRoute = (harness, sessionId) => {
+  const session = harness.sessions && sessionId ? harness.sessions.get(sessionId) : null;
+  const config = session && typeof session.requestHeader === "function" ? session.requestHeader()?.config : null;
+  if (config && config.provider && config.model) {
+    return { provider: config.provider, model: config.model, reasoningEffort: config.reasoningEffort, live: true };
+  }
+  const chosen = harness.defaults && typeof harness.defaults.currentSelection === "function" ? harness.defaults.currentSelection() : null;
+  if (chosen && chosen.provider && chosen.model) return { ...chosen, live: false };
+  return null;
+};
+
+/**
+ * One call to that model, outside the conversation: no turn in the chat, and
+ * logged by the harness against the session like any auxiliary call. The text
+ * of the reply, or a thrown sentence.
+ */
+const askModel = async (harness, route, sessionId, system, text) => {
+  const { createUserMessage } = await import("@deepseek-ai/dsh-llm/message");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+  let reply = "";
+  try {
+    for await (const chunk of harness.llm.stream({
+      provider: route.provider,
+      model: route.model,
+      ...(route.reasoningEffort ? { reasoningEffort: route.reasoningEffort } : {}),
+      system,
+      messages: [
+        createUserMessage({
+          content: [{ type: "text", text }],
+          source: { kind: "plugin", plugin: "dsh-professor-pane" },
+        }),
+      ],
+      maxTokens: 4000,
+      ...(route.live ? { sessionId } : {}),
+      signal: controller.signal,
+    })) {
+      if (chunk.type === "text-delta") reply += chunk.text;
+      if (chunk.type === "finish" && (chunk.reason.kind === "error" || chunk.reason.kind === "aborted")) {
+        throw new Error(chunk.reason.failure?.message ?? `the model call was ${chunk.reason.kind}`);
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+  return reply;
+};
+
+/**
+ * What to ask after `after`, chosen by the session's model and checked by
+ * `decideNext`; recorded in the session either way. A follow-up the model
+ * wrote is added to the questions before the decision is returned, so the
+ * desk can put it up at once.
+ */
+const chooseNext = async (harness, target, root, sessionId, after) => {
+  const drafted = readDefence(target.place.questions);
+  if (!drafted) throw new Error("no questions drafted yet");
+  const answers = readSession(target.place.session)?.answers ?? [];
+  const pin = readPin(target.place.pin);
+  const code = pin && existsSync(target.place.repo) ? collectCode(target.place.repo) : { files: [], unread: [] };
+  const rubric = allRubrics(target.bundle).get(target.assessment?.rubric_id ?? "") ?? target.assessment?.rubric;
+  const criteria = rubric?.criteria ?? [];
+  const at = new Date().toISOString();
+  const context = { questions: drafted.questions, answers, criteria, files: code.files, after, at };
+
+  const route = modelRoute(harness, sessionId);
+  let reply = "";
+  let by = "the desk, without a model";
+  let failure = null;
+  if (!harness.llm || !route) {
+    failure = "no model to ask: " + (harness.llm ? "this session has no model route yet" : "the harness offers no llm service");
+  } else {
+    by = `${route.provider}/${route.model}`;
+    try {
+      const digest = pin
+        ? codeDigest({
+            title: target.assessment?.title ?? target.assessmentId,
+            assessmentId: target.assessmentId,
+            studentId: target.studentId,
+            brief: briefText(root, target.bundle.documents ?? [], target.assessment ?? {}),
+            criteria,
+            pin,
+            files: code.files,
+            unread: code.unread,
+          })
+        : "(the code is not cloned)";
+      reply = await askModel(harness, route, sessionId, NEXT_SYSTEM, nextPrompt({ digest, questions: drafted.questions, answers, after }));
+    } catch (error) {
+      failure = "the model call failed: " + String(error?.message ?? error);
+    }
+  }
+  const { decision, followUp } = decideNext(reply, { ...context, by });
+  if (failure) decision.notes = [failure, ...(decision.notes ?? [])];
+  if (followUp) writeDefence(target.place.questions, { ...drafted, questions: [...drafted.questions, followUp] });
+  const index = recordDecision(target.place, target.ids, decision);
+  const questions = followUp ? [...drafted.questions, followUp] : drafted.questions;
+  return { decision, index, question: questions.find((question) => question.id === decision.question_id) ?? null };
+};
+
+/**
  * What the defence desk draws: the questions, every take with its transcript,
  * and which provider will hear the next one — or why none will. The provider is
  * named so the professor knows, before pressing record, where the student's
@@ -6082,7 +6196,7 @@ const sendErrorPage = (res, text) =>
  * it are this file's own vocabulary and a collision inside it is a typo, not
  * the composition-level contract `webServer.register` is protecting.
  */
-const handler = (registry, credentials = { service: null }) => (req, res) => {
+const handler = (registry, credentials = { service: null }, harness = { llm: null, sessions: null, defaults: null }) => (req, res) => {
   let url;
   try {
     url = new URL(req.url ?? "/", "http://localhost");
@@ -6198,6 +6312,36 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
     // folder, which is why it is the pane's and not the session's. The answer
     // is transcribed in this process too — no judgement in it, and the
     // provider is the professor's `transcription` connection.
+    // The hands-free desk's two writes: what to ask next, chosen by the
+    // session's model (AGT-2), and what the professor did instead (AGT-3).
+    if (path === "/api/defence/next" || path === "/api/defence/override") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      let target;
+      try {
+        target = defenceTarget(workspace, root, runId, url.searchParams);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      if (path === "/api/defence/next") {
+        const after = url.searchParams.get("after") || null;
+        if (after !== null && !/^Q\d+$/.test(after)) return sendJson(res, 200, { error: `${after} is not a question id` });
+        return chooseNext(harness, target, root, url.searchParams.get("session") ?? "", after)
+          .then((chosen) => sendJson(res, 200, chosen))
+          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+      }
+      return readBody(req)
+        .then((text) => {
+          const body = text ? JSON.parse(text) : {};
+          const override = String(body.override ?? "");
+          if (!["skip", "edit", "ask_now", "pause"].includes(override)) throw new Error(`${override} is not an override`);
+          const question =
+            override === "edit" ? editQuestion(target.place.questions, String(body.question ?? ""), String(body.text ?? "")) : null;
+          if (Number.isInteger(body.index)) overrideDecision(target.place, body.index, override);
+          return sendJson(res, 200, { ok: true, question });
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
     if (path === "/api/defence/session" || path === "/api/defence/answer" || path === "/api/defence/audio") {
       let target;
       try {
@@ -7468,12 +7612,30 @@ export function apply(ctx) {
     });
   });
 
+  /*
+   * The session's own model, for the hands-free desk (AGT-2): `llm` to call
+   * it, `sessions` to read which provider and model a session is talking to,
+   * and `agentDefaultModel` for a session that has not made a request yet.
+   * Optional by the same nested-fiber idiom as `credentials`, one each, so a
+   * composition without one loses only the choosing — the desk then falls
+   * back to the next prepared question — never the pane.
+   */
+  const harness = { llm: null, sessions: null, defaults: null };
+  for (const [key, service] of [["llm", "llm"], ["sessions", "sessions"], ["defaults", "agentDefaultModel"]]) {
+    ctx.inject([service], (scoped) => {
+      harness[key] = scoped[service];
+      scoped.on("dispose", () => {
+        harness[key] = null;
+      });
+    });
+  }
+
   ctx.effect(
     () =>
       ctx.webServer.register({
         kind: "prefix",
         path: BASE,
-        handler: handler(ctx.workspaceRegistry, credentials),
+        handler: handler(ctx.workspaceRegistry, credentials, harness),
       }),
     "professor-pane: the /professor-pane route",
   );

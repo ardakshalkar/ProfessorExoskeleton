@@ -130,6 +130,7 @@ import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../src
 import { buildMaterials, documentRecord, producerFor, readProducers } from "../src/materials.ts";
 import { printPaper, type AnswerLayout, type PaperFormat } from "../src/exam-paper.ts";
 import {
+  briefText,
   checkQuestions,
   cloneAtHandIn,
   codeDigest,
@@ -2901,21 +2902,12 @@ try {
       const { files, unread } = collectCode(place.repo);
 
       if (sub === "code") {
-        const brief = (() => {
-          const document = (bundle.documents as any[]).find(
-            (entry) => entry.document_id === assessment.instructions_document_id,
-          );
-          const key = String(document?.storage_key ?? "");
-          if (!key || key.includes("://") || !/\.(md|txt)$/i.test(key)) return null;
-          const path = join(root, key);
-          return existsSync(path) ? readFileSync(path, "utf-8") : null;
-        })();
         out(
           codeDigest({
             title: assessment.title,
             assessmentId,
             studentId,
-            brief: brief ?? assessment.description ?? null,
+            brief: briefText(root, bundle.documents as any[], assessment),
             criteria,
             pin,
             files,

@@ -833,6 +833,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-dmeterfill{display:block;height:100%;background:#9a9aa0;transition:width .1s linear}
 .pp-dmeteron{background:#2f8a4e}
 .pp-dlivemark{font-size:11.5px;font-weight:600}
+.pp-dchooser{display:inline-flex;align-items:center;gap:4px;cursor:pointer}
+.pp-dproposal{display:flex;flex-direction:column;gap:4px}
+.pp-dcount{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:600;color:#c43030}
+.pp-dedit{font:inherit;font-size:13px;width:100%;box-sizing:border-box;padding:6px 8px;border-radius:6px;
+  border:1px solid var(--dsw-alias-border-l2,#c9c9ce);background:transparent;color:inherit;resize:vertical}
 .pp-drop{flex:none;display:flex;align-items:center;justify-content:center;min-height:96px;
   padding:14px;border-radius:8px;cursor:pointer;text-align:center;font-size:12px;
   color:var(--dsw-alias-label-secondary,#444);
@@ -6445,6 +6450,13 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const [pending, setPending] = React.useState(0);
       // Hands-free (AGT-1): { question, phase, level, threshold } while running.
       const [handsFree, setHandsFree] = React.useState(null);
+      // AGT-2/3: the model's choice waiting out its five seconds, and whether
+      // the model is asked at all (off: the desk walks the prepared questions).
+      const [proposal, setProposal] = React.useState(null);
+      const proposalRef = React.useRef(null);
+      proposalRef.current = proposal;
+      const [chooser, setChooser] = React.useState(true);
+      const [now, setNow] = React.useState(Date.now());
       const recorder = React.useRef(null);
       // The hands-free loop's own state, outside React: it runs ten times a
       // second and must see the latest of everything without re-subscribing.
@@ -6594,6 +6606,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         if (running.audio && running.audio.state !== "closed") running.audio.close();
         loop.current = null;
         setHandsFree(null);
+        setProposal(null);
       };
 
       const beginTake = (questionId) => {
@@ -6624,12 +6637,110 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         const keep = how !== "skip" && (take.spoke || how === "space");
         take.media.onstop = () => {
           const blob = new Blob(take.chunks, { type: (take.media.mimeType || running.type || "audio/webm").split(";")[0] });
-          if (keep && blob.size) upload(take.question, blob, (Date.now() - take.started) / 1000);
+          const sent = keep && blob.size ? upload(take.question, blob, (Date.now() - take.started) / 1000) : Promise.resolve();
           if (how === "pause") releaseMicrophone();
-          else beginTake(nextUnanswered(take.question));
+          // An answer was given and the model may choose what follows it: wait
+          // for the transcript, then ask. A skipped question, or a desk told
+          // not to ask the model, goes straight to the next prepared one.
+          else if (running.chooser && keep) {
+            setHandsFree({ question: null, phase: "thinking", level: 0, threshold: 0 });
+            sent.then(() => propose(take.question));
+          } else beginTake(nextUnanswered(take.question));
         };
         take.media.stop();
       };
+
+      /*
+       * AGT-2 and AGT-3: after each answer the session's model chooses what to
+       * ask, and the professor has five seconds to step in before it is asked.
+       * Ask now, Skip (the next prepared question instead), Edit (change the
+       * words, then ask), Pause (stop; nothing is asked). Every choice and
+       * every override is recorded in the session by the server.
+       */
+      const PROPOSE_MS = 5000;
+      const propose = (after) => {
+        if (!loop.current) return;
+        fetch(endpoint("/api/defence/next", "&after=" + encodeURIComponent(after)), { method: "POST" })
+          .then((response) => response.json())
+          .then((result) => {
+            if (!loop.current) return;
+            if (result.error) {
+              setSaid({ error: true, text: "Could not choose the next question: " + result.error + " — moving to the next prepared one." });
+              beginTake(nextUnanswered(after));
+              return;
+            }
+            setTick((value) => value + 1);
+            setHandsFree({ question: null, phase: "proposing", level: 0, threshold: 0 });
+            // The clock the countdown reads, set with the deadline: left stale,
+            // the first frame counted from whenever it last ticked.
+            setNow(Date.now());
+            setProposal({ ...result, after, deadline: Date.now() + PROPOSE_MS, editing: null });
+          })
+          .catch((error) => {
+            setSaid({ error: true, text: String(error) });
+            if (loop.current) beginTake(nextUnanswered(after));
+          });
+      };
+
+      const override = (kind, extra) =>
+        fetch(endpoint("/api/defence/override"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.assign({ index: proposalRef.current ? proposalRef.current.index : null, override: kind }, extra || {})),
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error) setSaid({ error: true, text: result.error });
+            return result;
+          });
+
+      /** Act on the proposal in hand: `auto` when the countdown ran out. */
+      const settle = (how, text) => {
+        const current = proposalRef.current;
+        if (!current) return;
+        setProposal(null);
+        const question = current.question;
+        if (how === "pause") {
+          override("pause");
+          releaseMicrophone();
+          return;
+        }
+        if (how === "skip") {
+          override("skip");
+          if (question && loop.current) loop.current.asked.add(question.id);
+          beginTake(nextUnanswered(current.after));
+          return;
+        }
+        if (current.decision.action === "done" || !question) {
+          if (how === "ask_now") override("ask_now");
+          releaseMicrophone();
+          const reason = current.decision.why || "nothing left to ask";
+          setSaid({ error: false, text: "The desk thinks the defence is complete: " + reason + (/[.!?]$/.test(reason) ? "" : ".") });
+          return;
+        }
+        if (how === "edit") {
+          override("edit", { question: question.id, text: text }).then(() => {
+            setTick((value) => value + 1);
+            beginTake(question.id);
+          });
+          return;
+        }
+        if (how === "ask_now") override("ask_now");
+        beginTake(question.id);
+      };
+
+      // The countdown. Editing stops it: a professor rewording a question is
+      // not going to be overtaken by the clock.
+      React.useEffect(() => {
+        if (!proposal || proposal.editing !== null) return undefined;
+        const timer = setInterval(() => {
+          const current = proposalRef.current;
+          if (!current || current.editing !== null) return;
+          if (Date.now() >= current.deadline) settle("auto");
+          else setNow(Date.now());
+        }, 200);
+        return () => clearInterval(timer);
+      }, [proposal && proposal.index, proposal && proposal.editing !== null]);
 
       const startHandsFree = () => {
         if (recording || sending || loop.current) return;
@@ -6654,7 +6765,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find(
               (candidate) => MediaRecorder.isTypeSupported(candidate),
             );
-            loop.current = { stream, audio, analyser, samples, type, asked: new Set(), take: null, timer: null };
+            loop.current = { stream, audio, analyser, samples, type, chooser, asked: new Set(), take: null, timer: null };
             loop.current.timer = setInterval(() => {
               const running = loop.current;
               const take = running && running.take;
@@ -6724,6 +6835,125 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 answer.transcript.timed ? null : h("span", { className: "pp-dim" }, " (no timestamps from this model)"),
               )
             : h("div", { className: "pp-dim" }, answer.error ? "Not transcribed: " + answer.error : "Transcribing…"),
+        );
+
+      const startRow = () =>
+        h(
+          "div",
+          { className: "pp-approverow" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn pp-drec",
+              disabled: Boolean(recording || sending),
+              title: "Listens continuously: an answer ends after a pause of about two and a half seconds, and the next question comes up by itself.",
+              onClick: startHandsFree,
+            },
+            "● Start hands-free",
+          ),
+          h(
+            "label",
+            { className: "pp-dim pp-dchooser" },
+            h("input", { type: "checkbox", checked: chooser, onChange: (event) => setChooser(event.target.checked) }),
+            " the session's model chooses each next question — a follow-up, or the next prepared one",
+          ),
+          pending > 0 ? h("span", { className: "pp-dim" }, pending + " answer(s) transcribing…") : null,
+        );
+
+      const proposalPanel = () => {
+        const current = proposal;
+        const question = current.question;
+        const left = Math.max(0, Math.ceil((current.deadline - now) / 1000));
+        const done = current.decision.action === "done" || !question;
+        const notes = current.decision.notes || [];
+        return h(
+          "div",
+          { className: "pp-dproposal" },
+          h(
+            "div",
+            { className: "pp-dhandsline" },
+            done
+              ? h("b", null, "Done?")
+              : h("b", null, question.id + (question.follows ? " ↳ follow-up on " + question.follows : "")),
+            current.editing === null ? h("span", { className: "pp-dcount" }, done ? "finishing in " + left + " s" : "asking in " + left + " s") : null,
+          ),
+          done
+            ? h("div", null, current.decision.why || "Nothing left to ask.")
+            : current.editing !== null
+              ? h("textarea", {
+                  className: "pp-dedit",
+                  value: current.editing,
+                  rows: 2,
+                  autoFocus: true,
+                  onChange: (event) => setProposal(Object.assign({}, current, { editing: event.target.value })),
+                })
+              : h("div", { className: "pp-dqtext" }, question.text),
+          !done && current.decision.why ? h("div", { className: "pp-dim" }, "Why: " + current.decision.why) : null,
+          notes.length ? h("div", { className: "pp-dwarn" }, notes.join(" · ")) : null,
+          h(
+            "div",
+            { className: "pp-dim" },
+            "Chosen by " + current.decision.by + ".",
+          ),
+          h(
+            "div",
+            { className: "pp-approverow" },
+            current.editing !== null
+              ? h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: () => settle("edit", current.editing) }, "Save and ask")
+              : h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: () => settle("ask_now") }, done ? "Finish now" : "Ask now"),
+            !done && current.editing === null
+              ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setProposal(Object.assign({}, current, { editing: question.text })) }, "Edit")
+              : null,
+            !done ? h("button", { type: "button", className: "pp-segbtn", onClick: () => settle("skip") }, "Skip — next prepared question") : null,
+            h("button", { type: "button", className: "pp-segbtn", onClick: () => settle("pause") }, "Pause"),
+          ),
+        );
+      };
+
+      const handsPanel = () =>
+        h(
+          "div",
+          { className: "pp-dhands" },
+          proposal
+            ? proposalPanel()
+            : handsFree.phase === "thinking" || handsFree.phase === "proposing"
+              ? h("div", { className: "pp-dhandsline" }, "Transcribing the answer and choosing what to ask next…")
+              : h(
+                  React.Fragment,
+                  null,
+                  h(
+                    "div",
+                    { className: "pp-dhandsline" },
+                    h("b", null, handsFree.question),
+                    " · ",
+                    handsFree.phase === "speaking"
+                      ? handsFree.silent
+                        ? "pause " + (handsFree.silent / 1000).toFixed(1) + " s"
+                        : "hearing the answer"
+                      : "listening — waiting for the student to speak",
+                    h(
+                      "span",
+                      { className: "pp-dmeter", "aria-hidden": "true" },
+                      h("span", {
+                        className: "pp-dmeterfill" + (handsFree.level > handsFree.threshold ? " pp-dmeteron" : ""),
+                        style: { width: Math.min(100, Math.round(handsFree.level * 400)) + "%" },
+                      }),
+                    ),
+                  ),
+                  h(
+                    "div",
+                    { className: "pp-approverow" },
+                    h("button", { type: "button", className: "pp-segbtn", onClick: () => endTake("space") }, "End answer (Space)"),
+                    h("button", { type: "button", className: "pp-segbtn", onClick: () => endTake("skip") }, "Skip, no answer"),
+                    h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: () => endTake("pause") }, "Pause"),
+                  ),
+                  h(
+                    "div",
+                    { className: "pp-dim" },
+                    "Let the student read the question here — anything said aloud now counts as the answer, yours included.",
+                  ),
+                ),
         );
 
       const question = (entry) => {
@@ -6827,60 +7057,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 : null,
               // Hands-free: one press starts it, and from then on the desk
               // listens, notices the end of each answer and moves on.
-              data && !data.error && data.questions.length
-                ? handsFree
-                  ? h(
-                      "div",
-                      { className: "pp-dhands" },
-                      h(
-                        "div",
-                        { className: "pp-dhandsline" },
-                        h("b", null, handsFree.question),
-                        " · ",
-                        handsFree.phase === "speaking"
-                          ? handsFree.silent
-                            ? "pause " + (handsFree.silent / 1000).toFixed(1) + " s"
-                            : "hearing the answer"
-                          : "listening — waiting for the student to speak",
-                        h(
-                          "span",
-                          { className: "pp-dmeter", "aria-hidden": "true" },
-                          h("span", {
-                            className: "pp-dmeterfill" + (handsFree.level > handsFree.threshold ? " pp-dmeteron" : ""),
-                            style: { width: Math.min(100, Math.round(handsFree.level * 400)) + "%" },
-                          }),
-                        ),
-                      ),
-                      h(
-                        "div",
-                        { className: "pp-approverow" },
-                        h("button", { type: "button", className: "pp-segbtn", onClick: () => endTake("space") }, "End answer (Space)"),
-                        h("button", { type: "button", className: "pp-segbtn", onClick: () => endTake("skip") }, "Skip, no answer"),
-                        h("button", { type: "button", className: "pp-segbtn pp-drec", onClick: () => endTake("pause") }, "Pause"),
-                      ),
-                      h(
-                        "div",
-                        { className: "pp-dim" },
-                        "Let the student read the question here — anything said aloud now counts as the answer, yours included.",
-                      ),
-                    )
-                  : h(
-                      "div",
-                      { className: "pp-approverow" },
-                      h(
-                        "button",
-                        {
-                          type: "button",
-                          className: "pp-segbtn pp-drec",
-                          disabled: Boolean(recording || sending),
-                          title: "Listens continuously: an answer ends after a pause of about two and a half seconds, and the next question comes up by itself.",
-                          onClick: startHandsFree,
-                        },
-                        "● Start hands-free",
-                      ),
-                      pending > 0 ? h("span", { className: "pp-dim" }, pending + " answer(s) transcribing…") : null,
-                    )
-                : null,
+              data && !data.error && data.questions.length ? (handsFree ? handsPanel() : startRow()) : null,
               said ? h("div", { className: said.error ? "pp-dwarn" : "pp-dim" }, said.text) : null,
               data === null
                 ? h("div", { className: "pp-dim" }, "Loading…")

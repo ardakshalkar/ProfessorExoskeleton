@@ -925,18 +925,29 @@ is worth building.
       that is not the student's counts. A professor reading the question
       aloud is heard as the answer, so hands-free asks for the question to be
       read off the screen until AGT-4 (student screen) and AGT-6 (two voices).
-- [ ] **AGT-2** The model chooses the next question. After each answer it
+- [x] **AGT-2** The model chooses the next question. After each answer it
       gets the questions, the rubric criteria, everything said so far and
       the code digest (a fixed prefix, so it is cached and cheap to resend).
       It answers: a follow-up (written), the next prepared question, or
       *done* (every criterion has evidence, or the time budget is spent), with
       one line of reason. Called through `ctx.llm.stream` on the session's
       route, `purpose: "defence-next"`. `M` · depends: AGT-1, plugin `llm`
-      inject
-- [ ] **AGT-3** The professor's veto: the next question shows as *asking in
+      inject Done 2026-10-06. The pane injects `llm`, `sessions` and
+      `agentDefaultModel` (each optional) and reads the route from the
+      session's request header, as the title plugin does. `purpose` is left
+      unset because the harness's union admits only its own two values.
+      `decideNext` in `src/defence.ts` checks the reply: a follow-up goes
+      through `checkQuestions` and is appended, a `next` must name a
+      prepared question still to ask, and follow-ups stop two deep. Anything
+      unusable, or no model at all, falls back to the next prepared question
+      with a note, so the defence never stalls on the model.
+- [x] **AGT-3** The professor's veto: the next question shows as *asking in
       5 s* with **Ask now · Skip · Edit · Pause**. Silence is consent; any
       press takes over. Pause stops the loop and leaves the microphone off.
-      `S` · depends: AGT-2
+      `S` · depends: AGT-2 Done 2026-10-06. Editing holds the countdown; every
+      choice and override is kept in `session.yaml` under `decisions` (the
+      AGT-7 record; consent is still open). A *model chooses* switch turns
+      the model off, and the desk then walks the prepared questions.
 - [ ] **AGT-4** The student's screen: a second window, opened for the
       projector or a second monitor, showing the current question and a
       recording light, and nothing else: no draft scores, no reasons, no

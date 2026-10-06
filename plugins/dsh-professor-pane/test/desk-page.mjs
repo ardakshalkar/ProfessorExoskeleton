@@ -23,6 +23,8 @@ const questions = [
 ];
 const answers = [];
 const received = [];
+const decisions = [];
+const overrides = [];
 
 const page = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Defence desk — test page</title>
@@ -93,6 +95,42 @@ http
       });
     }
     if (url.pathname === "/professor-pane/api/defence/audio") return res.writeHead(404), res.end();
+    // AGT-2, scripted: a follow-up after Q1, then the prepared questions, then done.
+    if (url.pathname === "/professor-pane/api/defence/next" && req.method === "POST") {
+      const after = url.searchParams.get("after");
+      const answered = new Set(answers.map((a) => a.question_id));
+      let decision;
+      let question = null;
+      if (after === "Q1" && !questions.some((q) => q.follows === "Q1")) {
+        question = { id: `Q${questions.length + 1}`, kind: "follow_up", follows: "Q1", text: "You said it trains a model — which model, and why that one?", criterion_id: null, why: "", evidence: [], approval: "draft" };
+        questions.push(question);
+        decision = { after, action: "follow_up", question_id: question.id, why: "The answer named no model.", by: "mock/scripted", at: new Date().toISOString() };
+      } else {
+        question = questions.find((q) => !answered.has(q.id)) ?? null;
+        decision = question
+          ? { after, action: "next", question_id: question.id, why: "Its criterion has no evidence yet.", by: "mock/scripted", at: new Date().toISOString() }
+          : { after, action: "done", question_id: null, why: "Every criterion has been asked about.", by: "mock/scripted", at: new Date().toISOString() };
+      }
+      decisions.push(decision);
+      return setTimeout(() => json(res, { decision, index: decisions.length - 1, question }), 300);
+    }
+    if (url.pathname === "/professor-pane/api/defence/override" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+        if (decisions[body.index]) decisions[body.index].overridden = body.override;
+        let question = null;
+        if (body.override === "edit") {
+          question = questions.find((q) => q.id === body.question);
+          if (question) question.text = body.text;
+        }
+        overrides.push(body);
+        json(res, { ok: true, question });
+      });
+      return;
+    }
+    if (url.pathname === "/decisions") return json(res, { decisions, overrides });
     if (url.pathname === "/professor-pane/api/defence/answer" && req.method === "POST") {
       const chunks = [];
       req.on("data", (chunk) => chunks.push(chunk));
