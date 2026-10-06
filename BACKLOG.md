@@ -873,12 +873,80 @@ is worth building.
       `olzhasAl/whisper-large-v3-tulpar` (10.6%, KSC),
       `shyngys879/kazakh-whisper-large-v3-turbo` (11.8%, FLEURS), and
       `KRASR/kazakh-russian-asr-whisper-small-full-ft` for mixed Kazakh and
-      Russian. Serve one with an OpenAI-compatible Whisper server (speaches
-      takes CTranslate2 models, so a Transformers checkpoint is converted
-      once with `ct2-transformers-converter`), then `connections add
-      --provider openai --base-url http://localhost:8000/v1`. Nothing in
-      ainar-node changes. Needs a GPU machine, and a decision on where it
-      runs. `M` · depends: —
+      Russian. Served by an OpenAI-compatible Whisper server (speaches takes
+      CTranslate2 models, so a Transformers checkpoint is converted once with
+      `ct2-transformers-converter`). Nothing in ainar-node changes. Two modes,
+      decided 2026-10-06:
+      * **Local machine** — the server in Docker on the professor's laptop,
+        `connections add whisper-local --provider openai --base-url
+        http://127.0.0.1:8000/v1`, no key. Without a GPU, the turbo or small
+        models only; a 1-minute answer must come back in seconds, not a minute.
+      * **University server, if needed** — the same container on the
+        `deploy/` host, bound to 127.0.0.1 like every harness there. Harnesses
+        on that host reach it on loopback with no key and the voice never
+        leaves the server; a professor whose harness runs on a laptop reaches
+        it through Caddy, behind the same authentication, with a token of its
+        own (`--token-env AINAR_WHISPER_TOKEN`).
+      `M` · depends: —
+- [ ] **TRN-3** An ordered fallback instead of one default:
+      `defaults.transcription: ["whisper-local", "whisper-narxoz", "scribe"]`,
+      tried in order when one is unreachable. A fallback never moves a voice
+      somewhere less private without saying so: the desk header names the
+      chain, and each take records the connection that actually heard it.
+      `S` · depends: TRN-2
+
+**The agentic desk: it listens, and moves on by itself**
+
+> Dictated 2026-10-06: a mode where the system listens immediately. The
+> professor starts the defence and the desk runs it: it puts a question up,
+> listens, notices when the student has finished, transcribes, decides
+> what to ask next, and asks it. The professor watches, and can step in
+> at any point. The model that decides is the session's own: a pane plugin
+> can inject the harness's `llm` service and call the session's current
+> model route directly, as `dsh-session-title-llm` does. That means no chat
+> turn per question, and every call is recorded in the session log.
+>
+> What it may decide is LIV-2's line: only the next question. The grade
+> is produced afterwards from the whole recording, and the professor
+> accepts it (DEF-5).
+
+- [ ] **AGT-1** Hands-free turn-taking, with no model in the loop: the
+      microphone stays open, voice activity detection in the browser ends a
+      take after about 2.5 s of silence following speech (or a key press, or a
+      3-minute cap), the take is transcribed, and the desk advances to the
+      next prepared question. On its own, this already saves pressing Record
+      and Stop. `M` · depends: DEF-4
+- [ ] **AGT-2** The model chooses the next question. After each answer it
+      gets the questions, the rubric criteria, everything said so far and
+      the code digest (a fixed prefix, so it is cached and cheap to resend).
+      It answers: a follow-up (written), the next prepared question, or
+      *done* (every criterion has evidence, or the time budget is spent), with
+      one line of reason. Called through `ctx.llm.stream` on the session's
+      route, `purpose: "defence-next"`. `M` · depends: AGT-1, plugin `llm`
+      inject
+- [ ] **AGT-3** The professor's veto: the next question shows as *asking in
+      5 s* with **Ask now · Skip · Edit · Pause**. Silence is consent; any
+      press takes over. Pause stops the loop and leaves the microphone off.
+      `S` · depends: AGT-2
+- [ ] **AGT-4** The student's screen: a second window, opened for the
+      projector or a second monitor, showing the current question and a
+      recording light, and nothing else: no draft scores, no reasons, no
+      remaining questions (LIV-1). Optionally the question read aloud
+      (`speechSynthesis`, or ElevenLabs voices where a Kazakh voice is
+      wanted). `S` · depends: AGT-1
+- [ ] **AGT-5** Live captions, not only at the end of an answer: Scribe v2
+      Realtime over a WebSocket (about $0.39/hr), or the local server's
+      streaming route. They let AGT-2 start deciding before the student
+      stops, which turns a 6–10 s gap into 2–4 s. `M` · depends: AGT-2
+- [ ] **AGT-6** Two voices, one microphone. The professor will interject, so
+      diarize (Scribe has it) and keep the professor's words out of the
+      student's evidence. A take where the speakers could not be separated
+      is flagged, not cited. `S` · depends: AGT-1
+- [ ] **AGT-7** Consent and the record. The defence starts only after the
+      professor confirms the student agreed to be recorded, and that
+      confirmation is in `session.yaml`. Every decision the loop makes
+      (what it asked, why, what the professor overrode) goes there too, so
+      an appeal replays the whole exchange (LIV-3). `S` · depends: AGT-2
 - [ ] **DEF-5** The proposed grade from the whole session, by the AUD-1 path,
       as an `Evaluation` marked `approval: draft` citing transcript timestamps.
       `M` · depends: DEF-4
