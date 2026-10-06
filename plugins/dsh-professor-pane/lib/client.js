@@ -419,19 +419,44 @@ window.__ModuleLoader__.load({
   color:var(--dsw-alias-label-secondary,#3a3a3a)}
 .pp-approveerr{color:#b4342a}
 .pp-body{flex:1;min-height:0;display:flex;flex-direction:column}
-/* Scans: the step bar, then one card per paper that needs the professor. Three
-   steps a row, because six do not fit a column this narrow and a row that
-   scrolled sideways would hide the step the pile is on. */
-.pp-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin:0 0 12px}
-.pp-step{padding:5px 7px;border-radius:6px;font-size:10.5px;line-height:1.35;min-width:0;
-  color:var(--dsw-alias-label-tertiary,#6b6b6b);background:var(--dsw-alias-fill-secondary,#f5f5f7);
-  border:1px solid transparent}
-.pp-step b{display:block;font-size:11.5px;font-weight:600;color:var(--dsw-alias-label-secondary,#444)}
-.pp-step-done b::after{content:" \\2713";font-weight:400}
-.pp-step-current{border-color:var(--dsw-alias-label-primary,#111)}
-.pp-step-current b{color:var(--dsw-alias-label-primary,#111)}
-.pp-step-yours{border-color:#a5561f;background:rgba(165,86,31,.08)}
-.pp-step-yours b{color:#a5561f}
+/* Scans: the piles as a list, each saying where it is; the chosen pile's one
+   step to work on, as a headline with its single action; the seven steps as a
+   row of dots; and the chosen step's detail and tools under it. Overview
+   first, the step that matters next, the rest on demand. */
+.pp-piles{display:flex;flex-direction:column;gap:5px;margin:0 0 12px}
+.pp-pile{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font:inherit;cursor:pointer;
+  padding:7px 9px;border-radius:8px;color:inherit;background:0 0;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-pile[aria-current=true]{border-color:var(--dsw-alias-label-primary,#111)}
+.pp-pilename{flex:1;min-width:0}
+.pp-pilename b{display:block;font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-pilename span{display:block;font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-pilebar{display:flex;gap:2px;width:56px;flex:none}
+.pp-pilebar i{flex:1;height:4px;border-radius:2px;background:var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-pilebar i.pp-s-done{background:#2e7d4f}
+.pp-pilebar i.pp-s-now{background:#a5561f}
+.pp-whose{flex:none;font-size:10.5px;padding:1px 7px;border-radius:20px;white-space:nowrap}
+.pp-whose-you{color:#a5561f;background:rgba(165,86,31,.1)}
+.pp-whose-assistant{color:#5b4bb7;background:rgba(91,75,183,.1)}
+.pp-whose-done{color:#2e7d4f;background:rgba(46,125,79,.1)}
+.pp-now{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px;padding:10px 12px;margin:0 0 12px}
+.pp-nowkick{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-now h3{margin:3px 0 3px;font-size:14px;font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-now p{margin:0 0 9px;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary,#555)}
+.pp-stepper{display:flex;justify-content:space-between;margin:0 0 4px}
+.pp-stepbtn{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:2px 0;
+  font:inherit;cursor:pointer;background:0 0;border:0;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-stepbtn span{font-size:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.pp-stepbtn[aria-pressed=true] span{color:var(--dsw-alias-label-primary,#111);font-weight:600}
+.pp-dot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:10px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2,#cfcfd4)}
+.pp-dot-done{background:#2e7d4f;border-color:#2e7d4f;color:#fff}
+.pp-dot-now{border:2px solid #a5561f;color:#a5561f;font-weight:600}
+.pp-dot-yours{border-color:#a5561f;color:#a5561f}
+.pp-stepbtn[aria-pressed=true] .pp-dot{box-shadow:0 0 0 2px var(--dsw-alias-fill-secondary,#ececf0)}
+.pp-stepdetail{margin:6px 0 0;padding:9px 10px;border-radius:8px;font-size:12px;line-height:1.5;
+  background:var(--dsw-alias-fill-secondary,#f5f5f7)}
+.pp-stepdetail > b{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
 .pp-lane{display:flex;align-items:baseline;gap:6px;margin:14px 0 6px;font-size:11px;
   letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-lane span{text-transform:none;letter-spacing:0}
@@ -4322,26 +4347,32 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const busy = phase !== "idle";
       const c = props.canvas || { ready: 0, unsent: 0, changed: 0 };
       const toSend = c.unsent + c.changed;
+      // `lead`: this is the Scans headline's one action. The headline already
+      // says how many marks wait, so the count is not repeated, and Preview is
+      // the view's primary button.
+      const lead = Boolean(props.lead);
 
       return h(
         "div",
-        { className: "pp-next" },
+        { className: lead ? "" : "pp-next" },
         h(
           "div",
           { className: "pp-approverow" },
-          h(
-            "span",
-            null,
-            c.ready === 0
-              ? "No whole marks to send yet."
-              : toSend === 0
-                ? "Canvas has every mark (" + c.ready + ")."
-                : toSend + " of " + c.ready + " marks are not in Canvas. ",
-          ),
+          lead
+            ? null
+            : h(
+                "span",
+                null,
+                c.ready === 0
+                  ? "No whole marks to send yet."
+                  : toSend === 0
+                    ? "Canvas has every mark (" + c.ready + ")."
+                    : toSend + " of " + c.ready + " marks are not in Canvas. ",
+              ),
           c.ready > 0
             ? h(
                 "button",
-                { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => marks({}, "planning") },
+                { type: "button", className: lead && !plan ? "pp-primary" : "pp-segbtn", disabled: busy, onClick: () => marks({}, "planning") },
                 phase === "planning" ? "Asking Canvas…" : plan ? "Preview again" : "Preview the Canvas send",
               )
             : null,
@@ -5642,6 +5673,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const [focus, setFocus] = React.useState(0);
       const [reviewing, setReviewing] = React.useState(false);
       const [grading, setGrading] = React.useState(false);
+      // The step whose detail is open; null follows the pile's current step.
+      const [openStep, setOpenStep] = React.useState(null);
       const names = props.names;
 
       const query = (path) =>
@@ -5922,102 +5955,72 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         }
       };
 
-      // `next` is the server's word on which step to work on; a harness from
-      // before it falls back to the first step not done.
-      const current =
-        doc.stages.find((stage) => stage.id === doc.next) ||
-        (doc.next === undefined ? doc.stages.find((stage) => stage.state === "current" || stage.state === "yours") : null);
-      const ask = current && STEP_PROMPTS[current.id] ? STEP_PROMPTS[current.id](props.runId, assessmentId) : null;
-      // Grading opens as soon as one answer is recorded: the rest are read
-      // while the professor works, and the view says which are still waiting.
+      // A harness from before `now` existed sends none; the tab still draws.
+      const now = doc.now || { step: doc.next || null, index: 0, total: doc.stages.length, title: "", body: "", whose: "you", action: null };
+      const shown = openStep || now.step || "canvas";
+      const stageOf = (id) => doc.stages.find((stage) => stage.id === id) || null;
+      const shownStage = stageOf(shown);
       const gradable = doc.answers > 0;
       const check = work.filter((paper) => paper.lane === "check");
       const held = work.filter((paper) => paper.lane === "held");
       const placed = doc.papers.filter((paper) => paper.lane === "placed");
       const skipped = doc.papers.filter((paper) => paper.lane === "skipped");
 
-      return h(
-        "div",
-        { className: "pp-scroll", onKeyDown: onKey },
-        doc.piles.length > 1
-          ? h(
-              "select",
-              {
-                className: "pp-runs",
-                value: assessmentId,
-                "aria-label": "Which pile",
-                onChange: (event) => setPile(event.target.value),
-              },
-              doc.piles.map((entry) => h("option", { value: entry.id, key: entry.id }, entry.title)),
-            )
-          : null,
+      const WHOSE = { you: "Your move", assistant: "Assistant", done: "Done" };
+      const whose = (value) => h("span", { className: "pp-whose pp-whose-" + value }, WHOSE[value] || value);
+      const choosePile = (id) => {
+        setOpenStep(null);
+        setFocus(0);
+        setPile(id);
+      };
+
+      // The buttons each step offers. `primary` when it is the one action of
+      // the headline; the same button in a step's detail is secondary, so a
+      // view never has two primaries.
+      const readButton = (primary) =>
         h(
-          "div",
-          { className: "pp-steps", role: "list", "aria-label": doc.assessment.title + ": where the pile stands" },
-          doc.stages.map((stage) =>
-            h(
-              "div",
-              { className: "pp-step pp-step-" + stage.state, role: "listitem", key: stage.id, title: stage.detail },
-              h("b", null, stage.label),
-              stage.detail,
-            ),
-          ),
-        ),
-        current && current.id === "read"
+          "button",
+          {
+            type: "button",
+            key: "read",
+            className: primary ? "pp-primary" : "pp-segbtn",
+            disabled: Boolean(busy),
+            title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
+            onClick: () => post("/api/scans/read", {}, "read"),
+          },
+          busy === "read" ? "Reading… a few minutes for a class" : "Read and record the answers",
+        );
+      const gradeButton = (primary) =>
+        h(
+          "button",
+          {
+            type: "button",
+            key: "grade",
+            className: primary ? "pp-primary" : "pp-segbtn",
+            disabled: Boolean(busy),
+            title: "Every answer to each question as cards over the conversation — choose the rubric, then mark and decide",
+            onClick: () => setGrading(true),
+          },
+          "Open the Grade view",
+        );
+      const askButton = (kind, primary) =>
+        STEP_PROMPTS[kind]
           ? h(
-              "div",
-              { className: "pp-next" },
-              busy === "read"
-                ? "Reading the papers, then recording the answers as drafts — a few minutes for a whole class. "
-                : (gradable ? "Some placed papers are not read yet. " : "Read is next: a command, not a question. "),
-              h(
-                "button",
-                {
-                  type: "button",
-                  className: gradable ? "pp-segbtn" : "pp-primary",
-                  disabled: Boolean(busy),
-                  title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
-                  onClick: () => post("/api/scans/read", {}, "read"),
-                },
-                busy === "read" ? "Reading…" : "Read & record the answers",
-              ),
+              "button",
+              {
+                type: "button",
+                key: "ask-" + kind,
+                className: primary ? "pp-primary" : "pp-segbtn",
+                onClick: () => props.ask(STEP_PROMPTS[kind](props.runId, assessmentId)),
+              },
+              kind === "grade" ? "Ask the assistant for suggestions" : "Ask the assistant",
             )
-          : null,
-        current && current.id !== "match" && current.id !== "read" && ask && !gradable
-          ? h(
-              "div",
-              { className: "pp-next" },
-              current.label + " is next, and it is the assistant's to draft. ",
-              h(
-                "button",
-                { type: "button", className: "pp-segbtn", onClick: () => props.ask(ask) },
-                "Ask the assistant",
-              ),
-            )
-          : null,
-        gradable
-          ? h(
-              "div",
-              { className: "pp-next" },
-              current && current.id === "read"
-                ? "Unread papers' answers join each question once they are read. "
-                : "Rubric, marks and acceptance, one question at a time. ",
-              h(
-                "button",
-                {
-                  type: "button",
-                  className: "pp-primary",
-                  disabled: Boolean(busy),
-                  title: "Every answer to each question as cards over the conversation — propose or accept the rubric, then mark",
-                  onClick: () => setGrading(true),
-                },
-                "Grade the answers",
-              ),
-            )
-          : null,
+          : null;
+      const canvasPanel = (lead) =>
         doc.canvas && doc.canvas.ready > 0
           ? h(CanvasMarks, {
-              key: assessmentId,
+              key: "canvas-" + assessmentId,
+              lead: lead,
               runId: props.runId,
               sessionId: props.sessionId,
               assessmentId: assessmentId,
@@ -6029,6 +6032,217 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 props.onWrite();
               },
             })
+          : null;
+
+      const nowActions = () => {
+        if (now.action === "read") return [readButton(true)];
+        if (now.action === "ask") return [askButton(now.ask, true)];
+        if (now.action === "grade") return [gradeButton(true), now.ask ? askButton(now.ask, false) : null];
+        if (now.action === "match")
+          return [
+            h(
+              "button",
+              { type: "button", key: "match", className: "pp-primary", onClick: () => setOpenStep("match") },
+              "Show the papers",
+            ),
+          ];
+        return [];
+      };
+
+      // The headline: the one step to work on, why, and its one action.
+      const nowCard = h(
+        "section",
+        { className: "pp-now", "aria-label": "What " + doc.assessment.title + " needs now" },
+        h(
+          "div",
+          { className: "pp-nowkick" },
+          h("span", null, now.step ? "Step " + (now.index + 1) + " of " + now.total + " · " + ((stageOf(now.step) || {}).label || now.step) : "All " + now.total + " steps done"),
+          whose(now.whose),
+        ),
+        h("h3", null, now.title),
+        h("p", null, now.body),
+        now.action === "canvas"
+          ? canvasPanel(true)
+          : h("div", { className: "pp-actions" }, nowActions()),
+      );
+
+      // Every pile, each saying where it is: the overview the dropdown hid.
+      const pileList = h(
+        "div",
+        { className: "pp-piles", role: "list", "aria-label": "Scanned exams in " + props.runId },
+        doc.piles.map((entry) =>
+          h(
+            "button",
+            {
+              type: "button",
+              role: "listitem",
+              key: entry.id,
+              className: "pp-pile",
+              "aria-current": entry.id === assessmentId,
+              onClick: () => choosePile(entry.id),
+            },
+            h(
+              "span",
+              { className: "pp-pilename" },
+              h("b", null, entry.title),
+              h("span", null, entry.now ? entry.now.phrase : ""),
+            ),
+            entry.progress
+              ? h(
+                  "span",
+                  { className: "pp-pilebar", "aria-hidden": "true" },
+                  entry.progress.map((state, index) =>
+                    h("i", { key: index, className: state === "done" ? "pp-s-done" : entry.now && index === entry.now.index ? "pp-s-now" : "" }),
+                  ),
+                )
+              : null,
+            entry.now ? whose(entry.now.whose) : null,
+          ),
+        ),
+      );
+
+      // The seven steps: done, the one to work on, and the rest; each opens
+      // its own detail.
+      const stepper = h(
+        "div",
+        { className: "pp-stepper", role: "list", "aria-label": doc.assessment.title + ": the seven steps" },
+        doc.stages.map((stage, index) =>
+          h(
+            "button",
+            {
+              type: "button",
+              role: "listitem",
+              key: stage.id,
+              className: "pp-stepbtn",
+              "aria-pressed": stage.id === shown,
+              title: stage.label + ": " + stage.detail,
+              onClick: () => setOpenStep(stage.id),
+            },
+            h(
+              "span",
+              {
+                className:
+                  "pp-dot" +
+                  (stage.state === "done" ? " pp-dot-done" : stage.id === now.step ? " pp-dot-now" : stage.state === "yours" ? " pp-dot-yours" : ""),
+                "aria-hidden": "true",
+              },
+              stage.state === "done" ? "✓" : String(index + 1),
+            ),
+            h("span", null, stage.label),
+          ),
+        ),
+      );
+
+      // Match's tools: the papers that need a person, the review of every
+      // match, and what was placed.
+      const matchTools = () => [
+        !names
+          ? h(
+              Message,
+              { key: "pseudonyms" },
+              "Pseudonyms are showing, so the handwritten names and their crops are hidden. Press Names to match papers.",
+            )
+          : reviewable
+            ? h(
+                "div",
+                { className: "pp-actions", key: "review" },
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    disabled: Boolean(busy),
+                    title: "Every name the pile was matched on, as big cards — confirm them all at once, reject the wrong ones",
+                    onClick: () => setReviewing(true),
+                  },
+                  "Review all " + reviewable + " name matches",
+                ),
+              )
+            : null,
+        check.length
+          ? h(
+              "div",
+              { className: "pp-lane", key: "check-lane" },
+              "Check",
+              h("span", null, "· " + check.length + " placed on a close spelling or one word of the name — confirm, or say who it is"),
+            )
+          : null,
+        ...check.map((paper) => card(paper, work.indexOf(paper))),
+        held.length
+          ? h("div", { className: "pp-lane", key: "held-lane" }, "Held", h("span", null, "· " + held.length + " not placed"))
+          : null,
+        ...held.map((paper) => card(paper, work.indexOf(paper))),
+        work.length ? h("div", { className: "pp-cardmeta", key: "keys" }, "j / k to move between papers, Enter to confirm") : null,
+        h(
+          "details",
+          { className: "pp-folded", key: "placed" },
+          h(
+            "summary",
+            null,
+            placed.length + " placed" + (skipped.length ? " · " + skipped.length + " set aside" : "") + " · " + doc.missing + " enrolled with no paper",
+          ),
+          h(
+            "ul",
+            null,
+            placed.map((paper) =>
+              h(
+                "li",
+                { key: paper.file + paper.pages },
+                "pp. " + paper.pages + " → " + who(paper.resolved, paper.resolved_name) +
+                  (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : paper.match === "partial" ? " (one word)" : ""),
+              ),
+            ),
+            skipped.map((paper) => h("li", { key: paper.file + paper.pages }, "pp. " + paper.pages + " — " + paper.skip)),
+          ),
+          h(
+            "div",
+            { className: "pp-actions" },
+            h(
+              "button",
+              {
+                type: "button",
+                className: "pp-segbtn",
+                disabled: Boolean(busy),
+                title: "Run `scans apply` again — after editing plan.yaml by hand, say",
+                onClick: () => post("/api/scans/apply", {}, "apply"),
+              },
+              busy === "apply" ? "Applying…" : "Re-apply the plan",
+            ),
+          ),
+        ),
+      ];
+
+      // The open step's detail: what it says, and its tools when they are not
+      // already the headline's action.
+      const stepTools = () => {
+        if (shown === "match") return matchTools();
+        if (shown === "read") return now.action === "read" ? [] : [h("div", { className: "pp-actions", key: "a" }, readButton(false))];
+        if (shown === "rubric" || shown === "grade" || shown === "approve") {
+          if (!gradable || now.action === "grade") return [];
+          return [h("div", { className: "pp-actions", key: "a" }, gradeButton(false))];
+        }
+        if (shown === "canvas") return now.action === "canvas" ? [] : [canvasPanel()];
+        return [];
+      };
+      const detail = shownStage
+        ? h(
+            "section",
+            { className: "pp-stepdetail", "aria-label": shownStage.label },
+            h("b", null, shownStage.label),
+            " — " + shownStage.detail,
+            stepTools(),
+          )
+        : null;
+
+      return h(
+        "div",
+        { className: "pp-scroll", onKeyDown: onKey },
+        pileList,
+        nowCard,
+        stepper,
+        detail,
+        said
+          ? h("pre", { className: "pp-approveout" + (said.error ? " pp-approveerr" : "") }, said.text)
           : null,
         grading
           ? h(GradeBoard, {
@@ -6046,32 +6260,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               onClose: () => setGrading(false),
             })
           : null,
-        said
-          ? h("pre", { className: "pp-approveout" + (said.error ? " pp-approveerr" : "") }, said.text)
-          : null,
-        !names
-          ? h(
-              Message,
-              null,
-              "Pseudonyms are showing, so the handwritten names and their crops are hidden. Press Names to match papers.",
-            )
-          : reviewable
-            ? h(
-                "div",
-                { className: "pp-actions", style: { marginBottom: "4px" } },
-                h(
-                  "button",
-                  {
-                    type: "button",
-                    className: "pp-primary",
-                    disabled: Boolean(busy),
-                    title: "Every name the pile was matched on, as big cards — confirm them all at once, reject the wrong ones",
-                    onClick: () => setReviewing(true),
-                  },
-                  "Review all " + reviewable + " name matches",
-                ),
-              )
-            : null,
         reviewing && names
           ? h(MatchReview, {
               papers: doc.papers,
@@ -6084,59 +6272,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 post("/api/scans/assign", { papers: papers }, "review", () => setReviewing(false)),
             })
           : null,
-        check.length
-          ? h(
-              "div",
-              { className: "pp-lane" },
-              "Check",
-              h("span", null, "· " + check.length + " placed on a close spelling or one word of the name — confirm, or say who it is"),
-            )
-          : null,
-        check.map((paper) => card(paper, work.indexOf(paper))),
-        held.length
-          ? h(
-              "div",
-              { className: "pp-lane" },
-              "Held",
-              h("span", null, "· " + held.length + " not placed"),
-            )
-          : null,
-        held.map((paper) => card(paper, work.indexOf(paper))),
-        !work.length ? h(Message, null, "Every paper in this pile is placed or set aside.") : null,
-        h(
-          "details",
-          { className: "pp-folded" },
-          h("summary", null, placed.length + " placed" + (skipped.length ? " · " + skipped.length + " set aside" : "")),
-          h(
-            "ul",
-            null,
-            placed.map((paper) =>
-              h(
-                "li",
-                { key: paper.file + paper.pages },
-                "pp. " + paper.pages + " → " + who(paper.resolved, paper.resolved_name) +
-                  (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : paper.match === "partial" ? " (one word)" : ""),
-              ),
-            ),
-            skipped.map((paper) => h("li", { key: paper.file + paper.pages }, "pp. " + paper.pages + " — " + paper.skip)),
-          ),
-        ),
-        h(
-          "div",
-          { className: "pp-actions" },
-          h(
-            "button",
-            {
-              type: "button",
-              className: "pp-segbtn",
-              disabled: Boolean(busy),
-              title: "Run `scans apply` again — after editing plan.yaml by hand, say",
-              onClick: () => post("/api/scans/apply", {}, "apply"),
-            },
-            busy === "apply" ? "Applying…" : "Re-apply the plan",
-          ),
-          h("span", { className: "pp-as" }, doc.missing + " enrolled with no paper · j/k to move, Enter to confirm"),
-        ),
       );
     }
 

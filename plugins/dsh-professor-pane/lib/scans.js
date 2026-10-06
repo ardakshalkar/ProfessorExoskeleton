@@ -180,12 +180,156 @@ const stagesOf = ({ papers, status, assessment, rubric, items, responses, evalua
   // marked as theirs. Quiz 2 of CSS-4007 sat with 49 papers placed and none
   // read because one clash kept Match current.
   const current = stages.findIndex((stage) => !stage.done && !(stage.id === "match" && placed > 0));
-  return stages.map((stage, index) => ({
-    id: stage.id,
-    label: stage.label,
-    detail: stage.detail,
-    state: stage.done ? "done" : index === current ? (stage.waiting ? "yours" : "current") : stage.waiting ? "yours" : "todo",
-  }));
+  return {
+    stages: stages.map((stage, index) => ({
+      id: stage.id,
+      label: stage.label,
+      detail: stage.detail,
+      state: stage.done ? "done" : index === current ? (stage.waiting ? "yours" : "current") : stage.waiting ? "yours" : "todo",
+    })),
+    next: current === -1 ? null : stages[current].id,
+    counts: {
+      placed,
+      held,
+      check,
+      read: status.transcribed.length,
+      graded,
+      decided,
+      evaluations: evaluations.length,
+      rubric: rubricState,
+    },
+  };
+};
+
+const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+
+/**
+ * Where a pile stands, in words: the step to work on, a headline, one sentence
+ * on why, whose move it is, and which action the tab offers for it. `phrase`
+ * is the same thing in a few words, for the pile list. Every word is decided
+ * here, so the browser half only places them.
+ *
+ * `whose` is `you`, `assistant` or `done`; `action` is `match` (the papers to
+ * place), `read` (the Read & record button), `ask` (a one-line skill request,
+ * `ask` naming which), `grade` (the Grade view), `canvas` (the send) or null.
+ */
+const nowOf = (next, counts, canvas) => {
+  const index = STEP_IDS.indexOf(next);
+  const step = (fields) => ({ step: next, index, total: STEP_IDS.length, ...fields });
+  switch (next) {
+    case "match": {
+      const waiting = counts.held + counts.check;
+      return step({
+        title: counts.held ? `Say who ${plural(counts.held, "paper")} ${counts.held === 1 ? "is" : "are"}` : `Confirm ${plural(counts.check, "name match", "name matches")}`,
+        body:
+          counts.placed === 0
+            ? "Nothing is placed yet. Each paper needs a student before it can be read."
+            : `${plural(counts.placed, "paper")} placed. ` +
+              [counts.held ? `${counts.held} held` : null, counts.check ? `${counts.check} placed on a weak match, to check` : null].filter(Boolean).join(", ") +
+              ".",
+        phrase: `${plural(waiting, "paper")} to place`,
+        whose: "you",
+        action: "match",
+      });
+    }
+    case "read": {
+      const unread = counts.placed - counts.read;
+      return step({
+        title: "Read and record the answers",
+        body:
+          `${plural(counts.placed, "paper")} placed, ${counts.read} read. One press reads the rest and records every answer as a draft.` +
+          (counts.held + counts.check ? ` ${plural(counts.held + counts.check, "paper")} still ${counts.held + counts.check === 1 ? "waits" : "wait"} at Match.` : ""),
+        phrase: unread > 0 ? `${plural(unread, "paper")} to read` : "Answers to record",
+        whose: "you",
+        action: "read",
+      });
+    }
+    case "rubric":
+      return counts.rubric === "draft"
+        ? step({
+            title: "Choose the rubric",
+            body: "Proposals are ready. Compare them question by question in the Grade view, and accept one.",
+            phrase: "Rubric to choose",
+            whose: "you",
+            action: "grade",
+          })
+        : step({
+            title: "Propose a rubric",
+            body: "The answers are recorded. The assistant groups what the class wrote and proposes rubrics for you to choose between.",
+            phrase: "Rubric to propose",
+            whose: "assistant",
+            action: "ask",
+            ask: "rubric",
+          });
+    case "grade":
+      return step({
+        title: "Grade the answers",
+        body: `${counts.graded} of ${plural(counts.placed, "paper")} graded. Mark the groups in the Grade view; the assistant can suggest marks for the long answers.`,
+        phrase: `${plural(counts.placed - counts.graded, "paper")} to grade`,
+        whose: "you",
+        action: "grade",
+        ask: "grade",
+      });
+    case "approve":
+      return step({
+        title: "Decide the remaining answers",
+        body: `${counts.decided} of ${plural(counts.evaluations, "answer")} decided. A mark reaches Canvas only once you have decided it.`,
+        phrase: `${plural(counts.evaluations - counts.decided, "answer")} to decide`,
+        whose: "you",
+        action: "grade",
+      });
+    case "canvas": {
+      const waiting = canvas.unsent + canvas.changed;
+      return step({
+        title: "Send the marks to Canvas",
+        body:
+          canvas.ready === 0
+            ? "No mark is ready to send yet."
+            : `Every answer is decided. ${plural(canvas.ready, "mark")} ready` +
+              (canvas.sent ? `, ${canvas.sent} already in Canvas` : ", none sent yet") +
+              (canvas.changed ? `, ${canvas.changed} changed since sent` : "") +
+              ". Preview what Canvas would receive before anything leaves.",
+        phrase: waiting ? `${plural(waiting, "mark")} not sent` : "Marks to send",
+        whose: "you",
+        action: "canvas",
+      });
+    }
+    default:
+      return {
+        step: null,
+        index: STEP_IDS.length,
+        total: STEP_IDS.length,
+        title: "Every step is done",
+        body: `${plural(canvas.sent, "mark")} in Canvas, matching what the course records.`,
+        phrase: "Marks in Canvas",
+        whose: "done",
+        action: null,
+      };
+  }
+};
+
+const STEP_IDS = ["identify", "match", "read", "rubric", "grade", "approve", "canvas"];
+
+/**
+ * Everything about one pile that its row and its steps need, without the
+ * per-paper detail only the chosen pile shows.
+ */
+const standingOf = ({ bundle, runId, submissions, assessment, enrolled, ledger }) => {
+  const id = assessment.assessment_id;
+  const place = scanPlace(submissions, runId, id);
+  const plan = readPlan(place);
+  const status = scanStatus(place, enrolled);
+  const lanes = (plan?.sources ?? []).flatMap((source) => (source.papers ?? []).map((paper) => ({ lane: laneOf(paper) })));
+  const items = bundle.items.filter((item) => item.assessment_id === id).length;
+  const ids = new Set(status.placed.map((student) => scanSubmissionId(student, id)));
+  const responses = bundle.item_responses.filter((entry) => ids.has(entry.submission_id)).length;
+  const evaluations = bundle.evaluations.filter((entry) => ids.has(entry.submission_id));
+  const rubricId = assessment.rubric_id ?? assessment.rubric?.rubric_id ?? null;
+  const rubric = rubricId ? (bundle.rubrics ?? []).find((entry) => entry.rubric_id === rubricId) ?? assessment.rubric ?? null : null;
+  const low = status.placed.reduce((sum, student) => sum + lowConfidence(place, student), 0);
+  const canvas = canvasMarks({ bundle, runId, assessmentId: id, ledger });
+  const { stages, next, counts } = stagesOf({ papers: lanes, status, assessment, rubric, items, responses, evaluations, low, canvas });
+  return { place, plan, status, items, responses, canvas, stages, next, now: nowOf(next, counts, canvas) };
 };
 
 /**
@@ -198,18 +342,30 @@ const stagesOf = ({ papers, status, assessment, rubric, items, responses, evalua
 export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, assessmentId, names, syncDirectory = null }) => {
   const bundle = loaded.bundle;
   const assessments = bundle.assessments.filter((entry) => entry.course_version_id === runId);
-  const piles = pilesOf(submissions, runId, assessments);
+  const enrolled = new Set(enrolledIn(bundle, runId).map((entry) => entry.student_id));
+  const ledger = Ledger.load(runId, syncDirectory);
+  // Every pile's standing, so the list says where each one is without opening
+  // it: the dropdown this replaced hid that Quiz 1 had 61 marks unsent while
+  // Quiz 2 was on screen.
+  const found = pilesOf(submissions, runId, assessments);
+  const standings = new Map(
+    found.map((pile) => [
+      pile.id,
+      standingOf({ bundle, runId, submissions, assessment: assessments.find((entry) => entry.assessment_id === pile.id), enrolled, ledger }),
+    ]),
+  );
+  const piles = found.map((pile) => {
+    const standing = standings.get(pile.id);
+    return { ...pile, now: standing.now, progress: standing.stages.map((stage) => stage.state) };
+  });
   const chosen = piles.find((pile) => pile.id === assessmentId) ?? piles[0] ?? null;
   const base = { run: runId, piles, names: names === true, crops: cropsAvailable() };
   if (!chosen) return { ...base, assessment: null };
 
-  const assessment = assessments.find((entry) => entry.assessment_id === chosen.id);
-  const place = scanPlace(submissions, runId, chosen.id);
-  const enrolled = new Set(enrolledIn(bundle, runId).map((entry) => entry.student_id));
+  const standing = standings.get(chosen.id);
+  const { plan, status, items, responses, canvas, stages } = standing;
   const store = RosterStore.load(rosterDirectory);
   const nameOf = (student) => (names && store.people[student]?.name ? String(store.people[student].name).trim() : null);
-  const plan = readPlan(place);
-  const status = scanStatus(place, enrolled);
 
   const papers = [];
   for (const source of plan?.sources ?? []) {
@@ -260,31 +416,21 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
     }
   }
 
-  const items = bundle.items.filter((item) => item.assessment_id === chosen.id).length;
-  const ids = new Set(status.placed.map((student) => scanSubmissionId(student, chosen.id)));
-  const responses = bundle.item_responses.filter((entry) => ids.has(entry.submission_id)).length;
-  const evaluations = bundle.evaluations.filter((entry) => ids.has(entry.submission_id));
-  const rubricId = assessment.rubric_id ?? assessment.rubric?.rubric_id ?? null;
-  const rubric = rubricId ? (bundle.rubrics ?? []).find((entry) => entry.rubric_id === rubricId) ?? assessment.rubric ?? null : null;
-  const low = status.placed.reduce((sum, student) => sum + lowConfidence(place, student), 0);
-
   const placedSet = new Set(status.placed);
   const classList = [...enrolled]
     .sort()
     .map((student) => ({ student, name: nameOf(student), placed: placedSet.has(student) }));
   if (names) classList.sort((a, b) => (a.name ?? a.student).localeCompare(b.name ?? b.student));
 
-  const canvas = canvasMarks({ bundle, runId, assessmentId: chosen.id, ledger: Ledger.load(runId, syncDirectory) });
-
   const count = (lane) => papers.filter((paper) => paper.lane === lane).length;
-  const stages = stagesOf({ papers, status, assessment, rubric, items, responses, evaluations, low, canvas });
   return {
     ...base,
     assessment: { id: chosen.id, title: chosen.title, questions: items },
     stages,
     // The step to work on now: the first not done, past a Match that only
     // waits on held papers. Null when every step is done.
-    next: stages.find((stage) => stage.state === "current" || (stage.state === "yours" && !(stage.id === "match" && status.placed.length > 0)))?.id ?? null,
+    next: standing.next,
+    now: standing.now,
     canvas,
     lanes: { check: count("check"), held: count("held"), placed: count("placed"), skipped: count("skipped") },
     papers,
