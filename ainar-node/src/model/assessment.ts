@@ -225,6 +225,8 @@ export const Submission = entity({
   student_id: StudentId,
   submitted_at: awareDatetime().nullish(),
   files: z.array(SubmissionFile).default([]),
+  // The link the student handed in — a homework fork, for `code_repo` work.
+  url: z.string().nullish(),
   status: SubmissionStatus.default("submitted"),
   attempt: z.number().int().min(1).default(1),
   note: z.string().nullish(),

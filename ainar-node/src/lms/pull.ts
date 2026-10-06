@@ -45,7 +45,17 @@ export interface PullResult {
   drafts: Record<string, any>[];
   already: string[];
   unmatched: string[];
+  /**
+   * Students already recorded here for whom Canvas holds a handed-in link.
+   * Submissions pulled before the link was kept have none, and a defence needs
+   * the fork it opens; the command fills the link in where it is missing.
+   */
+  links?: { student_id: string; url: string }[];
 }
+
+/** The link Canvas holds for an `online_url` submission, when it holds one. */
+const handedInUrl = (submission: Record<string, any>): string | null =>
+  typeof submission.url === "string" && submission.url.trim() ? submission.url.trim() : null;
 
 export interface PullOptions {
   assessmentId: string;
@@ -147,6 +157,7 @@ export const submissionsFromApi = (
   const drafts: Record<string, any>[] = [];
   const already: string[] = [];
   const unmatched: string[] = [];
+  const links: { student_id: string; url: string }[] = [];
 
   for (const submission of submissions) {
     if (submission.excused) continue;
@@ -162,8 +173,10 @@ export const submissionsFromApi = (
       unmatched.push(studentId);
       continue;
     }
+    const url = handedInUrl(submission);
     if (knownSet.has(studentId)) {
       already.push(studentId);
+      if (url) links.push({ student_id: studentId, url });
       continue;
     }
 
@@ -176,6 +189,7 @@ export const submissionsFromApi = (
     };
     const stamped = submittedAt(submission.submitted_at, offsetMinutes);
     if (stamped) draft.submitted_at = stamped;
+    if (url) draft.url = url;
     const attachments = (submission.attachments ?? []) as unknown[];
     draft.note =
       "From the Canvas API. " +
@@ -186,5 +200,10 @@ export const submissionsFromApi = (
     drafts.push(draft);
   }
 
-  return { drafts, already: already.sort(), unmatched: [...new Set(unmatched)].sort() };
+  return {
+    drafts,
+    already: already.sort(),
+    unmatched: [...new Set(unmatched)].sort(),
+    links: links.sort((left, right) => left.student_id.localeCompare(right.student_id)),
+  };
 };

@@ -442,10 +442,13 @@ CREATE TABLE IF NOT EXISTS assessment.submissions (
     submitted_at  TIMESTAMPTZ,
     status        TEXT NOT NULL DEFAULT 'submitted',
     attempt       INTEGER NOT NULL DEFAULT 1 CHECK (attempt >= 1),
+    url           TEXT,
     note          TEXT,
     extensions    JSONB NOT NULL DEFAULT '{}',
     UNIQUE (assessment_id, student_code, attempt)
 );
+-- Added 2026-10-06; a database loaded before then has the table without it.
+ALTER TABLE assessment.submissions ADD COLUMN IF NOT EXISTS url TEXT;
 
 CREATE TABLE IF NOT EXISTS assessment.submission_files (
     submission_id UUID NOT NULL REFERENCES assessment.submissions(id) ON DELETE CASCADE,

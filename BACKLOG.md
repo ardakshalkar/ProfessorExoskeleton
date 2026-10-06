@@ -818,6 +818,48 @@ is worth building.
       cut them. The whole batch is marked `approval: draft`. `S` · depends:
       VIV-1
 
+**The defence desk: one student at a time, in the browser**
+
+> Dictated 2026-10-06. The professor opens a student's submission, which opens
+> their repository. They press *Start defence*. The system reads the code and
+> prepares questions, then opens with the first one ("explain homework 1"),
+> listens, transcribes the answer and keeps the transcript. The professor can
+> press *Follow-up*, which transcribes again, and at the end the system
+> proposes a grade. All of this happens in the browser, inside the pane. A
+> second mode takes recordings the professor uploads and analyses them alone,
+> after showing what the transcription will cost.
+
+- [x] **DEF-1** Keep the link a student handed in. Canvas returns it as the
+      submission's `url` for `online_url` work (`code_repo` maps there), and
+      `submissionsFromApi` drops it. Store it on the `Submission` so that "open
+      their repo" has something to open. `S` · depends: — Done 2026-10-06:
+      `Submission.url`; `lms import-submissions --target canvas-api` also fills
+      it in on submissions recorded before it existed.
+- [x] **DEF-2** Read the student's repository: a shallow clone into the private
+      folder, pinned to the commit read, so the questions and the grade cite one
+      version of the code. `S` · depends: DEF-1 Done 2026-10-06: `ainar defence
+      prepare`, a blobless clone in `~/.ainar/submissions/…/defence/`, pinned to
+      the last commit before `submitted_at`, run by the pane in its own process.
+- [x] **DEF-3** The defence desk in the pane: per student, the repository link,
+      *Start defence*, and the draft questions from VIV-1, which the professor
+      can edit or cut (VIV-4) before asking any of them. `M` · depends: DEF-2,
+      VIV-1 Done 2026-10-06, under each submission in Students. The session's
+      own model drafts the questions (`/defend-submission`), and
+      `ainar defence questions` checks and writes them to
+      `output/<RUN>/defence/` — the sandbox cannot write `~/.ainar`. Editing is
+      in that file for now; editing from the pane is open.
+- [ ] **DEF-4** Microphone in the pane: record per question, transcribe, save
+      the audio and a timestamped transcript as part of the student's
+      `oral_defense` submission. *Follow-up* asks the agent for the next
+      question from what was just said. `L` · depends: DEF-3, AUD-1, LIV-2
+- [ ] **DEF-5** The proposed grade from the whole session, by the AUD-1 path,
+      as an `Evaluation` marked `approval: draft` citing transcript timestamps.
+      `M` · depends: DEF-4
+- [ ] **DEF-6** Batch mode: upload recordings, see the total minutes and the
+      transcription cost per provider before anything is sent, then confirm.
+      Each recording is matched to a student and graded as DEF-5 does.
+      `M` · depends: AUD-1, AUD-2
+
 ## E27 · Spreadsheets both ways: Google Sheets and Excel — no `FUTURE.md` section yet
 
 > **Rank: unranked.** Proposed 2026-09-30. Half of this exists, and it goes one

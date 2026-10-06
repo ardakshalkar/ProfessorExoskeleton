@@ -771,6 +771,9 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       submitted_at: s.submitted_at,
       status: s.status,
       attempt: s.attempt,
+      // Only when there is one: the column postdates the Python script the
+      // golden import was emitted by, and a row without a link has nothing to say.
+      ...(s.url ? { url: s.url } : {}),
       note: s.note,
       extensions: s.extensions,
     })),

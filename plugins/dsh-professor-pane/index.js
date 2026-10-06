@@ -60,6 +60,7 @@ import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  allRubrics,
   assessmentsOf,
   enrollmentsOf,
   groupsOf,
@@ -85,6 +86,7 @@ import { outlinePayload } from "@ainar/core/src/outline.ts";
 import { dump as dumpYaml } from "@ainar/core/src/yaml-out.ts";
 import { dashboardPayload } from "@ainar/core/src/progress.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
+import { defencePlace, readDefence, readPin } from "@ainar/core/src/defence.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 // `parseDocument` alongside `parse`, for one caller: `writeCanvasSelection`
 // edits a file a professor also writes by hand, and the plain parse would hand
@@ -445,6 +447,19 @@ const walkRevision = (root) => {
   };
 
   walk(join(root, "courses"), 0);
+  // Defence questions are drafted into `output/<RUN>/defence/` rather than the
+  // course (see src/defence.ts), and the class list draws them, so their
+  // arrival has to redraw it like any record would. Only that folder: the rest
+  // of `output/` is render scratch and would redraw the pane mid-render.
+  let runs = [];
+  try {
+    runs = readdirSync(join(root, "output"), { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  } catch {
+    runs = [];
+  }
+  for (const run of runs.sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    walk(join(root, "output", run.name, "defence"), 5);
+  }
   return { revision: hash.digest("hex").slice(0, 16), files };
 };
 
@@ -3698,7 +3713,34 @@ const withStudentNames = (data) => {
  * the record because an import marks a departure rather than deleting the row,
  * and a class list that silently omitted them would undo the point of that.
  */
-const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId) => {
+/**
+ * What has been prepared for one student's oral defence: the pin (is the fork
+ * cloned) and the drafted questions, each null when there is none yet.
+ *
+ * A function rather than a value, so the class list reads these files only for
+ * submissions that carry a link. A submissions folder that cannot be resolved
+ * reads as nothing prepared — the class list must still draw.
+ */
+const defenceReader = (root, runId) => {
+  let submissions = null;
+  try {
+    submissions = submissionsDir(null);
+    refuseInsideRepo(submissions, root);
+  } catch {
+    submissions = null;
+  }
+  return (assessmentId, studentId) => {
+    if (submissions === null) return { pin: null, questions: null };
+    const place = defencePlace(submissions, root, runId, assessmentId, studentId);
+    try {
+      return { pin: readPin(place.pin), questions: readDefence(place.questions) };
+    } catch {
+      return { pin: null, questions: null };
+    }
+  };
+};
+
+const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId, defenceOf = null) => {
   const { bundle, issues } = loadedRun(workspace, runId);
   const enrolled = enrollmentsOf(bundle, runId);
 
@@ -3788,6 +3830,8 @@ const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId) 
   const assessmentTitles = new Map(
     assessmentsOf(bundle, runId).map((assessment) => [assessment.assessment_id, assessment]),
   );
+  // For the criterion a defence question is evidence for, by its title.
+  const rubricsById = allRubrics(bundle);
 
   const active = enrolled.filter((entry) => entry.status === "active");
   const inactive = enrolled.filter((entry) => entry.status !== "active");
@@ -3985,6 +4029,84 @@ const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId) 
     );
   };
 
+  /**
+   * The repository a student handed in, and their oral defence of it.
+   *
+   * Only for a submission with a link. The repository opens on GitHub in a
+   * tab of its own — it is somebody else's site, not a material this pane can
+   * frame. *Start defence* clones it in the harness's process and then asks
+   * the session to draft the questions (`/defend-submission`), so the model
+   * drafting them is whichever one the professor is talking to.
+   *
+   * Once drafted, the questions are drawn here in the order they will be
+   * asked, each with the criterion it is evidence for and the lines it is
+   * about, marked draft until the professor has read them.
+   */
+  const defenceBlock = (submission) => {
+    if (!submission.url) return "";
+    const prepared = defenceOf ? defenceOf(submission.assessment_id, submission.student_id) : { pin: null, questions: null };
+    const criteria = new Map(
+      ((rubricsById.get(assessmentTitles.get(submission.assessment_id)?.rubric_id ?? "") ?? {}).criteria ?? []).map(
+        (criterion) => [criterion.criterion_id, criterion.title],
+      ),
+    );
+    const questions = prepared.questions && Array.isArray(prepared.questions.questions) ? prepared.questions.questions : [];
+    const pin = prepared.pin;
+    const press = (label) =>
+      '<button type="button" class="chip" data-defence="' +
+      escapeText(submission.assessment_id) +
+      '" data-student="' +
+      escapeText(submission.student_id) +
+      '">' +
+      escapeText(label) +
+      "</button>";
+    return (
+      '<div class="defence">' +
+      '<p><a class="chip-link" href="' +
+      escapeText(submission.url) +
+      '" target="_blank" rel="noopener">repository</a>' +
+      (pin
+        ? ' <span class="dim">at <code>' +
+          escapeText(String(pin.commit).slice(0, 7)) +
+          "</code>" +
+          (pin.pinned_by === "submitted_at" ? ", as handed in" : pin.note ? " — " + escapeText(pin.note) : ", the head") +
+          (pin.head && pin.head !== pin.commit ? " · moved on since" : "") +
+          "</span>"
+        : "") +
+      " " +
+      (questions.length ? press("Draft again") : press("Start defence")) +
+      "</p>" +
+      (questions.length
+        ? "<ol class=\"dq\">" +
+          questions
+            .map(
+              (question) =>
+                "<li><p>" +
+                escapeText(String(question.text ?? "")) +
+                (question.approval === "draft" ? ' <span class="todo">draft</span>' : "") +
+                "</p>" +
+                '<p class="dim">' +
+                [
+                  question.kind === "opening" ? "opening" : null,
+                  question.criterion_id
+                    ? escapeText(criteria.get(question.criterion_id) ?? question.criterion_id)
+                    : null,
+                  ...(Array.isArray(question.evidence) ? question.evidence : []).map(
+                    (cite) => "<code>" + escapeText(cite.path) + (cite.lines ? ":" + escapeText(cite.lines) : "") + "</code>",
+                  ),
+                ]
+                  .filter(Boolean)
+                  .join(" · ") +
+                (question.why ? "<br>" + escapeText(String(question.why)) : "") +
+                "</p></li>",
+            )
+            .join("") +
+          "</ol>"
+        : "")
+      + "</div>"
+    );
+  };
+
   /** Everything one student handed in, closed until asked for. */
   const workPanel = (entry) => {
     const list = submissionsOf.get(entry.student_id) ?? [];
@@ -4033,10 +4155,11 @@ const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId) 
               : "") +
             responses.map(answer).join("") +
             files.map(fileRow).join("") +
+            defenceBlock(submission) +
             // Handed in, and nothing to read: a file-only submission whose
             // bytes are elsewhere, or a row created before any answer was
             // recorded. Both are facts, and an empty panel would look broken.
-            (responses.length === 0 && files.length === 0
+            (responses.length === 0 && files.length === 0 && !submission.url
               ? '<p class="dim">Nothing is recorded under this submission — no answers, no files.</p>'
               : "")
           );
@@ -4316,10 +4439,31 @@ const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId) 
     "white-space:pre-wrap;overflow-wrap:anywhere}" +
     ".ok{color:var(--info)}" +
     ".bad{color:var(--warn)}" +
+    ".defence{margin:8px 0 4px}" +
+    ".defence .chip{margin-left:4px}" +
+    ".dq{margin:4px 0 0;padding-left:20px}" +
+    ".dq li{margin:0 0 8px}" +
+    ".dq p{margin:0 0 2px;overflow-wrap:anywhere}" +
+    ".dq .dim{font-size:12px}" +
     "</style>";
 
+  /*
+   * *Start defence* posts up to the browser half, which runs the clone and
+   * then asks the session — the frame itself may not `fetch`. The button is
+   * disabled once pressed, so a double click is not two clones; the redraw
+   * that follows brings it back.
+   */
+  const defenceScript =
+    "<script>(function(){if(parent===window)return;" +
+    "document.addEventListener('click',function(e){" +
+    "var b=e.target.closest&&e.target.closest('button[data-defence]');if(!b||b.disabled)return;" +
+    "b.disabled=true;b.textContent='Cloning…';" +
+    "parent.postMessage({source:'professor-pane',kind:'defence'," +
+    "assessment:b.getAttribute('data-defence'),student:b.getAttribute('data-student')},'*');" +
+    "});})();</script>";
+
   return documentPage(
-    workStyle + filterBar + header + sections + departed + filterScript + workScript + VIEW_SCRIPT,
+    workStyle + filterBar + header + sections + departed + filterScript + workScript + defenceScript + VIEW_SCRIPT,
     dark,
   );
 };
@@ -5953,6 +6097,35 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
       }
     }
 
+    // *Start defence*: clone the fork a student handed in, pinned to the hand-in
+    // (`ainar defence prepare`). No judgement, and it writes the private
+    // folder, so it runs here in the harness's process, as `scans read` does;
+    // the questions are the session's to draft afterwards. POST, for
+    // `/api/publish`'s reason: it reaches out to GitHub.
+    if (path === "/api/defence/prepare") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      const assessmentId = url.searchParams.get("assessment") ?? "";
+      const studentId = url.searchParams.get("student") ?? "";
+      if (!/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId) || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(studentId)) {
+        return sendJson(res, 200, { error: "An assessment and a student id, please." });
+      }
+      try {
+        loadedRun(workspace, runId); // the run has to be this workspace's
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      return runScans(["defence", "prepare", runId, "--assessment", assessmentId, "--student", studentId], root)
+        .then((result) =>
+          sendJson(res, 200, {
+            ...result,
+            // What the session is asked next, decided here so the browser half
+            // carries no vocabulary of its own.
+            ask: result.ok ? `/defend-submission ${assessmentId} ${runId} ${studentId}` : null,
+          }),
+        )
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
     if (path === "/api/scans" || path.startsWith("/api/scans/")) {
       const assessmentId = url.searchParams.get("assessment") ?? "";
       if (assessmentId && !/^[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) {
@@ -6881,6 +7054,7 @@ const handler = (registry, credentials = { service: null }) => (req, res) => {
           url.searchParams.get("names") === "1",
           req.headers.host ? `http://${req.headers.host}` : "",
           url.searchParams.get("session") ?? "",
+          defenceReader(root, runId),
         ),
       );
     }

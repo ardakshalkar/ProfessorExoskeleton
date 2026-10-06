@@ -6710,6 +6710,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       // would otherwise see the value from when it was registered.
       const courseModeRef = React.useRef(false);
       courseModeRef.current = courseMode;
+      // The run on screen, for the same reason: *Start defence* is answered by
+      // that handler, and the run is chosen after it was registered.
+      const currentRunRef = React.useRef(null);
 
       // Open the column this pane lives in, once per session.
       //
@@ -6780,6 +6783,41 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             if (courseModeRef.current) setCourseMode(false);
             return;
           }
+          // *Start defence*: clone the fork here, through the server, then hand
+          // the drafting to the session — the model the professor is talking
+          // to drafts the questions. A failed clone goes to the session too,
+          // with what `defence prepare` said, so the answer arrives where the
+          // professor is already looking; the pane has no place of its own
+          // for it, and the redraw puts the button back.
+          if (data.kind === "defence") {
+            const id = /^[A-Z0-9][A-Z0-9-]*$/;
+            const run = currentRunRef.current;
+            if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+            fetch(
+              scoped(
+                BASE + "/api/defence/prepare?run=" + encodeURIComponent(run) +
+                  "&assessment=" + encodeURIComponent(data.assessment) +
+                  "&student=" + encodeURIComponent(data.student),
+                props.sessionId,
+              ),
+              { method: "POST" },
+            )
+              .then((response) => response.json())
+              .then((result) => {
+                setReload((count) => count + 1);
+                if (result.ok && result.ask) {
+                  props.ask(result.ask);
+                  return;
+                }
+                const said = String(result.error || result.output || "no output").trim().split("\n").slice(-3).join(" ");
+                props.ask(
+                  "/defend-submission " + data.assessment + " " + run + " " + data.student +
+                    " — the clone failed: " + said,
+                );
+              })
+              .catch(() => setReload((count) => count + 1));
+            return;
+          }
           if (data.kind === "publish") {
             if (typeof data.assessment !== "string" || data.assessment.trim() === "") return;
             openPublish("homework", {
@@ -6844,6 +6882,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         }
       }
       const current = options.find((option) => option.runId === chosen) || options[0] || null;
+      currentRunRef.current = current ? current.runId : null;
 
       // Switching run returns to the default rather than carrying the last
       // press across. It matters in one direction now: a professor who pressed

@@ -771,6 +771,37 @@ test("submission times come from Canvas, and lateness with them", () => {
   assert.match(drafts[0]!.note, /2 file\(s\) are attached in Canvas; the bytes stay/);
 });
 
+test("the link a student handed in is kept, and offered for a submission recorded without it", () => {
+  const { drafts, links } = submissionsFromApi(
+    [
+      {
+        user_id: 5001,
+        submitted_at: "2026-10-15T18:59:00Z",
+        workflow_state: "submitted",
+        submission_type: "online_url",
+        url: " https://github.com/student-a/css4007-hw1 ",
+      },
+      {
+        user_id: 5002,
+        submitted_at: "2026-10-15T10:00:00Z",
+        workflow_state: "submitted",
+        url: "https://github.com/student-b/css4007-hw1",
+      },
+      { user_id: 5003, submitted_at: "2026-10-15T10:00:00Z", workflow_state: "submitted", url: null },
+    ],
+    new Map([
+      ["STUDENT-JNG7SN", "5001"],
+      ["STUDENT-K4QM2X", "5002"],
+      ["STUDENT-AAA111", "5003"],
+    ]),
+    { assessmentId: "ASSESSMENT-04", known: ["STUDENT-K4QM2X"] },
+    300,
+  );
+  assert.equal(drafts.find((d) => d.student_id === "STUDENT-JNG7SN")!.url, "https://github.com/student-a/css4007-hw1");
+  assert.equal("url" in drafts.find((d) => d.student_id === "STUDENT-AAA111")!, false);
+  assert.deepEqual(links, [{ student_id: "STUDENT-K4QM2X", url: "https://github.com/student-b/css4007-hw1" }]);
+});
+
 test("an unsubmitted placeholder or an excused student is not a submission", () => {
   const { drafts } = submissionsFromApi(
     [

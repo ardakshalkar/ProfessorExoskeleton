@@ -36,6 +36,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { parse } from "yaml";
 import {
+  allRubrics,
   courseContext,
   enrollmentsOf,
   groupsOf,
@@ -128,6 +129,17 @@ import { deckForDocument, recordFor, type RecordedDeck } from "../src/slides/rec
 import { enableTiming, enableTimingFromEnvironment, reportTimings } from "../src/slides/timing.ts";
 import { buildMaterials, documentRecord, producerFor, readProducers } from "../src/materials.ts";
 import { printPaper, type AnswerLayout, type PaperFormat } from "../src/exam-paper.ts";
+import {
+  checkQuestions,
+  cloneAtHandIn,
+  codeDigest,
+  collectCode,
+  defencePlace,
+  readDefence,
+  readPin,
+  writeDefence,
+  writePin,
+} from "../src/defence.ts";
 import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
 import {
@@ -432,6 +444,18 @@ const HELP = `ainar — the AINAR course model CLI
   scans answers RUN --assessment A [--item ITEM] [--json]
                                            every recorded answer per question,
                                            identical ones grouped and counted
+
+  Oral defence of a homework fork. The clone stays in --submissions-dir; the
+  questions are drafts in output/RUN/defence/A/S.yaml:
+
+  defence prepare RUN --assessment A --student S [--refresh]
+                                           clone the handed-in link, pinned to
+                                           the last commit before the hand-in
+  defence code RUN --assessment A --student S
+                                           the brief, the rubric and the code,
+                                           lines numbered — what to draft from
+  defence questions RUN --assessment A --student S --from FILE.json [--force]
+                                           check drafted questions and write them
 
   Grading a written exam, question by question (the pane's Grade view). The
   grouping of answers is groups.yaml beside the scans; marks go to the course:
@@ -2715,6 +2739,130 @@ try {
      * has no record of — the assessment itself is written as a draft with the
      * claims only the professor can make (weight, outcomes) left empty.
      */
+    case "defence": {
+      // An oral defence of a homework fork: see src/defence.ts. `prepare` is
+      // the pane's half (no model); `code` and `questions` are the session's,
+      // through /defend-submission.
+      const sub = rest[0] ?? "";
+      const runId = rest[1];
+      const assessmentId = flag("assessment");
+      const studentId = flag("student");
+      if (!["prepare", "code", "questions"].includes(sub) || !runId || !assessmentId || !studentId) {
+        console.error(
+          "usage: defence prepare RUN --assessment A --student S [--refresh]\n" +
+            "       defence code RUN --assessment A --student S\n" +
+            "       defence questions RUN --assessment A --student S --from FILE.json [--force]",
+        );
+        process.exit(2);
+      }
+      const bundle = forRun(runId);
+      const base = submissionsDir(flag("submissions-dir"));
+      refuseInsideRepo(base, root);
+      const assessment = (bundle.assessments as any[]).find(
+        (entry) => entry.assessment_id === assessmentId && entry.course_version_id === runId,
+      );
+      if (!assessment) throw new Error(`${runId} has no assessment ${assessmentId}`);
+      const submission = (bundle.submissions as any[])
+        .filter((entry) => entry.assessment_id === assessmentId && entry.student_id === studentId)
+        .sort((a, b) => (b.attempt ?? 1) - (a.attempt ?? 1))[0];
+      if (!submission) throw new Error(`${studentId} has no submission for ${assessmentId}`);
+      const place = defencePlace(base, root, runId, assessmentId, studentId);
+
+      if (sub === "prepare") {
+        if (!submission.url) {
+          throw new Error(
+            `${submission.submission_id} has no handed-in link. ` +
+              `\`lms import-submissions ${runId} --assessment ${assessmentId} --target canvas-api\` fills it from Canvas.`,
+          );
+        }
+        const previous = readPin(place.pin);
+        const pin = await cloneAtHandIn({
+          url: submission.url,
+          repoDir: place.repo,
+          submittedAt: submission.submitted_at,
+          refresh: args.includes("--refresh"),
+          previous,
+        });
+        writePin(place.pin, pin);
+        out(`${pin === previous ? "already cloned" : "cloned"} ${pin.url}`);
+        out(
+          `  at ${pin.commit.slice(0, 7)} — ` +
+            (pin.pinned_by === "submitted_at"
+              ? `the last commit before the hand-in (${submission.submitted_at})`
+              : `the head of the default branch; ${pin.note ?? "the submission has no time"}`),
+        );
+        if (pin.head !== pin.commit) out(`  the fork has moved on since, to ${pin.head.slice(0, 7)}`);
+        const drafted = readDefence(place.questions);
+        out(
+          drafted?.questions?.length
+            ? `${drafted.questions.length} question(s) already drafted: ${relative(root, place.questions)}`
+            : `Next: /defend-submission ${assessmentId} ${runId} ${studentId}`,
+        );
+        break;
+      }
+
+      const pin = readPin(place.pin);
+      if (!pin || !existsSync(place.repo)) {
+        throw new Error(`not cloned yet: defence prepare ${runId} --assessment ${assessmentId} --student ${studentId}`);
+      }
+      const criteria = ((allRubrics(bundle).get(assessment.rubric_id ?? "") ?? assessment.rubric)?.criteria ?? []) as any[];
+      const { files, unread } = collectCode(place.repo);
+
+      if (sub === "code") {
+        const brief = (() => {
+          const document = (bundle.documents as any[]).find(
+            (entry) => entry.document_id === assessment.instructions_document_id,
+          );
+          const key = String(document?.storage_key ?? "");
+          if (!key || key.includes("://") || !/\.(md|txt)$/i.test(key)) return null;
+          const path = join(root, key);
+          return existsSync(path) ? readFileSync(path, "utf-8") : null;
+        })();
+        out(
+          codeDigest({
+            title: assessment.title,
+            assessmentId,
+            studentId,
+            brief: brief ?? assessment.description ?? null,
+            criteria,
+            pin,
+            files,
+            unread,
+          }),
+        );
+        break;
+      }
+
+      // questions
+      const from = flag("from");
+      if (!from) throw new Error("--from FILE.json: {\"questions\": [{text, criterion_id, why, evidence: [{path, lines}]}]}");
+      const existing = readDefence(place.questions);
+      if (existing?.questions?.length && !args.includes("--force")) {
+        throw new Error(
+          `${relative(root, place.questions)} already has ${existing.questions.length} question(s), ` +
+            "which may carry the professor's edits. --force replaces them.",
+        );
+      }
+      const { questions, notes } = checkQuestions(JSON.parse(readFileSync(from, "utf-8")), criteria, files);
+      if (!questions.length) throw new Error(`${from} holds no questions; nothing was written`);
+      writeDefence(place.questions, {
+        submission_id: submission.submission_id,
+        assessment_id: assessmentId,
+        student_id: studentId,
+        repo: { url: pin.url, commit: pin.commit },
+        drafted: {
+          ...(flag("by") ? { by: flag("by") } : {}),
+          at: decidedAt((runById(bundle).get(runId) as { timezone?: string })?.timezone),
+          ...(unread.length ? { unread } : {}),
+          ...(notes.length ? { notes } : {}),
+        },
+        questions,
+      });
+      out(`wrote ${questions.length} question(s), each approval: draft: ${relative(root, place.questions)}`);
+      for (const note of notes) out(`  ${note}`);
+      break;
+    }
+
     case "paper": {
       // The printed question paper, from the record. Exists as a command so an
       // agent finds it in `--help` instead of reaching for headless Chrome,

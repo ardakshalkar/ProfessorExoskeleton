@@ -3785,6 +3785,19 @@
           "title": "Files",
           "type": "array"
         },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The link the student handed in: a homework fork for code_repo work.",
+          "title": "Url"
+        },
         "status": {
           "$ref": "#/$defs/SubmissionStatus",
           "default": "submitted"

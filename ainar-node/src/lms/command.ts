@@ -63,7 +63,7 @@ import {
 } from "./assignment.ts";
 import { type AssignmentLink, writeAssessmentLinks } from "./link.ts";
 import { COLLECTIONS } from "../loader.ts";
-import { editRecords } from "../record-edit.ts";
+import { editRecords, setRecordFields } from "../record-edit.ts";
 import {
   type CanvasExport,
   columnFor,
@@ -1219,12 +1219,23 @@ const runImportSubmissions = async (
     source = `${args.source}, column '${context.column}'`;
   }
 
+  // A submission recorded before the handed-in link was kept, which Canvas now
+  // has a link for. Only a missing link is filled: one already recorded may
+  // have been corrected by hand, and Canvas does not get to overrule that.
+  const linkless = new Map(
+    (bundle.submissions as any[])
+      .filter((submission) => submission.assessment_id === assessment.assessment_id && !submission.url)
+      .map((submission) => [submission.student_id as string, submission.submission_id as string]),
+  );
+  const links = (result.links ?? []).filter((link) => linkless.has(link.student_id));
+
   deps.out(`${source} → ${assessment.assessment_id}`);
   deps.out(`  ${result.drafts.length} new, ${result.already.length} already recorded here`);
+  if (links.length) deps.out(`  ${links.length} recorded without the link handed in, which Canvas has`);
   for (const studentId of result.unmatched) {
     deps.out(`  skipped ${studentId}: not an active enrollment in this run`);
   }
-  if (!result.drafts.length) {
+  if (!result.drafts.length && !links.length) {
     deps.out("\nnothing new to record");
     return 0;
   }
@@ -1243,11 +1254,25 @@ const runImportSubmissions = async (
   // Into the course's own submissions file, or `--out` when one was given.
   // A submission is a fact about what Canvas holds, so there is nothing for a
   // person to accept: it is written as a record and carries no `approval`.
-  const courseDir = join(root, "courses", (bundle.course as any).course_id);
-  const path = args.out
-    ? upsertRecords(resolve(args.out), "submissions", result.drafts)
-    : writeRecords(courseDir, { submissions: result.drafts })[0]!;
-  deps.out(`\nwrote ${path}`);
+  const courseId = (bundle.course as any).course_id as string;
+  const courseDir = join(root, "courses", courseId);
+  if (result.drafts.length) {
+    const path = args.out
+      ? upsertRecords(resolve(args.out), "submissions", result.drafts)
+      : writeRecords(courseDir, { submissions: result.drafts })[0]!;
+    deps.out(`\nwrote ${path}`);
+  }
+  if (links.length) {
+    const { written } = setRecordFields({
+      root,
+      courseId,
+      patterns: COLLECTIONS.submissions,
+      idField: "submission_id",
+      collection: "submissions",
+      edits: new Map(links.map((link) => [linkless.get(link.student_id)!, { url: link.url }])),
+    });
+    deps.out(`\nadded ${links.length} handed-in link(s) in ${written.join(", ")}`);
+  }
   if (args.target === "canvas-api") {
     deps.out("Submission times come from Canvas, converted to the run's timezone.");
   } else {

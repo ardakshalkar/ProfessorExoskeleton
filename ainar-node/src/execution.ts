@@ -120,6 +120,7 @@ export const ACTIONS: readonly ActionPolicy[] = [
     "grade-submission",
     "grade-batch",
     "grade-scans",
+    "defend-submission",
     "find-gaps",
     "action-inbox",
     "student-report",
