@@ -318,7 +318,23 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
    the term plan must land on top of it, and narrower margins than a deck,
    because three columns of sixteen weeks want the width. */
 .pp-veil.pp-coursemode{z-index:3900;padding:14px clamp(10px,2vw,28px) 16px}
-.pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column}
+.pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+/* A course-wide view beside the weeks: the pane's own document for the tab,
+   in a drawer over the right of the term plan. One at a time. */
+.pp-cdrawer{position:absolute;top:0;right:0;bottom:0;width:min(460px,100%);z-index:2;
+  display:flex;flex-direction:column;background:var(--dsw-alias-bg-l1,#fff);
+  border-left:1px solid var(--dsw-alias-border-l2,#e3e3e6);box-shadow:-12px 0 32px rgba(0,0,0,.18);
+  animation:pp-cdrawer-in .16s ease-out}
+@keyframes pp-cdrawer-in{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+.pp-cdrawerhead{flex:none;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;padding:8px 10px;
+  border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cdrawerhead b{font-size:12.5px;margin-right:4px;color:var(--dsw-alias-label-primary,#111)}
+.pp-cdrawerbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto}
+.pp-cdrawerbtn[disabled]{opacity:.45;cursor:not-allowed}
+/* Canvas in one line; a press jumps to Integrations in the pane. */
+.pp-wiring{flex:none;font:inherit;font-size:11px;cursor:pointer;background:none;border:0;padding:2px 4px;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b);text-decoration:underline;text-underline-offset:2px}
+.pp-wiring-absent,.pp-wiring-partial{color:#a4362f}
 .pp-coursebody .pp-frame{background:transparent}
 .pp-coursehead{flex-wrap:wrap}
 /* The run picker's look, at a header's size: one control among the buttons. */

@@ -658,7 +658,23 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
    the term plan must land on top of it, and narrower margins than a deck,
    because three columns of sixteen weeks want the width. */
 .pp-veil.pp-coursemode{z-index:3900;padding:14px clamp(10px,2vw,28px) 16px}
-.pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column}
+.pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+/* A course-wide view beside the weeks: the pane's own document for the tab,
+   in a drawer over the right of the term plan. One at a time. */
+.pp-cdrawer{position:absolute;top:0;right:0;bottom:0;width:min(460px,100%);z-index:2;
+  display:flex;flex-direction:column;background:var(--dsw-alias-bg-l1,#fff);
+  border-left:1px solid var(--dsw-alias-border-l2,#e3e3e6);box-shadow:-12px 0 32px rgba(0,0,0,.18);
+  animation:pp-cdrawer-in .16s ease-out}
+@keyframes pp-cdrawer-in{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+.pp-cdrawerhead{flex:none;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;padding:8px 10px;
+  border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cdrawerhead b{font-size:12.5px;margin-right:4px;color:var(--dsw-alias-label-primary,#111)}
+.pp-cdrawerbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto}
+.pp-cdrawerbtn[disabled]{opacity:.45;cursor:not-allowed}
+/* Canvas in one line; a press jumps to Integrations in the pane. */
+.pp-wiring{flex:none;font:inherit;font-size:11px;cursor:pointer;background:none;border:0;padding:2px 4px;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b);text-decoration:underline;text-underline-offset:2px}
+.pp-wiring-absent,.pp-wiring-partial{color:#a4362f}
 .pp-coursebody .pp-frame{background:transparent}
 .pp-coursehead{flex-wrap:wrap}
 /* The run picker's look, at a header's size: one control among the buttons. */
@@ -3298,6 +3314,10 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    // ── client/course-escape.js
+
+    const courseModeEscape = ({ covered, drawer }) => (covered ? "none" : drawer ? "drawer" : "close");
+
     // ── client/materials.js
 
     /**
@@ -3612,19 +3632,112 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       return start && end && today >= start && today <= end ? "teaching" : "planning";
     };
 
+    /**
+     * What does not belong to any one week, beside the weeks: the class list,
+     * the gradebook and the tasks, each the very document its pane tab shows,
+     * in a drawer from the right. They carry names and marks, so they are
+     * private: Preview as student closes them and turns their buttons off.
+     */
+    const DRAWERS = [
+      { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
+      { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
+      { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
+    ];
+
+    /** The Status view's words for a connection, as the Integrations tab says them. */
+    const CONNECTION_STATE = { ready: "connected", partial: "partly set up", absent: "not set up" };
+
     function CourseMode(props) {
       const close = props.onClose;
       const [student, setStudent] = React.useState(false);
       const [mode, setMode] = React.useState(() => defaultCourseMode(props.start, props.end));
+      const [drawer, setDrawer] = React.useState(null);
+      const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
+      const preview = student && mode !== "teaching";
+      // The privacy wall: a student preview never sits beside a class list.
+      React.useEffect(() => {
+        if (preview) setDrawer(null);
+      }, [preview]);
       React.useEffect(() => {
         const onKey = (event) => {
+          if (event.key !== "Escape") return;
           // A deck opened from the term plan sits on top and owns Escape: it
           // closes first, and this stays where the professor was reading.
-          if (event.key === "Escape" && !props.covered) close();
+          const step = courseModeEscape({ covered: props.covered, drawer });
+          if (step === "drawer") setDrawer(null);
+          else if (step === "close") close();
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-      }, [close, props.covered]);
+      }, [close, props.covered, drawer]);
+      // Canvas, in one line: the row the Integrations tab's Status view draws,
+      // from the same payload. Nothing is computed here but the words.
+      const wiring = useJson(
+        scoped(BASE + "/api/integrations?run=" + encodeURIComponent(props.runId || "") + "&r=" + props.reload, props.sessionId),
+      );
+      const canvas =
+        wiring.phase === "ready" && wiring.value && !wiring.value.error
+          ? (wiring.value.integrations || []).find((row) => row.id === "canvas") || null
+          : null;
+
+      const drawerBody = () => {
+        if (drawer === "students") {
+          return h(WidgetFrame, {
+            key: "students|" + props.names + "|" + props.dark + "|" + props.reload,
+            view: "students",
+            runId: props.runId,
+            sessionId: props.sessionId,
+            dark: props.dark,
+            names: props.names,
+            title: "Students",
+          });
+        }
+        if (drawer === "gradebook") {
+          return h(
+            React.Fragment,
+            null,
+            h(GradebookStatus, {
+              runId: props.runId,
+              sessionId: props.sessionId,
+              revision: props.reload,
+              openUnpublished: () => {
+                setDrawer("tasks");
+                setTaskSub("unpublished");
+              },
+            }),
+            h(WidgetFrame, {
+              key: "gradebook|" + props.dark + "|" + props.drafts + "|" + props.reload,
+              view: "gradebook",
+              runId: props.runId,
+              sessionId: props.sessionId,
+              dark: props.dark,
+              drafts: props.drafts,
+              title: "Gradebook",
+            }),
+          );
+        }
+        if (taskSub === "unpublished") {
+          return h(Unpublished, {
+            runId: props.runId,
+            sessionId: props.sessionId,
+            revision: props.reload,
+            onWrite: props.onWrite,
+            openPublish: props.openPublish,
+            ask: props.ask,
+          });
+        }
+        return h(WidgetFrame, {
+          key: taskSub + "|" + props.names + "|" + props.dark + "|" + props.drafts + "|" + props.reload,
+          view: taskSub,
+          runId: props.runId,
+          sessionId: props.sessionId,
+          dark: props.dark,
+          drafts: props.drafts,
+          names: props.names,
+          title: "Tasks",
+        });
+      };
+      const drawerEntry = DRAWERS.find((entry) => entry.id === drawer) || null;
 
       return ReactDOM.createPortal(
         h(
@@ -3695,6 +3808,35 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               // open their own windows on top, so course mode is still here when
               // they close; the jump is for everything the term plan does not
               // draw — it closes course mode and opens the pane on that tab.
+              // The course-wide views, beside the weeks rather than instead of
+              // them. One at a time; a second press closes it.
+              DRAWERS.map((entry) =>
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn pp-cdrawerbtn",
+                    "aria-pressed": drawer === entry.id,
+                    disabled: preview,
+                    title: preview ? "Private — not shown while previewing as a student" : entry.hint,
+                    onClick: () => setDrawer(drawer === entry.id ? null : entry.id),
+                    key: entry.id,
+                  },
+                  entry.label,
+                ),
+              ),
+              canvas
+                ? h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-wiring pp-wiring-" + canvas.state,
+                      title: "Close course mode and open Integrations in the pane",
+                      onClick: () => props.onJump("integrations"),
+                    },
+                    "Canvas: " + (CONNECTION_STATE[canvas.state] || canvas.state),
+                  )
+                : null,
               h(
                 "button",
                 { type: "button", className: "pp-publishbtn", title: "Publish the course page, an announcement, a repository or a Canvas brief", onClick: props.onPublish },
@@ -3745,6 +3887,57 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 mode: mode,
                 title: "Course mode",
               }),
+              drawerEntry
+                ? h(
+                    "aside",
+                    { className: "pp-cdrawer", "aria-label": drawerEntry.label },
+                    h(
+                      "div",
+                      { className: "pp-cdrawerhead" },
+                      h("b", null, drawerEntry.label),
+                      drawer === "tasks"
+                        ? SUBVIEWS.tasks.map((entry) =>
+                            h(
+                              "button",
+                              {
+                                type: "button",
+                                className: "pp-segbtn",
+                                "aria-pressed": taskSub === entry.id,
+                                onClick: () => setTaskSub(entry.id),
+                                key: entry.id,
+                              },
+                              entry.label,
+                            ),
+                          )
+                        : null,
+                      h("span", { className: "pp-segspacer" }),
+                      // The pane's own Names / Pseudonyms choice, on the views
+                      // that name people: the same state, so the two never differ.
+                      drawer === "students" || (drawer === "tasks" && taskSub !== "unpublished")
+                        ? IDENTITY_MODES.map((entry) =>
+                            h(
+                              "button",
+                              {
+                                type: "button",
+                                className: "pp-segbtn" + (entry.names && props.names ? " pp-segbtn-warn" : ""),
+                                "aria-pressed": props.names === entry.names,
+                                title: entry.hint,
+                                onClick: () => props.setNames(entry.names),
+                                key: entry.label,
+                              },
+                              entry.label,
+                            ),
+                          )
+                        : null,
+                      h(
+                        "button",
+                        { type: "button", className: "pp-close", "aria-label": "Close " + drawerEntry.label, title: "Close (Esc)", onClick: () => setDrawer(null) },
+                        "×",
+                      ),
+                    ),
+                    h("div", { className: "pp-cdrawerbody" }, drawerBody()),
+                  )
+                : null,
             ),
           ),
         ),
@@ -9973,6 +10166,13 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 desk !== null || grading !== null || scansPile !== null,
               onPublish: () => openPublish("page"),
               onUpload: () => setUploading(true),
+              // For the drawers: the pane's own identity choice, and what the
+              // Unpublished view needs to send — the same props its tab gets.
+              names: names,
+              setNames: setNames,
+              ask: props.ask,
+              openPublish: openPublish,
+              onWrite: () => setReload((value) => value + 1),
               tabs: TABS,
               onJump: (id) => {
                 setTab(id);

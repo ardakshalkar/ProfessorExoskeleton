@@ -748,6 +748,13 @@ export function ProfessorPane(props) {
             desk !== null || grading !== null || scansPile !== null,
           onPublish: () => openPublish("page"),
           onUpload: () => setUploading(true),
+          // For the drawers: the pane's own identity choice, and what the
+          // Unpublished view needs to send — the same props its tab gets.
+          names: names,
+          setNames: setNames,
+          ask: props.ask,
+          openPublish: openPublish,
+          onWrite: () => setReload((value) => value + 1),
           tabs: TABS,
           onJump: (id) => {
             setTab(id);

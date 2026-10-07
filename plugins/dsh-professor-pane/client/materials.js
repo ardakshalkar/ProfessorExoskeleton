@@ -3,9 +3,11 @@
  * material overlay, and Course mode.
  */
 
-import { decodeIssues, Message } from "./common.js";
+import { decodeIssues, Message, useJson } from "./common.js";
+import { courseModeEscape } from "./course-escape.js";
+import { GradebookStatus, Unpublished } from "./marks.js";
 import { h, React, ReactDOM } from "./react.js";
-import { BASE, DRAFT_MODES, scoped } from "./tabs.js";
+import { BASE, DRAFT_MODES, IDENTITY_MODES, scoped, SUBVIEWS } from "./tabs.js";
 
 /**
  * A widget document in an iframe, delivered as `srcdoc` rather than `src`.
@@ -319,19 +321,112 @@ const defaultCourseMode = (start, end) => {
   return start && end && today >= start && today <= end ? "teaching" : "planning";
 };
 
+/**
+ * What does not belong to any one week, beside the weeks: the class list,
+ * the gradebook and the tasks, each the very document its pane tab shows,
+ * in a drawer from the right. They carry names and marks, so they are
+ * private: Preview as student closes them and turns their buttons off.
+ */
+const DRAWERS = [
+  { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
+  { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
+  { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
+];
+
+/** The Status view's words for a connection, as the Integrations tab says them. */
+const CONNECTION_STATE = { ready: "connected", partial: "partly set up", absent: "not set up" };
+
 export function CourseMode(props) {
   const close = props.onClose;
   const [student, setStudent] = React.useState(false);
   const [mode, setMode] = React.useState(() => defaultCourseMode(props.start, props.end));
+  const [drawer, setDrawer] = React.useState(null);
+  const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
+  const preview = student && mode !== "teaching";
+  // The privacy wall: a student preview never sits beside a class list.
+  React.useEffect(() => {
+    if (preview) setDrawer(null);
+  }, [preview]);
   React.useEffect(() => {
     const onKey = (event) => {
+      if (event.key !== "Escape") return;
       // A deck opened from the term plan sits on top and owns Escape: it
       // closes first, and this stays where the professor was reading.
-      if (event.key === "Escape" && !props.covered) close();
+      const step = courseModeEscape({ covered: props.covered, drawer });
+      if (step === "drawer") setDrawer(null);
+      else if (step === "close") close();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [close, props.covered]);
+  }, [close, props.covered, drawer]);
+  // Canvas, in one line: the row the Integrations tab's Status view draws,
+  // from the same payload. Nothing is computed here but the words.
+  const wiring = useJson(
+    scoped(BASE + "/api/integrations?run=" + encodeURIComponent(props.runId || "") + "&r=" + props.reload, props.sessionId),
+  );
+  const canvas =
+    wiring.phase === "ready" && wiring.value && !wiring.value.error
+      ? (wiring.value.integrations || []).find((row) => row.id === "canvas") || null
+      : null;
+
+  const drawerBody = () => {
+    if (drawer === "students") {
+      return h(WidgetFrame, {
+        key: "students|" + props.names + "|" + props.dark + "|" + props.reload,
+        view: "students",
+        runId: props.runId,
+        sessionId: props.sessionId,
+        dark: props.dark,
+        names: props.names,
+        title: "Students",
+      });
+    }
+    if (drawer === "gradebook") {
+      return h(
+        React.Fragment,
+        null,
+        h(GradebookStatus, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          revision: props.reload,
+          openUnpublished: () => {
+            setDrawer("tasks");
+            setTaskSub("unpublished");
+          },
+        }),
+        h(WidgetFrame, {
+          key: "gradebook|" + props.dark + "|" + props.drafts + "|" + props.reload,
+          view: "gradebook",
+          runId: props.runId,
+          sessionId: props.sessionId,
+          dark: props.dark,
+          drafts: props.drafts,
+          title: "Gradebook",
+        }),
+      );
+    }
+    if (taskSub === "unpublished") {
+      return h(Unpublished, {
+        runId: props.runId,
+        sessionId: props.sessionId,
+        revision: props.reload,
+        onWrite: props.onWrite,
+        openPublish: props.openPublish,
+        ask: props.ask,
+      });
+    }
+    return h(WidgetFrame, {
+      key: taskSub + "|" + props.names + "|" + props.dark + "|" + props.drafts + "|" + props.reload,
+      view: taskSub,
+      runId: props.runId,
+      sessionId: props.sessionId,
+      dark: props.dark,
+      drafts: props.drafts,
+      names: props.names,
+      title: "Tasks",
+    });
+  };
+  const drawerEntry = DRAWERS.find((entry) => entry.id === drawer) || null;
 
   return ReactDOM.createPortal(
     h(
@@ -402,6 +497,35 @@ export function CourseMode(props) {
           // open their own windows on top, so course mode is still here when
           // they close; the jump is for everything the term plan does not
           // draw — it closes course mode and opens the pane on that tab.
+          // The course-wide views, beside the weeks rather than instead of
+          // them. One at a time; a second press closes it.
+          DRAWERS.map((entry) =>
+            h(
+              "button",
+              {
+                type: "button",
+                className: "pp-segbtn pp-cdrawerbtn",
+                "aria-pressed": drawer === entry.id,
+                disabled: preview,
+                title: preview ? "Private — not shown while previewing as a student" : entry.hint,
+                onClick: () => setDrawer(drawer === entry.id ? null : entry.id),
+                key: entry.id,
+              },
+              entry.label,
+            ),
+          ),
+          canvas
+            ? h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-wiring pp-wiring-" + canvas.state,
+                  title: "Close course mode and open Integrations in the pane",
+                  onClick: () => props.onJump("integrations"),
+                },
+                "Canvas: " + (CONNECTION_STATE[canvas.state] || canvas.state),
+              )
+            : null,
           h(
             "button",
             { type: "button", className: "pp-publishbtn", title: "Publish the course page, an announcement, a repository or a Canvas brief", onClick: props.onPublish },
@@ -452,6 +576,57 @@ export function CourseMode(props) {
             mode: mode,
             title: "Course mode",
           }),
+          drawerEntry
+            ? h(
+                "aside",
+                { className: "pp-cdrawer", "aria-label": drawerEntry.label },
+                h(
+                  "div",
+                  { className: "pp-cdrawerhead" },
+                  h("b", null, drawerEntry.label),
+                  drawer === "tasks"
+                    ? SUBVIEWS.tasks.map((entry) =>
+                        h(
+                          "button",
+                          {
+                            type: "button",
+                            className: "pp-segbtn",
+                            "aria-pressed": taskSub === entry.id,
+                            onClick: () => setTaskSub(entry.id),
+                            key: entry.id,
+                          },
+                          entry.label,
+                        ),
+                      )
+                    : null,
+                  h("span", { className: "pp-segspacer" }),
+                  // The pane's own Names / Pseudonyms choice, on the views
+                  // that name people: the same state, so the two never differ.
+                  drawer === "students" || (drawer === "tasks" && taskSub !== "unpublished")
+                    ? IDENTITY_MODES.map((entry) =>
+                        h(
+                          "button",
+                          {
+                            type: "button",
+                            className: "pp-segbtn" + (entry.names && props.names ? " pp-segbtn-warn" : ""),
+                            "aria-pressed": props.names === entry.names,
+                            title: entry.hint,
+                            onClick: () => props.setNames(entry.names),
+                            key: entry.label,
+                          },
+                          entry.label,
+                        ),
+                      )
+                    : null,
+                  h(
+                    "button",
+                    { type: "button", className: "pp-close", "aria-label": "Close " + drawerEntry.label, title: "Close (Esc)", onClick: () => setDrawer(null) },
+                    "×",
+                  ),
+                ),
+                h("div", { className: "pp-cdrawerbody" }, drawerBody()),
+              )
+            : null,
         ),
       ),
     ),
