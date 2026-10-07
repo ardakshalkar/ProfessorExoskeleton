@@ -43,7 +43,8 @@
  * was given and does no arithmetic at all.
  */
 
-import { DefenceDesk, turnStep } from "./defence-desk.js";
+import { DefenceDesk } from "./defence-desk.js";
+import { turnStep } from "./defence-turn.js";
 import { inject, OpenPaneAction, ProfessorPane } from "./pane.js";
 
 /**

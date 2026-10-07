@@ -60,6 +60,13 @@ export const ORDER = [
   "marks.js",
   "grade-board.js",
   "scans.js",
+  "defence-turn.js",
+  "defence-dots.js",
+  "defence-marks.js",
+  "defence-captions.js",
+  "defence-screen.js",
+  "defence-views.js",
+  "defence-stage.js",
   "defence-desk.js",
   "upload.js",
   "pane.js",
@@ -176,7 +183,9 @@ const headerOf = (file) => {
  * * a name another module declares is used here without being imported,
  * * a name is imported but never used,
  * * a name is imported from a module that does not export it,
- * * a name is exported but no other module imports it.
+ * * a name is exported but no other module imports it,
+ * * two modules declare the same top-level name — legal as modules, a
+ *   duplicate declaration once they are joined into one scope.
  *
  * Scope-aware — a local that shadows another module's name is not a use of
  * it — because it asks the TypeScript checker what each identifier resolves to.
@@ -189,10 +198,16 @@ const checkImports = () => {
 
   const topNames = new Map(); // name -> declaring file
   const exportsOf = new Map(); // file -> Set of exported names
+  const problems = [];
   for (const [file, sf] of sources) {
     const exported = new Set();
     for (const st of sf.statements) {
       for (const name of declaredNames(st)) {
+        // One factory scope: a second declaration of the name is a SyntaxError
+        // in the built file, whichever module it is in.
+        if (topNames.has(name)) {
+          problems.push(`client/${file} declares \`${name}\`, which client/${topNames.get(name)} already declares — all modules share one scope`);
+        }
         topNames.set(name, file);
         if (isExported(st)) exported.add(name);
       }
@@ -200,7 +215,6 @@ const checkImports = () => {
     exportsOf.set(file, exported);
   }
 
-  const problems = [];
   const importedAnywhere = new Set(); // "file:name"
   for (const [file, sf] of sources) {
     const imported = new Map(); // local name -> { from, node }
