@@ -268,7 +268,7 @@ happens.
    the scan pile's step, defended of handed in, not in Canvas or no starter
    repository), from `server/week-status.js`, and its button opens Grade, Scans,
    the defence desk or Publish over course mode. **Students**, **Gradebook** and
-   **Tasks** open as drawers from the right, holding the pane's own documents,
+   **Tasks** open over the whole term plan, each holding the pane's own document,
    and are closed and disabled under *Preview as student*. One header line says
    where Canvas stands and jumps to Integrations. Escape closes innermost first:
    a window on top, then a drawer, then course mode.

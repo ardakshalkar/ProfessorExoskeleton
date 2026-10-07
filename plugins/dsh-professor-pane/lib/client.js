@@ -660,10 +660,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-veil.pp-coursemode{z-index:3900;padding:14px clamp(10px,2vw,28px) 16px}
 .pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
 /* A course-wide view beside the weeks: the pane's own document for the tab,
-   in a drawer over the right of the term plan. One at a time. */
-.pp-cdrawer{position:absolute;top:0;right:0;bottom:0;width:min(460px,100%);z-index:2;
+   over the whole term plan. One at a time. */
+.pp-cdrawer{position:absolute;inset:0;z-index:2;
   display:flex;flex-direction:column;background:var(--dsw-alias-bg-l1,#fff);
-  border-left:1px solid var(--dsw-alias-border-l2,#e3e3e6);box-shadow:-12px 0 32px rgba(0,0,0,.18);
   animation:pp-cdrawer-in .16s ease-out}
 @keyframes pp-cdrawer-in{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
 .pp-cdrawerhead{flex:none;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;padding:8px 10px;
@@ -3639,7 +3638,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     /**
      * What does not belong to any one week, beside the weeks: the class list,
      * the gradebook and the tasks, each the very document its pane tab shows,
-     * in a drawer from the right. They carry names and marks, so they are
+     * over the whole term plan. They carry names and marks, so they are
      * private: Preview as student closes them and turns their buttons off.
      */
     const DRAWERS = [

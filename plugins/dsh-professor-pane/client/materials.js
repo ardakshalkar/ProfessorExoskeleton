@@ -328,7 +328,7 @@ const defaultCourseMode = (start, end) => {
 /**
  * What does not belong to any one week, beside the weeks: the class list,
  * the gradebook and the tasks, each the very document its pane tab shows,
- * in a drawer from the right. They carry names and marks, so they are
+ * over the whole term plan. They carry names and marks, so they are
  * private: Preview as student closes them and turns their buttons off.
  */
 const DRAWERS = [
