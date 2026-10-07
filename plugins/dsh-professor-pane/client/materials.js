@@ -298,13 +298,15 @@ function mentionOf(url, label) {
  * show; Preview as student is this view's alone.
  */
 /**
- * The two modes a professor is in, and the full table either can drop
- * into. Planning asks whether the term holds together; Teaching is this
- * week between the last and the next, and alone carries class figures.
+ * The two modes a professor is in, the full table either can drop into,
+ * and how it went. Planning asks whether the term holds together; Teaching
+ * is this week between the last and the next; Evidence is every week's
+ * hand-ins, marks and concepts. Those two alone carry class figures.
  */
 const COURSE_MODES = [
   { id: "planning", label: "Planning", hint: "Does the term hold together: topics, quizzes, homework, weights" },
   { id: "teaching", label: "Teaching", hint: "This week, between the last and the next. Carries class figures" },
+  { id: "evidence", label: "Evidence", hint: "How each week went: hand-ins, marks and concepts. Carries class figures" },
   { id: "term", label: "All weeks", hint: "Every week in full, three columns" },
 ];
 
@@ -342,7 +344,10 @@ export function CourseMode(props) {
   const [mode, setMode] = React.useState(() => defaultCourseMode(props.start, props.end));
   const [drawer, setDrawer] = React.useState(null);
   const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
-  const preview = student && mode !== "teaching";
+  // Teaching and Evidence carry class figures, so there is no student
+  // version of either to preview.
+  const private_ = mode === "teaching" || mode === "evidence";
+  const preview = student && !private_;
   // The privacy wall: a student preview never sits beside a class list.
   React.useEffect(() => {
     if (preview) setDrawer(null);
@@ -481,7 +486,7 @@ export function CourseMode(props) {
           ),
           // Not on Teaching: a student is never shown class figures, so
           // there is no student version of that page to preview.
-          mode === "teaching"
+          private_
             ? null
             : h(
                 "label",
@@ -572,7 +577,7 @@ export function CourseMode(props) {
             sessionId: props.sessionId,
             dark: props.dark,
             drafts: props.drafts,
-            student: student && mode !== "teaching",
+            student: preview,
             mode: mode,
             title: "Course mode",
           }),

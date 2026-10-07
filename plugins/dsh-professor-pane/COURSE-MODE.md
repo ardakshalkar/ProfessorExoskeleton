@@ -262,6 +262,34 @@ happens.
    since the layout has no full-width one. Not yet: persisting the mode per
    workspace, and the context packet as structured data rather than a prompt
    naming the ids.
-5. **Evidence**, as its own document.
+   **Extended** (2026-10-07) so the course-wide things sit beside the weeks.
+   The header carries Publish, Upload and *Open in pane…*. Each assessment chip
+   in Teaching and All weeks says where its work stands (suggested and decided,
+   the scan pile's step, defended of handed in, not in Canvas or no starter
+   repository), from `server/week-status.js`, and its button opens Grade, Scans,
+   the defence desk or Publish over course mode. **Students**, **Gradebook** and
+   **Tasks** open as drawers from the right, holding the pane's own documents,
+   and are closed and disabled under *Preview as student*. One header line says
+   where Canvas stands and jumps to Integrations. Escape closes innermost first:
+   a window on top, then a drawer, then course mode.
+5. ~~**Evidence**, as its own document~~ — **built** (2026-10-07), as course
+   mode's fourth reading. `mode=evidence` asks the host for `class_progress`,
+   `gradebook` and `action_inbox` over approved records only, and
+   `evidenceBody` draws the term's weeks. Each week shows the work due in it
+   with the gradebook summary verbatim (handed in of enrolled, not handed in,
+   graded, mean and median out of the maximum), the concepts its module
+   teaches with their class mean and coverage (under 60% marked to revisit),
+   and the class-level signals tied to those concepts. Weeks with nothing due
+   and nothing measured become bands. It is private, like Teaching: the strip
+   says so, there is no *Preview as student*, and it names nobody. Left out
+   for lack of a field, or deliberately:
+   * **Signals about one student.** The inbox carries them, but they are not
+     aggregates.
+   * **Hand-ins for work not yet due.** The gradebook counts every missing row
+     as `not_submitted` whatever the date, so an upcoming week says "not due
+     yet" instead.
+   * **A week's own concept trend.** No payload carries a concept's mean as
+     of a date, so a week shows today's mean for what it taught, not the mean
+     at the time.
 6. **Deadline editable in place.** Last, deliberately: it is the only step that
    writes, and it should land when everything around it is settled.

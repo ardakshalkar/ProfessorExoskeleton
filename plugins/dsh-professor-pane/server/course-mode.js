@@ -187,6 +187,11 @@ button.link{border:0;background:none;padding:0;font:inherit;font-size:13px;color
 .chip.act{font-size:12px;padding:1px 7px;border-color:var(--accent-line);color:var(--accent-ink)}
 .chip.act:hover{background:var(--accent-tint)}
 .facts li .status{flex-basis:100%}
+.facts li.flagged>span,.facts li.flagged>small{color:var(--flag)}
+.mode.evidence .grid{margin:0}
+.mode.evidence .facts li>small{flex-basis:100%;padding-left:1.4em}
+.mode.evidence .facts li>a.chip+small,.mode.evidence .facts li>span.chip+small{padding-left:0}
+small.none{color:var(--muted)}
 .chip.ask.strong{border:1px solid var(--accent-line);background:var(--surface);font-weight:500}
 .gap[data-ask]::after{content:"\\2726";margin-left:2px;font-size:.85em;opacity:.75}
 .primary{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font:inherit;font-size:13px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--on-fg);cursor:pointer}
@@ -707,8 +712,120 @@ const teachingBody = (data, evidence, status) => {
   return `<div class="mode">${sections}</div>`;
 };
 
-/** A week nobody has planned and nothing meets in: a candidate for a band. */
-const isEmpty = (w) => !(w.modules ?? []).length && !(w.meetings ?? []).length;
+// ---------------------------------------------------------------- evidence
+
+/**
+ * How each week actually went — asked during and after the term, of every
+ * week at once, which no other view answers: Progress is keyed by concept and
+ * the gradebook by assessment, and "which week went wrong" is a question about
+ * weeks. The same spine as All weeks; per week, the work that fell due with
+ * the gradebook's own figures for it, the concepts the week's module teaches
+ * with their class mean, and the class-level signals about those concepts.
+ *
+ * Private, like Teaching, and from approved evidence only. Every figure is
+ * the host payload's (`gradebook` summary, `class_progress`), printed as it
+ * came: grouping under weeks is presentation, and nothing is added up here.
+ * Aggregates only — no row of this page is about one student.
+ */
+const evidenceBody = (data, evidence, status) => {
+  const run = data.run ?? {};
+  const weeks = data.weeks ?? [];
+  const current = data.current_week ?? null;
+  const concepts = evidence.concepts ?? {};
+  const work = evidence.work ?? {};
+  const signals = evidence.signals ?? [];
+
+  // A signal belongs to the first week that teaches one of its concepts.
+  const weekOfConcept = new Map();
+  for (const w of weeks) for (const c of conceptsOf(w)) if (!weekOfConcept.has(c.id)) weekOfConcept.set(c.id, w.week);
+  const signalWeek = (s) => (s.concepts ?? []).map((c) => weekOfConcept.get(c)).find((n) => n !== undefined) ?? null;
+  const loose = signals.filter((s) => signalWeek(s) === null);
+  const signalLine = (s) =>
+    `<li class="${s.severity === "high" ? "flagged" : ""}">${icon("concept")}<span>${esc(s.description)}</span>` +
+    (s.severity ? `<small>${esc(s.severity)}</small>` : "") + "</li>";
+
+  // Work in a week still to come has nothing to report yet: the gradebook
+  // counts every row with no hand-in as `not_submitted` whatever the date,
+  // and "81 not handed in" for a quiz due next week is an accusation.
+  const figures = (a, w) => {
+    if (w.when === "upcoming") return '<small class="none">not due yet</small>';
+    const f = work[a.assessment_id];
+    if (!f) return '<small class="none">no approved marks yet</small>';
+    const out = [];
+    if (f.enrolled !== null && f.submitted !== null) out.push(`${f.submitted} of ${f.enrolled} handed in`);
+    if (f.not_submitted) out.push(`${f.not_submitted} not handed in`);
+    if (f.graded !== null) out.push(`${f.graded} graded` + (f.partially_graded ? ` · ${f.partially_graded} partly` : ""));
+    if (f.mean !== null) out.push(`mean ${f.mean}` + (f.maximum !== null ? ` of ${f.maximum}` : ""));
+    if (f.median !== null) out.push(`median ${f.median}`);
+    return `<small>${esc(out.join(" · "))}</small>`;
+  };
+  const measured = (w) =>
+    (w.due ?? []).length > 0 ||
+    conceptsOf(w).some((c) => concepts[c.id] && concepts[c.id].class_mean !== null && concepts[c.id].class_mean !== undefined) ||
+    signals.some((s) => signalWeek(s) === w.week);
+
+  const row = (w) => {
+    const due = (w.due ?? [])
+      .map((a) => `<li>${workChip(a, `due ${shortDate(a.due_on)}`)}${figures(a, w)}${statusLine(a, status)}</li>`)
+      .join("");
+    const taught = conceptsOf(w)
+      .map((c) => {
+        const x = concepts[c.id];
+        const has = x && x.class_mean !== null && x.class_mean !== undefined;
+        const low = has && x.class_mean < REVISIT_BELOW;
+        return `<li class="${low ? "flagged" : ""}">${icon("concept")}<span>${esc(c.title ?? c.id)}</span><small>${
+          has ? `class ${esc(pct(x.class_mean))} · ${esc(x.coverage ?? "")} observed${low ? " · revisit" : ""}` : "not assessed yet"
+        }</small></li>`;
+      })
+      .join("");
+    const here = signals.filter((s) => signalWeek(s) === w.week).map(signalLine).join("");
+    const module = (w.modules ?? [])[0];
+    const weak = conceptsOf(w).filter((c) => concepts[c.id] && concepts[c.id].class_mean !== null && concepts[c.id].class_mean < REVISIT_BELOW);
+    const ask = weak.length
+      ? askButton(
+          `In week ${w.week} of ${run.id}${module ? ` (${module.module_id})` : ""}, the class is weakest on ` +
+            `${weak.map((c) => c.id).join(", ")}. Read the approved evidence for those concepts and tell me what went wrong ` +
+            "and what to revisit. Change nothing.",
+          "Why did this week go wrong?",
+        )
+      : "";
+    return `<div class="wkhead ${w.when === "current" ? "now" : w.when === "past" ? "past" : ""}" id="week-${w.week}">` +
+      `<b>${w.week < 10 ? "0" + w.week : w.week}</b><span class="k mono">${esc(shortDate(w.starts_on))} – ${esc(shortDate(w.ends_on))}</span>` +
+      (titleOf(w) ? `<h3>${esc(titleOf(w))}</h3>` : '<h3 class="none">Unplanned</h3>') +
+      (w.when === "current" ? '<span class="pill now">this week</span>' : "") +
+      `<span class="askw">${ask}</span></div>` +
+      `<div class="cell" data-col="Due that week">${due ? `<ul class="facts">${due}</ul>` : '<span class="dash">—</span>'}</div>` +
+      `<div class="cell" data-col="Concepts taught">${taught ? `<ul class="facts">${taught}</ul>` : '<span class="dash">—</span>'}</div>` +
+      `<div class="cell" data-col="Signals">${here ? `<ul class="facts">${here}</ul>` : '<span class="dash">—</span>'}</div>`;
+  };
+
+  // A run of two or more weeks with nothing due and nothing measured is one band.
+  const rows = [];
+  for (let i = 0; i < weeks.length; ) {
+    let j = i;
+    while (j < weeks.length && !measured(weeks[j])) j += 1;
+    if (j - i >= 2) {
+      const a = weeks[i];
+      const z = weeks[j - 1];
+      rows.push(`<div class="band" id="week-${a.week}"><b>${icon("calendar")} Weeks ${a.week}–${z.week}</b>` +
+        `<span class="k mono">${esc(shortDate(a.starts_on))} – ${esc(shortDate(z.ends_on))}</span>` +
+        `<span class="none">nothing due, nothing measured yet</span></div>`);
+      i = j;
+    } else {
+      rows.push(row(weeks[i]));
+      i += 1;
+    }
+  }
+
+  return `<div class="mode evidence"><div class="stepper"><b>${current ? `Week ${current} of ${weeks.length}` : `${weeks.length} weeks`}</b>` +
+    `<span class="private">Private — class figures from approved evidence only</span></div>` +
+    (loose.length ? `<div class="side"><small>Open signals not tied to a week</small><ul class="facts">${loose.map(signalLine).join("")}</ul></div>` : "") +
+    `<div class="grid"><div class="th">Due that week</div><div class="th">Concepts taught</div><div class="th">Signals</div>${rows.join("")}</div>` +
+    `<p class="foot">Hand-ins and marks are the gradebook's, from approved decisions; a concept's class mean is over approved evidence. ` +
+    `A concept under ${esc(pct(REVISIT_BELOW))} is marked to revisit.</p></div>`;
+};
+
+/** A week nobody has planned and nothing meets in: a candidate for a band. */const isEmpty = (w) => !(w.modules ?? []).length && !(w.meetings ?? []).length;
 
 // ------------------------------------------------------------------ document
 
@@ -920,6 +1037,8 @@ export const courseModeDocument = (
     main = strip("does the term hold together") + studentBanner + planningBody(data, { student }) + structureFoot;
   } else if (mode === "teaching") {
     main = strip("this week, between the last and the next") + teachingBody(data, evidence ?? {}, status);
+  } else if (mode === "evidence") {
+    main = strip("how each week went") + evidenceBody(data, evidence ?? {}, status);
   } else {
     main = strip("press a hole to have Claude fill it", tallyHtml) + studentBanner + lead +
       `<div class="grid"><div class="th">Lecture</div><div class="th">Graded work</div><div class="th">Outcomes</div>${body}</div>` +

@@ -1643,11 +1643,12 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
           ],
         );
       }
-      // Three readings of the same term. `planning` and `term` are structure
+      // Four readings of the same term. `planning` and `term` are structure
       // only. `teaching` adds class figures — a concept's class mean, what has
-      // been handed in, the open signals — so it alone reads the two private
-      // payloads, and only when asked for by name.
-      const mode = ["planning", "teaching"].includes(url.searchParams.get("mode"))
+      // been handed in, the open signals — and `evidence` gives them for every
+      // week, so those two alone read the private payloads, and only when
+      // asked for by name.
+      const mode = ["planning", "teaching", "evidence"].includes(url.searchParams.get("mode"))
         ? url.searchParams.get("mode")
         : "term";
       let evidence = null;
@@ -1668,10 +1669,43 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
         const signals = (inbox.open_signals ?? []).map((s) => ({ description: s.description ?? "" }));
         evidence = { concepts, handed_in: handedIn, signals };
       }
+      // How each week went, from approved evidence only — drafts are never
+      // asked for here, whatever the toggle says. Figures are the payloads'
+      // own, copied by id; grouping them under weeks is the page's, and no
+      // mean, sum or share is made here. Class-level signals only: one about
+      // a single student is not an aggregate, and this page names nobody.
+      if (mode === "evidence") {
+        const on = url.searchParams.get("date");
+        const progress = viewPayload(workspace, "class_progress", runId, on, false).payload;
+        const book = viewPayload(workspace, "gradebook", runId, on, false).payload;
+        const inbox = viewPayload(workspace, "action_inbox", runId, on, false).payload;
+        const concepts = {};
+        for (const c of progress.concepts ?? []) {
+          concepts[c.concept_id] = { class_mean: c.class_mean ?? null, coverage: c.coverage ?? null };
+        }
+        const work = {};
+        for (const a of book.assessments ?? []) {
+          const s = a.summary ?? {};
+          work[a.assessment_id] = {
+            maximum: a.maximum ?? null,
+            enrolled: s.enrolled ?? null,
+            submitted: s.submitted ?? null,
+            not_submitted: s.not_submitted ?? null,
+            graded: s.graded ?? null,
+            partially_graded: s.partially_graded ?? null,
+            mean: s.mean ?? null,
+            median: s.median ?? null,
+          };
+        }
+        const signals = (inbox.open_signals ?? [])
+          .filter((s) => !s.student_id)
+          .map((s) => ({ description: s.description ?? "", severity: s.severity ?? null, concepts: s.concepts ?? [] }));
+        evidence = { concepts, work, signals };
+      }
       // Where each piece of graded work stands — grading, Canvas, a pile, the
       // defences — for its chip: Teaching and All weeks, never the student
       // preview. Read with drafts included, as the windows it opens read it.
-      const student = mode !== "teaching" && url.searchParams.get("student") === "1";
+      const student = mode !== "teaching" && mode !== "evidence" && url.searchParams.get("student") === "1";
       let status = null;
       if (mode !== "planning" && !student) {
         try {

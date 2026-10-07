@@ -13,6 +13,8 @@
  * 5. **A chip says where its work stands** — from the host's status, once per
  *    week, each with the press that opens its window — and only where the host
  *    sent one: never in the student preview.
+ * 6. **Evidence prints the payloads' figures as they came,** week by week,
+ *    names nobody, and none of it leaks into Planning or the term table.
  *
  *     node --test test/pane-course-mode.test.mjs
  */
@@ -142,4 +144,54 @@ test("a chip says where its work stands, with the press that opens its window", 
 test("the student preview carries no status, whatever the host sent", () => {
   const html = courseModeDocument(payload(), { mode: "term", student: true, status });
   assert.equal(/suggested ·|defended<|not in Canvas|data-grade="|data-publish="/.test(html), false);
+});
+
+const weekly = {
+  concepts: { "K-1": { class_mean: 0.33, coverage: "3/3" }, "K-2": { class_mean: 0.81, coverage: "2/3" } },
+  work: {
+    "ASM-Q": { maximum: 10, enrolled: 3, submitted: 2, not_submitted: 1, graded: 2, partially_graded: 0, mean: 7.25, median: 7.5 },
+  },
+  signals: [
+    { description: "Search handled loosely across the class.", severity: "medium", concepts: ["K-1"] },
+    { description: "Attendance dipped after the break.", severity: "low", concepts: [] },
+  ],
+};
+
+test("evidence prints each week's figures as the payloads carry them, and says it is private", () => {
+  const html = courseModeDocument(payload(), { mode: "evidence", evidence: weekly, status });
+  assert.match(html, /Private — class figures from approved evidence only/);
+  // The gradebook summary, verbatim: no figure is re-derived.
+  assert.match(html, /2 of 3 handed in · 1 not handed in · 2 graded · mean 7\.25 of 10 · median 7\.5/);
+  // Week 1 teaches K-1, under the line, so it is flagged; week 2's K-2 is not.
+  assert.match(html, /Search<\/span><small>class 33% · 3\/3 observed · revisit/);
+  assert.match(html, /Overfitting<\/span><small>class 81% · 2\/3 observed<\/small>/);
+  assert.match(html, /data-ask="In week 1 of RUN-1 \(M-1\), the class is weakest on K-1/);
+  // A signal tied to K-1 sits in week 1; one tied to nothing goes on top.
+  assert.match(html, /Search handled loosely across the class\./);
+  assert.match(html, /Open signals not tied to a week.*Attendance dipped after the break\./s);
+  // Step 2's chip buttons work here too.
+  assert.match(html, /data-grade="ASM-Q"/);
+  // Weeks 3–4: nothing due, nothing measured.
+  assert.match(html, /Weeks 3–4<\/b>.*nothing due, nothing measured yet/s);
+});
+
+test("evidence names nobody", () => {
+  const html = courseModeDocument(payload(), { mode: "evidence", evidence: weekly });
+  assert.equal(/STUDENT-/.test(html), false);
+});
+
+test("planning and the term table carry none of evidence's figures", () => {
+  for (const mode of ["planning", "term"]) {
+    const html = courseModeDocument(payload(), { mode, evidence: weekly });
+    for (const figure of [/mean 7\.25/, /median 7\.5/, /handed in/, /class 33%/, /Search handled loosely/, /Private/]) {
+      assert.equal(figure.test(html), false, `${mode} drew ${figure}`);
+    }
+  }
+});
+
+test("evidence reports nothing for work in a week still to come", () => {
+  const data = payload();
+  data.weeks[2] = week(3, { due: [quiz], gaps: [] });
+  const html = courseModeDocument(data, { mode: "evidence", evidence: weekly });
+  assert.match(html, /id="week-3".*not due yet/s);
 });
