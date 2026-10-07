@@ -147,6 +147,7 @@ import { studentScreenPage } from "./server/student-screen.js";
 import { studentsDocument } from "./server/students.js";
 import { unpublishedDocument } from "./server/unpublished.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./server/upload.js";
+import { assessmentStatus } from "./server/week-status.js";
 import {
   loadedRun,
   payload,
@@ -1667,6 +1668,31 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
         const signals = (inbox.open_signals ?? []).map((s) => ({ description: s.description ?? "" }));
         evidence = { concepts, handed_in: handedIn, signals };
       }
+      // Where each piece of graded work stands — grading, Canvas, a pile, the
+      // defences — for its chip: Teaching and All weeks, never the student
+      // preview. Read with drafts included, as the windows it opens read it.
+      const student = mode !== "teaching" && url.searchParams.get("student") === "1";
+      let status = null;
+      if (mode !== "planning" && !student) {
+        try {
+          let submissions = null;
+          try {
+            submissions = submissionsDir(null);
+            refuseInsideRepo(submissions, root);
+          } catch {
+            submissions = null;
+          }
+          status = assessmentStatus({
+            bundle: loadedRun(workspace, runId).bundle,
+            runId,
+            root,
+            submissions,
+            ledger: Ledger.load(runId),
+          });
+        } catch {
+          status = null;
+        }
+      }
       res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
       return send(
         res,
@@ -1674,9 +1700,10 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
         "text/html; charset=utf-8",
         courseModeDocument(data, {
           dark,
-          student: mode !== "teaching" && url.searchParams.get("student") === "1",
+          student,
           mode,
           evidence,
+          status,
         }),
       );
     }

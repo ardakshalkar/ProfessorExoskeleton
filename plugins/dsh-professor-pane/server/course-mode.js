@@ -180,6 +180,13 @@ a.chip:hover,button.chip:hover{border-color:var(--accent-line)}
 .mode .foot{margin:0}
 .calm{margin:0;color:var(--muted);font-size:13px}
 button.link{border:0;background:none;padding:0;font:inherit;font-size:13px;color:var(--accent-ink);cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:var(--accent-line);text-underline-offset:2px}
+.status{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding-left:9px;margin:-1px 0 3px;font-size:12px}
+.status .stat{color:var(--muted);font-variant-numeric:tabular-nums}
+.status .stat.yours{color:var(--draft);font-weight:500}
+.status .badge{border-radius:999px;padding:0 7px;border:1px dashed var(--flag-line);color:var(--flag)}
+.chip.act{font-size:12px;padding:1px 7px;border-color:var(--accent-line);color:var(--accent-ink)}
+.chip.act:hover{background:var(--accent-tint)}
+.facts li .status{flex-basis:100%}
 .chip.ask.strong{border:1px solid var(--accent-line);background:var(--surface);font-weight:500}
 .gap[data-ask]::after{content:"\\2726";margin-left:2px;font-size:.85em;opacity:.75}
 .primary{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font:inherit;font-size:13px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--on-fg);cursor:pointer}
@@ -236,8 +243,9 @@ table.plan td.lane{width:16%;min-width:140px;padding:0 6px}
 }`;
 
 /**
- * Presses, out to the harness: the same two messages every pane document
- * sends, and nothing else. `parent === window` means the page was opened in a
+ * Presses, out to the harness: the two messages every pane document sends,
+ * and the four a status line's buttons send to open the pane's own windows
+ * (`grade`, `scans`, `defence-desk`, `publish`). `parent === window` means the page was opened in a
  * tab by itself, with nobody listening, so it takes no clicks at all. A
  * modified click keeps the tab a link always opened.
  *
@@ -259,6 +267,13 @@ if(parent===window)return;
 document.addEventListener('click',function(e){
   var b=e.target.closest&&e.target.closest('[data-ask]');
   if(b){e.preventDefault();parent.postMessage({source:'professor-pane',kind:'ask',prompt:b.getAttribute('data-ask')},'*');return;}
+  var w=e.target.closest&&e.target.closest('[data-grade],[data-scans],[data-desk],[data-publish]');
+  if(w){e.preventDefault();var m={source:'professor-pane'};
+    if(w.hasAttribute('data-grade')){m.kind='grade';m.assessment=w.getAttribute('data-grade');m.label=w.getAttribute('data-label')||'';}
+    else if(w.hasAttribute('data-scans')){m.kind='scans';m.assessment=w.getAttribute('data-scans');}
+    else if(w.hasAttribute('data-desk')){m.kind='defence-desk';m.assessment=w.getAttribute('data-desk');m.student=w.getAttribute('data-student');}
+    else{m.kind='publish';m.assessment=w.getAttribute('data-publish');m.label=w.getAttribute('data-label')||'';m.target=w.getAttribute('data-target')||'';}
+    parent.postMessage(m,'*');return;}
   var a=e.target.closest&&e.target.closest('a[data-view]');if(!a)return;
   if(e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
   e.preventDefault();
@@ -376,6 +391,47 @@ const workChip = (a, when) => {
       `data-format="${esc(format)}" title="open the brief">${body}</a>`;
   }
   return `<span class="${cls}">${body}</span>`;
+};
+
+/**
+ * Where a piece of graded work stands, under its chip: the host's figures
+ * (`server/week-status.js`) said as words, each with the press that goes with
+ * it. A press opens one of the pane's own windows over course mode — Grade,
+ * Scans, Publish, the defence desk — and asks the chat nothing. Absent in the
+ * student preview and in Planning, where the host sends no status.
+ */
+const statusLine = (a, status) => {
+  const st = status ? status[a.assessment_id] : null;
+  if (!st) return "";
+  const id = esc(a.assessment_id);
+  const label = esc(a.title ?? a.assessment_id);
+  const parts = [];
+  if (st.grading) {
+    parts.push(`<span class="stat">${st.grading.suggested} suggested · ${st.grading.decided} decided</span>` +
+      `<button type="button" class="chip act" data-grade="${id}" data-label="${label}" title="Open the Grade view">Grade</button>`);
+  }
+  if (st.scans) {
+    parts.push(`<span class="stat${st.scans.whose === "you" ? " yours" : ""}">${esc(st.scans.phrase)}</span>` +
+      `<button type="button" class="chip act" data-scans="${id}" title="Open the pile in Scans">Scans</button>`);
+  }
+  if (st.defences) {
+    parts.push(`<span class="stat">${st.defences.defended} of ${st.defences.of} defended</span>` +
+      (st.defences.student
+        ? `<button type="button" class="chip act" data-desk="${id}" data-student="${esc(st.defences.student)}" ` +
+          `title="${esc(`The defence desk, on ${st.defences.student}`)}">Open defence desk</button>`
+        : ""));
+  }
+  if (st.canvas) {
+    parts.push(`<span class="badge">${st.canvas === "some" ? "not in every Canvas course yet" : "not in Canvas yet"}</span>` +
+      `<button type="button" class="chip act" data-publish="${id}" data-target="canvas" data-label="${label}" ` +
+      `title="Send its definition to Canvas — reads a plan first">publish…</button>`);
+  }
+  if (st.repo) {
+    parts.push(`<span class="badge">no starter repository yet</span>` +
+      `<button type="button" class="chip act" data-publish="${id}" data-target="homework" data-label="${label}" ` +
+      `title="Create the starter repository on GitHub — reads a plan first">publish…</button>`);
+  }
+  return parts.length ? `<span class="status">${parts.join("")}</span>` : "";
 };
 
 const hasBrief = (a) => Boolean(a.url || a.brief_url || String(a.description ?? "").trim());
@@ -531,7 +587,7 @@ const planningBody = (data, { student }) => {
  */
 const REVISIT_BELOW = 0.6;
 
-const teachingBody = (data, evidence) => {
+const teachingBody = (data, evidence, status) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];
   const current = data.current_week ?? null;
@@ -540,10 +596,13 @@ const teachingBody = (data, evidence) => {
   const handed = evidence.handed_in ?? {};
   const signals = evidence.signals ?? [];
 
-  const workLine = (a, verb, date, withHanded) => {
+  // One status line per piece of work in a week: on its due line when it is
+  // due in the same week it opens.
+  const workLine = (a, verb, date, withHanded, week) => {
     const h = handed[a.assessment_id];
     return `<li>${workChip(a, `${verb} ${shortDate(date)}`)}` +
-      (withHanded && h && h.enrolled ? `<small>${h.received} of ${h.enrolled} handed in</small>` : "") + "</li>";
+      (withHanded && h && h.enrolled ? `<small>${h.received} of ${h.enrolled} handed in</small>` : "") +
+      (withHanded || !(week?.due ?? []).some((d) => d.assessment_id === a.assessment_id) ? statusLine(a, status) : "") + "</li>";
   };
   const deckNeed = (w) => {
     const meets = w.meetings ?? [];
@@ -571,7 +630,7 @@ const teachingBody = (data, evidence) => {
       : "";
     return `<div class="side"><small>${esc(label)} · week ${w.week}</small><b>${esc(titleOf(w) || "No topic yet")}</b>` +
       `<ul class="facts">${(w.meetings ?? []).map(meetingLine).join("")}` +
-      (w.opens ?? []).map((a) => workLine(a, "opens", a.opens_on, false)).join("") +
+      (w.opens ?? []).map((a) => workLine(a, "opens", a.opens_on, false, w)).join("") +
       (w.due ?? []).map((a) => workLine(a, "due", a.due_on, true)).join("") + ev + "</ul>" +
       deckNeed(w) + `<button type="button" class="link" data-goto="${w.week}">Make this the focus ›</button></div>`;
   };
@@ -598,7 +657,7 @@ const teachingBody = (data, evidence) => {
       })
       .join("");
     const work = [
-      ...(w.opens ?? []).map((a) => workLine(a, "opens", a.opens_on, false)),
+      ...(w.opens ?? []).map((a) => workLine(a, "opens", a.opens_on, false, w)),
       ...(w.due ?? []).map((a) => workLine(a, "due", a.due_on, true)),
     ].join("");
     // What to repair before building on it: concepts taught in the two weeks
@@ -664,7 +723,7 @@ const isEmpty = (w) => !(w.modules ?? []).length && !(w.meetings ?? []).length;
  */
 export const courseModeDocument = (
   data,
-  { dark = false, student = false, mode = "term", evidence = null } = {},
+  { dark = false, student = false, mode = "term", evidence = null, status = null } = {},
 ) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];
@@ -686,7 +745,7 @@ export const courseModeDocument = (
       undated
         .map(({ a, w }) => {
           count(w ? tierOf(w, current) : "soon");
-          return workChip(a, "no date") +
+          return workChip(a, "no date") + statusLine(a, status) +
             gapChip("deadline", w ? tierOf(w, current) : "soon", datesPrompt(a, run),
               `${a.assessment_id} has no dates${w ? `; its module is week ${w.week}` : ""}.`);
         })
@@ -774,7 +833,8 @@ export const courseModeDocument = (
     const graded = [];
     for (const [list, verb, field] of [[w.opens, "opens", "opens_on"], [w.due, "due", "due_on"]]) {
       for (const a of list ?? []) {
-        graded.push(workChip(a, `${verb} ${shortDate(a[field])}`));
+        const last = verb === "due" || !(w.due ?? []).some((d) => d.assessment_id === a.assessment_id);
+        graded.push(workChip(a, `${verb} ${shortDate(a[field])}`) + (student || !last ? "" : statusLine(a, status)));
         if (showGaps && !hasBrief(a) && !seen.has(a.assessment_id)) {
           seen.add(a.assessment_id);
           count(tier);
@@ -814,8 +874,8 @@ export const courseModeDocument = (
     const z = run_[run_.length - 1];
     const span = `Weeks ${a.week}–${z.week}`;
     const work = run_.flatMap((w) => [
-      ...(w.opens ?? []).map((x) => workChip(x, `opens ${shortDate(x.opens_on)}`)),
-      ...(w.due ?? []).map((x) => workChip(x, `due ${shortDate(x.due_on)}`)),
+      ...(w.opens ?? []).map((x) => workChip(x, `opens ${shortDate(x.opens_on)}`) + (student ? "" : statusLine(x, status))),
+      ...(w.due ?? []).map((x) => workChip(x, `due ${shortDate(x.due_on)}`) + (student ? "" : statusLine(x, status))),
     ]);
     let plan = "";
     if (showGaps) {
@@ -859,7 +919,7 @@ export const courseModeDocument = (
   if (mode === "planning") {
     main = strip("does the term hold together") + studentBanner + planningBody(data, { student }) + structureFoot;
   } else if (mode === "teaching") {
-    main = strip("this week, between the last and the next") + teachingBody(data, evidence ?? {});
+    main = strip("this week, between the last and the next") + teachingBody(data, evidence ?? {}, status);
   } else {
     main = strip("press a hole to have Claude fill it", tallyHtml) + studentBanner + lead +
       `<div class="grid"><div class="th">Lecture</div><div class="th">Graded work</div><div class="th">Outcomes</div>${body}</div>` +

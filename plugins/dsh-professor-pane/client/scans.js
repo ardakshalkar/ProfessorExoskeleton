@@ -5,7 +5,7 @@
 import { Message } from "./common.js";
 import { GradeBoard } from "./grade-board.js";
 import { CanvasMarks, MatchReview, STEP_PROMPTS } from "./marks.js";
-import { h, React } from "./react.js";
+import { h, React, ReactDOM } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
 /**
@@ -18,7 +18,7 @@ import { BASE, scoped } from "./tabs.js";
  * assistant, since reading, proposing a rubric and grading are its work.
  */
 export function ScansTab(props) {
-  const [pile, setPile] = React.useState("");
+  const [pile, setPile] = React.useState(props.pile || "");
   const [tick, setTick] = React.useState(0);
   const [state, setState] = React.useState({ phase: "loading", value: null });
   const [busy, setBusy] = React.useState(null);
@@ -625,5 +625,61 @@ export function ScansTab(props) {
             post("/api/scans/assign", { papers: papers }, "review", () => setReviewing(false)),
         })
       : null,
+  );
+}
+
+/**
+ * The Scans tab as a window, opened on one pile from a chip in course mode.
+ *
+ * The same component the tab draws, over course mode rather than in the
+ * column, so the professor checks a pile and comes back to the week they were
+ * reading. Escape is heard in the bubbling phase: the Grade view and the
+ * match review inside it take it first, in capture, and stop it there.
+ */
+export function ScansModal(props) {
+  const close = props.onClose;
+  React.useEffect(() => {
+    const onKey = (event) => {
+      if (event.key === "Escape") close();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [close]);
+  return ReactDOM.createPortal(
+    h(
+      "div",
+      {
+        className: "pp-veil",
+        onMouseDown: (event) => {
+          if (event.target === event.currentTarget) close();
+        },
+      },
+      h(
+        "div",
+        {
+          className: "pp-modal pp-scansmodal",
+          role: "dialog",
+          "aria-modal": "true",
+          "aria-label": "Scans",
+          onMouseDown: (event) => event.stopPropagation(),
+        },
+        h(
+          "div",
+          { className: "pp-modalhead" },
+          h("div", { className: "pp-modaltitle" }, "Scans · " + props.runId),
+          h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: close }, "×"),
+        ),
+        h(ScansTab, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          names: props.names,
+          ask: props.ask,
+          onWrite: props.onWrite,
+          revision: props.revision,
+          pile: props.pile,
+        }),
+      ),
+    ),
+    document.body,
   );
 }

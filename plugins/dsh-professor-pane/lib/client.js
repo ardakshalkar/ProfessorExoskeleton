@@ -5786,7 +5786,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * assistant, since reading, proposing a rubric and grading are its work.
      */
     function ScansTab(props) {
-      const [pile, setPile] = React.useState("");
+      const [pile, setPile] = React.useState(props.pile || "");
       const [tick, setTick] = React.useState(0);
       const [state, setState] = React.useState({ phase: "loading", value: null });
       const [busy, setBusy] = React.useState(null);
@@ -6393,6 +6393,62 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 post("/api/scans/assign", { papers: papers }, "review", () => setReviewing(false)),
             })
           : null,
+      );
+    }
+
+    /**
+     * The Scans tab as a window, opened on one pile from a chip in course mode.
+     *
+     * The same component the tab draws, over course mode rather than in the
+     * column, so the professor checks a pile and comes back to the week they were
+     * reading. Escape is heard in the bubbling phase: the Grade view and the
+     * match review inside it take it first, in capture, and stop it there.
+     */
+    function ScansModal(props) {
+      const close = props.onClose;
+      React.useEffect(() => {
+        const onKey = (event) => {
+          if (event.key === "Escape") close();
+        };
+        window.addEventListener("keydown", onKey);
+        return () => window.removeEventListener("keydown", onKey);
+      }, [close]);
+      return ReactDOM.createPortal(
+        h(
+          "div",
+          {
+            className: "pp-veil",
+            onMouseDown: (event) => {
+              if (event.target === event.currentTarget) close();
+            },
+          },
+          h(
+            "div",
+            {
+              className: "pp-modal pp-scansmodal",
+              role: "dialog",
+              "aria-modal": "true",
+              "aria-label": "Scans",
+              onMouseDown: (event) => event.stopPropagation(),
+            },
+            h(
+              "div",
+              { className: "pp-modalhead" },
+              h("div", { className: "pp-modaltitle" }, "Scans · " + props.runId),
+              h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: close }, "×"),
+            ),
+            h(ScansTab, {
+              runId: props.runId,
+              sessionId: props.sessionId,
+              names: props.names,
+              ask: props.ask,
+              onWrite: props.onWrite,
+              revision: props.revision,
+              pile: props.pile,
+            }),
+          ),
+        ),
+        document.body,
       );
     }
 
@@ -9317,6 +9373,10 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const [desk, setDesk] = React.useState(null);
       // The recorded-defences dialog (DEF-6), open or not.
       const [batch, setBatch] = React.useState(false);
+      // The Grade view and the Scans window, opened from an assessment chip in
+      // course mode: `{ assessment, label }` and an assessment id, or null.
+      const [grading, setGrading] = React.useState(null);
+      const [scansPile, setScansPile] = React.useState(null);
 
       // Open the column this pane lives in, once per session.
       //
@@ -9428,9 +9488,19 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               .catch(() => setReload((count) => count + 1));
             return;
           }
+          // From an assessment chip in course mode: the Grade view, or the Scans
+          // tab as a window on that pile. Each opens over course mode, which stays.
+          if (data.kind === "grade" || data.kind === "scans") {
+            const id = /^[A-Z0-9][A-Z0-9-]*$/;
+            if (!id.test(String(data.assessment))) return;
+            if (data.kind === "scans") setScansPile(data.assessment);
+            else setGrading({ assessment: data.assessment, label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment });
+            return;
+          }
           if (data.kind === "publish") {
             if (typeof data.assessment !== "string" || data.assessment.trim() === "") return;
-            openPublish("homework", {
+            // The starter repository unless the press names the Canvas brief.
+            openPublish(data.target === "canvas" ? "canvas" : "homework", {
               assessment: data.assessment.trim(),
               label: typeof data.label === "string" ? data.label : data.assessment,
             });
@@ -9898,7 +9968,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               drafts: drafts,
               setDrafts: setDrafts,
               reload: reload,
-              covered: material !== null || publishing !== null || uploading || batch,
+              covered:
+                material !== null || publishing !== null || uploading || batch ||
+                desk !== null || grading !== null || scansPile !== null,
               onPublish: () => openPublish("page"),
               onUpload: () => setUploading(true),
               tabs: TABS,
@@ -9919,6 +9991,31 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               ask: props.ask,
               reload: reload,
               onClose: () => setDesk(null),
+            })
+          : null,
+        grading && current
+          ? h(GradeBoard, {
+              runId: current.runId,
+              sessionId: props.sessionId,
+              assessmentId: grading.assessment,
+              title: grading.label,
+              names: names,
+              revision: reload,
+              ask: props.ask,
+              onWrite: () => setReload((value) => value + 1),
+              onClose: () => setGrading(null),
+            })
+          : null,
+        scansPile && current
+          ? h(ScansModal, {
+              runId: current.runId,
+              sessionId: props.sessionId,
+              pile: scansPile,
+              names: names,
+              revision: reload,
+              ask: props.ask,
+              onWrite: () => setReload((value) => value + 1),
+              onClose: () => setScansPile(null),
             })
           : null,
         batch && current

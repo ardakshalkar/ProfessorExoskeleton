@@ -10,6 +10,9 @@
  * 3. **A hole is a press.** Every fault Planning names asks for its fix, naming
  *    the run and the weeks, so the model starts from the record.
  * 4. **The student preview draws no hole**, on either structural reading.
+ * 5. **A chip says where its work stands** — from the host's status, once per
+ *    week, each with the press that opens its window — and only where the host
+ *    sent one: never in the student preview.
  *
  *     node --test test/pane-course-mode.test.mjs
  */
@@ -107,4 +110,36 @@ test("the student preview draws no hole on either structural reading", () => {
     assert.equal(/class="chip gap/.test(html), false, `${mode} drew a gap chip`);
     assert.equal(/class="faults"/.test(html), false, `${mode} drew the faults list`);
   }
+});
+
+const status = {
+  "ASM-Q": {
+    grading: { suggested: 12, decided: 5 },
+    canvas: "none",
+    repo: false,
+    scans: { phrase: "8 papers to place", whose: "you" },
+    defences: { defended: 4, of: 20, prepared: 6, student: "STUDENT-AB12" },
+  },
+};
+
+test("a chip says where its work stands, with the press that opens its window", () => {
+  for (const mode of ["term", "teaching"]) {
+    const html = courseModeDocument(payload(), { mode, evidence, status });
+    assert.match(html, /12 suggested · 5 decided/, mode);
+    assert.match(html, /data-grade="ASM-Q"/, mode);
+    assert.match(html, /8 papers to place/, mode);
+    assert.match(html, /data-scans="ASM-Q"/, mode);
+    assert.match(html, /4 of 20 defended/, mode);
+    assert.match(html, /data-desk="ASM-Q" data-student="STUDENT-AB12"/, mode);
+    assert.match(html, /not in Canvas yet/, mode);
+    assert.match(html, /data-publish="ASM-Q" data-target="canvas"/, mode);
+  }
+  // The quiz opens and falls due in week 2: one status line there, not two.
+  const term = courseModeDocument(payload(), { mode: "term", status });
+  assert.equal(term.match(/data-grade="ASM-Q"/g).length, 1);
+});
+
+test("the student preview carries no status, whatever the host sent", () => {
+  const html = courseModeDocument(payload(), { mode: "term", student: true, status });
+  assert.equal(/suggested ·|defended<|not in Canvas|data-grade="|data-publish="/.test(html), false);
 });

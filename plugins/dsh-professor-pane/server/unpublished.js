@@ -35,7 +35,7 @@ const lms = (record) => {
  * assessment: `all`, `some` (with the subgroups missing), `none`, or null
  * for a run with no Canvas course at all, where the question does not arise.
  */
-const canvasBinding = (run, assessment) => {
+export const canvasBinding = (run, assessment) => {
   const courses = lms(run).canvas_courses;
   const groups = courses && typeof courses === "object" && !Array.isArray(courses) ? Object.keys(courses).sort() : [];
   if (groups.length) {

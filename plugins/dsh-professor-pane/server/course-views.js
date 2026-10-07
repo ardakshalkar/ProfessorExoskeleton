@@ -26,7 +26,7 @@ import { viewPayload } from "./workspace.js";
  * the press arrives, because a frame that has been open since this morning is
  * not a reliable witness to any of them.
  */
-const isRepoWork = (assessment) => {
+export const isRepoWork = (assessment) => {
   const kinds = assessment.submission_type;
   return Array.isArray(kinds)
     ? kinds.includes("code_repo")

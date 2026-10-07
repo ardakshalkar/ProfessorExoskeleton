@@ -11,7 +11,8 @@ import { CourseMode, MaterialModal, materialUrl, WidgetFrame } from "./materials
 import { Preferences } from "./preferences.js";
 import { PublishModal } from "./publish.js";
 import { h, React } from "./react.js";
-import { ScansTab } from "./scans.js";
+import { GradeBoard } from "./grade-board.js";
+import { ScansModal, ScansTab } from "./scans.js";
 import {
   BASE,
   defaultSub,
@@ -147,6 +148,10 @@ export function ProfessorPane(props) {
   const [desk, setDesk] = React.useState(null);
   // The recorded-defences dialog (DEF-6), open or not.
   const [batch, setBatch] = React.useState(false);
+  // The Grade view and the Scans window, opened from an assessment chip in
+  // course mode: `{ assessment, label }` and an assessment id, or null.
+  const [grading, setGrading] = React.useState(null);
+  const [scansPile, setScansPile] = React.useState(null);
 
   // Open the column this pane lives in, once per session.
   //
@@ -258,9 +263,19 @@ export function ProfessorPane(props) {
           .catch(() => setReload((count) => count + 1));
         return;
       }
+      // From an assessment chip in course mode: the Grade view, or the Scans
+      // tab as a window on that pile. Each opens over course mode, which stays.
+      if (data.kind === "grade" || data.kind === "scans") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        if (!id.test(String(data.assessment))) return;
+        if (data.kind === "scans") setScansPile(data.assessment);
+        else setGrading({ assessment: data.assessment, label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment });
+        return;
+      }
       if (data.kind === "publish") {
         if (typeof data.assessment !== "string" || data.assessment.trim() === "") return;
-        openPublish("homework", {
+        // The starter repository unless the press names the Canvas brief.
+        openPublish(data.target === "canvas" ? "canvas" : "homework", {
           assessment: data.assessment.trim(),
           label: typeof data.label === "string" ? data.label : data.assessment,
         });
@@ -728,7 +743,9 @@ export function ProfessorPane(props) {
           drafts: drafts,
           setDrafts: setDrafts,
           reload: reload,
-          covered: material !== null || publishing !== null || uploading || batch,
+          covered:
+            material !== null || publishing !== null || uploading || batch ||
+            desk !== null || grading !== null || scansPile !== null,
           onPublish: () => openPublish("page"),
           onUpload: () => setUploading(true),
           tabs: TABS,
@@ -749,6 +766,31 @@ export function ProfessorPane(props) {
           ask: props.ask,
           reload: reload,
           onClose: () => setDesk(null),
+        })
+      : null,
+    grading && current
+      ? h(GradeBoard, {
+          runId: current.runId,
+          sessionId: props.sessionId,
+          assessmentId: grading.assessment,
+          title: grading.label,
+          names: names,
+          revision: reload,
+          ask: props.ask,
+          onWrite: () => setReload((value) => value + 1),
+          onClose: () => setGrading(null),
+        })
+      : null,
+    scansPile && current
+      ? h(ScansModal, {
+          runId: current.runId,
+          sessionId: props.sessionId,
+          pile: scansPile,
+          names: names,
+          revision: reload,
+          ask: props.ask,
+          onWrite: () => setReload((value) => value + 1),
+          onClose: () => setScansPile(null),
         })
       : null,
     batch && current

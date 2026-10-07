@@ -339,11 +339,13 @@ const standingOf = ({ bundle, runId, submissions, assessment, enrolled, ledger }
  * placement is not a draft and neither is an answer read off paper, and the
  * professor is the reader here). `submissions` is the private folder.
  */
-export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, assessmentId, names, syncDirectory = null }) => {
-  const bundle = loaded.bundle;
+/**
+ * Every pile of a run with where it stands, without any paper's detail: what
+ * the Scans tab's pile list draws, and what course mode puts on an exam chip.
+ */
+export const scanPiles = ({ bundle, runId, submissions, ledger }) => {
   const assessments = bundle.assessments.filter((entry) => entry.course_version_id === runId);
   const enrolled = new Set(enrolledIn(bundle, runId).map((entry) => entry.student_id));
-  const ledger = Ledger.load(runId, syncDirectory);
   // Every pile's standing, so the list says where each one is without opening
   // it: the dropdown this replaced hid that Quiz 1 had 61 marks unsent while
   // Quiz 2 was on screen.
@@ -358,6 +360,13 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
     const standing = standings.get(pile.id);
     return { ...pile, now: standing.now, progress: standing.stages.map((stage) => stage.state) };
   });
+  return { piles, standings, enrolled };
+};
+
+export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, assessmentId, names, syncDirectory = null }) => {
+  const bundle = loaded.bundle;
+  const ledger = Ledger.load(runId, syncDirectory);
+  const { piles, standings, enrolled } = scanPiles({ bundle, runId, submissions, ledger });
   const chosen = piles.find((pile) => pile.id === assessmentId) ?? piles[0] ?? null;
   const base = { run: runId, piles, names: names === true, crops: cropsAvailable() };
   if (!chosen) return { ...base, assessment: null };
