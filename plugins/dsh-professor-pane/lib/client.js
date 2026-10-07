@@ -9906,7 +9906,14 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               label: material.label,
               format: material.format,
               papers: material.papers,
-              mention: props.mention,
+              // A draft written under course mode's veil is a draft nobody sees:
+              // the mention lands in the composer, so get out of its way, as an
+              // `ask` from the page does.
+              mention: props.mention && ((text) => {
+                const written = props.mention(text);
+                if (written) setCourseMode(false);
+                return written;
+              }),
               onClose: () => setMaterial(null),
             }),
       );
