@@ -1738,6 +1738,8 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
           mode,
           evidence,
           status,
+          // The week Teaching was last stepped to, kept by course mode.
+          focus: /^\d{1,2}$/.test(url.searchParams.get("week") ?? "") ? Number(url.searchParams.get("week")) : null,
         }),
       );
     }

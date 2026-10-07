@@ -263,6 +263,10 @@ table.plan td.lane{width:16%;min-width:140px;padding:0 6px}
  * a scroll made at parse time is lost and the page sits on week 1. It is
  * made again on load, on resize and whenever the page reflows, until the
  * professor scrolls themselves.
+ *
+ * Teaching steps between weeks in the page, with no round trip, and says
+ * which week it stepped to (`teaching-week`): course mode keeps it, so
+ * leaving Teaching and coming back returns to that week, not this one.
  */
 const SCRIPT = `<script>(function(){
 var strip=document.querySelector('.strip');
@@ -278,6 +282,7 @@ document.addEventListener('click',function(e){
   var n=g.getAttribute('data-goto');
   document.querySelectorAll('.trio-wrap').forEach(function(s){s.hidden=s.getAttribute('data-week')!==n;});
   window.scrollTo(0,0);
+  if(parent!==window)parent.postMessage({source:'professor-pane',kind:'teaching-week',week:Number(n)},'*');
 });
 if(parent===window)return;
 document.addEventListener('click',function(e){
@@ -603,7 +608,7 @@ const planningBody = (data, { student }) => {
  */
 const REVISIT_BELOW = 0.6;
 
-const teachingBody = (data, evidence, status) => {
+const teachingBody = (data, evidence, status, focus = null) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];
   const current = data.current_week ?? null;
@@ -704,7 +709,9 @@ const teachingBody = (data, evidence, status) => {
       askButton(prepare, "Prepare this week", "primary") + "</div>";
   };
 
-  const start = current ?? 1;
+  // The week the professor last stepped to, when course mode kept one;
+  // otherwise this week.
+  const start = weeks.some((w) => w.week === focus) ? focus : current ?? 1;
   const sections = weeks
     .map((w) => {
       const prev = at(w.week - 1);
@@ -852,7 +859,7 @@ const evidenceBody = (data, evidence, status) => {
  */
 export const courseModeDocument = (
   data,
-  { dark = false, student = false, mode = "term", evidence = null, status = null } = {},
+  { dark = false, student = false, mode = "term", evidence = null, status = null, focus = null } = {},
 ) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];
@@ -1049,7 +1056,7 @@ export const courseModeDocument = (
   if (mode === "planning") {
     main = strip("does the term hold together") + studentBanner + planningBody(data, { student }) + structureFoot;
   } else if (mode === "teaching") {
-    main = strip("this week, between the last and the next") + teachingBody(data, evidence ?? {}, status);
+    main = strip("this week, between the last and the next") + teachingBody(data, evidence ?? {}, status, focus);
   } else if (mode === "evidence") {
     main = strip("how each week went") + evidenceBody(data, evidence ?? {}, status);
   } else {

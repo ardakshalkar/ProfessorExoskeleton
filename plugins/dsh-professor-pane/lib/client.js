@@ -3375,6 +3375,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           (props.student ? "&student=1" : "") +
           // Course mode's reading: planning, teaching, or the full term table.
           (props.mode ? "&mode=" + encodeURIComponent(props.mode) : "") +
+          // Teaching's focus week, when course mode kept one.
+          (props.week ? "&week=" + encodeURIComponent(props.week) : "") +
           // Only ever sent affirmatively, and only by the class list. Every
           // other view's URL is unchanged, so nothing else can start naming
           // people because a parameter leaked into a shared link.
@@ -3655,6 +3657,28 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const [mode, setMode] = React.useState(() => defaultCourseMode(props.start, props.end));
       const [drawer, setDrawer] = React.useState(null);
       const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
+      // The week Teaching was last stepped to. The page steps without a round
+      // trip and reports each step; it is held in a ref so a step redraws
+      // nothing, and copied into `week` only when Teaching is drawn again — on
+      // coming back to it, or when the record or the drafts toggle changes.
+      const stepped = React.useRef(null);
+      const [week, setWeek] = React.useState(null);
+      React.useEffect(() => {
+        const onMessage = (event) => {
+          const data = event.data;
+          if (!data || data.source !== "professor-pane" || data.kind !== "teaching-week") return;
+          if (Number.isInteger(data.week) && data.week > 0 && data.week < 100) stepped.current = data.week;
+        };
+        window.addEventListener("message", onMessage);
+        return () => window.removeEventListener("message", onMessage);
+      }, []);
+      React.useEffect(() => {
+        setWeek(stepped.current);
+      }, [props.reload, props.drafts]);
+      const chooseMode = (id) => {
+        if (id === "teaching") setWeek(stepped.current);
+        setMode(id);
+      };
       // Teaching and Evidence carry class figures, so there is no student
       // version of either to preview.
       const private_ = mode === "teaching" || mode === "evidence";
@@ -3774,7 +3798,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     className: "pp-segbtn",
                     "aria-pressed": mode === entry.id,
                     title: entry.hint,
-                    onClick: () => setMode(entry.id),
+                    onClick: () => chooseMode(entry.id),
                     key: entry.id,
                   },
                   entry.label,
@@ -3890,6 +3914,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 drafts: props.drafts,
                 student: preview,
                 mode: mode,
+                week: mode === "teaching" ? week : null,
                 title: "Course mode",
               }),
               drawerEntry

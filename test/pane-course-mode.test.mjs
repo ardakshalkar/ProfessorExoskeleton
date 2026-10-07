@@ -206,3 +206,13 @@ test("evidence opens on this week, whether it is a row or inside a band", () => 
   const banded = courseModeDocument(later, { mode: "evidence", evidence: weekly });
   assert.match(banded, /<div class="band now" id="week-3">/);
 });
+
+test("teaching opens on the week it was last stepped to, and says when it steps", () => {
+  const html = courseModeDocument(payload(), { mode: "teaching", evidence, focus: 3 });
+  assert.match(html, /<section class="trio-wrap" data-week="3">/);
+  assert.match(html, /<section class="trio-wrap" data-week="2" hidden>/);
+  assert.match(html, /kind:'teaching-week'/);
+  // A week the run does not have falls back to this week.
+  const lost = courseModeDocument(payload(), { mode: "teaching", evidence, focus: 40 });
+  assert.match(lost, /<section class="trio-wrap" data-week="2">/);
+});
