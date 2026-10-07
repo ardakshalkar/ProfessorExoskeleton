@@ -88,8 +88,14 @@ import { dashboardPayload } from "@ainar/core/src/progress.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
 import {
   NEXT_SYSTEM,
+  SPLIT_SYSTEM,
   WHOLE_DEFENCE,
+  approveSplit,
   assignVoices,
+  checkSplit,
+  recordSplit,
+  splitFromMarks,
+  splitPrompt,
   ensureWholeDefence,
   briefText,
   captionAudio,
@@ -3834,10 +3840,10 @@ const modelRoute = (harness, sessionId) => {
  * logged by the harness against the session like any auxiliary call. The text
  * of the reply, or a thrown sentence.
  */
-const askModel = async (harness, route, sessionId, system, text) => {
+const askModel = async (harness, route, sessionId, system, text, timeoutMs = 60000) => {
   const { createUserMessage } = await import("@deepseek-ai/dsh-llm/message");
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   let reply = "";
   try {
     for await (const chunk of harness.llm.stream({
@@ -3918,6 +3924,41 @@ const chooseNext = async (harness, target, root, sessionId, after) => {
 };
 
 /**
+ * Divide one whole-defence take into its questions (AGT-11): the session's
+ * model reads the timed dialogue with the professor's presses as hints, and
+ * `checkSplit` keeps what holds. With no model, or a reply that is no use,
+ * the presses alone make the split. Kept as a draft; a split with no parts
+ * at all is reported and not kept.
+ */
+const splitWhole = async (harness, target, sessionId, questionId, take) => {
+  const session = readSession(target.place.session);
+  const answer = session?.answers.find((entry) => entry.question_id === questionId && entry.take === take);
+  if (!answer) throw new Error(`no take ${take} of ${questionId}`);
+  if (!answer.transcript) throw new Error(`take ${take} of ${questionId} has no transcript yet`);
+  if (answer.withdrawn) throw new Error("this take was recorded before consent was withdrawn; it is not split");
+  const questions = readDefence(target.place.questions)?.questions ?? [];
+  const rubric = allRubrics(target.bundle).get(target.assessment?.rubric_id ?? "") ?? target.assessment?.rubric;
+  const criteria = rubric?.criteria ?? [];
+  const at = new Date().toISOString();
+  const route = modelRoute(harness, sessionId);
+  let split;
+  if (!harness.llm || !route) {
+    split = splitFromMarks({ answer, questions, at });
+    split.notes = ["no model to ask: " + (harness.llm ? "this session has no model route yet" : "the harness offers no llm service"), ...(split.notes ?? [])];
+  } else {
+    try {
+      const reply = await askModel(harness, route, sessionId, SPLIT_SYSTEM, splitPrompt({ answer, questions, criteria }), 120000);
+      split = checkSplit(reply, { answer, questions, criteria, by: `${route.provider}/${route.model}`, at });
+    } catch (error) {
+      split = splitFromMarks({ answer, questions, at });
+      split.notes = ["the model call failed: " + String(error?.message ?? error), ...(split.notes ?? [])];
+    }
+  }
+  if (!split.parts.length) return { split: null, notes: split.notes ?? [] };
+  return { split: recordSplit(target.place, split), notes: split.notes ?? [] };
+};
+
+/**
  * What the defence desk draws: the questions, every take with its transcript,
  * and which provider will hear the next one — or why none will. The provider is
  * named so the professor knows, before pressing record, where the student's
@@ -3958,6 +3999,7 @@ const defenceSessionPayload = (target) => {
     pin: readPin(target.place.pin),
     questions: readDefence(target.place.questions)?.questions ?? [],
     answers: session?.answers ?? [],
+    splits: session?.splits ?? [],
     transcription,
     // AGT-7: what the student is asked to agree to — written here from the
     // provider in use, never by the browser — and what they answered.
@@ -6423,6 +6465,30 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
+    // AGT-11: divide a whole-defence take into its questions, by the
+    // session's model with the professor's presses as hints; or say the
+    // split is right.
+    if (path === "/api/defence/split") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      let target;
+      try {
+        target = defenceTarget(workspace, root, runId, url.searchParams);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      return readBody(req)
+        .then((text) => {
+          const body = text ? JSON.parse(text) : {};
+          const questionId = String(body.question ?? "");
+          const take = Number(body.take);
+          if (!/^Q\d+$/.test(questionId) || !Number.isInteger(take)) throw new Error("a question id and a take, please");
+          if (body.action === "approve") return { split: approveSplit(target.place, questionId, take), notes: [] };
+          return splitWhole(harness, target, url.searchParams.get("session") ?? "", questionId, take);
+        })
+        .then((result) => sendJson(res, 200, result))
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
     // AGT-7: the student's answer to the consent statement, as the professor
     // confirms it. The statement is written here, from the provider in use,
     // so what is recorded as agreed is what the student was actually told.
@@ -6580,6 +6646,14 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
         .map((match) => [Number(match[1]), Number(match[2])])
         .filter(([from, to]) => to > from)
         .slice(0, 200);
+      // AGT-11: in a whole defence, where the professor pressed for a new
+      // question, as `12.3:Q2,40.1` — seconds, and the question picked if any.
+      const marks = String(url.searchParams.get("marks") ?? "")
+        .split(",")
+        .map((part) => /^(\d+(?:\.\d+)?)(?::(Q\d+))?$/.exec(part.trim()))
+        .filter(Boolean)
+        .map((match) => (match[2] ? { at: Number(match[1]), question_id: match[2] } : { at: Number(match[1]) }))
+        .slice(0, 200);
       return readBytes(req, 64 * 1024 * 1024)
         .then(async (bytes) => {
           const { answer } = saveAnswer({
@@ -6590,6 +6664,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
             mime,
             seconds: Number.isFinite(seconds) ? seconds : null,
             professorSpoke,
+            marks,
             // When listening began, for the replay; an epoch in milliseconds.
             askedAt: /^\d{10,14}$/.test(url.searchParams.get("asked") ?? "")
               ? new Date(Number(url.searchParams.get("asked"))).toISOString()

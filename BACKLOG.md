@@ -1000,6 +1000,43 @@ is worth building.
       when a streamed sentence is committed and a pause begins, ask the
       model on the words so far, and drop the choice if the student goes on.
       Turns the 6–10 s gap into 2–4 s. `S` · depends: AGT-8
+- [x] **AGT-10** A stage for the defence: the current question, one big
+      button and the live transcript in the foreground, with the AI's
+      questions, proposals and controls folded into a drawer at the bottom.
+      The student screen shows their own words under the question as they
+      speak. `S` · depends: AGT-8 Done 2026-10-06. The big button does
+      whatever comes next: start hands-free, end the answer, stop a take, ask
+      the proposed question, or open consent. Its dots draw a microphone at
+      rest and an equalizer while listening. The drawer folds while
+      recording and opens when the model proposes. A Stage/List switch keeps
+      the old layout, and the choice is remembered. The student screen shows
+      captions only for the question it is showing, and only while it is
+      being answered. Tested on the desk test page with the mock socket.
+- [x] **AGT-11** Two modes, the whole defence first. *Whole defence* (the
+      default) records the whole conversation in one take and transcribes it
+      live. Space or the big button marks each new question, and *Asking
+      this* beside a prepared question marks that one and puts it on the
+      student's screen. Pause leaves the gap out of the recording, the
+      stream and the times. Once transcribed, the session's model divides
+      the take into its questions, with the marks as hints, not cuts
+      (`/api/defence/split`, `checkSplit`). With no model, or a reply that is
+      no use, the marks alone make the split. The split is
+      `approval: draft` until *These are right*. The evidence then shows each
+      part under the question it asked or the criterion it was about. The
+      citations stay `[Q0 take k @ s]`, so grading is unchanged.
+      *Question by question* is AGT-1's hands-free mode, as before. Skip,
+      Pause and hold to speak now sit in a row beside the big button, and
+      the drawer strip no longer repeats them. `M` · depends: DEF-7, AGT-8
+      Done 2026-10-07. Tested by unit tests (`defence-split.test.ts`) and on
+      the desk test page with the scripted voice and the mock socket. Not
+      yet tried with a real microphone, a real Scribe key, a real model or
+      inside the harness. A Scribe realtime session's length limit is
+      unchecked against a 20-minute defence.
+- [ ] **AGT-12** Move a split's boundaries by hand: drag a part's start on the
+      transcript, or change which question a part asked, before *These are
+      right*. `S` · depends: AGT-11
+- [ ] **AGT-13** Undo for Skip on the stage: "Skipped · Undo" for a few
+      seconds, now that Skip sits next to End answer. `S` · depends: AGT-11
 - [x] **AGT-6** Two voices, one microphone. The professor will interject, so
       diarize (Scribe has it) and keep the professor's words out of the
       student's evidence. A take where the speakers could not be separated

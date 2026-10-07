@@ -149,6 +149,14 @@ student's answers as `[Q0 take 1 @ 15.0s]`. If `Q0` is listed under *Not
 citable* as *voices unclear*, stop: ask the professor to open the desk and say
 which voice is theirs. Until then, nothing in it is the student's for certain.
 
+Once the desk has divided a whole defence into its questions, each part
+appears under the prepared question it asked, or, asked off the list, under
+the criterion it was about, headed `Q0 take 1, part 2 (…): the professor asked
+"…"`. The citations do not change: still `[Q0 take 1 @ 44.0s]`. A part marked
+*not yet checked* was divided by a model, and the professor has not looked at
+it yet. If a part's words plainly belong to another criterion, grade them where
+they belong and say so in the comment.
+
 For each criterion the defence and the code let you judge:
 
 - the score, from the rubric's levels, out of its maximum;

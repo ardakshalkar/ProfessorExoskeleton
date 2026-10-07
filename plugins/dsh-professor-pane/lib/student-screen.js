@@ -14,6 +14,12 @@
  * them, even from the developer tools. The desk is the only sender, and every
  * message is drawn as text, never as markup.
  *
+ * Their own words. While a question is being recorded, the screen also shows
+ * the live captions of the answer — the student sees what is being heard, and
+ * can correct a word the transcription got wrong by saying it again. Only the
+ * captions of the question on screen are drawn, and they are cleared the
+ * moment it changes or recording stops.
+ *
  * Read aloud. With the desk's switch on, the screen speaks each question and
  * says when it has finished. The desk starts listening only after that,
  * because the microphone cannot tell the synthetic voice from the student's.
@@ -38,6 +44,8 @@ main{min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;ju
 #title{color:var(--dim);font-size:clamp(14px,1.6vw,22px);letter-spacing:.04em;text-transform:uppercase}
 #label{color:var(--dim);font-size:clamp(16px,2vw,28px)}
 #question{font-size:clamp(26px,4.2vw,64px);line-height:1.25;font-weight:600;white-space:pre-wrap;overflow-wrap:anywhere}
+#said{max-width:60ch;font-size:clamp(18px,2.4vw,30px);line-height:1.45;color:var(--fg);min-height:1.45em;overflow-wrap:anywhere}
+#said .partial{color:var(--dim)}
 #status{display:flex;align-items:center;gap:.6em;font-size:clamp(16px,2vw,28px);color:var(--dim)}
 #light{width:.8em;height:.8em;border-radius:50%;background:var(--dim);flex:none}
 body[data-phase=listening] #light,body[data-phase=hearing] #light{background:var(--rec);animation:pulse 1.4s ease-in-out infinite}
@@ -56,6 +64,7 @@ body[data-phase=consent] #question,body[data-phase=stopped] #question{font-size:
   <div id="title"></div>
   <div id="label">Waiting for the defence to start</div>
   <div id="question"></div>
+  <div id="said" aria-live="polite"></div>
   <div id="status"><span id="light"></span><span id="state">Not recording</span></div>
 </main>
 <button id="begin" type="button">Click to begin — then put this window on the screen the student can see</button>
@@ -87,9 +96,29 @@ body[data-phase=consent] #question,body[data-phase=stopped] #question{font-size:
     u.onerror = said;
     speechSynthesis.speak(u);
   }
+  var current = { question: null, phase: "idle" };
+  function said(text, partial) {
+    var box = $("said");
+    box.textContent = text || "";
+    if (partial) {
+      var span = document.createElement("span");
+      span.className = "partial";
+      span.textContent = (text ? " " : "") + partial;
+      box.appendChild(span);
+    }
+  }
   channel.onmessage = function (event) {
     var m = event.data || {};
+    if (m.type === "caption") {
+      // The answer to the question on screen, while it is being recorded.
+      if (m.question && m.question === current.question && (current.phase === "listening" || current.phase === "hearing")) {
+        said(m.text, m.partial);
+      }
+      return;
+    }
     if (m.type !== "state") return;
+    if (m.question !== current.question || (m.phase !== "listening" && m.phase !== "hearing")) said("", "");
+    current = { question: m.question || null, phase: m.phase };
     var phase = STATES[m.phase] ? m.phase : "idle";
     document.body.setAttribute("data-phase", phase);
     $("title").textContent = m.title || "";

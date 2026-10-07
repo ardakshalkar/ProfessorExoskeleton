@@ -15,6 +15,7 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { studentScreenPage } from "../lib/student-screen.js";
 import { labelSpeakers } from "../../../ainar-node/src/transcribe.ts";
+import { checkSplit } from "../../../ainar-node/src/defence.ts";
 
 const PORT = Number(process.env.PORT ?? 3091);
 const client = new URL("../lib/client.js", import.meta.url);
@@ -25,6 +26,7 @@ const questions = [
   { id: "Q3", kind: "probe", text: "What would your accuracy mean if the classes were imbalanced?", criterion_id: "CRIT-HW1-EVAL", why: "Probes the choice of metric.", evidence: [{ path: "eval.py", lines: "10-18" }], approval: "draft" },
 ];
 const answers = [];
+const splits = [];
 const received = [];
 const decisions = [];
 let consent = null;
@@ -106,12 +108,55 @@ http
         pin: { commit: "abc1234def", pinned_by: "submitted_at" },
         questions,
         answers,
+        splits,
         transcription: { name: "mock", provider: "openai", model: "none", local: true, pricePerMinute: 0 },
         statement: STATEMENT,
         consent,
       });
     }
     if (url.pathname === "/professor-pane/api/defence/audio") return res.writeHead(404), res.end();
+    // AGT-11: Q0 for the whole defence, and its split — the model scripted
+    // to agree with the presses, or to cut the take in three without any;
+    // the real checkSplit keeps what holds.
+    if (url.pathname === "/professor-pane/api/defence/whole" && req.method === "POST") {
+      if (!questions.some((q) => q.id === "Q0")) {
+        questions.unshift({ id: "Q0", kind: "whole", text: "The whole defence, recorded in one piece.", criterion_id: null, why: "", evidence: [], approval: "draft" });
+      }
+      return json(res, { ok: true, question: "Q0" });
+    }
+    if (url.pathname === "/professor-pane/api/defence/split" && req.method === "POST") {
+      const chunks = [];
+      req.on("data", (chunk) => chunks.push(chunk));
+      req.on("end", () => {
+        const body = JSON.parse(Buffer.concat(chunks).toString() || "{}");
+        const answer = answers.find((a) => a.question_id === body.question && a.take === Number(body.take));
+        if (!answer) return json(res, { error: `no take ${body.take} of ${body.question}` });
+        if (body.action === "approve") {
+          const found = splits.find((s) => s.question_id === answer.question_id && s.take === answer.take);
+          if (!found) return json(res, { error: "not split" });
+          found.approval = "approved";
+          return json(res, { split: found, notes: [] });
+        }
+        const length = answer.seconds || 1;
+        const starts = answer.marks?.length ? answer.marks : [{ at: 0 }, { at: length / 3 }, { at: (2 * length) / 3 }];
+        const reply = {
+          parts: starts.map((mark, index) => ({
+            start: mark.at,
+            end: starts[index + 1]?.at ?? length,
+            asked: mark.question_id ? questions.find((q) => q.id === mark.question_id)?.text : `an unprepared question ${index + 1}`,
+            question_id: mark.question_id ?? null,
+            criterion_id: null,
+          })),
+        };
+        const split = checkSplit(reply, { answer, questions, criteria: [{ criterion_id: "CRIT-HW1-SPLIT", title: "" }, { criterion_id: "CRIT-HW1-EVAL", title: "" }], by: "mock/scripted", at: new Date().toISOString() });
+        const index = splits.findIndex((s) => s.question_id === answer.question_id && s.take === answer.take);
+        if (index >= 0) splits.splice(index, 1);
+        splits.push(split);
+        setTimeout(() => json(res, { split, notes: split.notes ?? [] }), 800);
+      });
+      return;
+    }
+    if (url.pathname === "/splits") return json(res, { splits, received });
     // AGT-2, scripted: a follow-up after Q1, then the prepared questions, then done.
     if (url.pathname === "/professor-pane/api/defence/next" && req.method === "POST") {
       const after = url.searchParams.get("after");
@@ -196,11 +241,16 @@ http
         const seconds = Number(url.searchParams.get("seconds"));
         const bytes = Buffer.concat(chunks).length;
         const professor = (url.searchParams.get("professor") ?? "").split(",").filter(Boolean).map((p) => p.split("-").map(Number));
-        received.push({ question, bytes, seconds, type: req.headers["content-type"], professor });
+        const marks = (url.searchParams.get("marks") ?? "").split(",").filter(Boolean).map((m) => {
+          const [at, id] = m.split(":");
+          return id ? { at: Number(at), question_id: id } : { at: Number(at) };
+        });
+        received.push({ question, bytes, seconds, type: req.headers["content-type"], professor, marks });
         const take = answers.filter((a) => a.question_id === question).length + 1;
         const answer = {
           question_id: question, take, audio: `answers/${question}-${take}.webm`, mime: "audio/webm",
           recorded_at: new Date().toISOString(), seconds,
+          ...(marks.length ? { marks } : {}),
           // One mock segment a second, so the professor's marked stretches
           // can be seen cut out by the real labelSpeakers.
           transcript: labelSpeakers({ text: "(mock)", language: "en", seconds, timed: true, provider: "openai", model: "none", at: "", cost_usd: 0,

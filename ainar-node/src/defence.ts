@@ -504,8 +504,20 @@ export interface Answer {
    * its start (AGT-6): those stretches are theirs, never the student's.
    */
   professor_spoke?: Range[];
+  /**
+   * In a whole defence, where the professor pressed for a new question, in
+   * seconds from the start of the take, and which prepared question it was
+   * when they picked one. Hints for the split, not cuts: a press a little
+   * late, or one missed, costs nothing.
+   */
+  marks?: Mark[];
   /** Why there is no transcript: no provider configured, or the provider refused. */
   error?: string;
+}
+
+export interface Mark {
+  at: number;
+  question_id?: string;
 }
 
 export interface Session {
@@ -513,6 +525,8 @@ export interface Session {
   assessment_id: string;
   student_id: string;
   answers: Answer[];
+  /** A whole defence divided into its questions, one per take that was split. */
+  splits?: Split[];
   /** What the hands-free desk chose to ask, why, and what the professor did about it (AGT-2, AGT-7). */
   decisions?: Decision[];
   /** Whether the student agreed to be recorded, to what, and when (AGT-7). */
@@ -625,6 +639,7 @@ export const saveAnswer = (options: {
   mime: string;
   seconds?: number | null;
   professorSpoke?: Range[];
+  marks?: Mark[];
   askedAt?: string | null;
   now?: Date;
 }): { answer: Answer; path: string } => {
@@ -656,6 +671,7 @@ export const saveAnswer = (options: {
     seconds: typeof options.seconds === "number" && options.seconds > 0 ? Math.round(options.seconds * 10) / 10 : null,
     transcript: null,
     ...(options.professorSpoke?.length ? { professor_spoke: options.professorSpoke } : {}),
+    ...(options.marks?.length ? { marks: options.marks } : {}),
   };
   session.answers.push(answer);
   writeSession(options.place.session, session);
@@ -954,7 +970,7 @@ export const editQuestion = (file: string, questionId: string, text: string): Qu
 
 export interface ReplayEntry {
   at: string;
-  kind: "consent" | "withdrawn" | "decision" | "answer";
+  kind: "consent" | "withdrawn" | "decision" | "answer" | "split";
   text: string;
 }
 
@@ -1029,6 +1045,17 @@ export const replay = (session: Session | null, questions: Question[]): ReplayEn
       text: `${answer.question_id} take ${answer.take}${answer.seconds ? `, ${answer.seconds}s` : ""}${flags.length ? ` [${flags.join(", ")}]` : ""} (${answer.audio}): ${words}`,
     });
   }
+  for (const split of session.splits ?? []) {
+    entries.push({
+      at: split.at,
+      kind: "split",
+      text:
+        `${split.question_id} take ${split.take} divided into ${split.parts.length} question(s) by ${split.by}` +
+        `${split.approval === "approved" ? ", checked by the professor" : ", not yet checked"}: ` +
+        split.parts.map((part) => `${part.start.toFixed(0)}s "${part.asked}"${part.question_id ? ` (${part.question_id})` : ""}`).join("; ") +
+        (split.notes?.length ? ` (${split.notes.join("; ")})` : ""),
+    });
+  }
   return entries.sort((a, b) => a.at.localeCompare(b.at));
 };
 
@@ -1098,23 +1125,63 @@ export const defenceEvidence = (context: {
   };
   // A whole defence is shown as the dialogue it was: the professor's
   // questions for context, never citable; the student's answers citable.
+  const line = (answer: Answer, segment: Segment): string => {
+    const at = `${answer.question_id} take ${answer.take} @ ${segment.start.toFixed(1)}s`;
+    if (segment.speaker === "professor") return `  (professor asks, @ ${segment.start.toFixed(1)}s) ${segment.text}`;
+    if (segment.speaker === "unknown") return `  (another voice, @ ${segment.start.toFixed(1)}s — not citable) ${segment.text}`;
+    return `  [${at}] ${segment.text}${segment.confidence === "low" ? "   (unsure transcription — listen before citing)" : ""}`;
+  };
+  const wholeTakes = (questionId?: string): Answer[] =>
+    answers.filter(
+      (entry) =>
+        (questionId ? entry.question_id === questionId : context.questions.some((q) => q.kind === "whole" && q.id === entry.question_id)) &&
+        entry.transcript &&
+        !entry.withdrawn &&
+        !entry.transcript.speakers?.unclear,
+    );
+  // A whole defence that was split: each part goes under the criterion it
+  // was about, and only what fell outside every part stays in the dialogue.
   const dialogue = (question: Question): string[] => {
     const lines: string[] = [];
-    for (const answer of answers.filter((entry) => entry.question_id === question.id && entry.transcript && !entry.withdrawn)) {
-      if (answer.transcript!.speakers?.unclear) continue;
+    let split = false;
+    for (const answer of wholeTakes(question.id)) {
+      const parts = splitOf(context.session, answer.question_id, answer.take)?.parts ?? null;
+      if (parts) split = true;
       for (const segment of answer.transcript!.segments) {
-        const at = `${answer.question_id} take ${answer.take} @ ${segment.start.toFixed(1)}s`;
-        if (segment.speaker === "professor") lines.push(`  (professor asks, @ ${segment.start.toFixed(1)}s) ${segment.text}`);
-        else if (segment.speaker === "unknown") lines.push(`  (another voice, @ ${segment.start.toFixed(1)}s — not citable) ${segment.text}`);
-        else lines.push(`  [${at}] ${segment.text}${segment.confidence === "low" ? "   (unsure transcription — listen before citing)" : ""}`);
+        if (parts && partOf(parts, segment) !== null) continue;
+        lines.push(line(answer, segment));
       }
     }
-    return lines.length ? lines : ["  (nothing citable)"];
+    return lines.length ? lines : [split ? "  (every part is shown under the criterion it was about)" : "  (nothing citable)"];
   };
-  const block = (question: Question): string[] => [
-    `${question.id}${question.follows ? ` (follow-up on ${question.follows})` : ""}: ${question.text}`,
-    ...(question.kind === "whole" ? dialogue(question) : said(question)),
-  ];
+  // A part asking a prepared question is shown under that question; one
+  // asked off the list, under the criterion the split gave it.
+  const prepared = new Set(context.questions.filter((question) => question.kind !== "whole").map((question) => question.id));
+  const parts = (keep: (part: SplitPart) => boolean): string[] =>
+    wholeTakes().flatMap((answer) => {
+      const split = splitOf(context.session, answer.question_id, answer.take);
+      if (!split) return [];
+      const status = split.approval === "approved" ? "split checked by the professor" : `split proposed by ${split.by}, not yet checked`;
+      return split.parts.flatMap((part, index) =>
+        !keep(part)
+          ? []
+          : [
+              `  ${answer.question_id} take ${answer.take}, part ${index + 1} (${status}): the professor asked "${part.asked}"`,
+              ...answer.transcript!.segments.filter((segment) => partOf(split.parts, segment) === index).map((segment) => line(answer, segment)),
+            ],
+      );
+    });
+  const offList = (criterionId: string | null): string[] =>
+    parts((part) => !(part.question_id && prepared.has(part.question_id)) && part.criterion_id === criterionId);
+  const block = (question: Question): string[] => {
+    if (question.kind === "whole") return [`${question.id}: ${question.text}`, ...dialogue(question)];
+    const own = said(question);
+    const inWhole = parts((part) => part.question_id === question.id);
+    return [
+      `${question.id}${question.follows ? ` (follow-up on ${question.follows})` : ""}: ${question.text}`,
+      ...(inWhole.length && own[0] === "  (nothing citable)" ? inWhole : [...own, ...inWhole]),
+    ];
+  };
   const consent = context.session?.consent;
   return [
     `# ${context.title} (${context.assessmentId}) — ${context.studentId}, oral defence`,
@@ -1129,11 +1196,12 @@ export const defenceEvidence = (context: {
     "## What the student said, by criterion",
     ...context.criteria.flatMap((criterion) => {
       const asked = context.questions.filter((question) => question.criterion_id === criterion.criterion_id);
-      return [`\n### ${criterion.criterion_id} ${criterion.title}`, ...(asked.length ? asked.flatMap(block) : ["  (no question was asked for this criterion)"])];
+      const lines = [...asked.flatMap(block), ...offList(criterion.criterion_id)];
+      return [`\n### ${criterion.criterion_id} ${criterion.title}`, ...(lines.length ? lines : ["  (no question was asked for this criterion)"])];
     }),
     ...(() => {
-      const general = context.questions.filter((question) => !question.criterion_id);
-      return general.length ? ["\n### Not tied to a criterion", ...general.flatMap(block)] : [];
+      const general = [...context.questions.filter((question) => !question.criterion_id).flatMap(block), ...offList(null)];
+      return general.length ? ["\n### Not tied to a criterion", ...general] : [];
     })(),
     ...(excluded.length
       ? ["", "## Not citable", ...excluded.map(({ answer, why }) => `- ${answer.question_id} take ${answer.take}: ${why}`)]
@@ -1348,6 +1416,222 @@ export const assignVoices = (place: DefencePlace, questionId: string, take: numb
   });
   writeSession(place.session, session);
   return answer;
+};
+
+// --------------------------------------------------------------------------
+// Splitting a whole defence into its questions (AGT-11)
+// --------------------------------------------------------------------------
+
+/**
+ * One exchange inside a whole defence: what the professor asked, which
+ * prepared question that was if any, the criterion its answer is evidence
+ * for, and where it sits in the take, in seconds.
+ */
+export interface SplitPart {
+  question_id: string | null;
+  asked: string;
+  criterion_id: string | null;
+  start: number;
+  end: number;
+}
+
+/**
+ * A whole defence divided into its questions. Proposed by the session's
+ * model reading the transcript, with the professor's marks as hints, or by
+ * the marks alone when no model answered; `approval: draft` until the
+ * professor says the parts are right. A split moves no words and changes no
+ * citation — `[Q0 take 1 @ 12.3s]` stays what it was — it only says which
+ * criterion each stretch of the dialogue was about.
+ */
+export interface Split {
+  question_id: string;
+  take: number;
+  parts: SplitPart[];
+  by: string;
+  at: string;
+  approval: "draft" | "approved";
+  notes?: string[];
+}
+
+export const splitOf = (session: Session | null, questionId: string, take: number): Split | null =>
+  session?.splits?.find((split) => split.question_id === questionId && split.take === take) ?? null;
+
+/** Which part a segment belongs to: the one holding its middle, or null. */
+export const partOf = (parts: SplitPart[], segment: Segment): number | null => {
+  const middle = (segment.start + segment.end) / 2;
+  const index = parts.findIndex((part) => middle >= part.start && middle < part.end);
+  return index < 0 ? null : index;
+};
+
+export const SPLIT_SYSTEM = [
+  "You divide the transcript of a university oral defence, recorded in one piece, into its questions.",
+  "Each part begins where the professor asks something new and ends where the next begins. You never grade and never judge the answers.",
+  "Your only output is the parts, as JSON.",
+].join(" ");
+
+const clockOf = (seconds: number): string => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+
+/** The prompt for one split: the prepared questions, the rubric, the professor's marks and the timed dialogue. */
+export const splitPrompt = (context: { answer: Answer; questions: Question[]; criteria: Criterion[] }): string => {
+  const { answer } = context;
+  const prepared = context.questions.filter((question) => question.kind !== "whole");
+  const voice = (segment: Segment): string =>
+    segment.speaker === "professor" ? "PROFESSOR" : segment.speaker === "unknown" ? "OTHER" : segment.speaker === "student" ? "STUDENT" : segment.speaker_id ?? "VOICE";
+  return [
+    `## Prepared questions`,
+    ...(prepared.length
+      ? prepared.map((question) => `${question.id}${question.criterion_id ? ` [${question.criterion_id}]` : ""}: ${question.text}`)
+      : ["(none — every question was asked off the cuff)"]),
+    "",
+    "## Rubric criteria",
+    ...(context.criteria.length ? context.criteria.map((criterion) => `${criterion.criterion_id}: ${criterion.title}${criterion.description ? ` — ${criterion.description}` : ""}`) : ["(none)"]),
+    "",
+    "## Where the professor pressed for a new question",
+    ...(answer.marks?.length
+      ? answer.marks.map((mark) => `${mark.at.toFixed(1)}s${mark.question_id ? ` — they picked ${mark.question_id}` : ""}`)
+      : ["(no presses: find every question from the words)"]),
+    "",
+    `## The dialogue (${answer.seconds ? `${answer.seconds}s` : "length unknown"}; ${answer.transcript?.speakers?.unclear ? "voices not settled, so the labels may be wrong — judge from what is said" : "voices as labelled"})`,
+    ...(answer.transcript?.segments ?? []).map((segment) => `[${segment.start.toFixed(1)}–${segment.end.toFixed(1)}] ${voice(segment)}: ${segment.text}`),
+    "",
+    "Return only a JSON object:",
+    '{"parts": [{"start": 12.0, "end": 64.5, "asked": "...", "question_id": "Q2" or null, "criterion_id": "CRIT-..." or null}]}',
+    "",
+    "Rules:",
+    "- One part per question the professor asked, in order. A follow-up or a rephrasing of the same question stays in its part; a new topic starts a new part.",
+    "- start is where the professor begins asking, end where the next part starts (or the end of the dialogue). Use the times shown.",
+    "- A press is a hint: the professor may have pressed a few seconds late, twice, or not at all. Trust the words over the presses.",
+    "- question_id names the prepared question asked, even in other words; null when the professor asked something not prepared.",
+    "- criterion_id is the criterion the answer is evidence for: the prepared question's, or the closest one in the rubric; null when none fits.",
+    "- asked is the professor's question in a few words, in the language they asked it.",
+    "- Greetings, consent and goodbyes before the first question or after the last belong to no part.",
+  ].join("\n");
+};
+
+/**
+ * The parts the model returned (its reply's text, or the object parsed from
+ * it), checked rather than trusted.
+ *
+ * Times are put in order and inside the take, an overlap is cut where the
+ * later part begins, and an empty part is dropped. A question the desk does
+ * not have becomes null, a criterion the rubric does not have likewise, and a
+ * prepared question's own criterion fills one left empty. Anything unusable
+ * falls back to the professor's marks. Each mark not inside a part asking
+ * that question is noted, for the professor to look at.
+ */
+export const checkSplit = (
+  reply: any,
+  context: { answer: Answer; questions: Question[]; criteria: Criterion[]; by: string; at: string },
+): Split => {
+  const { answer } = context;
+  const notes: string[] = [];
+  const segments = answer.transcript?.segments ?? [];
+  const length = answer.seconds ?? answer.transcript?.seconds ?? segments.at(-1)?.end ?? 0;
+  const byId = new Map(context.questions.filter((q) => q.kind !== "whole").map((q) => [q.id, q]));
+  const known = new Set(context.criteria.map((criterion) => criterion.criterion_id));
+  const parsed = typeof reply === "string" ? parseReply(reply) : reply;
+  const raw = Array.isArray(parsed?.parts) ? parsed.parts : null;
+  const fallback = (why: string): Split => {
+    const marked = splitFromMarks(context);
+    return { ...marked, notes: [why, ...(marked.notes ?? [])] };
+  };
+  if (!raw || !raw.length) return fallback(raw ? "the model found no questions" : "the model's reply was not a split");
+  const parts: SplitPart[] = [];
+  for (const entry of raw
+    .map((entry: any) => ({ entry, start: Number(entry?.start), end: Number(entry?.end) }))
+    .filter((item: any) => Number.isFinite(item.start))
+    .sort((a: any, b: any) => a.start - b.start)) {
+    const start = Math.max(0, Math.min(entry.start, length));
+    let end = Number.isFinite(entry.end) ? Math.min(entry.end, length || entry.end) : length;
+    const previous = parts.at(-1);
+    if (previous && previous.end > start) previous.end = start;
+    if (!(end > start)) {
+      end = length;
+      if (!(end > start)) continue;
+    }
+    let questionId = entry.entry?.question_id ? String(entry.entry.question_id) : null;
+    if (questionId && !byId.has(questionId)) {
+      notes.push(`part ${parts.length + 1}: ${questionId} is not a prepared question — left unset`);
+      questionId = null;
+    }
+    let criterion = entry.entry?.criterion_id ? String(entry.entry.criterion_id) : null;
+    if (criterion && !known.has(criterion)) {
+      notes.push(`part ${parts.length + 1}: criterion ${criterion} is not in the rubric — left unset`);
+      criterion = null;
+    }
+    if (!criterion && questionId) criterion = byId.get(questionId)!.criterion_id;
+    parts.push({ question_id: questionId, asked: String(entry.entry?.asked ?? "").trim() || "(not said)", criterion_id: criterion, start, end });
+  }
+  const kept = parts.filter((part) => part.end > part.start);
+  if (!kept.length) return fallback("no part the model returned had a time inside the recording");
+  for (const mark of answer.marks ?? []) {
+    if (!mark.question_id) continue;
+    const holding = kept.find((part) => mark.at >= part.start - 5 && mark.at < part.end);
+    if (!holding || holding.question_id !== mark.question_id) {
+      notes.push(`you picked ${mark.question_id} at ${clockOf(mark.at)}, but the split puts ${holding?.question_id ?? "no prepared question"} there`);
+    }
+  }
+  return {
+    question_id: answer.question_id,
+    take: answer.take,
+    parts: kept,
+    by: context.by,
+    at: context.at,
+    approval: "draft",
+    ...(notes.length ? { notes } : {}),
+  };
+};
+
+/**
+ * The split the professor's own presses make, with no model: each press
+ * starts a part that runs to the next. What the model falls back to, and
+ * what a defence recorded with presses gets when no model can be asked.
+ */
+export const splitFromMarks = (context: { answer: Answer; questions: Question[]; criteria?: Criterion[]; by?: string; at: string }): Split => {
+  const { answer } = context;
+  const length = answer.seconds ?? answer.transcript?.seconds ?? answer.transcript?.segments.at(-1)?.end ?? 0;
+  const marks = [...(answer.marks ?? [])].filter((mark) => mark.at >= 0 && mark.at < length).sort((a, b) => a.at - b.at);
+  const byId = new Map(context.questions.map((q) => [q.id, q]));
+  const parts = marks.map((mark, index) => {
+    const question = mark.question_id ? byId.get(mark.question_id) : undefined;
+    return {
+      question_id: question ? question.id : null,
+      asked: question ? question.text : `question ${index + 1}, as marked`,
+      criterion_id: question?.criterion_id ?? null,
+      start: mark.at,
+      end: marks[index + 1]?.at ?? length,
+    };
+  });
+  return {
+    question_id: answer.question_id,
+    take: answer.take,
+    parts: parts.filter((part) => part.end > part.start),
+    by: "your presses, without a model",
+    at: context.at,
+    approval: "draft",
+    ...(marks.length ? {} : { notes: ["no presses to split by either: the defence stays one piece"] }),
+  };
+};
+
+/** Keep a split, replacing any earlier one of the same take. */
+export const recordSplit = (place: DefencePlace, split: Split): Split => {
+  const session = readSession(place.session);
+  if (!session?.answers.some((answer) => answer.question_id === split.question_id && answer.take === split.take)) {
+    throw new Error(`no take ${split.take} of ${split.question_id} in ${place.session}`);
+  }
+  session.splits = [...(session.splits ?? []).filter((entry) => !(entry.question_id === split.question_id && entry.take === split.take)), split];
+  writeSession(place.session, session);
+  return split;
+};
+
+/** The professor says the parts are right. */
+export const approveSplit = (place: DefencePlace, questionId: string, take: number): Split => {
+  const session = readSession(place.session);
+  const split = splitOf(session, questionId, take);
+  if (!session || !split) throw new Error(`take ${take} of ${questionId} has not been split`);
+  split.approval = "approved";
+  writeSession(place.session, session);
+  return split;
 };
 
 // --------------------------------------------------------------------------
