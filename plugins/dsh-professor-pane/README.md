@@ -515,7 +515,7 @@ pane reads none of it directly; it is in the CLI's output, like everything else
 in this dialog.
 
 What it cannot be made to do: accept a draft of any kind, a deck or a grade.
-See `runPublish` in `index.js`, and `ainar-node/src/publish.ts` for why a
+See `runPublish` in `lib/actions.js`, and `ainar-node/src/publish.ts` for why a
 publish that also approved was two decisions behind one button.
 
 The announcement box is the only thing in the pane a professor composes rather
@@ -569,7 +569,7 @@ because it is the same code.
 
 What is drawn in this package is what no tool returns. The class list, the
 Checklist, the assessment, slide and exam tables and the grading policy are
-assembled in `index.js` and served as plain pages into the same frame.
+assembled in `lib/` and served as plain pages into the same frame.
 Preferences and Integrations are drawn in `lib/client.js` instead, and the
 reason is narrower than "no tool returns them": both carry a **form**, and the
 frame is delivered as `srcdoc` without `allow-same-origin`, so a document
@@ -578,9 +578,13 @@ inside it has an opaque origin and cannot call back to the routes a Save needs.
 ## The two halves
 
 ```
-index.js        host: one prefix route, /professor-pane
+index.js        host: one prefix route, /professor-pane — the route table
+lib/*.js        host: what the routes assemble, one module per concern
+                (workspace, preferences, integrations, lms-writes, connections,
+                page, course-views, checklist, students, defence-desk,
+                materials, serve-file, actions, http, …)
 lib/client.js   browser: the pane, hand-written in the module loader's own form
-cordis.patch.yml  the loader entry that makes both of the above load
+cordis.patch.yml  the loader entry that makes both halves load
 ```
 
 `lib/client.js` is **not built**. Every client half under

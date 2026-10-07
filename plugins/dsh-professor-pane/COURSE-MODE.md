@@ -28,7 +28,7 @@ Pseudonyms** (whether a projector is in the room). Over the top of all of it,
 
 Five things are worth saying plainly about that table.
 
-**It draws six of the sixteen read tools.** `index.js` calls `course_outline`,
+**It draws six of the sixteen read tools.** The host half calls `course_outline`,
 `action_inbox`, `class_progress`, `gradebook`, `student` and `list_courses`.
 Nothing in the pane draws `alignment_report`, `validate_course`, `syllabus`,
 `assessment_blueprint`, `calibration`, `course_stats` or `assessment_rubric` —

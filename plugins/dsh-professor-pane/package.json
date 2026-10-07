@@ -16,10 +16,7 @@
   },
   "files": [
     "index.js",
-    "lib/client.js",
-    "lib/course-mode.js",
-    "lib/upload.js",
-    "lib/student-screen.js",
+    "lib/",
     "vendor/dots-swarm.js",
     "vendor/dots-swarm.LICENSE",
     "cordis.patch.yml",
