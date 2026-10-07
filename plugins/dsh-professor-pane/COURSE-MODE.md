@@ -268,10 +268,13 @@ happens.
    the scan pile's step, defended of handed in, not in Canvas or no starter
    repository), from `server/week-status.js`, and its button opens Grade, Scans,
    the defence desk or Publish over course mode. **Students**, **Gradebook** and
-   **Tasks** open over the whole term plan, each holding the pane's own document,
-   and are closed and disabled under *Preview as student*. One header line says
-   where Canvas stands and jumps to Integrations. Escape closes innermost first:
-   a window on top, then a drawer, then course mode.
+   **Tasks** are chosen in the same row as the readings, past a divider: they
+   read the course by person, mark and task rather than by week, so they are
+   not a fifth way of painting the weeks, but they are whole views, not layers.
+   Each holds the pane's own document; the weeks stay mounted beneath, so going
+   back to a reading keeps its place. They are private, and disabled under
+   *Preview as student*. One header line says where Canvas stands and jumps to
+   Integrations. Escape closes a window on top first, then course mode.
 5. ~~**Evidence**, as its own document~~ — **built** (2026-10-07), as course
    mode's fourth reading. `mode=evidence` asks the host for `class_progress`,
    `gradebook` and `action_inbox` over approved records only, and

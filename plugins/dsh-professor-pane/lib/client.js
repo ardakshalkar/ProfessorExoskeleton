@@ -659,17 +659,15 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
    because three columns of sixteen weeks want the width. */
 .pp-veil.pp-coursemode{z-index:3900;padding:14px clamp(10px,2vw,28px) 16px}
 .pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
-/* A course-wide view beside the weeks: the pane's own document for the tab,
-   over the whole term plan. One at a time. */
-.pp-cdrawer{position:absolute;inset:0;z-index:2;
-  display:flex;flex-direction:column;background:var(--dsw-alias-bg-l1,#fff);
-  animation:pp-cdrawer-in .16s ease-out}
-@keyframes pp-cdrawer-in{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
-.pp-cdrawerhead{flex:none;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;padding:8px 10px;
+/* A course-wide view (Students, Gradebook, Tasks) over the weeks, which
+   stay mounted beneath so they come back where they were left. */
+.pp-cview{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;background:var(--dsw-alias-bg-l1,#fff)}
+.pp-cviewbar{flex:none;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;padding:8px 10px;
   border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-.pp-cdrawerhead b{font-size:12.5px;margin-right:4px;color:var(--dsw-alias-label-primary,#111)}
-.pp-cdrawerbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto}
-.pp-cdrawerbtn[disabled]{opacity:.45;cursor:not-allowed}
+.pp-cviewbody{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto}
+/* The readings of the weeks, then the course read another way. */
+.pp-segsep{flex:none;align-self:stretch;width:1px;margin:2px 4px;background:var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-coursehead .pp-segbtn[disabled]{opacity:.45;cursor:not-allowed}
 /* Canvas in one line; a press jumps to Integrations in the pane. */
 .pp-wiring{flex:none;font:inherit;font-size:11px;cursor:pointer;background:none;border:0;padding:2px 4px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);text-decoration:underline;text-underline-offset:2px}
@@ -3315,7 +3313,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 
     // ── client/course-escape.js
 
-    const courseModeEscape = ({ covered, drawer }) => (covered ? "none" : drawer ? "drawer" : "close");
+    const courseModeEscape = ({ covered }) => (covered ? "none" : "close");
 
     // ── client/materials.js
 
@@ -3636,12 +3634,14 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     };
 
     /**
-     * What does not belong to any one week, beside the weeks: the class list,
-     * the gradebook and the tasks, each the very document its pane tab shows,
-     * over the whole term plan. They carry names and marks, so they are
-     * private: Preview as student closes them and turns their buttons off.
+     * The course read by person, by mark and by task rather than by week: the
+     * class list, the gradebook and the tasks, each the very document its pane
+     * tab shows. Chosen like the readings above and drawn after them, past a
+     * divider, because they are not a way of painting the weeks. They carry
+     * names and marks, so they are private: no Preview as student on them, and
+     * their buttons are off while previewing one of the readings.
      */
-    const DRAWERS = [
+    const COURSE_VIEWS = [
       { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
       { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
       { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
@@ -3654,7 +3654,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const close = props.onClose;
       const [student, setStudent] = React.useState(false);
       const [mode, setMode] = React.useState(() => defaultCourseMode(props.start, props.end));
-      const [drawer, setDrawer] = React.useState(null);
+      // A course-wide view, when one is chosen, in place of the reading; the
+      // reading is kept so the weeks come back as they were left.
+      const [view, setView] = React.useState(null);
       const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
       // The week Teaching was last stepped to. The page steps without a round
       // trip and reports each step; it is held in a ref so a step redraws
@@ -3677,27 +3679,22 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const chooseMode = (id) => {
         if (id === "teaching") setWeek(stepped.current);
         setMode(id);
+        setView(null);
       };
-      // Teaching and Evidence carry class figures, so there is no student
-      // version of either to preview.
-      const private_ = mode === "teaching" || mode === "evidence";
+      // Teaching, Evidence and the course-wide views carry class figures or
+      // names, so there is no student version of any of them to preview.
+      const private_ = view !== null || mode === "teaching" || mode === "evidence";
       const preview = student && !private_;
-      // The privacy wall: a student preview never sits beside a class list.
-      React.useEffect(() => {
-        if (preview) setDrawer(null);
-      }, [preview]);
       React.useEffect(() => {
         const onKey = (event) => {
           if (event.key !== "Escape") return;
           // A deck opened from the term plan sits on top and owns Escape: it
           // closes first, and this stays where the professor was reading.
-          const step = courseModeEscape({ covered: props.covered, drawer });
-          if (step === "drawer") setDrawer(null);
-          else if (step === "close") close();
+          if (courseModeEscape({ covered: props.covered }) === "close") close();
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-      }, [close, props.covered, drawer]);
+      }, [close, props.covered]);
       // Canvas, in one line: the row the Integrations tab's Status view draws,
       // from the same payload. Nothing is computed here but the words.
       const wiring = useJson(
@@ -3708,8 +3705,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           ? (wiring.value.integrations || []).find((row) => row.id === "canvas") || null
           : null;
 
-      const drawerBody = () => {
-        if (drawer === "students") {
+      const viewBody = () => {
+        if (view === "students") {
           return h(WidgetFrame, {
             key: "students|" + props.names + "|" + props.dark + "|" + props.reload,
             view: "students",
@@ -3720,7 +3717,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             title: "Students",
           });
         }
-        if (drawer === "gradebook") {
+        if (view === "gradebook") {
           return h(
             React.Fragment,
             null,
@@ -3729,7 +3726,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               sessionId: props.sessionId,
               revision: props.reload,
               openUnpublished: () => {
-                setDrawer("tasks");
+                setView("tasks");
                 setTaskSub("unpublished");
               },
             }),
@@ -3765,7 +3762,22 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           title: "Tasks",
         });
       };
-      const drawerEntry = DRAWERS.find((entry) => entry.id === drawer) || null;
+      const segment = (entry, pressed, onClick, disabled) =>
+        h(
+          "button",
+          {
+            type: "button",
+            className: "pp-segbtn",
+            "aria-pressed": pressed,
+            disabled: disabled,
+            title: disabled ? "Private — not shown while previewing as a student" : entry.hint,
+            onClick: onClick,
+            key: entry.id,
+          },
+          entry.label,
+        );
+      // The views that name people follow the pane's Names / Pseudonyms choice.
+      const named = view === "students" || (view === "tasks" && taskSub !== "unpublished");
 
       return ReactDOM.createPortal(
         h(
@@ -3789,20 +3801,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               "div",
               { className: "pp-modalhead pp-coursehead" },
               h("div", { className: "pp-modaltitle" }, props.title + " · course mode"),
-              COURSE_MODES.map((entry) =>
-                h(
-                  "button",
-                  {
-                    type: "button",
-                    className: "pp-segbtn",
-                    "aria-pressed": mode === entry.id,
-                    title: entry.hint,
-                    onClick: () => chooseMode(entry.id),
-                    key: entry.id,
-                  },
-                  entry.label,
-                ),
-              ),
+              COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
+              h("span", { className: "pp-segsep", "aria-hidden": "true" }),
+              COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
               h("span", { className: "pp-segspacer" }),
               DRAFT_MODES.map((entry) =>
                 h(
@@ -3818,8 +3819,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   entry.label,
                 ),
               ),
-              // Not on Teaching: a student is never shown class figures, so
-              // there is no student version of that page to preview.
+              // Not on Teaching, Evidence or a course-wide view: a student is
+              // never shown class figures or names, so there is nothing to preview.
               private_
                 ? null
                 : h(
@@ -3836,23 +3837,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               // open their own windows on top, so course mode is still here when
               // they close; the jump is for everything the term plan does not
               // draw — it closes course mode and opens the pane on that tab.
-              // The course-wide views, beside the weeks rather than instead of
-              // them. One at a time; a second press closes it.
-              DRAWERS.map((entry) =>
-                h(
-                  "button",
-                  {
-                    type: "button",
-                    className: "pp-segbtn pp-cdrawerbtn",
-                    "aria-pressed": drawer === entry.id,
-                    disabled: preview,
-                    title: preview ? "Private — not shown while previewing as a student" : entry.hint,
-                    onClick: () => setDrawer(drawer === entry.id ? null : entry.id),
-                    key: entry.id,
-                  },
-                  entry.label,
-                ),
-              ),
               canvas
                 ? h(
                     "button",
@@ -3916,55 +3900,38 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 week: mode === "teaching" ? week : null,
                 title: "Course mode",
               }),
-              drawerEntry
+              // The weeks stay mounted under a course-wide view, so coming back
+              // to them keeps the place and the scroll.
+              view
                 ? h(
-                    "aside",
-                    { className: "pp-cdrawer", "aria-label": drawerEntry.label },
-                    h(
-                      "div",
-                      { className: "pp-cdrawerhead" },
-                      h("b", null, drawerEntry.label),
-                      drawer === "tasks"
-                        ? SUBVIEWS.tasks.map((entry) =>
-                            h(
-                              "button",
-                              {
-                                type: "button",
-                                className: "pp-segbtn",
-                                "aria-pressed": taskSub === entry.id,
-                                onClick: () => setTaskSub(entry.id),
-                                key: entry.id,
-                              },
-                              entry.label,
-                            ),
-                          )
-                        : null,
-                      h("span", { className: "pp-segspacer" }),
-                      // The pane's own Names / Pseudonyms choice, on the views
-                      // that name people: the same state, so the two never differ.
-                      drawer === "students" || (drawer === "tasks" && taskSub !== "unpublished")
-                        ? IDENTITY_MODES.map((entry) =>
-                            h(
-                              "button",
-                              {
-                                type: "button",
-                                className: "pp-segbtn" + (entry.names && props.names ? " pp-segbtn-warn" : ""),
-                                "aria-pressed": props.names === entry.names,
-                                title: entry.hint,
-                                onClick: () => props.setNames(entry.names),
-                                key: entry.label,
-                              },
-                              entry.label,
-                            ),
-                          )
-                        : null,
-                      h(
-                        "button",
-                        { type: "button", className: "pp-close", "aria-label": "Close " + drawerEntry.label, title: "Close (Esc)", onClick: () => setDrawer(null) },
-                        "×",
-                      ),
-                    ),
-                    h("div", { className: "pp-cdrawerbody" }, drawerBody()),
+                    "section",
+                    { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || {}).label },
+                    view === "tasks" || named
+                      ? h(
+                          "div",
+                          { className: "pp-cviewbar" },
+                          view === "tasks" ? SUBVIEWS.tasks.map((entry) => segment(entry, taskSub === entry.id, () => setTaskSub(entry.id), false)) : null,
+                          h("span", { className: "pp-segspacer" }),
+                          // The pane's own choice, the same state, so the two never differ.
+                          named
+                            ? IDENTITY_MODES.map((entry) =>
+                                h(
+                                  "button",
+                                  {
+                                    type: "button",
+                                    className: "pp-segbtn" + (entry.names && props.names ? " pp-segbtn-warn" : ""),
+                                    "aria-pressed": props.names === entry.names,
+                                    title: entry.hint,
+                                    onClick: () => props.setNames(entry.names),
+                                    key: entry.label,
+                                  },
+                                  entry.label,
+                                ),
+                              )
+                            : null,
+                        )
+                      : null,
+                    h("div", { className: "pp-cviewbody" }, viewBody()),
                   )
                 : null,
             ),
@@ -10195,7 +10162,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 desk !== null || grading !== null || scansPile !== null,
               onPublish: () => openPublish("page"),
               onUpload: () => setUploading(true),
-              // For the drawers: the pane's own identity choice, and what the
+              // For Students, Gradebook and Tasks: the pane's own identity choice, and what the
               // Unpublished view needs to send — the same props its tab gets.
               names: names,
               setNames: setNames,

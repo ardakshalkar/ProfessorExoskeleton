@@ -326,12 +326,14 @@ const defaultCourseMode = (start, end) => {
 };
 
 /**
- * What does not belong to any one week, beside the weeks: the class list,
- * the gradebook and the tasks, each the very document its pane tab shows,
- * over the whole term plan. They carry names and marks, so they are
- * private: Preview as student closes them and turns their buttons off.
+ * The course read by person, by mark and by task rather than by week: the
+ * class list, the gradebook and the tasks, each the very document its pane
+ * tab shows. Chosen like the readings above and drawn after them, past a
+ * divider, because they are not a way of painting the weeks. They carry
+ * names and marks, so they are private: no Preview as student on them, and
+ * their buttons are off while previewing one of the readings.
  */
-const DRAWERS = [
+const COURSE_VIEWS = [
   { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
   { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
@@ -344,7 +346,9 @@ export function CourseMode(props) {
   const close = props.onClose;
   const [student, setStudent] = React.useState(false);
   const [mode, setMode] = React.useState(() => defaultCourseMode(props.start, props.end));
-  const [drawer, setDrawer] = React.useState(null);
+  // A course-wide view, when one is chosen, in place of the reading; the
+  // reading is kept so the weeks come back as they were left.
+  const [view, setView] = React.useState(null);
   const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
   // The week Teaching was last stepped to. The page steps without a round
   // trip and reports each step; it is held in a ref so a step redraws
@@ -367,27 +371,22 @@ export function CourseMode(props) {
   const chooseMode = (id) => {
     if (id === "teaching") setWeek(stepped.current);
     setMode(id);
+    setView(null);
   };
-  // Teaching and Evidence carry class figures, so there is no student
-  // version of either to preview.
-  const private_ = mode === "teaching" || mode === "evidence";
+  // Teaching, Evidence and the course-wide views carry class figures or
+  // names, so there is no student version of any of them to preview.
+  const private_ = view !== null || mode === "teaching" || mode === "evidence";
   const preview = student && !private_;
-  // The privacy wall: a student preview never sits beside a class list.
-  React.useEffect(() => {
-    if (preview) setDrawer(null);
-  }, [preview]);
   React.useEffect(() => {
     const onKey = (event) => {
       if (event.key !== "Escape") return;
       // A deck opened from the term plan sits on top and owns Escape: it
       // closes first, and this stays where the professor was reading.
-      const step = courseModeEscape({ covered: props.covered, drawer });
-      if (step === "drawer") setDrawer(null);
-      else if (step === "close") close();
+      if (courseModeEscape({ covered: props.covered }) === "close") close();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [close, props.covered, drawer]);
+  }, [close, props.covered]);
   // Canvas, in one line: the row the Integrations tab's Status view draws,
   // from the same payload. Nothing is computed here but the words.
   const wiring = useJson(
@@ -398,8 +397,8 @@ export function CourseMode(props) {
       ? (wiring.value.integrations || []).find((row) => row.id === "canvas") || null
       : null;
 
-  const drawerBody = () => {
-    if (drawer === "students") {
+  const viewBody = () => {
+    if (view === "students") {
       return h(WidgetFrame, {
         key: "students|" + props.names + "|" + props.dark + "|" + props.reload,
         view: "students",
@@ -410,7 +409,7 @@ export function CourseMode(props) {
         title: "Students",
       });
     }
-    if (drawer === "gradebook") {
+    if (view === "gradebook") {
       return h(
         React.Fragment,
         null,
@@ -419,7 +418,7 @@ export function CourseMode(props) {
           sessionId: props.sessionId,
           revision: props.reload,
           openUnpublished: () => {
-            setDrawer("tasks");
+            setView("tasks");
             setTaskSub("unpublished");
           },
         }),
@@ -455,7 +454,22 @@ export function CourseMode(props) {
       title: "Tasks",
     });
   };
-  const drawerEntry = DRAWERS.find((entry) => entry.id === drawer) || null;
+  const segment = (entry, pressed, onClick, disabled) =>
+    h(
+      "button",
+      {
+        type: "button",
+        className: "pp-segbtn",
+        "aria-pressed": pressed,
+        disabled: disabled,
+        title: disabled ? "Private — not shown while previewing as a student" : entry.hint,
+        onClick: onClick,
+        key: entry.id,
+      },
+      entry.label,
+    );
+  // The views that name people follow the pane's Names / Pseudonyms choice.
+  const named = view === "students" || (view === "tasks" && taskSub !== "unpublished");
 
   return ReactDOM.createPortal(
     h(
@@ -479,20 +493,9 @@ export function CourseMode(props) {
           "div",
           { className: "pp-modalhead pp-coursehead" },
           h("div", { className: "pp-modaltitle" }, props.title + " · course mode"),
-          COURSE_MODES.map((entry) =>
-            h(
-              "button",
-              {
-                type: "button",
-                className: "pp-segbtn",
-                "aria-pressed": mode === entry.id,
-                title: entry.hint,
-                onClick: () => chooseMode(entry.id),
-                key: entry.id,
-              },
-              entry.label,
-            ),
-          ),
+          COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
+          h("span", { className: "pp-segsep", "aria-hidden": "true" }),
+          COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
           h("span", { className: "pp-segspacer" }),
           DRAFT_MODES.map((entry) =>
             h(
@@ -508,8 +511,8 @@ export function CourseMode(props) {
               entry.label,
             ),
           ),
-          // Not on Teaching: a student is never shown class figures, so
-          // there is no student version of that page to preview.
+          // Not on Teaching, Evidence or a course-wide view: a student is
+          // never shown class figures or names, so there is nothing to preview.
           private_
             ? null
             : h(
@@ -526,23 +529,6 @@ export function CourseMode(props) {
           // open their own windows on top, so course mode is still here when
           // they close; the jump is for everything the term plan does not
           // draw — it closes course mode and opens the pane on that tab.
-          // The course-wide views, beside the weeks rather than instead of
-          // them. One at a time; a second press closes it.
-          DRAWERS.map((entry) =>
-            h(
-              "button",
-              {
-                type: "button",
-                className: "pp-segbtn pp-cdrawerbtn",
-                "aria-pressed": drawer === entry.id,
-                disabled: preview,
-                title: preview ? "Private — not shown while previewing as a student" : entry.hint,
-                onClick: () => setDrawer(drawer === entry.id ? null : entry.id),
-                key: entry.id,
-              },
-              entry.label,
-            ),
-          ),
           canvas
             ? h(
                 "button",
@@ -606,55 +592,38 @@ export function CourseMode(props) {
             week: mode === "teaching" ? week : null,
             title: "Course mode",
           }),
-          drawerEntry
+          // The weeks stay mounted under a course-wide view, so coming back
+          // to them keeps the place and the scroll.
+          view
             ? h(
-                "aside",
-                { className: "pp-cdrawer", "aria-label": drawerEntry.label },
-                h(
-                  "div",
-                  { className: "pp-cdrawerhead" },
-                  h("b", null, drawerEntry.label),
-                  drawer === "tasks"
-                    ? SUBVIEWS.tasks.map((entry) =>
-                        h(
-                          "button",
-                          {
-                            type: "button",
-                            className: "pp-segbtn",
-                            "aria-pressed": taskSub === entry.id,
-                            onClick: () => setTaskSub(entry.id),
-                            key: entry.id,
-                          },
-                          entry.label,
-                        ),
-                      )
-                    : null,
-                  h("span", { className: "pp-segspacer" }),
-                  // The pane's own Names / Pseudonyms choice, on the views
-                  // that name people: the same state, so the two never differ.
-                  drawer === "students" || (drawer === "tasks" && taskSub !== "unpublished")
-                    ? IDENTITY_MODES.map((entry) =>
-                        h(
-                          "button",
-                          {
-                            type: "button",
-                            className: "pp-segbtn" + (entry.names && props.names ? " pp-segbtn-warn" : ""),
-                            "aria-pressed": props.names === entry.names,
-                            title: entry.hint,
-                            onClick: () => props.setNames(entry.names),
-                            key: entry.label,
-                          },
-                          entry.label,
-                        ),
-                      )
-                    : null,
-                  h(
-                    "button",
-                    { type: "button", className: "pp-close", "aria-label": "Close " + drawerEntry.label, title: "Close (Esc)", onClick: () => setDrawer(null) },
-                    "×",
-                  ),
-                ),
-                h("div", { className: "pp-cdrawerbody" }, drawerBody()),
+                "section",
+                { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || {}).label },
+                view === "tasks" || named
+                  ? h(
+                      "div",
+                      { className: "pp-cviewbar" },
+                      view === "tasks" ? SUBVIEWS.tasks.map((entry) => segment(entry, taskSub === entry.id, () => setTaskSub(entry.id), false)) : null,
+                      h("span", { className: "pp-segspacer" }),
+                      // The pane's own choice, the same state, so the two never differ.
+                      named
+                        ? IDENTITY_MODES.map((entry) =>
+                            h(
+                              "button",
+                              {
+                                type: "button",
+                                className: "pp-segbtn" + (entry.names && props.names ? " pp-segbtn-warn" : ""),
+                                "aria-pressed": props.names === entry.names,
+                                title: entry.hint,
+                                onClick: () => props.setNames(entry.names),
+                                key: entry.label,
+                              },
+                              entry.label,
+                            ),
+                          )
+                        : null,
+                    )
+                  : null,
+                h("div", { className: "pp-cviewbody" }, viewBody()),
               )
             : null,
         ),
