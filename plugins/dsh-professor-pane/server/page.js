@@ -23,6 +23,20 @@ import { escapeText } from "./markdown.js";
  * the alternative — editing `shell.css` — is editing a file two servers share
  * and a test compares byte for byte.
  */
+/**
+ * The mark on every press that goes to the chat.
+ *
+ * A press in this pane either changes a record or asks the assistant, and the
+ * two look alike: "Accept rubric" writes a file, "Just one rubric" queues a
+ * turn in the session. The mark says which, without a reading of the code.
+ * Drawn by CSS on the attribute that does the sending — `data-ask` in the
+ * widgets and Course mode, `data-defence` on the Students view — so a button
+ * that sends is marked by being one, and the vendored widgets need no edit.
+ * `client/style.js` draws the same glyph on the pane's own buttons (`pp-chat`).
+ */
+export const CHAT_MARK_CSS =
+  '[data-ask]::after,[data-defence]::after{content:"\\2726";margin-left:.35em;font-size:.85em;opacity:.75}';
+
 export const widgetDocument = (widget, data, dark) => {
   const shim = `<script>
 window.openai = {
@@ -73,7 +87,7 @@ window.openai = {
   return (
     "<!doctype html><meta charset=\"utf-8\">" +
     "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
-    "<style>html,body{margin:0;padding:12px 14px 32px}</style>" +
+    "<style>html,body{margin:0;padding:12px 14px 32px}" + CHAT_MARK_CSS + "</style>" +
     shim +
     widget.html() +
     scheme
@@ -219,6 +233,7 @@ export const documentPage = (bodyHtml, dark) =>
   ".chip-link{color:inherit;text-decoration:none;border:1px solid var(--line);" +
   "border-radius:3px;padding:0 5px;font-size:11px;letter-spacing:.04em;white-space:nowrap}" +
   ".chip-link:hover{border-color:var(--fg)}" +
+  CHAT_MARK_CSS +
   "</style>" +
   bodyHtml;
 

@@ -397,6 +397,9 @@ window.__ModuleLoader__.load({
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-segbtn[aria-pressed=true]{color:var(--dsw-alias-label-primary,#111);font-weight:600;
   border-color:var(--dsw-alias-label-primary,#111)}
+/* A press that goes to the chat rather than changing a record. The same glyph
+   server/page.js puts on [data-ask] in the frames, so it means one thing everywhere. */
+.pp-chat::after{content:"\\2726";margin-left:.35em;font-size:.85em;opacity:.75}
 /* The repository name, typed when the assessment does not record one. Sized to
    owner/name and no wider: it sits in a row of buttons, and a field that
    stretched would read as the subject of the strip rather than a gap in it. */
@@ -3820,7 +3823,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     "button",
                     {
                       type: "button",
-                      className: "pp-modallink",
+                      className: "pp-modallink pp-chat",
                       title: "Put this in the message box, then type your question",
                       onClick: () => {
                         if (props.mention(mentionOf(current.url, props.label))) close();
@@ -4496,7 +4499,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               ),
               h(
                 "button",
-                { type: "button", className: "pp-primary", disabled: busy, onClick: askToLink },
+                { type: "button", className: "pp-primary pp-chat", disabled: busy, onClick: askToLink },
                 "Ask the assistant to link " + title,
               ),
             )
@@ -5134,13 +5137,13 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 { className: "pp-actions" },
                 h(
                   "button",
-                  { type: "button", className: proposed ? "pp-segbtn" : "pp-primary", disabled: Boolean(busy), onClick: () => { props.ask(ask(true)); close(); } },
+                  { type: "button", className: (proposed ? "pp-segbtn" : "pp-primary") + " pp-chat", disabled: Boolean(busy), onClick: () => { props.ask(ask(true)); close(); } },
                   proposed ? "Ask for other rubrics" : "Ask the assistant to propose rubrics",
                 ),
                 !proposed
                   ? h(
                       "button",
-                      { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => { props.ask(ask(false)); close(); } },
+                      { type: "button", className: "pp-segbtn pp-chat", disabled: Boolean(busy), onClick: () => { props.ask(ask(false)); close(); } },
                       "Just one rubric",
                     )
                   : null,
@@ -5609,7 +5612,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             "button",
             {
               type: "button",
-              className: "pp-segbtn",
+              className: "pp-segbtn pp-chat",
               disabled: !(notes["rethink|" + item.item_id] || "").trim(),
               onClick: () => {
                 props.ask(rethinkPrompt(notes["rethink|" + item.item_id]));
@@ -6098,7 +6101,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               {
                 type: "button",
                 key: "ask-" + kind,
-                className: primary ? "pp-primary" : "pp-segbtn",
+                className: (primary ? "pp-primary" : "pp-segbtn") + " pp-chat",
                 onClick: () => props.ask(STEP_PROMPTS[kind](props.runId, assessmentId)),
               },
               kind === "grade" ? "Ask the assistant for suggestions" : "Ask the assistant",
@@ -7207,7 +7210,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       return h(
         "div",
         { className: "pp-approverow" },
-        h("button", { type: "button", className: "pp-segbtn", onClick: desk.proposeGrade }, "Propose the grade"),
+        h("button", { type: "button", className: "pp-segbtn pp-chat", onClick: desk.proposeGrade }, "Propose the grade"),
         h(
           "span",
           { className: "pp-dim" },
@@ -7505,7 +7508,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           takes.length
             ? h(
                 "button",
-                { type: "button", className: "pp-segbtn", disabled: Boolean(recording || handsFree), onClick: () => desk.followUp(entry.id) },
+                { type: "button", className: "pp-segbtn pp-chat", disabled: Boolean(recording || handsFree), onClick: () => desk.followUp(entry.id) },
                 "Follow-up question",
               )
             : null,
@@ -9137,7 +9140,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   "button",
                   {
                     type: "button",
-                    className: "pp-segbtn",
+                    // Recordings open the batch steps instead of writing to the chat.
+                    className: kind === "recordings" ? "pp-segbtn" : "pp-segbtn pp-chat",
                     disabled: busy || files.length === 0,
                     title:
                       "Upload to the private folder outside the course, then tell the assistant in the chat where " +

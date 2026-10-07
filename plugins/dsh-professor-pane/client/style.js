@@ -57,6 +57,9 @@ const CSS = `
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-segbtn[aria-pressed=true]{color:var(--dsw-alias-label-primary,#111);font-weight:600;
   border-color:var(--dsw-alias-label-primary,#111)}
+/* A press that goes to the chat rather than changing a record. The same glyph
+   server/page.js puts on [data-ask] in the frames, so it means one thing everywhere. */
+.pp-chat::after{content:"\\2726";margin-left:.35em;font-size:.85em;opacity:.75}
 /* The repository name, typed when the assessment does not record one. Sized to
    owner/name and no wider: it sits in a row of buttons, and a field that
    stretched would read as the subject of the strip rather than a gap in it. */

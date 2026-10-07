@@ -354,7 +354,7 @@ export function CanvasMarks(props) {
           ),
           h(
             "button",
-            { type: "button", className: "pp-primary", disabled: busy, onClick: askToLink },
+            { type: "button", className: "pp-primary pp-chat", disabled: busy, onClick: askToLink },
             "Ask the assistant to link " + title,
           ),
         )

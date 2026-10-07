@@ -363,7 +363,7 @@ export function ScansTab(props) {
           {
             type: "button",
             key: "ask-" + kind,
-            className: primary ? "pp-primary" : "pp-segbtn",
+            className: (primary ? "pp-primary" : "pp-segbtn") + " pp-chat",
             onClick: () => props.ask(STEP_PROMPTS[kind](props.runId, assessmentId)),
           },
           kind === "grade" ? "Ask the assistant for suggestions" : "Ask the assistant",

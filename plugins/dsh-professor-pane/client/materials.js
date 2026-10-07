@@ -532,7 +532,7 @@ export function MaterialModal(props) {
                 "button",
                 {
                   type: "button",
-                  className: "pp-modallink",
+                  className: "pp-modallink pp-chat",
                   title: "Put this in the message box, then type your question",
                   onClick: () => {
                     if (props.mention(mentionOf(current.url, props.label))) close();

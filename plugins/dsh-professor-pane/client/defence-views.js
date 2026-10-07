@@ -241,7 +241,7 @@ export function GradeRow(props) {
   return h(
     "div",
     { className: "pp-approverow" },
-    h("button", { type: "button", className: "pp-segbtn", onClick: desk.proposeGrade }, "Propose the grade"),
+    h("button", { type: "button", className: "pp-segbtn pp-chat", onClick: desk.proposeGrade }, "Propose the grade"),
     h(
       "span",
       { className: "pp-dim" },
@@ -539,7 +539,7 @@ export function QuestionItem(props) {
       takes.length
         ? h(
             "button",
-            { type: "button", className: "pp-segbtn", disabled: Boolean(recording || handsFree), onClick: () => desk.followUp(entry.id) },
+            { type: "button", className: "pp-segbtn pp-chat", disabled: Boolean(recording || handsFree), onClick: () => desk.followUp(entry.id) },
             "Follow-up question",
           )
         : null,

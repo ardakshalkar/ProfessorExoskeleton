@@ -460,7 +460,8 @@ export function UploadModal(props) {
               "button",
               {
                 type: "button",
-                className: "pp-segbtn",
+                // Recordings open the batch steps instead of writing to the chat.
+                className: kind === "recordings" ? "pp-segbtn" : "pp-segbtn pp-chat",
                 disabled: busy || files.length === 0,
                 title:
                   "Upload to the private folder outside the course, then tell the assistant in the chat where " +

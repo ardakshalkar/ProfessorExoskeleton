@@ -181,6 +181,7 @@ a.chip:hover,button.chip:hover{border-color:var(--accent-line)}
 .calm{margin:0;color:var(--muted);font-size:13px}
 button.link{border:0;background:none;padding:0;font:inherit;font-size:13px;color:var(--accent-ink);cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:var(--accent-line);text-underline-offset:2px}
 .chip.ask.strong{border:1px solid var(--accent-line);background:var(--surface);font-weight:500}
+.gap[data-ask]::after{content:"\\2726";margin-left:2px;font-size:.85em;opacity:.75}
 .primary{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font:inherit;font-size:13px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--on-fg);cursor:pointer}
 .weights{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .wcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 13px;display:flex;flex-direction:column;gap:2px}

@@ -398,13 +398,13 @@ export function GradeBoard(props) {
             { className: "pp-actions" },
             h(
               "button",
-              { type: "button", className: proposed ? "pp-segbtn" : "pp-primary", disabled: Boolean(busy), onClick: () => { props.ask(ask(true)); close(); } },
+              { type: "button", className: (proposed ? "pp-segbtn" : "pp-primary") + " pp-chat", disabled: Boolean(busy), onClick: () => { props.ask(ask(true)); close(); } },
               proposed ? "Ask for other rubrics" : "Ask the assistant to propose rubrics",
             ),
             !proposed
               ? h(
                   "button",
-                  { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => { props.ask(ask(false)); close(); } },
+                  { type: "button", className: "pp-segbtn pp-chat", disabled: Boolean(busy), onClick: () => { props.ask(ask(false)); close(); } },
                   "Just one rubric",
                 )
               : null,
@@ -873,7 +873,7 @@ export function GradeBoard(props) {
         "button",
         {
           type: "button",
-          className: "pp-segbtn",
+          className: "pp-segbtn pp-chat",
           disabled: !(notes["rethink|" + item.item_id] || "").trim(),
           onClick: () => {
             props.ask(rethinkPrompt(notes["rethink|" + item.item_id]));
