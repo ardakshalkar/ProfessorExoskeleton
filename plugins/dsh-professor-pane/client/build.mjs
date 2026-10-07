@@ -167,7 +167,95 @@ const headerOf = (file) => {
   return text.slice(0, text.indexOf("*/") + 2);
 };
 
+/**
+ * The `import` lines are only for the reader, so nothing at runtime keeps them
+ * true: every module shares the factory's scope, and a name used without being
+ * imported still works. This makes them true by refusing to build when they
+ * are not:
+ *
+ * * a name another module declares is used here without being imported,
+ * * a name is imported but never used,
+ * * a name is imported from a module that does not export it,
+ * * a name is exported but no other module imports it.
+ *
+ * Scope-aware — a local that shadows another module's name is not a use of
+ * it — because it asks the TypeScript checker what each identifier resolves to.
+ */
+const checkImports = () => {
+  const paths = ORDER.map((file) => HERE + file);
+  const program = ts.createProgram(paths, { allowJs: true, noEmit: true, types: [], noLib: true });
+  const checker = program.getTypeChecker();
+  const sources = new Map(ORDER.map((file) => [file, program.getSourceFile(HERE + file)]));
+
+  const topNames = new Map(); // name -> declaring file
+  const exportsOf = new Map(); // file -> Set of exported names
+  for (const [file, sf] of sources) {
+    const exported = new Set();
+    for (const st of sf.statements) {
+      for (const name of declaredNames(st)) {
+        topNames.set(name, file);
+        if (isExported(st)) exported.add(name);
+      }
+    }
+    exportsOf.set(file, exported);
+  }
+
+  const problems = [];
+  const importedAnywhere = new Set(); // "file:name"
+  for (const [file, sf] of sources) {
+    const imported = new Map(); // local name -> { from, node }
+    for (const st of sf.statements.filter(ts.isImportDeclaration)) {
+      const from = st.moduleSpecifier.text.replace(/^\.\//, "");
+      for (const el of st.importClause?.namedBindings?.elements ?? []) {
+        imported.set(el.name.text, { from, node: el });
+        importedAnywhere.add(`${from}:${(el.propertyName ?? el.name).text}`);
+        if (!exportsOf.get(from)?.has((el.propertyName ?? el.name).text)) {
+          problems.push(`client/${file} imports \`${el.name.text}\` from ./${from}, which does not export it`);
+        }
+      }
+    }
+    const used = new Set();
+    const visit = (node) => {
+      if (ts.isImportDeclaration(node)) return;
+      if (ts.isIdentifier(node) && isReference(node)) {
+        const symbol = ts.isShorthandPropertyAssignment(node.parent) && node.parent.name === node
+          ? checker.getShorthandAssignmentValueSymbol(node.parent)
+          : checker.getSymbolAtLocation(node);
+        const declaration = symbol?.declarations?.[0];
+        if (declaration && ts.isImportSpecifier(declaration)) used.add(node.text);
+        else if (!declaration && topNames.has(node.text) && topNames.get(node.text) !== file) {
+          problems.push(`client/${file} uses \`${node.text}\` from ./${topNames.get(node.text)} without importing it`);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    for (const name of imported.keys()) {
+      if (!used.has(name)) problems.push(`client/${file} imports \`${name}\` and never uses it`);
+    }
+  }
+  for (const [file, names] of exportsOf) {
+    for (const name of names) {
+      if (!importedAnywhere.has(`${file}:${name}`)) {
+        problems.push(`client/${file} exports \`${name}\`, which no module imports`);
+      }
+    }
+  }
+  if (problems.length) throw new Error("imports out of step:\n  " + [...new Set(problems)].join("\n  "));
+};
+
+/** An identifier that names a binding, not a property or a label. */
+const isReference = (node) => {
+  const parent = node.parent;
+  if (ts.isPropertyAccessExpression(parent) && parent.name === node) return false;
+  if ((ts.isPropertyAssignment(parent) || ts.isMethodDeclaration(parent)) && parent.name === node) return false;
+  if (ts.isBindingElement(parent) && parent.propertyName === node) return false;
+  if ((ts.isLabeledStatement(parent) || ts.isBreakOrContinueStatement(parent)) && parent.label === node) return false;
+  return true;
+};
+
 export const build = () => {
+  checkImports();
   const declared = new Set();
   const parts = [];
   for (const file of ORDER) {
