@@ -27,7 +27,7 @@ import {
 /**
  * The views a widget document answers, keyed by the path segment.
  *
- * Not the tab list — `lib/client.js` owns that, and most tabs are no longer in
+ * Not the tab list — `client/tabs.js` owns that, and most tabs are no longer in
  * here. Each entry names a tool in `dsh-ainar-course-model`'s manifest, which
  * is keyed by tool. Everything else the pane draws has no widget behind it:
  * the class list, the Checklist, the assessment, slide and exam tables and the

@@ -250,7 +250,7 @@ crops, because the crop *is* the handwritten name, and the review is not offered
 ### Grading, question by question
 
 **Grade the answers** appears in the Scans tab once one answer is recorded,
-and opens over the conversation (`GradeBoard` in `lib/client.js`, the payload
+and opens over the conversation (`GradeBoard` in `client/grade-board.js`, the payload
 in `lib/grade.js`, which is `ainar grade status --json` with names added).
 Questions are tabs across the top, each with how many of its answers are
 decided. What the body draws depends on where the rubric stands:
@@ -570,7 +570,7 @@ because it is the same code.
 What is drawn in this package is what no tool returns. The class list, the
 Checklist, the assessment, slide and exam tables and the grading policy are
 assembled in `lib/` and served as plain pages into the same frame.
-Preferences and Integrations are drawn in `lib/client.js` instead, and the
+Preferences and Integrations are drawn in `client/` instead, and the
 reason is narrower than "no tool returns them": both carry a **form**, and the
 frame is delivered as `srcdoc` without `allow-same-origin`, so a document
 inside it has an opaque origin and cannot call back to the routes a Save needs.
@@ -583,17 +583,22 @@ lib/*.js        host: what the routes assemble, one module per concern
                 (workspace, preferences, integrations, lms-writes, connections,
                 page, course-views, checklist, students, defence-desk,
                 materials, serve-file, actions, http, …)
-lib/client.js   browser: the pane, hand-written in the module loader's own form
+client/*.js     browser: the pane, one module per tab or concern
+client/build.mjs  joins them into lib/client.js
+lib/client.js   browser: the built file dsh serves — do not edit by hand
 cordis.patch.yml  the loader entry that makes both halves load
 ```
 
-`lib/client.js` is **not built**. Every client half under
-`node_modules/@deepseek-ai` is a `window.__ModuleLoader__.load({ id, factory })`
-registration, so that shape is the loader's contract rather than anybody's
-private bundler artefact, and one file of plain ES2020 using
-`React.createElement` is cheaper to keep true than a tsdown config this project
-would otherwise not have. Add the bundler when this outgrows a few hundred
-lines, not before.
+**Edit `client/`, then run `npm run build`.** dsh serves exactly one browser
+file per package — `exports["./client"]`, at `/plugins/<id>/client.js`, and
+nothing else under that prefix — and every client half under
+`node_modules/@deepseek-ai` is one `window.__ModuleLoader__.load({ id, factory })`
+registration. So the modules in `client/` are joined into that one file and the
+result is committed. The join is `client/build.mjs` rather than a bundler: the
+modules share one factory scope, as they did when this was a single file, and
+need nothing from npm, so dropping their `import`/`export` lines and
+concatenating them is the whole job. `test/client-build.test.mjs` fails when
+the built file is out of step with the sources.
 
 ### The routes
 
@@ -866,7 +871,7 @@ thing that opens it is the `openDetails(target)` action handed to
 `conversation.chat.node` registrants, and no shipped registrant calls it — the
 panel is unreachable in the running harness either way, and the same data is in
 the trajectory view. If a future DSH wires a "view details" control up, the
-`priority: -1` in `lib/client.js` is the one line to reconsider.
+`priority: -1` in `client/main.js` is the one line to reconsider.
 
 **The frame is fed by `srcdoc`, not `src`.** The sandbox is `allow-scripts` and
 deliberately not `allow-same-origin` — the widgets declare an empty CSP

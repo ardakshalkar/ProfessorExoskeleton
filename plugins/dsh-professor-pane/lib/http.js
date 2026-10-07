@@ -5,7 +5,7 @@
 
 import { escapeText } from "./markdown.js";
 
-/** Where every route in this file lives. Keep it in step with `lib/client.js`. */
+/** Where every route in this file lives. Keep it in step with `client/tabs.js`. */
 export const BASE = "/professor-pane";
 
 /**

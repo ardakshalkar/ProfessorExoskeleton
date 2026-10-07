@@ -7,7 +7,8 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test \"test/*.test.mjs\"",
-    "desk": "node test/desk-page.mjs"
+    "desk": "node test/desk-page.mjs",
+    "build": "node client/build.mjs"
   },
   "exports": {
     ".": "./index.js",
@@ -36,8 +37,8 @@
     }
   },
   "comments": {
-    "client": "`lib/client.js` is HAND-WRITTEN in the module-loader's registration form (`window.__ModuleLoader__.load({id, factory})`) rather than produced by tsdown, and there is deliberately no build step. Every shipped client half in node_modules/@deepseek-ai is that same shape, so the format is a contract rather than a private artefact, and one file of plain ES2020 with React.createElement is cheaper to keep true than a bundler config this project would otherwise not have. If this grows past a few hundred lines, add the bundler then.",
-    "inject": "`dsh.client.inject` names PACKAGES whose client halves must be live first, not services. ui-layout because the `details` seat is declared inside its AppFrame children table and does not exist until that entry mounts; ui-conversation because the header-action seat this pane's opener sits in is declared by its session header; client-runtime for `slots` and `sessions`. The service names this plugin injects are the `inject` export in index.js and lib/client.js.",
+    "client": "`lib/client.js` is BUILT from `client/*.js` by `client/build.mjs` (`npm run build`) and committed, because dsh serves that one file from disk: `exports[\"./client\"]` at /plugins/<id>/client.js, and nothing else under that prefix. The output is the module-loader registration form (`window.__ModuleLoader__.load({id, factory})`) every shipped client half in node_modules/@deepseek-ai has. The build is a join, not a bundler: the modules share one factory scope and need nothing from npm, so it drops their import/export lines, concatenates them in order and wraps them. test/client-build.test.mjs fails when the built file is out of step.",
+    "inject": "`dsh.client.inject` names PACKAGES whose client halves must be live first, not services. ui-layout because the `details` seat is declared inside its AppFrame children table and does not exist until that entry mounts; ui-conversation because the header-action seat this pane's opener sits in is declared by its session header; client-runtime for `slots` and `sessions`. The service names this plugin injects are the `inject` export in index.js and client/pane.js.",
     "dependency": "This reads the course model through `@ainar/core/src/**` — the package in ainar-node/, imported as TypeScript because Node strips types on import. Until 2026-09-16 it read `dsh-ainar-course-model/server/**`, a second compiled copy of the same model; the pane and the course-model plugin now import the one source, so a change to the model reaches both without anyone keeping two trees in step. `@ainar/core` is a dependency of the PROJECT rather than of this package, for the reason the course model's package.json gives: pnpm cannot resolve a file: spec whose absolute path contains a space, and this checkout lives under a home directory that has one. Node resolution finds it from the dsh installation's node_modules either way."
   }
 }

@@ -1,3 +1,4 @@
+// Built by client/build.mjs from client/*.js — edit those, then `npm run build`.
 /**
  * The browser half: the right column of the harness, as the professor's pane.
  *
@@ -50,13 +51,17 @@ window.__ModuleLoader__.load({
     var exports = module.exports;
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 
+    // ── client/react.js
+
     const React = require("react");
     // For one thing only: the material overlay. Everything else in this file
     // renders inside the column; a deck cannot, so it is portalled to the body.
     const ReactDOM = require("react-dom");
     const h = React.createElement;
 
-    /** Kept in step with `BASE` in index.js by hand; there are two of them. */
+    // ── client/tabs.js
+
+    /** Kept in step with `BASE` in lib/http.js by hand; there are two of them. */
     const BASE = "/professor-pane";
 
     /**
@@ -334,6 +339,8 @@ window.__ModuleLoader__.load({
       { label: "Record", drafts: false, hint: "only what has been accepted" },
       { label: "+ drafts", drafts: true, hint: "including records marked approval: draft" },
     ];
+
+    // ── client/style.js
 
     // ---------------------------------------------------------------- styles
 
@@ -912,6 +919,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       document.head.appendChild(tag);
     }
 
+    // ── client/common.js
+
     // ------------------------------------------------------------- fetching
 
     /**
@@ -984,6 +993,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     function Message(props) {
       return h("div", { className: "pp-msg" + (props.error ? " pp-err" : "") }, props.children);
     }
+
+    // ── client/preferences.js
 
     /**
      * One preference layer.
@@ -1324,6 +1335,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         ),
       );
     }
+
+    // ── client/integration-parts.js
 
     // ------------------------------------------------------------ integrations
 
@@ -2333,6 +2346,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    // ── client/integrations.js
+
     /**
      * What this run is wired to, and what it is not.
      *
@@ -3278,6 +3293,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    // ── client/materials.js
+
     /**
      * A widget document in an iframe, delivered as `srcdoc` rather than `src`.
      *
@@ -3853,6 +3870,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    // ── client/publish.js
+
     /**
      * The four places a course reaches an audience, and one dialog for them.
      *
@@ -4127,6 +4146,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         document.body,
       );
     }
+
+    // ── client/marks.js
 
     // ---------------------------------------------------------------- scans
 
@@ -4718,6 +4739,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         ),
       );
     }
+
+    // ── client/grade-board.js
 
     /**
      * Grading a written exam, one question at a time, over the conversation.
@@ -5718,6 +5741,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    // ── client/scans.js
+
     /**
      * Paper exams: where a pile stands, and who each paper is.
      *
@@ -6338,72 +6363,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
-    // --------------------------------------------------------------- upload
-
-    /**
-     * The two things a professor uploads, and what each is for.
-     *
-     * Kept to two on purpose. The harness's own attachment path takes images
-     * and gives the model no file it can run a command on, so these are the
-     * files that otherwise have no way in: the scanned pile, and the paper and
-     * key it was sat against. Each lands in the private submissions folder
-     * where the skill that reads it already looks — see `lib/upload.js`.
-     */
-    const UPLOAD_KINDS = [
-      {
-        id: "scans",
-        label: "Scanned student papers",
-        accept: ".pdf,application/pdf",
-        hint:
-          "PDFs from the scanner — one per student or one batch for the class. Kept outside " +
-          "the course, renamed so no student's name travels with them.",
-      },
-      {
-        id: "paper",
-        label: "Exam paper or answer key",
-        accept: ".pdf,.docx,.odt,.md,.txt,.png,.jpg,.jpeg",
-        hint:
-          "The paper you set, and its key — so the questions can be recorded exactly as " +
-          "printed. Kept outside the course until they are imported.",
-      },
-      {
-        id: "recordings",
-        label: "Recorded oral defences",
-        accept: ".m4a,.mp4,.mp3,.wav,.webm,.ogg,audio/*",
-        hint:
-          "Defences recorded elsewhere — on a phone, in another room — one file per student. Kept " +
-          "outside the course, renamed so no name travels with them; matched to students and priced " +
-          "before anything is sent.",
-      },
-    ];
-
-    /**
-     * The message the agent gets once the files are in place.
-     *
-     * Paths, never the original filenames: a scan's name can carry a student's,
-     * and this sentence goes into the transcript. The server has already renamed
-     * a scan by its content, so what is quoted here is safe to say.
-     */
-    const uploadPrompt = (kind, runId, stored, note) => {
-      const fresh = stored.filter((entry) => !entry.duplicate);
-      const again = stored.length - fresh.length;
-      const list = stored.map((entry) => "- " + entry.path).join("\n");
-      const extra = note.trim() === "" ? "" : "\n\nWhat I can tell you: " + note.trim();
-      const repeat = again ? " (" + again + " of them already uploaded before)" : "";
-      if (kind === "scans") {
-        return (
-          "I uploaded " + stored.length + " scanned exam PDF(s) for " + runId + repeat +
-          ", into the run's unfiled inbox:\n" + list + extra +
-          "\n\nWork out which assessment they are from the covers and ask me before filing " +
-          "them (/import-assessment §1), then grade them (/grade-scans)."
-        );
-      }
-      return (
-        "I uploaded the exam paper / answer key for " + runId + repeat + ":\n" + list + extra +
-        "\n\nUse them to record the exam's questions and key (/import-assessment) — ask me " +
-        "which assessment it is and about variants first."
-      );
-    };
+    // ── client/defence-desk.js
 
     /**
      * When an answer has ended, from the microphone's level alone (AGT-1).
@@ -8544,6 +8504,75 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
+    // ── client/upload.js
+
+    // --------------------------------------------------------------- upload
+
+    /**
+     * The two things a professor uploads, and what each is for.
+     *
+     * Kept to two on purpose. The harness's own attachment path takes images
+     * and gives the model no file it can run a command on, so these are the
+     * files that otherwise have no way in: the scanned pile, and the paper and
+     * key it was sat against. Each lands in the private submissions folder
+     * where the skill that reads it already looks — see `lib/upload.js`.
+     */
+    const UPLOAD_KINDS = [
+      {
+        id: "scans",
+        label: "Scanned student papers",
+        accept: ".pdf,application/pdf",
+        hint:
+          "PDFs from the scanner — one per student or one batch for the class. Kept outside " +
+          "the course, renamed so no student's name travels with them.",
+      },
+      {
+        id: "paper",
+        label: "Exam paper or answer key",
+        accept: ".pdf,.docx,.odt,.md,.txt,.png,.jpg,.jpeg",
+        hint:
+          "The paper you set, and its key — so the questions can be recorded exactly as " +
+          "printed. Kept outside the course until they are imported.",
+      },
+      {
+        id: "recordings",
+        label: "Recorded oral defences",
+        accept: ".m4a,.mp4,.mp3,.wav,.webm,.ogg,audio/*",
+        hint:
+          "Defences recorded elsewhere — on a phone, in another room — one file per student. Kept " +
+          "outside the course, renamed so no name travels with them; matched to students and priced " +
+          "before anything is sent.",
+      },
+    ];
+
+    /**
+     * The message the agent gets once the files are in place.
+     *
+     * Paths, never the original filenames: a scan's name can carry a student's,
+     * and this sentence goes into the transcript. The server has already renamed
+     * a scan by its content, so what is quoted here is safe to say.
+     */
+    const uploadPrompt = (kind, runId, stored, note) => {
+      const fresh = stored.filter((entry) => !entry.duplicate);
+      const again = stored.length - fresh.length;
+      const list = stored.map((entry) => "- " + entry.path).join("\n");
+      const extra = note.trim() === "" ? "" : "\n\nWhat I can tell you: " + note.trim();
+      const repeat = again ? " (" + again + " of them already uploaded before)" : "";
+      if (kind === "scans") {
+        return (
+          "I uploaded " + stored.length + " scanned exam PDF(s) for " + runId + repeat +
+          ", into the run's unfiled inbox:\n" + list + extra +
+          "\n\nWork out which assessment they are from the covers and ask me before filing " +
+          "them (/import-assessment §1), then grade them (/grade-scans)."
+        );
+      }
+      return (
+        "I uploaded the exam paper / answer key for " + runId + repeat + ":\n" + list + extra +
+        "\n\nUse them to record the exam's questions and key (/import-assessment) — ask me " +
+        "which assessment it is and about variants first."
+      );
+    };
+
     /**
      * Recorded defences uploaded afterwards (DEF-6): plan, file, transcribe —
      * each a press, each answered by `ainar defence batch` in the pane's own
@@ -8955,6 +8984,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         document.body,
       );
     }
+
+    // ── client/pane.js
 
     // ----------------------------------------------------------------- pane
 
@@ -9728,6 +9759,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         "Course",
       );
     }
+
+    // ── client/main.js
 
     /**
      * @param ctx - client root context.
