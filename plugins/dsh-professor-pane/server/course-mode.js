@@ -138,7 +138,8 @@ body{margin:0;background:var(--ground);color:var(--ink);font:14px/1.5 ui-sans-se
 .wkhead>b{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
 .wkhead h3{margin:0;font-size:14px;font-weight:600}
 .wkhead h3.none{color:var(--muted);font-weight:450}
-.wkhead.now{background:var(--accent-tint)}.wkhead.now>b{color:var(--accent)}
+.wkhead,.band{scroll-margin-top:calc(var(--strip-h,45px) + 38px)}
+.wkhead.now,.band.now{background:var(--accent-tint)}.wkhead.now>b{color:var(--accent)}
 .wkhead.past>b,.wkhead.past h3{color:var(--muted)}
 .wkhead .askw{margin-left:auto}
 .concepts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px;padding:2px 12px 10px;align-items:center;color:var(--muted)}
@@ -256,12 +257,22 @@ table.plan td.lane{width:16%;min-width:140px;padding:0 6px}
  *
  * And the sticky column heads sit under the strip by its MEASURED height,
  * because the strip wraps on a narrow frame.
+ *
+ * The page opens on this week. Once is not enough: the frame is sandboxed
+ * with an opaque origin and may be given its size only after this runs, so
+ * a scroll made at parse time is lost and the page sits on week 1. It is
+ * made again on load, on resize and whenever the page reflows, until the
+ * professor scrolls themselves.
  */
 const SCRIPT = `<script>(function(){
 var strip=document.querySelector('.strip');
 function measure(){if(strip)document.documentElement.style.setProperty('--strip-h',strip.offsetHeight+'px');}
 measure();if(window.ResizeObserver&&strip)new ResizeObserver(measure).observe(strip);
-var now=document.querySelector('.wkhead.now');if(now)now.scrollIntoView({block:'start'});
+var now=document.querySelector('.wkhead.now,.band.now'),moved=false;
+function toNow(){if(now&&!moved&&innerHeight>0)now.scrollIntoView({block:'start'});}
+['wheel','keydown','mousedown','touchstart'].forEach(function(k){addEventListener(k,function(){moved=true;},{once:true,passive:true});});
+toNow();addEventListener('load',toNow);addEventListener('resize',toNow);if(window.requestAnimationFrame)requestAnimationFrame(toNow);
+if(window.ResizeObserver)new ResizeObserver(toNow).observe(document.body);
 document.addEventListener('click',function(e){
   var g=e.target.closest&&e.target.closest('[data-goto]');if(!g)return;
   var n=g.getAttribute('data-goto');
@@ -807,7 +818,8 @@ const evidenceBody = (data, evidence, status) => {
     if (j - i >= 2) {
       const a = weeks[i];
       const z = weeks[j - 1];
-      rows.push(`<div class="band" id="week-${a.week}"><b>${icon("calendar")} Weeks ${a.week}–${z.week}</b>` +
+      const holds = current !== null && current >= a.week && current <= z.week;
+      rows.push(`<div class="band${holds ? " now" : ""}" id="week-${a.week}"><b>${icon("calendar")} Weeks ${a.week}–${z.week}</b>` +
         `<span class="k mono">${esc(shortDate(a.starts_on))} – ${esc(shortDate(z.ends_on))}</span>` +
         `<span class="none">nothing due, nothing measured yet</span></div>`);
       i = j;
@@ -1003,7 +1015,8 @@ export const courseModeDocument = (
           "and what falls due in them, as draft modules for me to read.",
       )}">${icon("module")}Plan ${esc(span.toLowerCase())}</button>`;
     }
-    return `<div class="band" id="week-${a.week}"><b>${icon("calendar")} ${esc(span)}</b>` +
+    const holds = current !== null && current >= a.week && current <= z.week;
+    return `<div class="band${holds ? " now" : ""}" id="week-${a.week}"><b>${icon("calendar")} ${esc(span)}</b>` +
       `<span class="k mono">${esc(shortDate(a.starts_on))} – ${esc(shortDate(z.ends_on))}</span>` +
       `<span class="none">${showGaps ? `unplanned · ${run_.length} weeks` : "no sessions scheduled"}</span>` +
       work.join("") + plan + "</div>";

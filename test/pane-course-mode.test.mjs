@@ -195,3 +195,14 @@ test("evidence reports nothing for work in a week still to come", () => {
   const html = courseModeDocument(data, { mode: "evidence", evidence: weekly });
   assert.match(html, /id="week-3".*not due yet/s);
 });
+
+test("evidence opens on this week, whether it is a row or inside a band", () => {
+  const html = courseModeDocument(payload(), { mode: "evidence", evidence: weekly });
+  assert.match(html, /<div class="wkhead now" id="week-2">/);
+  // The scroll is made again once the frame has its size, not only at parse time.
+  assert.match(html, /addEventListener\('load',toNow\)/);
+  const later = payload();
+  later.current_week = 3;
+  const banded = courseModeDocument(later, { mode: "evidence", evidence: weekly });
+  assert.match(banded, /<div class="band now" id="week-3">/);
+});
