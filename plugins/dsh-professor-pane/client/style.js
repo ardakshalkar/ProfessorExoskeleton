@@ -321,6 +321,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column}
 .pp-coursebody .pp-frame{background:transparent}
 .pp-coursehead{flex-wrap:wrap}
+/* The run picker's look, at a header's size: one control among the buttons. */
+.pp-coursehead .pp-jump{width:auto;margin:0;flex:none}
 .pp-coursehead label{display:inline-flex;gap:5px;align-items:center;font-size:11px;
   color:var(--dsw-alias-label-secondary,#555);cursor:pointer}
 /* The publish dialog's body. Unlike the material modal there is no frame to

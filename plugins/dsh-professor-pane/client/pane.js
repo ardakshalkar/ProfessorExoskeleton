@@ -728,7 +728,15 @@ export function ProfessorPane(props) {
           drafts: drafts,
           setDrafts: setDrafts,
           reload: reload,
-          covered: material !== null || publishing !== null,
+          covered: material !== null || publishing !== null || uploading || batch,
+          onPublish: () => openPublish("page"),
+          onUpload: () => setUploading(true),
+          tabs: TABS,
+          onJump: (id) => {
+            setTab(id);
+            setCourseMode(false);
+            if (props.openDetails) props.openDetails();
+          },
           onClose: () => setCourseMode(false),
         })
       : null,

@@ -398,6 +398,34 @@ export function CourseMode(props) {
                 }),
                 "Preview as student",
               ),
+          // The pane's header, which this veil covers. Publish and Upload
+          // open their own windows on top, so course mode is still here when
+          // they close; the jump is for everything the term plan does not
+          // draw — it closes course mode and opens the pane on that tab.
+          h(
+            "button",
+            { type: "button", className: "pp-publishbtn", title: "Publish the course page, an announcement, a repository or a Canvas brief", onClick: props.onPublish },
+            "Publish",
+          ),
+          h(
+            "button",
+            { type: "button", className: "pp-publishbtn", title: "Scanned papers, an exam paper and its key, or recorded defences", onClick: props.onUpload },
+            "Upload",
+          ),
+          h(
+            "select",
+            {
+              className: "pp-runs pp-jump",
+              value: "",
+              "aria-label": "Open a tab in the pane",
+              title: "Close course mode and open this tab in the pane",
+              onChange: (event) => {
+                if (event.target.value) props.onJump(event.target.value);
+              },
+            },
+            h("option", { value: "" }, "Open in pane…"),
+            props.tabs.map((entry) => h("option", { value: entry.id, key: entry.id, title: entry.hint }, entry.label)),
+          ),
           h(
             "button",
             {
