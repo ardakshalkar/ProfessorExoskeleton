@@ -174,7 +174,7 @@ export const gradingDocument = (workspace, root, runId, dark, withDrafts, on) =>
     : "";
 
   // A run with a grading scheme is drawn as the blocks it is built from — see
-  // lib/grading-view.js — and the written policy follows as the reference.
+  // server/grading-view.js — and the written policy follows as the reference.
   // Without one, the flat list of weights is still the whole truth.
   if (run.grading_scheme?.components?.length) {
     const shown = withDrafts ? bundle : approvedView(bundle);

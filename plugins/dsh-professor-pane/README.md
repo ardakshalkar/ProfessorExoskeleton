@@ -10,12 +10,12 @@ and offers a picker when the workspace holds more than one offering.
 | Button | What it draws | Where it comes from |
 | --- | --- | --- |
 | Course outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines. Every piece of graded work carries a link to the brief students read, or says it has none — and every week says what it is still waiting for | `course_outline` |
-| Course outline · Grading policy | With a `grading_scheme` on the run, how the grade is built: one bar of the whole grade, a segment per block (ВСК1 / ВСК2 / Final at Narxoz) split by kind of work; then a card per block — its weight against what its members add up to, the kinds of work with count and per-item share, each assessment with its date and a tick once marks are in, the dates the block spans, and whether each Canvas course has the block's assignment group mapped; then anything counting in no block. The written policy and the run's facts follow. Without a scheme, the flat list of weights and their total | the run's `grading_scheme`, its assessments, `gradebook` for which have marks (`lib/grading-view.js`) |
+| Course outline · Grading policy | With a `grading_scheme` on the run, how the grade is built: one bar of the whole grade, a segment per block (ВСК1 / ВСК2 / Final at Narxoz) split by kind of work; then a card per block — its weight against what its members add up to, the kinds of work with count and per-item share, each assessment with its date and a tick once marks are in, the dates the block spans, and whether each Canvas course has the block's assignment group mapped; then anything counting in no block. The written policy and the run's facts follow. Without a scheme, the flat list of weights and their total | the run's `grading_scheme`, its assessments, `gradebook` for which have marks (`server/grading-view.js`) |
 | Students | The class list by subgroup, named or pseudonymous, with each student's marks so far, and under each row what they actually handed in. A submission with a link gets **repository** and **Start defence**: the pane clones the fork pinned to the hand-in, then sends `/defend-submission` so the session's model drafts the questions, which are drawn there as drafts. **Open defence desk** opens them over the harness, where each answer is recorded, kept and transcribed through the `transcription` connection, and **Follow-up question** asks the session for one more | the enrollments, `gradebook` for the marks, the run's submissions and item responses, and for a defence `pin.yaml` in the submissions folder and `output/<RUN>/defence/` |
 | Progress · Concepts | Concepts in teaching order against students by pseudonym, with the mean proportion of marks earned on evidence tagged with each | `class_progress` |
 | Progress · Gradebook | One score per student per assessment, from approved decisions only, with the rows that must not be exported and the reason for each. Above it, one line per assessment something was handed in for: how many are graded, and how many of those marks Canvas has | `gradebook`; the line is `/api/unpublished` |
 | Tasks | Work with no date and a button that sets one, grades awaiting approval, outstanding submissions, open signals, interventions | `action_inbox` |
-| Tasks · Unpublished | What the course holds that has not gone out: marks not in Canvas (and whether a Canvas assignment exists for them), materials changed since they were published, and drafts a publication leaves out — each with the press that sends it | `/api/unpublished` (`lib/unpublished.js`) |
+| Tasks · Unpublished | What the course holds that has not gone out: marks not in Canvas (and whether a Canvas assignment exists for them), materials changed since they were published, and drafts a publication leaves out — each with the press that sends it | `/api/unpublished` (`server/unpublished.js`) |
 | Preferences | The DataLayer preference layers, each with its own file path and its own values | the preference files |
 | Integrations | What this run is wired to outside the workspace, and what it is not: the gradebook target, the Canvas course and host, the spreadsheet, which credentials are present, and which Canvas section feeds which subgroup | the run record, `lms.toml`, `connections.json`, the environment |
 
@@ -65,7 +65,7 @@ and closes first.
 Why a page of the pane's own rather than the widget: the widget is one column
 by construction — it is what ChatGPT and Claude Desktop draw beside a reply,
 and what the public page renders — and the layout declares no full-width seat,
-so this takes the material overlay's idiom. `lib/course-mode.js` draws it on
+so this takes the material overlay's idiom. `server/course-mode.js` draws it on
 the host, from the same payload with the same material links, into the same
 sandboxed frame, sending the same two messages (`ask`, `view`).
 
@@ -126,7 +126,7 @@ same-origin grant only makes it load. The table is in `MaterialModal`.
 `.md` is on the showable list, and it was not before. The reason it was
 excluded stopped being true rather than being overruled: Chrome downloads
 `text/markdown` whatever the file contains, so `/file` no longer sends one. A
-markdown document is rendered to HTML there — `lib/markdown.js` — and served as
+markdown document is rendered to HTML there — `server/markdown.js` — and served as
 HTML, which the browser paints.
 
 This matters more than it sounds like it should, because markdown is what this
@@ -251,7 +251,7 @@ crops, because the crop *is* the handwritten name, and the review is not offered
 
 **Grade the answers** appears in the Scans tab once one answer is recorded,
 and opens over the conversation (`GradeBoard` in `client/grade-board.js`, the payload
-in `lib/grade.js`, which is `ainar grade status --json` with names added).
+in `server/grade.js`, which is `ainar grade status --json` with names added).
 Questions are tabs across the top, each with how many of its answers are
 decided. What the body draws depends on where the rubric stands:
 
@@ -515,7 +515,7 @@ pane reads none of it directly; it is in the CLI's output, like everything else
 in this dialog.
 
 What it cannot be made to do: accept a draft of any kind, a deck or a grade.
-See `runPublish` in `lib/actions.js`, and `ainar-node/src/publish.ts` for why a
+See `runPublish` in `server/actions.js`, and `ainar-node/src/publish.ts` for why a
 publish that also approved was two decisions behind one button.
 
 The announcement box is the only thing in the pane a professor composes rather
@@ -569,7 +569,7 @@ because it is the same code.
 
 What is drawn in this package is what no tool returns. The class list, the
 Checklist, the assessment, slide and exam tables and the grading policy are
-assembled in `lib/` and served as plain pages into the same frame.
+assembled in `server/` and served as plain pages into the same frame.
 Preferences and Integrations are drawn in `client/` instead, and the
 reason is narrower than "no tool returns them": both carry a **form**, and the
 frame is delivered as `srcdoc` without `allow-same-origin`, so a document
@@ -579,7 +579,7 @@ inside it has an opaque origin and cannot call back to the routes a Save needs.
 
 ```
 index.js        host: one prefix route, /professor-pane — the route table
-lib/*.js        host: what the routes assemble, one module per concern
+server/*.js     host: what the routes assemble, one module per concern
                 (workspace, preferences, integrations, lms-writes, connections,
                 page, course-views, checklist, students, defence-desk,
                 materials, serve-file, actions, http, …)

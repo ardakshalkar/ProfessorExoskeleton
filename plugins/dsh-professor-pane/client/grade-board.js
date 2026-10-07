@@ -9,7 +9,7 @@ import { BASE, scoped } from "./tabs.js";
 /**
  * Grading a written exam, one question at a time, over the conversation.
  *
- * The document is lib/grade.js — `ainar grade status --json` with names
+ * The document is server/grade.js — `ainar grade status --json` with names
  * added — and every figure in it arrived computed. Three readings, chosen
  * by where the rubric stands:
  *

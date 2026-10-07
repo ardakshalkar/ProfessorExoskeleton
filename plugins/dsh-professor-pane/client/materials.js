@@ -289,7 +289,7 @@ function mentionOf(url, label) {
  * button" half: a press on the page sends its prompt into the open session
  * and closes this, so the professor lands on the turn they started.
  *
- * The document is `/view/course`, drawn by the pane (`lib/course-mode.js`)
+ * The document is `/view/course`, drawn by the pane (`server/course-mode.js`)
  * from the same outline payload the Weeks tab gets, in the same sandboxed
  * frame, posting the same two messages. Record / + drafts is the pane's
  * own state, so this and the column never disagree about which half they

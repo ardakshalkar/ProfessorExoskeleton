@@ -957,7 +957,7 @@ is worth building.
       remaining questions (LIV-1). Optionally the question read aloud
       (`speechSynthesis`, or ElevenLabs voices where a Kazakh voice is
       wanted). `S` · depends: AGT-1 Done 2026-10-06: *Open student screen* on
-      the desk opens `lib/student-screen.js`, a page that fetches nothing and
+      the desk opens `server/student-screen.js`, a page that fetches nothing and
       is told what to show over a BroadcastChannel: the question by number,
       and whether it is recording. Between questions it shows only "the next
       question is coming", since the proposal may still be edited or skipped.

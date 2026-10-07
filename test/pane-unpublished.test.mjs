@@ -1,5 +1,5 @@
 /**
- * What has not gone out yet: `plugins/dsh-professor-pane/lib/unpublished.js`.
+ * What has not gone out yet: `plugins/dsh-professor-pane/server/unpublished.js`.
  *
  *     node --test test/pane-unpublished.test.mjs
  *
@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { allRubrics, enrolledIn } from "@ainar/core/src/bundle.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { Workspace } from "@ainar/core/src/workspace.ts";
-import { unpublishedDocument } from "../plugins/dsh-professor-pane/lib/unpublished.js";
+import { unpublishedDocument } from "../plugins/dsh-professor-pane/server/unpublished.js";
 
 const ROOT = fileURLToPath(new URL("../workspace", import.meta.url));
 const RUN = "CSS-4008-2026-FALL";

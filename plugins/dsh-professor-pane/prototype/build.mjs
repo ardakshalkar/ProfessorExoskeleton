@@ -16,7 +16,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 // The pane's own renderer and its style, so a brief reads here exactly as it
 // reads in the harness. Not a second markdown implementation.
-import { MARKDOWN_STYLE, renderMarkdown } from "../lib/markdown.js";
+import { MARKDOWN_STYLE, renderMarkdown } from "../server/markdown.js";
 import { Workspace } from "../../../ainar-node/src/workspace.ts";
 import { outlinePayload } from "../../../ainar-node/src/outline.ts";
 import { gradebookPayload } from "../../../ainar-node/src/gradebook.ts";

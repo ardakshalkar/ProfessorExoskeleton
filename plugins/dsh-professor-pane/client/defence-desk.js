@@ -158,7 +158,7 @@ function ListeningDots(props) {
   );
 }
 
-/** Kept in step with `screenChannel` in lib/student-screen.js by hand. */
+/** Kept in step with `screenChannel` in server/student-screen.js by hand. */
 const screenChannelName = (assessmentId, studentId) => "professor-pane-defence:" + assessmentId + ":" + studentId;
 
 export function DefenceDesk(props) {

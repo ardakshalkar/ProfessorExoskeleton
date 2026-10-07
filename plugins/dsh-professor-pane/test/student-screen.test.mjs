@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { screenChannel, studentScreenPage } from "../lib/student-screen.js";
+import { screenChannel, studentScreenPage } from "../server/student-screen.js";
 
 const page = studentScreenPage({ assessmentId: "ASSESSMENT-HW1", studentId: "STUDENT-JNG7SN" });
 

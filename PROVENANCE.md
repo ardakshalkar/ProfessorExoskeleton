@@ -227,7 +227,7 @@ decisions this project made, not code it inherited.
   `courses/` through `yaml`'s document API, which is what keeps the comments in
   those hand-authored files.
 * `src/markdown.ts` — the markdown renderer, moved out of
-  `dsh-professor-pane/lib/markdown.js` when a second reader appeared: the pane
+  `dsh-professor-pane/server/markdown.js` when a second reader appeared: the pane
   serves a brief over loopback and `assignment-push` sends the same brief to
   Canvas as HTML. Two copies would have meant a brief that read one way to the
   professor and another to the class. The pane re-exports it and keeps only its
@@ -261,7 +261,7 @@ decisions this project made, not code it inherited.
   `storage_key` is repository-relative; `object://` is reported as held
   outside the workspace rather than linked, which is the stance
   `samples/documents.yaml` already wrote down.
-* `plugins/dsh-professor-pane/lib/markdown.js` — markdown rendered to HTML on
+* `plugins/dsh-professor-pane/server/markdown.js` — markdown rendered to HTML on
   the pane's own `/file` route, so a brief or a deck opens as a document over
   the harness instead of landing in Downloads. Markdown is what this project's
   skills write, which made it the one format where serving the file and showing

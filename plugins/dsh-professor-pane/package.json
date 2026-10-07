@@ -17,7 +17,8 @@
   },
   "files": [
     "index.js",
-    "lib/",
+    "server/",
+    "lib/client.js",
     "vendor/dots-swarm.js",
     "vendor/dots-swarm.LICENSE",
     "cordis.patch.yml",

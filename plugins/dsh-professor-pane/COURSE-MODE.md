@@ -256,7 +256,7 @@ happens.
    Small, and it is the whole of the `UI-5` question answered by doing it once.
 4. **The spine as a page**, chat as a button, mode persisted per workspace.
    **Built, as an overlay** (2026-10-01): *Course mode* in the pane's header
-   opens `/view/course` — `lib/course-mode.js`, from the prototype — over the
+   opens `/view/course` — `server/course-mode.js`, from the prototype — over the
    harness, and a press on it asks and closes, landing on the turn. The mount
    question was answered by the material overlay's idiom rather than by a seat,
    since the layout has no full-width one. Not yet: persisting the mode per

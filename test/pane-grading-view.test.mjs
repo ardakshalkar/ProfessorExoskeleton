@@ -1,5 +1,5 @@
 /**
- * The grading policy drawn from the run's scheme: plugins/dsh-professor-pane/lib/grading-view.js
+ * The grading policy drawn from the run's scheme: plugins/dsh-professor-pane/server/grading-view.js
  *
  *     node --test test/pane-grading-view.test.mjs
  */
@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { schemeHtml } from "../plugins/dsh-professor-pane/lib/grading-view.js";
+import { schemeHtml } from "../plugins/dsh-professor-pane/server/grading-view.js";
 
 const run = (extra = {}) => ({
   grading_scheme: {

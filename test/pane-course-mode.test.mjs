@@ -1,6 +1,6 @@
 /**
  * Course mode's three readings of one term: Planning, Teaching and the full
- * term table, as `lib/course-mode.js` draws them on the host.
+ * term table, as `server/course-mode.js` draws them on the host.
  *
  * The rules worth pinning are the ones about what each page may carry:
  *
@@ -16,7 +16,7 @@
 
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { courseModeDocument } from "../plugins/dsh-professor-pane/lib/course-mode.js";
+import { courseModeDocument } from "../plugins/dsh-professor-pane/server/course-mode.js";
 
 const week = (n, extra = {}) => ({
   week: n,

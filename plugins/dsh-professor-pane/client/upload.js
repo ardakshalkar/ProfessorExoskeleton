@@ -14,7 +14,7 @@ import { BASE, scoped } from "./tabs.js";
  * and gives the model no file it can run a command on, so these are the
  * files that otherwise have no way in: the scanned pile, and the paper and
  * key it was sat against. Each lands in the private submissions folder
- * where the skill that reads it already looks — see `lib/upload.js`.
+ * where the skill that reads it already looks — see `server/upload.js`.
  */
 const UPLOAD_KINDS = [
   {

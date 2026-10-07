@@ -6,7 +6,7 @@
 
 import { React } from "./react.js";
 
-/** Kept in step with `BASE` in lib/http.js by hand; there are two of them. */
+/** Kept in step with `BASE` in server/http.js by hand; there are two of them. */
 export const BASE = "/professor-pane";
 
 /**

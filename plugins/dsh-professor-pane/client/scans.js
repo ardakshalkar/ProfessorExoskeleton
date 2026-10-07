@@ -12,7 +12,7 @@ import { BASE, scoped } from "./tabs.js";
  * Paper exams: where a pile stands, and who each paper is.
  *
  * Drawn here rather than in the frame for Integrations' reason — it calls
- * back. The document is lib/scans.js; every figure in it arrived computed.
+ * back. The document is server/scans.js; every figure in it arrived computed.
  * Match is the one step drawn in full, because it is the one only the
  * professor can do; the others are a sentence and a press that asks the
  * assistant, since reading, proposing a rubric and grading are its work.

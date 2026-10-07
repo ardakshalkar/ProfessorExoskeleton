@@ -61,7 +61,7 @@ window.__ModuleLoader__.load({
 
     // ── client/tabs.js
 
-    /** Kept in step with `BASE` in lib/http.js by hand; there are two of them. */
+    /** Kept in step with `BASE` in server/http.js by hand; there are two of them. */
     const BASE = "/professor-pane";
 
     /**
@@ -3577,7 +3577,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * button" half: a press on the page sends its prompt into the open session
      * and closes this, so the professor lands on the turn they started.
      *
-     * The document is `/view/course`, drawn by the pane (`lib/course-mode.js`)
+     * The document is `/view/course`, drawn by the pane (`server/course-mode.js`)
      * from the same outline payload the Weeks tab gets, in the same sandboxed
      * frame, posting the same two messages. Record / + drafts is the pane's
      * own state, so this and the column never disagree about which half they
@@ -4745,7 +4745,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     /**
      * Grading a written exam, one question at a time, over the conversation.
      *
-     * The document is lib/grade.js — `ainar grade status --json` with names
+     * The document is server/grade.js — `ainar grade status --json` with names
      * added — and every figure in it arrived computed. Three readings, chosen
      * by where the rubric stands:
      *
@@ -5747,7 +5747,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * Paper exams: where a pile stands, and who each paper is.
      *
      * Drawn here rather than in the frame for Integrations' reason — it calls
-     * back. The document is lib/scans.js; every figure in it arrived computed.
+     * back. The document is server/scans.js; every figure in it arrived computed.
      * Match is the one step drawn in full, because it is the one only the
      * professor can do; the others are a sentence and a press that asks the
      * assistant, since reading, proposing a rubric and grading are its work.
@@ -6517,7 +6517,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       );
     }
 
-    /** Kept in step with `screenChannel` in lib/student-screen.js by hand. */
+    /** Kept in step with `screenChannel` in server/student-screen.js by hand. */
     const screenChannelName = (assessmentId, studentId) => "professor-pane-defence:" + assessmentId + ":" + studentId;
 
     function DefenceDesk(props) {
@@ -8515,7 +8515,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
      * and gives the model no file it can run a command on, so these are the
      * files that otherwise have no way in: the scanned pile, and the paper and
      * key it was sat against. Each lands in the private submissions folder
-     * where the skill that reads it already looks — see `lib/upload.js`.
+     * where the skill that reads it already looks — see `server/upload.js`.
      */
     const UPLOAD_KINDS = [
       {

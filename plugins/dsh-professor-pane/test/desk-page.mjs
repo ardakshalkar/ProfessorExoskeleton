@@ -13,7 +13,7 @@
 import http from "node:http";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { studentScreenPage } from "../lib/student-screen.js";
+import { studentScreenPage } from "../server/student-screen.js";
 import { labelSpeakers } from "../../../ainar-node/src/transcribe.ts";
 import { checkSplit } from "../../../ainar-node/src/defence.ts";
 

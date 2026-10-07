@@ -49,8 +49,8 @@
  * professor would eventually see disagree with itself.
  *
  * This file is the route table — `handler` and `apply`. What each route
- * assembles lives in `lib/`, one module per concern; the processes the write
- * routes spawn are in `lib/actions.js`.
+ * assembles lives in `server/`, one module per concern; the processes the write
+ * routes spawn are in `server/actions.js`.
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -93,8 +93,8 @@ import {
   runMarksPush,
   runPublish,
   runScans,
-} from "./lib/actions.js";
-import { checklistDocument, readyDocument } from "./lib/checklist.js";
+} from "./server/actions.js";
+import { checklistDocument, readyDocument } from "./server/checklist.js";
 import {
   addConnection,
   canvasAssignmentList,
@@ -104,14 +104,14 @@ import {
   moodleWhoAmI,
   spreadsheetIdFrom,
   telegramWhoAmI,
-} from "./lib/connections.js";
-import { courseModeDocument } from "./lib/course-mode.js";
+} from "./server/connections.js";
+import { courseModeDocument } from "./server/course-mode.js";
 import {
   assessmentsDocument,
   examsDocument,
   gradingDocument,
   slidesDocument,
-} from "./lib/course-views.js";
+} from "./server/course-views.js";
 import {
   chooseNext,
   defenceReader,
@@ -120,9 +120,9 @@ import {
   splitWhole,
   statementFor,
   transcriptionInfo,
-} from "./lib/defence-desk.js";
-import { answerPage, gradeDocument, groupsStamp } from "./lib/grade.js";
-import { BASE, readBody, readBytes, send, sendErrorPage, sendJson } from "./lib/http.js";
+} from "./server/defence-desk.js";
+import { answerPage, gradeDocument, groupsStamp } from "./server/grade.js";
+import { BASE, readBody, readBytes, send, sendErrorPage, sendJson } from "./server/http.js";
 import {
   canvasSettings,
   CREDENTIAL_REF,
@@ -130,23 +130,23 @@ import {
   integrationsAnswer,
   integrationsDocument,
   resolveCredential,
-} from "./lib/integrations.js";
+} from "./server/integrations.js";
 import {
   canvasCatalogue,
   recordAssessmentLinks,
   writeCanvasCourses,
   writeCanvasSelection,
   writeRunLmsValue,
-} from "./lib/lms-writes.js";
-import { withMaterialLinks } from "./lib/materials.js";
-import { widgetDocument } from "./lib/page.js";
-import { preferencesDocument, writePreferences } from "./lib/preferences.js";
-import { paperCrop, scansDocument } from "./lib/scans.js";
-import { sendBrief, sendMaterial, sendOutline, sendStarter } from "./lib/serve-file.js";
-import { studentScreenPage } from "./lib/student-screen.js";
-import { studentsDocument } from "./lib/students.js";
-import { unpublishedDocument } from "./lib/unpublished.js";
-import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./lib/upload.js";
+} from "./server/lms-writes.js";
+import { withMaterialLinks } from "./server/materials.js";
+import { widgetDocument } from "./server/page.js";
+import { preferencesDocument, writePreferences } from "./server/preferences.js";
+import { paperCrop, scansDocument } from "./server/scans.js";
+import { sendBrief, sendMaterial, sendOutline, sendStarter } from "./server/serve-file.js";
+import { studentScreenPage } from "./server/student-screen.js";
+import { studentsDocument } from "./server/students.js";
+import { unpublishedDocument } from "./server/unpublished.js";
+import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./server/upload.js";
 import {
   loadedRun,
   payload,
@@ -158,7 +158,7 @@ import {
   VIEWS,
   withRecordPaths,
   withStudentNames,
-} from "./lib/workspace.js";
+} from "./server/workspace.js";
 
 export const name = "professor-pane";
 
@@ -228,7 +228,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
      * plugin would otherwise not have. The destination is never the caller's:
      * `kind` picks one of two folders under the private submissions directory,
      * and `name` is only ever the original filename, reduced to a safe one (a
-     * scan's is replaced outright — see lib/upload.js for why).
+     * scan's is replaced outright — see server/upload.js for why).
      *
      * The run has to be one this workspace has, so a request cannot make a
      * folder for a course run nobody opened. The answer is where the file is,
@@ -266,7 +266,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     }
 
     /**
-     * Paper exams — see lib/scans.js. One read, one picture, two writes.
+     * Paper exams — see server/scans.js. One read, one picture, two writes.
      *
      * The writes spawn the CLI, as Publish does: `scans assign` says who one
      * paper is (taking back a wrong placement first), then places it by the
@@ -275,7 +275,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
      * and a placement with an evaluation on it is refused, not undone.
      */
     /**
-     * What is not out yet — see lib/unpublished.js. A read of local files
+     * What is not out yet — see server/unpublished.js. A read of local files
      * only: the gradebook, the sync ledger, the record's drafts and the
      * checksums of what was last published. Canvas is not asked.
      */
@@ -309,7 +309,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
 
     // The student's screen (AGT-4): a page with no data in it. Everything it
     // shows arrives from the desk over a BroadcastChannel; see
-    // lib/student-screen.js for why it fetches nothing.
+    // server/student-screen.js for why it fetches nothing.
     if (path === "/defence/screen") {
       const assessmentId = url.searchParams.get("assessment") ?? "";
       const studentId = url.searchParams.get("student") ?? "";
@@ -743,7 +743,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     }
 
     /**
-     * Grading a written exam, question by question — see lib/grade.js. One
+     * Grading a written exam, question by question — see server/grade.js. One
      * read, one picture, four writes.
      *
      * The writes spawn `ainar grade …`, as Scans spawns `ainar scans …`. One of
@@ -1614,7 +1614,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     // Course mode: the term plan as a page, over the harness. The outline
     // payload exactly as the Weeks tab gets it — same drafts rule, same
     // material links, same record paths — drawn by the pane in three columns
-    // rather than by the one-column widget. See `lib/course-mode.js`.
+    // rather than by the one-column widget. See `server/course-mode.js`.
     if (view === "course") {
       if (!runId) return sendErrorPage(res, "No run chosen.");
       const withDrafts = url.searchParams.get("drafts") === "1";

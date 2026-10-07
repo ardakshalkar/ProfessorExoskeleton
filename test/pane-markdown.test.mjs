@@ -12,7 +12,7 @@
  * - a document that renders as something other than what it says, and
  * - a document that renders as MARKUP it did not ask for.
  *
- * No workspace, no web server, no harness. `lib/markdown.js` imports nothing
+ * No workspace, no web server, no harness. `server/markdown.js` imports nothing
  * but itself, which is why the module exists separately from `index.js`.
  */
 
@@ -25,7 +25,7 @@ import {
   markdownHref,
   markdownInline,
   renderMarkdown,
-} from "../plugins/dsh-professor-pane/lib/markdown.js";
+} from "../plugins/dsh-professor-pane/server/markdown.js";
 
 /** The source as one string, written as lines so the test reads like a file. */
 const md = (...lines) => lines.join("\n");

@@ -33,7 +33,7 @@ import { loadedRun } from "./workspace.js";
  * through to a different implementation of the same gate.
  *
  * Three levels up from this file is the project root:
- * plugins/dsh-professor-pane/lib/actions.js -> ../../.. -> ainar-node/bin/ainar.ts
+ * plugins/dsh-professor-pane/server/actions.js -> ../../.. -> ainar-node/bin/ainar.ts
  */
 export const AINAR_CLI = fileURLToPath(new URL("../../../ainar-node/bin/ainar.ts", import.meta.url));
 
