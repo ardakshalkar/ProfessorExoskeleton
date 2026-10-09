@@ -431,8 +431,8 @@ const totals = (
     }));
 };
 
-const lmsOut = (run: any, assessment: any): Record<string, unknown> => {
-  const scale = lmsScale(run, assessment);
+const lmsOut = (run: any, assessment: any, peers: readonly any[]): Record<string, unknown> => {
+  const scale = lmsScale(run, assessment, peers);
   if (scale.problem) return { lms: { maximum: null, problem: scale.problem } };
   return rescales(scale) ? { lms: { maximum: scale.maximum, factor: roundHalfEven(scale.factor, 6), why: scale.why } } : {};
 };
@@ -463,7 +463,7 @@ export const gradebookPayload = (
       component: assessment.component ?? null,
       maximum: assessment.maximum_score,
       // What the LMS has it out of, when the grading scheme rescales it.
-      ...(lmsOut(run, assessment)),
+      ...(lmsOut(run, assessment, [...assessments.values()])),
       due_at: assessment.due_at ?? null,
       criteria: (rubric?.criteria ?? []).map((c: any) => ({
         criterion_id: c.criterion_id,

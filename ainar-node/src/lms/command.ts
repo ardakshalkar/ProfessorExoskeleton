@@ -84,7 +84,8 @@ import {
   scaleProblem,
   visibilityNote,
 } from "./canvas-api.ts";
-import { type Criterion, type Grid, assessmentGrid, padded, summaryGrid, totals, width } from "./grid.ts";
+import { type Criterion, type Grid, STUDENT, TOTAL, assessmentGrid, padded, summaryGrid, totals, width } from "./grid.ts";
+import { decide } from "../sync/reconcile.ts";
 import { FetchTransport, type Transport } from "./http.ts";
 import { Ledger } from "./ledger.ts";
 import { writeSheet } from "./sheet.ts";
@@ -229,7 +230,7 @@ const openContext = async (
     notes: [],
     unmatched: [],
     scaleProblem: null,
-    scale: assessment ? lmsScale(runOf(bundle, args.run), assessment) : null,
+    scale: assessment ? lmsScale(runOf(bundle, args.run), assessment, assessmentsOf(bundle, args.run)) : null,
     sheets: null,
     spreadsheetId: null,
     tab: null,
@@ -679,6 +680,71 @@ const gridConflicts = (
   return conflicts;
 };
 
+/** The ledger's key for one assessment tab's cells, under `syncs`. */
+const sheetSyncKey = (assessmentId: string): string => `sheets-api|${assessmentId}`;
+
+/** Columns a person reads but this never compares: who the row is, and why it is blocked. */
+const UNCHECKED = new Set([STUDENT, "name", "not_exportable_because"]);
+
+/** Every student cell of a grid, as `student|header → value`. */
+const gridCells = (grid: Grid): Record<string, string> => {
+  const cells: Record<string, string> = {};
+  grid.students.forEach((studentId, position) => {
+    if (!studentId) return;
+    const row = grid.rows[position] ?? [];
+    grid.header.forEach((header, index) => {
+      if (!UNCHECKED.has(header)) cells[`${studentId}|${header}`] = row[index] ?? "";
+    });
+  });
+  return cells;
+};
+
+/** The same cells as the tab holds them now, found by header name. */
+const tabCells = (existing: string[][], students: Set<string>): Record<string, string> => {
+  const header = (existing[0] ?? []).map((cell) => String(cell).trim());
+  const studentAt = header.indexOf(STUDENT);
+  if (studentAt < 0) return {};
+  const cells: Record<string, string> = {};
+  for (const row of existing.slice(1)) {
+    const studentId = String(row[studentAt] ?? "").trim();
+    if (!students.has(studentId)) continue;
+    header.forEach((name, index) => {
+      if (name && !UNCHECKED.has(name)) cells[`${studentId}|${name}`] = String(row[index] ?? "").trim();
+    });
+  }
+  return cells;
+};
+
+/**
+ * Cells someone changed in the sheet since this last wrote them, any column.
+ *
+ * The three-way comparison of `sync/reconcile.ts`: the tab now, what was last
+ * written, what would be written. A cell that differs from the last write and
+ * from the new value is a hand edit — `drift` for a target.
+ */
+const cellConflicts = (
+  existing: string[][],
+  grid: Grid,
+  base: Record<string, string>,
+): [string, number | string, number | string | null][] => {
+  const ours = gridCells(grid);
+  const theirs = tabCells(existing, new Set(grid.students));
+  const found: [string, number | string, number | string | null][] = [];
+  const asValue = (text: string): number | string => (text !== "" && Number.isFinite(Number(text)) ? Number(text) : text);
+  const reported = new Set<string>();
+  for (const [key, value] of Object.entries(theirs)) {
+    if (!(key in base)) continue;
+    const decision = decide(key, ours[key] ?? "", base[key], value, "target", "refuse");
+    if (decision.verdict !== "drift" && decision.verdict !== "conflict") continue;
+    const [studentId, header] = key.split("|") as [string, string];
+    const label = header === TOTAL ? studentId : `${studentId} ${header}`;
+    if (reported.has(label)) continue;
+    reported.add(label);
+    found.push([label, asValue(value), ours[key] ? asValue(ours[key]!) : null]);
+  }
+  return found;
+};
+
 // --------------------------------------------------------------------------
 // The subcommands
 // --------------------------------------------------------------------------
@@ -806,16 +872,32 @@ const pushToSheets = async (
   );
   deps.out("  No student sees this sheet. It is your working copy.");
 
-  const conflicts = gridConflicts(
-    context.existingTab,
-    grid,
-    ledger.prepared(args.target, context.assessment.assessment_id),
-  );
+  // A tab with rows but no `student` column cannot be checked for hand edits:
+  // nothing says which row is whose. Rewriting it anyway is how a renamed
+  // header used to cost a professor their own columns.
+  const headerRow = (context.existingTab[0] ?? []).map((cell) => String(cell).trim());
+  if (context.existingTab.length > 1 && !headerRow.includes(STUDENT) && !args.overwriteDrift) {
+    throw new Error(
+      `\n'${context.tab}' has rows but no '${STUDENT}' column, so this cannot tell which row is whose ` +
+        "or whether anyone edited it. Rename the column back to 'student', or pass --overwrite-drift to " +
+        "replace the tab.",
+    );
+  }
+
+  // Every cell this writes is checked against what it wrote last time, not
+  // only the total. Until a first write under this rule there is no record of
+  // the other cells, and the total alone is checked, as before.
+  const syncKey = sheetSyncKey(context.assessment.assessment_id);
+  const base = ledger.synced(syncKey);
+  const conflicts = Object.keys(base).length
+    ? cellConflicts(context.existingTab, grid, base)
+    : gridConflicts(context.existingTab, grid, ledger.prepared(args.target, context.assessment.assessment_id));
   if (conflicts.length && !args.overwriteDrift) {
     deps.out("\n  the sheet holds values this workspace did not put there:");
+    const shown = (value: number | string): string => (typeof value === "number" ? g(value) : `"${value}"`);
     for (const [studentId, theirs, ours] of conflicts) {
-      const replacement = ours === null ? "a blank" : g(ours);
-      deps.out(`    ${studentId}  sheet has ${g(theirs)}, this would write ${replacement}`);
+      const replacement = ours === null ? "a blank" : shown(ours);
+      deps.out(`    ${studentId}  sheet has ${shown(theirs)}, this would write ${replacement}`);
     }
     throw new Error(
       "\nrefusing to overwrite them. Either record the decision here so the two " +
@@ -848,7 +930,17 @@ const pushToSheets = async (
 
   deps.out(`\nwrote ${written} row(s) to ${target}`);
   deps.out("The sheet is a view: regenerate it rather than editing scores in it.");
+  try {
+    const tab = (await context.sheets!.tabs(context.spreadsheetId!)).find((entry) => entry.title === context.tab);
+    if (tab && (await context.sheets!.warnOnColumns(context.spreadsheetId!, tab.sheetId, width(grid)))) {
+      deps.out("Marked the written columns 'warn before editing' — Google asks anyone typing there first.");
+    }
+  } catch (error) {
+    // The grades are written; a protection that could not be added is a note, not a failure.
+    deps.out(`(could not mark the columns: ${(error as Error).message.trim()})`);
+  }
   const at = decidedAt(runOf(context.bundle, args.run)?.timezone);
+  ledger.recordSynced(syncKey, { ...Object.fromEntries(Object.keys(base).map((key) => [key, null])), ...gridCells(grid) });
   const touched = ledger.record(args.target, context.assessment.assessment_id, writable(plan), {
     at,
     state: "applied",
@@ -1397,7 +1489,7 @@ const runAssignment = async (
 
   // The brief, read once: it is the same document for every subgroup.
   const brief = briefHtml(bundle, assessment, root);
-  const scale = lmsScale(run, assessment);
+  const scale = lmsScale(run, assessment, assessmentsOf(bundle, args.run));
   const spec = specFor(assessment, brief.html, scale.problem ? null : scale.maximum);
 
   const config = loadCanvasConfig(rosterDir(args.rosterDir), {
@@ -1689,7 +1781,7 @@ const runAssignmentList = async (args: LmsArgs, bundle: CourseBundle, deps: Deps
       linked = canvasAssignmentFor(wanted, group) ?? null;
       if (!linked) {
         candidates = raw
-          .map((assignment) => ({ assignment, found: matchAssignment(wanted, assignment, lmsScale(run, wanted).maximum) }))
+          .map((assignment) => ({ assignment, found: matchAssignment(wanted, assignment, lmsScale(run, wanted, assessments).maximum) }))
           .filter((entry) => entry.found && !linkedTo.has(String(entry.assignment.id)))
           .map((entry) => ({
             id: String(entry.assignment.id),

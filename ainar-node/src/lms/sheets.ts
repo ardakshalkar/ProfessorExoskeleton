@@ -61,6 +61,11 @@ const INPUT_OPTION = "RAW";
 /** Google refused, and said why. */
 export class SheetsError extends Error {}
 
+/** Developer-metadata keys. The values are random tags or assessment ids — never a pseudonym. */
+export const ROW_ANCHOR = "ainar.row";
+export const COLUMN_ANCHOR = "ainar.column";
+export const PROTECTION_NOTE = "Written by ainar — edit in the course, not here";
+
 // --------------------------------------------------------------------------
 // Credentials
 // --------------------------------------------------------------------------
@@ -419,6 +424,151 @@ export class SheetsClient {
     );
     const payload = json(response) ?? {};
     return Number(payload.updatedRows ?? values.length);
+  }
+
+  private async post(spreadsheetId: string, suffix: string, body: unknown, what: string): Promise<any> {
+    const response = this.check(
+      await this.transport.request("POST", this.url(spreadsheetId, suffix), {
+        headers: { ...(await this.headers()), "Content-Type": "application/json" },
+        body: new TextEncoder().encode(JSON.stringify(body)),
+      }),
+      what,
+    );
+    return json(response) ?? {};
+  }
+
+  /** Every tab with the numeric id the metadata and protection APIs address it by. */
+  async tabs(spreadsheetId: string): Promise<{ title: string; sheetId: number }[]> {
+    const response = this.check(
+      await this.transport.request(
+        "GET",
+        this.url(spreadsheetId, "", { fields: "sheets.properties(title,sheetId)" }),
+        { headers: await this.headers() },
+      ),
+      "reading the spreadsheet",
+    );
+    const payload = json(response) ?? {};
+    return (payload.sheets ?? []).map((sheet: any) => ({
+      title: String(sheet?.properties?.title ?? ""),
+      sheetId: Number(sheet?.properties?.sheetId ?? 0),
+    }));
+  }
+
+  /** Several single cells in one request: `[{range: "'Tab'!C5", value: "LT"}]`. */
+  async writeCells(spreadsheetId: string, cells: { range: string; value: string }[]): Promise<number> {
+    if (!cells.length) return 0;
+    const payload = await this.post(
+      spreadsheetId,
+      "/values:batchUpdate",
+      {
+        valueInputOption: INPUT_OPTION,
+        data: cells.map((cell) => ({ range: cell.range, majorDimension: "ROWS", values: [[cell.value]] })),
+      },
+      `writing ${cells.length} cell(s)`,
+    );
+    return Number(payload.totalUpdatedCells ?? cells.length);
+  }
+
+  /**
+   * The invisible tags this tooling left on one tab's rows and columns.
+   *
+   * Developer metadata is Google's own mechanism for exactly this: a key and
+   * a value attached to a row or a column, invisible in the sheet, moving with
+   * its row when rows are inserted, sorted or deleted around it.
+   */
+  async anchors(spreadsheetId: string, sheetId: number): Promise<{ rows: Map<number, string>; columns: Map<number, string> }> {
+    const payload = await this.post(
+      spreadsheetId,
+      "/developerMetadata:search",
+      {
+        // By key alone, across the spreadsheet, and filtered to the tab below:
+        // a lookup with a location matches that exact location by default,
+        // which is the tab itself and none of its rows.
+        dataFilters: [ROW_ANCHOR, COLUMN_ANCHOR].map((metadataKey) => ({
+          developerMetadataLookup: { metadataKey },
+        })),
+      },
+      "reading the sheet's anchors",
+    );
+    const rows = new Map<number, string>();
+    const columns = new Map<number, string>();
+    for (const match of payload.matchedDeveloperMetadata ?? []) {
+      const metadata = match?.developerMetadata ?? {};
+      const range = metadata.location?.dimensionRange;
+      if (!range || Number(range.sheetId) !== sheetId) continue;
+      const index = Number(range.startIndex ?? 0);
+      if (metadata.metadataKey === ROW_ANCHOR && range.dimension === "ROWS") rows.set(index, String(metadata.metadataValue));
+      if (metadata.metadataKey === COLUMN_ANCHOR && range.dimension === "COLUMNS") columns.set(index, String(metadata.metadataValue));
+    }
+    return { rows, columns };
+  }
+
+  /** Tag rows and columns, 0-based. One request for all of them. */
+  async addAnchors(
+    spreadsheetId: string,
+    sheetId: number,
+    anchors: { dimension: "ROWS" | "COLUMNS"; index: number; value: string }[],
+  ): Promise<void> {
+    if (!anchors.length) return;
+    await this.post(
+      spreadsheetId,
+      ":batchUpdate",
+      {
+        requests: anchors.map((anchor) => ({
+          createDeveloperMetadata: {
+            developerMetadata: {
+              metadataKey: anchor.dimension === "ROWS" ? ROW_ANCHOR : COLUMN_ANCHOR,
+              metadataValue: anchor.value,
+              visibility: "DOCUMENT",
+              location: {
+                dimensionRange: { sheetId, dimension: anchor.dimension, startIndex: anchor.index, endIndex: anchor.index + 1 },
+              },
+            },
+          },
+        })),
+      },
+      `anchoring ${anchors.length} row(s) and column(s)`,
+    );
+  }
+
+  /**
+   * Mark the columns this tooling writes as "warn before editing".
+   *
+   * Warning-only, so nobody is locked out: Google asks a person typing there
+   * whether they meant to. Added once — a protection with this description on
+   * the tab already is left as it is.
+   */
+  async warnOnColumns(spreadsheetId: string, sheetId: number, columns: number): Promise<boolean> {
+    const response = this.check(
+      await this.transport.request(
+        "GET",
+        this.url(spreadsheetId, "", { fields: "sheets(properties.sheetId,protectedRanges(description,range))" }),
+        { headers: await this.headers() },
+      ),
+      "reading the sheet's protections",
+    );
+    const payload = json(response) ?? {};
+    const sheet = (payload.sheets ?? []).find((entry: any) => Number(entry?.properties?.sheetId) === sheetId);
+    if ((sheet?.protectedRanges ?? []).some((range: any) => range?.description === PROTECTION_NOTE)) return false;
+    await this.post(
+      spreadsheetId,
+      ":batchUpdate",
+      {
+        requests: [
+          {
+            addProtectedRange: {
+              protectedRange: {
+                range: { sheetId, startColumnIndex: 0, endColumnIndex: columns },
+                description: PROTECTION_NOTE,
+                warningOnly: true,
+              },
+            },
+          },
+        ],
+      },
+      "marking the written columns",
+    );
+    return true;
   }
 
   async clear(spreadsheetId: string, rangeA1: string): Promise<void> {

@@ -29,6 +29,7 @@ import {
   entity,
   plainDate,
 } from "./common.ts";
+import { Sync } from "./sync.ts";
 
 export const User = entity({
   user_id: UserId,
@@ -93,6 +94,12 @@ export const CourseVersion = entity({
   syllabus_document_id: DocumentId.nullish(),
   notes: z.string().nullish(),
   grading_scheme: GradingScheme.nullish(),
+  /**
+   * Every road to a service outside the run, in one vocabulary. See
+   * `model/sync.ts`. Optional rather than defaulted, so a run without any
+   * exports exactly as it did before the field existed.
+   */
+  syncs: z.array(Sync).optional(),
 });
 
 export const Enrollment = entity({

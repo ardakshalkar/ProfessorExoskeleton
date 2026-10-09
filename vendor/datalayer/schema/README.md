@@ -37,6 +37,16 @@ about an afternoon and has not been done.
   of a hundred. Marks stay recorded out of `maximum_score`; only what is sent
   and the gradebook's block totals are converted. `components` may now be empty,
   so a course with no blocks can still say it is out of 100.
+- **2026-10-09 — syncs.** `CourseVersion.syncs`, a list of `Sync`: every road
+  between a run and a service outside it (Canvas, Google Sheets, Telegram,
+  GitHub), in one vocabulary — `role` (source / target / both), `stream`,
+  `match` (link, code, key:…, name, name:one-word, tried in order), `unsure`
+  (hold / ask), `write`, `remove`, `conflict`, `map`, `anchors`. Optional:
+  a run without it is unchanged. Inserted as text into `course_version` and the
+  bundle — the definitions in sorted position, `syncs` last among the run's
+  properties — so no existing byte moved; a parse-and-dump round trip would
+  have turned every `1.0` into `1`. Which student a row is never appears here:
+  links are private, in `~/.ainar/links/`.
 
 ## Conventions
 

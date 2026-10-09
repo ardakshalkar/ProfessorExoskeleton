@@ -14,6 +14,19 @@
  * scheme's `points` is the fallback; with neither the scale is the identity.
  * Only the edges use this — what is sent to Canvas and what the gradebook says
  * a block is worth — so a decision is never stored rescaled.
+ *
+ * ## A block adds up to its points on the page
+ *
+ * Canvas shows points to two decimals, and students add up what they see. A
+ * ВСК1 of one 10% midterm, four 4% homeworks and three 1.33% quizzes is
+ * 33.3333 + 4 × 13.3333 + 3 × 4.4444 — which Canvas shows as 99.97. So when
+ * the run's assessments are given, a block is apportioned in whole cents by
+ * largest remainder: each member gets its share rounded down, and the cents
+ * left over go to the largest remainders (ties to the earlier id), so the
+ * block is 33.33 + 4 × 13.33 + 3 × 4.45 = 100.00. Only a block whose members'
+ * shares already add up to its points is apportioned; one still being filled
+ * in is rounded member by member. Without the run's assessments the share is
+ * rounded to four places on its own, as it always was.
  */
 
 import { roundHalfEven } from "./grading.ts";
@@ -38,7 +51,43 @@ const g = (value: number): string => String(Number(value.toPrecision(6)));
 /** Rounded the way the gradebook rounds: four places, half to even. */
 export const toLms = (score: number, scale: LmsScale): number => roundHalfEven(score * scale.factor, 4);
 
-export const lmsScale = (run: any, assessment: any): LmsScale => {
+/** The nearest block above the assessment that sets `points`, or null for the scheme's own. */
+const scalerOf = (scheme: any, assessment: any): any => {
+  const byId = new Map<string, any>(((scheme.components ?? []) as any[]).map((c) => [c.component_id, c]));
+  const seen = new Set<string>();
+  for (let at = assessment.component ?? null; at && byId.has(at) && !seen.has(at); at = byId.get(at).parent ?? null) {
+    seen.add(at);
+    if (byId.get(at).points != null) return byId.get(at);
+  }
+  return null;
+};
+
+/**
+ * The block's points in whole cents, by largest remainder, keyed by assessment
+ * id — or null when the members' shares do not add up to the block's points.
+ */
+const apportioned = (scheme: any, scaler: any, peers: readonly any[]): Map<string, number> | null => {
+  const total: number = scaler ? scaler.points : scheme.points;
+  const share = (a: any): number => (scaler ? (a.weight / scaler.weight) * scaler.points : a.weight * scheme.points);
+  const members = peers
+    .filter((a) => a.weight != null && a.weight > 0 && (scalerOf(scheme, a)?.component_id ?? null) === (scaler?.component_id ?? null))
+    .map((a) => ({ id: String(a.assessment_id), cents: share(a) * 100 }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const wanted = Math.round(total * 100);
+  if (!members.length || Math.abs(members.reduce((sum, m) => sum + m.cents, 0) - wanted) > 1e-6) return null;
+  const floors = members.map((m) => ({ ...m, floor: Math.floor(m.cents + 1e-6) }));
+  let left = wanted - floors.reduce((sum, m) => sum + m.floor, 0);
+  const byRemainder = [...floors].sort((a, b) => b.cents - b.floor - (a.cents - a.floor) || a.id.localeCompare(b.id));
+  const extra = new Set<string>();
+  for (const m of byRemainder) {
+    if (left <= 0) break;
+    extra.add(m.id);
+    left -= 1;
+  }
+  return new Map(floors.map((m) => [m.id, (m.floor + (extra.has(m.id) ? 1 : 0)) / 100]));
+};
+
+export const lmsScale = (run: any, assessment: any, peers?: readonly any[]): LmsScale => {
   const maximum = Number(assessment.maximum_score);
   const scheme = run?.grading_scheme ?? null;
   const raw: LmsScale = {
@@ -51,16 +100,7 @@ export const lmsScale = (run: any, assessment: any): LmsScale => {
   };
   if (!scheme) return raw;
 
-  const byId = new Map<string, any>(((scheme.components ?? []) as any[]).map((c) => [c.component_id, c]));
-  let scaler: any = null;
-  const seen = new Set<string>();
-  for (let at = assessment.component ?? null; at && byId.has(at) && !seen.has(at); at = byId.get(at).parent ?? null) {
-    seen.add(at);
-    if (byId.get(at).points != null) {
-      scaler = byId.get(at);
-      break;
-    }
-  }
+  const scaler = scalerOf(scheme, assessment);
   if (!scaler && scheme.points == null) return raw;
 
   const weight = assessment.weight;
@@ -87,7 +127,8 @@ export const lmsScale = (run: any, assessment: any): LmsScale => {
     out = weight * scheme.points;
     why = `the course is out of ${g(scheme.points)}; this is ${g(weight * 100)}% of it`;
   }
-  out = roundHalfEven(out, 4);
+  const cents = peers ? apportioned(scheme, scaler, peers)?.get(String(assessment.assessment_id)) : undefined;
+  out = cents ?? roundHalfEven(out, 4);
   if (!(out > 0)) return failed(`${assessment.assessment_id} has weight 0, so it is out of nothing in the LMS`);
   return {
     maximum: out,

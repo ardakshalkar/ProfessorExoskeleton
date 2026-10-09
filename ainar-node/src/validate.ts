@@ -189,6 +189,10 @@ export const ADDED = [
   "lms.both_course_forms",
   "lms.unknown_subgroup",
   "lms.unmapped_subgroup",
+  "sync.duplicate",
+  "sync.map",
+  "sync.unsupported",
+  "sync.where",
 ] as const;
 
 export const coverage = () => ({
@@ -608,7 +612,7 @@ const gradingSchemeIssues = (run: any, assessments: any[], issues: IssueList): v
   // a share of some block's points, and that share is not known.
   if (run.grading_scheme) {
     for (const assessment of assessments) {
-      const problem = lmsScale(run, assessment).problem;
+      const problem = lmsScale(run, assessment, assessments).problem;
       if (problem) issues.warn("grading.unscaled", `${problem}; nothing can be sent to the LMS for it`, assessment.assessment_id);
     }
   }
@@ -1605,6 +1609,88 @@ const checkSheetLinks = (
 };
 
 /**
+ * What `ainar sync` can run, by service, stream and role. A sync outside this
+ * list loads and is reported, so a professor who writes down "we push to
+ * Moodle" sees that nothing does yet rather than a setting that looks effective.
+ */
+const RUNNABLE_SYNCS = new Set([
+  "sheets|marks|source",
+  "sheets|marks|both",
+  "sheets|grades|target",
+  "canvas|roster|source",
+  "canvas|submissions|source",
+  "canvas|grades|target",
+  "canvas|assignment|target",
+  "telegram|announcement|target",
+  "github|repo|target",
+]);
+
+/**
+ * A run's `syncs:` — the one description of every road to a service outside it.
+ *
+ * The model already refuses an unknown role, stream or rule. What is left is
+ * what only the course can answer: two syncs under one id (the links and the
+ * ledger are keyed by it, so they would share a memory), a mapped column
+ * naming an assessment the run does not have, a sheet sync with no sheet.
+ */
+const checkSyncs = (b: CourseBundle, issues: IssueList): void => {
+  for (const run of b.versions as any[]) {
+    const syncs = (run.syncs ?? []) as any[];
+    if (!syncs.length) continue;
+    const at = run.course_version_id as string;
+    for (const id of duplicates(syncs.map((sync) => sync.sync_id))) {
+      issues.error("sync.duplicate", `two syncs are called '${id}'; links and the ledger are kept per sync id`, at);
+    }
+    const assessments = new Set(assessmentsOf(b, at).map((assessment: any) => assessment.assessment_id as string));
+    for (const sync of syncs) {
+      const where = `${at} syncs.${sync.sync_id}`;
+      const key = `${sync.service}|${sync.stream}|${sync.role}`;
+      if (!RUNNABLE_SYNCS.has(key)) {
+        issues.warn(
+          "sync.unsupported",
+          `nothing runs ${sync.service} ${sync.stream} as ${sync.role} yet, so this sync is a note, not a setting`,
+          where,
+        );
+      }
+      if (sync.anchors && sync.service !== "sheets") {
+        issues.warn("sync.unsupported", "anchors are a Google Sheets feature; this sync's service has nowhere to put them", where);
+      }
+      if (sync.service === "sheets") {
+        const sheet = sync.where?.sheet;
+        if (sheet == null && !(sync.stream === "grades" && lmsString(run, SHEET_ID_KEY) !== null)) {
+          issues.warn("sync.where", "names no sheet (where.sheet); only a CSV export passed with --from can be read", where);
+        }
+      }
+      if (sync.service === "sheets" && sync.stream === "marks") {
+        const columns = sync.map?.columns;
+        if (!columns || typeof columns !== "object" || !Object.keys(columns).length) {
+          issues.error("sync.map", "a marks sheet needs map.columns: { \"<header>\": ASSESSMENT-… }", where);
+        } else {
+          for (const [header, assessmentId] of Object.entries(columns as Record<string, unknown>)) {
+            if (!assessments.has(String(assessmentId))) {
+              issues.error("sync.map", `column "${header}" maps to ${assessmentId}, which ${at} does not have`, where);
+            }
+          }
+        }
+        for (const [word, mark] of Object.entries((sync.map?.marks ?? {}) as Record<string, any>)) {
+          const factor = typeof mark === "number" ? mark : Number(mark?.factor);
+          if (!Number.isFinite(factor) || factor < 0 || factor > 1) {
+            issues.error("sync.map", `mark ${word} is worth ${factor}, which is not a factor between 0 and 1`, where);
+          }
+        }
+        if (sync.unsure === "ask" && (sync.match ?? []).includes("name:one-word")) {
+          issues.warn(
+            "sync.map",
+            "a single written word is accepted and written without confirmation (unsure: ask) — consider unsure: hold",
+            where,
+          );
+        }
+      }
+    }
+  }
+};
+
+/**
  * The `extensions.lms` mapping that points an assessment at its Canvas column.
  *
  * A shared assignment id is an error: two assessments writing to one Canvas
@@ -2583,6 +2669,7 @@ export const validate = (
   checkItemIntent(b, issues);
   checkDelivery(b, issues);
   checkLmsLinks(b, issues);
+  checkSyncs(b, issues);
   checkNotionLinks(b, issues);
   checkResources(b, issues);
   checkRuntime(b, issues);

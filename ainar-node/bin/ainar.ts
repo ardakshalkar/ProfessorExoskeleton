@@ -103,6 +103,10 @@ import {
   refuseInsideRepo,
   rosterDir,
 } from "../src/roster.ts";
+import { DEFAULT_MARKS, type SheetConfig, configPath, loadSheetConfig, saveSheetConfig } from "../src/grade-sheet.ts";
+import { runSync } from "../src/sync/command.ts";
+import { syncsOf } from "../src/sync/registry.ts";
+import { runMarksSync } from "../src/sync/sheet-marks.ts";
 import { dump } from "../src/yaml-out.ts";
 import { SCHEMA_NAMES, jsonSchemaFor, shapeText } from "../src/schema.ts";
 import {
@@ -298,6 +302,8 @@ const BOOLEAN_FLAGS = new Set([
   // `scans`
   "per-file",
   "replace",
+  // `sync link`
+  "unlink",
 ]);
 
 /** Every occurrence of a repeatable flag, with comma-separated values split. */
@@ -623,6 +629,19 @@ const HELP = `ainar — the AINAR course model CLI
   fetches anything, and refused outright if it declares a different surface.
   --structure is the section layout for page, on the same terms.
 
+  Every road to a service outside the run, in one vocabulary (syncs: in the
+  run's version.yaml; links in ~/.ainar/links/). plan never writes; anything
+  that changes Canvas, a sheet or a channel needs --confirm:
+
+  sync list RUN                          every sync, written or implied by older settings
+  sync show RUN SYNC                     one sync, and how many links it remembers
+  sync plan RUN SYNC [flags]             what would change
+  sync run RUN SYNC [--confirm]          do it; other flags go to the command it runs
+  sync review RUN [SYNC]                 unsure matches waiting for you
+  sync confirm RUN SYNC (--line N | --name X | --all) [--to STUDENT-X]
+  sync link RUN SYNC "Name as written=STUDENT-X" [--unlink]
+  sync migrate RUN [--dry-run]           write the implied syncs out as syncs:
+
   The gradebook targets. plan and diff are read-only; push to a -csv target
   writes a file somebody still has to upload, and the two -api targets reach a
   live gradebook, need --confirm, and are not for an agent to run:
@@ -897,6 +916,96 @@ const rebuildPlan = (found: ReturnType<typeof freshness>, courseId: string): str
     );
   }
   return lines;
+};
+
+/** Every value of a flag given more than once: `--column A=X --column B=Y`. */
+const flagAll = (name: string): string[] =>
+  args.flatMap((value, index) => (value === `--${name}` && index + 1 < args.length ? [args[index + 1]!] : []));
+
+/** `KEY=VALUE`, split on the first `=` — a sheet header may hold one. */
+const pairOf = (text: string, what: string): [string, string] => {
+  const at = text.lastIndexOf("=");
+  if (at <= 0 || at === text.length - 1) throw new Error(`--${what} takes KEY=VALUE, got '${text}'`);
+  return [text.slice(0, at).trim(), text.slice(at + 1).trim()];
+};
+
+/**
+ * The professor's hand-kept grade sheet: say what it is (`sheet`), or bring it
+ * in again (`sync`). The rules are in `src/grade-sheet.ts`; this reads the
+ * sheet, matches, writes, and reports. Names are printed here — to the
+ * terminal, like `roster whois` — and never written into `courses/`.
+ */
+const gradeSheet = async (step: string, runId: string | undefined): Promise<void> => {
+  if (!runId) throw new Error(`usage: homework ${step} RUN …`);
+  const bundle = forRun(runId);
+  const run = runById(bundle).get(runId) as any;
+
+  if (step === "sheet") {
+    const config: SheetConfig = loadSheetConfig(runId) ?? {
+      run: runId,
+      url: null,
+      tab: null,
+      name_column: "Name",
+      flag_column: null,
+      columns: {},
+      marks: DEFAULT_MARKS,
+      students: {},
+    };
+    if (flag("url")) config.url = flag("url")!;
+    if (flag("tab")) config.tab = flag("tab")!;
+    if (flag("name-column")) config.name_column = flag("name-column")!;
+    if (flag("flag-column")) config.flag_column = flag("flag-column")!;
+    for (const text of flagAll("column")) {
+      const [header, assessmentId] = pairOf(text, "column");
+      config.columns[header] = assessmentId;
+    }
+    for (const text of flagAll("mark")) {
+      const [word, value] = pairOf(text, "mark");
+      const [factor, status] = value.split(":");
+      const number = Number(factor);
+      if (!Number.isFinite(number) || number < 0 || number > 1) throw new Error(`--mark ${word}: ${factor} is not a factor 0–1`);
+      config.marks[word.toUpperCase()] = {
+        factor: number,
+        status: status === "late" ? "late" : "submitted",
+        label: config.marks[word.toUpperCase()]?.label ?? (status === "late" ? "late" : "handed in"),
+      };
+    }
+    for (const text of flagAll("student")) {
+      const [name, studentId] = pairOf(text, "student");
+      config.students[name] = studentId;
+    }
+    const changed = ["url", "tab", "name-column", "flag-column", "column", "mark", "student"].some((name) => flag(name) !== undefined);
+    if (changed) out(`saved ${saveSheetConfig(config)}`);
+    else out(`settings ${configPath(runId)}${loadSheetConfig(runId) ? "" : " (none yet)"}`);
+    out(`  sheet    ${config.url ?? "—"}${config.tab ? `  tab ${config.tab}` : ""}`);
+    out(`  names    "${config.name_column}"${config.flag_column ? `   flag "${config.flag_column}" (kept in the roster)` : ""}`);
+    for (const [header, assessmentId] of Object.entries(config.columns)) out(`  column   "${header}" → ${assessmentId}`);
+    for (const [word, mark] of Object.entries(config.marks)) {
+      out(`  mark     ${word} = ×${mark.factor} of each criterion, ${mark.status} (${mark.label})`);
+    }
+    for (const [name, studentId] of Object.entries(config.students)) out(`  pinned   "${name}" → ${studentId}`);
+    return;
+  }
+
+  // The sheet is one sync among the run's: written as `syncs:`, or implied by
+  // the settings this command keeps. Either way the shared runner reads it,
+  // matches through the links, and holds what it is unsure of.
+  const sheetSync = syncsOf(bundle, runId).find((entry) => entry.service === "sheets" && entry.stream === "marks");
+  if (!sheetSync) {
+    throw new Error(`no grade sheet set up for ${runId} — \`homework sheet ${runId} --url URL --column 'H=ASSESSMENT-ID'\` first`);
+  }
+  if (flag("connection")) sheetSync.connection = flag("connection")!;
+  await runMarksSync({
+    bundle,
+    runId,
+    root,
+    sync: sheetSync,
+    rosterDirectory: rosterDir(flag("roster-dir")),
+    from: flag("from") ?? null,
+    dryRun: args.includes("--dry-run"),
+    json: args.includes("--json"),
+    out,
+  });
 };
 
 /**
@@ -3906,11 +4015,69 @@ try {
      * facing half of this belongs to a person, and the flag is where they say
      * so. The rules live in `src/homework.ts`; this is the seam.
      */
+    case "sync": {
+      // Every road to a service outside the run, in one vocabulary. The rules
+      // are in `src/sync/`; this is argument parsing.
+      const subcommand = rest[0];
+      if (!subcommand || (!rest[1] && subcommand !== "help")) {
+        console.error(
+          "usage: sync list RUN | show RUN SYNC | plan RUN SYNC [flags] | run RUN SYNC [--confirm]\n" +
+            "       sync review RUN [SYNC] | confirm RUN SYNC (--all | --line N | --name X) [--to STUDENT-X]\n" +
+            '       sync link RUN SYNC "Name=STUDENT-X" [--unlink] | migrate RUN [--dry-run]',
+        );
+        process.exit(1);
+      }
+      // Flags `sync` reads itself; everything else is handed to the command a
+      // sync delegates to — `--assessment`, `--group`, `--message`, `--by`.
+      const own = new Set(["confirm", "dry-run", "line", "name", "to", "unlink", "links-dir", "root"]);
+      const passthrough: string[] = [];
+      for (let index = 0; index < args.length; index += 1) {
+        const value = args[index]!;
+        if (!value.startsWith("--")) continue;
+        const name = value.slice(2);
+        const takesValue = !BOOLEAN_FLAGS.has(name);
+        if (!own.has(name)) passthrough.push(value, ...(takesValue && args[index + 1] !== undefined ? [args[index + 1]!] : []));
+        if (takesValue) index += 1;
+      }
+      const code = await runSync(
+        {
+          subcommand,
+          run: rest[1]!,
+          sync: rest[2] ?? null,
+          extra: rest.slice(3),
+          confirm: args.includes("--confirm"),
+          dryRun: args.includes("--dry-run"),
+          json: args.includes("--json"),
+          all: args.includes("--all"),
+          line: flag("line") ? Number(flag("line")) : null,
+          name: flag("name") ?? null,
+          to: flag("to") ?? null,
+          unlink: args.includes("--unlink"),
+          from: flag("from") ?? null,
+          rosterDir: rosterDir(flag("roster-dir")),
+          linksDir: flag("links-dir") ?? null,
+          passthrough,
+        },
+        forRun(rest[1]!),
+        root,
+        { out },
+      );
+      if (code) process.exit(code);
+      break;
+    }
+
     case "homework": {
+      if (rest[0] === "sheet" || rest[0] === "sync") {
+        await gradeSheet(rest[0], rest[1]);
+        break;
+      }
       if (rest[0] !== "publish") {
         console.error(
           "usage: homework publish ASSESSMENT_ID [--repo owner/name] [--auth gh|token] " +
-            "[--private] [--confirm]",
+            "[--private] [--confirm]\n" +
+            "       homework sheet RUN [--url URL] [--tab TAB] [--name-column H] [--flag-column H]\n" +
+            "                          [--column 'H=ASSESSMENT-ID']… [--mark 'WORD=FACTOR[:late]']… [--student 'NAME=STUDENT-ID']…\n" +
+            "       homework sync RUN [--from export.csv] [--dry-run] [--json]",
         );
         process.exit(1);
       }

@@ -43,9 +43,11 @@ import { dirname, join, resolve } from "node:path";
  * 2 added `content`, 3 added `pushed`, 4 added `assignments`, 5 added
  * `publications`. Older files load unchanged, and a file written by 5 is read
  * by 4 with the publication half ignored — which costs a publication being
- * described as the first one after a downgrade, and loses nothing.
+ * described as the first one after a downgrade, and loses nothing. 6 added
+ * `syncs`, the per-sync base values; an older reader drops them, and the next
+ * sync then treats every value as first seen — it asks rather than overwrites.
  */
-export const STORE_VERSION = 5;
+export const STORE_VERSION = 6;
 
 const HEADER_NOTE =
   "One course run's state outside this workspace: gradebook values prepared by " +
@@ -150,6 +152,14 @@ export class Ledger {
   pushed: Record<string, unknown> = {};
   assignments: Record<string, AssignmentEntry> = {};
   publications: Record<string, Publication> = {};
+  /**
+   * Version 6: each sync's values as last synced, `sync id → key → value`.
+   * The base of `sync/reconcile.ts`'s three-way comparison — what makes a
+   * hand edit on the far side tell itself apart from a change of ours, in
+   * every cell a sync owns rather than only the one column the gradebook half
+   * used to check.
+   */
+  syncs: Record<string, Record<string, string>> = {};
 
   constructor(path: string) {
     this.path = path;
@@ -169,7 +179,25 @@ export class Ledger {
     ledger.pushed = payload.pushed ?? {};
     ledger.assignments = payload.assignments ?? {};
     ledger.publications = payload.publications ?? {};
+    ledger.syncs = payload.syncs ?? {};
     return ledger;
+  }
+
+  /** One sync's values as last synced, or an empty map before its first run. */
+  synced(syncId: string): Record<string, string> {
+    return { ...(this.syncs[syncId] ?? {}) };
+  }
+
+  /**
+   * Note values as synced. `values` replaces the keys it names; a key mapped to
+   * null is forgotten — the value left both sides.
+   */
+  recordSynced(syncId: string, values: Record<string, string | null>): void {
+    const current = (this.syncs[syncId] ??= {});
+    for (const [key, value] of Object.entries(values)) {
+      if (value === null) delete current[key];
+      else current[key] = value;
+    }
   }
 
   /** The last value prepared for each student, for one target. */
@@ -272,6 +300,7 @@ export class Ledger {
       assignments: this.assignments,
       publications: this.publications,
       pushed: this.pushed,
+      syncs: this.syncs,
     };
     writeFileSync(this.path, sortedJson(payload) + "\n", { encoding: "utf-8" });
     try {

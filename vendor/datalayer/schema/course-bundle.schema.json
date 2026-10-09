@@ -1250,6 +1250,15 @@
           ],
           "default": null,
           "description": "The blocks the final grade is divided into — ВСК1/ВСК2/Final, categories, periods."
+        },
+        "syncs": {
+          "default": null,
+          "description": "Every road to a service outside the run, in one vocabulary. Absent, none is written down.",
+          "items": {
+            "$ref": "#/$defs/Sync"
+          },
+          "title": "Syncs",
+          "type": "array"
         }
       },
       "required": [
@@ -3881,6 +3890,203 @@
         "withdrawn"
       ],
       "title": "SubmissionStatus",
+      "type": "string"
+    },
+    "Sync": {
+      "additionalProperties": false,
+      "description": "One road between this run and a service outside it, described the same way\nfor every service: which way data goes (`role`), what moves (`stream`), how a\nrow on the far side is found to be one of our students (`match`), what to do\nwith a match that is not sure (`unsure`), how the receiving side is changed\n(`write`, `remove`) and who wins when both sides changed (`conflict`).\n\nIt holds neither names nor secrets: a connection NAME, a sheet id, a column\nmap. Which person a row is — a pin, an anchor, a Canvas user id — is a link,\nand links are private, outside the repository.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "sync_id": {
+          "pattern": "^[a-z][a-z0-9-]{0,39}$",
+          "title": "Sync Id",
+          "type": "string"
+        },
+        "service": {
+          "$ref": "#/$defs/SyncService"
+        },
+        "connection": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A connection's name in ~/.ainar/connections.json; absent, the service's default.",
+          "title": "Connection"
+        },
+        "role": {
+          "$ref": "#/$defs/SyncRole"
+        },
+        "stream": {
+          "$ref": "#/$defs/SyncStream"
+        },
+        "where": {
+          "additionalProperties": true,
+          "default": {},
+          "description": "Where on the far side: {sheet, tab}, {canvas_course}, {chat}, {repo}.",
+          "title": "Where",
+          "type": "object"
+        },
+        "match": {
+          "default": [],
+          "description": "How a row is found to be one of our students, tried in order.",
+          "items": {
+            "$ref": "#/$defs/SyncMatch"
+          },
+          "title": "Match",
+          "type": "array"
+        },
+        "unsure": {
+          "$ref": "#/$defs/SyncUnsure",
+          "default": "hold"
+        },
+        "write": {
+          "$ref": "#/$defs/SyncWrite",
+          "default": "upsert"
+        },
+        "remove": {
+          "$ref": "#/$defs/SyncRemove",
+          "default": "never"
+        },
+        "conflict": {
+          "$ref": "#/$defs/SyncConflict",
+          "default": "refuse"
+        },
+        "map": {
+          "additionalProperties": true,
+          "default": {},
+          "description": "What corresponds to what: columns, marks, rows.",
+          "title": "Map",
+          "type": "object"
+        },
+        "anchors": {
+          "default": false,
+          "description": "Leave an invisible, random tag on each matched row and column (Google Sheets developer metadata).",
+          "title": "Anchors",
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "sync_id",
+        "service",
+        "role",
+        "stream"
+      ],
+      "title": "Sync",
+      "type": "object"
+    },
+    "SyncConflict": {
+      "enum": [
+        "refuse",
+        "course-wins",
+        "remote-wins",
+        "fill-blanks"
+      ],
+      "title": "SyncConflict",
+      "type": "string"
+    },
+    "SyncMatch": {
+      "enum": [
+        "link",
+        "anchor",
+        "code",
+        "key:sis-id",
+        "key:login",
+        "key:email",
+        "key:number",
+        "name",
+        "name:one-word"
+      ],
+      "title": "SyncMatch",
+      "type": "string"
+    },
+    "SyncRemove": {
+      "enum": [
+        "never",
+        "own",
+        "mark-dropped"
+      ],
+      "title": "SyncRemove",
+      "type": "string"
+    },
+    "SyncRole": {
+      "enum": [
+        "source",
+        "target",
+        "both"
+      ],
+      "title": "SyncRole",
+      "type": "string"
+    },
+    "SyncService": {
+      "enum": [
+        "canvas",
+        "sheets",
+        "telegram",
+        "github",
+        "moodle",
+        "file"
+      ],
+      "title": "SyncService",
+      "type": "string"
+    },
+    "SyncStream": {
+      "enum": [
+        "roster",
+        "submissions",
+        "marks",
+        "grades",
+        "assignment",
+        "announcement",
+        "repo",
+        "page"
+      ],
+      "title": "SyncStream",
+      "type": "string"
+    },
+    "SyncUnsure": {
+      "enum": [
+        "hold",
+        "ask"
+      ],
+      "title": "SyncUnsure",
+      "type": "string"
+    },
+    "SyncWrite": {
+      "enum": [
+        "upsert",
+        "update-only",
+        "create-only",
+        "mirror",
+        "append"
+      ],
+      "title": "SyncWrite",
       "type": "string"
     },
     "User": {

@@ -123,7 +123,10 @@ workspace/                                  the folder that contains courses/
 
 ~/.ainar/                                   outside the repository
 ├─ roster/                                  salt, people.json — names ↔ STUDENT-…
-├─ sync/                                    LMS and Telegram ledger (ids, tokens)
+├─ links/<RUN>.json                         which student a row elsewhere is, per sync;
+│                                           the review queue of unsure matches
+├─ sync/                                    LMS and Telegram ledger (ids, tokens);
+│                                           each sync's values as last synced
 ├─ submissions/<RUN>/<ASSESSMENT>/
 │  ├─ _inbox/                               scans as you upload them, before matching
 │  └─ <STUDENT>/                            one student's work: a fork, an upload, a scan
@@ -459,7 +462,7 @@ Chat ids, tokens and LMS ids stay in `~/.ainar/sync/`.
 | Collection | Authored in | Tool writes to | Kind | State |
 | --- | --- | --- | --- | --- |
 | course | `course.yaml` | — | authored | — |
-| course version (run) | `version.yaml` | — | authored | — |
+| course version (run) | `version.yaml` | `syncs:` by `ainar sync migrate` | authored | — |
 | outcomes | `outcomes.yaml` | — (never) | authored | — |
 | capabilities | `capabilities.yaml`, `shared/` | — (never) | authored | — |
 | concepts | `concepts.yaml` | `concepts/generated.yaml` | authored / proposed | `approval` |
@@ -484,6 +487,26 @@ Chat ids, tokens and LMS ids stay in `~/.ainar/sync/`.
 | action items | — | `records/action-items.yaml` | proposed | `approval` |
 | events | — | `records/events.yaml` | fact | — |
 | publications | — | `records/publications.yaml` | fact | — |
+
+---
+
+### Syncs: the settings in the run, the links outside
+
+Every road to a service outside the run is a `syncs:` entry in `version.yaml`
+— which service, `role` (source / target / both), `stream`, how a row is
+matched, what is held for a person, who wins a conflict. It holds no names and
+no secrets, so it is in the repository with the rest of the run. Three things
+that go with it are not:
+
+| What | Where | Why not in the repository |
+| --- | --- | --- |
+| the address and the credential's variable | `~/.ainar/connections.json` | machine configuration; the token itself is in the environment |
+| which student a row is — a name pin, an anchor tag, a Canvas user id — and the matches waiting for review | `~/.ainar/links/<RUN>.json` | a link ties a name as written to a pseudonym |
+| the values as last synced, the base of the three-way comparison | `~/.ainar/sync/<RUN>.json` | they are gradebook values held for the far side |
+
+The older places — `extensions.lms`, `extensions.telegram`,
+`~/.ainar/sheets/<RUN>.json` — are still read, as *implied* syncs, until
+`ainar sync migrate RUN` writes them out.
 
 ---
 

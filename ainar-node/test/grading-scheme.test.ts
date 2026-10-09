@@ -271,6 +271,23 @@ test("the scale: the nearest block with points decides, the scheme's points is t
   assert.match(lmsScale(run, { ...quiz, weight: null }).problem!, /no weight/);
 });
 
+test("a block adds up to its points in whole cents, the leftover cents going to the largest remainders", () => {
+  // CSS-4007's ВСК1: shown to two decimals one at a time it was 99.97.
+  const run = { grading_scheme: { components: [{ component_id: "VSK1", title: "ВСК 1", weight: 0.3, points: 100 }] } };
+  const peers = [
+    { assessment_id: "MIDTERM-1", weight: 0.1, maximum_score: 100, component: "VSK1" },
+    ...[1, 2, 3, 4].map((n) => ({ assessment_id: `HW-${n}`, weight: 0.04, maximum_score: 4, component: "VSK1" })),
+    ...[1, 2, 3].map((n) => ({ assessment_id: `QUIZ-${n}`, weight: 0.013333333333, maximum_score: 10, component: "VSK1" })),
+  ];
+  const maxima = peers.map((a) => lmsScale(run, a, peers).maximum);
+  assert.deepEqual(maxima, [33.33, 13.33, 13.33, 13.33, 13.33, 4.45, 4.45, 4.45]);
+  assert.equal(Math.round(maxima.reduce((sum, m) => sum + m, 0) * 100), 10000);
+  // Without the run's assessments, each share is rounded on its own, as before.
+  assert.equal(lmsScale(run, peers[5]).maximum, 4.4444);
+  // A block still being filled in is not forced to its points.
+  assert.equal(lmsScale(run, peers[5], peers.slice(0, 6)).maximum, 4.4444);
+});
+
 test("a scheme of points alone is valid, and an assessment it cannot scale is a warning", () => {
   const b: any = structuredClone(sample);
   runOf(b).grading_scheme = { points: 100 };
