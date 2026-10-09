@@ -638,8 +638,8 @@ const HELP = `ainar — the AINAR course model CLI
   sync plan RUN SYNC [flags]             what would change
   sync run RUN SYNC [--confirm]          do it; other flags go to the command it runs
   sync review RUN [SYNC]                 unsure matches waiting for you
-  sync confirm RUN SYNC (--line N | --name X | --all) [--to STUDENT-X]
-  sync link RUN SYNC "Name as written=STUDENT-X" [--unlink]
+  sync confirm RUN SYNC (--line N | --name X | --all) [--to "Name in class list"]
+  sync link RUN SYNC "Name as written=Name in class list" [--unlink]
   sync migrate RUN [--dry-run]           write the implied syncs out as syncs:
 
   The gradebook targets. plan and diff are read-only; push to a -csv target
@@ -4022,8 +4022,8 @@ try {
       if (!subcommand || (!rest[1] && subcommand !== "help")) {
         console.error(
           "usage: sync list RUN | show RUN SYNC | plan RUN SYNC [flags] | run RUN SYNC [--confirm]\n" +
-            "       sync review RUN [SYNC] | confirm RUN SYNC (--all | --line N | --name X) [--to STUDENT-X]\n" +
-            '       sync link RUN SYNC "Name=STUDENT-X" [--unlink] | migrate RUN [--dry-run]',
+            "       sync review RUN [SYNC] | confirm RUN SYNC (--all | --line N | --name X) [--to NAME]\n" +
+            '       sync link RUN SYNC "Name as written=Name in class list" [--unlink] | migrate RUN [--dry-run]',
         );
         process.exit(1);
       }

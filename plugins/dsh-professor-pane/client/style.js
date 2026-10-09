@@ -382,6 +382,29 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-primary{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:6px 14px;border-radius:20px;
   color:#fff;background:#2f8a4e;border:1px solid #2f8a4e}
 .pp-primary:disabled{opacity:.5;cursor:default}
+/* Syncs: a row per road, then the matches waiting for a person — the name as
+   written beside the class list's name, never a pseudonym alone. */
+.pp-synclist{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px;margin:8px 0 4px}
+.pp-syncrow{display:flex;flex-direction:column;gap:4px;padding:9px 11px;
+  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-syncrow:first-child{border-top:none}
+.pp-synchead{display:flex;align-items:baseline;gap:8px}
+.pp-syncname{flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow-wrap:anywhere}
+.pp-syncname .pp-as{font-weight:400}
+.pp-syncdir{flex:none;font-size:10.5px;padding:1px 8px;border-radius:20px}
+.pp-syncdir-source{background:rgba(47,98,168,.12);color:#2f62a8}
+.pp-syncdir-target{background:rgba(47,138,78,.12);color:#2f8a4e}
+.pp-syncdir-both{background:rgba(110,77,180,.12);color:#6e4db4}
+.pp-heldlist{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px;margin:4px 0}
+.pp-heldrow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 11px;
+  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-heldrow:first-child{border-top:none}
+.pp-heldbody{min-width:0;display:flex;flex-direction:column;gap:3px}
+.pp-heldpair{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px}
+.pp-heldwritten{color:var(--dsw-alias-label-secondary,#555)}
+.pp-heldname{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-syncrow select,.pp-heldrow select{font:inherit;font-size:11.5px;padding:2px 4px;border-radius:6px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:transparent;color:inherit}
 /* Grading: one question at a time over the conversation. The questions are
    tabs in the head; a card is the page beside what was read off it, and a row
    of marks. A dashed mark is the suggestion, a filled one the decision. */

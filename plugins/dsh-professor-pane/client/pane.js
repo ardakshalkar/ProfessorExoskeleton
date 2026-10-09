@@ -6,6 +6,7 @@
 import { Message, useDark, useJson } from "./common.js";
 import { DefenceDesk } from "./defence-desk.js";
 import { Integrations } from "./integrations.js";
+import { SyncsView } from "./syncs.js";
 import { GradebookStatus, Unpublished } from "./marks.js";
 import { CourseMode, MaterialModal, materialUrl, WidgetFrame } from "./materials.js";
 import { Preferences } from "./preferences.js";
@@ -438,6 +439,17 @@ export function ProfessorPane(props) {
         names: names,
         ask: props.ask,
         // A placement writes a submission into the course, which other tabs draw.
+        onWrite: () => setReload((value) => value + 1),
+        revision: reload,
+        key: current.runId,
+      });
+    }
+    if (tab === "integrations" && subView(tab) === "syncs") {
+      return h(SyncsView, {
+        runId: current.runId,
+        sessionId: props.sessionId,
+        names: names,
+        // A run writes records, and Save-in-settings writes the run record.
         onWrite: () => setReload((value) => value + 1),
         revision: reload,
         key: current.runId,

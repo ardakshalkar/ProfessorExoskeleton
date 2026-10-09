@@ -145,6 +145,7 @@ import { paperCrop, scansDocument } from "./server/scans.js";
 import { sendBrief, sendMaterial, sendOutline, sendStarter } from "./server/serve-file.js";
 import { studentScreenPage } from "./server/student-screen.js";
 import { studentsDocument } from "./server/students.js";
+import { runSyncAction, syncsDocument } from "./server/syncs.js";
 import { unpublishedDocument } from "./server/unpublished.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./server/upload.js";
 import { assessmentStatus } from "./server/week-status.js";
@@ -904,6 +905,32 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
       }
 
       return sendJson(res, 200, preferencesDocument(root, course, term));
+    }
+
+    // The Syncs view: every road to a service outside the run, and the
+    // matches waiting for the professor. Read here; every press is
+    // `ainar sync …` — see server/syncs.js.
+    if (path === "/api/syncs") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return sendJson(res, 200, syncsDocument(workspace, runId, { names: url.searchParams.get("names") === "1" }));
+    }
+
+    // POST only, for `/api/publish`'s reason: a run can reach Canvas or a
+    // sheet, and a confirm writes the private link table.
+    if (path === "/api/syncs/action") {
+      if (req.method !== "POST") return sendJson(res, 405, { error: "a sync action is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then(async (raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          return sendJson(res, 200, await runSyncAction(workspace, root, runId, body ?? {}));
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
     if (path === "/api/integrations") {

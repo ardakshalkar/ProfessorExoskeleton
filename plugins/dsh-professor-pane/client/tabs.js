@@ -195,6 +195,9 @@ export const SUBVIEWS = {
     // this tab with is "is it set up", and the three views below answer
     // it only by making them read five facts and do the arithmetic.
     { id: "status", label: "Status" },
+    // Second: "is it set up" is answered above; this is "what moves, and
+    // what is waiting for me" — the rows a sync was not sure of.
+    { id: "syncs", label: "Syncs" },
     { id: "targets", label: "Targets" },
     { id: "credentials", label: "Credentials" },
     { id: "links", label: "Links" },
@@ -235,7 +238,9 @@ export const NO_SEGMENTED_ROW = new Set(["preferences"]);
  * gradebook and the concept grid are about the class, and a parameter that
  * reached them would be a parameter with nothing to do.
  */
-export const NAMED_TABS = new Set(["students", "tasks", "scans"]);
+// Integrations for its Syncs view: "Ostanin Artym → Ostanin Artem" is a
+// decision a professor can make; "→ STUDENT-B7K2QA" is not.
+export const NAMED_TABS = new Set(["students", "tasks", "scans", "integrations"]);
 
 /**
  * Pseudonyms or real names, on the tabs that name people.

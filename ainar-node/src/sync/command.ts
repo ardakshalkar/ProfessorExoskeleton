@@ -20,6 +20,8 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { RosterStore } from "../roster.ts";
+import { nameKey } from "../scans.ts";
 import { LinkTable, nameLinkKey } from "./links.ts";
 import { type RunSync, findSync, syncsOf, writeSyncs, writtenForm } from "./registry.ts";
 import { runMarksSync } from "./sheet-marks.ts";
@@ -210,22 +212,31 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
     }
 
     case "review": {
+      // Names, not codes: a person deciding "is Ostanin Artym Ostanin Artem?"
+      // needs the class list's spelling. Printed to this terminal only, like
+      // `roster whois`; nothing here is written anywhere.
+      const store = RosterStore.load(args.rosterDir);
       const links = LinkTable.load(runId, args.linksDir);
       const ids = args.sync ? [args.sync] : Object.keys(links.pending);
       let waiting = 0;
       for (const syncId of ids) {
-        for (const [key, entry] of links.queued(syncId)) {
+        for (const [, entry] of links.queued(syncId)) {
           waiting += 1;
-          const options = entry.candidates.map((candidate) => `${candidate.student} (${candidate.match})`).join(", ");
-          out(`${syncId}  ${entry.line ? `line ${entry.line} ` : ""}"${entry.label}"  ${entry.why}`);
-          out(`    could be: ${options || "nobody close"}   [${key}]`);
+          out(`${syncId}  ${entry.line ? `line ${entry.line}  ` : ""}"${entry.label}"  — ${entry.why}`);
+          const [best, ...others] = entry.candidates;
+          if (!best) {
+            out("    nobody in the class list is close");
+            continue;
+          }
+          out(`    → ${nameOf(store, best.student)}   (${best.match})`);
+          for (const other of others) out(`      or ${nameOf(store, other.student)}`);
         }
       }
       if (!waiting) out("Nothing is waiting for review.");
       else {
         out(
-          `\n${waiting} waiting. \`ainar sync confirm ${runId} SYNC --line N\` takes the first candidate; ` +
-            "add --to STUDENT-X for another; --all takes the first candidate for every one.",
+          `\n${waiting} waiting. \`ainar sync confirm ${runId} SYNC --line N\` takes the suggested person; ` +
+            'add --to "Name in the class list" for someone else; --all takes the suggestion for every one.',
         );
       }
       return 0;
@@ -235,6 +246,7 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
       const syncId = need(args.sync, "confirm");
       findSync(bundle, runId, syncId);
       const links = LinkTable.load(runId, args.linksDir);
+      const store = RosterStore.load(args.rosterDir);
       const queued = links.queued(syncId).filter(([, entry]) => {
         if (args.all) return true;
         if (args.line !== null) return entry.line === args.line;
@@ -249,15 +261,16 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
         out("--to names one student, so confirm one row at a time with --line or --name.");
         return 1;
       }
+      const chosen = args.to ? studentFor(store, args.to) : null;
       for (const [key, entry] of queued) {
-        const student = args.to ?? entry.candidates[0]?.student;
+        const student = chosen ?? entry.candidates[0]?.student;
         if (!student) {
           out(`  "${entry.label}" has no candidate — give one with --to STUDENT-X`);
           continue;
         }
         if (!/^STUDENT-[A-Z0-9]+$/.test(student)) throw new Error(`${student} is not a pseudonym`);
         links.set(syncId, key, { student, how: "confirmed", at: new Date().toISOString(), label: entry.label });
-        out(`  "${entry.label}" → ${student}`);
+        out(`  "${entry.label}" → ${nameOf(store, student)}`);
       }
       if (!args.dryRun) out(`saved ${links.save()}. Run the sync again to apply.`);
       return 0;
@@ -267,8 +280,9 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
       const syncId = need(args.sync, "link");
       findSync(bundle, runId, syncId);
       const links = LinkTable.load(runId, args.linksDir);
+      const store = RosterStore.load(args.rosterDir);
       const pairs = args.extra;
-      if (!pairs.length) throw new Error('usage: sync link RUN SYNC "Name as written=STUDENT-X" [--unlink]');
+      if (!pairs.length) throw new Error('usage: sync link RUN SYNC "Name as written=Name in the class list" [--unlink]');
       for (const pair of pairs) {
         const at = pair.lastIndexOf("=");
         const label = (args.unlink && at < 0 ? pair : pair.slice(0, at)).trim();
@@ -277,10 +291,10 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
           out(links.unset(syncId, key) ? `  forgot "${label}"` : `  "${label}" was not linked`);
           continue;
         }
-        const student = pair.slice(at + 1).trim();
-        if (at <= 0 || !/^STUDENT-[A-Z0-9]+$/.test(student)) throw new Error(`'${pair}' is not "Name=STUDENT-X"`);
+        if (at <= 0) throw new Error(`'${pair}' is not "Name as written=Name in the class list"`);
+        const student = studentFor(store, pair.slice(at + 1).trim());
         links.set(syncId, key, { student, how: "pinned", at: new Date().toISOString(), label });
-        out(`  "${label}" → ${student}`);
+        out(`  "${label}" → ${nameOf(store, student)}`);
       }
       if (!args.dryRun) out(`saved ${links.save()}`);
       return 0;
@@ -311,6 +325,31 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
         `unknown sync subcommand '${args.subcommand}'. It is one of: list, show, plan, run, review, confirm, link, migrate`,
       );
   }
+};
+
+/** The class list's name for a code, or the code when the private roster does not hold one. */
+const nameOf = (store: RosterStore, student: string): string => {
+  const name = (store.people[student] as { name?: string } | undefined)?.name;
+  return name ? name : `${student} (not in the class list on this computer)`;
+};
+
+/**
+ * `--to` as a code or as a name from the class list. A name must be one
+ * person exactly as the class list spells it (case, order and punctuation set
+ * aside) — a confirmation is a person's decision, so it is not guessed at.
+ */
+const studentFor = (store: RosterStore, given: string): string => {
+  if (/^STUDENT-[A-Z0-9]+$/.test(given)) return given;
+  const wanted = nameKey(given);
+  const found = Object.entries(store.people)
+    .filter(([, person]) => (person as { name?: string }).name && nameKey((person as { name: string }).name) === wanted)
+    .map(([student]) => student);
+  if (found.length === 1) return found[0]!;
+  throw new Error(
+    found.length
+      ? `${found.length} people in the class list are called "${given}" — use the code \`sync review\` shows`
+      : `nobody in the class list is called "${given}" — write the name as the class list has it, or use the code`,
+  );
 };
 
 const need = (value: string | null, subcommand: string): string => {

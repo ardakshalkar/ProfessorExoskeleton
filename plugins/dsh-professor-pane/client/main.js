@@ -44,6 +44,7 @@
  */
 
 import { DefenceDesk } from "./defence-desk.js";
+import { SyncsView } from "./syncs.js";
 import { turnStep } from "./defence-turn.js";
 import { inject, OpenPaneAction, ProfessorPane } from "./pane.js";
 
@@ -155,3 +156,6 @@ exports.inject = inject;
 // alone by `test/desk-page.mjs`, against a mock API and a synthetic voice.
 exports.turnStep = turnStep;
 exports.DefenceDesk = DefenceDesk;
+// The same, for `test/syncs-page.mjs`: the Syncs view alone, against the real
+// syncs of a workspace and made-up names in the review list.
+exports.SyncsView = SyncsView;

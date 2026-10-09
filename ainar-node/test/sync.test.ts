@@ -455,6 +455,42 @@ test("sync migrate writes the implied syncs into version.yaml and keeps its comm
   for (const entry of parsed.syncs) Sync.parse(entry);
 });
 
+test("review shows class-list names, and confirm and link take a name instead of a code", async () => {
+  const linksDir = temp();
+  const rosterDir = temp();
+  writeFileSync(join(rosterDir, "people.json"), JSON.stringify({ version: 1, people: store().people }));
+  const run = { syncs: [{ sync_id: "hw", service: "sheets", role: "source", stream: "marks", map: { columns: { "1Task": "ASSESSMENT-HW1" } } }] };
+  const table = LinkTable.load(RUN, linksDir);
+  table.queue("hw", nameLinkKey("Ostanin Artym"), {
+    label: "Ostanin Artym",
+    line: 7,
+    candidates: [{ student: "STUDENT-BBBBBB", match: "close" }, { student: "STUDENT-CCCCCC", match: "distance 0.4" }],
+    why: "a close spelling",
+    at: AT,
+  });
+  table.save();
+
+  const lines: string[] = [];
+  const deps = { out: (line: unknown) => lines.push(String(line)) };
+  await runSync(args({ subcommand: "review", sync: "hw", linksDir, rosterDir }), runBundle(run), "/nowhere", deps);
+  const shown = lines.join("\n");
+  assert.match(shown, /"Ostanin Artym"/);
+  assert.match(shown, /→ Ostanin Artem/);
+  assert.match(shown, /or Nurlanova Aigerim/);
+  assert.doesNotMatch(shown, /STUDENT-/);
+
+  await runSync(args({ subcommand: "confirm", sync: "hw", line: 7, to: "nurlanova, AIGERIM", linksDir, rosterDir }), runBundle(run), "/nowhere", deps);
+  assert.equal(LinkTable.load(RUN, linksDir).get("hw", nameLinkKey("Ostanin Artym"))!.student, "STUDENT-CCCCCC");
+
+  await runSync(args({ subcommand: "link", sync: "hw", extra: ["A. Ostanin=Ostanin Artem"], linksDir, rosterDir }), runBundle(run), "/nowhere", deps);
+  assert.equal(LinkTable.load(RUN, linksDir).get("hw", nameLinkKey("A. Ostanin"))!.student, "STUDENT-BBBBBB");
+
+  await assert.rejects(
+    runSync(args({ subcommand: "link", sync: "hw", extra: ["X=Nobody Here"], linksDir, rosterDir }), runBundle(run), "/nowhere", deps),
+    /nobody in the class list is called "Nobody Here"/,
+  );
+});
+
 test("sync link and confirm write the private link table", async () => {
   const linksDir = temp();
   const run = { syncs: [{ sync_id: "hw", service: "sheets", role: "source", stream: "marks", map: { columns: { "1Task": "ASSESSMENT-HW1" } } }] };

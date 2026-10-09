@@ -250,6 +250,9 @@ window.__ModuleLoader__.load({
         // this tab with is "is it set up", and the three views below answer
         // it only by making them read five facts and do the arithmetic.
         { id: "status", label: "Status" },
+        // Second: "is it set up" is answered above; this is "what moves, and
+        // what is waiting for me" — the rows a sync was not sure of.
+        { id: "syncs", label: "Syncs" },
         { id: "targets", label: "Targets" },
         { id: "credentials", label: "Credentials" },
         { id: "links", label: "Links" },
@@ -290,7 +293,9 @@ window.__ModuleLoader__.load({
      * gradebook and the concept grid are about the class, and a parameter that
      * reached them would be a parameter with nothing to do.
      */
-    const NAMED_TABS = new Set(["students", "tasks", "scans"]);
+    // Integrations for its Syncs view: "Ostanin Artym → Ostanin Artem" is a
+    // decision a professor can make; "→ STUDENT-B7K2QA" is not.
+    const NAMED_TABS = new Set(["students", "tasks", "scans", "integrations"]);
 
     /**
      * Pseudonyms or real names, on the tabs that name people.
@@ -722,6 +727,29 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-primary{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:6px 14px;border-radius:20px;
   color:#fff;background:#2f8a4e;border:1px solid #2f8a4e}
 .pp-primary:disabled{opacity:.5;cursor:default}
+/* Syncs: a row per road, then the matches waiting for a person — the name as
+   written beside the class list's name, never a pseudonym alone. */
+.pp-synclist{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px;margin:8px 0 4px}
+.pp-syncrow{display:flex;flex-direction:column;gap:4px;padding:9px 11px;
+  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-syncrow:first-child{border-top:none}
+.pp-synchead{display:flex;align-items:baseline;gap:8px}
+.pp-syncname{flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow-wrap:anywhere}
+.pp-syncname .pp-as{font-weight:400}
+.pp-syncdir{flex:none;font-size:10.5px;padding:1px 8px;border-radius:20px}
+.pp-syncdir-source{background:rgba(47,98,168,.12);color:#2f62a8}
+.pp-syncdir-target{background:rgba(47,138,78,.12);color:#2f8a4e}
+.pp-syncdir-both{background:rgba(110,77,180,.12);color:#6e4db4}
+.pp-heldlist{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px;margin:4px 0}
+.pp-heldrow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 11px;
+  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-heldrow:first-child{border-top:none}
+.pp-heldbody{min-width:0;display:flex;flex-direction:column;gap:3px}
+.pp-heldpair{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px}
+.pp-heldwritten{color:var(--dsw-alias-label-secondary,#555)}
+.pp-heldname{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-syncrow select,.pp-heldrow select{font:inherit;font-size:11.5px;padding:2px 4px;border-radius:6px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:transparent;color:inherit}
 /* Grading: one question at a time over the conversation. The questions are
    tabs in the head; a card is the page beside what was read off it, and a row
    of marks. A dashed mark is the suggestion, a filled one the decision. */
@@ -3308,6 +3336,344 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               result.text,
             )
           : null,
+      );
+    }
+
+    // ── client/syncs.js
+
+    /**
+     * Why a row is waiting, in two or three words for the badge. The matcher's
+     * own sentence is the title, for the professor who wants all of it.
+     */
+    const shortWhy = (why) => {
+      const text = String(why || "");
+      if (/close spelling/.test(text)) return "close spelling";
+      if (/only one word/.test(text)) return "only one word";
+      const several = /matches (\d+) enrolled/.exec(text);
+      if (several) return "fits " + several[1] + " students";
+      if (/not enrolled/.test(text)) return "not enrolled";
+      if (/closely enough|matches no enrolled/.test(text)) return "no close match";
+      if (/no name/.test(text)) return "no name";
+      return text.split(/[—;:]/)[0].trim();
+    };
+
+    const DIRECTION = {
+      source: { text: "in", hint: "feeds the course" },
+      target: { text: "out", hint: "the course feeds it" },
+      both: { text: "both ways", hint: "whichever side changed wins; both changed waits for you" },
+    };
+
+    function SyncsView(props) {
+      const url = (path) => scoped(BASE + path + "?run=" + encodeURIComponent(props.runId || ""), props.sessionId);
+      const [tick, setTick] = React.useState(0);
+      const [state, setState] = React.useState({ phase: "loading", value: null });
+      // Per sync: the last press's answer, which assessment is chosen, where the
+      // sheet is read from, and whether a preview is on screen (which is what
+      // makes a send available).
+      const [results, setResults] = React.useState({});
+      const [chosen, setChosen] = React.useState({});
+      const [reading, setReading] = React.useState({});
+      const [previewed, setPreviewed] = React.useState({});
+      const [busy, setBusy] = React.useState(null);
+      const [others, setOthers] = React.useState({});
+
+      React.useEffect(() => {
+        let live = true;
+        fetch(url("/api/syncs") + (props.names ? "&names=1" : "") + "&r=" + (props.revision || 0) + "." + tick, {
+          headers: { accept: "application/json" },
+        })
+          .then((response) => response.json())
+          .then((value) => live && setState({ phase: "ready", value }))
+          .catch((error) => live && setState({ phase: "ready", value: { error: String(error.message || error) } }));
+        return () => {
+          live = false;
+        };
+      }, [props.runId, props.names, props.revision, tick]);
+
+      if (state.phase === "loading") return h(Message, null, "Reading this run's syncs…");
+      const doc = state.value;
+      if (doc.error) return h(Message, { error: true }, doc.error);
+
+      const post = (body, key) => {
+        setBusy(key);
+        return fetch(url("/api/syncs/action"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        })
+          .then((response) => response.json())
+          .catch((error) => ({ error: String(error.message || error) }))
+          .then((answer) => {
+            setBusy(null);
+            return answer;
+          });
+      };
+
+      const press = (sync, action, confirm) => {
+        const body = {
+          action,
+          sync: sync.id,
+          assessment: chosen[sync.id] || "",
+          from: sync.exported && (reading[sync.id] || (sync.exported ? "export" : "live")) === "export" ? "export" : "live",
+          confirm: Boolean(confirm),
+        };
+        post(body, sync.id + ":" + action).then((answer) => {
+          setResults((all) => Object.assign({}, all, { [sync.id]: answer }));
+          setPreviewed((all) => Object.assign({}, all, { [sync.id]: action === "plan" && !answer.error && answer.ok }));
+          if (action === "run") {
+            setTick((value) => value + 1);
+            if (props.onWrite) props.onWrite();
+          }
+        });
+      };
+
+      const confirmRow = (row, to) => {
+        post({ action: "confirm", sync: row.sync, line: row.line, key: row.key, to: to || null }, "confirm:" + row.key).then(
+          (answer) => {
+            if (answer.error || !answer.ok) {
+              setResults((all) => Object.assign({}, all, { [row.sync]: answer }));
+              return;
+            }
+            setTick((value) => value + 1);
+          },
+        );
+      };
+
+      const migrate = () =>
+        post({ action: "migrate" }, "migrate").then((answer) => {
+          setResults((all) => Object.assign({}, all, { _migrate: answer }));
+          setTick((value) => value + 1);
+          if (props.onWrite) props.onWrite();
+        });
+
+      const person = (candidate) => candidate.name || candidate.student;
+      const implied = doc.syncs.filter((sync) => sync.implied).length;
+
+      const syncRow = (sync) => {
+        const result = results[sync.id];
+        const direction = DIRECTION[sync.role] || { text: sync.role, hint: "" };
+        const needsAssessment = sync.needs === "assessment";
+        const ready = !needsAssessment || chosen[sync.id];
+        const from = reading[sync.id] || (sync.exported ? "export" : "live");
+        return h(
+          "div",
+          { className: "pp-syncrow", key: sync.id },
+          h(
+            "div",
+            { className: "pp-synchead" },
+            h(
+              "div",
+              { className: "pp-syncname" },
+              h("span", null, sync.label),
+              h("span", { className: "pp-as" }, " " + sync.id),
+            ),
+            h("span", { className: "pp-syncdir pp-syncdir-" + sync.role, title: direction.hint }, direction.text),
+          ),
+          h(
+            "div",
+            { className: "pp-as" },
+            [
+              sync.implied ? "from older settings" : "in the run's settings",
+              sync.remembered ? sync.remembered + " students remembered" : null,
+              sync.waiting ? sync.waiting + " waiting for you" : null,
+              sync.live ? "other people see what it sends" : null,
+              sync.enabled ? null : "switched off",
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          ),
+          sync.needs === "message"
+            ? h("p", { className: "pp-as" }, "Announcements are written and sent from Publish.")
+            : h(
+                "div",
+                { className: "pp-approverow" },
+                needsAssessment
+                  ? h(
+                      "select",
+                      {
+                        className: "pp-bindsel",
+                        value: chosen[sync.id] || "",
+                        onChange: (event) => {
+                          const value = event.target.value;
+                          setChosen((all) => Object.assign({}, all, { [sync.id]: value }));
+                          setPreviewed((all) => Object.assign({}, all, { [sync.id]: false }));
+                        },
+                      },
+                      h("option", { value: "" }, "Choose the assessment…"),
+                      doc.assessments.map((entry) => h("option", { value: entry.id, key: entry.id }, entry.title)),
+                    )
+                  : null,
+                sync.exported !== null && sync.exported !== undefined
+                  ? h(
+                      "select",
+                      {
+                        className: "pp-bindsel",
+                        value: from,
+                        onChange: (event) => {
+                          const value = event.target.value;
+                          setReading((all) => Object.assign({}, all, { [sync.id]: value }));
+                          setPreviewed((all) => Object.assign({}, all, { [sync.id]: false }));
+                        },
+                      },
+                      sync.hasSheet ? h("option", { value: "live" }, "Read the sheet in Google") : null,
+                      sync.exported
+                        ? h("option", { value: "export" }, "Read the export of " + new Date(sync.exported).toLocaleDateString())
+                        : null,
+                    )
+                  : null,
+                h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    disabled: Boolean(busy) || !ready,
+                    onClick: () => press(sync, "plan"),
+                  },
+                  busy === sync.id + ":plan" ? "Looking…" : "Preview",
+                ),
+                sync.live
+                  ? h(
+                      "button",
+                      {
+                        type: "button",
+                        className: "pp-segbtn pp-danger",
+                        disabled: Boolean(busy) || !ready || !previewed[sync.id],
+                        title: previewed[sync.id] ? "Do what the preview shows" : "Preview first",
+                        onClick: () => press(sync, "run", true),
+                      },
+                      busy === sync.id + ":run" ? "Sending…" : "Send",
+                    )
+                  : h(
+                      "button",
+                      {
+                        type: "button",
+                        className: "pp-segbtn",
+                        disabled: Boolean(busy) || !ready || !sync.enabled,
+                        onClick: () => press(sync, "run"),
+                      },
+                      busy === sync.id + ":run" ? "Running…" : "Run",
+                    ),
+              ),
+          result
+            ? h(
+                "pre",
+                { className: "pp-approveout" + (result.error || !result.ok ? " pp-approveerr" : "") },
+                result.error || result.output || "(nothing printed)",
+              )
+            : null,
+        );
+      };
+
+      const waitingRow = (row) => {
+        const [best] = row.candidates;
+        const picking = others[row.key];
+        return h(
+          "div",
+          { className: "pp-heldrow", key: row.sync + row.key },
+          h("span", { className: "pp-as pp-heldline" }, row.line ? "line " + row.line : ""),
+          h(
+            "div",
+            { className: "pp-heldbody" },
+            h(
+              "div",
+              { className: "pp-heldpair" },
+              h("span", { className: "pp-heldwritten" }, row.written !== null ? row.written : "(name hidden)"),
+              h("span", { "aria-hidden": "true" }, "→"),
+              h("span", { className: "pp-heldname" }, best ? person(best) : "nobody close"),
+              h("span", { className: "pp-rbadge pp-rbadge-close", title: row.why.replace(/ of STUDENT-[A-Z0-9]+/, "") }, shortWhy(row.why)),
+            ),
+            row.candidates.length > 1 ? h("div", { className: "pp-as" }, "also near: " + row.candidates.slice(1).map(person).join(", ")) : null,
+            picking
+              ? h(
+                  "div",
+                  { className: "pp-approverow" },
+                  h(
+                    "select",
+                    {
+                      className: "pp-bindsel",
+                      value: picking.to || "",
+                      onChange: (event) => {
+                        const to = event.target.value;
+                        setOthers((all) => Object.assign({}, all, { [row.key]: { to } }));
+                      },
+                    },
+                    h("option", { value: "" }, "Who is it?"),
+                    doc.students.map((student) => h("option", { value: student.student, key: student.student }, student.name || student.student)),
+                  ),
+                  h(
+                    "button",
+                    { type: "button", className: "pp-segbtn", disabled: Boolean(busy) || !picking.to, onClick: () => confirmRow(row, picking.to) },
+                    "Confirm",
+                  ),
+                  h(
+                    "button",
+                    { type: "button", className: "pp-segbtn", onClick: () => setOthers((all) => Object.assign({}, all, { [row.key]: null })) },
+                    "Cancel",
+                  ),
+                )
+              : null,
+          ),
+          picking
+            ? null
+            : h(
+                "div",
+                { className: "pp-approverow" },
+                best
+                  ? h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => confirmRow(row, null) }, "Confirm")
+                  : null,
+                h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", onClick: () => setOthers((all) => Object.assign({}, all, { [row.key]: { to: "" } })) },
+                  "Someone else",
+                ),
+              ),
+        );
+      };
+
+      return h(
+        "div",
+        null,
+        h(
+          "p",
+          { className: "pp-absent" },
+          "Every road between this run and a service outside it. Preview never changes anything; " +
+            "a sync other people see has Send only after a preview of it is on screen.",
+        ),
+        implied
+          ? h(
+              "div",
+              { className: "pp-approverow" },
+              h("span", { className: "pp-as" }, implied + " of these come from older settings."),
+              h(
+                "button",
+                { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: migrate, title: "Writes syncs: into the run's version.yaml" },
+                busy === "migrate" ? "Writing…" : "Save them in the run's settings",
+              ),
+            )
+          : null,
+        results._migrate ? h("pre", { className: "pp-approveout" }, results._migrate.error || results._migrate.output) : null,
+        doc.syncs.length ? h("div", { className: "pp-synclist" }, doc.syncs.map(syncRow)) : h(Message, null, "This run has no syncs yet."),
+        h(
+          "p",
+          { className: "pp-factgroup" },
+          "Waiting for you" + (doc.waiting.length ? " · " + doc.waiting.length : ""),
+        ),
+        doc.waiting.length
+          ? h(
+              "div",
+              null,
+              doc.names
+                ? null
+                : h("p", { className: "pp-as" }, "Names are hidden. Press Names above to see who each row is."),
+              h("div", { className: "pp-heldlist" }, doc.waiting.map(waitingRow)),
+              h(
+                "p",
+                { className: "pp-as" },
+                "A confirmed row is remembered on this computer and applied the next time its sync runs. " +
+                  "Until then it writes nothing, and the grades it already had stay where they are.",
+              ),
+            )
+          : h("p", { className: "pp-as" }, "Nothing is waiting. Rows a sync is not sure of appear here after it runs."),
       );
     }
 
@@ -9857,6 +10223,17 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             key: current.runId,
           });
         }
+        if (tab === "integrations" && subView(tab) === "syncs") {
+          return h(SyncsView, {
+            runId: current.runId,
+            sessionId: props.sessionId,
+            names: names,
+            // A run writes records, and Save-in-settings writes the run record.
+            onWrite: () => setReload((value) => value + 1),
+            revision: reload,
+            key: current.runId,
+          });
+        }
         if (tab === "integrations") {
           return h(Integrations, {
             runId: current.runId,
@@ -10388,6 +10765,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     // alone by `test/desk-page.mjs`, against a mock API and a synthetic voice.
     exports.turnStep = turnStep;
     exports.DefenceDesk = DefenceDesk;
+    // The same, for `test/syncs-page.mjs`: the Syncs view alone, against the real
+    // syncs of a workspace and made-up names in the review list.
+    exports.SyncsView = SyncsView;
     return module.exports;
   },
 });
