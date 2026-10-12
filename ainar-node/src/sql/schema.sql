@@ -444,11 +444,15 @@ CREATE TABLE IF NOT EXISTS assessment.submissions (
     attempt       INTEGER NOT NULL DEFAULT 1 CHECK (attempt >= 1),
     url           TEXT,
     note          TEXT,
+    defence       TEXT CHECK (defence IN ('defended', 'not_defended')),
     extensions    JSONB NOT NULL DEFAULT '{}',
     UNIQUE (assessment_id, student_code, attempt)
 );
 -- Added 2026-10-06; a database loaded before then has the table without it.
 ALTER TABLE assessment.submissions ADD COLUMN IF NOT EXISTS url TEXT;
+-- Added 2026-10-12, likewise.
+ALTER TABLE assessment.submissions ADD COLUMN IF NOT EXISTS defence TEXT
+    CHECK (defence IN ('defended', 'not_defended'));
 
 CREATE TABLE IF NOT EXISTS assessment.submission_files (
     submission_id UUID NOT NULL REFERENCES assessment.submissions(id) ON DELETE CASCADE,

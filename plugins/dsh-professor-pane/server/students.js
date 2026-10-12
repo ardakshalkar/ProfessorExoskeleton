@@ -577,6 +577,50 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     );
   };
 
+  /*
+   * The professor's word on the oral defence — *Defended* or *Not defended* —
+   * written onto the submission (`defence mark`). Offered on work that can be
+   * defended: homework and projects, a handed-in repository, an assessment
+   * that lists an oral defence, or one already marked — not on a quiz or an
+   * exam paper. Pressing the word that is on clears it.
+   */
+  const defendedRow = (submission) => {
+    const assessment = assessmentTitles.get(submission.assessment_id) ?? {};
+    const types = Array.isArray(assessment.submission_type) ? assessment.submission_type : [];
+    const defensible =
+      submission.url ||
+      submission.defence ||
+      assessment.type === "assignment" ||
+      assessment.type === "project" ||
+      types.includes("oral_defense");
+    if (!defensible) return "";
+    const press = (outcome, text) => {
+      const on = submission.defence === outcome;
+      return (
+        '<button type="button" class="chip" data-defended="' +
+        (on ? "clear" : outcome) +
+        '" data-assessment="' +
+        escapeText(submission.assessment_id) +
+        '" data-student="' +
+        escapeText(submission.student_id) +
+        '" aria-pressed="' +
+        String(on) +
+        '"' +
+        (on ? ' title="Press again to clear"' : "") +
+        ">" +
+        escapeText(text) +
+        "</button>"
+      );
+    };
+    return (
+      '<p class="defended"><span class="dim">Defence:</span>' +
+      press("defended", "Defended") +
+      press("not_defended", "Not defended") +
+      (submission.defence ? "" : ' <span class="dim">not marked</span>') +
+      "</p>"
+    );
+  };
+
   /** Everything one student handed in, closed until asked for. */
   const workPanel = (entry) => {
     const list = submissionsOf.get(entry.student_id) ?? [];
@@ -625,6 +669,7 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
               : "") +
             responses.map(answer).join("") +
             files.map(fileRow).join("") +
+            defendedRow(submission) +
             defenceBlock(submission) +
             // Handed in, and nothing to read: a file-only submission whose
             // bytes are elsewhere, or a row created before any answer was
@@ -1021,6 +1066,9 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     ".bad{color:var(--warn)}" +
     ".defence{margin:8px 0 4px}" +
     ".defence .chip{margin-left:4px}" +
+    ".defended{margin:6px 0 2px}" +
+    ".defended .chip{margin-left:6px}" +
+    ".defended .chip[aria-pressed=true]{border-color:var(--info);color:var(--info);font-weight:600}" +
     ".dq{margin:4px 0 0;padding-left:20px}" +
     ".dq li{margin:0 0 8px}" +
     ".dq p{margin:0 0 2px;overflow-wrap:anywhere}" +
@@ -1058,6 +1106,10 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     "var k=e.target.closest&&e.target.closest('button[data-ask]');" +
     "if(k){if(k.disabled)return;k.disabled=true;k.textContent='Asked…';" +
     "parent.postMessage({source:'professor-pane',kind:'ask',prompt:k.getAttribute('data-ask')},'*');return;}" +
+    "var m=e.target.closest&&e.target.closest('button[data-defended]');" +
+    "if(m){if(m.disabled)return;m.disabled=true;" +
+    "parent.postMessage({source:'professor-pane',kind:'defended',outcome:m.getAttribute('data-defended')," +
+    "assessment:m.getAttribute('data-assessment'),student:m.getAttribute('data-student')},'*');return;}" +
     "var d=e.target.closest&&e.target.closest('button[data-desk]');" +
     "if(d){parent.postMessage({source:'professor-pane',kind:'defence-desk'," +
     "assessment:d.getAttribute('data-desk'),student:d.getAttribute('data-student')},'*');return;}" +

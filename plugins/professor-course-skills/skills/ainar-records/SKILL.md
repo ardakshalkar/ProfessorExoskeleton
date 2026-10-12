@@ -95,6 +95,24 @@ changed.
 to `records/submissions.yaml` as `SUB-<student>-<assessment>` with no
 `approval` field.
 
+**The professor's word on a defence.** Whether a student defended a homework
+orally is a field on that submission, `defence: defended | not_defended`
+(absent: not held yet, or not asked). When the professor *tells you* in chat —
+"STUDENT-3BCIXS defended HW2", "HW4: STUDENT-X did not defend" — record it
+with the CLI, never by hand:
+
+```bash
+<cli> defence mark <RUN> --assessment <ASSESSMENT_ID> --student <STUDENT_ID> --outcome defended|not_defended|clear --root "<workspace>"
+```
+
+Several students: one command each. Resolve "HW2" to its `ASSESSMENT-…` id
+from the run's assessments. Students are named by their `STUDENT-…` code; a
+real name is not yours to look up (`roster whois` is private), so if the
+professor gives a name, ask for the code — or point them to the Students view
+in the pane, where each homework has **Defended / Not defended** buttons that
+write the same field. This is recording what the professor said, not deciding:
+never set it on your own reading of a defence session or a transcript.
+
 ## What the field means
 
 - **No `approval` field is approved.** Anything typed into `courses/` by hand is

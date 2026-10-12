@@ -1,5 +1,13 @@
 {
   "$defs": {
+    "DefenceOutcome": {
+      "enum": [
+        "defended",
+        "not_defended"
+      ],
+      "title": "DefenceOutcome",
+      "type": "string"
+    },
     "ActionItem": {
       "additionalProperties": false,
       "description": "One entry in the professor's action inbox.\n\nEverything the exoskeleton wants from the professor arrives here, with the\nevent that produced it, so nothing is asked without a traceable reason.",
@@ -3828,6 +3836,18 @@
           ],
           "default": null,
           "title": "Note"
+        },
+        "defence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenceOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The professor's word on the oral defence. Absent means not yet held, or not asked."
         }
       },
       "required": [

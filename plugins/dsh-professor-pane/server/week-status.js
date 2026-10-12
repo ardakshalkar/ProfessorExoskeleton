@@ -56,31 +56,39 @@ const gradingOf = (bundle, runId, assessmentId, submissions) => {
   };
 };
 
-/** The defences of one assessment, or null when none has been prepared. */
+/**
+ * The defences of one assessment, or null when none has been prepared or marked.
+ * The professor's word on a submission (`defence: defended | not_defended`)
+ * wins; without it, a recorded answer that was not withdrawn counts as held.
+ */
 const defencesOf = (bundle, root, runId, assessmentId, submissions) => {
   if (!submissions) return null;
   const latest = new Map();
   for (const entry of bundle.submissions ?? []) {
-    if (entry.assessment_id !== assessmentId || !entry.url) continue;
+    if (entry.assessment_id !== assessmentId || (!entry.url && !entry.defence)) continue;
     const before = latest.get(entry.student_id);
     if (!before || (entry.attempt ?? 1) > (before.attempt ?? 1)) latest.set(entry.student_id, entry);
   }
   let prepared = 0;
   let defended = 0;
+  let marked = 0;
   let next = null;
   let first = null;
   for (const student of [...latest.keys()].sort()) {
     const place = defencePlace(submissions, root, runId, assessmentId, student);
     const questions = attempt(() => readDefence(place.questions));
     const session = attempt(() => readSession(place.session));
-    const done = Boolean(session && session.answers.some((answer) => !answer.withdrawn));
+    const said = latest.get(student).defence;
+    const done = said ? said === "defended" : Boolean(session && session.answers.some((answer) => !answer.withdrawn));
     if (done) defended += 1;
+    if (said) marked += 1;
     if (!questions || !Array.isArray(questions.questions) || !questions.questions.length) continue;
     prepared += 1;
     first ??= student;
-    if (!done) next ??= student;
+    // A "not defended" is settled too: the next one to hold is one with no word.
+    if (!done && !said) next ??= student;
   }
-  if (!prepared && !defended) return null;
+  if (!prepared && !defended && !marked) return null;
   return { defended, of: latest.size, prepared, student: next ?? first };
 };
 

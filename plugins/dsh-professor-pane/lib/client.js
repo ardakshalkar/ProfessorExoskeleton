@@ -10014,6 +10014,27 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             setDesk({ assessment: data.assessment, student: data.student });
             return;
           }
+          // *Defended* / *Not defended*: the professor's word, written onto the
+          // submission by the server (`defence mark`); the redraw shows it.
+          if (data.kind === "defended") {
+            const id = /^[A-Z0-9][A-Z0-9-]*$/;
+            const run = currentRunRef.current;
+            if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+            if (!["defended", "not_defended", "clear"].includes(data.outcome)) return;
+            fetch(
+              scoped(
+                BASE + "/api/defence/mark?run=" + encodeURIComponent(run) +
+                  "&assessment=" + encodeURIComponent(data.assessment) +
+                  "&student=" + encodeURIComponent(data.student) +
+                  "&outcome=" + encodeURIComponent(data.outcome),
+                props.sessionId,
+              ),
+              { method: "POST" },
+            )
+              .then(() => setReload((count) => count + 1))
+              .catch(() => setReload((count) => count + 1));
+            return;
+          }
           if (data.kind === "defence") {
             const id = /^[A-Z0-9][A-Z0-9-]*$/;
             const run = currentRunRef.current;

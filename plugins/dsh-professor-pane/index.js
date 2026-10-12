@@ -640,6 +640,30 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 
+    // *Defended* / *Not defended* in the Students view: the professor's word,
+    // set on the submission by `ainar defence mark`. A press is the decision,
+    // so nothing is drafted and nothing waits for approval.
+    if (path === "/api/defence/mark") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      const assessmentId = url.searchParams.get("assessment") ?? "";
+      const studentId = url.searchParams.get("student") ?? "";
+      const outcome = url.searchParams.get("outcome") ?? "";
+      if (!/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId) || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(studentId)) {
+        return sendJson(res, 200, { error: "An assessment and a student id, please." });
+      }
+      if (!["defended", "not_defended", "clear"].includes(outcome)) {
+        return sendJson(res, 200, { error: "defended, not_defended or clear." });
+      }
+      try {
+        loadedRun(workspace, runId); // the run has to be this workspace's
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      return runScans(["defence", "mark", runId, "--assessment", assessmentId, "--student", studentId, "--outcome", outcome], root)
+        .then((result) => sendJson(res, 200, result))
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
     if (path === "/api/scans" || path.startsWith("/api/scans/")) {
       const assessmentId = url.searchParams.get("assessment") ?? "";
       if (assessmentId && !/^[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) {

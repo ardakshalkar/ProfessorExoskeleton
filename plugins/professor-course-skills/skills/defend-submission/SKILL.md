@@ -195,3 +195,10 @@ reason, and the notes `grade` printed. List anything below 0.6 confidence
 first, as the marks worth the professor's ear. Never `--force` once the student has
 answered: the command refuses, because the answers would then point at
 different questions.
+
+**Whether the student defended** is the professor's word, not a grade you
+propose: `defence: defended | not_defended` on the submission. Set it only when
+the professor says so — `bin/ainar defence mark RUN --assessment ASSESSMENT
+--student STUDENT --outcome defended|not_defended|clear` — or let them press
+**Defended / Not defended** in the Students view. Never infer it from the
+answers.

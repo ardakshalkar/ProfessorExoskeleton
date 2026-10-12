@@ -775,6 +775,7 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       // golden import was emitted by, and a row without a link has nothing to say.
       ...(s.url ? { url: s.url } : {}),
       note: s.note,
+      ...(s.defence ? { defence: s.defence } : {}),
       extensions: s.extensions,
     })),
   );

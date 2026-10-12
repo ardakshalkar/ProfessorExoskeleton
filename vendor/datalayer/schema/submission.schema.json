@@ -1,5 +1,13 @@
 {
   "$defs": {
+    "DefenceOutcome": {
+      "enum": [
+        "defended",
+        "not_defended"
+      ],
+      "title": "DefenceOutcome",
+      "type": "string"
+    },
     "SubmissionFile": {
       "additionalProperties": false,
       "properties": {
@@ -133,6 +141,18 @@
       ],
       "default": null,
       "title": "Note"
+    },
+    "defence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DefenceOutcome"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The professor's word on the oral defence. Absent means not yet held, or not asked."
     }
   },
   "required": [

@@ -147,6 +147,8 @@ export const DeliveryChannel = z.enum([
 export const SubmissionStatus = z.enum([
   "missing", "draft", "submitted", "late", "resubmitted", "withdrawn",
 ]);
+/** The professor's word on an oral defence. Absent means not yet held, or not asked. */
+export const DefenceOutcome = z.enum(["defended", "not_defended"]);
 export const EvaluationStatus = z.enum(["suggested", "in_review", "approved", "overridden"]);
 /**
  * Whether a person stands behind a record an agent wrote.

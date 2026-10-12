@@ -294,7 +294,12 @@ submissions:
     submitted_at: 2026-10-20T22:41:00+05:00
     status: submitted
     note: fork at commit 3e1f9ab
+    defence: defended        # the professor's word on the oral defence
 ```
+
+`defence` is `defended` or `not_defended`, and absent until the professor says
+which, from the Students view's buttons or `ainar defence mark`. The defence
+itself (questions, recordings, transcripts) stays private, beside the fork.
 
 ### Scanned papers, for grading
 

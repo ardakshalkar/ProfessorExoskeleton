@@ -37,6 +37,7 @@ import {
   SubmissionFormat,
   SubmissionId,
   SubmissionStatus,
+  DefenceOutcome,
   UserId,
   Weight,
   CognitiveLevel,
@@ -230,6 +231,8 @@ export const Submission = entity({
   status: SubmissionStatus.default("submitted"),
   attempt: z.number().int().min(1).default(1),
   note: z.string().nullish(),
+  // The professor's word on the oral defence: the pane's toggle, or `defence mark`.
+  defence: DefenceOutcome.nullish(),
 });
 
 export const AiSuggestion = entity({

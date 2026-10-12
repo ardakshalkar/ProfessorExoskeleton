@@ -85,7 +85,7 @@ import { alignmentMarkdown, syllabusMarkdown } from "../src/report.ts";
 import { coverage, validate } from "../src/validate.ts";
 import { IssueList, describe } from "../src/issues.ts";
 import { AGENT_WRITABLE, approvedView, drafts as draftsIn, withRecords } from "../src/approval.ts";
-import { candidateFiles } from "../src/record-edit.ts";
+import { candidateFiles, editRecords } from "../src/record-edit.ts";
 import {
   dominantMisconception,
   emptyResult,
@@ -503,6 +503,9 @@ const HELP = `ainar — the AINAR course model CLI
   defence transcribe RUN --assessment A --student S [--question Q] [--all]
                      [--connection NAME]   transcribe recorded takes through the
                                            \`transcription\` connection
+  defence mark RUN --assessment A --student S --outcome defended|not_defended|clear
+                                           the professor's word on whether the
+                                           student defended it, on the submission
 
   Grading a written exam, question by question (the pane's Grade view). The
   grouping of answers is groups.yaml beside the scans; marks go to the course:
@@ -3094,6 +3097,41 @@ try {
           );
         }
         out(`\nThen, per student: /defend-submission ${batchAssessment} ${batchRun} STUDENT — propose the grade`);
+        break;
+      }
+
+      if (sub === "mark") {
+        // The professor's word on the defence, as a fact on the submission —
+        // the pane's Defended / Not defended toggle, or said in chat. Nothing
+        // private is read: whether a defence was recorded here does not matter.
+        const markRun = rest[1];
+        const markAssessment = flag("assessment");
+        const markStudent = flag("student");
+        const outcome = (flag("outcome") ?? "").replace("-", "_");
+        if (!markRun || !markAssessment || !markStudent || !["defended", "not_defended", "clear"].includes(outcome)) {
+          console.error("usage: defence mark RUN --assessment A --student S --outcome defended|not_defended|clear");
+          process.exit(2);
+        }
+        const bundle = forRun(markRun);
+        const submission = (bundle.submissions as any[])
+          .filter((entry) => entry.assessment_id === markAssessment && entry.student_id === markStudent)
+          .sort((a, b) => (b.attempt ?? 1) - (a.attempt ?? 1))[0];
+        if (!submission) throw new Error(`${markStudent} has no submission for ${markAssessment}: the defence belongs to one`);
+        const id = submission.submission_id as string;
+        const { written } = editRecords({
+          root,
+          courseId: (bundle.course as any).course_id,
+          patterns: COLLECTIONS.submissions,
+          idField: "submission_id",
+          collection: "submissions",
+          edits: new Map([[id, (node: any) => (outcome === "clear" ? node.delete("defence") : node.set("defence", outcome))]]),
+        });
+        out(
+          outcome === "clear"
+            ? `${id}: defence cleared`
+            : `${id}: ${outcome === "defended" ? "defended" : "not defended"}`,
+        );
+        if (written.length) out(`  in ${written.map((path) => relative(root, path)).join(", ")}`);
         break;
       }
 
