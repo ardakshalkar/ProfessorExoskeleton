@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { evaluationId } from "../src/grade-board.ts";
-import { DEFAULT_MARKS, type SheetConfig, planSync, sheetRows } from "../src/grade-sheet.ts";
+import { DEFAULT_MARKS, type SheetConfig, planSync, rowContextFor, sheetLayout, sheetRows } from "../src/grade-sheet.ts";
+import { HISTORY_KEPT, Ledger } from "../src/lms/ledger.ts";
 import { Sync } from "../src/model/sync.ts";
 import { RosterStore } from "../src/roster.ts";
 import { runSync } from "../src/sync/command.ts";
@@ -15,6 +16,7 @@ import { matchRow } from "../src/sync/match.ts";
 import { decide, reconcile } from "../src/sync/reconcile.ts";
 import { impliedSyncs, syncsOf, writtenForm } from "../src/sync/registry.ts";
 import { runMarksSync } from "../src/sync/sheet-marks.ts";
+import { checkSheet } from "../src/sync/sheet-watch.ts";
 import { validate } from "../src/validate.ts";
 
 const RUN = "CSS-1-2026-FALL";
@@ -164,6 +166,54 @@ const plan = (grid: string[][], options: Record<string, unknown> = {}, b = bundl
     decidedAt: AT,
     ...options,
   });
+
+test("a held row keeps the sheet around it — header, the row, a neighbour each side — and nobody-close rows wait too", () => {
+  const links = new LinkTable("(memory)", RUN);
+  const grid = [
+    ["Gradebook 2026"],
+    ["Name", "1Task", "Note"],
+    ["Nurlanova Aigerim", "T", ""],
+    ["Ostanin Artym", "LT", "late"],
+    ["Zzzz Qqqq", "T", ""],
+  ];
+  const withNote = { ...config, flag_column: "Note" };
+  const rows = sheetRows(grid, withNote);
+  const result = planSync({
+    rows,
+    config: withNote,
+    bundle: bundle(),
+    runId: RUN,
+    store: store(),
+    salt: null,
+    enrolled,
+    decidedBy: null,
+    decidedAt: AT,
+    links,
+    rowContext: rowContextFor(grid, sheetLayout(grid, withNote), { sheet: "1AbCdEfGhIjK", tab: "Homework", gid: 7 }),
+  });
+  assert.equal(result.queued, 2);
+  const [, close] = links.queued("hw-sheet").find(([, entry]) => entry.line === 4)!;
+  assert.deepEqual(close.context!.header, ["Name", "1Task", "Note"]);
+  assert.deepEqual(close.context!.rows.map((row) => row.line), [3, 4, 5]);
+  assert.deepEqual(close.context!.rows[1]!.cells, ["Ostanin Artym", "LT", "late"]);
+  assert.equal(close.context!.nameColumn, 0);
+  assert.deepEqual(close.context!.markColumns, [1]);
+  assert.equal(close.context!.gid, 7);
+  // Nobody in the class list is near this one, and it still waits for a person.
+  const [, nobody] = links.queued("hw-sheet").find(([, entry]) => entry.line === 5)!;
+  assert.deepEqual(nobody.candidates, []);
+});
+
+test("the ledger notes when a sync ran, and finds the last send from before it did", () => {
+  const ledger = new Ledger("(memory)");
+  ledger.record("canvas-api", "ASSESSMENT-HW1", [{ student_id: "STUDENT-A", score: 1, maximum: 2 }], { at: "2026-10-01T10:00:00+05:00", state: "applied" });
+  ledger.record("canvas-api", "ASSESSMENT-HW2", [{ student_id: "STUDENT-A", score: 1, maximum: 2 }], { at: "2026-10-05T10:00:00+05:00", state: "applied" });
+  assert.equal(ledger.latestSent("canvas-api|"), "2026-10-05T10:00:00+05:00");
+  assert.equal(ledger.latestSent("sheets-api|"), null);
+  assert.equal(ledger.lastRun("canvas-grades"), null);
+  ledger.recordRun("canvas-grades", "2026-10-09T12:00:00+05:00");
+  assert.equal(ledger.lastRun("canvas-grades"), "2026-10-09T12:00:00+05:00");
+});
 
 test("an unsure name in the sheet is held and queued, and writes nothing for that row", () => {
   const links = new LinkTable("(memory)", RUN);
@@ -360,8 +410,13 @@ class FakeSheets {
   rowAnchors = new Map<number, string>();
   columnAnchors = new Map<number, string>();
   cells: { range: string; value: string }[] = [];
+  /** What Drive says about when the file changed; null is Drive not saying. */
+  modified: string | null = null;
   constructor(grid: string[][]) {
     this.grid = grid;
+  }
+  async modifiedTime() {
+    return this.modified;
   }
   async tabs() {
     return [{ title: "Homework", sheetId: 42 }];
@@ -433,6 +488,77 @@ test("a two-way anchored sheet: matched once by name, then by anchor after the n
   assert.deepEqual(second.plan.problems, []);
   assert.equal(second.plan.placed[0]!.student, "STUDENT-CCCCCC");
   assert.equal((second.plan.submissions[0] as any).extensions.mark, "LT");
+
+  // The first run is remembered: read from the sheet, when, and the mark it added.
+  const [event] = Ledger.load(RUN, syncDir).events("hw");
+  assert.equal(event!.read, "sheet");
+  assert.equal(event!.saved, event!.at);
+  assert.deepEqual(
+    event!.changes.map((change) => [change.student, change.assessment, change.from, change.to, change.score_from]),
+    [["STUDENT-CCCCCC", "ASSESSMENT-HW1", null, "T", null]],
+  );
+  // The preview names the mark that moves, and a preview is not remembered.
+  assert.deepEqual(second.changes.map((change) => [change.from, change.to]), [["T", "LT"]]);
+  assert.ok(second.changes[0]!.score_to! < second.changes[0]!.score_from!);
+  assert.equal(Ledger.load(RUN, syncDir).events("hw").length, 1);
+});
+
+test("sync check: same after a sync, changed after an edit, and an export's quirks are not an edit", async () => {
+  const rosterDir = temp();
+  const syncDir = temp();
+  const sheetsDir = temp();
+  writeFileSync(join(rosterDir, "people.json"), JSON.stringify({ version: 1, people: store().people }));
+  const course = runBundle({});
+  course.enrollments = [...enrolled].map((student) => ({ course_version_id: RUN, student_id: student, role: "student", status: "active" }));
+  course.assessments = bundle().assessments;
+  const sync = Sync.parse({
+    sync_id: "hw",
+    service: "sheets",
+    role: "source",
+    stream: "marks",
+    where: { sheet: "1AbC", tab: "Homework" },
+    map: { columns: { "1Task": "ASSESSMENT-HW1" } },
+  }) as any;
+  const sheet = new FakeSheets([["Name", "1Task"], ["Nurlanova Aigerim", "T"]]);
+  const check = () => checkSheet({ runId: RUN, sync, rosterDirectory: rosterDir, syncDirectory: syncDir, sheetsDirectory: sheetsDir, client: sheet as any });
+
+  sheet.modified = "2026-10-12T09:00:00.000Z";
+  const before = await check();
+  assert.equal(before.state, "never-synced");
+  assert.equal(before.modified, "2026-10-12T09:00:00.000Z");
+
+  await runMarksSync({
+    bundle: course, runId: RUN, root: temp(), sync, rosterDirectory: rosterDir, linksDirectory: temp(),
+    syncDirectory: syncDir, sheetsDirectory: sheetsDir, out: () => {}, client: sheet as any, dryRun: false,
+  });
+  const [event] = Ledger.load(RUN, syncDir).events("hw");
+  assert.ok(event!.fingerprint);
+  assert.equal(event!.modified, "2026-10-12T09:00:00.000Z");
+  // A trailing blank cell or row is how an export differs from a live read, not an edit.
+  sheet.grid = [["Name", "1Task", ""], ["Nurlanova Aigerim", " T "], []];
+  assert.equal((await check()).state, "same");
+
+  // A mark typed in, and Drive says the file changed after the sync read it.
+  sheet.grid = [["Name", "1Task"], ["Nurlanova Aigerim", "LT"]];
+  sheet.modified = new Date(Date.parse(event!.saved!) + 60000).toISOString();
+  const after = await check();
+  assert.equal(after.state, "changed");
+  assert.match(after.said, /changed since the last sync/);
+  // The hashes differ but Drive says nothing changed since the sheet that was read: same.
+  sheet.modified = "2026-10-01T00:00:00.000Z";
+  assert.equal((await check()).state, "same");
+  // Drive silent: the hash alone decides.
+  sheet.modified = null;
+  assert.equal((await check()).state, "changed");
+});
+
+test("the ledger keeps the last runs of a sync, newest first", () => {
+  const ledger = new Ledger("(memory)");
+  const event = (at: string) => ({ at, read: "file" as const, saved: at, rows: 1, placed: 1, held: 0, waiting: 0, unchanged: 0, wrote_back: 0, changes: [] });
+  for (let day = 1; day <= HISTORY_KEPT + 3; day += 1) ledger.recordEvent("hw", event(`2026-10-${String(day).padStart(2, "0")}`));
+  const events = ledger.events("hw");
+  assert.equal(events.length, HISTORY_KEPT);
+  assert.equal(events[0]!.at, `2026-10-${HISTORY_KEPT + 3}`);
 });
 
 test("sync migrate writes the implied syncs into version.yaml and keeps its comments", async () => {

@@ -5,6 +5,7 @@
 
 import { Message } from "./common.js";
 import { h, React, ReactDOM } from "./react.js";
+import { when } from "./syncs.js";
 import { BASE, scoped } from "./tabs.js";
 
 // ---------------------------------------------------------------- scans
@@ -484,6 +485,290 @@ export function GradebookStatus(props) {
         said.canvas ? h("span", { className: said.behind ? "pp-behind" : "pp-as" }, said.canvas) : null,
         said.behind
           ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.openUnpublished() }, "Send…")
+          : null,
+      );
+    }),
+  );
+}
+
+// ---------------------------------------------------------------- sheet activity
+
+/** `/api/marks-activity` for one run: what each grade-sheet sync brought in. */
+function useMarksActivity(runId, sessionId, revision, names) {
+  const [state, setState] = React.useState({ phase: "loading", value: null });
+  React.useEffect(() => {
+    if (!runId) return undefined;
+    let live = true;
+    fetch(
+      scoped(BASE + "/api/marks-activity?run=" + encodeURIComponent(runId) + (names ? "&names=1" : "") + "&r=" + revision, sessionId),
+      { headers: { accept: "application/json" } },
+    )
+      .then((response) => response.json())
+      .then((value) => live && setState({ phase: "ready", value }))
+      .catch((error) => live && setState({ phase: "ready", value: { error: String(error) } }));
+    return () => {
+      live = false;
+    };
+  }, [runId, sessionId, revision, names]);
+  return state;
+}
+
+/** How often an open pane asks whether the sheet changed. The server asks Google at most every two minutes. */
+const SHEET_CHECK_EVERY = 5 * 60 * 1000;
+
+/**
+ * `/api/sheet-check` for one run: has each grade sheet changed in Google
+ * since its last sync? Asked on load, after every write here, and every five
+ * minutes while the pane is on screen — a hidden pane does not spend
+ * Google's quota.
+ */
+export function useSheetCheck(runId, sessionId, revision) {
+  const [value, setValue] = React.useState(null);
+  React.useEffect(() => {
+    if (!runId) return undefined;
+    let live = true;
+    const ask = () => {
+      if (document.visibilityState === "hidden") return;
+      fetch(scoped(BASE + "/api/sheet-check?run=" + encodeURIComponent(runId) + "&r=" + revision, sessionId), {
+        headers: { accept: "application/json" },
+      })
+        .then((response) => response.json())
+        .then((answer) => live && setValue(answer))
+        .catch(() => {});
+    };
+    ask();
+    const timer = setInterval(ask, SHEET_CHECK_EVERY);
+    const onShow = () => document.visibilityState === "visible" && ask();
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      live = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onShow);
+    };
+  }, [runId, sessionId, revision]);
+  return value;
+}
+
+/** What a dismissal of "the sheet changed" is about: this edit, or — when Drive gives no time — until the next sync. */
+const changeMark = (check) => check.sync + "|" + (check.modified || check.last_synced || "");
+
+/**
+ * The last sync this browser has shown, per run. A per-viewer convenience:
+ * lost in a private window, and then the notice shows once more.
+ */
+const sheetSeenKey = (runId) => "pp-sheet-seen:" + runId;
+const readSheetSeen = (runId) => {
+  try {
+    return window.localStorage.getItem(sheetSeenKey(runId));
+  } catch {
+    return null;
+  }
+};
+const writeSheetSeen = (runId, at) => {
+  try {
+    window.localStorage.setItem(sheetSeenKey(runId), at);
+  } catch {
+    // Nothing kept; the notice comes back on the next load.
+  }
+};
+
+/** "3 new · 1 changed · 1 taken back" */
+const countWords = (event) =>
+  [
+    event.added ? event.added + " new" : null,
+    event.changed ? event.changed + " changed" : null,
+    event.removed ? event.removed + " taken back" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+/** Where the sheet was read from, and how old it was. */
+const sourceWords = (event) =>
+  event.read === "sheet"
+    ? "read from the sheet in Google"
+    : "from the copy downloaded " + (when(event.saved) || "at an unknown time");
+
+/** One mark's move: "P (10)", "P → L · 10 → 8", "taken back (was P)". */
+const markWords = (change) => {
+  const points = (value) => (value === null || value === undefined ? "—" : String(value));
+  if (change.from === null && change.score_from === null) return (change.to || "?") + (change.score_to !== null ? " · " + points(change.score_to) : "");
+  if (change.to === null && change.score_to === null) return "taken back (was " + (change.from || "a mark") + ")";
+  const words = change.from === change.to ? change.to || "" : (change.from || "—") + " → " + (change.to || "—");
+  const scores = change.score_from === change.score_to ? "" : points(change.score_from) + " → " + points(change.score_to);
+  return [words, scores].filter(Boolean).join(" · ");
+};
+
+/**
+ * A notice over the pane when a grade-sheet sync brought marks in that this
+ * browser has not shown yet — whoever ran it: the Syncs view, the CLI or the
+ * assistant. It says how many, when, and from what; Gradebook shows which.
+ */
+export function SheetNotice(props) {
+  return h(
+    React.Fragment,
+    null,
+    h(SheetChangedNotice, props),
+    h(SheetSyncedNotice, props),
+  );
+}
+
+/**
+ * "Your grade sheet changed in Google since the last sync" — asked of Google
+ * by the server, on a machine with a Google login. The press goes to the
+ * Syncs view, where Preview shows what would come in; nothing syncs here.
+ */
+function SheetChangedNotice(props) {
+  const answer = useSheetCheck(props.runId, props.sessionId, props.revision);
+  const storeKey = "pp-sheet-change-seen:" + props.runId;
+  const [dismissed, setDismissed] = React.useState(() => {
+    try {
+      return window.localStorage.getItem(storeKey);
+    } catch {
+      return null;
+    }
+  });
+  if (!answer || !answer.available || !answer.checks) return null;
+  const changed = answer.checks.find((check) => check.state === "changed" && changeMark(check) !== dismissed);
+  if (!changed) return null;
+  const dismiss = () => {
+    const mark = changeMark(changed);
+    try {
+      window.localStorage.setItem(storeKey, mark);
+    } catch {
+      // Not kept; it shows again on the next load.
+    }
+    setDismissed(mark);
+  };
+  return h(
+    "div",
+    { className: "pp-sheetnotice pp-sheetnotice-changed", role: "status" },
+    h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, "GS"),
+    h(
+      "span",
+      { className: "pp-sheetnoticetext" },
+      h("b", null, "Your grade sheet changed in Google"),
+      (changed.modified ? " — edited " + when(changed.modified) : "") +
+        (changed.last_synced ? "; last synced " + when(changed.last_synced) : "") +
+        ". Nothing has come in yet.",
+    ),
+    props.onSync
+      ? h(
+          "button",
+          {
+            type: "button",
+            className: "pp-segbtn",
+            onClick: () => {
+              dismiss();
+              props.onSync();
+            },
+          },
+          "Preview the sync",
+        )
+      : null,
+    h("button", { type: "button", className: "pp-close", "aria-label": "Dismiss", onClick: dismiss }, "×"),
+  );
+}
+
+function SheetSyncedNotice(props) {
+  const state = useMarksActivity(props.runId, props.sessionId, props.revision, false);
+  const [seen, setSeen] = React.useState(() => readSheetSeen(props.runId));
+  React.useEffect(() => setSeen(readSheetSeen(props.runId)), [props.runId]);
+  if (state.phase === "loading" || !state.value || state.value.error) return null;
+  const latest = (state.value.events || []).find((event) => event.changes.length);
+  if (!latest) return null;
+  // Never seen anything on this browser: a sync from the last two days is
+  // still news; an older one is not.
+  const fresh = seen ? Date.parse(latest.at) > Date.parse(seen) : Date.now() - Date.parse(latest.at) < 2 * 86400000;
+  if (!fresh) return null;
+  const dismiss = () => {
+    const newest = state.value.events[0].at;
+    writeSheetSeen(props.runId, newest);
+    setSeen(newest);
+  };
+  return h(
+    "div",
+    { className: "pp-sheetnotice", role: "status" },
+    h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, "GS"),
+    h(
+      "span",
+      { className: "pp-sheetnoticetext" },
+      h("b", null, "Grade sheet synced " + (when(latest.at) || "")),
+      " — marks: " + countWords(latest) + "; " + sourceWords(latest) + ".",
+    ),
+    props.onOpen
+      ? h(
+          "button",
+          {
+            type: "button",
+            className: "pp-segbtn",
+            onClick: () => {
+              dismiss();
+              props.onOpen();
+            },
+          },
+          "See in Gradebook",
+        )
+      : null,
+    h("button", { type: "button", className: "pp-close", "aria-label": "Dismiss", onClick: dismiss }, "×"),
+  );
+}
+
+/**
+ * Above the Gradebook: the marks the grade sheet brought in last, newest
+ * run first — when each run happened, what it read and how old that was,
+ * and each mark that came, moved or went. A run that changed nothing is a
+ * line of its own, so "did my sync work?" has an answer too.
+ */
+export function RecentMarks(props) {
+  const state = useMarksActivity(props.runId, props.sessionId, props.revision, props.names);
+  const [open, setOpen] = React.useState(false);
+  if (state.phase === "loading" || !state.value || state.value.error) return null;
+  const events = state.value.events || [];
+  if (!events.length) return null;
+  const SHOWN = 6;
+  const shown = open ? events : events.slice(0, 2);
+  const more = events.length > 2 || shown.some((event) => event.changes.length > SHOWN);
+  return h(
+    "div",
+    { className: "pp-next pp-recentmarks" },
+    h(
+      "div",
+      { className: "pp-recenthead" },
+      h("b", null, "Last added from the grade sheet"),
+      more ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setOpen(!open) }, open ? "Fewer" : "Show all") : null,
+    ),
+    shown.map((event) => {
+      const rows = open ? event.changes : event.changes.slice(0, SHOWN);
+      return h(
+        "div",
+        { className: "pp-recentrun", key: event.sync + event.at },
+        h(
+          "div",
+          { className: "pp-recentwhen", title: "Synced " + new Date(event.at).toLocaleString() + (event.saved ? "; sheet as of " + new Date(event.saved).toLocaleString() : "") },
+          h("span", null, when(event.at)),
+          h("span", { className: "pp-as" }, (event.changes.length ? countWords(event) : "nothing changed") + " · " + sourceWords(event)),
+        ),
+        rows.length
+          ? h(
+              "ul",
+              { className: "pp-recentlist" },
+              rows.map((change) =>
+                h(
+                  "li",
+                  { key: change.student + change.assessment },
+                  h("span", { className: "pp-recentwho" }, change.name || change.student),
+                  h("span", { className: "pp-as" }, change.title),
+                  h(
+                    "span",
+                    { className: change.to === null && change.score_to === null ? "pp-behind" : "pp-recentmark" },
+                    markWords(change),
+                  ),
+                ),
+              ),
+            )
+          : null,
+        event.changes.length > rows.length
+          ? h("div", { className: "pp-as" }, "… and " + (event.changes.length - rows.length) + " more")
           : null,
       );
     }),

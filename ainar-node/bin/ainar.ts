@@ -118,11 +118,15 @@ import {
 } from "../src/connections/index.ts";
 import {
   type AuthMode,
+  anonymousCall,
   describePlan,
+  pagedForks,
   planPublish,
   publish,
+  recordedRepo,
   resolveAuth,
 } from "../src/homework.ts";
+import { forkChoices, forksPath, githubLogin, recordedLogins, toForks, writeForks } from "../src/forks.ts";
 import { archiveRun, migrateLayout } from "../src/layout.ts";
 import { organizeMaterials } from "../src/material-folders.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
@@ -306,8 +310,9 @@ const BOOLEAN_FLAGS = new Set([
   // `scans`
   "per-file",
   "replace",
-  // `sync link`
+  // `sync link`; `sync run` and `homework sync` printing pseudonyms, not names
   "unlink",
+  "codes",
 ]);
 
 /** Every occurrence of a repeatable flag, with comma-separated values split. */
@@ -434,9 +439,9 @@ const HELP = `ainar — the AINAR course model CLI
   alignment RUN            the constructive alignment report
   gradebook RUN [--assessment A] [--group G]
   pending RUN [--assessment A]
-  rubric ASSESSMENT
   grade-changes RUN [--assessment A] [--student S] [--all] [--json]
                            when and how each grade changed, oldest first
+  rubric ASSESSMENT
   student RUN STUDENT
   class-progress RUN [--group G]
   inbox RUN [--date D] [--group G]
@@ -454,6 +459,9 @@ const HELP = `ainar — the AINAR course model CLI
                                            the run names; adds who is new
   roster show [--run RUN] [--out PATH]     PRIVATE: names, to a terminal
   roster whois STUDENT-XXXXXX              PRIVATE: one identity
+  roster github STUDENT-XXXXXX [--login NAME | --clear]
+                                           PRIVATE: their GitHub account, for
+                                           matching their homework forks
   roster groups [--run RUN]                the subgroups, and who is in them
   roster status                            where the identities live
 
@@ -513,20 +521,20 @@ const HELP = `ainar — the AINAR course model CLI
   defence transcribe RUN --assessment A --student S [--question Q] [--all]
                      [--connection NAME]   transcribe recorded takes through the
                                            \`transcription\` connection
-  defence mark RUN --assessment A --student S --outcome defended|not_defended|clear
-  defence fork RUN --assessment A --student S (--url URL | --clear)
+  defence fork RUN --assessment A --student S (--url URL | --in-person | --clear)
                                            a fork the student brought, not handed
                                            in through Canvas: the link a defence
                                            clones
+  defence mark RUN --assessment A --student S --outcome defended|not_defended|clear
                                            the professor's word on whether the
                                            student defended it, on the submission
-
   defence mark RUN --assessment A --student S --criterion C[,C…]
                      --outcome confirmed|partly|not_confirmed|clear [--score N]
                                            the defence checked against the rubric:
                                            partly halves the written mark, not
                                            confirmed is 0, --score overrides;
                                            clear restores the written mark
+
   Grading a written exam, question by question (the pane's Grade view). The
   grouping of answers is groups.yaml beside the scans; marks go to the course:
 
@@ -567,6 +575,9 @@ const HELP = `ainar — the AINAR course model CLI
   new run COURSE_ID TERM --start YYYY-MM-DD --end YYYY-MM-DD
   homework publish ASSESSMENT [--repo owner/name] [--private] [--confirm]
                                            plan it; --confirm creates and pushes
+  homework forks RUN [--assessment A] [--json]
+                                           look up the starter's public forks, so
+                                           a student's own fork can be chosen, not pasted
 
   Publishing. Each of these reads and prints a plan, and --confirm publishes.
   A record marked \`approval: draft\` is never published — the plan names it
@@ -978,6 +989,7 @@ const gradeSheet = async (step: string, runId: string | undefined): Promise<void
     if (flag("tab")) config.tab = flag("tab")!;
     if (flag("name-column")) config.name_column = flag("name-column")!;
     if (flag("flag-column")) config.flag_column = flag("flag-column")!;
+    if (flag("github-column")) config.github_column = flag("github-column")!;
     for (const text of flagAll("column")) {
       const [header, assessmentId] = pairOf(text, "column");
       config.columns[header] = assessmentId;
@@ -997,11 +1009,12 @@ const gradeSheet = async (step: string, runId: string | undefined): Promise<void
       const [name, studentId] = pairOf(text, "student");
       config.students[name] = studentId;
     }
-    const changed = ["url", "tab", "name-column", "flag-column", "column", "mark", "student"].some((name) => flag(name) !== undefined);
+    const changed = ["url", "tab", "name-column", "flag-column", "github-column", "column", "mark", "student"].some((name) => flag(name) !== undefined);
     if (changed) out(`saved ${saveSheetConfig(config)}`);
     else out(`settings ${configPath(runId)}${loadSheetConfig(runId) ? "" : " (none yet)"}`);
     out(`  sheet    ${config.url ?? "—"}${config.tab ? `  tab ${config.tab}` : ""}`);
     out(`  names    "${config.name_column}"${config.flag_column ? `   flag "${config.flag_column}" (kept in the roster)` : ""}`);
+    if (config.github_column) out(`  github   "${config.github_column}" (kept in the roster)`);
     for (const [header, assessmentId] of Object.entries(config.columns)) out(`  column   "${header}" → ${assessmentId}`);
     for (const [word, mark] of Object.entries(config.marks)) {
       out(`  mark     ${word} = ×${mark.factor} of each criterion, ${mark.status} (${mark.label})`);
@@ -1027,6 +1040,7 @@ const gradeSheet = async (step: string, runId: string | undefined): Promise<void
     from: flag("from") ?? null,
     dryRun: args.includes("--dry-run"),
     json: args.includes("--json"),
+    codes: args.includes("--codes"),
     out,
   });
 };
@@ -1196,8 +1210,6 @@ try {
         }),
       );
       break;
-    case "pending":
-      out(pendingPayload(forRun(rest[0]!), rest[0]!, flag("assessment")));
     case "grade-changes": {
       // Read back out of each evaluation's history (src/grade-changes.ts).
       // Codes, not names: this prints to wherever the output goes.
@@ -1227,6 +1239,8 @@ try {
 ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists decisions that kept the same score"}`);
       break;
     }
+    case "pending":
+      out(pendingPayload(forRun(rest[0]!), rest[0]!, flag("assessment")));
       break;
     case "rubric":
       out(rubricPayload(workspace.findAssessment(rest[0]!), rest[0]!));
@@ -3149,8 +3163,6 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         break;
       }
 
-      if (sub === "mark") {
-        // The professor's word on the defence, as a fact on the submission —
       if (sub === "fork") {
         // A fork the student brought in person, not handed in through Canvas.
         // The link goes onto their submission for the homework, or onto a new
@@ -3161,8 +3173,11 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         const forkStudent = flag("student");
         const given = flag("url");
         const clear = args.includes("--clear");
-        if (!forkRun || !forkAssessment || !forkStudent || (!given && !clear)) {
-          console.error("usage: defence fork RUN --assessment A --student S (--url https://github.com/OWNER/REPO | --clear)");
+        // No link at all: the student defends in person and nothing was handed
+        // in anywhere. The desk needs a submission to file the recording under.
+        const inPerson = args.includes("--in-person");
+        if (!forkRun || !forkAssessment || !forkStudent || (!given && !clear && !inPerson)) {
+          console.error("usage: defence fork RUN --assessment A --student S (--url https://github.com/OWNER/REPO | --in-person | --clear)");
           process.exit(2);
         }
         const bundle = forRun(forkRun);
@@ -3192,6 +3207,29 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             edits: new Map([[submission.submission_id, (node: any) => node.delete("url")]]),
           });
           out(`${submission.submission_id}: fork link removed`);
+          break;
+        }
+        if (inPerson && !given) {
+          if (submission) {
+            out(`${submission.submission_id}: already recorded — the defence goes under it`);
+            break;
+          }
+          const id = pulledSubmissionId(forkStudent, forkAssessment);
+          for (const path of writeRecords(courseDir, {
+            submissions: [
+              {
+                submission_id: id,
+                assessment_id: forkAssessment,
+                student_id: forkStudent,
+                status: "submitted",
+                note: "Defended in person; nothing handed in through Canvas",
+                extensions: { source: "fork" },
+              },
+            ] as never[],
+          })) {
+            out(`wrote ${relative(root, path)}`);
+          }
+          out(`${id}: in person, no link`);
           break;
         }
         const url = repoUrl(given!);
@@ -3228,6 +3266,8 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         break;
       }
 
+      if (sub === "mark") {
+        // The professor's word on the defence, as a fact on the submission —
         // the pane's Defended / Not defended toggle, or said in chat. Nothing
         // private is read: whether a defence was recorded here does not matter.
         const markRun = rest[1];
@@ -3249,8 +3289,6 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           .sort((a, b) => (b.attempt ?? 1) - (a.attempt ?? 1))[0];
         if (!submission) throw new Error(`${markStudent} has no submission for ${markAssessment}: the defence belongs to one`);
         const id = submission.submission_id as string;
-        const { written } = editRecords({
-          root,
 
         if (markCriteria.length) {
           // Criterion by criterion, against the homework's own rubric: the
@@ -3308,6 +3346,8 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           }
           break;
         }
+        const { written } = editRecords({
+          root,
           courseId: (bundle.course as any).course_id,
           patterns: COLLECTIONS.submissions,
           idField: "submission_id",
@@ -3876,6 +3916,54 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           if (person[key]) out(`  ${key.padEnd(18)} ${person[key]}`);
         }
         if (person.runs?.length) out(`  ${"runs".padEnd(18)} ${person.runs.join(", ")}`);
+        if (person.github) out(`  ${"github".padEnd(18)} ${person.github}`);
+        break;
+      }
+
+      /*
+       * The GitHub account a student works under, recorded once.
+       *
+       * The fork picker in the pane learns an account from a link a student
+       * handed in; a course whose marks come off a sheet has no such link, so
+       * this says it outright. It ties a pseudonym to a person, so it goes in
+       * the roster store beside their name and never into `courses/`. The
+       * sheet's GitHub column (`homework sheet --github-column`, or a sync's
+       * `map.rows.github`) writes the same field.
+       */
+      if (sub === "github") {
+        const studentId = rest[1];
+        if (!studentId) throw new Error("usage: roster github STUDENT-XXXXXX [--login NAME | --clear]");
+        const store = RosterStore.load(directory);
+        const person = store.whois(studentId);
+        if (person === null) {
+          console.error(`${studentId} is not in the local roster — \`roster whois\` names the ones it holds`);
+          process.exit(1);
+        }
+        const wanted = flag("login");
+        if (wanted !== undefined) {
+          const login = githubLogin(wanted);
+          if (!login) throw new Error(`"${wanted}" is not a GitHub account — letters, digits and single hyphens, up to 39`);
+          const taken = Object.entries(store.people).filter(
+            ([other, entry]) => other !== studentId && typeof entry.github === "string" && entry.github.toLowerCase() === login.toLowerCase(),
+          );
+          person.github = login;
+          out(`saved ${store.save()}`);
+          out(`  ${studentId} github ${login}`);
+          if (taken.length) {
+            out(
+              `  note   ${taken.map(([other]) => other).join(", ")} has the same account recorded; ` +
+                "until one is corrected, its forks are offered to neither",
+            );
+          }
+        } else if (flag("clear") !== undefined) {
+          if (person.github) {
+            delete person.github;
+            out(`saved ${store.save()}`);
+          }
+          out(`  ${studentId} github —`);
+        } else {
+          out(`  ${studentId} github ${person.github ?? "— (record one with --login NAME)"}`);
+        }
         break;
       }
 
@@ -4247,7 +4335,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       const subcommand = rest[0];
       if (!subcommand || (!rest[1] && subcommand !== "help")) {
         console.error(
-          "usage: sync list RUN | show RUN SYNC | plan RUN SYNC [flags] | run RUN SYNC [--confirm]\n" +
+          "usage: sync list RUN | show RUN SYNC | plan RUN SYNC [flags] | run RUN SYNC [--confirm] | check RUN [SYNC]\n" +
             "       sync review RUN [SYNC] | confirm RUN SYNC (--all | --line N | --name X) [--to NAME]\n" +
             '       sync link RUN SYNC "Name as written=Name in class list" [--unlink] | migrate RUN [--dry-run]',
         );
@@ -4255,7 +4343,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       }
       // Flags `sync` reads itself; everything else is handed to the command a
       // sync delegates to — `--assessment`, `--group`, `--message`, `--by`.
-      const own = new Set(["confirm", "dry-run", "line", "name", "to", "unlink", "links-dir", "root"]);
+      const own = new Set(["confirm", "dry-run", "line", "name", "to", "unlink", "links-dir", "root", "codes"]);
       const passthrough: string[] = [];
       for (let index = 0; index < args.length; index += 1) {
         const value = args[index]!;
@@ -4274,6 +4362,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           confirm: args.includes("--confirm"),
           dryRun: args.includes("--dry-run"),
           json: args.includes("--json"),
+          codes: args.includes("--codes"),
           all: args.includes("--all"),
           line: flag("line") ? Number(flag("line")) : null,
           name: flag("name") ?? null,
@@ -4297,11 +4386,80 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         await gradeSheet(rest[0], rest[1]);
         break;
       }
+      if (rest[0] === "forks") {
+        // Every public fork of each homework's starter repository, written
+        // beside the run's submissions for the Students view to match against
+        // the accounts students' links name (src/forks.ts). Reads GitHub,
+        // records nothing in the course.
+        const forksRun = rest[1];
+        if (!forksRun) throw new Error("usage: homework forks RUN [--assessment ASSESSMENT_ID] [--json]");
+        const bundle = forRun(forksRun);
+        const only = flag("assessment");
+        const targets = (bundle.assessments as any[]).filter(
+          (entry) => entry.course_version_id === forksRun && recordedRepo(entry) && (!only || entry.assessment_id === only),
+        );
+        if (!targets.length) {
+          throw new Error(
+            only
+              ? `${only} records no starter repository (extensions.github.template_repo)`
+              : `no assessment in ${forksRun} records a starter repository (extensions.github.template_repo)`,
+          );
+        }
+        // A configured connection or `gh` when there is one — five thousand
+        // reads an hour — and otherwise GitHub with no credential, which
+        // the forks of a public repository need none of.
+        const forced = flag("auth");
+        const auth = resolveAuth({
+          connection: findConnection(loadRegistry(flag("connections")), { name: flag("connection"), type: "github" }),
+          force: forced === "gh" || forced === "token" ? forced : null,
+        });
+        const base = submissionsDir(flag("submissions-dir"));
+        refuseInsideRepo(base, root);
+        const summary: Record<string, any>[] = [];
+        const runAssessments = new Set(
+          (bundle.assessments as any[]).filter((entry) => entry.course_version_id === forksRun).map((entry) => entry.assessment_id),
+        );
+        const submissions = (bundle.submissions as any[]).filter((entry) => runAssessments.has(entry.assessment_id));
+        const enrolled = enrolledIn(bundle, forksRun).map((entry: any) => String(entry.student_id));
+        // The accounts recorded with `roster github`: counted here as the pane
+        // will count them, and never printed.
+        const recorded = recordedLogins(RosterStore.load(rosterDir(flag("roster-dir"))).people);
+        for (const assessment of targets) {
+          const repo = recordedRepo(assessment)!;
+          const listed = auth.github ? await auth.github.forks(repo) : await pagedForks(repo, anonymousCall);
+          const forks = toForks(listed);
+          const cache = {
+            assessment_id: assessment.assessment_id,
+            template_repo: repo,
+            looked_up_at: new Date().toISOString(),
+            forks,
+          };
+          writeForks(forksPath(base, forksRun, assessment.assessment_id), cache);
+          const missing = enrolled.filter(
+            (student) => !submissions.some((entry) => entry.assessment_id === assessment.assessment_id && entry.student_id === student),
+          );
+          const found = missing.filter((student) => forkChoices(cache, submissions, assessment.assessment_id, student, recorded).theirs).length;
+          summary.push({ assessment_id: assessment.assessment_id, repo, forks: forks.length, nothing_handed_in: missing.length, their_fork_found: found });
+        }
+        if (args.includes("--json")) {
+          out(JSON.stringify(summary, null, 2));
+          break;
+        }
+        if (!auth.github) out("note: read GitHub without a login — public forks only, sixty reads an hour");
+        for (const line of summary) {
+          out(
+            `${line.assessment_id} (${line.repo}): ${line.forks} public fork(s); ` +
+              `${line.nothing_handed_in} student(s) handed nothing in, ${line.their_fork_found} of them with a fork under their own account`,
+          );
+        }
+        break;
+      }
       if (rest[0] !== "publish") {
         console.error(
           "usage: homework publish ASSESSMENT_ID [--repo owner/name] [--auth gh|token] " +
             "[--private] [--confirm]\n" +
-            "       homework sheet RUN [--url URL] [--tab TAB] [--name-column H] [--flag-column H]\n" +
+            "       homework forks RUN [--assessment ASSESSMENT_ID] [--json]\n" +
+            "       homework sheet RUN [--url URL] [--tab TAB] [--name-column H] [--flag-column H] [--github-column H]\n" +
             "                          [--column 'H=ASSESSMENT-ID']… [--mark 'WORD=FACTOR[:late]']… [--student 'NAME=STUDENT-ID']…\n" +
             "       homework sync RUN [--from export.csv] [--dry-run] [--json]",
         );

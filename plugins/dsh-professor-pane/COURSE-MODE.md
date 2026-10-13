@@ -275,6 +275,11 @@ happens.
    back to a reading keeps its place. They are private, and disabled under
    *Preview as student*. One header line says where Canvas stands and jumps to
    Integrations. Escape closes a window on top first, then course mode.
+   **Syncs** joined them (2026-10-09): the pane's Syncs view — every road out
+   with Preview / Run / Send, and the rows a sync was not sure of as *name as
+   written → name in the class list*. The header line now reads *Canvas:
+   connected · 5 waiting* and opens it in place rather than closing course
+   mode; *Open Integrations* inside it is the jump to the pane for setup.
 5. ~~**Evidence**, as its own document~~ — **built** (2026-10-07), as course
    mode's fourth reading. `mode=evidence` asks the host for `class_progress`,
    `gradebook` and `action_inbox` over approved records only, and

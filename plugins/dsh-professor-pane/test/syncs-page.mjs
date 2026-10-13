@@ -13,7 +13,7 @@
 import http from "node:http";
 import { readFileSync } from "node:fs";
 
-import { runSyncAction, syncsDocument } from "../server/syncs.js";
+import { copyFromUpload, runSyncAction, syncsDocument } from "../server/syncs.js";
 import { resolveWorkspace } from "../server/workspace.js";
 
 const PORT = Number(process.env.PORT ?? 3092);
@@ -37,10 +37,32 @@ let waiting = [
   { line: 31, written: "Zhanel", why: "only one word", candidates: ["STUDENT-AAAA05"] },
 ];
 
+/** A made-up sheet around a waiting row: the header, the row, a neighbour each side. */
+const NEIGHBOURS = ["Akhmetov Ruslan", "Bekova Dana", "Ivanova Maria", "Kassymov Timur", "Li Wei", "Omarova Saule"];
+const previewFor = (row, names, index) => {
+  const marks = (seed) => ["T", "LT", "", "T", "LLT"].map((_, column) => ["T", "LT", "", "LLT"][(seed + column) % 4]);
+  const line = (at, name, seed) => ({ line: at, cells: [names ? name : "•••", ...marks(seed), seed % 3 ? "" : "lab partner absent"] });
+  return {
+    tab: "Homework",
+    firstColumn: 1,
+    nameColumn: 0,
+    markColumns: [1, 2, 3, 4, 5],
+    header: ["Name", "1Task", "2Task", "3Task", "4Task", "5Task", "Note"],
+    rows: [
+      line(row.line - 1, NEIGHBOURS[index % NEIGHBOURS.length], index + 1),
+      line(row.line, row.written, index),
+      line(row.line + 1, NEIGHBOURS[(index + 3) % NEIGHBOURS.length], index + 2),
+    ],
+    open: "https://docs.google.com/spreadsheets/d/EXAMPLE-ONLY-NOT-A-SHEET/edit#gid=0&range=A" + row.line,
+  };
+};
+
 const documentFor = (names) => {
   const real = syncsDocument(workspace, RUN, { names: false });
-  const rows = waiting.map((row) => ({
+  const rows = waiting.map((row, index) => ({
     sync: "hw-sheet",
+    source: "Grade sheet you keep",
+    preview: previewFor(row, names, index),
     key: "name:" + row.written.toLowerCase(),
     line: row.line,
     written: names ? row.written : null,
@@ -60,6 +82,42 @@ const documentFor = (names) => {
   };
 };
 
+/** Two made-up runs of the grade sheet: one from a downloaded copy this morning, one live yesterday. */
+const activityFor = (names) => {
+  const change = (student, title, from, to, scoreFrom, scoreTo) => ({
+    student,
+    name: names ? named(student).name : null,
+    assessment: "ASSESSMENT-" + title.replace(/\s+/g, ""),
+    title,
+    from,
+    to,
+    score_from: scoreFrom,
+    score_to: scoreTo,
+  });
+  const hour = 3600000;
+  const at = (ago) => new Date(Date.now() - ago).toISOString();
+  return {
+    runId: RUN,
+    names,
+    events: [
+      {
+        sync: "hw-sheet", label: "Grade sheet you keep", at: at(0.2 * hour), read: "file", saved: at(0.5 * hour),
+        rows: 31, placed: 30, held: 1, waiting: 1, unchanged: 112, wrote_back: 0, added: 2, changed: 1, removed: 1,
+        changes: [
+          change("STUDENT-AAAA01", "Homework 3", null, "T", null, 10),
+          change("STUDENT-AAAA02", "Homework 3", null, "LT", null, 8),
+          change("STUDENT-AAAA04", "Homework 2", "LT", "T", 8, 10),
+          change("STUDENT-AAAA05", "Homework 2", "T", null, 10, null),
+        ],
+      },
+      {
+        sync: "hw-sheet", label: "Grade sheet you keep", at: at(26 * hour), read: "sheet", saved: at(26 * hour),
+        rows: 31, placed: 31, held: 0, waiting: 0, unchanged: 116, wrote_back: 0, added: 0, changed: 0, removed: 0, changes: [],
+      },
+    ],
+  };
+};
+
 const page = `<!doctype html>
 <html><head><meta charset="utf-8"><title>Syncs — test page</title>
 <style>body{font:13px system-ui;margin:0;background:#f4f4f6}#root{max-width:560px;margin:24px auto;background:#fff;
@@ -73,12 +131,27 @@ window.__ModuleLoader__ = { load: ({ factory }) => { window.__client = factory((
 <script src="/client.js"></script>
 <script>
 const h = React.createElement;
+window.__jumped = [];
 function App() {
   const [names, setNames] = React.useState(true);
   const [revision, setRevision] = React.useState(0);
+  const [drafts, setDrafts] = React.useState(false);
+  // ?course=1 opens course mode (the big screen) over the page instead.
+  if (new URLSearchParams(location.search).get("course") === "1") {
+    return h(window.__client.CourseMode, {
+      title: ${JSON.stringify(RUN)}, runId: ${JSON.stringify(RUN)}, sessionId: "", start: "2026-09-01", end: "2026-12-20",
+      reload: revision, drafts, setDrafts, names, setNames, dark: false, covered: false,
+      onClose: () => {}, onJump: (tab) => window.__jumped.push(tab), onPublish: () => {}, onUpload: () => {},
+      onWrite: () => setRevision(revision + 1), openPublish: () => {}, ask: () => {},
+      tabs: [{ id: "integrations", label: "Integrations", hint: "" }],
+    });
+  }
   return h(React.Fragment, null,
     ReactDOM.createPortal(h("button", { onClick: () => setNames(!names) }, names ? "Show codes" : "Show names"), document.getElementById("bar")),
-    h(window.__client.SyncsView, { runId: ${JSON.stringify(RUN)}, sessionId: "", names, revision, onWrite: () => setRevision(revision + 1) }));
+    // What a sheet sync brought in: the notice over the pane and Gradebook's "Last added".
+    h(window.__client.SheetNotice, { runId: ${JSON.stringify(RUN)}, sessionId: "", revision, onOpen: () => window.__jumped.push("gradebook"), onSync: () => window.__jumped.push("syncs") }),
+    h(window.__client.RecentMarks, { runId: ${JSON.stringify(RUN)}, sessionId: "", revision, names }),
+    h(window.__client.SyncsView,{ runId: ${JSON.stringify(RUN)}, sessionId: "", names, revision, onWrite: () => setRevision(revision + 1) }));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(h(App));
 </script></body></html>`;
@@ -100,6 +173,25 @@ http
       return res.end(readFileSync(client));
     }
     if (url.pathname === "/professor-pane/api/syncs") return json(res, documentFor(url.searchParams.get("names") === "1"));
+    if (url.pathname === "/professor-pane/api/marks-activity") return json(res, activityFor(url.searchParams.get("names") === "1"));
+    // Google is not asked from here: the sheet is said to have changed ten minutes ago.
+    if (url.pathname === "/professor-pane/api/sheet-check") {
+      const ago = (minutes) => new Date(Date.now() - minutes * 60000).toISOString();
+      return json(res, {
+        runId: RUN,
+        available: true,
+        checks: [{ sync: "hw-sheet", label: "Grade sheet you keep", state: "changed", modified: ago(10), last_synced: ago(12), last_saved: ago(30), checked_at: ago(0), said: "the sheet has changed since the last sync" }],
+      });
+    }
+    // Course mode's header line reads Canvas's state from here; a stand-in.
+    if (url.pathname === "/professor-pane/api/integrations") return json(res, { integrations: [{ id: "canvas", state: "ready" }] });
+    // A dropped sheet is checked by the real `sync plan` and then thrown away:
+    // the copy on disk is never replaced from here.
+    if (url.pathname === "/professor-pane/api/syncs/copy") {
+      let raw = "";
+      for await (const chunk of req) raw += chunk;
+      return json(res, await copyFromUpload(workspace, root, RUN, JSON.parse(raw || "{}"), { keep: false }));
+    }
     if (url.pathname === "/professor-pane/api/syncs/action") {
       let raw = "";
       for await (const chunk of req) raw += chunk;

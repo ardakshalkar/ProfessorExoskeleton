@@ -7,7 +7,7 @@ import { Message, useDark, useJson } from "./common.js";
 import { DefenceDesk } from "./defence-desk.js";
 import { Integrations } from "./integrations.js";
 import { SyncsView } from "./syncs.js";
-import { GradebookStatus, Unpublished } from "./marks.js";
+import { GradebookStatus, RecentMarks, SheetNotice, Unpublished } from "./marks.js";
 import { CourseMode, MaterialModal, materialUrl, WidgetFrame } from "./materials.js";
 import { Preferences } from "./preferences.js";
 import { PublishModal } from "./publish.js";
@@ -259,6 +259,56 @@ export function ProfessorPane(props) {
       // A fork the student brought in person (`defence fork`). A link the
       // command refuses comes back as its own words, since the frame that
       // asked has no place to show them.
+      // *Audio defence* on a homework with nothing handed in: a submission
+      // with no link is recorded first, so the desk has one to file under.
+      if (data.kind === "defence-audio") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run = currentRunRef.current;
+        if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+        fetch(
+          scoped(
+            BASE + "/api/defence/fork?run=" + encodeURIComponent(run) +
+              "&assessment=" + encodeURIComponent(data.assessment) +
+              "&student=" + encodeURIComponent(data.student) + "&inperson=1",
+            props.sessionId,
+          ),
+          { method: "POST" },
+        )
+          .then((response) => response.json())
+          .then((result) => {
+            setReload((count) => count + 1);
+            if (!result.ok) {
+              window.alert(String(result.error || result.output || "the defence could not be started").trim().split("\n").slice(-2).join(" "));
+              return;
+            }
+            setDesk({ assessment: data.assessment, student: data.student });
+          })
+          .catch(() => setReload((count) => count + 1));
+        return;
+      }
+      // *Find forks*: the starter's public forks, looked up on GitHub by the
+      // server; the redraw offers each student their own.
+      if (data.kind === "homework-forks") {
+        const run = currentRunRef.current;
+        if (!run || !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+        fetch(
+          scoped(
+            BASE + "/api/homework/forks?run=" + encodeURIComponent(run) +
+              "&assessment=" + encodeURIComponent(data.assessment),
+            props.sessionId,
+          ),
+          { method: "POST" },
+        )
+          .then((response) => response.json())
+          .then((result) => {
+            if (!result.ok) {
+              window.alert(String(result.error || result.output || "the forks could not be looked up").trim().split("\n").slice(-2).join(" "));
+            }
+            setReload((count) => count + 1);
+          })
+          .catch(() => setReload((count) => count + 1));
+        return;
+      }
       if (data.kind === "defence-fork") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run = currentRunRef.current;
@@ -348,6 +398,14 @@ export function ProfessorPane(props) {
         if (!id.test(String(data.assessment))) return;
         if (data.kind === "scans") setScansPile(data.assessment);
         else setGrading({ assessment: data.assessment, label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment });
+        return;
+      }
+      // The Students tab's "Sync from sheet": the Syncs view, where the sheet
+      // is read directly or brought in as a downloaded file.
+      if (data.kind === "syncs") {
+        setTab("integrations");
+        setSubViews((current) => Object.assign({}, current, { integrations: "syncs" }));
+        if (courseModeRef.current) setCourseMode(false);
         return;
       }
       if (data.kind === "publish") {
@@ -610,6 +668,13 @@ export function ProfessorPane(props) {
             setSubViews((value) => Object.assign({}, value, { tasks: "unpublished" }));
           },
         }),
+        h(RecentMarks, {
+          runId: current.runId,
+          sessionId: props.sessionId,
+          revision: reload,
+          names: names,
+          key: "recent|" + current.runId,
+        }),
         frame,
       );
     }
@@ -811,6 +876,24 @@ export function ProfessorPane(props) {
               )
             : null,
         ),
+    // Marks a grade-sheet sync brought in since this browser last looked,
+    // whoever ran it. Over every tab, since a sync is news wherever one is.
+    current
+      ? h(SheetNotice, {
+          runId: current.runId,
+          sessionId: props.sessionId,
+          revision: reload,
+          key: "notice|" + current.runId,
+          onOpen: () => {
+            setTab("progress");
+            setSubViews((value) => Object.assign({}, value, { progress: "gradebook" }));
+          },
+          onSync: () => {
+            setTab("integrations");
+            setSubViews((value) => Object.assign({}, value, { integrations: "syncs" }));
+          },
+        })
+      : null,
     h("div", { className: "pp-body" }, body()),
     publishing === null
       ? null

@@ -115,6 +115,7 @@ import {
 import {
   chooseNext,
   defenceReader,
+  forksReader,
   defenceSessionPayload,
   defenceTarget,
   splitWhole,
@@ -145,7 +146,14 @@ import { paperCrop, scansDocument } from "./server/scans.js";
 import { sendBrief, sendMaterial, sendOutline, sendStarter } from "./server/serve-file.js";
 import { studentScreenPage } from "./server/student-screen.js";
 import { studentsDocument } from "./server/students.js";
-import { runSyncAction, syncsDocument } from "./server/syncs.js";
+import {
+  UPLOAD_LIMIT as SHEET_UPLOAD_LIMIT,
+  copyFromUpload,
+  marksActivity,
+  runSyncAction,
+  sheetChecks,
+  syncsDocument,
+} from "./server/syncs.js";
 import { unpublishedDocument } from "./server/unpublished.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "./server/upload.js";
 import { assessmentStatus } from "./server/week-status.js";
@@ -650,16 +658,41 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
       const assessmentId = url.searchParams.get("assessment") ?? "";
       const studentId = url.searchParams.get("student") ?? "";
       const link = (url.searchParams.get("url") ?? "").trim();
+      // Audio defence on a homework with nothing handed in: a submission with no link.
+      const inPerson = url.searchParams.get("inperson") === "1";
       if (!/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId) || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(studentId)) {
         return sendJson(res, 200, { error: "An assessment and a student id, please." });
       }
-      if (!/^https:\/\/\S{3,300}$/.test(link)) return sendJson(res, 200, { error: "A fork link starts with https://" });
+      if (!inPerson && !/^https:\/\/\S{3,300}$/.test(link)) return sendJson(res, 200, { error: "A fork link starts with https://" });
       try {
         loadedRun(workspace, runId); // the run has to be this workspace's
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }
-      return runScans(["defence", "fork", runId, "--assessment", assessmentId, "--student", studentId, "--url", link], root)
+      return runScans(
+        ["defence", "fork", runId, "--assessment", assessmentId, "--student", studentId, ...(inPerson ? ["--in-person"] : ["--url", link])],
+        root,
+      )
+        .then((result) => sendJson(res, 200, result))
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // *Find forks* in the Students view: the starter's public forks, looked up
+    // on GitHub (`ainar homework forks`) and kept beside the submissions, so
+    // the professor picks a student's fork rather than pasting its link.
+    // POST, for `/api/defence/prepare`'s reason: it reaches out to GitHub.
+    if (path === "/api/homework/forks") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      const assessmentId = url.searchParams.get("assessment") ?? "";
+      if (assessmentId && !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) {
+        return sendJson(res, 200, { error: "An assessment id, please." });
+      }
+      try {
+        loadedRun(workspace, runId); // the run has to be this workspace's
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      return runScans(["homework", "forks", runId, ...(assessmentId ? ["--assessment", assessmentId] : [])], root)
         .then((result) => sendJson(res, 200, result))
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
@@ -973,6 +1006,26 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
       return sendJson(res, 200, syncsDocument(workspace, runId, { names: url.searchParams.get("names") === "1" }));
     }
 
+    // Whether each grade sheet changed in Google since its last sync. Reads
+    // the sheet and Drive's last-changed time; writes nothing.
+    if (path === "/api/sheet-check") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return sheetChecks(workspace, runId)
+        .then((value) => sendJson(res, 200, value))
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // What the grade sheets brought in, run by run: the pane's notice and the
+    // Gradebook's "Last added". A read of the sync ledger on this machine.
+    if (path === "/api/marks-activity") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      try {
+        return sendJson(res, 200, marksActivity(workspace, runId, { names: url.searchParams.get("names") === "1" }));
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+    }
+
     // POST only, for `/api/publish`'s reason: a run can reach Canvas or a
     // sheet, and a confirm writes the private link table.
     if (path === "/api/syncs/action") {
@@ -987,6 +1040,25 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
             return sendJson(res, 200, { error: "The request body is not JSON." });
           }
           return sendJson(res, 200, await runSyncAction(workspace, root, runId, body ?? {}));
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // A grade sheet the professor downloaded and dropped on its card. The one
+    // write here that is not `ainar sync …`: it keeps the file as the run's
+    // copy, and only after a `sync plan` has read it — see copyFromUpload.
+    if (path === "/api/syncs/copy") {
+      if (req.method !== "POST") return sendJson(res, 405, { error: "a sheet copy is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req, SHEET_UPLOAD_LIMIT)
+        .then(async (raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          return sendJson(res, 200, await copyFromUpload(workspace, root, runId, body ?? {}));
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
@@ -1653,6 +1725,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
           req.headers.host ? `http://${req.headers.host}` : "",
           url.searchParams.get("session") ?? "",
           defenceReader(root, runId),
+          forksReader(root, runId),
         ),
       );
     }

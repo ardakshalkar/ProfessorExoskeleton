@@ -174,6 +174,8 @@ export interface Person {
   email?: string;
   first_seen?: string;
   runs?: string[];
+  /** Their GitHub login, as the professor recorded it (`roster github`, or the sheet's GitHub column). */
+  github?: string;
   [key: string]: unknown;
 }
 

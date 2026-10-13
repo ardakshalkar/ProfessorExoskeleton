@@ -46,8 +46,53 @@ import { dirname, join, resolve } from "node:path";
  * described as the first one after a downgrade, and loses nothing. 6 added
  * `syncs`, the per-sync base values; an older reader drops them, and the next
  * sync then treats every value as first seen — it asks rather than overwrites.
+ * 7 added `history`, what each sheet sync brought in; an older reader drops
+ * it, which costs the pane's "last added" list and nothing a sync needs.
  */
-export const STORE_VERSION = 6;
+export const STORE_VERSION = 7;
+
+/** How many runs of one sync `history` keeps. A list to read, not an archive. */
+export const HISTORY_KEPT = 30;
+
+/** One cell that a sync changed in the course: a mark that came, went or moved. */
+export interface MarkChange {
+  student: string;
+  assessment: string;
+  /** The sheet's word before and after: `P`, `L`; null when there was none. */
+  from: string | null;
+  to: string | null;
+  /** The points the mark is worth, summed over the rubric, before and after. */
+  score_from: number | null;
+  score_to: number | null;
+}
+
+/**
+ * One real run of a marks-sheet sync — what came in, and from what.
+ *
+ * `saved` is the honest answer to "how fresh was the sheet I synced": for a
+ * downloaded copy, when the professor's browser saved the file; for a live
+ * read, the moment it was read. Google gives no per-cell edit time to the
+ * Sheets API, so neither is when a particular mark was typed.
+ */
+export interface SyncEvent {
+  at: string;
+  read: "sheet" | "file";
+  saved: string | null;
+  rows: number;
+  placed: number;
+  held: number;
+  waiting: number;
+  unchanged: number;
+  wrote_back: number;
+  changes: MarkChange[];
+  /**
+   * A hash of the values read, so a later check can tell whether the sheet
+   * says anything different without keeping what it said. Absent before.
+   */
+  fingerprint?: string | null;
+  /** Drive's last-changed time for the spreadsheet at a live read; null when Drive would not say. */
+  modified?: string | null;
+}
 
 const HEADER_NOTE =
   "One course run's state outside this workspace: gradebook values prepared by " +
@@ -160,6 +205,10 @@ export class Ledger {
    * used to check.
    */
   syncs: Record<string, Record<string, string>> = {};
+  /** When each sync last ran for real (not a plan), `sync id → ISO time`. */
+  runs: Record<string, string> = {};
+  /** Version 7: each sheet sync's last runs and what they changed, newest first. */
+  history: Record<string, SyncEvent[]> = {};
 
   constructor(path: string) {
     this.path = path;
@@ -180,7 +229,44 @@ export class Ledger {
     ledger.assignments = payload.assignments ?? {};
     ledger.publications = payload.publications ?? {};
     ledger.syncs = payload.syncs ?? {};
+    ledger.runs = payload.runs ?? {};
+    ledger.history = payload.history ?? {};
     return ledger;
+  }
+
+  /** Note what one run brought in, newest first, keeping the last `HISTORY_KEPT`. */
+  recordEvent(syncId: string, event: SyncEvent): void {
+    this.history[syncId] = [event, ...(this.history[syncId] ?? [])].slice(0, HISTORY_KEPT);
+  }
+
+  /** One sync's runs, newest first; empty before the first or for a ledger older than 7. */
+  events(syncId: string): SyncEvent[] {
+    return [...(this.history[syncId] ?? [])];
+  }
+
+  /** Note that a sync ran — after it did, never for a plan. */
+  recordRun(syncId: string, at: string): void {
+    this.runs[syncId] = at;
+  }
+
+  lastRun(syncId: string): string | null {
+    return this.runs[syncId] ?? null;
+  }
+
+  /**
+   * The latest time anything in this ledger was sent under a prefix — for a
+   * sync that ran before `runs` existed. `canvas-api|` is the last grade sent
+   * to Canvas, `homework|` the last repository pushed.
+   */
+  latestSent(prefix: string): string | null {
+    let latest: string | null = null;
+    const consider = (at: unknown) => {
+      if (typeof at === "string" && at && (latest === null || Date.parse(at) > Date.parse(latest))) latest = at;
+    };
+    for (const [key, entry] of Object.entries(this.entries)) if (key.startsWith(prefix)) consider(entry.at);
+    for (const [key, entry] of Object.entries(this.publications)) if (key.startsWith(prefix)) consider(entry.at);
+    if (prefix === "assignment|") for (const entry of Object.values(this.assignments)) consider(entry.at);
+    return latest;
   }
 
   /** One sync's values as last synced, or an empty map before its first run. */
@@ -301,6 +387,8 @@ export class Ledger {
       publications: this.publications,
       pushed: this.pushed,
       syncs: this.syncs,
+      runs: this.runs,
+      history: this.history,
     };
     writeFileSync(this.path, sortedJson(payload) + "\n", { encoding: "utf-8" });
     try {

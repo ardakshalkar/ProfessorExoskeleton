@@ -51,12 +51,36 @@ export interface Candidate {
   match: string;
 }
 
+/**
+ * Where a waiting row came from, so a person can see it as it stands in the
+ * sheet rather than as a line number: the header, the row, and one row each
+ * side. Kept with the queue, privately, because it holds names.
+ */
+export interface RowContext {
+  source: "sheet";
+  /** The spreadsheet's URL or id, when it was read live or is known. */
+  sheet?: string | null;
+  tab?: string | null;
+  /** The tab's numeric id, for a link that opens on the row. Live reads only. */
+  gid?: number | null;
+  /** 0-based sheet column of the first cell shown, so a view can letter the columns A, B, C… */
+  firstColumn: number;
+  /** Index within the shown cells of the names, so a view can hide them in pseudonym mode. */
+  nameColumn: number;
+  /** 0-based columns the sync reads marks from. */
+  markColumns: number[];
+  header: string[];
+  /** The row and its neighbours, 1-based lines as the sheet numbers them. */
+  rows: { line: number; cells: string[] }[];
+}
+
 export interface Pending {
   label: string;
   line?: number | null;
   candidates: Candidate[];
   why: string;
   at: string;
+  context?: RowContext | null;
 }
 
 export const linksDir = (explicit?: string | null): string => {
@@ -127,7 +151,9 @@ export class LinkTable {
       before &&
       before.label === entry.label &&
       before.why === entry.why &&
-      JSON.stringify(before.candidates) === JSON.stringify(entry.candidates);
+      before.line === entry.line &&
+      JSON.stringify(before.candidates) === JSON.stringify(entry.candidates) &&
+      JSON.stringify(before.context ?? null) === JSON.stringify(entry.context ?? null);
     if (same) return;
     (this.pending[syncId] ??= {})[key] = entry;
     this.dirty = true;
@@ -144,6 +170,27 @@ export class LinkTable {
 
   queued(syncId: string): [string, Pending][] {
     return Object.entries(this.pending[syncId] ?? {});
+  }
+
+  /**
+   * Write one sync's review queue and nothing else — for a plan.
+   *
+   * A plan changes nothing in the course or on the far side, and it should
+   * not teach the link table either: what it matched for sure is remembered
+   * when the sync runs. But the rows it could not place are worth keeping at
+   * once, so the review list shows what the preview just found rather than
+   * waiting for a run. Read fresh from disk so the plan's in-memory links are
+   * not written with it.
+   */
+  saveQueue(syncId: string): string {
+    const disk = existsSync(this.path) ? JSON.parse(readFileSync(this.path, "utf-8")) : {};
+    const onDisk = new LinkTable(this.path, this.runId);
+    onDisk.links = disk.links ?? {};
+    onDisk.pending = disk.pending ?? {};
+    if (JSON.stringify(onDisk.pending[syncId] ?? {}) === JSON.stringify(this.pending[syncId] ?? {})) return this.path;
+    if (this.pending[syncId] && Object.keys(this.pending[syncId]!).length) onDisk.pending[syncId] = this.pending[syncId]!;
+    else delete onDisk.pending[syncId];
+    return onDisk.save();
   }
 
   save(): string {

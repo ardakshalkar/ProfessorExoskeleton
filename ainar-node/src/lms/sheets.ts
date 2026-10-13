@@ -49,7 +49,14 @@ import { resolveVariable } from "../connections/store.ts";
 
 const API_ROOT = "https://sheets.googleapis.com/v4/spreadsheets";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
-const SCOPE = "https://www.googleapis.com/auth/spreadsheets";
+/**
+ * Sheets to read and write; Drive metadata to ask only when a file last
+ * changed (`modifiedTime`), never what is in it. A key whose project has the
+ * Drive API switched off still gets a token — the one question it cannot
+ * answer is "when", and `modifiedTime` then says null.
+ */
+const SCOPE = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly";
+const DRIVE_FILES = "https://www.googleapis.com/drive/v3/files";
 
 export const TOKEN_ENV = "AINAR_SHEETS_TOKEN";
 export const KEY_FILE_ENV = "AINAR_SHEETS_KEY";
@@ -365,6 +372,27 @@ export class SheetsClient {
     let url = `${API_ROOT}/${encodeURIComponent(spreadsheetId)}${suffix}`;
     if (params) url += "?" + new URLSearchParams(params).toString();
     return url;
+  }
+
+  /**
+   * When the spreadsheet last changed, from Drive — the whole file, not one
+   * cell; Google keeps no per-cell time. Null when Drive will not say (the
+   * API off for the key's project, a token without the Drive scope): a
+   * question this can do without, so it never throws for it.
+   */
+  async modifiedTime(spreadsheetId: string): Promise<string | null> {
+    try {
+      const response = await this.transport.request(
+        "GET",
+        `${DRIVE_FILES}/${encodeURIComponent(spreadsheetId)}?` + new URLSearchParams({ fields: "modifiedTime", supportsAllDrives: "true" }),
+        { headers: await this.headers() },
+      );
+      if (response.status < 200 || response.status >= 300) return null;
+      const value = (json(response) ?? {}).modifiedTime;
+      return typeof value === "string" && value ? value : null;
+    } catch {
+      return null;
+    }
   }
 
   async tabTitles(spreadsheetId: string): Promise<string[]> {

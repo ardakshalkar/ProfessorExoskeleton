@@ -44,10 +44,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { allRubrics } from "./bundle.ts";
+import { githubLogin } from "./forks.ts";
 import { evaluationId } from "./grade-board.ts";
 import { pulledSubmissionId } from "./lms/pull.ts";
 import { type RosterStore } from "./roster.ts";
-import { LinkTable, adoptPins } from "./sync/links.ts";
+import { LinkTable, type RowContext, adoptPins } from "./sync/links.ts";
 import { type MatchContext, type MatchStep, type RowIdentity, matchRow, rowKeys } from "./sync/match.ts";
 import { type ConflictRule, decide } from "./sync/reconcile.ts";
 
@@ -72,6 +73,8 @@ export interface SheetConfig {
   name_column: string;
   /** A header whose cell is a note about the person, kept in the roster. */
   flag_column: string | null;
+  /** A header whose cell is the person's GitHub account, kept in the roster (`people.json`'s `github`). */
+  github_column?: string | null;
   /** Header → assessment id. */
   columns: Record<string, string>;
   /** Mark word → what it is worth. Matched without regard to case. */
@@ -106,6 +109,7 @@ export const loadSheetConfig = (runId: string, directory = sheetsDir()): SheetCo
     tab: raw.tab ?? null,
     name_column: raw.name_column ?? "Name",
     flag_column: raw.flag_column ?? null,
+    github_column: raw.github_column ?? null,
     columns: raw.columns ?? {},
     marks: raw.marks ?? DEFAULT_MARKS,
     students: raw.students ?? {},
@@ -131,6 +135,8 @@ export interface SheetRow {
   line: number;
   name: string;
   flag: string;
+  /** The GitHub column's cell, as written; empty without the column. */
+  github?: string;
   cells: Record<string, string>;
   /** The invisible tag on this row, when the sync anchors and the row has one. */
   anchor?: string | null;
@@ -148,6 +154,7 @@ export interface SheetLayout {
   columns: Record<string, number>;
   name: number;
   flag: number;
+  github: number;
 }
 
 /** What the sheet's own invisible tags say, read before the grid is parsed. */
@@ -158,8 +165,45 @@ export interface SheetAnchors {
   rows: Map<number, string>;
 }
 
+/**
+ * A held row as it stands in the sheet: the header, the row, one row each
+ * side, cut to the columns that matter (from the first to the last of the
+ * name, the note and the mapped marks) so a wide sheet stays readable.
+ */
+export const rowContextFor = (
+  grid: string[][],
+  layout: SheetLayout,
+  where: { sheet?: string | null; tab?: string | null; gid?: number | null },
+): ((line: number) => RowContext | null) => {
+  const used = [layout.name, layout.flag, ...Object.values(layout.columns)].filter((column) => column >= 0);
+  const first = Math.min(...used);
+  const last = Math.max(...used);
+  const cut = (row: string[] | undefined) =>
+    Array.from({ length: last - first + 1 }, (_, offset) => clean((row ?? [])[first + offset]));
+  return (line) => {
+    const index = line - 1;
+    if (index <= layout.headerRow || index >= grid.length) return null;
+    const rows: { line: number; cells: string[] }[] = [];
+    for (let at = Math.max(layout.headerRow + 1, index - 1); at <= Math.min(grid.length - 1, index + 1); at += 1) {
+      rows.push({ line: at + 1, cells: cut(grid[at]) });
+    }
+    return {
+      source: "sheet",
+      sheet: where.sheet ?? null,
+      tab: where.tab ?? null,
+      gid: where.gid ?? null,
+      firstColumn: first,
+      nameColumn: layout.name - first,
+      markColumns: Object.values(layout.columns).map((column) => column - first),
+      header: cut(grid[layout.headerRow]),
+      rows,
+    };
+  };
+};
+
 export const NAME_ANCHOR = "name";
 export const NOTE_ANCHOR = "note";
+export const GITHUB_ANCHOR = "github";
 
 export const sheetLayout = (grid: string[][], config: SheetConfig, anchors?: SheetAnchors | null): SheetLayout => {
   const wanted = Object.keys(config.columns);
@@ -196,7 +240,10 @@ export const sheetLayout = (grid: string[][], config: SheetConfig, anchors?: She
   if (missing.length) throw new Error(`the sheet has no column ${missing.map((h) => `"${h}"`).join(", ")}`);
   const name = index(config.name_column) >= 0 ? index(config.name_column) : anchoredName;
   const flag = config.flag_column ? (index(config.flag_column) >= 0 ? index(config.flag_column) : anchoredAt(NOTE_ANCHOR)) : -1;
-  return { headerRow: at, columns, name, flag };
+  const github = config.github_column
+    ? index(config.github_column) >= 0 ? index(config.github_column) : anchoredAt(GITHUB_ANCHOR)
+    : -1;
+  return { headerRow: at, columns, name, flag, github };
 };
 
 /**
@@ -223,6 +270,7 @@ export const sheetRows = (grid: string[][], config: SheetConfig, anchors?: Sheet
       line: index + 1,
       name,
       flag: layout.flag >= 0 ? clean(row[layout.flag]) : "",
+      github: layout.github >= 0 ? clean(row[layout.github]) : "",
       cells,
       anchor: anchors?.rows.get(index) ?? null,
     });
@@ -256,6 +304,8 @@ export interface SyncPlan {
   unchanged: number;
   /** Pseudonym → the flag cell, for everyone the sheet placed. */
   flags: Record<string, string>;
+  /** Pseudonym → the GitHub cell as written, for everyone the sheet placed with one. */
+  githubs: Record<string, string>;
   /** Unsure matches put in the review queue, for `ainar sync confirm`. */
   queued: number;
   /** Two-way only: cells the course changed, to write into the sheet. */
@@ -288,6 +338,8 @@ export const planSync = (options: {
   /** The values as last synced (`Ledger.synced`), for a two-way sync. */
   base?: Record<string, string>;
   anchors?: boolean;
+  /** The row as it stands in the sheet, by line — kept with a row that waits for review. */
+  rowContext?: (line: number) => RowContext | null;
 }): SyncPlan => {
   const { rows, config, bundle, runId, store, salt, enrolled } = options;
   const syncId = options.syncId ?? "hw-sheet";
@@ -302,6 +354,7 @@ export const planSync = (options: {
     kept: [],
     unchanged: 0,
     flags: {},
+    githubs: {},
     queued: 0,
     writeBack: [],
     anchor: [],
@@ -375,7 +428,13 @@ export const planSync = (options: {
       hold(row, `no name in "${config.name_column}", but it has ${marked.join(", ")} — write the name in`);
       continue;
     }
-    const identity: RowIdentity = { label: row.name, line: row.line, name: row.name, anchor: row.anchor ?? null };
+    const identity: RowIdentity = {
+      label: row.name,
+      line: row.line,
+      name: row.name,
+      anchor: row.anchor ?? null,
+      context: options.rowContext ? options.rowContext(row.line) : null,
+    };
     for (const key of rowKeys(identity)) seenKeys.add(key);
     const outcome = matchRow(identity, context);
     if (outcome.status === "held") {
@@ -392,6 +451,7 @@ export const planSync = (options: {
     const how = outcome.status === "check" ? outcome.how : outcome.how === "link" || outcome.how === "name" ? null : outcome.how;
     plan.placed.push({ line: row.line, student: outcome.student, match: how });
     if (row.flag) plan.flags[outcome.student] = row.flag;
+    if (row.github) plan.githubs[outcome.student] = row.github;
     if (options.anchors && !row.anchor) plan.anchor.push({ line: row.line, student: outcome.student });
   }
   links.pruneQueue(syncId, seenKeys);
@@ -628,4 +688,35 @@ export const applyFlags = (store: RosterStore, runId: string, placed: string[], 
     changed += 1;
   }
   return changed;
+};
+
+/**
+ * Keep each placed person's GitHub account in the roster, from the sheet's
+ * GitHub column.
+ *
+ * Unlike a flag, an empty cell takes nothing away: the account is the
+ * person's, not this run's, and `ainar roster github` may have recorded it
+ * with no sheet involved. A cell that is not a GitHub account is refused and
+ * reported, never stored — the fork match reads this field as the professor's
+ * word.
+ */
+export const applyGithubLogins = (
+  store: RosterStore,
+  githubs: Record<string, string>,
+): { changed: number; refused: { student: string; value: string }[] } => {
+  let changed = 0;
+  const refused: { student: string; value: string }[] = [];
+  for (const [student, value] of Object.entries(githubs)) {
+    const person = store.people[student];
+    if (!person) continue;
+    const login = githubLogin(value);
+    if (!login) {
+      refused.push({ student, value });
+      continue;
+    }
+    if (person.github === login) continue;
+    person.github = login;
+    changed += 1;
+  }
+  return { changed, refused };
 };

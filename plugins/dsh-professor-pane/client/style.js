@@ -81,6 +81,26 @@ const CSS = `
    Scans bar gives a step that is yours. */
 .pp-behind{font-size:12px;color:#a15c00}
 .pp-bookstatus{flex:0 0 auto;max-height:35%;overflow:auto;margin:8px 14px 0}
+/* What the grade sheet brought in: a notice over every tab until seen, and the
+   last runs above the Gradebook. Green, the colour of a thing that arrived. */
+.pp-sheetnotice{flex:none;display:flex;align-items:center;gap:8px;margin:8px 14px 0;padding:7px 9px;
+  border-radius:8px;font-size:11.5px;line-height:1.45;border:1px solid rgba(46,125,79,.35);
+  background:rgba(46,125,79,.08);color:var(--dsw-alias-label-secondary,#3a3a3a)}
+.pp-sheetnotice b{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+/* Changed in Google, not yet in: amber, the colour of a step that is yours. */
+.pp-sheetnotice-changed{border-color:rgba(161,92,0,.4);background:rgba(161,92,0,.08)}
+.pp-sheetnoticetext{flex:1;min-width:0}
+.pp-recentmarks{flex:0 0 auto;max-height:30%;overflow:auto;margin:8px 14px 0}
+.pp-recenthead{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 4px}
+.pp-recenthead b{font-weight:600}
+.pp-recentrun{padding:4px 0;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-recentwhen{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pp-recentwhen > span:first-child{font-weight:600}
+.pp-recentlist{list-style:none;margin:3px 0 0;padding:0}
+.pp-recentlist li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:1px 0}
+.pp-recentwho{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%}
+.pp-recentmark{margin-left:auto;font-variant-numeric:tabular-nums;color:#2e7d4f}
+.pp-recentlist .pp-behind{margin-left:auto}
 .pp-linkask{margin:8px 0;padding:8px 10px;border-left:3px solid #a15c00}
 .pp-linkask p{margin:0 0 6px}
 .pp-approveout{margin:8px 0 0;padding:8px 10px;max-height:180px;overflow:auto;
@@ -382,29 +402,136 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-primary{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:6px 14px;border-radius:20px;
   color:#fff;background:#2f8a4e;border:1px solid #2f8a4e}
 .pp-primary:disabled{opacity:.5;cursor:default}
-/* Syncs: a row per road, then the matches waiting for a person — the name as
-   written beside the class list's name, never a pseudonym alone. */
-.pp-synclist{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px;margin:8px 0 4px}
-.pp-syncrow{display:flex;flex-direction:column;gap:4px;padding:9px 11px;
-  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-.pp-syncrow:first-child{border-top:none}
-.pp-synchead{display:flex;align-items:baseline;gap:8px}
-.pp-syncname{flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow-wrap:anywhere}
-.pp-syncname .pp-as{font-weight:400}
-.pp-syncdir{flex:none;font-size:10.5px;padding:1px 8px;border-radius:20px}
-.pp-syncdir-source{background:rgba(47,98,168,.12);color:#2f62a8}
-.pp-syncdir-target{background:rgba(47,138,78,.12);color:#2f8a4e}
-.pp-syncdir-both{background:rgba(110,77,180,.12);color:#6e4db4}
-.pp-heldlist{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px;margin:4px 0}
-.pp-heldrow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 11px;
-  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-.pp-heldrow:first-child{border-top:none}
-.pp-heldbody{min-width:0;display:flex;flex-direction:column;gap:3px}
-.pp-heldpair{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px}
-.pp-heldwritten{color:var(--dsw-alias-label-secondary,#555)}
-.pp-heldname{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
-.pp-syncrow select,.pp-heldrow select{font:inherit;font-size:11.5px;padding:2px 4px;border-radius:6px;
-  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:transparent;color:inherit}
+/* Syncs. Tiles say how much there is; the rows waiting for a person come
+   first, each as the sheet shows it (letters across, lines down, the row lit)
+   with the decision under it; then the roads, grouped by which way data runs,
+   each with its service's mark. */
+.pp-syncs{display:flex;flex-direction:column;gap:14px}
+.pp-cviewpad{padding:16px 20px 40px;max-width:880px}
+.pp-wiring-waiting{color:#a5561f;font-weight:600}
+.pp-stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:8px}
+.pp-stile{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;
+  background:var(--dsw-alias-fill-secondary,#f3f3f5)}
+.pp-stilelabel{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-stilevalue{font-size:22px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums;
+  color:var(--dsw-alias-label-primary,#111)}
+.pp-stilenote{font-size:11px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-stile-warn{background:rgba(214,130,32,.13)}
+.pp-stile-warn .pp-stilevalue{color:#b4600f}
+.pp-stile-ok .pp-stilevalue{color:#2f8a4e}
+.pp-syncnote{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-radius:10px;font-size:12px;
+  border:1px dashed var(--dsw-alias-border-l2,#d6d6dc);color:var(--dsw-alias-label-secondary,#555)}
+.pp-syncnote > span{flex:1;min-width:180px}
+.pp-syncsection{display:flex;flex-direction:column;gap:6px}
+.pp-synch3{display:flex;align-items:center;gap:8px;margin:2px 0 0;font-size:13.5px;font-weight:600;
+  color:var(--dsw-alias-label-primary,#111)}
+.pp-count{font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:20px;
+  background:var(--dsw-alias-fill-secondary,#ececf0);color:var(--dsw-alias-label-secondary,#555)}
+.pp-count-warn{background:rgba(214,130,32,.16);color:#b4600f}
+.pp-syncgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:8px}
+.pp-synccard{display:flex;flex-direction:column;gap:9px;padding:11px 12px;border-radius:12px;min-width:0;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-synccard:hover{border-color:var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-synctop{display:flex;gap:10px;align-items:flex-start}
+.pp-svc{flex:none;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-size:11.5px;font-weight:700;letter-spacing:.02em}
+.pp-svc-small{width:22px;height:22px;border-radius:6px;font-size:9.5px}
+.pp-svc-canvas{background:rgba(226,73,51,.14);color:#c23a26}
+.pp-svc-sheets{background:rgba(30,142,62,.14);color:#1e7e38}
+.pp-svc-telegram{background:rgba(42,161,218,.15);color:#1d84b6}
+.pp-svc-github{background:rgba(60,64,72,.13);color:#3c4048}
+.pp-svc-moodle,.pp-svc-file{background:rgba(214,130,32,.14);color:#b4600f}
+.pp-syncmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.pp-synctitle{font-size:13px;font-weight:600;line-height:1.3;color:var(--dsw-alias-label-primary,#111);overflow-wrap:anywhere}
+.pp-syncid{margin-left:6px;font-weight:400;font-size:11px;font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);
+  color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.pp-chips{display:flex;gap:4px;flex-wrap:wrap}
+.pp-diricon{display:block;flex:none}
+.pp-dir{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px}
+.pp-dir-small{position:absolute;right:-5px;bottom:-5px;width:17px;height:17px;border-radius:50%;
+  box-shadow:0 0 0 2px var(--dsw-alias-bg-l1,#fff)}
+.pp-dir-source{background:rgba(47,98,168,.14);color:#2f62a8}
+.pp-dir-target{background:rgba(47,138,78,.14);color:#2f8a4e}
+.pp-dir-both{background:rgba(110,77,180,.14);color:#6e4db4}
+.pp-dir-small{background-color:var(--dsw-alias-bg-l1,#fff)}
+.pp-dir-small.pp-dir-source{background-image:linear-gradient(rgba(47,98,168,.18),rgba(47,98,168,.18))}
+.pp-dir-small.pp-dir-target{background-image:linear-gradient(rgba(47,138,78,.18),rgba(47,138,78,.18))}
+.pp-dir-small.pp-dir-both{background-image:linear-gradient(rgba(110,77,180,.18),rgba(110,77,180,.18))}
+.pp-svcwrap{position:relative;flex:none;display:inline-flex}
+.pp-stiledirs{display:inline-flex;gap:10px;flex-wrap:wrap}
+.pp-stiledir{display:inline-flex;align-items:center;gap:3px}
+.pp-stiledir-source{color:#2f62a8}
+.pp-stiledir-target{color:#2f8a4e}
+.pp-stiledir-both{color:#6e4db4}
+.pp-synccopy{font-size:11px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-synccopy-none{color:#b4600f}
+.pp-synclast{font-size:11px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-synclast::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;
+  vertical-align:1px;background:#2f8a4e}
+.pp-synclast-never{color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.pp-synclast-never::before{background:var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-stilevalue{overflow-wrap:anywhere}
+.pp-chip{font-size:10.5px;padding:1px 7px;border-radius:20px;white-space:nowrap;
+  background:var(--dsw-alias-fill-secondary,#f0f0f2);color:var(--dsw-alias-label-secondary,#555)}
+.pp-chip-warn{background:rgba(214,130,32,.15);color:#b4600f}
+.pp-chip-live{background:rgba(180,52,42,.11);color:#b4342a}
+.pp-syncctl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pp-syncctl select{flex:1;min-width:0;max-width:100%;font:inherit;font-size:11.5px;padding:4px 6px;border-radius:7px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);color:inherit}
+.pp-syncbtn{font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;padding:4px 12px;border-radius:20px;
+  background:transparent;color:var(--dsw-alias-label-primary,#111);border:1px solid var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-syncbtn:hover:not(:disabled){background:var(--dsw-alias-fill-secondary,#f0f0f2)}
+.pp-syncbtn:disabled{opacity:.45;cursor:default}
+a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
+.pp-syncbtn-off{opacity:.45;pointer-events:none}
+/* A downloaded sheet is dropped on its card; the outline says where it lands. */
+.pp-synccard-drop{border:1px dashed #1e7e38;background:rgba(30,142,62,.06)}
+.pp-synchint{margin:0;font-size:11px;line-height:1.45;color:var(--dsw-alias-label-secondary,#555)}
+.pp-syncbtn-run{color:#fff;background:#2f8a4e;border-color:#2f8a4e}
+.pp-syncbtn-run:hover:not(:disabled){background:#28794a}
+.pp-syncbtn-send{color:#b4342a;border-color:#b4342a}
+.pp-syncbtn-send:not(:disabled){color:#fff;background:#b4342a}
+.pp-syncout{border-radius:9px;overflow:hidden;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-syncout-err{border-color:rgba(180,52,42,.45)}
+.pp-syncouthead{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 4px 10px;font-size:11px;font-weight:600;
+  background:var(--dsw-alias-fill-secondary,#f3f3f5);color:var(--dsw-alias-label-secondary,#555)}
+.pp-syncout-err .pp-syncouthead{background:rgba(180,52,42,.09);color:#b4342a}
+.pp-syncout pre{margin:0;padding:8px 10px;max-height:200px;overflow:auto;font-size:11px;line-height:1.5;white-space:pre-wrap;
+  font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace)}
+.pp-waitlist{display:flex;flex-direction:column;gap:10px}
+.pp-waitcard{display:flex;flex-direction:column;gap:9px;padding:11px 12px;border-radius:12px;
+  border:1px solid rgba(214,130,32,.35);background:var(--dsw-alias-bg-l1,#fff);box-shadow:inset 3px 0 0 rgba(214,130,32,.7)}
+.pp-waithead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.pp-waitsource{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-waitwhere{font-weight:400;color:var(--dsw-alias-label-secondary,#555)}
+.pp-waitopen{font-size:11.5px;color:#1e7e38;text-decoration:none;white-space:nowrap}
+.pp-waitopen:hover{text-decoration:underline}
+.pp-sheetwrap{overflow-x:auto;border-radius:8px;border:1px solid var(--dsw-alias-border-l2,#dadce0)}
+.pp-sheet{border-collapse:collapse;width:100%;font-size:11.5px;font-variant-numeric:tabular-nums}
+.pp-sheet th,.pp-sheet td{border:1px solid var(--dsw-alias-border-l2,#e2e3e6);padding:3px 7px;height:20px;
+  white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.pp-sheet thead th{font-size:10px;font-weight:500;text-align:center;color:var(--dsw-alias-label-tertiary,#80868b);
+  background:var(--dsw-alias-fill-secondary,#f6f7f8)}
+.pp-sheet tr > :first-child{border-left:0}
+.pp-sheet tr:last-child > *{border-bottom:0}
+.pp-sheet thead tr > *{border-top:0}
+.pp-sheetcorner,.pp-sheetline{width:30px;min-width:30px;font-size:10px;font-weight:500;text-align:center;
+  color:var(--dsw-alias-label-tertiary,#80868b);background:var(--dsw-alias-fill-secondary,#f6f7f8)}
+.pp-sheethead td{font-weight:600;color:var(--dsw-alias-label-primary,#111);background:rgba(30,142,62,.05)}
+.pp-sheetcell{color:var(--dsw-alias-label-secondary,#444)}
+.pp-sheetmark{text-align:center;font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace)}
+.pp-sheetlit td{background:rgba(214,130,32,.13);color:var(--dsw-alias-label-primary,#111)}
+.pp-sheetlit .pp-sheetline{background:rgba(214,130,32,.3);color:#8a4a0c;font-weight:700}
+.pp-sheetlit .pp-sheetname{font-weight:600;box-shadow:inset 0 0 0 2px #d68220}
+.pp-waitdecide{display:flex;flex-direction:column;gap:6px}
+.pp-waitpair{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.pp-waitwritten{color:var(--dsw-alias-label-secondary,#555);font-style:italic}
+.pp-waitarrow{color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.pp-waitwho{display:inline-flex;align-items:center;gap:6px}
+.pp-avatar{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:9.5px;font-weight:700;background:rgba(47,98,168,.14);color:#2f62a8}
+.pp-waitname{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-syncfoot{margin:0}
 /* Grading: one question at a time over the conversation. The questions are
    tabs in the head; a card is the page beside what was read off it, and a row
    of marks. A dashed mark is the suggestion, a filled one the decision. */

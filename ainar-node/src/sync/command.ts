@@ -5,6 +5,7 @@
  *     ainar sync show    RUN SYNC                    one sync in full, and its links
  *     ainar sync plan    RUN SYNC [flags]            what would change; writes nothing
  *     ainar sync run     RUN SYNC [--confirm]        do it
+ *     ainar sync check   RUN [SYNC]                  has a grade sheet changed since its last sync? reads only
  *     ainar sync review  RUN [SYNC]                  matches waiting for a person
  *     ainar sync confirm RUN SYNC (--all | --line N | --name "X") [--to STUDENT-X]
  *     ainar sync link    RUN SYNC "Name as written=STUDENT-X" [--unlink]
@@ -20,11 +21,13 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { Ledger } from "../lms/ledger.ts";
 import { RosterStore } from "../roster.ts";
 import { nameKey } from "../scans.ts";
 import { LinkTable, nameLinkKey } from "./links.ts";
 import { type RunSync, findSync, syncsOf, writeSyncs, writtenForm } from "./registry.ts";
 import { runMarksSync } from "./sheet-marks.ts";
+import { checkSheet } from "./sheet-watch.ts";
 
 export interface SyncArgs {
   subcommand: string;
@@ -35,6 +38,8 @@ export interface SyncArgs {
   confirm: boolean;
   dryRun: boolean;
   json: boolean;
+  /** Pseudonyms in what is printed, rather than the class list's names. */
+  codes?: boolean;
   all: boolean;
   line: number | null;
   name: string | null;
@@ -181,6 +186,7 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
           from: args.from,
           dryRun: planning,
           json: args.json,
+          codes: args.codes === true,
           out,
           linksDirectory: args.linksDir,
         });
@@ -218,7 +224,47 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
         ...args.passthrough,
       ];
       out(`→ ainar ${argv.join(" ")}`);
-      return delegate(argv);
+      const code = delegate(argv);
+      // The command that did the work keeps its own record; this notes only
+      // that the sync ran, for "last synced". A plan is not a run.
+      if (code === 0 && !planning) {
+        const ledger = Ledger.load(runId);
+        ledger.recordRun(sync.sync_id, new Date().toISOString());
+        ledger.save();
+      }
+      return code;
+    }
+
+    case "check": {
+      // Every grade sheet the run has, or the one named, against its last
+      // sync. Reads the sheet; writes nothing anywhere.
+      const sheets = args.sync
+        ? [findSync(bundle, runId, args.sync)]
+        : syncsOf(bundle, runId).filter((sync) => isMarksSheet(sync) && (sync.where as Record<string, unknown>).sheet);
+      if (!sheets.length) {
+        out(`${runId} has no grade sheet with where.sheet to check.`);
+        return 0;
+      }
+      const answers = [];
+      let failed = 0;
+      for (const sync of sheets) {
+        if (!isMarksSheet(sync)) {
+          out(`${sync.sync_id} is not a grade sheet; only those are checked.`);
+          failed += 1;
+          continue;
+        }
+        try {
+          const answer = await checkSheet({ runId, sync, rosterDirectory: args.rosterDir });
+          answers.push(answer);
+          if (!args.json) out(`${sync.sync_id}: ${answer.said}`);
+        } catch (error) {
+          failed += 1;
+          if (args.json) answers.push({ sync: sync.sync_id, state: "error", said: (error as Error).message });
+          else out(`${sync.sync_id}: could not check — ${(error as Error).message}`);
+        }
+      }
+      if (args.json) out(answers);
+      return failed && !answers.length ? 1 : 0;
     }
 
     case "review": {
@@ -332,7 +378,7 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
 
     default:
       throw new Error(
-        `unknown sync subcommand '${args.subcommand}'. It is one of: list, show, plan, run, review, confirm, link, migrate`,
+        `unknown sync subcommand '${args.subcommand}'. It is one of: list, show, plan, run, check, review, confirm, link, migrate`,
       );
   }
 };

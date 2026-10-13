@@ -339,6 +339,11 @@ export const printPaper = async (options: PrintOptions): Promise<PrintReport> =>
   const pageSize = options.pageSize ?? (printing_.page_size === "a4" || printing_.page_size === "letter" ? printing_.page_size : null);
   const maxPages = options.maxPages ?? (Number.isInteger(printing_.max_pages) && printing_.max_pages > 0 ? printing_.max_pages : null);
   if (pageSize !== null && pageSize !== "a4" && pageSize !== "letter") throw new Error("--page must be a4 or letter");
+  // `2` on a paper printed on both sides: the name on the front of every sheet.
+  const candidateEvery =
+    Number.isInteger(printing_.candidate_fields_every) && printing_.candidate_fields_every > 0
+      ? printing_.candidate_fields_every
+      : null;
 
   const warnings: string[] = [];
   const lines: string[] = [];
@@ -382,6 +387,9 @@ export const printPaper = async (options: PrintOptions): Promise<PrintReport> =>
       )
         ? ["Name", "Group"]
         : ["Name"],
+      ...(candidateEvery
+        ? { candidateFieldsEvery: candidateEvery, runningHead: [assessment.title, variant ? `Variant ${variant}` : null].filter(Boolean).join(" - ") }
+        : {}),
       questions: items.map((item) => ({
         number: item.number,
         marks: item.maximum_score,

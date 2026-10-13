@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { DEFAULT_MARKS, type SheetConfig, applyFlags, planSync, sheetRows } from "../src/grade-sheet.ts";
+import { DEFAULT_MARKS, type SheetConfig, applyFlags, applyGithubLogins, planSync, sheetRows } from "../src/grade-sheet.ts";
 import { RosterStore } from "../src/roster.ts";
 
 const RUN = "CSS-1-2026-FALL";
@@ -154,6 +154,40 @@ test("a flag goes into the roster under the run, and comes off again", () => {
   assert.deepEqual(people.people["STUDENT-AAAAAA"]!.sheet_flags, { [RUN]: "🚲" });
   assert.equal(applyFlags(people, RUN, ["STUDENT-AAAAAA"], {}), 1);
   assert.equal(people.people["STUDENT-AAAAAA"]!.sheet_flags, undefined);
+});
+
+test("a GitHub column is read per placed row, and kept in the roster, never cleared by an empty cell", () => {
+  const withGithub = { ...config, github_column: "GitHub" };
+  const rows = [
+    ["Name", "Note", "GitHub", "1Task"],
+    ["Yermenbayeva Indira", "", "@Indira-Y", "T"],
+    ["Artem Ostanin", "", "", "T"],
+  ];
+  const result = planSync({
+    rows: sheetRows(rows, withGithub),
+    config: withGithub,
+    bundle: bundle(),
+    runId: RUN,
+    store: store(),
+    salt: null,
+    enrolled,
+    decidedBy: "INSTRUCTOR-1",
+    decidedAt: "2026-10-07T12:00:00+05:00",
+  });
+  assert.deepEqual(result.githubs, { "STUDENT-AAAAAA": "@Indira-Y" });
+  // Not in any record the course keeps.
+  assert.ok(!JSON.stringify([result.submissions, result.evaluations]).includes("Indira-Y"));
+
+  const people = store();
+  people.people["STUDENT-BBBBBB"]!.github = "artem-o";
+  assert.deepEqual(applyGithubLogins(people, result.githubs), { changed: 1, refused: [] });
+  assert.equal(people.people["STUDENT-AAAAAA"]!.github, "Indira-Y");
+  assert.equal(people.people["STUDENT-BBBBBB"]!.github, "artem-o");
+  assert.deepEqual(applyGithubLogins(people, result.githubs), { changed: 0, refused: [] });
+  assert.deepEqual(applyGithubLogins(people, { "STUDENT-BBBBBB": "artem o" }).refused, [
+    { student: "STUDENT-BBBBBB", value: "artem o" },
+  ]);
+  assert.equal(people.people["STUDENT-BBBBBB"]!.github, "artem-o");
 });
 
 test("a mark checked at the defence is kept out of quietly, and not taken back", () => {

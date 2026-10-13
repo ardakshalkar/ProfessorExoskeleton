@@ -91,7 +91,9 @@ export const Sync = entity({
   conflict: SyncConflict.default("refuse"),
   /**
    * What corresponds to what: `columns` (header → assessment), `marks`
-   * (word → factor), `rows` (which header holds the name). Service-specific.
+   * (word → factor), `rows` (which header holds the name; for a marks
+   * sheet also `note`, and `github` — each person's GitHub account, kept in
+   * the roster store, never in the course). Service-specific.
    */
   map: z.record(z.string(), z.unknown()).default({}),
   /**

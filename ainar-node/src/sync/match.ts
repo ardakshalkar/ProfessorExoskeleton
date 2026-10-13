@@ -21,7 +21,7 @@
 
 import type { RosterStore } from "../roster.ts";
 import { identify, nameCandidates } from "../scans.ts";
-import { type Candidate, type LinkTable, anchorLinkKey, nameLinkKey } from "./links.ts";
+import { type Candidate, type LinkTable, type RowContext, anchorLinkKey, nameLinkKey } from "./links.ts";
 
 export type MatchStep =
   | "link" | "anchor" | "code" | "key:sis-id" | "key:login" | "key:email" | "key:number" | "name" | "name:one-word";
@@ -38,6 +38,8 @@ export interface RowIdentity {
   anchor?: string | null;
   /** An identifier the roster may hold, with its kind. */
   key?: { kind: "sis-id" | "login" | "email"; value: string } | null;
+  /** The row as it stands on the far side, kept with it if it waits for review. */
+  context?: RowContext | null;
 }
 
 export type Outcome =
@@ -191,21 +193,28 @@ export const matchRow = (row: RowIdentity, context: MatchContext): Outcome => {
   return held(row, context, { problem: lastProblem ?? "the row matches no enrolled student", candidates: near });
 };
 
-/** Hold a row, and queue it for review when there is a key to review it under. */
+/**
+ * Hold a row, and queue it for review when there is a key to review it under.
+ *
+ * Queued with no candidate too: a name nobody in the class list is near is
+ * still a person someone can name — "Someone else" in the review list — and
+ * leaving it out would make the list look finished while a row is not placed.
+ */
 const held = (
   row: RowIdentity,
   context: MatchContext,
   { problem, candidates }: { problem: string; candidates: Candidate[] },
 ): Outcome => {
   const key = rowKeys(row)[0] ?? null;
-  if (key && candidates.length) {
+  if (key) {
     context.links.queue(context.syncId, key, {
       label: row.label,
       line: row.line ?? null,
       candidates,
       why: problem,
       at: context.at,
+      context: row.context ?? null,
     });
   }
-  return { status: "held", problem, candidates, queued: Boolean(key && candidates.length) };
+  return { status: "held", problem, candidates, queued: Boolean(key) };
 };

@@ -3,7 +3,8 @@
  */
 
 import { allRubrics, assessmentsOf, enrollmentsOf, runById } from "@ainar/core/src/bundle.ts";
-import { exportPath, loadSheetConfig } from "@ainar/core/src/grade-sheet.ts";
+import { forkChoices, recordedLogins } from "@ainar/core/src/forks.ts";
+import { loadSheetConfig } from "@ainar/core/src/grade-sheet.ts";
 import { gradeChanges } from "@ainar/core/src/grade-changes.ts";
 import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
 
@@ -13,7 +14,16 @@ import { extensionOfKey, SHOWABLE } from "./materials.js";
 import { documentPage, stamp, VIEW_SCRIPT } from "./page.js";
 import { loadedRun, rosterPath, rosterPeople } from "./workspace.js";
 
-export const studentsDocument = (workspace, runId, dark, withNames, origin, sessionId, defenceOf = null) => {
+export const studentsDocument = (
+  workspace,
+  runId,
+  dark,
+  withNames,
+  origin,
+  sessionId,
+  defenceOf = null,
+  forksOf = null,
+) => {
   const { bundle, issues } = loadedRun(workspace, runId);
   const enrolled = enrollmentsOf(bundle, runId);
 
@@ -21,38 +31,16 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
   // twenty-seven reads of it would be twenty-seven chances to catch it
   // half-written by a concurrent `ainar roster import`.
   const people = withNames ? rosterPeople() : null;
-
-  /**
-   * What to show for one person, and what to show underneath it.
-   *
-   * The pseudonym never disappears. It is the identifier every other surface
-   * uses — the gradebook, `whois`, a bug report — so a named row that dropped
-   * it would be a row the professor could not act on anywhere else.
-   */
-  const heading = (studentId) => {
-    const person = people ? people[studentId] : null;
-    const name = person && typeof person.name === "string" ? person.name.trim() : "";
-    if (!name) return escapeText(studentId);
-    // The grade sheet's note about this person, kept beside their name in the
-    // roster and shown only with it: it is about them, not about their work.
-    const sheetFlag = person.sheet_flags && typeof person.sheet_flags[runId] === "string" ? person.sheet_flags[runId] : "";
-    return (
-      escapeText(name) +
-      (sheetFlag ? ' <span title="Noted in the grade sheet">' + escapeText(sheetFlag) + "</span>" : "") +
-      '<br><span class="dim" style="font-weight:400"><code>' +
-      escapeText(studentId) +
-      "</code></span>"
-    );
-  };
+  // The GitHub accounts recorded with `ainar roster github` or the sheet's
+  // GitHub column, read whether or not names are on: they only pick a
+  // student's fork out of the list, and are never drawn on their own.
+  const recorded = recordedLogins(withNames ? people : rosterPeople());
 
   const issueItems = issues && Array.isArray(issues.items) ? issues.items : [];
   const refused = issueItems.filter(
     (issue) => issue.code === "storage.forbidden" && /enrollments/.test(issue.message ?? ""),
   );
   const synthetic = issueItems.some((issue) => issue.code === "storage.fixture");
-
-  const note = (text) =>
-    '<p class="dim" style="border-left:3px solid var(--line);padding-left:10px">' + text + "</p>";
 
   /*
    * The refused file is worth saying even when there IS a list to draw.
@@ -148,10 +136,6 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
       })
       .map((assessment) => assessment.assessment_id),
   );
-  const submissionUrl = new Map();
-  for (const submission of bundle.submissions ?? []) {
-    if (submission.url) submissionUrl.set(submission.submission_id, submission.url);
-  }
   const KINDS = [
     { label: "Homework", types: ["assignment", "homework", "lab"] },
     { label: "Quizzes", types: ["quiz"] },
@@ -216,9 +200,9 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     };
   };
 
-  const cell = (assessment, { state, entry, due }) => {
+  /** What one cell says when hovered: the assessment, its state, its deadline. */
+  const tipOf = (assessment, { state, entry, due }) => {
     const title = assessment.title ?? assessment.assessment_id;
-    const url = entry && entry.submission_id ? submissionUrl.get(entry.submission_id) : null;
     const when = Number.isFinite(due) ? " · due " + stamp(assessment.due_at) : " · no due date";
     const said =
       state === "graded"
@@ -228,20 +212,71 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
           : state === "missing"
             ? "missing — past due, nothing handed in"
             : state === "unrecorded"
-              ? "past due, but no hand-ins recorded for anyone yet — not imported"
+              ? "no hand-ins imported for anyone yet"
               : "not due yet";
-    const text = { graded: entry && number(entry.score), in: "✓", missing: "✗", unrecorded: "?", ahead: "·" }[state];
-    const tip = title + " — " + said + when + (url ? " · " + url : "");
-    // A handed-in repository opens on GitHub from its cell: the homework row
-    // is where the professor is looking when they want it.
-    return url
-      ? '<a class="c ' + state + ' repo" href="' + escapeText(url) + '" target="_blank" rel="noopener" title="' +
-          escapeText(tip) + '">' + escapeText(text) + "</a>"
-      : '<span class="c ' + state + '" title="' + escapeText(tip) + '">' + escapeText(text) + "</span>";
+    return title + " — " + said + when;
   };
 
+  /*
+   * The row's marks: one column per kind — Homework, Quizzes, Exams,
+   * Projects — and one fixed-width cell per assessment inside it, in the order
+   * the detail lists them, so cell 3 of Homework is HW3 on every row. Colour
+   * is the state, the hover is the assessment — a column of amber down the
+   * list is a hand-in the whole class missed, which is the pattern a card per
+   * student could never show.
+   */
+  const CELL = 24;
+  const GAP = 2;
+  const kindWidth = (kind) => kind.assessments.length * (CELL + GAP) - GAP;
+  const columns =
+    "minmax(150px,1.3fr) 56px 140px 52px 56px " + kinds.map((kind) => Math.max(kindWidth(kind), 52) + "px").join(" ");
+  // The number the professor calls an assessment by — HW3, Quiz 4 — where its
+  // title starts with one, and its place in the kind where it does not.
+  const shortOf = (assessment, index) => {
+    const match = /^\D{0,12}?(\d+)/.exec(String(assessment.title ?? ""));
+    return match ? match[1] : String(index + 1);
+  };
+  /*
+   * Every cell opens its item's line in the student's detail — what was
+   * handed in, the fork, the defence, or what can still be done about it. The
+   * attributes are read by the press in `workScript`.
+   */
+  const opens = (studentId, assessment) =>
+    studentId
+      ? ' data-hw="' + escapeText(assessment.assessment_id) + '" data-hw-student="' + escapeText(studentId) +
+        '" role="button" tabindex="0"'
+      : "";
+
+  const strip = (standing, studentId) =>
+    kinds
+      .map(
+        (kind) =>
+          '<span class="sk">' +
+          kind.assessments
+            .map((a) => {
+              const at = standing.cells.get(a.assessment_id);
+              // The mark itself, small, where there is one; the state's sign
+              // where there is not. A cell not yet due stays a bare slot.
+              const text =
+                at.state === "graded" ? number(at.entry.score) : { in: "✓", missing: "✗", unrecorded: "?" }[at.state] ?? "";
+              return (
+                '<span class="m ' + at.state + '" title="' + escapeText(tipOf(a, at)) + '"' + opens(studentId, a) + ">" +
+                escapeText(text) + "</span>"
+              );
+            })
+            .join("") +
+          "</span>",
+      )
+      .join("");
+
+  /*
+   * Where the course can still end, and the scheme's blocks — only once
+   * something is graded. Before that the range is 0 – 100 for everyone and the
+   * blocks are all dashes: a line that is true of the whole class says nothing
+   * about this student, and the row's bar already draws it.
+   */
   const standingBlock = (studentId, standing) => {
-    if (!weighted.length) return "";
+    if (!weighted.length || standing.floor === null || standing.open >= 100) return "";
     const total = totals.get(studentId);
     const blocks = schemeBlocks.length && total && Array.isArray(total.components)
       ? '<p class="blocks">' +
@@ -260,27 +295,10 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
         "</p>"
       : "";
     const bounds =
-      standing.floor === null
-        ? ""
-        : '<p class="bounds">Final can still land <b>' + number(standing.floor) + " – " + number(standing.ceiling) +
-          "</b> / 100" +
-          ' <span class="dim">· ' + number(standing.open) + "% of the course still open" +
-          (standing.waiting ? " · " + standing.waiting + " handed in, awaiting grading" : "") +
-          "</span></p>";
-    const lines = kinds
-      .map((kind) => {
-        const missed = kind.assessments.filter((a) => standing.cells.get(a.assessment_id).state === "missing").length;
-        return (
-          '<div class="kind"><span class="kl">' + escapeText(kind.label) + "</span>" +
-          '<span class="cells">' +
-          kind.assessments.map((a) => cell(a, standing.cells.get(a.assessment_id))).join("") +
-          "</span>" +
-          (missed ? ' <span class="todo">' + missed + " missing</span>" : "") +
-          "</div>"
-        );
-      })
-      .join("");
-    return '<div class="standing">' + bounds + blocks + lines + "</div>";
+      '<p class="bounds">Final can still land <b>' + number(standing.floor) + " – " + number(standing.ceiling) +
+      "</b> / 100" +
+      ' <span class="dim">· ' + number(standing.open) + "% of the course still open</span></p>";
+    return '<div class="standing">' + bounds + blocks + "</div>";
   };
 
   // The run's own assessments, by id. Doubles as the scope filter for
@@ -306,25 +324,32 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     return a.localeCompare(b);
   });
 
-  const marks = (studentId) => {
+  /*
+   * The share of graded work, which is also where the course ends at this
+   * pace — the same share carried over what is left. The gradebook's figure,
+   * not this view's.
+   */
+  const paceOf = (studentId) => {
+    const percent = (totals.get(studentId) ?? {}).percent_of_graded;
+    return typeof percent === "number" ? percent : null;
+  };
+
+  /*
+   * The line a row is judged against. The model has no pass mark yet, so this
+   * is the 50 every scheme the pane has met uses; when `grading_scheme` grows
+   * one, it replaces this constant and nothing else.
+   */
+  const PASS = 50;
+  const attentionOf = (studentId, standing) => {
+    const pace = paceOf(studentId);
+    return Boolean((standing && standing.missing > 0) || (pace !== null && pace < PASS));
+  };
+
+  const gradedLine = (studentId) => {
     const row = totals.get(studentId);
-    if (!row) return '<span class="dim">no work graded yet</span>';
+    if (!row) return "no work graded yet";
     const counted = (row.assessments_counted ?? []).length;
-    const outstanding = (row.assessments_outstanding ?? []).length;
-    const percent = row.percent_of_graded;
-    const of = counted + outstanding;
-    // The share of graded work is also where the course ends at this pace —
-    // the same share carried over what is left — so it is said once, as that.
-    return (
-      (percent === null || percent === undefined
-        ? '<span class="dim">—</span>'
-        : "<b>" + escapeText(String(percent)) + "</b>" + '<span class="dim"> at this pace</span>') +
-      '<br><span class="dim">' +
-      escapeText(String(counted)) +
-      " of " +
-      escapeText(String(of)) +
-      " graded</span>"
-    );
+    return counted + " of " + (counted + (row.assessments_outstanding ?? []).length) + " graded";
   };
 
   /* ------------------------------------------------------- what they handed in
@@ -589,7 +614,6 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     assessment.type === "assignment" ||
     assessment.type === "project" ||
     (Array.isArray(assessment.submission_type) && assessment.submission_type.includes("oral_defense"));
-  const defensibles = [...assessmentTitles.values()].filter(defensibleAssessment);
 
   const defendedRow = (submission) => {
     const assessment = assessmentTitles.get(submission.assessment_id) ?? {};
@@ -754,115 +778,273 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
 
   /*
    * A fork the student brought in person rather than handed in through
-   * Canvas (`defence fork`): its link, pasted here, is what Start defence
-   * clones. On a submission with no link, and — at the foot of the panel — for
-   * a homework the student has no submission for at all.
+   * Canvas (`defence fork`) — chosen, not pasted.
+   *
+   * Students fork the starter and keep the fork public, so the starter's
+   * forks are a list GitHub already has (`ainar homework forks`, src/forks.ts),
+   * and the account a student's earlier links name picks theirs out of it.
+   * Found: one press, *Use their fork*. Not found: a list of the forks nobody
+   * on record owns, to pick from. Never looked up: *Find their fork*. Pasting a
+   * link stays, one press behind, for a fork GitHub does not list — and on a
+   * homework with no starter repository recorded it is the only way.
    */
-  const forkRow = (submission) => {
-    if (submission.url || !defensibleAssessment(assessmentTitles.get(submission.assessment_id) ?? {})) return "";
+  const runSubmissions = [...submissionsOf.values()].flat();
+  const forkPicker = (assessmentId, studentId) => {
+    const assessment = assessmentTitles.get(assessmentId) ?? {};
+    const starter = assessment.extensions?.github?.template_repo ?? null;
+    const cache = starter && forksOf ? forksOf(assessmentId) : null;
+    const attrs = ' data-fork="' + escapeText(assessmentId) + '" data-student="' + escapeText(studentId) + '"';
+    const input = (shown) =>
+      '<input class="fk" type="url" placeholder="https://github.com/owner/repo" aria-label="Fork link"' +
+      (shown ? "" : " hidden") +
+      ">";
+    const save = (shown, label = "Save", url = "") =>
+      '<button type="button" class="chip' + (url ? " act" : "") + '"' + attrs +
+      (url ? ' data-url="' + escapeText(url) + '"' : "") +
+      (shown ? "" : " hidden") +
+      ">" + escapeText(label) + "</button>";
+    const paste = '<button type="button" class="lnk" data-paste>paste a link</button>';
+    const again = cache
+      ? '<button type="button" class="lnk" data-forks="' + escapeText(assessmentId) + '" title="Forks of ' +
+        escapeText(starter) + " last looked up " + escapeText(stamp(cache.looked_up_at)) + '">look again</button>'
+      : "";
+    if (!starter) return '<span class="fp">' + input(true) + " " + save(true) + "</span>";
+    if (!cache) {
+      return (
+        '<span class="fp"><button type="button" class="chip" data-forks="' + escapeText(assessmentId) +
+        '" title="Look up the public forks of ' + escapeText(starter) + '">Find their fork</button> ' +
+        paste + input(false) + " " + save(false) + "</span>"
+      );
+    }
+    const { theirs, how, unclaimed } = forkChoices(cache, runSubmissions, assessmentId, studentId, recorded);
+    if (theirs) {
+      // A fork found by a recorded account names that account beside a
+      // pseudonym; with names off it is not drawn, and the press alone stays.
+      const shown = how !== "recorded" || withNames;
+      return (
+        '<span class="fp">' + save(true, "Use their fork", theirs.url) +
+        (shown
+          ? ' <a class="dim" href="' + escapeText(theirs.url) + '" target="_blank" rel="noopener">' + escapeText(theirs.repo) + "</a>"
+          : ' <span class="dim">by their recorded account</span>') +
+        " " + paste + input(false) + again + "</span>"
+      );
+    }
+    if (!unclaimed.length) {
+      return (
+        '<span class="fp"><span class="dim">no unclaimed fork of ' + escapeText(starter) + "</span> " +
+        input(true) + " " + save(true) + again + "</span>"
+      );
+    }
+    /*
+     * Until a student has handed in one link, nothing says which account is
+     * theirs. Their name can still order the list: an account that spells
+     * part of it goes first, under its own heading. A hint, never a choice —
+     * `aliya` is more than one student — and only with names on screen.
+     */
+    const person = people ? people[studentId] : null;
+    const tokens = person && typeof person.name === "string"
+      ? person.name.toLowerCase().split(/[^\p{L}]+/u).filter((token) => token.length >= 4)
+      : [];
+    const looksLike = (fork) => {
+      const login = fork.owner.toLowerCase().replace(/[^a-z]/g, "");
+      return tokens.some((token) => login.includes(token) || (login.length >= 4 && token.includes(login)));
+    };
+    const option = (fork) =>
+      '<option value="' + escapeText(fork.url) + '">' + escapeText(fork.repo) +
+      (fork.pushed_at ? " · pushed " + escapeText(stamp(fork.pushed_at)) : "") + "</option>";
+    const likely = unclaimed.filter(looksLike);
+    const others = unclaimed.filter((fork) => !looksLike(fork));
     return (
-      '<p class="fork"><span class="dim">Fork link:</span> ' +
-      '<input class="fk" type="url" placeholder="https://github.com/…/…" aria-label="Fork link"> ' +
-      '<button type="button" class="chip" data-fork="' +
-      escapeText(submission.assessment_id) +
-      '" data-student="' +
-      escapeText(submission.student_id) +
-      '">Save</button> <span class="dim">brought to you, not in Canvas</span></p>'
-    );
-  };
-  const unsubmitted = (studentId) => {
-    const list = submissionsOf.get(studentId) ?? [];
-    return defensibles.filter((assessment) => !list.some((entry) => entry.assessment_id === assessment.assessment_id));
-  };
-  const bringFork = (studentId) => {
-    const missing = unsubmitted(studentId);
-    if (!missing.length) return "";
-    return (
-      '<div class="fork"><h3>A fork brought in person</h3><p>' +
-      '<select class="fka" aria-label="Homework">' +
-      missing
-        .map(
-          (assessment) =>
-            '<option value="' +
-            escapeText(assessment.assessment_id) +
-            '">' +
-            escapeText(assessment.title ?? assessment.assessment_id) +
-            "</option>",
-        )
-        .join("") +
-      "</select> " +
-      '<input class="fk" type="url" placeholder="https://github.com/…/…" aria-label="Fork link"> ' +
-      '<button type="button" class="chip" data-fork="" data-student="' +
-      escapeText(studentId) +
-      '">Save</button></p>' +
-      '<p class="dim">For a student who forked and showed you, with nothing in Canvas. Then Start defence appears on it.</p></div>'
+      '<span class="fp"><select class="fks" aria-label="Their fork"><option value="">Pick their fork…</option>' +
+      (likely.length
+        ? '<optgroup label="Looks like their name">' + likely.map(option).join("") + "</optgroup>" +
+          '<optgroup label="Every other fork">' + others.map(option).join("") + "</optgroup>"
+        : others.map(option).join("")) +
+      '<option value="paste">Paste a link…</option></select> ' +
+      input(false) + " " + save(true) + again + "</span>"
     );
   };
 
-  /** Everything one student handed in, closed until asked for. */
-  const workPanel = (entry) => {
-    const list = submissionsOf.get(entry.student_id) ?? [];
-    if (!list.length && !unsubmitted(entry.student_id).length) return "";
+  /*
+   * *Audio defence*: the defence desk on this homework, which records the
+   * whole conversation by default — drafted questions are optional, and so is
+   * the fork. The desk asks for the student's consent before anything records.
+   */
+  const audioRow = (submission) =>
+    defensibleAssessment(assessmentTitles.get(submission.assessment_id) ?? {}) || submission.url
+      ? '<p class="audio"><button type="button" class="chip act" data-desk="' +
+        escapeText(submission.assessment_id) +
+        '" data-student="' +
+        escapeText(submission.student_id) +
+        '">Audio defence</button> <span class="dim">record the defence — questions are optional</span></p>'
+      : "";
+
+  /** One hand-in, in full: the answers, the files, the fork, the defence. */
+  const submissionSection = (submission) => {
+    const responses = (responsesOf.get(submission.submission_id) ?? [])
+      .slice()
+      .sort((a, b) => {
+        const left = itemById.get(a.item_id);
+        const right = itemById.get(b.item_id);
+        // By the number the student saw, and by id where a question has
+        // none: the order on the paper is the order to read them in.
+        return (
+          (left && left.number ? left.number : 0) - (right && right.number ? right.number : 0) ||
+          String(a.item_id).localeCompare(String(b.item_id))
+        );
+      });
+    const files = Array.isArray(submission.files) ? submission.files : [];
     return (
-      '<div class="row work" data-group="' +
-      escapeText(label(entry)) +
-      '" data-work="' +
-      escapeText(String(entry.student_id ?? "")) +
-      '" hidden><div class="wk">' +
-      list
-        .map((submission) => {
-          const assessment = assessmentTitles.get(submission.assessment_id) ?? {};
-          const responses = (responsesOf.get(submission.submission_id) ?? [])
-            .slice()
-            .sort((a, b) => {
-              const left = itemById.get(a.item_id);
-              const right = itemById.get(b.item_id);
-              // By the number the student saw, and by id where a question has
-              // none: the order on the paper is the order to read them in.
-              return (
-                (left && left.number ? left.number : 0) - (right && right.number ? right.number : 0) ||
-                String(a.item_id).localeCompare(String(b.item_id))
-              );
-            });
-          const files = Array.isArray(submission.files) ? submission.files : [];
-          return (
-            "<h3>" +
-            escapeText(assessment.title ?? submission.assessment_id) +
-            ' <span class="id">' +
-            escapeText(submission.assessment_id) +
-            "</span></h3>" +
-            '<p class="dim">' +
-            (submission.submitted_at
-              ? "handed in " + escapeText(stamp(submission.submitted_at))
-              : "no time recorded") +
-            (submission.status && submission.status !== "submitted"
-              ? " · " + escapeText(String(submission.status))
-              : "") +
-            (submission.attempt && submission.attempt > 1
-              ? " · attempt " + escapeText(String(submission.attempt))
-              : "") +
-            "</p>" +
-            (submission.note
-              ? '<p class="dim">' + escapeText(String(submission.note)) + "</p>"
-              : "") +
-            responses.map(answer).join("") +
-            files.map(fileRow).join("") +
-            forkRow(submission) +
-            defendedRow(submission) +
-            changesBlock(submission) +
-            defenceBlock(submission) +
-            // Handed in, and nothing to read: a file-only submission whose
-            // bytes are elsewhere, or a row created before any answer was
-            // recorded. Both are facts, and an empty panel would look broken.
-            (responses.length === 0 && files.length === 0 && !submission.url
-              ? '<p class="dim">Nothing is recorded under this submission — no answers, no files.</p>'
-              : "")
-          );
-        })
-        .join("") +
-      bringFork(entry.student_id) +
-      "</div></div>"
+      '<section class="sub">' +
+      '<p class="dim">' +
+      (submission.submitted_at ? "handed in " + escapeText(stamp(submission.submitted_at)) : "no time recorded") +
+      (submission.status && submission.status !== "submitted" ? " · " + escapeText(String(submission.status)) : "") +
+      (submission.attempt && submission.attempt > 1 ? " · attempt " + escapeText(String(submission.attempt)) : "") +
+      ' · <span class="id">' + escapeText(submission.submission_id) + "</span>" +
+      "</p>" +
+      (submission.note ? '<p class="dim">' + escapeText(String(submission.note)) + "</p>" : "") +
+      responses.map(answer).join("") +
+      files.map(fileRow).join("") +
+      // A hand-in with no fork link gets its picker on the line itself, not here.
+      defendedRow(submission) +
+      changesBlock(submission) +
+      defenceBlock(submission) +
+      // Handed in, and nothing to read: a file-only submission whose bytes
+      // are elsewhere, or a row created before any answer was recorded. Both
+      // are facts, and an empty panel would look broken.
+      (responses.length === 0 && files.length === 0 && !submission.url
+        ? '<p class="dim">Nothing is recorded under this submission — no answers, no files.</p>'
+        : "") +
+      audioRow(submission) +
+      "</section>"
     );
+  };
+
+  /*
+   * One student's work, one line per assessment.
+   *
+   * The detail used to repeat the row — the same cells, larger — and put the
+   * things a professor does at the foot of it, behind a dropdown of
+   * homework. Now each assessment is a line saying where it stands, with
+   * what can be done about it on the same line, and what was handed in
+   * folded under it. Past-due lines come first and open; the rest fold into
+   * one summary line. A cell in the row opens its line here.
+   *
+   * Answers stay closed until their line is pressed, for the reason the
+   * whole detail does: this pane is projected.
+   */
+  const headOf = (title) => {
+    const split = /^(.{1,16}?)\s+[-–—:]\s+(.+)$/.exec(title);
+    return split
+      ? '<span class="iname">' + escapeText(split[1]) + '</span> <span class="dim">' + escapeText(split[2]) + "</span>"
+      : '<span class="iname">' + escapeText(title) + "</span>";
+  };
+  const itemsOf = (studentId, standing) => {
+    const list = submissionsOf.get(studentId) ?? [];
+    const of = (id) => list.filter((entry) => entry.assessment_id === id);
+    const items = weighted.map((a) => ({
+      assessment: assessmentTitles.get(a.assessment_id) ?? a,
+      cell: standing ? standing.cells.get(a.assessment_id) : null,
+      subs: of(a.assessment_id),
+    }));
+    // What carries no weight still has a line when there is work under it,
+    // or when it is homework a fork could still be brought for.
+    for (const assessment of assessmentTitles.values()) {
+      if (weighted.some((a) => a.assessment_id === assessment.assessment_id)) continue;
+      const subs = of(assessment.assessment_id);
+      if (subs.length || defensibleAssessment(assessment)) items.push({ assessment, cell: null, subs });
+    }
+    return items.map((item) => {
+      const due = item.assessment.due_at ? Date.parse(item.assessment.due_at) : NaN;
+      const state = item.cell
+        ? item.cell.state
+        : item.subs.length
+          ? "in"
+          : Number.isFinite(due) && due < now
+            ? "missing"
+            : "ahead";
+      return { ...item, due, state };
+    });
+  };
+  const itemLine = (item, studentId) => {
+    const { assessment, cell, subs, due, state } = item;
+    const id = assessment.assessment_id;
+    const latest = subs[subs.length - 1];
+    const tag =
+      state === "graded"
+        ? number(cell.entry.score) + " / " + number(cell.entry.maximum)
+        : state === "in"
+          ? latest && latest.submitted_at ? "handed in " + stamp(latest.submitted_at) : "handed in"
+          : state === "missing"
+            ? "missing" + (Number.isFinite(due) ? " · due " + stamp(assessment.due_at) : "")
+            : state === "unrecorded"
+              ? "not imported"
+              : Number.isFinite(due)
+                ? "due " + stamp(assessment.due_at)
+                : "no due date";
+    const defensible = defensibleAssessment(assessment);
+    const actions =
+      !subs.length && defensible && (state === "missing" || state === "ahead" || state === "unrecorded")
+        ? forkPicker(id, studentId) +
+          ' <button type="button" class="chip act" data-audio-new data-assessment="' + escapeText(id) +
+          '" data-student="' + escapeText(studentId) + '" title="Defended in person, nothing handed in">Audio defence</button>'
+        : latest && !latest.url && defensible
+          ? forkPicker(id, studentId)
+          : "";
+    const body = subs.map(submissionSection).join("");
+    const head = headOf(assessment.title ?? id);
+    return (
+      '<div class="it" data-it="' + escapeText(id) + '">' +
+      (body
+        ? '<button type="button" class="ih" aria-expanded="false" title="' + escapeText(id) + '">' +
+          '<span class="car" aria-hidden="true"></span>' + head + "</button>"
+        : '<span class="ih" title="' + escapeText(id) + '"><span class="car none" aria-hidden="true"></span>' + head + "</span>") +
+      '<span class="is"><span class="tag ' + state + '">' + escapeText(tag) + "</span></span>" +
+      '<span class="ia">' + actions + "</span>" +
+      (body ? '<div class="ib" hidden>' + body + "</div>" : "") +
+      "</div>"
+    );
+  };
+  const workPanel = (entry, standing) => {
+    const studentId = String(entry.student_id ?? "");
+    const items = itemsOf(studentId, standing);
+    if (!items.length) return "";
+    const due = items.filter((item) => item.state === "missing");
+    const rest = items.filter((item) => item.state !== "missing");
+    const count = (state) => rest.filter((item) => item.state === state).length;
+    const folded = [
+      count("graded") ? count("graded") + " graded" : "",
+      count("in") ? count("in") + " awaiting grading" : "",
+      count("unrecorded") ? count("unrecorded") + " not imported" : "",
+      count("ahead") ? count("ahead") + " not yet due" : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      '<div class="items" data-work="' + escapeText(studentId) + '">' +
+      (due.length ? '<p class="ihd">Past due</p>' + due.map((item) => itemLine(item, studentId)).join("") : "") +
+      (rest.length
+        ? '<details class="more"' + (due.length ? "" : " open") + "><summary>" + escapeText(folded) + "</summary>" +
+          rest.map((item) => itemLine(item, studentId)).join("") +
+          "</details>"
+        : "") +
+      "</div>"
+    );
+  };
+
+  /** The one sentence a detail opens with: what is in, what is late, what is marked. */
+  const summaryOf = (studentId, standing) => {
+    const handed = (submissionsOf.get(studentId) ?? []).length;
+    const row = totals.get(studentId);
+    const counted = row ? (row.assessments_counted ?? []).length : 0;
+    return [
+      handed ? escapeText(handed + " handed in") : "Nothing handed in yet",
+      standing && standing.missing ? '<span class="todo">' + standing.missing + " past due</span>" : "",
+      counted ? escapeText(gradedLine(studentId)) : "nothing graded",
+      standing && standing.waiting ? escapeText(standing.waiting + " awaiting grading") : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
   };
 
   /**
@@ -873,77 +1055,106 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
   const student = (entry, dimmed) => {
     const id = String(entry.student_id ?? "");
     const standing = dimmed || !weighted.length ? null : standingOf(id);
+    const pace = dimmed ? null : paceOf(id);
+    const person = people ? people[id] : null;
+    const named = person && typeof person.name === "string" ? person.name.trim() : "";
+    // The grade sheet's note about this person, kept beside their name in the
+    // roster and shown only with it: it is about them, not about their work.
+    const flag = named && person.sheet_flags && typeof person.sheet_flags[runId] === "string" ? person.sheet_flags[runId] : "";
+    const low = pace !== null && pace < PASS;
+
+    /*
+     * The bar: 0 to 100, the stretch the course can still end anywhere in, a
+     * tick where this pace lands, and a faint line at the pass mark. Warm only
+     * when the pace is under it — a floor of 9.8 in week five is everyone's,
+     * and colouring floors would colour the whole list.
+     */
+    const bar =
+      standing && standing.floor !== null
+        ? '<span class="bar" title="Final can still land ' + number(standing.floor) + " – " + number(standing.ceiling) +
+          ' / 100"><span class="pass" style="left:' + PASS + '%"></span>' +
+          '<span class="span" style="left:' + number(standing.floor) + "%;width:" +
+          number(Math.max(0, standing.ceiling - standing.floor)) + '%"></span>' +
+          (pace !== null ? '<span class="tick' + (low ? " low" : "") + '" style="left:' + number(Math.min(100, pace)) + '%"></span>' : "") +
+          '<span class="ends"><span>' + number(standing.floor) + "</span><span>" + number(standing.ceiling) + "</span></span>" +
+          "</span>"
+        : '<span class="dim">—</span>';
+
+    // Opened by pressing the row, closed on load: this pane is projected. One
+    // sentence, then a line per assessment — the row's strip is not repeated.
+    // The pseudonym sits at the end, quiet: it is the identifier every other
+    // surface uses, so a named row must still lead to it.
+    const detail = dimmed
+      ? ""
+      : '<div class="detail" hidden><p class="sum">' +
+        summaryOf(id, standing) +
+        (entry.role && entry.role !== "student" ? " · " + escapeText(entry.role) : "") +
+        (named ? '<code class="pid">' + escapeText(id) + "</code>" : "") +
+        "</p>" +
+        (standing ? standingBlock(id, standing) : "") +
+        workPanel(entry, standing) +
+        "</div>";
+
     return (
       // The group travels with the student so the filter can act on a
-      // departed one too. Their section is not grouped — it is one list of
-      // everyone who left — but they belonged to a subgroup while they were
-      // here, and a filter that showed the whole departed list under every
-      // subgroup would be answering a different question each time.
+      // departed one too: they belonged to a subgroup while they were here.
       '<div class="st" data-group="' +
       escapeText(label(entry)) +
       '" data-name="' +
       escapeText(sortKey(entry)) +
+      '" data-find="' +
+      escapeText((sortKey(entry) + " " + id).toLowerCase()) +
       '" data-missing="' +
       (standing ? standing.missing : 0) +
+      // Unknown sorts last under "lowest first", not first: a student with
+      // nothing graded is not the weakest in the class.
       '" data-share="' +
-      (standing && standing.share !== null ? standing.share : -1) +
+      (pace !== null ? pace : 999) +
       '" data-floor="' +
-      (standing && standing.floor !== null ? standing.floor : -1) +
-      '">' +
-      row(entry, dimmed, standing ? standingBlock(id, standing) : "") +
-      workPanel(entry) +
+      (standing && standing.floor !== null ? standing.floor : 999) +
+      '" data-attn="' +
+      (!dimmed && attentionOf(id, standing) ? "1" : "0") +
+      '"><div class="sr' +
+      (dimmed ? " gone" : "") +
+      '"' +
+      (dimmed ? "" : ' role="button" tabindex="0" aria-expanded="false"') +
+      ' title="' +
+      escapeText(id) +
+      '"><span class="nm">' +
+      escapeText(named || id) +
+      (flag ? ' <span class="todo" title="Noted in the grade sheet">' + escapeText(flag) + "</span>" : "") +
+      "</span>" +
+      '<span class="gr" title="' + escapeText(label(entry)) + '">' + escapeText(shortGroup(label(entry))) + "</span>" +
+      (dimmed
+        ? '<span class="rest"><span class="todo">' + escapeText(entry.status ?? "inactive") + "</span></span>"
+        : bar +
+          '<span class="pc' + (low ? " low" : "") + '">' + (pace !== null ? number(pace) : '<span class="dim">—</span>') + "</span>" +
+          '<span class="ms">' +
+          (standing && standing.missing ? '<span class="todo">' + standing.missing + "</span>" : '<span class="dim">–</span>') +
+          "</span>" +
+          (standing ? strip(standing, id) : kinds.map(() => "<span></span>").join(""))) +
+      "</div>" +
+      detail +
       "</div>"
     );
   };
 
-  const row = (entry, dimmed, below) =>
-    '<div class="row' +
-    (below ? " has-st" : "") +
-    '"><span class="k"' +
-    (dimmed ? ' style="color:var(--dim)"' : "") +
-    ">" +
-    heading(entry.student_id ?? "") +
-    (entry.role && entry.role !== "student"
-      ? ' <span class="dim">' + escapeText(entry.role) + "</span>"
-      : "") +
-    '</span><span class="v">' +
-    (dimmed
-      ? '<span class="todo">' +
-        escapeText(entry.status ?? "inactive") +
-        "</span>" +
-        (label(entry) ? '<br><span class="dim">' + escapeText(label(entry)) + "</span>" : "")
-      : marks(entry.student_id)) +
-    workButton(entry) +
-    "</span>" +
-    below +
-    "</div>";
-
-  /**
-   * The press that opens one person's work, or nothing at all.
-   *
-   * Absent rather than disabled when there is nothing handed in: a row of
-   * dead buttons down a class list of which three have submitted is noise,
-   * and "no button" already says it. The count is on the button because the
-   * professor is choosing which row to open.
+  /*
+   * A subgroup as its row shows it. `CSS4007-ENG-8`, `-9` and `-10` differ in
+   * the last part only, and the column has room for that part; the full name
+   * is the cell's hover and the chip's label.
    */
-  const workButton = (entry) => {
-    const count = (submissionsOf.get(entry.student_id) ?? []).length;
-    if (count === 0) {
-      return unsubmitted(entry.student_id).length
-        ? ' <button type="button" class="chip" aria-expanded="false" data-workbtn="' +
-            escapeText(String(entry.student_id ?? "")) +
-            '" title="Nothing handed in — add a fork they brought you">Add a fork</button>'
-        : "";
-    }
-    return (
-      '<br><button type="button" class="chip" aria-expanded="false" data-workbtn="' +
-      escapeText(String(entry.student_id ?? "")) +
-      '">' +
-      escapeText(String(count)) +
-      (count === 1 ? " submission" : " submissions") +
-      "</button>"
-    );
-  };
+  const namedGroups = groups.filter((group) => group !== "");
+  let shared =
+    namedGroups.length > 1
+      ? namedGroups.reduce((a, b) => {
+          let i = 0;
+          while (i < a.length && a[i] === b[i]) i++;
+          return a.slice(0, i);
+        })
+      : "";
+  shared = shared.slice(0, Math.max(shared.lastIndexOf("-"), shared.lastIndexOf("_"), shared.lastIndexOf(" ")) + 1);
+  const shortGroup = (group) => (shared && group.startsWith(shared) ? group.slice(shared.length) : group);
 
   /*
    * Sort by what is on screen.
@@ -961,25 +1172,42 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
   };
   const byDisplayed = (a, b) => sortKey(a).localeCompare(sortKey(b));
 
-  const sections = groups
-    .map((group) => {
-      const members = active.filter((entry) => label(entry) === group).sort(byDisplayed);
-      return (
-        '<section data-group="' +
-        escapeText(group) +
-        '"><h2>' +
-        escapeText(group === "" ? "No subgroup" : group) +
-        ' <span class="dim">· ' +
-        escapeText(String(members.length)) +
-        " active</span></h2>" +
-        members.map((entry) => student(entry, false)).join("") +
-        "</section>"
-      );
-    })
-    .join("");
+  /*
+   * One list, not a section per subgroup. The group is a column and a filter
+   * now; sectioning by it made "who is lowest across the class" a question
+   * the screen could not answer without three scrolls and a memory.
+   */
+  const list =
+    '<div class="tbl" id="list" style="--cols:' + columns + '">' +
+    (weighted.length
+      ? '<div class="th">' +
+        '<button type="button" data-sort="name" aria-pressed="true">Student</button>' +
+        "<span>Group</span>" +
+        '<button type="button" data-sort="floor" aria-pressed="false" title="Where the final can still land, lowest floor first">Final range</button>' +
+        '<button type="button" data-sort="share" aria-pressed="false" title="Share of graded work, lowest first">Pace</button>' +
+        '<button type="button" data-sort="missing" aria-pressed="false" title="Most missing first">Missing</button>' +
+        kinds
+          .map(
+            (kind) =>
+              '<span class="kh"><span class="kn">' +
+              escapeText(kind.label) +
+              '</span><span class="sk">' +
+              kind.assessments
+                .map(
+                  (a, i) =>
+                    '<span class="n" title="' + escapeText(a.title ?? a.assessment_id) + '">' + escapeText(shortOf(a, i)) + "</span>",
+                )
+                .join("") +
+              "</span></span>",
+          )
+          .join("") +
+        "</div>"
+      : "") +
+    active.slice().sort(byDisplayed).map((entry) => student(entry, false)).join("") +
+    "</div>";
 
   const departed = inactive.length
-    ? '<section data-departed="1"><h2>No longer active</h2>' +
+    ? '<section class="tbl" data-departed="1" style="--cols:' + columns + '"><h2>No longer active</h2>' +
       inactive
         .slice()
         .sort(byDisplayed)
@@ -989,116 +1217,94 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     : "";
 
   /*
-   * Which of the three identity states this render is in, said on screen.
-   *
-   * The named case gets a band rather than the usual quiet grey line. It is
-   * the one state where the screen holds something that must not be projected
-   * by accident, and a professor who has just plugged into a lecture-hall HDMI
-   * should be able to see it from the back of the room.
+   * The four numbers read before the list is: how many, where the middle of
+   * the class is heading, how many are heading under the line, and how many
+   * owe work. "Owe" excludes the unrecorded — see `unrecorded` above.
    */
-  const identityNote = !withNames
-    ? note(
-        "Pseudonyms — safe to screen-share. Press <b>Names</b> above to go back " +
-          "to reading the list; names are what this view opens with.",
-      )
-    : people === null
-      ? note(
-          "<b>No names available.</b> There is no roster store at <code>" +
-            escapeText(rosterPath()) +
-            "</code>. Import a class list with <code>ainar roster import " +
-            "export.csv --run " +
-            escapeText(runId) +
-            "</code>, or point <code>AINAR_ROSTER_DIR</code> at the directory " +
-            "holding it.",
-        )
-      : // Names are the normal state now, so this is a marker rather than a
-        // warning: a filled amber alarm on every load would be wallpaper
-        // within a week and would stop being read at the one moment it
-        // matters. A coloured rule and one sentence stay legible.
-        '<p style="border-left:3px solid #a5561f;padding-left:10px;margin:8px 0;' +
-        'color:#a5561f"><b>Real names on screen.</b> Press <b>Pseudonyms</b> ' +
-        "before screen-sharing or projecting this.</p>";
+  const paces = active.map((entry) => paceOf(String(entry.student_id ?? ""))).filter((pace) => pace !== null).sort((a, b) => a - b);
+  const median = paces.length
+    ? paces.length % 2
+      ? paces[(paces.length - 1) / 2]
+      : (paces[paces.length / 2 - 1] + paces[paces.length / 2]) / 2
+    : null;
+  const below = paces.filter((pace) => pace < PASS).length;
+  const tile = (label, value, warm) =>
+    '<div class="tile"><div class="dim">' + label + '</div><div class="tv' + (warm ? " low" : "") + '">' + value + "</div></div>";
+  const tiles =
+    '<div class="tiles">' +
+    tile("Active", escapeText(String(active.length)) + (inactive.length ? '<span class="dim"> · ' + inactive.length + " left</span>" : ""), false) +
+    (weighted.length
+      ? tile("Median at this pace", median === null ? "—" : number(median), false) +
+        tile("Below " + PASS + " at this pace", String(below), below > 0) +
+        tile("Owe past-due work", String(behind), behind > 0)
+      : "") +
+    "</div>";
 
   /*
-   * The professor's own grade sheet, when the run has one (`ainar homework
-   * sheet`). Synced on a press rather than on every render: the sheet is
-   * private, so only the open session can read it — through its Google Drive
-   * connector — and a render must not start a turn. The press asks the session,
-   * which exports the sheet beside the roster and runs `homework sync`; the
-   * sync is deterministic and safe to repeat, so a second press changes
-   * nothing unless the sheet did.
+   * What is wrong with the DATA rather than with a student, said once.
+   *
+   * These were four stacked paragraphs; the professor read them every load
+   * and acted on them once. One line each, the action at the end of it.
    */
   const sheet = loadSheetConfig(runId);
-  const sheetPrompt = sheet
-    ? "Sync the grade sheet for " + runId + ". Read the Google Sheet " + (sheet.url ?? "(no URL set)") +
-      (sheet.tab ? ", tab \"" + sheet.tab + "\"," : "") +
-      " with the Google Drive connector and write it as CSV — the header row and every row, empty cells kept — to " +
-      exportPath(runId) + ". Then run `ainar homework sync " + runId + " --from \"" + exportPath(runId) +
-      "\"` and tell me what it wrote, and every `check` and `held` line."
-    : "";
-  const sheetHtml = sheet
-    ? '<p class="dim">Grade sheet: ' +
-      Object.entries(sheet.columns)
-        .map(([column, id]) => escapeText(column) + " → " + escapeText((weighted.find((a) => a.assessment_id === id) ?? {}).title ?? id))
-        .join(", ") +
-      " · " +
-      (sheet.synced_at ? "last synced " + escapeText(stamp(sheet.synced_at)) : "never synced") +
-      ' <button type="button" class="chip" data-ask="' + escapeText(sheetPrompt) + '">Sync from sheet</button></p>'
-    : "";
-
-  const header =
-    "<section><h2>Students</h2>" +
-    '<p class="dim">' +
-    escapeText(String(active.length)) +
-    " active" +
-    (inactive.length ? " · " + escapeText(String(inactive.length)) + " no longer active" : "") +
-    (groups.filter((group) => group !== "").length
-      ? " · " + escapeText(String(groups.filter((group) => group !== "").length)) + " subgroups"
-      : "") +
-    "</p>" +
-    (behind
-      ? '<p><span class="todo">' + behind + (behind === 1 ? " student has" : " students have") +
-        " work past due and not handed in</span></p>"
-      : "") +
-    sheetHtml +
-    (unrecorded.size
-      ? note(
-          "Past due with <b>no hand-ins recorded for anyone</b>, so drawn as <b>?</b> rather than missing: " +
-            [...unrecorded]
-              .map((id) => escapeText((weighted.find((a) => a.assessment_id === id) ?? {}).title ?? id))
-              .join(", ") +
-            ". Bring them in from Canvas with <code>ainar lms import-submissions " +
-            escapeText(runId) +
-            " --assessment …</code>; the repository links come with them.",
-        )
-      : "") +
-    identityNote +
-    (synthetic
-      ? note(
-          "Read from <code>samples/</code>: synthetic fixtures, not the roster. " +
-            "Real enrollments come from Supabase.",
-        )
-      : "") +
-    refusedHtml +
-    "</section>";
+  const titleOf = (id) => (weighted.find((a) => a.assessment_id === id) ?? {}).title ?? id;
+  const health = [
+    unrecorded.size
+      ? '<p class="hw">' +
+        [...unrecorded].length +
+        (unrecorded.size === 1 ? " assessment is" : " assessments are") +
+        " past due with no hand-ins imported for anyone, so drawn as unknown, not missing: " +
+        [...unrecorded].map((id) => escapeText(titleOf(id))).join(", ") +
+        ". Bring them in with <code>ainar lms import-submissions " +
+        escapeText(runId) +
+        " --assessment …</code></p>"
+      : "",
+    /*
+     * The professor's own grade sheet, when the run has one (`ainar homework
+     * sheet`). Synced from the Syncs view, which the press opens; that view
+     * reads the sheet directly where this machine has a Google login, and
+     * otherwise takes the file the professor downloads. The column mapping
+     * lives there too, and is this line's hover.
+     */
+    sheet
+      ? '<p class="dim" title="' +
+        escapeText(
+          Object.entries(sheet.columns)
+            .map(([column, id]) => column + " → " + titleOf(id))
+            .join("\n"),
+        ) +
+        '">Grade sheet ' +
+        (sheet.synced_at ? "last synced " + escapeText(stamp(sheet.synced_at)) : "never synced") +
+        ' <button type="button" class="chip" data-syncs title="Integrations → Syncs">Sync from sheet</button></p>'
+      : "",
+    synthetic
+      ? '<p class="dim">Read from <code>samples/</code>: synthetic fixtures, not the roster. Real enrollments come from Supabase.</p>'
+      : "",
+    withNames && people === null
+      ? '<p class="hw"><b>No names available.</b> There is no roster store at <code>' +
+        escapeText(rosterPath()) +
+        "</code>. Import a class list with <code>ainar roster import export.csv --run " +
+        escapeText(runId) +
+        "</code>, or point <code>AINAR_ROSTER_DIR</code> at the directory holding it.</p>"
+      : "",
+  ].join("");
 
   /*
-   * The subgroup filter, drawn above everything else.
-   *
-   * Inside the document rather than in the pane's segmented row, and filtering
-   * in the page rather than refetching. Three reasons, in order of weight:
-   *
-   * * the groups are a property of the run, so the browser half would have to
-   *   be told them before it could draw a control for them — a header, a
-   *   parse, and a second source of truth for what the subgroups are;
-   * * a refetch per press would re-resolve the roster and rebuild the list to
-   *   show a subset of what is already on screen;
-   * * the professor switching between CSS4007-ENG-8 and -9 in a meeting wants
-   *   it to happen at the speed of a click.
-   *
-   * Only drawn when there is something to choose between: one subgroup, or
-   * none at all, and the control would be a row of buttons that all do the
-   * same thing.
+   * Which identity state this render is in, at the end of the toolbar where
+   * the eye lands after a filter. Names are the normal state, so a coloured
+   * word rather than a band: an alarm on every load is wallpaper within a week.
+   */
+  const identity = !withNames
+    ? '<span class="idn dim">Pseudonyms — safe to share</span>'
+    : people === null
+      ? ""
+      : '<span class="idn named" title="Press Pseudonyms above before screen-sharing or projecting this">Real names on screen</span>';
+
+  /*
+   * The toolbar, filtering in the page rather than refetching: the groups are
+   * the run's, a refetch would rebuild what is already on screen, and the
+   * professor switching subgroups in a meeting wants it at the speed of a
+   * click. Group chips only when there is something to choose between.
    */
   const chip = (value, text, count, pressed) =>
     '<button type="button" class="chip" data-filter="' +
@@ -1110,136 +1316,176 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     ' <span class="dim">' +
     escapeText(String(count)) +
     "</span></button>";
-
   const groupChips =
     groups.length > 1
       ? chip("*", "All", active.length, true) +
         groups
           .map((group) =>
-            chip(
-              group,
-              group === "" ? "No subgroup" : group,
-              active.filter((entry) => label(entry) === group).length,
-              false,
-            ),
+            chip(group, group === "" ? "No subgroup" : group, active.filter((entry) => label(entry) === group).length, false),
           )
           .join("")
       : "";
-  const sortChip = (value, text, pressed) =>
-    '<button type="button" class="chip" data-sort="' + value + '" aria-pressed="' + (pressed ? "true" : "false") + '">' +
-    escapeText(text) + "</button>";
+  const attention = active.filter((entry) => {
+    const id = String(entry.student_id ?? "");
+    return attentionOf(id, weighted.length ? standingOf(id) : null);
+  }).length;
   const filterBar =
-    groupChips || weighted.length
-      ? '<div class="chips">' +
-        groupChips +
-        (behind
-          ? '<button type="button" class="chip" data-missing-only aria-pressed="false">Missing work only ' +
-            '<span class="dim">' + behind + "</span></button>"
-          : "") +
-        (weighted.length
-          ? '<span class="dim sortl">Sort</span>' +
-            sortChip("name", "Name", true) +
-            sortChip("missing", "Most missing", false) +
-            sortChip("share", "Lowest %", false) +
-            sortChip("floor", "Lowest floor", false)
-          : "") +
-        "</div>"
-      : "";
+    '<div class="chips tools">' +
+    '<input type="search" class="find" placeholder="Find a student" aria-label="Find a student">' +
+    groupChips +
+    (attention
+      ? '<button type="button" class="chip" data-attn-only aria-pressed="false" title="Work past due, or under ' +
+        PASS +
+        ' at this pace">Needs attention <span class="dim">' +
+        attention +
+        "</span></button>"
+      : "") +
+    '<span class="shown dim"></span>' +
+    identity +
+    "</div>";
 
-  /*
-   * The filter, as eighteen lines of DOM toggling.
-   *
-   * `hidden` rather than a class, so a section that is filtered out is out of
-   * the accessibility tree as well as off the screen — a screen reader running
-   * down a filtered list should not read the ninety students the professor
-   * just filtered away.
-   *
-   * The departed section is handled row by row and then hidden if it emptied,
-   * because it is one list rather than one section per group.
-   */
-  // Missing-only hides every student with nothing overdue, the departed list
-  // included: nobody who left has work still due. Sorting reorders students
-  // inside their own section, never across subgroups.
-  const filterScript = filterBar
-    ? "<script>(function(){" +
-      "var chips=[].slice.call(document.querySelectorAll('.chip[data-filter]'));" +
-      "var sorts=[].slice.call(document.querySelectorAll('.chip[data-sort]'));" +
-      "var only=document.querySelector('.chip[data-missing-only]');" +
-      "var sections=[].slice.call(document.querySelectorAll('section[data-group]'));" +
-      "var gone=document.querySelector('section[data-departed]');" +
-      "var want='*',lacking=false;" +
-      "function apply(){" +
-      "chips.forEach(function(c){c.setAttribute('aria-pressed',String(c.dataset.filter===want));});" +
-      "if(only)only.setAttribute('aria-pressed',String(lacking));" +
-      "sections.forEach(function(s){var seen=0;" +
-      "[].forEach.call(s.querySelectorAll('.st'),function(r){var off=lacking&&r.dataset.missing==='0';r.hidden=off;if(!off)seen++;});" +
-      "s.hidden=(want!=='*'&&s.dataset.group!==want)||seen===0;});" +
-      "if(gone){var left=0;" +
-      "[].forEach.call(gone.querySelectorAll('.st'),function(r){" +
-      "var off=lacking||(want!=='*'&&r.dataset.group!==want);r.hidden=off;if(!off)left++;});" +
-      "gone.hidden=left===0;}" +
-      "}" +
-      "function order(by){" +
-      "sorts.forEach(function(c){c.setAttribute('aria-pressed',String(c.dataset.sort===by));});" +
-      "sections.concat(gone?[gone]:[]).forEach(function(s){" +
-      "var list=[].slice.call(s.querySelectorAll('.st'));" +
-      "list.sort(function(a,b){var d=0;" +
-      "if(by==='missing')d=Number(b.dataset.missing)-Number(a.dataset.missing);" +
-      "else if(by==='share'||by==='floor')d=Number(a.dataset[by])-Number(b.dataset[by]);" +
-      "return d||a.dataset.name.localeCompare(b.dataset.name);});" +
-      "list.forEach(function(r){s.appendChild(r);});});" +
-      "}" +
-      "chips.forEach(function(c){c.addEventListener('click',function(){want=c.dataset.filter;apply();});});" +
-      "if(only)only.addEventListener('click',function(){lacking=!lacking;apply();});" +
-      "sorts.forEach(function(c){c.addEventListener('click',function(){order(c.dataset.sort);});});" +
-      "})();</script>"
+  const header = "<section>" + tiles + (health ? '<div class="health">' + health + "</div>" : "") + refusedHtml + "</section>";
+
+  const legend = weighted.length
+    ? '<p class="legend dim"><span class="m graded"></span>graded <span class="m in"></span>handed in ' +
+      '<span class="m missing"></span>missing <span class="m unrecorded"></span>not imported <span class="m ahead"></span>not due · ' +
+      "press a row for marks and work</p>"
     : "";
 
   /*
-   * The disclosure, as nine lines of DOM toggling.
+   * Filter, search, sort and the row disclosure, as DOM toggling.
    *
-   * `hidden` rather than a class, for the filter's reason: a panel nobody has
+   * `hidden` rather than a class, so a filtered row is out of the
+   * accessibility tree as well as off the screen. A row opens its detail by
+   * click or Enter; a press on a link, button or input inside it is that
+   * control's, not the row's. The departed list filters by group and search
+   * and drops out under "Needs attention" — nobody who left owes work.
+   */
+  const filterScript =
+    "<script>(function(){" +
+    "var chips=[].slice.call(document.querySelectorAll('.chip[data-filter]'));" +
+    "var sorts=[].slice.call(document.querySelectorAll('.th [data-sort]'));" +
+    "var only=document.querySelector('.chip[data-attn-only]');" +
+    "var find=document.querySelector('.find');var shown=document.querySelector('.shown');" +
+    "var box=document.getElementById('list');var gone=document.querySelector('section[data-departed]');" +
+    "var want='*',attn=false,q='';" +
+    "function apply(){" +
+    "chips.forEach(function(c){c.setAttribute('aria-pressed',String(c.dataset.filter===want));});" +
+    "if(only)only.setAttribute('aria-pressed',String(attn));" +
+    "var all=0,seen=0;" +
+    "[].forEach.call(box.querySelectorAll('.st'),function(r){all++;" +
+    "var off=(want!=='*'&&r.dataset.group!==want)||(attn&&r.dataset.attn!=='1')||(q&&r.dataset.find.indexOf(q)<0);" +
+    "r.hidden=off;if(!off)seen++;});" +
+    "if(shown)shown.textContent=seen===all?'':seen+' of '+all;" +
+    "if(gone){var left=0;[].forEach.call(gone.querySelectorAll('.st'),function(r){" +
+    "var off=attn||(want!=='*'&&r.dataset.group!==want)||(q&&r.dataset.find.indexOf(q)<0);r.hidden=off;if(!off)left++;});" +
+    "gone.hidden=left===0;}}" +
+    "function order(by){" +
+    "sorts.forEach(function(c){c.setAttribute('aria-pressed',String(c.dataset.sort===by));});" +
+    "var list=[].slice.call(box.querySelectorAll('.st'));" +
+    "list.sort(function(a,b){var d=0;" +
+    "if(by==='missing')d=Number(b.dataset.missing)-Number(a.dataset.missing);" +
+    "else if(by==='share'||by==='floor')d=Number(a.dataset[by])-Number(b.dataset[by]);" +
+    "return d||a.dataset.name.localeCompare(b.dataset.name);});" +
+    "list.forEach(function(r){box.appendChild(r);});}" +
+    "function toggle(row){var d=row.parentNode.querySelector('.detail');if(!d)return;" +
+    "d.hidden=!d.hidden;row.setAttribute('aria-expanded',String(!d.hidden));}" +
+    "document.addEventListener('click',function(e){var row=e.target.closest&&e.target.closest('.sr[role=button]');" +
+    "if(!row||e.target.closest('a,button,input,select,[data-hw]'))return;toggle(row);});" +
+    "document.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;" +
+    "var row=e.target.closest&&e.target.closest('.sr[role=button]');if(!row||e.target!==row)return;e.preventDefault();toggle(row);});" +
+    "chips.forEach(function(c){c.addEventListener('click',function(){want=c.dataset.filter;apply();});});" +
+    "if(only)only.addEventListener('click',function(){attn=!attn;apply();});" +
+    "if(find)find.addEventListener('input',function(){q=find.value.trim().toLowerCase();apply();});" +
+    "sorts.forEach(function(c){c.addEventListener('click',function(){order(c.dataset.sort);});});" +
+    "})();</script>";
+
+  /*
+   * The item lines, as DOM toggling.
+   *
+   * `hidden` rather than a class, for the filter's reason: a line nobody has
    * opened should be out of the accessibility tree as well as off the screen.
    * A screen reader running down a class list must not read every student's
    * answers aloud.
    *
-   * The panel is found by `data-work` matching the button's `data-workbtn`
-   * rather than by DOM adjacency, so the two can be reordered without this
-   * quietly opening the wrong person's work.
+   * A cell in the row opens the student's detail, unfolds the summary if the
+   * line is in it, opens the line's hand-in and marks the line for a moment —
+   * the line is found inside that student's own `.st`, so a reordered list
+   * cannot open the wrong person's work. The fork picker's two small presses
+   * (`paste a link`, the select's last option) only reveal its link field.
    */
   const workScript =
     "<script>(function(){" +
-    "[].forEach.call(document.querySelectorAll('[data-workbtn]'),function(b){" +
-    "b.addEventListener('click',function(){" +
-    "var panel=document.querySelector('[data-work=\"'+b.dataset.workbtn+'\"]');" +
-    "if(!panel)return;" +
-    "panel.hidden=!panel.hidden;" +
-    "b.setAttribute('aria-expanded',String(!panel.hidden));" +
-    "});});" +
+    "function show(line,on){var b=line.querySelector('.ib'),h=line.querySelector('button.ih');if(!b)return;" +
+    "b.hidden=!on;if(h)h.setAttribute('aria-expanded',String(on));}" +
+    "function open(c){var a=c.getAttribute('data-hw');" +
+    "var st=c.closest('.st'),d=st&&st.querySelector('.detail');if(!d)return;" +
+    "d.hidden=false;var r=st.querySelector('.sr');if(r)r.setAttribute('aria-expanded','true');" +
+    "var line=null;[].forEach.call(d.querySelectorAll('[data-it]'),function(x){if(x.getAttribute('data-it')===a)line=x;});" +
+    "if(!line)return;var m=line.closest('details');if(m)m.open=true;show(line,true);" +
+    "line.classList.remove('flash');void line.offsetWidth;line.classList.add('flash');" +
+    "line.scrollIntoView({block:'nearest'});}" +
+    "function reveal(fp){var i=fp.querySelector('input.fk'),s=fp.querySelector('button[data-fork]');" +
+    "if(i){i.hidden=false;i.focus();}if(s)s.hidden=false;}" +
+    "document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;" +
+    "var c=t.closest('[data-hw]');if(c){open(c);return;}" +
+    "var h=t.closest('button.ih');if(h){var line=h.closest('.it');show(line,h.getAttribute('aria-expanded')!=='true');return;}" +
+    "var p=t.closest('[data-paste]');if(p){var fp=p.closest('.fp');if(fp)reveal(fp);}});" +
+    "document.addEventListener('change',function(e){var s=e.target;if(!s.matches||!s.matches('select.fks'))return;" +
+    "var fp=s.closest('.fp'),i=fp&&fp.querySelector('input.fk');if(!i)return;" +
+    "if(s.value==='paste')reveal(fp);else i.hidden=true;});" +
+    "document.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;" +
+    "var c=e.target.closest&&e.target.closest('[data-hw]');if(!c||e.target!==c)return;e.preventDefault();open(c);});" +
     "})();</script>";
 
   /*
-   * What a work panel needs that `documentPage` does not have.
+   * What the detail needs that `documentPage` does not have.
    *
-   * `.row[hidden]` is the one that is not cosmetic. `documentPage` gives
-   * `.row` a `display:flex`, and an author `display` beats the user agent's
-   * `[hidden]{display:none}` — so without this line every panel is open on
-   * load, which is precisely the state this view must never boot into.
+   * The `[hidden]` rules are the ones that are not cosmetic: an author
+   * `display` beats the user agent's `[hidden]{display:none}`, so a line's
+   * hand-in or a fork field given `display` here without them would be open
+   * on load — the one state this view must never boot into.
    */
   const workStyle =
     "<style>" +
-    ".row.work{display:block;border-bottom:1px solid var(--line);padding:0}" +
-    // AFTER `.row.work`, and the order is the whole point. Both selectors
-    // score the same, so the later one wins — with these two the other way
-    // round every panel was open on load, which is the one state this view
-    // must never boot into. Written as the more specific selector as well, so
-    // that a rule added between them cannot bring the bug back.
-    ".row.work[hidden]{display:none}" +
-    ".wk{padding:2px 0 10px 10px;border-left:2px solid var(--line);margin:0 0 6px}" +
-    ".wk h3{font-size:12px;margin:10px 0 2px;letter-spacing:.04em;text-transform:uppercase;" +
-    "color:var(--dim)}" +
-    ".wk h3:first-child{margin-top:2px}" +
-    ".wk p{margin:0 0 4px}" +
+    "[data-hw]{cursor:pointer}" +
+    "[data-hw]:hover,[data-hw]:focus-visible{outline:2px solid var(--accent-line,var(--info));outline-offset:1px}" +
+    ".ib[hidden],.fp [hidden]{display:none}" +
+    ".audio{margin:6px 0 4px}" +
+    // The opening sentence, the pseudonym quiet at its end.
+    ".detail .sum{margin:0 0 6px;display:flex;flex-wrap:wrap;gap:4px 0;align-items:baseline}" +
+    ".pid{margin-left:auto;font-size:11px;color:var(--dim);background:none;padding:0}" +
+    // One line per assessment: what it is, where it stands, what can be done.
+    ".items{margin:4px 0 2px}" +
+    ".ihd{margin:6px 0 2px;font-size:12px;color:var(--dim)}" +
+    ".it{display:grid;grid-template-columns:minmax(180px,1.3fr) minmax(110px,auto) minmax(0,2fr);gap:4px 12px;" +
+    "align-items:center;padding:5px 6px;border-top:1px solid var(--line)}" +
+    ".it.flash{animation:flash 1.2s ease-out}" +
+    "@keyframes flash{from{background:var(--infobg)}to{background:transparent}}" +
+    ".ih{display:flex;align-items:baseline;gap:6px;min-width:0;font:inherit;color:inherit;background:none;border:0;padding:0;" +
+    "text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}" +
+    "button.ih{cursor:pointer}button.ih:hover .iname{text-decoration:underline}" +
+    ".iname{font-weight:600}" +
+    ".car{display:inline-block;width:10px;flex:none;color:var(--dim)}" +
+    ".car::before{content:'\\25B8'}button.ih[aria-expanded=true] .car::before{content:'\\25BE'}.car.none::before{content:''}" +
+    ".tag{font-size:12px;padding:1px 7px;border-radius:4px;white-space:nowrap;font-variant-numeric:tabular-nums}" +
+    ".tag.missing{background:var(--warnbg);color:var(--warn)}" +
+    ".tag.graded{background:var(--infobg)}" +
+    ".tag.in{color:var(--info)}" +
+    ".tag.ahead,.tag.unrecorded{color:var(--dim)}" +
+    ".ia{display:flex;flex-wrap:wrap;gap:4px 6px;align-items:center;min-width:0}" +
+    ".fp{display:inline-flex;flex-wrap:wrap;gap:4px 6px;align-items:center;min-width:0}" +
+    ".fp .fk{width:min(260px,100%);font:inherit;font-size:12px}" +
+    ".fp .fks{font:inherit;font-size:12px;max-width:260px}" +
+    ".fp a{font-size:12px;overflow-wrap:anywhere}" +
+    ".lnk{font:inherit;font-size:12px;background:none;border:0;padding:0;color:var(--dim);text-decoration:underline;" +
+    "text-underline-offset:2px;cursor:pointer}.lnk:hover{color:var(--fg)}" +
+    ".ib{grid-column:1/-1;padding:4px 0 6px 16px}" +
+    ".sub{margin:0 0 8px}.sub+.sub{border-top:1px dashed var(--line);padding-top:6px}" +
+    ".sub p{margin:0 0 4px}" +
+    ".more summary{cursor:pointer;font-size:12px;color:var(--dim);padding:6px 6px;border-top:1px solid var(--line)}" +
+    ".more summary:hover{color:var(--fg)}" +
+    "@media(max-width:720px){.it{grid-template-columns:minmax(0,1fr) auto}.ia{grid-column:1/-1}}" +
     ".qa{margin:6px 0 10px}" +
     ".qa .q{font-weight:600}" +
     ".qa .a{margin:0 0 2px}" +
@@ -1255,8 +1501,6 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     ".defence .chip{margin-left:4px}" +
     ".defended{margin:6px 0 2px}" +
     ".fork{margin:6px 0 2px}" +
-    ".fork .fk{width:min(320px,60%);font:inherit;font-size:13px}" +
-    ".fork .fka{font:inherit;font-size:13px;max-width:40%}" +
     ".defended .chip{margin-left:6px}" +
     ".defended .chip[aria-pressed=true],.dc .chip[aria-pressed=true]{border-color:var(--info);color:var(--info);font-weight:600}" +
     ".dc{margin:2px 0 8px}" +
@@ -1270,24 +1514,71 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     ".dq li{margin:0 0 8px}" +
     ".dq p{margin:0 0 2px;overflow-wrap:anywhere}" +
     ".dq .dim{font-size:12px}" +
-    // A student's row is the last child of its wrapper whether or not work
-    // follows it, and `documentPage` drops the rule under a last child.
-    ".st>.row:not(.work){border-bottom:1px solid var(--line)}" +
-    ".row.has-st{flex-wrap:wrap;row-gap:2px}" +
-    ".standing{flex:1 0 100%;font-size:12px;margin:2px 0 4px}" +
+    // The summary tiles and the data-health lines above the list.
+    ".tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:0 0 10px}" +
+    ".tile{border:1px solid var(--line);border-radius:6px;padding:7px 11px}" +
+    ".tile .dim{font-size:12px}" +
+    ".tv{font-size:20px;line-height:1.3;font-variant-numeric:tabular-nums}" +
+    ".health{margin:0 0 10px}.health p{margin:0 0 4px}" +
+    ".hw{background:var(--warnbg);color:var(--warn);border-radius:4px;padding:5px 9px}" +
+    ".tools{align-items:center}" +
+    ".find{font:inherit;font-size:12px;padding:2px 9px;border:1px solid var(--line);border-radius:20px;" +
+    "background:transparent;color:var(--fg);width:160px}" +
+    ".shown{font-size:12px}" +
+    ".idn{margin-left:auto;font-size:12px}" +
+    ".idn.named{color:#a5561f;font-weight:600}" +
+    // One row per student. The same columns on the header and every row; the
+    // strip takes what is left and the name gives way first.
+    ".tbl{overflow-x:auto}" +
+    ".th,.sr{display:grid;grid-template-columns:var(--cols);min-width:max-content;" +
+    "gap:10px;align-items:center}" +
+    ".th{font-size:11px;color:var(--dim);padding:0 4px 4px;border-bottom:1px solid var(--line)}" +
+    ".th button{font:inherit;background:none;border:0;padding:0;color:inherit;text-align:left;cursor:pointer}" +
+    ".th button:hover{color:var(--fg)}" +
+    ".th button[aria-pressed=true]{color:var(--fg);font-weight:600}" +
+    ".th button[aria-pressed=true]::after{content:' \\2193'}" +
+    ".sr{padding:6px 4px;border-bottom:1px solid var(--line);cursor:pointer}" +
+    ".sr:hover,.sr[aria-expanded=true]{background:var(--infobg)}" +
+    ".sr:focus-visible{outline:2px solid var(--info);outline-offset:-2px}" +
+    ".sr.gone{cursor:default;color:var(--dim)}.sr.gone:hover{background:none}" +
+    ".sr .rest{grid-column:3/-1}" +
+    ".nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    ".gr{color:var(--dim);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    ".pc{font-variant-numeric:tabular-nums;font-weight:600}" +
+    ".pc.low,.tv.low{color:var(--warn)}" +
+    ".bar{position:relative;display:block;height:8px;border-radius:4px;background:var(--line)}" +
+    ".bar .span{position:absolute;top:0;bottom:0;border-radius:4px;background:var(--dim);opacity:.45}" +
+    ".bar .pass{position:absolute;top:-2px;bottom:-2px;width:1px;background:var(--dim);opacity:.6}" +
+    ".bar .tick{position:absolute;top:-4px;width:2px;height:16px;margin-left:-1px;background:var(--fg)}" +
+    ".bar .tick.low{background:var(--warn)}" +
+    // The floor and the ceiling, small, under each end of the bar.
+    ".bar{margin-bottom:11px}" +
+    ".bar .ends{position:absolute;top:10px;left:0;right:0;display:flex;justify-content:space-between;" +
+    "font-size:10px;line-height:1;color:var(--dim);font-variant-numeric:tabular-nums}" +
+    // Every cell the same size, whatever it holds, so the columns line up
+    // down the list and under the header's numbers.
+    ".sk{display:inline-flex;gap:2px}" +
+    ".sk .m,.sk .n{width:24px;height:18px;padding:0;font-size:10px;line-height:16px;text-align:center;" +
+    "font-variant-numeric:tabular-nums;box-sizing:border-box;overflow:hidden;vertical-align:middle}" +
+    ".sk .n{border:0;color:var(--dim);line-height:14px;height:14px}" +
+    ".kh{display:flex;flex-direction:column;gap:1px}" +
+    ".kn{color:var(--fg);font-weight:600}" +
+    ".m{display:inline-block;width:9px;height:14px;border-radius:2px;border:1px solid var(--line);vertical-align:-2px}" +
+    ".m.graded{background:var(--infobg);border-color:var(--info);color:var(--fg)}" +
+    ".m.in{border:1px dashed var(--info);color:var(--info)}" +
+    ".m.missing{background:var(--warnbg);border-color:var(--warn);color:var(--warn);font-weight:600}" +
+    ".m.unrecorded{color:var(--dim)}" +
+    ".m.unrecorded{border-style:dotted;border-color:var(--dim)}" +
+    ".legend{font-size:11px;margin:8px 0 16px}.legend .m{margin:0 3px 0 8px}.legend .m:first-child{margin-left:0}" +
+    ".detail{padding:8px 12px 10px;border-bottom:1px solid var(--line);border-left:2px solid var(--info)}" +
+    ".detail>p{margin:0 0 4px}" +
+    "section.tbl{margin-top:18px}" +
+    // A narrow pane keeps who, where they are heading, and what they owe.
+    "@media(max-width:720px){.th,.sr{grid-template-columns:minmax(0,1fr) 110px 44px 44px}" +
+    ".th>:nth-child(2),.th>:nth-child(n+6),.sr .gr,.sr>.sk{display:none}.sr .rest{grid-column:2/-1}}" +
+    ".standing{font-size:12px;margin:2px 0 4px}" +
     ".standing p{margin:0 0 3px}" +
     ".blocks .blk{margin-right:14px;white-space:nowrap}" +
-    ".kind{display:flex;align-items:center;gap:6px;margin:2px 0;flex-wrap:wrap}" +
-    ".kl{width:72px;color:var(--dim)}" +
-    ".cells{display:inline-flex;gap:3px;flex-wrap:wrap}" +
-    ".c{display:inline-block;min-width:26px;padding:0 3px;text-align:center;border-radius:3px;" +
-    "border:1px solid var(--line);font-variant-numeric:tabular-nums;line-height:18px;text-decoration:none;color:var(--fg)}" +
-    ".c.graded{background:var(--infobg);border-color:transparent}" +
-    ".c.in{color:var(--info);border-style:dashed;border-color:var(--info)}" +
-    ".c.missing{background:var(--warnbg);color:var(--warn);border-color:var(--warn);font-weight:600}" +
-    ".c.ahead{color:var(--dim)}" +
-    ".c.unrecorded{color:var(--dim);border-style:dotted}" +
-    ".c.repo{text-decoration:underline;text-underline-offset:2px}" +
     ".sortl{margin-left:12px;font-size:12px}" +
     "</style>";
 
@@ -1303,11 +1594,22 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     "var k=e.target.closest&&e.target.closest('button[data-ask]');" +
     "if(k){if(k.disabled)return;k.disabled=true;k.textContent='Asked…';" +
     "parent.postMessage({source:'professor-pane',kind:'ask',prompt:k.getAttribute('data-ask')},'*');return;}" +
+    "var s=e.target.closest&&e.target.closest('button[data-syncs]');" +
+    "if(s){parent.postMessage({source:'professor-pane',kind:'syncs'},'*');return;}" +
+    // Save a fork: their own (the button carries it), the one picked from
+    // the list, or a pasted link — in that order.
     "var f=e.target.closest&&e.target.closest('button[data-fork]');" +
-    "if(f){if(f.disabled)return;var p=f.parentNode,u=p.querySelector('input.fk'),s=p.querySelector('select.fka')," +
-    "a=f.getAttribute('data-fork')||(s&&s.value)||'',v=u?u.value.trim():'';if(!a||!v){if(u)u.focus();return;}" +
+    "if(f){if(f.disabled)return;var p=f.closest('.fp'),u=p&&p.querySelector('input.fk'),s=p&&p.querySelector('select.fks')," +
+    "v=f.getAttribute('data-url')||(s&&s.value&&s.value!=='paste'?s.value:'')||(u&&!u.hidden?u.value.trim():'');" +
+    "if(!v){if(s&&s.value!=='paste')s.focus();else if(u)u.focus();return;}" +
     "f.disabled=true;f.textContent='Saving…';parent.postMessage({source:'professor-pane',kind:'defence-fork'," +
-    "assessment:a,student:f.getAttribute('data-student'),url:v},'*');return;}" +
+    "assessment:f.getAttribute('data-fork'),student:f.getAttribute('data-student'),url:v},'*');return;}" +
+    "var g=e.target.closest&&e.target.closest('button[data-forks]');" +
+    "if(g){if(g.disabled)return;g.disabled=true;g.textContent='Looking…';" +
+    "parent.postMessage({source:'professor-pane',kind:'homework-forks',assessment:g.getAttribute('data-forks')},'*');return;}" +
+    "var n=e.target.closest&&e.target.closest('button[data-audio-new]');" +
+    "if(n){if(n.disabled)return;n.disabled=true;n.textContent='Opening…';parent.postMessage({source:'professor-pane',kind:'defence-audio'," +
+    "assessment:n.getAttribute('data-assessment'),student:n.getAttribute('data-student')},'*');return;}" +
     "var c=e.target.closest&&e.target.closest('button[data-check]');" +
     "if(c){if(c.disabled)return;var o=c.getAttribute('data-check'),x=c.parentNode.querySelector('input.dcs'),v=o==='partly'&&x&&x.value!==''?Number(x.value):null;" +
     "c.disabled=true;parent.postMessage({source:'professor-pane',kind:'defence-check',outcome:o,score:v," +
@@ -1326,7 +1628,7 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     "});})();</script>";
 
   return documentPage(
-    workStyle + filterBar + header + sections + departed + filterScript + workScript + defenceScript + VIEW_SCRIPT,
+    workStyle + header + filterBar + list + legend + departed + filterScript + workScript + defenceScript + VIEW_SCRIPT,
     dark,
   );
 };

@@ -45,6 +45,16 @@ type ExamInput = {
    * deliberate choice rather than the default.
    */
   candidateFields?: string[];
+  /**
+   * Repeat the candidate fields at the top of every Nth page: `2` on a paper
+   * printed on both sides puts them on the front of every sheet, so a sheet
+   * that comes loose from its staple can still be matched to who wrote it.
+   * The repeated line leads with `runningHead`, which is where the variant
+   * goes. Absent, the fields are on page 1 only.
+   */
+  candidateFieldsEvery?: number;
+  /** What the repeated line starts with, e.g. `Midterm Exam 1 - Variant A`. Default: the title. */
+  runningHead?: string;
   questions: ExamQuestion[];
   /** `a4` or `letter` (the default, as before). Kazakhstan prints on A4. */
   pageSize?: "a4" | "letter";
@@ -138,7 +148,18 @@ function validateExam(value: unknown): ExamInput {
       throw new Error(`Question ${question.number} responseLines must be positive`);
     }
   }
+  if (exam.candidateFieldsEvery !== undefined && !(Number.isInteger(exam.candidateFieldsEvery) && exam.candidateFieldsEvery >= 1)) {
+    throw new Error("candidateFieldsEvery must be a positive integer");
+  }
   return exam as ExamInput;
+}
+
+/** The line repeated on later pages: the running head, then the fields to fill in. */
+function repeatedCandidateLine(exam: ExamInput): string | null {
+  if (!exam.candidateFieldsEvery || !exam.candidateFields?.length) return null;
+  const fields = exam.candidateFields.map((field) => `${field}: ____________________`).join("    ");
+  const head = exam.runningHead ?? exam.title;
+  return head ? `${head}    ${fields}` : fields;
 }
 
 function questionHeading(question: ExamQuestion): string {
@@ -164,6 +185,7 @@ async function renderDocx(exam: ExamInput, output: string, answers: AnswerLayout
     BorderStyle,
     Document,
     Footer,
+    Header,
     HeadingLevel,
     Packer,
     PageBreak,
@@ -263,8 +285,36 @@ async function renderDocx(exam: ExamInput, output: string, answers: AnswerLayout
     }
   }
 
+  const pageFooter = (): any => new Footer({
+    children: [new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [
+        new TextRun({ text: "Page ", color: "6B7280", size: 18 }),
+        new TextRun({ children: [PageNumber.CURRENT], color: "6B7280", size: 18 }),
+      ],
+    })],
+  });
+  // Word has no "every Nth page" header, only first / odd / even. Every second
+  // page is the odd-page header with a distinct first page; any other interval
+  // is printed on every page after the first, which errs towards more names.
+  const repeated = repeatedCandidateLine(exam);
+  const header = (text: string | null): any => new Header({
+    children: [new Paragraph({
+      border: text ? { bottom: { color: "111827", space: 4, style: BorderStyle.SINGLE, size: 6 } } : undefined,
+      children: text ? [new TextRun({ text, size: 20 })] : [],
+    })],
+  });
+  const everyOther = exam.candidateFieldsEvery === 2;
+  const headers = repeated
+    ? { first: header(null), default: header(repeated), ...(everyOther ? { even: header(null) } : {}) }
+    : undefined;
+  const footers = repeated
+    ? { first: pageFooter(), default: pageFooter(), ...(everyOther ? { even: pageFooter() } : {}) }
+    : { default: pageFooter() };
+
   const document = new Document({
     creator: "ProfessorHarness",
+    ...(repeated && everyOther ? { evenAndOddHeaderAndFooters: true } : {}),
     title: exam.title ?? "Exam",
     description: `Question-only exam with ${answers} answer layout`,
     styles: {
@@ -323,21 +373,13 @@ async function renderDocx(exam: ExamInput, output: string, answers: AnswerLayout
     sections: [{
       properties: {
         page: {
-          size: { width: 12240, height: 15840 },
+          size: exam.pageSize === "a4" ? { width: 11906, height: 16838 } : { width: 12240, height: 15840 },
           margin: { top: 1080, right: 1080, bottom: 1080, left: 1080, header: 360, footer: 480 },
         },
+        ...(repeated ? { titlePage: true } : {}),
       },
-      footers: {
-        default: new Footer({
-          children: [new Paragraph({
-            alignment: AlignmentType.CENTER,
-            children: [
-              new TextRun({ text: "Page ", color: "6B7280", size: 18 }),
-              new TextRun({ children: [PageNumber.CURRENT], color: "6B7280", size: 18 }),
-            ],
-          })],
-        }),
-      },
+      ...(headers ? { headers } : {}),
+      footers,
       children: pageChildren,
     }],
   });
@@ -370,14 +412,32 @@ const FITS: Fit[] = [
   { lineScale: 0.5, compact: true },
   { lineScale: 0.4, compact: true },
   { lineScale: 0.3, compact: true },
+  // Finer steps at the bottom: a long paper that just misses at 0.3 should not
+  // drop straight to one line per question and leave its last page half empty.
+  { lineScale: 0.25, compact: true },
+  { lineScale: 0.2, compact: true },
+  { lineScale: 0.15, compact: true },
+  { lineScale: 0.1, compact: true },
   { lineScale: 0, compact: true },
 ];
 
 async function renderPdf(exam: ExamInput, output: string, answers: AnswerLayout): Promise<void> {
   const limit = exam.maxPages;
   for (const fit of limit ? FITS : [FITS[0]!]) {
-    const { bytes, pages } = await layoutPdf(exam, answers, fit);
-    if (!limit || pages <= limit) {
+    const first = await layoutPdf(exam, answers, fit);
+    if (!limit || first.pages <= limit) {
+      let { bytes } = first;
+      // A fitted paper moves whole questions between pages, so each page ends
+      // with space nobody can write in. Give it back as ruled lines to the
+      // questions on that page — the pagination is unchanged, and checked.
+      if (limit && answers === "under-question") {
+        const extra = spareLines(first.layout);
+        if (extra.size) {
+          const filled = await layoutPdf(exam, answers, fit, extra);
+          const same = filled.layout.placed.every((page, at) => page === first.layout.placed[at]);
+          if (filled.pages === first.pages && same) bytes = filled.bytes;
+        }
+      }
       await mkdir(dirname(output), { recursive: true });
       await writeFile(output, bytes);
       return;
@@ -389,11 +449,35 @@ async function renderPdf(exam: ExamInput, output: string, answers: AnswerLayout)
   );
 }
 
+/** Where each question landed, and the room left at the foot of each page. */
+type Layout = { placed: number[]; spare: number[] };
+
+/** Ruled line pitch in the PDF: `drawResponseLines` spends this per line. */
+const LINE_PITCH = 22;
+
+/** Extra ruled lines per question index, sharing each page's spare room among the questions on it. */
+function spareLines(layout: Layout): Map<number, number> {
+  const extra = new Map<number, number>();
+  layout.spare.forEach((room, page) => {
+    const here = layout.placed.flatMap((p, index) => (p === page ? [index] : []));
+    if (!here.length) return;
+    const lines = Math.floor((room - 4) / LINE_PITCH);
+    if (lines <= 0) return;
+    // Spread evenly, the remainder to the later (harder, longer) questions.
+    here.forEach((index, at) => {
+      const share = Math.floor(lines / here.length) + (at >= here.length - (lines % here.length) ? 1 : 0);
+      if (share > 0) extra.set(index, share);
+    });
+  });
+  return extra;
+}
+
 async function layoutPdf(
   exam: ExamInput,
   answers: AnswerLayout,
   fit: Fit,
-): Promise<{ bytes: Uint8Array; pages: number }> {
+  extraLines: Map<number, number> = new Map(),
+): Promise<{ bytes: Uint8Array; pages: number; layout: Layout }> {
   const { PDFDocument, StandardFonts, rgb } = loadDependency("pdf-lib");
   const pdf = await PDFDocument.create();
   pdf.setCreator("ProfessorHarness");
@@ -406,8 +490,8 @@ async function layoutPdf(
   const margin = fit.compact ? 50 : 72;
   // Fewer ruled lines, never none: a question with nowhere to write is not a
   // question on paper. Scale 0 is the floor — one line each.
-  const responseLinesFor = (question: ExamQuestion): number =>
-    Math.max(1, Math.round(defaultResponseLines(question) * fit.lineScale));
+  const responseLinesFor = (question: ExamQuestion, index = -1): number =>
+    Math.max(1, Math.round(defaultResponseLines(question) * fit.lineScale)) + (extraLines.get(index) ?? 0);
   const contentWidth = pageWidth - 2 * margin;
   const bodySize = 11;
   const bodyLeading = 15;
@@ -419,14 +503,29 @@ async function layoutPdf(
 
   let page: any;
   let y = 0;
+  const repeated = repeatedCandidateLine(exam);
+  const layout: Layout = { placed: [], spare: [] };
+  const bottom = margin + 18;
 
   const newPage = (): void => {
+    if (page) layout.spare.push(y - bottom);
     page = pdf.addPage([pageWidth, pageHeight]);
     y = pageHeight - margin;
+    // Page 1 carries the full cover; later pages repeat the fields every Nth page.
+    const index = pdf.getPageCount() - 1;
+    if (repeated && index > 0 && index % exam.candidateFieldsEvery! === 0) {
+      for (const line of wrapText(repeated, regular, bodySize, contentWidth)) {
+        page.drawText(line, { x: margin, y, size: bodySize, font: regular, color: ink });
+        y -= bodyLeading;
+      }
+      y -= 4;
+      page.drawLine({ start: { x: margin, y }, end: { x: pageWidth - margin, y }, thickness: 0.8, color: ink });
+      y -= 12;
+    }
   };
 
   const ensure = (height: number): void => {
-    if (!page || y - height < margin + 18) newPage();
+    if (!page || y - height < bottom) newPage();
   };
 
   const drawWrapped = (
@@ -482,7 +581,7 @@ async function layoutPdf(
     return { label, labelWidth, lines };
   };
 
-  const drawQuestion = (question: ExamQuestion, includeAnswerSpace: boolean): void => {
+  const drawQuestion = (question: ExamQuestion, includeAnswerSpace: boolean, index: number): void => {
     const labelled = labelledLines(question);
     const headingLines = 0;
     const promptLines = labelled.lines.length;
@@ -492,13 +591,14 @@ async function layoutPdf(
       0,
     );
     const answerHeight = includeAnswerSpace
-      ? (question.options?.length ? 25 : responseLinesFor(question) * 22 + 4)
+      ? (question.options?.length ? 25 : responseLinesFor(question, index) * LINE_PITCH + 4)
       : 8;
     const fullBlockHeight =
       headingLines * bodyLeading + 8 +
       promptLines * bodyLeading + 6 +
       optionsHeight + answerHeight;
     ensure(Math.min(fullBlockHeight, pageHeight - 2 * margin - 36));
+    layout.placed[index] = pdf.getPageCount() - 1;
     y -= 8;
     labelled.lines.forEach((line, at) => {
       if (at === 0) {
@@ -517,7 +617,7 @@ async function layoutPdf(
       if (question.options?.length) {
         drawWrapped("Answer: ____________________", bold, bodySize, ink, 0, 10);
       } else {
-        drawResponseLines(responseLinesFor(question));
+        drawResponseLines(responseLinesFor(question, index));
       }
     } else {
       y -= 8;
@@ -541,7 +641,8 @@ async function layoutPdf(
       14,
     );
   }
-  for (const question of exam.questions) drawQuestion(question, answers === "under-question");
+  exam.questions.forEach((question, index) => drawQuestion(question, answers === "under-question", index));
+  layout.spare.push(y - bottom);
 
   if (answers === "separate-sheet") {
     newPage();
@@ -573,7 +674,7 @@ async function layoutPdf(
     });
   });
 
-  return { bytes: await pdf.save(), pages: pages.length };
+  return { bytes: await pdf.save(), pages: pages.length, layout };
 }
 
 function wrapText(text: string, font: any, size: number, width: number): string[] {
@@ -663,6 +764,7 @@ function withWinAnsi(exam: ExamInput): ExamInput {
     title: fix(exam.title),
     subtitle: fix(exam.subtitle),
     candidateFields: exam.candidateFields?.map((field) => winAnsiText(field)),
+    runningHead: fix(exam.runningHead),
     questions: exam.questions.map((question) => ({
       ...question,
       title: fix(question.title),

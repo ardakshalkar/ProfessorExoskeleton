@@ -27,6 +27,7 @@ import {
   splitPrompt,
   writeDefence,
 } from "@ainar/core/src/defence.ts";
+import { forksPath, readForks } from "@ainar/core/src/forks.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
 import { describeTranscription } from "@ainar/core/src/transcribe.ts";
@@ -97,6 +98,27 @@ export const defenceReader = (root, runId) => {
     } catch {
       return { pin: null, questions: null };
     }
+  };
+};
+
+/**
+ * The last fork lookup for one homework (`ainar homework forks`), or null when
+ * there has been none. Read per homework and kept for the render, so a class
+ * list of eighty reads each file once.
+ */
+export const forksReader = (root, runId) => {
+  let submissions = null;
+  try {
+    submissions = submissionsDir(null);
+    refuseInsideRepo(submissions, root);
+  } catch {
+    submissions = null;
+  }
+  const read = new Map();
+  return (assessmentId) => {
+    if (submissions === null) return null;
+    if (!read.has(assessmentId)) read.set(assessmentId, readForks(forksPath(submissions, runId, assessmentId)));
+    return read.get(assessmentId);
   };
 };
 

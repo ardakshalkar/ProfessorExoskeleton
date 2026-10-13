@@ -1,29 +1,50 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    {
-      "name": "harness",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": [
-        "/c",
-        "bin\\sample.cmd"
-      ],
-      "port": 3080
-    },
-    {
-      "name": "harness-v1",
-      "runtimeExecutable": "cmd",
-      "runtimeArgs": [
-        "/c",
-        "set AINAR_WORKSPACE=C:\\Users\\Ardak Shalkar\\OneDrive\\Documents\\AI Course 2026 v1&& bin\\sample.cmd"
-      ],
-      "port": 3080
-    },
-    {
-      "name": "desk-test",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["plugins/dsh-professor-pane/test/desk-page.mjs"],
-      "port": 3091
-    }
-  ]
+﻿{
+    "version":  "0.0.1",
+    "configurations":  [
+                           {
+                               "name":  "harness",
+                               "runtimeExecutable":  "cmd",
+                               "runtimeArgs":  [
+                                                   "/c",
+                                                   "bin\\sample.cmd"
+                                               ],
+                               "port":  3080
+                           },
+                           {
+                               "name":  "harness-v1",
+                               "runtimeExecutable":  "cmd",
+                               "runtimeArgs":  [
+                                                   "/c",
+                                                   "set AINAR_WORKSPACE=C:\\Users\\Ardak Shalkar\\OneDrive\\Documents\\AI Course 2026 v1\u0026\u0026 bin\\sample.cmd"
+                                               ],
+                               "port":  3080
+                           },
+                           {
+                               "name":  "desk-test",
+                               "runtimeExecutable":  "node",
+                               "runtimeArgs":  [
+                                                   "plugins/dsh-professor-pane/test/desk-page.mjs"
+                                               ],
+                               "port":  3091,
+                               "autoPort":  true
+                           },
+                           {
+                               "name":  "students-test",
+                               "runtimeExecutable":  "cmd",
+                               "runtimeArgs":  [
+                                                   "/c",
+                                                   "set AINAR_WORKSPACE=C:\\Users\\Ardak Shalkar\\OneDrive\\Documents\\AI Course 2026 v1\u0026\u0026 node --experimental-strip-types plugins/dsh-professor-pane/test/students-page.mjs CSS-4007-2026-FALL"
+                                               ],
+                               "port":  3093
+                           },
+                           {
+                               "name":  "syncs-test",
+                               "runtimeExecutable":  "cmd",
+                               "runtimeArgs":  [
+                                                   "/c",
+                                                   "set AINAR_WORKSPACE=C:\\Users\\Ardak Shalkar\\OneDrive\\Documents\\AI Course 2026 v1\u0026\u0026 node --experimental-strip-types plugins/dsh-professor-pane/test/syncs-page.mjs CSS-4007-2026-FALL"
+                                               ],
+                               "port":  3092
+                           }
+                       ]
 }

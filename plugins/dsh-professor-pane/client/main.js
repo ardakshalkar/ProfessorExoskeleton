@@ -45,6 +45,8 @@
 
 import { DefenceDesk } from "./defence-desk.js";
 import { SyncsView } from "./syncs.js";
+import { CourseMode } from "./materials.js";
+import { RecentMarks, SheetNotice } from "./marks.js";
 import { turnStep } from "./defence-turn.js";
 import { inject, OpenPaneAction, ProfessorPane } from "./pane.js";
 
@@ -159,3 +161,7 @@ exports.DefenceDesk = DefenceDesk;
 // The same, for `test/syncs-page.mjs`: the Syncs view alone, against the real
 // syncs of a workspace and made-up names in the review list.
 exports.SyncsView = SyncsView;
+exports.CourseMode = CourseMode;
+// And the grade sheet's notice and "Last added", against made-up marks.
+exports.SheetNotice = SheetNotice;
+exports.RecentMarks = RecentMarks;

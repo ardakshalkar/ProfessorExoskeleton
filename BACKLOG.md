@@ -1271,6 +1271,140 @@ is worth building.
       vendor means a second data agreement and a second key in
       `connections/`; decide only if VIS-2 shows it reads better. · depends: VIS-2
 
+## E30 · "Connect Google": Sheets access a professor can set up alone — no `FUTURE.md` section yet
+
+> **Rank: next after E27's SHT-3.** Raised 2026-10-10, when a harness session
+> was asked to read the CSS-4007 grade sheet "with the Google Drive connector"
+> and could not: a dsh session has no such connector, its sandbox blocks
+> outbound TLS, and `loadCredentials` (`src/lms/sheets.ts`) found no token, no
+> service-account key and no sheets connection. The stopgap shipped the same
+> day: the Syncs card links Google's `/export?format=csv` in the professor's own
+> browser and takes the downloaded file as a drop, checked by `sync plan` before
+> it replaces the copy. That works for any sheet but is two steps every time.
+> A service-account key or an access token is a developer's task, not a
+> professor's.
+>
+> **The shape.** OAuth for an installed app: the pane opens Google's sign-in,
+> Google redirects to the pane's own localhost address, and the refresh token is
+> kept in `~/.ainar` (the pane's server can write there; the dsh sandbox
+> cannot). Scope `drive.file` plus the **Google Picker**: the app sees only the
+> sheets the professor picks, it is a non-sensitive scope (no Google
+> verification and no "unverified app" screen), and it still allows the writes
+> a two-way sync needs. Grades go from Google to the professor's machine with no
+> server of ours in between.
+>
+> **Not this:** "Publish to web" links (grades become public), and one shared
+> service account across installs (every copy carries a key that reads every
+> professor's shared sheets).
+
+- [ ] **GAU-1** One-time setup, as the developer: a Google Cloud project, an
+      OAuth client of type "Desktop", a consent screen with a privacy-policy
+      link, published **In production**. "Testing" status expires refresh
+      tokens every 7 days. The client ID ships in the harness; a desktop
+      client's secret is not a secret, and PKCE is used anyway. `S` · depends: —
+- [ ] **GAU-2** The sign-in in the pane: a Connect button in Integrations →
+      Credentials, a loopback redirect to the pane's server, PKCE, the refresh
+      token saved as a `sheets` connection with an `oauth` credential in
+      `connections.json` (token value in the managed store, never in the
+      registry), and Disconnect, which revokes it. `M` · depends: GAU-1
+- [ ] **GAU-3** `loadCredentials` learns the `oauth` credential: exchange the
+      refresh token for an access token, cache it until expiry, and report a
+      revoked grant as "Reconnect Google in Integrations", not as an HTTP code.
+      Probe support in `connections/probe.ts`. `S` · depends: GAU-2
+- [ ] **GAU-4** The Google Picker when a sync's sheet is set or changed, so the
+      chosen sheet is the one `drive.file` grants. A sheet linked before
+      connecting asks to be picked once. `M` · depends: GAU-2
+- [ ] **GAU-5** The live read runs in the pane's server, not in the session.
+      Check that `sync plan`/`run`, spawned by the pane, reach Google from where
+      the pane runs; if the dsh sandbox blocks them too, the pane reads the
+      sheet and passes `--from`. Then the Syncs card loses its download and drop
+      steps whenever Google is connected (they stay as the fallback for
+      universities that block third-party apps). `S` · depends: GAU-3
+
+---
+
+## E31 · Private files off the machine: one archive, several connectors — no `FUTURE.md` section yet
+
+> **Raised 2026-10-13.** Everything private and heavy — scans
+> (`scans.ts`), defence audio (`recordings.ts`, the desk), forks — lives only
+> in `~/.ainar/submissions/<RUN>/`. Records point at it with `private://…`
+> refs (`scans.ts:83`, `bin/ainar.ts:3334`), and nothing turns a ref back
+> into a file anywhere but this laptop. Nothing backs it up, and a term of
+> recorded defences fills a disk.
+>
+> **Decided with Ardak the same day.** *Archive plus on-demand:* `~/.ainar`
+> stays the working copy; files are pushed to a store, a finished run's local
+> copies can be evicted, and a `private://` ref is fetched back when a tool
+> needs it. Offline grading keeps working and no reader changes until it
+> meets a missing file. *Encryption per connector:* a flag on each
+> connection, not a global default. *Connectors:* a folder, S3-compatible and
+> Google Drive.
+>
+> **The shape.** A `storage` connection type in the existing registry
+> (`connections/index.ts`): where and which variable holds the secret, never
+> the secret. A driver only moves bytes (`put`, `get`, `head`, `list`);
+> hashing, encryption and the manifest are ours and identical across drivers.
+> Which run goes to which store is a `syncs:` entry (`service: storage`,
+> `role: target`, `stream: private-files`), the same road every other
+> integration takes. What was pushed, its checksum and whether it is still
+> local is `~/.ainar/archive/<RUN>.json`, beside the links and the ledger.
+>
+> **Why Drive goes through rclone first.** Drive's API is a few REST calls.
+> What costs is the token: E30's OAuth client, consent screen and loopback
+> sign-in. rclone already does that sign-in (`rclone config`, scope
+> `drive.file`) and the same binary covers OneDrive, Dropbox and SFTP, so
+> one wrapper buys them all. The native Drive driver waits for E30.
+>
+> **Not this:** files under the course workspace (a OneDrive folder is a
+> fine target, the workspace is not; the folder driver refuses any path
+> inside it), names-bearing files on an unencrypted store, and a store as
+> the only copy of something not yet verified there.
+
+- [ ] **STO-1** `storage` connection type: `driver` (`folder` | `s3` |
+      `rclone`), `path` / `bucket` + `prefix` + `region` + `baseUrl` (R2,
+      MinIO, Oracle) / `remote`, `encrypt: true|false`, `keyEnv`; S3 secret
+      via `tokenEnv` as now. `probe.ts` writes, reads back and deletes a
+      marker object. `S` · depends: —
+- [ ] **STO-2** `ainar files status|push RUN [--dry-run]`: walk the run's
+      private tree, hash, upload what the store lacks, write the manifest;
+      idempotent, resumable, and a `syncs:` entry names the connection.
+      STORAGE.md gains `~/.ainar/archive/` in §3 and the road in §7. `M` ·
+      depends: STO-1
+- [ ] **STO-3** Folder driver: any mounted path — external disk, NAS, a
+      OneDrive or Dropbox synced folder (which is OneDrive with no API work).
+      Atomic write by rename. `S` · depends: STO-1
+- [ ] **STO-4** S3 driver, native: SigV4 over `fetch`, no SDK; multipart
+      above 64 MB (a scan batch reaches 200 MB). Tested against MinIO. `M` ·
+      depends: STO-1
+- [ ] **STO-5** Encryption, when the connection says so: AES-256-GCM in
+      chunks so a 200 MB file streams, the key in the managed credential
+      store via `keyEnv`, its fingerprint in the manifest so a wrong key is
+      named as a wrong key. `push` refuses a names-bearing file (`_inbox/`,
+      `uploads.json`, `plan.yaml`) to an unencrypted store. `M` · depends:
+      STO-2
+- [ ] **STO-6** One resolver: `resolvePrivate(ref)` returns a local path,
+      fetching and verifying the checksum when the file is gone. `scans.ts`,
+      `defence.ts`, `recordings.ts` and the pane's `scans.js` /
+      `defence-desk.js` read through it. `M` · depends: STO-2
+- [ ] **STO-7** `ainar files evict RUN`: drop local copies the manifest
+      shows verified on the store; never an unfiled `_inbox/` item;
+      `archive-run` offers it. `S` · depends: STO-6
+- [ ] **STO-8** rclone driver: any configured remote — Drive, OneDrive,
+      Dropbox, SFTP — through `rclone rcat` / `cat` / `lsjson`, rclone found
+      on `PATH`, `doctor` saying how to install it when it is not. `S` ·
+      depends: STO-1
+- [ ] **STO-9** Storage in the pane's Integrations: each store, per run what
+      is local, archived and evicted in bytes, and Push as the professor's
+      press after a dry-run preview — student files leaving the machine is
+      theirs to send. `M` · depends: STO-2
+- [ ] **STO-10** Native Drive driver on E30's OAuth, for a professor who
+      cannot install rclone: resumable upload, an app folder under
+      `drive.file`. `M` · depends: GAU-3, STO-1
+- [ ] **STO-11** Retention: `ainar files purge RUN --confirm` deletes a run's
+      private files everywhere once the institution's keeping period is
+      over, and writes that it did to `records/events.yaml`. `S` · depends:
+      STO-2
+
 ---
 
 ## Suggested order

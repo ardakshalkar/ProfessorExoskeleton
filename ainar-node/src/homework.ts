@@ -226,6 +226,8 @@ export interface Github {
   /** Default owner for a repository created with no owner spelled out. */
   owner: string | null;
   tree(repo: string): Promise<Map<string, string> | null>;
+  /** The repository's public forks, as GitHub lists them (`forks.ts`). */
+  forks(repo: string): Promise<Record<string, any>[]>;
   createRepo(repo: string, checkout: string, visibility: Visibility): Promise<string>;
   cloneUrl(repo: string): string;
   gitEnv(): Record<string, string>;
@@ -254,6 +256,15 @@ export const ghCli = (run: Runner = realRunner): Github => ({
       return null; // No such repository, or no access to it.
     }
   },
+  async forks(repo) {
+    // One JSON object a line: `--paginate` alone prints each page's array
+    // back to back, which is not one document.
+    const raw = run("gh", ["api", "--paginate", `repos/${repo}/forks?per_page=100`, "--jq", ".[]"]);
+    return raw
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line));
+  },
   async createRepo(repo, checkout, visibility) {
     return run("gh", ["repo", "create", repo, `--${visibility}`, "--source", checkout, "--push"]);
   },
@@ -267,6 +278,37 @@ export const ghCli = (run: Runner = realRunner): Github => ({
     return text;
   },
 });
+
+/**
+ * Every page of `/repos/{repo}/forks`, through whatever `call` authenticates
+ * with — a token, or nothing at all: the forks of a public repository are
+ * public, and an anonymous read is the route of last resort.
+ */
+export const pagedForks = async (
+  repo: string,
+  call: (path: string) => Promise<Response>,
+): Promise<Record<string, any>[]> => {
+  const found: Record<string, any>[] = [];
+  // Ten pages is a thousand forks: more than any class, and a stop on a loop
+  // that a misbehaving API could otherwise keep feeding.
+  for (let page = 1; page <= 10; page++) {
+    const response = await call(`/repos/${repo}/forks?per_page=100&page=${page}`);
+    if (!response.ok) {
+      if (page === 1) throw new Error(`GitHub would not list the forks of ${repo} (${response.status})`);
+      break;
+    }
+    const batch = (await response.json()) as Record<string, any>[];
+    found.push(...batch);
+    if (batch.length < 100) break;
+  }
+  return found;
+};
+
+/** GitHub with no credential, for reading what is public. */
+export const anonymousCall = (path: string): Promise<Response> =>
+  fetch(`https://api.github.com${path}`, {
+    headers: { accept: "application/vnd.github+json", "user-agent": "ainar-homework-forks" },
+  });
 
 /** A configured token, for a host with no interactive login. */
 export const tokenApi = (token: string, owner: string | null, source: string): Github => {
@@ -289,6 +331,9 @@ export const tokenApi = (token: string, owner: string | null, source: string): G
       const response = await call(`/repos/${repo}/git/trees/HEAD?recursive=1`);
       if (!response.ok) return null;
       return parseTree(await response.text());
+    },
+    async forks(repo) {
+      return pagedForks(repo, call);
     },
     async createRepo(repo, _checkout, visibility) {
       const [repoOwner, name] = repo.split("/");

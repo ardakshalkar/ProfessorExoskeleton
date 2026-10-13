@@ -41,6 +41,41 @@ test("importing the renderer renders nothing and exits nothing", async () => {
   assert.equal(typeof module.renderExam, "function");
 });
 
+test("the name repeats on the front of every sheet when a duplex paper asks for it", async () => {
+  const { renderExam } = await import("../bin/render-exam.ts");
+  const dir = mkdtempSync(join(tmpdir(), "exam-every-"));
+  try {
+    const exam = {
+      title: "Midterm",
+      runningHead: "Midterm - Variant C",
+      candidateFields: ["Name", "Group"],
+      candidateFieldsEvery: 2,
+      pageSize: "a4",
+      questions: Array.from({ length: 12 }, (_, at) => ({ number: at + 1, marks: 5, prompt: `Question ${at + 1}.`, responseLines: 12 })),
+    };
+    // Word: a distinct first page, then the line on odd pages only.
+    await renderExam(exam, join(dir, "p.docx"), "docx", "under-question");
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(readFileSync(join(dir, "p.docx")));
+    const settings = await zip.file("word/settings.xml")!.async("string");
+    assert.match(settings, /evenAndOddHeaders/);
+    const headers = await Promise.all(
+      Object.keys(zip.files).filter((name) => /^word\/header\d+\.xml$/.test(name)).map((name) => zip.file(name)!.async("string")),
+    );
+    assert.equal(headers.filter((xml) => xml.includes("Midterm - Variant C")).length, 1, "one header carries the line");
+
+    // PDF: the same pages as without the option, give or take the line it costs.
+    await renderExam(exam, join(dir, "p.pdf"), "pdf", "under-question");
+    const { PDFDocument } = await import("pdf-lib");
+    const pdf = await PDFDocument.load(readFileSync(join(dir, "p.pdf")));
+    assert.ok(pdf.getPageCount() >= 3, "long enough to have a second sheet");
+
+    await assert.rejects(renderExam({ ...exam, candidateFieldsEvery: 0 }, join(dir, "x.pdf"), "pdf", "under-question"), /positive integer/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("a paper prints in process, as a real PDF, and is registered against its assessment", async () => {
   await withWorkspace(async (root) => {
     const report = await printPaper({ assessmentId: "ASSESSMENT-01", root, format: "pdf" });

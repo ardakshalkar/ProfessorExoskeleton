@@ -5,7 +5,9 @@
 
 import { decodeIssues, Message, useJson } from "./common.js";
 import { courseModeEscape } from "./course-escape.js";
-import { GradebookStatus, Unpublished } from "./marks.js";
+import { GradebookStatus, RecentMarks, Unpublished } from "./marks.js";
+import { Integrations } from "./integrations.js";
+import { SyncsView } from "./syncs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, DRAFT_MODES, IDENTITY_MODES, scoped, SUBVIEWS } from "./tabs.js";
 
@@ -337,6 +339,9 @@ const COURSE_VIEWS = [
   { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
   { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
+  // Last: not the course but its roads out — Canvas, the sheet, the
+  // repositories — and the rows a sync was not sure of, by name.
+  { id: "syncs", label: "Syncs", hint: "Canvas, the grade sheet and the rest: preview, run, and the rows waiting for you" },
 ];
 
 /** The Status view's words for a connection, as the Integrations tab says them. */
@@ -350,6 +355,9 @@ export function CourseMode(props) {
   // reading is kept so the weeks come back as they were left.
   const [view, setView] = React.useState(null);
   const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
+  // Integrations, opened from Syncs: the pane's own tab, drawn here so going
+  // to it does not close course mode. Status first, as in the pane.
+  const [integrationsSub, setIntegrationsSub] = React.useState("status");
   // The week Teaching was last stepped to. The page steps without a round
   // trip and reports each step; it is held in a ref so a step redraws
   // nothing, and copied into `week` only when Teaching is drawn again — on
@@ -397,7 +405,53 @@ export function CourseMode(props) {
       ? (wiring.value.integrations || []).find((row) => row.id === "canvas") || null
       : null;
 
+  // How many sync rows wait for the professor, for the header line. Read
+  // without names: a count needs none.
+  const syncs = useJson(
+    scoped(BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + props.reload, props.sessionId),
+  );
+  // The last answer of each read is kept while the next one loads, so a
+  // confirm or a run — which bump `reload` — does not blank the line.
+  const shown = React.useRef({ canvas: null, waiting: 0 });
+  if (wiring.phase === "ready") shown.current.canvas = canvas;
+  if (syncs.phase === "ready") {
+    shown.current.waiting = syncs.value && !syncs.value.error ? (syncs.value.waiting || []).length : 0;
+  }
+  const waiting = shown.current.waiting;
+  const canvasLine = shown.current.canvas;
+
   const viewBody = () => {
+    if (view === "syncs") {
+      return h(
+        "div",
+        { className: "pp-cviewpad" },
+        h(SyncsView, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          names: props.names,
+          revision: props.reload,
+          onWrite: props.onWrite,
+          // Connections themselves — a host, a token — are the Integrations
+          // tab's. Opened in place: closing course mode to get there read as
+          // the window crashing.
+          onSetup: () => setView("integrations"),
+        }),
+      );
+    }
+    if (view === "integrations") {
+      return h(
+        "div",
+        { className: "pp-cviewpad" },
+        h(Integrations, {
+          runId: props.runId,
+          subView: integrationsSub,
+          sessionId: props.sessionId,
+          onWrite: props.onWrite,
+          revision: props.reload,
+          key: props.runId,
+        }),
+      );
+    }
     if (view === "students") {
       return h(WidgetFrame, {
         key: "students|" + props.names + "|" + props.dark + "|" + props.reload,
@@ -422,6 +476,7 @@ export function CourseMode(props) {
             setTaskSub("unpublished");
           },
         }),
+        h(RecentMarks, { runId: props.runId, sessionId: props.sessionId, revision: props.reload, names: props.names }),
         h(WidgetFrame, {
           key: "gradebook|" + props.dark + "|" + props.drafts + "|" + props.reload,
           view: "gradebook",
@@ -469,7 +524,7 @@ export function CourseMode(props) {
       entry.label,
     );
   // The views that name people follow the pane's Names / Pseudonyms choice.
-  const named = view === "students" || (view === "tasks" && taskSub !== "unpublished");
+  const named = view === "students" || view === "syncs" || (view === "tasks" && taskSub !== "unpublished");
 
   return ReactDOM.createPortal(
     h(
@@ -527,18 +582,25 @@ export function CourseMode(props) {
               ),
           // The pane's header, which this veil covers. Publish and Upload
           // open their own windows on top, so course mode is still here when
-          // they close; the jump is for everything the term plan does not
-          // draw — it closes course mode and opens the pane on that tab.
-          canvas
+          // they close. The wiring line opens the Syncs view in place —
+          // where Canvas stands and what is waiting are both answered there,
+          // and it links on to the pane's Integrations for the setup itself.
+          canvasLine || waiting
             ? h(
                 "button",
                 {
                   type: "button",
-                  className: "pp-wiring pp-wiring-" + canvas.state,
-                  title: "Close course mode and open Integrations in the pane",
-                  onClick: () => props.onJump("integrations"),
+                  className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
+                  title: preview ? "Private — not shown while previewing as a student" : "Open Syncs",
+                  disabled: preview,
+                  onClick: () => setView("syncs"),
                 },
-                "Canvas: " + (CONNECTION_STATE[canvas.state] || canvas.state),
+                [
+                  canvasLine ? "Canvas: " + (CONNECTION_STATE[canvasLine.state] || canvasLine.state) : null,
+                  waiting ? waiting + " waiting" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
               )
             : null,
           h(
@@ -597,12 +659,23 @@ export function CourseMode(props) {
           view
             ? h(
                 "section",
-                { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || {}).label },
-                view === "tasks" || named
+                { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || { label: "Integrations" }).label },
+                view === "tasks" || view === "integrations" || named
                   ? h(
                       "div",
                       { className: "pp-cviewbar" },
                       view === "tasks" ? SUBVIEWS.tasks.map((entry) => segment(entry, taskSub === entry.id, () => setTaskSub(entry.id), false)) : null,
+                      // Integrations' own row; its Syncs entry goes back to the Syncs view.
+                      view === "integrations"
+                        ? SUBVIEWS.integrations.map((entry) =>
+                            segment(
+                              entry,
+                              entry.id !== "syncs" && integrationsSub === entry.id,
+                              () => (entry.id === "syncs" ? setView("syncs") : setIntegrationsSub(entry.id)),
+                              false,
+                            ),
+                          )
+                        : null,
                       h("span", { className: "pp-segspacer" }),
                       // The pane's own choice, the same state, so the two never differ.
                       named

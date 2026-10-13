@@ -48,7 +48,11 @@ export const sheetConfigAsSync = (config: SheetConfig, syncId = "hw-sheet"): Rec
   remove: "own",
   conflict: "refuse",
   map: {
-    rows: { name: config.name_column, ...(config.flag_column ? { note: config.flag_column } : {}) },
+    rows: {
+      name: config.name_column,
+      ...(config.flag_column ? { note: config.flag_column } : {}),
+      ...(config.github_column ? { github: config.github_column } : {}),
+    },
     columns: config.columns,
     marks: Object.fromEntries(
       Object.entries(config.marks).map(([word, mark]) => [word, { factor: mark.factor, status: mark.status, label: mark.label }]),

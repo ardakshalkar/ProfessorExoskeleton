@@ -426,6 +426,26 @@ window.__ModuleLoader__.load({
    Scans bar gives a step that is yours. */
 .pp-behind{font-size:12px;color:#a15c00}
 .pp-bookstatus{flex:0 0 auto;max-height:35%;overflow:auto;margin:8px 14px 0}
+/* What the grade sheet brought in: a notice over every tab until seen, and the
+   last runs above the Gradebook. Green, the colour of a thing that arrived. */
+.pp-sheetnotice{flex:none;display:flex;align-items:center;gap:8px;margin:8px 14px 0;padding:7px 9px;
+  border-radius:8px;font-size:11.5px;line-height:1.45;border:1px solid rgba(46,125,79,.35);
+  background:rgba(46,125,79,.08);color:var(--dsw-alias-label-secondary,#3a3a3a)}
+.pp-sheetnotice b{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+/* Changed in Google, not yet in: amber, the colour of a step that is yours. */
+.pp-sheetnotice-changed{border-color:rgba(161,92,0,.4);background:rgba(161,92,0,.08)}
+.pp-sheetnoticetext{flex:1;min-width:0}
+.pp-recentmarks{flex:0 0 auto;max-height:30%;overflow:auto;margin:8px 14px 0}
+.pp-recenthead{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 4px}
+.pp-recenthead b{font-weight:600}
+.pp-recentrun{padding:4px 0;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-recentwhen{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pp-recentwhen > span:first-child{font-weight:600}
+.pp-recentlist{list-style:none;margin:3px 0 0;padding:0}
+.pp-recentlist li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:1px 0}
+.pp-recentwho{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%}
+.pp-recentmark{margin-left:auto;font-variant-numeric:tabular-nums;color:#2e7d4f}
+.pp-recentlist .pp-behind{margin-left:auto}
 .pp-linkask{margin:8px 0;padding:8px 10px;border-left:3px solid #a15c00}
 .pp-linkask p{margin:0 0 6px}
 .pp-approveout{margin:8px 0 0;padding:8px 10px;max-height:180px;overflow:auto;
@@ -727,29 +747,136 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-primary{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:6px 14px;border-radius:20px;
   color:#fff;background:#2f8a4e;border:1px solid #2f8a4e}
 .pp-primary:disabled{opacity:.5;cursor:default}
-/* Syncs: a row per road, then the matches waiting for a person — the name as
-   written beside the class list's name, never a pseudonym alone. */
-.pp-synclist{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px;margin:8px 0 4px}
-.pp-syncrow{display:flex;flex-direction:column;gap:4px;padding:9px 11px;
-  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-.pp-syncrow:first-child{border-top:none}
-.pp-synchead{display:flex;align-items:baseline;gap:8px}
-.pp-syncname{flex:1;min-width:0;font-size:12.5px;font-weight:600;overflow-wrap:anywhere}
-.pp-syncname .pp-as{font-weight:400}
-.pp-syncdir{flex:none;font-size:10.5px;padding:1px 8px;border-radius:20px}
-.pp-syncdir-source{background:rgba(47,98,168,.12);color:#2f62a8}
-.pp-syncdir-target{background:rgba(47,138,78,.12);color:#2f8a4e}
-.pp-syncdir-both{background:rgba(110,77,180,.12);color:#6e4db4}
-.pp-heldlist{border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px;margin:4px 0}
-.pp-heldrow{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 11px;
-  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-.pp-heldrow:first-child{border-top:none}
-.pp-heldbody{min-width:0;display:flex;flex-direction:column;gap:3px}
-.pp-heldpair{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px}
-.pp-heldwritten{color:var(--dsw-alias-label-secondary,#555)}
-.pp-heldname{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
-.pp-syncrow select,.pp-heldrow select{font:inherit;font-size:11.5px;padding:2px 4px;border-radius:6px;
-  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:transparent;color:inherit}
+/* Syncs. Tiles say how much there is; the rows waiting for a person come
+   first, each as the sheet shows it (letters across, lines down, the row lit)
+   with the decision under it; then the roads, grouped by which way data runs,
+   each with its service's mark. */
+.pp-syncs{display:flex;flex-direction:column;gap:14px}
+.pp-cviewpad{padding:16px 20px 40px;max-width:880px}
+.pp-wiring-waiting{color:#a5561f;font-weight:600}
+.pp-stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:8px}
+.pp-stile{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;
+  background:var(--dsw-alias-fill-secondary,#f3f3f5)}
+.pp-stilelabel{font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-stilevalue{font-size:22px;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums;
+  color:var(--dsw-alias-label-primary,#111)}
+.pp-stilenote{font-size:11px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-stile-warn{background:rgba(214,130,32,.13)}
+.pp-stile-warn .pp-stilevalue{color:#b4600f}
+.pp-stile-ok .pp-stilevalue{color:#2f8a4e}
+.pp-syncnote{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-radius:10px;font-size:12px;
+  border:1px dashed var(--dsw-alias-border-l2,#d6d6dc);color:var(--dsw-alias-label-secondary,#555)}
+.pp-syncnote > span{flex:1;min-width:180px}
+.pp-syncsection{display:flex;flex-direction:column;gap:6px}
+.pp-synch3{display:flex;align-items:center;gap:8px;margin:2px 0 0;font-size:13.5px;font-weight:600;
+  color:var(--dsw-alias-label-primary,#111)}
+.pp-count{font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:20px;
+  background:var(--dsw-alias-fill-secondary,#ececf0);color:var(--dsw-alias-label-secondary,#555)}
+.pp-count-warn{background:rgba(214,130,32,.16);color:#b4600f}
+.pp-syncgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:8px}
+.pp-synccard{display:flex;flex-direction:column;gap:9px;padding:11px 12px;border-radius:12px;min-width:0;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-synccard:hover{border-color:var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-synctop{display:flex;gap:10px;align-items:flex-start}
+.pp-svc{flex:none;width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  font-size:11.5px;font-weight:700;letter-spacing:.02em}
+.pp-svc-small{width:22px;height:22px;border-radius:6px;font-size:9.5px}
+.pp-svc-canvas{background:rgba(226,73,51,.14);color:#c23a26}
+.pp-svc-sheets{background:rgba(30,142,62,.14);color:#1e7e38}
+.pp-svc-telegram{background:rgba(42,161,218,.15);color:#1d84b6}
+.pp-svc-github{background:rgba(60,64,72,.13);color:#3c4048}
+.pp-svc-moodle,.pp-svc-file{background:rgba(214,130,32,.14);color:#b4600f}
+.pp-syncmain{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
+.pp-synctitle{font-size:13px;font-weight:600;line-height:1.3;color:var(--dsw-alias-label-primary,#111);overflow-wrap:anywhere}
+.pp-syncid{margin-left:6px;font-weight:400;font-size:11px;font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);
+  color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.pp-chips{display:flex;gap:4px;flex-wrap:wrap}
+.pp-diricon{display:block;flex:none}
+.pp-dir{flex:none;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:7px}
+.pp-dir-small{position:absolute;right:-5px;bottom:-5px;width:17px;height:17px;border-radius:50%;
+  box-shadow:0 0 0 2px var(--dsw-alias-bg-l1,#fff)}
+.pp-dir-source{background:rgba(47,98,168,.14);color:#2f62a8}
+.pp-dir-target{background:rgba(47,138,78,.14);color:#2f8a4e}
+.pp-dir-both{background:rgba(110,77,180,.14);color:#6e4db4}
+.pp-dir-small{background-color:var(--dsw-alias-bg-l1,#fff)}
+.pp-dir-small.pp-dir-source{background-image:linear-gradient(rgba(47,98,168,.18),rgba(47,98,168,.18))}
+.pp-dir-small.pp-dir-target{background-image:linear-gradient(rgba(47,138,78,.18),rgba(47,138,78,.18))}
+.pp-dir-small.pp-dir-both{background-image:linear-gradient(rgba(110,77,180,.18),rgba(110,77,180,.18))}
+.pp-svcwrap{position:relative;flex:none;display:inline-flex}
+.pp-stiledirs{display:inline-flex;gap:10px;flex-wrap:wrap}
+.pp-stiledir{display:inline-flex;align-items:center;gap:3px}
+.pp-stiledir-source{color:#2f62a8}
+.pp-stiledir-target{color:#2f8a4e}
+.pp-stiledir-both{color:#6e4db4}
+.pp-synccopy{font-size:11px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-synccopy-none{color:#b4600f}
+.pp-synclast{font-size:11px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-synclast::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:6px;
+  vertical-align:1px;background:#2f8a4e}
+.pp-synclast-never{color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.pp-synclast-never::before{background:var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-stilevalue{overflow-wrap:anywhere}
+.pp-chip{font-size:10.5px;padding:1px 7px;border-radius:20px;white-space:nowrap;
+  background:var(--dsw-alias-fill-secondary,#f0f0f2);color:var(--dsw-alias-label-secondary,#555)}
+.pp-chip-warn{background:rgba(214,130,32,.15);color:#b4600f}
+.pp-chip-live{background:rgba(180,52,42,.11);color:#b4342a}
+.pp-syncctl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pp-syncctl select{flex:1;min-width:0;max-width:100%;font:inherit;font-size:11.5px;padding:4px 6px;border-radius:7px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);color:inherit}
+.pp-syncbtn{font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;padding:4px 12px;border-radius:20px;
+  background:transparent;color:var(--dsw-alias-label-primary,#111);border:1px solid var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-syncbtn:hover:not(:disabled){background:var(--dsw-alias-fill-secondary,#f0f0f2)}
+.pp-syncbtn:disabled{opacity:.45;cursor:default}
+a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
+.pp-syncbtn-off{opacity:.45;pointer-events:none}
+/* A downloaded sheet is dropped on its card; the outline says where it lands. */
+.pp-synccard-drop{border:1px dashed #1e7e38;background:rgba(30,142,62,.06)}
+.pp-synchint{margin:0;font-size:11px;line-height:1.45;color:var(--dsw-alias-label-secondary,#555)}
+.pp-syncbtn-run{color:#fff;background:#2f8a4e;border-color:#2f8a4e}
+.pp-syncbtn-run:hover:not(:disabled){background:#28794a}
+.pp-syncbtn-send{color:#b4342a;border-color:#b4342a}
+.pp-syncbtn-send:not(:disabled){color:#fff;background:#b4342a}
+.pp-syncout{border-radius:9px;overflow:hidden;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-syncout-err{border-color:rgba(180,52,42,.45)}
+.pp-syncouthead{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 4px 10px;font-size:11px;font-weight:600;
+  background:var(--dsw-alias-fill-secondary,#f3f3f5);color:var(--dsw-alias-label-secondary,#555)}
+.pp-syncout-err .pp-syncouthead{background:rgba(180,52,42,.09);color:#b4342a}
+.pp-syncout pre{margin:0;padding:8px 10px;max-height:200px;overflow:auto;font-size:11px;line-height:1.5;white-space:pre-wrap;
+  font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace)}
+.pp-waitlist{display:flex;flex-direction:column;gap:10px}
+.pp-waitcard{display:flex;flex-direction:column;gap:9px;padding:11px 12px;border-radius:12px;
+  border:1px solid rgba(214,130,32,.35);background:var(--dsw-alias-bg-l1,#fff);box-shadow:inset 3px 0 0 rgba(214,130,32,.7)}
+.pp-waithead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.pp-waitsource{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-waitwhere{font-weight:400;color:var(--dsw-alias-label-secondary,#555)}
+.pp-waitopen{font-size:11.5px;color:#1e7e38;text-decoration:none;white-space:nowrap}
+.pp-waitopen:hover{text-decoration:underline}
+.pp-sheetwrap{overflow-x:auto;border-radius:8px;border:1px solid var(--dsw-alias-border-l2,#dadce0)}
+.pp-sheet{border-collapse:collapse;width:100%;font-size:11.5px;font-variant-numeric:tabular-nums}
+.pp-sheet th,.pp-sheet td{border:1px solid var(--dsw-alias-border-l2,#e2e3e6);padding:3px 7px;height:20px;
+  white-space:nowrap;max-width:180px;overflow:hidden;text-overflow:ellipsis}
+.pp-sheet thead th{font-size:10px;font-weight:500;text-align:center;color:var(--dsw-alias-label-tertiary,#80868b);
+  background:var(--dsw-alias-fill-secondary,#f6f7f8)}
+.pp-sheet tr > :first-child{border-left:0}
+.pp-sheet tr:last-child > *{border-bottom:0}
+.pp-sheet thead tr > *{border-top:0}
+.pp-sheetcorner,.pp-sheetline{width:30px;min-width:30px;font-size:10px;font-weight:500;text-align:center;
+  color:var(--dsw-alias-label-tertiary,#80868b);background:var(--dsw-alias-fill-secondary,#f6f7f8)}
+.pp-sheethead td{font-weight:600;color:var(--dsw-alias-label-primary,#111);background:rgba(30,142,62,.05)}
+.pp-sheetcell{color:var(--dsw-alias-label-secondary,#444)}
+.pp-sheetmark{text-align:center;font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace)}
+.pp-sheetlit td{background:rgba(214,130,32,.13);color:var(--dsw-alias-label-primary,#111)}
+.pp-sheetlit .pp-sheetline{background:rgba(214,130,32,.3);color:#8a4a0c;font-weight:700}
+.pp-sheetlit .pp-sheetname{font-weight:600;box-shadow:inset 0 0 0 2px #d68220}
+.pp-waitdecide{display:flex;flex-direction:column;gap:6px}
+.pp-waitpair{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.pp-waitwritten{color:var(--dsw-alias-label-secondary,#555);font-style:italic}
+.pp-waitarrow{color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.pp-waitwho{display:inline-flex;align-items:center;gap:6px}
+.pp-avatar{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:9.5px;font-weight:700;background:rgba(47,98,168,.14);color:#2f62a8}
+.pp-waitname{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-syncfoot{margin:0}
 /* Grading: one question at a time over the conversation. The questions are
    tabs in the head; a card is the page beside what was read off it, and a row
    of marks. A dashed mark is the suggestion, a filled one the decision. */
@@ -3357,11 +3484,155 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       return text.split(/[—;:]/)[0].trim();
     };
 
-    const DIRECTION = {
-      source: { text: "in", hint: "feeds the course" },
-      target: { text: "out", hint: "the course feeds it" },
-      both: { text: "both ways", hint: "whichever side changed wins; both changed waits for you" },
+    /**
+     * Which way a sync runs, as an icon: an arrow into a tray (coming in), out of
+     * one (going out), or two arrows passing (both ways). Outline strokes in the
+     * current colour, so the badge or heading around one decides how it looks.
+     */
+    const DIRECTION_PATHS = {
+      source: ["M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-5", "M12 3v12", "M8 11l4 4l4 -4"],
+      target: ["M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-5", "M12 15v-12", "M8 7l4 -4l4 4"],
+      both: ["M7 10h14l-4 -4", "M17 14h-14l4 4"],
     };
+
+    const DIRECTION_WORDS = { source: "Coming in", target: "Going out", both: "Both ways" };
+
+    function DirectionIcon(props) {
+      const size = props.size || 14;
+      return h(
+        "svg",
+        {
+          className: "pp-diricon",
+          width: size,
+          height: size,
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 2,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          "aria-hidden": "true",
+        },
+        (DIRECTION_PATHS[props.role] || DIRECTION_PATHS.both).map((d) => h("path", { d, key: d })),
+      );
+    }
+
+    /** The icon on its own tint, for headings and cards. */
+    function DirectionBadge(props) {
+      return h(
+        "span",
+        { className: "pp-dir pp-dir-" + props.role + (props.small ? " pp-dir-small" : ""), title: DIRECTION_WORDS[props.role] },
+        h(DirectionIcon, { role: props.role, size: props.small ? 11 : 14 }),
+      );
+    }
+
+    /** The groups the syncs are drawn in, by which way the data runs. */
+    const GROUPS = [
+      { role: "source", title: "Coming into the course", hint: "Read from the service; nothing is sent to it." },
+      { role: "target", title: "Going out", hint: "Other people see what these send — preview first." },
+      { role: "both", title: "Both ways", hint: "Whichever side changed since the last sync wins; both changed waits for you." },
+    ];
+
+    /** A service's mark: two letters on its own colour. */
+    const SERVICE = {
+      canvas: { mark: "Cv", name: "Canvas" },
+      sheets: { mark: "GS", name: "Google Sheets" },
+      telegram: { mark: "Tg", name: "Telegram" },
+      github: { mark: "GH", name: "GitHub" },
+      moodle: { mark: "Md", name: "Moodle" },
+      file: { mark: "F", name: "File" },
+    };
+
+    /** 0 → A, 25 → Z, 26 → AA: the sheet's own column letters. */
+    const columnLetter = (index) => {
+      let letters = "";
+      let current = index + 1;
+      while (current > 0) {
+        const remainder = (current - 1) % 26;
+        letters = String.fromCharCode(65 + remainder) + letters;
+        current = Math.floor((current - 1) / 26);
+      }
+      return letters;
+    };
+
+    /** "today 14:20", "yesterday 09:05", "3 days ago · 6 Oct" — and the exact time in the title. */
+    const when = (iso) => {
+      if (!iso) return null;
+      const at = new Date(iso);
+      if (Number.isNaN(at.getTime())) return null;
+      const clock = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const day = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+      const days = Math.round((day(new Date()) - day(at)) / 86400000);
+      if (days <= 0) return "today " + clock;
+      if (days === 1) return "yesterday " + clock;
+      const date = at.toLocaleDateString([], { day: "numeric", month: "short" });
+      return days < 14 ? days + " days ago · " + date : date;
+    };
+
+    const initials = (name) =>
+      String(name || "")
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((word) => word[0].toUpperCase())
+        .join("") || "?";
+
+    /** The row as it stands in the sheet: letters across, line numbers down, the waiting row lit. */
+    function SheetPreview(props) {
+      const preview = props.preview;
+      const width = Math.max(preview.header.length, ...preview.rows.map((row) => row.cells.length));
+      const marks = new Set(preview.markColumns);
+      const cell = (value, index, extra) =>
+        h(
+          "td",
+          {
+            key: index,
+            className:
+              "pp-sheetcell" +
+              (index === preview.nameColumn ? " pp-sheetname" : "") +
+              (marks.has(index) ? " pp-sheetmark" : "") +
+              (extra || ""),
+            title: value || "",
+          },
+          value || "",
+        );
+      return h(
+        "div",
+        { className: "pp-sheetwrap" },
+        h(
+          "table",
+          { className: "pp-sheet" },
+          h(
+            "thead",
+            null,
+            h(
+              "tr",
+              null,
+              h("th", { className: "pp-sheetcorner" }),
+              Array.from({ length: width }, (_, index) => h("th", { key: index }, columnLetter(preview.firstColumn + index))),
+            ),
+          ),
+          h(
+            "tbody",
+            null,
+            h(
+              "tr",
+              { className: "pp-sheethead" },
+              h("th", { className: "pp-sheetline" }, ""),
+              Array.from({ length: width }, (_, index) => cell(preview.header[index], index)),
+            ),
+            preview.rows.map((row) =>
+              h(
+                "tr",
+                { key: row.line, className: row.line === props.line ? "pp-sheetlit" : "" },
+                h("th", { className: "pp-sheetline" }, row.line),
+                Array.from({ length: width }, (_, index) => cell(row.cells[index], index)),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     function SyncsView(props) {
       const url = (path) => scoped(BASE + path + "?run=" + encodeURIComponent(props.runId || ""), props.sessionId);
@@ -3376,6 +3647,10 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       const [previewed, setPreviewed] = React.useState({});
       const [busy, setBusy] = React.useState(null);
       const [others, setOthers] = React.useState({});
+      // The card a file is being dragged over, for its outline.
+      const [dropping, setDropping] = React.useState(null);
+      // Whether each grade sheet changed in Google since its last sync.
+      const sheetCheck = useSheetCheck(props.runId, props.sessionId, (props.revision || 0) + "." + tick);
 
       React.useEffect(() => {
         let live = true;
@@ -3390,7 +3665,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
         };
       }, [props.runId, props.names, props.revision, tick]);
 
-      if (state.phase === "loading") return h(Message, null, "Reading this run's syncs…");
+      if (state.phase === "loading" && !state.value) return h(Message, null, "Reading this run's syncs…");
       const doc = state.value;
       if (doc.error) return h(Message, { error: true }, doc.error);
 
@@ -3409,22 +3684,63 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           });
       };
 
+      // The sheet itself when this machine can read it; otherwise the copy the
+      // professor downloaded. A copy is older than the sheet by definition, so it
+      // is never the default when the live read is there.
+      const fromOf = (sync) => reading[sync.id] || (sync.canReadLive ? "live" : "export");
+
       const press = (sync, action, confirm) => {
         const body = {
           action,
           sync: sync.id,
           assessment: chosen[sync.id] || "",
-          from: sync.exported && (reading[sync.id] || (sync.exported ? "export" : "live")) === "export" ? "export" : "live",
+          from: sync.exported && fromOf(sync) === "export" ? "export" : "live",
           confirm: Boolean(confirm),
+          names: Boolean(props.names),
         };
         post(body, sync.id + ":" + action).then((answer) => {
-          setResults((all) => Object.assign({}, all, { [sync.id]: answer }));
+          setResults((all) => Object.assign({}, all, { [sync.id]: Object.assign({ action }, answer) }));
           setPreviewed((all) => Object.assign({}, all, { [sync.id]: action === "plan" && !answer.error && answer.ok }));
-          if (action === "run") {
+          // A preview keeps the rows it could not place for review, so the
+          // Waiting list is read again after either press.
+          setTick((value) => value + 1);
+          if (props.onWrite) props.onWrite();
+        });
+      };
+
+      // A downloaded sheet, dropped on the card or chosen with the button. The host
+      // keeps it only if `sync plan` can read it, and answers with that plan, so
+      // what comes back is a preview of the new copy.
+      const takeCopy = (sync, file) => {
+        if (!file) return;
+        const key = sync.id + ":copy";
+        if (/\.(xlsx|xlsm|xls|ods)$/i.test(file.name)) {
+          setResults((all) => Object.assign({}, all, {
+            [sync.id]: { action: "plan", error: "That is a spreadsheet file. In Google Sheets choose File → Download → Comma-separated values (.csv)." },
+          }));
+          return;
+        }
+        setBusy(key);
+        file
+          .text()
+          .then((csv) =>
+            fetch(url("/api/syncs/copy"), {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              // When the browser saved the download: how old the sheet in it is.
+              body: JSON.stringify({ sync: sync.id, csv, names: Boolean(props.names), lastModified: file.lastModified }),
+            }).then((response) => response.json()),
+          )
+          .catch((error) => ({ error: String(error.message || error) }))
+          .then((answer) => {
+            setBusy(null);
+            setResults((all) => Object.assign({}, all, { [sync.id]: Object.assign({ action: "plan" }, answer) }));
+            const kept = !answer.error && answer.ok;
+            if (kept) setReading((all) => Object.assign({}, all, { [sync.id]: "export" }));
+            setPreviewed((all) => Object.assign({}, all, { [sync.id]: kept }));
             setTick((value) => value + 1);
             if (props.onWrite) props.onWrite();
-          }
-        });
+          });
       };
 
       const confirmRow = (row, to) => {
@@ -3435,6 +3751,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               return;
             }
             setTick((value) => value + 1);
+            // Course mode's header counts what is waiting; it reads on the same revision.
+            if (props.onWrite) props.onWrite();
           },
         );
       };
@@ -3448,50 +3766,109 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 
       const person = (candidate) => candidate.name || candidate.student;
       const implied = doc.syncs.filter((sync) => sync.implied).length;
+      const remembered = doc.syncs.reduce((sum, sync) => sum + (sync.remembered || 0), 0);
+      const latest = doc.syncs
+        .filter((sync) => sync.lastSynced)
+        .sort((a, b) => Date.parse(b.lastSynced) - Date.parse(a.lastSynced))[0];
+      const close = (id) => setResults((all) => Object.assign({}, all, { [id]: null }));
 
-      const syncRow = (sync) => {
+      // ---- one sync ----------------------------------------------------------
+
+      const syncCard = (sync) => {
         const result = results[sync.id];
-        const direction = DIRECTION[sync.role] || { text: sync.role, hint: "" };
+        const service = SERVICE[sync.service] || { mark: sync.service.slice(0, 2), name: sync.service };
         const needsAssessment = sync.needs === "assessment";
         const ready = !needsAssessment || chosen[sync.id];
-        const from = reading[sync.id] || (sync.exported ? "export" : "live");
+        const check = sheetCheck && sheetCheck.checks ? sheetCheck.checks.find((entry) => entry.sync === sync.id) : null;
+        const chips = [
+          check && check.state === "changed"
+            ? h(
+                "span",
+                { className: "pp-chip pp-chip-warn", key: "c", title: check.said + " — checked " + new Date(check.checked_at).toLocaleTimeString() },
+                "changed in Google" + (check.modified ? " " + when(check.modified) : ""),
+              )
+            : null,
+          check && check.state === "same"
+            ? h("span", { className: "pp-chip", key: "c", title: "Checked " + new Date(check.checked_at).toLocaleTimeString() }, "up to date")
+            : null,
+          check && check.state === "error" ? h("span", { className: "pp-chip", key: "c", title: check.said }, "could not check") : null,
+          sync.implied ? h("span", { className: "pp-chip", key: "o", title: "Read from " + (sync.from || "older settings") }, "older settings") : null,
+          sync.remembered ? h("span", { className: "pp-chip", key: "r" }, sync.remembered + " remembered") : null,
+          sync.waiting ? h("span", { className: "pp-chip pp-chip-warn", key: "w" }, sync.waiting + " waiting") : null,
+          sync.live ? h("span", { className: "pp-chip pp-chip-live", key: "l" }, "others see it") : null,
+          sync.enabled ? null : h("span", { className: "pp-chip", key: "x" }, "switched off"),
+        ];
+        // A grade sheet this machine cannot open itself comes in as a file the
+        // professor downloads; the whole card takes the drop.
+        const takesFile = Boolean(sync.download) && !sync.canReadLive;
+        const hasFile = (event) => Array.from((event.dataTransfer && event.dataTransfer.types) || []).includes("Files");
+        const dropProps = takesFile
+          ? {
+              onDragOver: (event) => {
+                if (!hasFile(event)) return;
+                event.preventDefault();
+                if (dropping !== sync.id) setDropping(sync.id);
+              },
+              onDragLeave: (event) => {
+                if (!event.currentTarget.contains(event.relatedTarget)) setDropping(null);
+              },
+              onDrop: (event) => {
+                if (!hasFile(event)) return;
+                event.preventDefault();
+                setDropping(null);
+                takeCopy(sync, event.dataTransfer.files[0]);
+              },
+            }
+          : {};
         return h(
           "div",
-          { className: "pp-syncrow", key: sync.id },
+          Object.assign({ className: "pp-synccard" + (dropping === sync.id ? " pp-synccard-drop" : ""), key: sync.id }, dropProps),
           h(
             "div",
-            { className: "pp-synchead" },
+            { className: "pp-synctop" },
+            h(
+              "span",
+              { className: "pp-svcwrap" },
+              h("span", { className: "pp-svc pp-svc-" + sync.service, title: service.name, "aria-hidden": "true" }, service.mark),
+              // Which way it runs, on the corner of the service's mark.
+              h(DirectionBadge, { role: sync.role, small: true }),
+            ),
             h(
               "div",
-              { className: "pp-syncname" },
-              h("span", null, sync.label),
-              h("span", { className: "pp-as" }, " " + sync.id),
+              { className: "pp-syncmain" },
+              h("div", { className: "pp-synctitle" }, sync.label, h("span", { className: "pp-syncid" }, sync.id)),
+              h(
+                "div",
+                {
+                  className: "pp-synclast" + (sync.lastSynced ? "" : " pp-synclast-never"),
+                  title: sync.lastSynced ? new Date(sync.lastSynced).toLocaleString() : "No record of this sync running",
+                },
+                sync.lastSynced ? "Last synced " + when(sync.lastSynced) : "Never synced",
+                // What that run brought, for a grade sheet: the marks, and how old the sheet was.
+                sync.lastEvent
+                  ? " · " +
+                      ([
+                        sync.lastEvent.added ? sync.lastEvent.added + " new" : null,
+                        sync.lastEvent.changed ? sync.lastEvent.changed + " changed" : null,
+                        sync.lastEvent.removed ? sync.lastEvent.removed + " taken back" : null,
+                      ]
+                        .filter(Boolean)
+                        .join(", ") || "no marks changed") +
+                      (sync.lastEvent.read === "file" && sync.lastEvent.saved ? " · sheet saved " + when(sync.lastEvent.saved) : "")
+                  : null,
+              ),
+              h("div", { className: "pp-chips" }, chips),
             ),
-            h("span", { className: "pp-syncdir pp-syncdir-" + sync.role, title: direction.hint }, direction.text),
-          ),
-          h(
-            "div",
-            { className: "pp-as" },
-            [
-              sync.implied ? "from older settings" : "in the run's settings",
-              sync.remembered ? sync.remembered + " students remembered" : null,
-              sync.waiting ? sync.waiting + " waiting for you" : null,
-              sync.live ? "other people see what it sends" : null,
-              sync.enabled ? null : "switched off",
-            ]
-              .filter(Boolean)
-              .join(" · "),
           ),
           sync.needs === "message"
             ? h("p", { className: "pp-as" }, "Announcements are written and sent from Publish.")
             : h(
                 "div",
-                { className: "pp-approverow" },
+                { className: "pp-syncctl" },
                 needsAssessment
                   ? h(
                       "select",
                       {
-                        className: "pp-bindsel",
                         value: chosen[sync.id] || "",
                         onChange: (event) => {
                           const value = event.target.value;
@@ -3503,32 +3880,65 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                       doc.assessments.map((entry) => h("option", { value: entry.id, key: entry.id }, entry.title)),
                     )
                   : null,
-                sync.exported !== null && sync.exported !== undefined
+                // Where the sheet is read from. Directly when this machine has a
+                // Google login of its own; otherwise from the copy the professor
+                // downloaded, with its date, and the two presses that replace it.
+                sync.exported !== null && sync.exported !== undefined && sync.hasSheet && sync.canReadLive
                   ? h(
                       "select",
                       {
-                        className: "pp-bindsel",
-                        value: from,
+                        value: fromOf(sync),
                         onChange: (event) => {
                           const value = event.target.value;
                           setReading((all) => Object.assign({}, all, { [sync.id]: value }));
                           setPreviewed((all) => Object.assign({}, all, { [sync.id]: false }));
                         },
                       },
-                      sync.hasSheet ? h("option", { value: "live" }, "Read the sheet in Google") : null,
-                      sync.exported
-                        ? h("option", { value: "export" }, "Read the export of " + new Date(sync.exported).toLocaleDateString())
-                        : null,
+                      h("option", { value: "live" }, "Read the sheet in Google"),
+                      sync.exported ? h("option", { value: "export" }, "Read the copy of " + when(sync.exported)) : null,
+                    )
+                  : sync.exported !== null && sync.exported !== undefined
+                    ? h(
+                        "span",
+                        { className: "pp-synccopy" + (sync.exported ? "" : " pp-synccopy-none"), title: sync.exported ? new Date(sync.exported).toLocaleString() : "" },
+                        sync.exported ? "Copy of the sheet from " + when(sync.exported) : "No copy of the sheet yet",
+                      )
+                    : null,
+                takesFile
+                  ? h(
+                      "a",
+                      {
+                        className: "pp-syncbtn",
+                        href: sync.download.url,
+                        target: "_blank",
+                        rel: "noreferrer",
+                        title: "Your browser downloads the sheet from Google as a .csv file",
+                      },
+                      "Download from Google",
                     )
                   : null,
+                takesFile
+                  ? h(
+                      "label",
+                      { className: "pp-syncbtn" + (busy ? " pp-syncbtn-off" : ""), title: "Choose the .csv file you downloaded, or drop it on this card" },
+                      busy === sync.id + ":copy" ? "Reading…" : "Add the downloaded file",
+                      h("input", {
+                        type: "file",
+                        accept: ".csv,text/csv",
+                        hidden: true,
+                        disabled: Boolean(busy),
+                        onChange: (event) => {
+                          const file = event.target.files && event.target.files[0];
+                          event.target.value = "";
+                          takeCopy(sync, file);
+                        },
+                      }),
+                    )
+                  : null,
+                h("span", { className: "pp-segspacer" }),
                 h(
                   "button",
-                  {
-                    type: "button",
-                    className: "pp-segbtn",
-                    disabled: Boolean(busy) || !ready,
-                    onClick: () => press(sync, "plan"),
-                  },
+                  { type: "button", className: "pp-syncbtn", disabled: Boolean(busy) || !ready, onClick: () => press(sync, "plan") },
                   busy === sync.id + ":plan" ? "Looking…" : "Preview",
                 ),
                 sync.live
@@ -3536,7 +3946,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                       "button",
                       {
                         type: "button",
-                        className: "pp-segbtn pp-danger",
+                        className: "pp-syncbtn pp-syncbtn-send",
                         disabled: Boolean(busy) || !ready || !previewed[sync.id],
                         title: previewed[sync.id] ? "Do what the preview shows" : "Preview first",
                         onClick: () => press(sync, "run", true),
@@ -3547,50 +3957,94 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                       "button",
                       {
                         type: "button",
-                        className: "pp-segbtn",
+                        className: "pp-syncbtn pp-syncbtn-run",
                         disabled: Boolean(busy) || !ready || !sync.enabled,
                         onClick: () => press(sync, "run"),
                       },
                       busy === sync.id + ":run" ? "Running…" : "Run",
                     ),
               ),
+          // How the file gets here, and what would make the step unnecessary: the
+          // missing thing named, so "why do I have to do this" has an answer.
+          takesFile
+            ? h(
+                "p",
+                { className: "pp-synchint" },
+                "This computer has no Google login of its own, so the sheet comes in as a file: press Download from Google" +
+                  (sync.download.tabHint
+                    ? ' (it downloads the first tab; for "' + sync.download.tabHint + '" open that tab and use File → Download → Comma-separated values)'
+                    : "") +
+                  ", then drop the file here. You see what it would change before anything is written.",
+              )
+            : null,
           result
             ? h(
-                "pre",
-                { className: "pp-approveout" + (result.error || !result.ok ? " pp-approveerr" : "") },
-                result.error || result.output || "(nothing printed)",
+                "div",
+                { className: "pp-syncout" + (result.error || !result.ok ? " pp-syncout-err" : "") },
+                h(
+                  "div",
+                  { className: "pp-syncouthead" },
+                  h("span", null, result.error ? "Could not run" : result.action === "run" ? "Done" : "Preview — nothing was changed"),
+                  h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: () => close(sync.id) }, "×"),
+                ),
+                h("pre", null, result.error || result.output || "(nothing printed)"),
               )
             : null,
         );
       };
 
-      const waitingRow = (row) => {
+      // ---- one waiting row ---------------------------------------------------
+
+      const waitingCard = (row) => {
         const [best] = row.candidates;
         const picking = others[row.key];
+        const preview = row.preview;
         return h(
           "div",
-          { className: "pp-heldrow", key: row.sync + row.key },
-          h("span", { className: "pp-as pp-heldline" }, row.line ? "line " + row.line : ""),
+          { className: "pp-waitcard", key: row.sync + row.key },
           h(
             "div",
-            { className: "pp-heldbody" },
+            { className: "pp-waithead" },
+            h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, preview ? "GS" : "··"),
+            h(
+              "span",
+              { className: "pp-waitsource" },
+              row.source,
+              preview && preview.tab ? h("span", { className: "pp-waitwhere" }, " · tab " + preview.tab) : null,
+              row.line ? h("span", { className: "pp-waitwhere" }, " · line " + row.line) : null,
+            ),
+            h("span", { className: "pp-segspacer" }),
+            preview && preview.open
+              ? h("a", { className: "pp-waitopen", href: preview.open, target: "_blank", rel: "noreferrer" }, "Open in Google Sheets ↗")
+              : null,
+          ),
+          preview ? h(SheetPreview, { preview, line: row.line }) : null,
+          h(
+            "div",
+            { className: "pp-waitdecide" },
             h(
               "div",
-              { className: "pp-heldpair" },
-              h("span", { className: "pp-heldwritten" }, row.written !== null ? row.written : "(name hidden)"),
-              h("span", { "aria-hidden": "true" }, "→"),
-              h("span", { className: "pp-heldname" }, best ? person(best) : "nobody close"),
-              h("span", { className: "pp-rbadge pp-rbadge-close", title: row.why.replace(/ of STUDENT-[A-Z0-9]+/, "") }, shortWhy(row.why)),
+              { className: "pp-waitpair" },
+              h("span", { className: "pp-waitwritten", title: "As written in the sheet" }, row.written !== null ? "“" + row.written + "”" : "(name hidden)"),
+              h("span", { className: "pp-waitarrow", "aria-hidden": "true" }, "→"),
+              best
+                ? h(
+                    "span",
+                    { className: "pp-waitwho" },
+                    h("span", { className: "pp-avatar", "aria-hidden": "true" }, best.name ? initials(best.name) : "?"),
+                    h("span", { className: "pp-waitname" }, person(best)),
+                  )
+                : h("span", { className: "pp-as" }, "nobody in the class list is close"),
+              h("span", { className: "pp-chip pp-chip-warn", title: row.why.replace(/ of STUDENT-[A-Z0-9]+/, "") }, shortWhy(row.why)),
             ),
-            row.candidates.length > 1 ? h("div", { className: "pp-as" }, "also near: " + row.candidates.slice(1).map(person).join(", ")) : null,
+            row.candidates.length > 1 ? h("div", { className: "pp-as" }, "Also near: " + row.candidates.slice(1).map(person).join(", ")) : null,
             picking
               ? h(
                   "div",
-                  { className: "pp-approverow" },
+                  { className: "pp-syncctl" },
                   h(
                     "select",
                     {
-                      className: "pp-bindsel",
                       value: picking.to || "",
                       onChange: (event) => {
                         const to = event.target.value;
@@ -3600,80 +4054,135 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                     h("option", { value: "" }, "Who is it?"),
                     doc.students.map((student) => h("option", { value: student.student, key: student.student }, student.name || student.student)),
                   ),
+                  h("span", { className: "pp-segspacer" }),
                   h(
                     "button",
-                    { type: "button", className: "pp-segbtn", disabled: Boolean(busy) || !picking.to, onClick: () => confirmRow(row, picking.to) },
+                    { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: Boolean(busy) || !picking.to, onClick: () => confirmRow(row, picking.to) },
                     "Confirm",
                   ),
-                  h(
-                    "button",
-                    { type: "button", className: "pp-segbtn", onClick: () => setOthers((all) => Object.assign({}, all, { [row.key]: null })) },
-                    "Cancel",
-                  ),
+                  h("button", { type: "button", className: "pp-syncbtn", onClick: () => setOthers((all) => Object.assign({}, all, { [row.key]: null })) }, "Cancel"),
                 )
-              : null,
-          ),
-          picking
-            ? null
-            : h(
-                "div",
-                { className: "pp-approverow" },
-                best
-                  ? h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => confirmRow(row, null) }, "Confirm")
-                  : null,
-                h(
-                  "button",
-                  { type: "button", className: "pp-segbtn", onClick: () => setOthers((all) => Object.assign({}, all, { [row.key]: { to: "" } })) },
-                  "Someone else",
+              : h(
+                  "div",
+                  { className: "pp-syncctl" },
+                  h("span", { className: "pp-segspacer" }),
+                  best
+                    ? h(
+                        "button",
+                        { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: Boolean(busy), onClick: () => confirmRow(row, null) },
+                        "Confirm " + (best.name ? best.name.split(/\s+/)[0] : "it"),
+                      )
+                    : null,
+                  h("button", { type: "button", className: "pp-syncbtn", onClick: () => setOthers((all) => Object.assign({}, all, { [row.key]: { to: "" } })) }, "Someone else"),
                 ),
-              ),
+          ),
         );
       };
 
+      // ---- the page ----------------------------------------------------------
+
+      const tile = (label, value, note, tone) =>
+        h(
+          "div",
+          { className: "pp-stile" + (tone ? " pp-stile-" + tone : "") },
+          h("span", { className: "pp-stilelabel" }, label),
+          h("span", { className: "pp-stilevalue" }, value),
+          note ? h("span", { className: "pp-stilenote" }, note) : null,
+        );
+
       return h(
         "div",
-        null,
+        { className: "pp-syncs" },
         h(
-          "p",
-          { className: "pp-absent" },
-          "Every road between this run and a service outside it. Preview never changes anything; " +
-            "a sync other people see has Send only after a preview of it is on screen.",
+          "div",
+          { className: "pp-stiles" },
+          tile(
+            "Syncs",
+            doc.syncs.length,
+            h(
+              "span",
+              { className: "pp-stiledirs" },
+              GROUPS.map((group) => {
+                const count = doc.syncs.filter((sync) => sync.role === group.role).length;
+                return count
+                  ? h(
+                      "span",
+                      { className: "pp-stiledir pp-stiledir-" + group.role, key: group.role, title: DIRECTION_WORDS[group.role] },
+                      h(DirectionIcon, { role: group.role, size: 12 }),
+                      count + " " + (group.role === "source" ? "in" : group.role === "target" ? "out" : "both"),
+                    )
+                  : null;
+              }),
+            ),
+          ),
+          tile("Waiting for you", doc.waiting.length, doc.waiting.length ? "rows a sync was not sure of" : "nothing to decide", doc.waiting.length ? "warn" : "ok"),
+          tile("Last synced", latest ? when(latest.lastSynced) : "never", latest ? latest.label : "no sync has run yet"),
+          tile("Remembered", remembered, "students found by a saved link"),
         ),
+        props.onSetup
+          ? h(
+              "div",
+              { className: "pp-syncnote" },
+              h("span", null, "Addresses, tokens and Canvas links are set up in Integrations."),
+              h("button", { type: "button", className: "pp-syncbtn", title: "Show Integrations here — Status, Targets, Credentials, Links", onClick: props.onSetup }, "Open Integrations"),
+            )
+          : null,
         implied
           ? h(
               "div",
-              { className: "pp-approverow" },
-              h("span", { className: "pp-as" }, implied + " of these come from older settings."),
+              { className: "pp-syncnote" },
+              h(
+                "span",
+                null,
+                implied === doc.syncs.length ? "All " : implied + " of ",
+                doc.syncs.length + " are read from older settings. Save them in the run's settings so they are written down in one place.",
+              ),
               h(
                 "button",
-                { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: migrate, title: "Writes syncs: into the run's version.yaml" },
-                busy === "migrate" ? "Writing…" : "Save them in the run's settings",
+                { type: "button", className: "pp-syncbtn", disabled: Boolean(busy), onClick: migrate, title: "Writes syncs: into the run's version.yaml" },
+                busy === "migrate" ? "Writing…" : "Save in settings",
               ),
             )
           : null,
         results._migrate ? h("pre", { className: "pp-approveout" }, results._migrate.error || results._migrate.output) : null,
-        doc.syncs.length ? h("div", { className: "pp-synclist" }, doc.syncs.map(syncRow)) : h(Message, null, "This run has no syncs yet."),
-        h(
-          "p",
-          { className: "pp-factgroup" },
-          "Waiting for you" + (doc.waiting.length ? " · " + doc.waiting.length : ""),
-        ),
+
         doc.waiting.length
           ? h(
-              "div",
-              null,
-              doc.names
-                ? null
-                : h("p", { className: "pp-as" }, "Names are hidden. Press Names above to see who each row is."),
-              h("div", { className: "pp-heldlist" }, doc.waiting.map(waitingRow)),
+              "section",
+              { className: "pp-syncsection" },
+              h("h3", { className: "pp-synch3" }, "Waiting for you", h("span", { className: "pp-count pp-count-warn" }, doc.waiting.length)),
               h(
                 "p",
                 { className: "pp-as" },
-                "A confirmed row is remembered on this computer and applied the next time its sync runs. " +
-                  "Until then it writes nothing, and the grades it already had stay where they are.",
+                doc.names
+                  ? "Each row as it stands in its sheet, and who it most likely is. A confirmed row is remembered on this computer and applied the next time its sync runs; until then it writes nothing."
+                  : "Names are hidden. Press Names to see who each row is.",
               ),
+              h("div", { className: "pp-waitlist" }, doc.waiting.map(waitingCard)),
             )
-          : h("p", { className: "pp-as" }, "Nothing is waiting. Rows a sync is not sure of appear here after it runs."),
+          : null,
+
+        GROUPS.map((group) => {
+          const members = doc.syncs.filter((sync) => sync.role === group.role);
+          if (!members.length) return null;
+          return h(
+            "section",
+            { className: "pp-syncsection", key: group.role },
+            h(
+              "h3",
+              { className: "pp-synch3" },
+              h(DirectionBadge, { role: group.role }),
+              group.title,
+              h("span", { className: "pp-count" }, members.length),
+            ),
+            h("p", { className: "pp-as" }, group.hint),
+            h("div", { className: "pp-syncgrid" }, members.map(syncCard)),
+          );
+        }),
+        doc.syncs.length ? null : h(Message, null, "This run has no syncs yet."),
+        doc.waiting.length
+          ? null
+          : h("p", { className: "pp-as pp-syncfoot" }, "Nothing is waiting. Rows a sync is not sure of appear at the top after it runs."),
       );
     }
 
@@ -4011,6 +4520,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
       { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
       { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
+      // Last: not the course but its roads out — Canvas, the sheet, the
+      // repositories — and the rows a sync was not sure of, by name.
+      { id: "syncs", label: "Syncs", hint: "Canvas, the grade sheet and the rest: preview, run, and the rows waiting for you" },
     ];
 
     /** The Status view's words for a connection, as the Integrations tab says them. */
@@ -4024,6 +4536,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
       // reading is kept so the weeks come back as they were left.
       const [view, setView] = React.useState(null);
       const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
+      // Integrations, opened from Syncs: the pane's own tab, drawn here so going
+      // to it does not close course mode. Status first, as in the pane.
+      const [integrationsSub, setIntegrationsSub] = React.useState("status");
       // The week Teaching was last stepped to. The page steps without a round
       // trip and reports each step; it is held in a ref so a step redraws
       // nothing, and copied into `week` only when Teaching is drawn again — on
@@ -4071,7 +4586,53 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           ? (wiring.value.integrations || []).find((row) => row.id === "canvas") || null
           : null;
 
+      // How many sync rows wait for the professor, for the header line. Read
+      // without names: a count needs none.
+      const syncs = useJson(
+        scoped(BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + props.reload, props.sessionId),
+      );
+      // The last answer of each read is kept while the next one loads, so a
+      // confirm or a run — which bump `reload` — does not blank the line.
+      const shown = React.useRef({ canvas: null, waiting: 0 });
+      if (wiring.phase === "ready") shown.current.canvas = canvas;
+      if (syncs.phase === "ready") {
+        shown.current.waiting = syncs.value && !syncs.value.error ? (syncs.value.waiting || []).length : 0;
+      }
+      const waiting = shown.current.waiting;
+      const canvasLine = shown.current.canvas;
+
       const viewBody = () => {
+        if (view === "syncs") {
+          return h(
+            "div",
+            { className: "pp-cviewpad" },
+            h(SyncsView, {
+              runId: props.runId,
+              sessionId: props.sessionId,
+              names: props.names,
+              revision: props.reload,
+              onWrite: props.onWrite,
+              // Connections themselves — a host, a token — are the Integrations
+              // tab's. Opened in place: closing course mode to get there read as
+              // the window crashing.
+              onSetup: () => setView("integrations"),
+            }),
+          );
+        }
+        if (view === "integrations") {
+          return h(
+            "div",
+            { className: "pp-cviewpad" },
+            h(Integrations, {
+              runId: props.runId,
+              subView: integrationsSub,
+              sessionId: props.sessionId,
+              onWrite: props.onWrite,
+              revision: props.reload,
+              key: props.runId,
+            }),
+          );
+        }
         if (view === "students") {
           return h(WidgetFrame, {
             key: "students|" + props.names + "|" + props.dark + "|" + props.reload,
@@ -4096,6 +4657,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 setTaskSub("unpublished");
               },
             }),
+            h(RecentMarks, { runId: props.runId, sessionId: props.sessionId, revision: props.reload, names: props.names }),
             h(WidgetFrame, {
               key: "gradebook|" + props.dark + "|" + props.drafts + "|" + props.reload,
               view: "gradebook",
@@ -4143,7 +4705,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           entry.label,
         );
       // The views that name people follow the pane's Names / Pseudonyms choice.
-      const named = view === "students" || (view === "tasks" && taskSub !== "unpublished");
+      const named = view === "students" || view === "syncs" || (view === "tasks" && taskSub !== "unpublished");
 
       return ReactDOM.createPortal(
         h(
@@ -4201,18 +4763,25 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   ),
               // The pane's header, which this veil covers. Publish and Upload
               // open their own windows on top, so course mode is still here when
-              // they close; the jump is for everything the term plan does not
-              // draw — it closes course mode and opens the pane on that tab.
-              canvas
+              // they close. The wiring line opens the Syncs view in place —
+              // where Canvas stands and what is waiting are both answered there,
+              // and it links on to the pane's Integrations for the setup itself.
+              canvasLine || waiting
                 ? h(
                     "button",
                     {
                       type: "button",
-                      className: "pp-wiring pp-wiring-" + canvas.state,
-                      title: "Close course mode and open Integrations in the pane",
-                      onClick: () => props.onJump("integrations"),
+                      className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
+                      title: preview ? "Private — not shown while previewing as a student" : "Open Syncs",
+                      disabled: preview,
+                      onClick: () => setView("syncs"),
                     },
-                    "Canvas: " + (CONNECTION_STATE[canvas.state] || canvas.state),
+                    [
+                      canvasLine ? "Canvas: " + (CONNECTION_STATE[canvasLine.state] || canvasLine.state) : null,
+                      waiting ? waiting + " waiting" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · "),
                   )
                 : null,
               h(
@@ -4271,12 +4840,23 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
               view
                 ? h(
                     "section",
-                    { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || {}).label },
-                    view === "tasks" || named
+                    { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || { label: "Integrations" }).label },
+                    view === "tasks" || view === "integrations" || named
                       ? h(
                           "div",
                           { className: "pp-cviewbar" },
                           view === "tasks" ? SUBVIEWS.tasks.map((entry) => segment(entry, taskSub === entry.id, () => setTaskSub(entry.id), false)) : null,
+                          // Integrations' own row; its Syncs entry goes back to the Syncs view.
+                          view === "integrations"
+                            ? SUBVIEWS.integrations.map((entry) =>
+                                segment(
+                                  entry,
+                                  entry.id !== "syncs" && integrationsSub === entry.id,
+                                  () => (entry.id === "syncs" ? setView("syncs") : setIntegrationsSub(entry.id)),
+                                  false,
+                                ),
+                              )
+                            : null,
                           h("span", { className: "pp-segspacer" }),
                           // The pane's own choice, the same state, so the two never differ.
                           named
@@ -5214,6 +5794,290 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             said.canvas ? h("span", { className: said.behind ? "pp-behind" : "pp-as" }, said.canvas) : null,
             said.behind
               ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.openUnpublished() }, "Send…")
+              : null,
+          );
+        }),
+      );
+    }
+
+    // ---------------------------------------------------------------- sheet activity
+
+    /** `/api/marks-activity` for one run: what each grade-sheet sync brought in. */
+    function useMarksActivity(runId, sessionId, revision, names) {
+      const [state, setState] = React.useState({ phase: "loading", value: null });
+      React.useEffect(() => {
+        if (!runId) return undefined;
+        let live = true;
+        fetch(
+          scoped(BASE + "/api/marks-activity?run=" + encodeURIComponent(runId) + (names ? "&names=1" : "") + "&r=" + revision, sessionId),
+          { headers: { accept: "application/json" } },
+        )
+          .then((response) => response.json())
+          .then((value) => live && setState({ phase: "ready", value }))
+          .catch((error) => live && setState({ phase: "ready", value: { error: String(error) } }));
+        return () => {
+          live = false;
+        };
+      }, [runId, sessionId, revision, names]);
+      return state;
+    }
+
+    /** How often an open pane asks whether the sheet changed. The server asks Google at most every two minutes. */
+    const SHEET_CHECK_EVERY = 5 * 60 * 1000;
+
+    /**
+     * `/api/sheet-check` for one run: has each grade sheet changed in Google
+     * since its last sync? Asked on load, after every write here, and every five
+     * minutes while the pane is on screen — a hidden pane does not spend
+     * Google's quota.
+     */
+    function useSheetCheck(runId, sessionId, revision) {
+      const [value, setValue] = React.useState(null);
+      React.useEffect(() => {
+        if (!runId) return undefined;
+        let live = true;
+        const ask = () => {
+          if (document.visibilityState === "hidden") return;
+          fetch(scoped(BASE + "/api/sheet-check?run=" + encodeURIComponent(runId) + "&r=" + revision, sessionId), {
+            headers: { accept: "application/json" },
+          })
+            .then((response) => response.json())
+            .then((answer) => live && setValue(answer))
+            .catch(() => {});
+        };
+        ask();
+        const timer = setInterval(ask, SHEET_CHECK_EVERY);
+        const onShow = () => document.visibilityState === "visible" && ask();
+        document.addEventListener("visibilitychange", onShow);
+        return () => {
+          live = false;
+          clearInterval(timer);
+          document.removeEventListener("visibilitychange", onShow);
+        };
+      }, [runId, sessionId, revision]);
+      return value;
+    }
+
+    /** What a dismissal of "the sheet changed" is about: this edit, or — when Drive gives no time — until the next sync. */
+    const changeMark = (check) => check.sync + "|" + (check.modified || check.last_synced || "");
+
+    /**
+     * The last sync this browser has shown, per run. A per-viewer convenience:
+     * lost in a private window, and then the notice shows once more.
+     */
+    const sheetSeenKey = (runId) => "pp-sheet-seen:" + runId;
+    const readSheetSeen = (runId) => {
+      try {
+        return window.localStorage.getItem(sheetSeenKey(runId));
+      } catch {
+        return null;
+      }
+    };
+    const writeSheetSeen = (runId, at) => {
+      try {
+        window.localStorage.setItem(sheetSeenKey(runId), at);
+      } catch {
+        // Nothing kept; the notice comes back on the next load.
+      }
+    };
+
+    /** "3 new · 1 changed · 1 taken back" */
+    const countWords = (event) =>
+      [
+        event.added ? event.added + " new" : null,
+        event.changed ? event.changed + " changed" : null,
+        event.removed ? event.removed + " taken back" : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+    /** Where the sheet was read from, and how old it was. */
+    const sourceWords = (event) =>
+      event.read === "sheet"
+        ? "read from the sheet in Google"
+        : "from the copy downloaded " + (when(event.saved) || "at an unknown time");
+
+    /** One mark's move: "P (10)", "P → L · 10 → 8", "taken back (was P)". */
+    const markWords = (change) => {
+      const points = (value) => (value === null || value === undefined ? "—" : String(value));
+      if (change.from === null && change.score_from === null) return (change.to || "?") + (change.score_to !== null ? " · " + points(change.score_to) : "");
+      if (change.to === null && change.score_to === null) return "taken back (was " + (change.from || "a mark") + ")";
+      const words = change.from === change.to ? change.to || "" : (change.from || "—") + " → " + (change.to || "—");
+      const scores = change.score_from === change.score_to ? "" : points(change.score_from) + " → " + points(change.score_to);
+      return [words, scores].filter(Boolean).join(" · ");
+    };
+
+    /**
+     * A notice over the pane when a grade-sheet sync brought marks in that this
+     * browser has not shown yet — whoever ran it: the Syncs view, the CLI or the
+     * assistant. It says how many, when, and from what; Gradebook shows which.
+     */
+    function SheetNotice(props) {
+      return h(
+        React.Fragment,
+        null,
+        h(SheetChangedNotice, props),
+        h(SheetSyncedNotice, props),
+      );
+    }
+
+    /**
+     * "Your grade sheet changed in Google since the last sync" — asked of Google
+     * by the server, on a machine with a Google login. The press goes to the
+     * Syncs view, where Preview shows what would come in; nothing syncs here.
+     */
+    function SheetChangedNotice(props) {
+      const answer = useSheetCheck(props.runId, props.sessionId, props.revision);
+      const storeKey = "pp-sheet-change-seen:" + props.runId;
+      const [dismissed, setDismissed] = React.useState(() => {
+        try {
+          return window.localStorage.getItem(storeKey);
+        } catch {
+          return null;
+        }
+      });
+      if (!answer || !answer.available || !answer.checks) return null;
+      const changed = answer.checks.find((check) => check.state === "changed" && changeMark(check) !== dismissed);
+      if (!changed) return null;
+      const dismiss = () => {
+        const mark = changeMark(changed);
+        try {
+          window.localStorage.setItem(storeKey, mark);
+        } catch {
+          // Not kept; it shows again on the next load.
+        }
+        setDismissed(mark);
+      };
+      return h(
+        "div",
+        { className: "pp-sheetnotice pp-sheetnotice-changed", role: "status" },
+        h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, "GS"),
+        h(
+          "span",
+          { className: "pp-sheetnoticetext" },
+          h("b", null, "Your grade sheet changed in Google"),
+          (changed.modified ? " — edited " + when(changed.modified) : "") +
+            (changed.last_synced ? "; last synced " + when(changed.last_synced) : "") +
+            ". Nothing has come in yet.",
+        ),
+        props.onSync
+          ? h(
+              "button",
+              {
+                type: "button",
+                className: "pp-segbtn",
+                onClick: () => {
+                  dismiss();
+                  props.onSync();
+                },
+              },
+              "Preview the sync",
+            )
+          : null,
+        h("button", { type: "button", className: "pp-close", "aria-label": "Dismiss", onClick: dismiss }, "×"),
+      );
+    }
+
+    function SheetSyncedNotice(props) {
+      const state = useMarksActivity(props.runId, props.sessionId, props.revision, false);
+      const [seen, setSeen] = React.useState(() => readSheetSeen(props.runId));
+      React.useEffect(() => setSeen(readSheetSeen(props.runId)), [props.runId]);
+      if (state.phase === "loading" || !state.value || state.value.error) return null;
+      const latest = (state.value.events || []).find((event) => event.changes.length);
+      if (!latest) return null;
+      // Never seen anything on this browser: a sync from the last two days is
+      // still news; an older one is not.
+      const fresh = seen ? Date.parse(latest.at) > Date.parse(seen) : Date.now() - Date.parse(latest.at) < 2 * 86400000;
+      if (!fresh) return null;
+      const dismiss = () => {
+        const newest = state.value.events[0].at;
+        writeSheetSeen(props.runId, newest);
+        setSeen(newest);
+      };
+      return h(
+        "div",
+        { className: "pp-sheetnotice", role: "status" },
+        h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, "GS"),
+        h(
+          "span",
+          { className: "pp-sheetnoticetext" },
+          h("b", null, "Grade sheet synced " + (when(latest.at) || "")),
+          " — marks: " + countWords(latest) + "; " + sourceWords(latest) + ".",
+        ),
+        props.onOpen
+          ? h(
+              "button",
+              {
+                type: "button",
+                className: "pp-segbtn",
+                onClick: () => {
+                  dismiss();
+                  props.onOpen();
+                },
+              },
+              "See in Gradebook",
+            )
+          : null,
+        h("button", { type: "button", className: "pp-close", "aria-label": "Dismiss", onClick: dismiss }, "×"),
+      );
+    }
+
+    /**
+     * Above the Gradebook: the marks the grade sheet brought in last, newest
+     * run first — when each run happened, what it read and how old that was,
+     * and each mark that came, moved or went. A run that changed nothing is a
+     * line of its own, so "did my sync work?" has an answer too.
+     */
+    function RecentMarks(props) {
+      const state = useMarksActivity(props.runId, props.sessionId, props.revision, props.names);
+      const [open, setOpen] = React.useState(false);
+      if (state.phase === "loading" || !state.value || state.value.error) return null;
+      const events = state.value.events || [];
+      if (!events.length) return null;
+      const SHOWN = 6;
+      const shown = open ? events : events.slice(0, 2);
+      const more = events.length > 2 || shown.some((event) => event.changes.length > SHOWN);
+      return h(
+        "div",
+        { className: "pp-next pp-recentmarks" },
+        h(
+          "div",
+          { className: "pp-recenthead" },
+          h("b", null, "Last added from the grade sheet"),
+          more ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setOpen(!open) }, open ? "Fewer" : "Show all") : null,
+        ),
+        shown.map((event) => {
+          const rows = open ? event.changes : event.changes.slice(0, SHOWN);
+          return h(
+            "div",
+            { className: "pp-recentrun", key: event.sync + event.at },
+            h(
+              "div",
+              { className: "pp-recentwhen", title: "Synced " + new Date(event.at).toLocaleString() + (event.saved ? "; sheet as of " + new Date(event.saved).toLocaleString() : "") },
+              h("span", null, when(event.at)),
+              h("span", { className: "pp-as" }, (event.changes.length ? countWords(event) : "nothing changed") + " · " + sourceWords(event)),
+            ),
+            rows.length
+              ? h(
+                  "ul",
+                  { className: "pp-recentlist" },
+                  rows.map((change) =>
+                    h(
+                      "li",
+                      { key: change.student + change.assessment },
+                      h("span", { className: "pp-recentwho" }, change.name || change.student),
+                      h("span", { className: "pp-as" }, change.title),
+                      h(
+                        "span",
+                        { className: change.to === null && change.score_to === null ? "pp-behind" : "pp-recentmark" },
+                        markWords(change),
+                      ),
+                    ),
+                  ),
+                )
+              : null,
+            event.changes.length > rows.length
+              ? h("div", { className: "pp-as" }, "… and " + (event.changes.length - rows.length) + " more")
               : null,
           );
         }),
@@ -10038,6 +10902,56 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
           // A fork the student brought in person (`defence fork`). A link the
           // command refuses comes back as its own words, since the frame that
           // asked has no place to show them.
+          // *Audio defence* on a homework with nothing handed in: a submission
+          // with no link is recorded first, so the desk has one to file under.
+          if (data.kind === "defence-audio") {
+            const id = /^[A-Z0-9][A-Z0-9-]*$/;
+            const run = currentRunRef.current;
+            if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+            fetch(
+              scoped(
+                BASE + "/api/defence/fork?run=" + encodeURIComponent(run) +
+                  "&assessment=" + encodeURIComponent(data.assessment) +
+                  "&student=" + encodeURIComponent(data.student) + "&inperson=1",
+                props.sessionId,
+              ),
+              { method: "POST" },
+            )
+              .then((response) => response.json())
+              .then((result) => {
+                setReload((count) => count + 1);
+                if (!result.ok) {
+                  window.alert(String(result.error || result.output || "the defence could not be started").trim().split("\n").slice(-2).join(" "));
+                  return;
+                }
+                setDesk({ assessment: data.assessment, student: data.student });
+              })
+              .catch(() => setReload((count) => count + 1));
+            return;
+          }
+          // *Find forks*: the starter's public forks, looked up on GitHub by the
+          // server; the redraw offers each student their own.
+          if (data.kind === "homework-forks") {
+            const run = currentRunRef.current;
+            if (!run || !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+            fetch(
+              scoped(
+                BASE + "/api/homework/forks?run=" + encodeURIComponent(run) +
+                  "&assessment=" + encodeURIComponent(data.assessment),
+                props.sessionId,
+              ),
+              { method: "POST" },
+            )
+              .then((response) => response.json())
+              .then((result) => {
+                if (!result.ok) {
+                  window.alert(String(result.error || result.output || "the forks could not be looked up").trim().split("\n").slice(-2).join(" "));
+                }
+                setReload((count) => count + 1);
+              })
+              .catch(() => setReload((count) => count + 1));
+            return;
+          }
           if (data.kind === "defence-fork") {
             const id = /^[A-Z0-9][A-Z0-9-]*$/;
             const run = currentRunRef.current;
@@ -10127,6 +11041,14 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
             if (!id.test(String(data.assessment))) return;
             if (data.kind === "scans") setScansPile(data.assessment);
             else setGrading({ assessment: data.assessment, label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment });
+            return;
+          }
+          // The Students tab's "Sync from sheet": the Syncs view, where the sheet
+          // is read directly or brought in as a downloaded file.
+          if (data.kind === "syncs") {
+            setTab("integrations");
+            setSubViews((current) => Object.assign({}, current, { integrations: "syncs" }));
+            if (courseModeRef.current) setCourseMode(false);
             return;
           }
           if (data.kind === "publish") {
@@ -10389,6 +11311,13 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                 setSubViews((value) => Object.assign({}, value, { tasks: "unpublished" }));
               },
             }),
+            h(RecentMarks, {
+              runId: current.runId,
+              sessionId: props.sessionId,
+              revision: reload,
+              names: names,
+              key: "recent|" + current.runId,
+            }),
             frame,
           );
         }
@@ -10590,6 +11519,24 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
                   )
                 : null,
             ),
+        // Marks a grade-sheet sync brought in since this browser last looked,
+        // whoever ran it. Over every tab, since a sync is news wherever one is.
+        current
+          ? h(SheetNotice, {
+              runId: current.runId,
+              sessionId: props.sessionId,
+              revision: reload,
+              key: "notice|" + current.runId,
+              onOpen: () => {
+                setTab("progress");
+                setSubViews((value) => Object.assign({}, value, { progress: "gradebook" }));
+              },
+              onSync: () => {
+                setTab("integrations");
+                setSubViews((value) => Object.assign({}, value, { integrations: "syncs" }));
+              },
+            })
+          : null,
         h("div", { className: "pp-body" }, body()),
         publishing === null
           ? null
@@ -10845,6 +11792,10 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
     // The same, for `test/syncs-page.mjs`: the Syncs view alone, against the real
     // syncs of a workspace and made-up names in the review list.
     exports.SyncsView = SyncsView;
+    exports.CourseMode = CourseMode;
+    // And the grade sheet's notice and "Last added", against made-up marks.
+    exports.SheetNotice = SheetNotice;
+    exports.RecentMarks = RecentMarks;
     return module.exports;
   },
 });
