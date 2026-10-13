@@ -774,6 +774,12 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
 .pp-cdetails > summary{cursor:pointer;font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-cdetails[open] > summary{margin-bottom:4px}
 .pp-unused{padding:2px 0}
+/* A sync inside its service's card: the card's own border is enough. */
+.pp-synccard-bare{padding:0;border:0;border-radius:0;background:none}
+.pp-synccard-bare:hover{border-color:transparent}
+.pp-synccard-bare.pp-synccard-drop{padding:8px;border:1px dashed #1e7e38;border-radius:9px}
+.pp-csub{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-csubtitle{font-size:12px;font-weight:600}
 `;
 
 if (

@@ -6,7 +6,6 @@
 import { Message, useDark, useJson } from "./common.js";
 import { DefenceDesk } from "./defence-desk.js";
 import { Integrations } from "./integrations.js";
-import { SyncsView } from "./syncs.js";
 import { GradebookStatus, RecentMarks, SheetNotice, Unpublished } from "./marks.js";
 import { CourseMode, MaterialModal, materialUrl, WidgetFrame } from "./materials.js";
 import { Preferences } from "./preferences.js";
@@ -46,6 +45,15 @@ export function ProfessorPane(props) {
   // state — and so that leaving a tab and coming back to it remembers where
   // the professor was, which one shared value could not do.
   const [subViews, setSubViews] = React.useState({});
+  // Which card Integrations → This course should bring into view, from a jump
+  // elsewhere (the sheet notice, Students' "Sync from sheet"). The tick makes
+  // the same jump work twice.
+  const [integrationsFocus, setIntegrationsFocus] = React.useState({ service: null, tick: 0 });
+  const focusCard = (service) => {
+    setTab("integrations");
+    setSubViews((value) => Object.assign({}, value, { integrations: "course" }));
+    setIntegrationsFocus((value) => ({ service, tick: value.tick + 1 }));
+  };
   const subView = (tabId) => subViews[tabId] ?? defaultSub(tabId);
   // ON by default, which reverses the original decision here and is worth
   // recording rather than quietly flipping.
@@ -403,8 +411,7 @@ export function ProfessorPane(props) {
       // The Students tab's "Sync from sheet": the Syncs view, where the sheet
       // is read directly or brought in as a downloaded file.
       if (data.kind === "syncs") {
-        setTab("integrations");
-        setSubViews((current) => Object.assign({}, current, { integrations: "syncs" }));
+        focusCard("sheets");
         if (courseModeRef.current) setCourseMode(false);
         return;
       }
@@ -579,17 +586,6 @@ export function ProfessorPane(props) {
         key: current.runId,
       });
     }
-    if (tab === "integrations" && subView(tab) === "syncs") {
-      return h(SyncsView, {
-        runId: current.runId,
-        sessionId: props.sessionId,
-        names: names,
-        // A run writes records, and Save-in-settings writes the run record.
-        onWrite: () => setReload((value) => value + 1),
-        revision: reload,
-        key: current.runId,
-      });
-    }
     if (tab === "integrations") {
       return h(Integrations, {
         runId: current.runId,
@@ -611,7 +607,7 @@ export function ProfessorPane(props) {
         revision: reload,
         names: names,
         ask: props.ask,
-        openSyncs: () => setSubViews((value) => Object.assign({}, value, { integrations: "syncs" })),
+        focus: integrationsFocus,
         key: current.runId,
       });
     }
@@ -892,8 +888,7 @@ export function ProfessorPane(props) {
             setSubViews((value) => Object.assign({}, value, { progress: "gradebook" }));
           },
           onSync: () => {
-            setTab("integrations");
-            setSubViews((value) => Object.assign({}, value, { integrations: "syncs" }));
+            focusCard("sheets");
           },
         })
       : null,

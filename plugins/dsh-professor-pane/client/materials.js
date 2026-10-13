@@ -7,7 +7,6 @@ import { decodeIssues, Message, useJson } from "./common.js";
 import { courseModeEscape } from "./course-escape.js";
 import { GradebookStatus, RecentMarks, Unpublished } from "./marks.js";
 import { Integrations } from "./integrations.js";
-import { SyncsView } from "./syncs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, DRAFT_MODES, IDENTITY_MODES, scoped, SUBVIEWS } from "./tabs.js";
 
@@ -341,7 +340,7 @@ const COURSE_VIEWS = [
   { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
   // Last: not the course but its roads out — Canvas, the sheet, the
   // repositories — and the rows a sync was not sure of, by name.
-  { id: "syncs", label: "Syncs", hint: "Canvas, the grade sheet and the rest: preview, run, and the rows waiting for you" },
+  { id: "integrations", label: "Integrations", hint: "Canvas, the grade sheet and GitHub: where each stands, and what is waiting for you" },
 ];
 
 /** The Status view's words for a connection, as the Integrations tab says them. */
@@ -355,7 +354,7 @@ export function CourseMode(props) {
   // reading is kept so the weeks come back as they were left.
   const [view, setView] = React.useState(null);
   const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
-  // Integrations, opened from Syncs: the pane's own tab, drawn here so going
+  // Integrations: the pane's own tab, drawn here so going
   // to it does not close course mode. This course first, as in the pane.
   const [integrationsSub, setIntegrationsSub] = React.useState("course");
   // The week Teaching was last stepped to. The page steps without a round
@@ -421,23 +420,6 @@ export function CourseMode(props) {
   const canvasLine = shown.current.canvas;
 
   const viewBody = () => {
-    if (view === "syncs") {
-      return h(
-        "div",
-        { className: "pp-cviewpad" },
-        h(SyncsView, {
-          runId: props.runId,
-          sessionId: props.sessionId,
-          names: props.names,
-          revision: props.reload,
-          onWrite: props.onWrite,
-          // Connections themselves — a host, a token — are the Integrations
-          // tab's. Opened in place: closing course mode to get there read as
-          // the window crashing.
-          onSetup: () => setView("integrations"),
-        }),
-      );
-    }
     if (view === "integrations") {
       return h(
         "div",
@@ -450,7 +432,6 @@ export function CourseMode(props) {
           revision: props.reload,
           names: props.names,
           ask: props.ask,
-          openSyncs: () => setView("syncs"),
           key: props.runId,
         }),
       );
@@ -527,7 +508,7 @@ export function CourseMode(props) {
       entry.label,
     );
   // The views that name people follow the pane's Names / Pseudonyms choice.
-  const named = view === "students" || view === "syncs" || (view === "tasks" && taskSub !== "unpublished");
+  const named = view === "students" || view === "integrations" || (view === "tasks" && taskSub !== "unpublished");
 
   return ReactDOM.createPortal(
     h(
@@ -585,18 +566,20 @@ export function CourseMode(props) {
               ),
           // The pane's header, which this veil covers. Publish and Upload
           // open their own windows on top, so course mode is still here when
-          // they close. The wiring line opens the Syncs view in place —
-          // where Canvas stands and what is waiting are both answered there,
-          // and it links on to the pane's Integrations for the setup itself.
+          // they close. The wiring line opens Integrations in place, where
+          // Canvas stands, what is waiting, and the setup are all answered.
           canvasLine || waiting
             ? h(
                 "button",
                 {
                   type: "button",
                   className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
-                  title: preview ? "Private — not shown while previewing as a student" : "Open Syncs",
+                  title: preview ? "Private — not shown while previewing as a student" : "Open Integrations",
                   disabled: preview,
-                  onClick: () => setView("syncs"),
+                  onClick: () => {
+                    setIntegrationsSub("course");
+                    setView("integrations");
+                  },
                 },
                 [
                   canvasLine ? "Canvas: " + (CONNECTION_STATE[canvasLine.state] || canvasLine.state) : null,
@@ -673,8 +656,8 @@ export function CourseMode(props) {
                         ? SUBVIEWS.integrations.map((entry) =>
                             segment(
                               entry,
-                              entry.id !== "syncs" && integrationsSub === entry.id,
-                              () => (entry.id === "syncs" ? setView("syncs") : setIntegrationsSub(entry.id)),
+                              integrationsSub === entry.id,
+                              () => setIntegrationsSub(entry.id),
                               false,
                             ),
                           )

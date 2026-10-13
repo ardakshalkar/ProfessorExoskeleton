@@ -235,13 +235,11 @@ window.__ModuleLoader__.load({
         // marks Canvas does not have, materials changed since publishing.
         { id: "unpublished", label: "Unpublished" },
       ],
-      // Being regrouped by service (2026-10-13). This course is one card per
-      // service — Canvas's took over Status, Targets and Links. Syncs goes when
-      // the sheet and GitHub get cards of their own, and Credentials when
-      // Accounts replaces it.
+      // Regrouped by service (2026-10-13). This course is one card per service —
+      // Canvas's took over Status, Targets and Links, and the sheet's and
+      // GitHub's took over Syncs. Credentials goes when Accounts replaces it.
       integrations: [
         { id: "course", label: "This course" },
-        { id: "syncs", label: "Syncs" },
         { id: "credentials", label: "Credentials" },
       ],
     };
@@ -1106,6 +1104,12 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
 .pp-cdetails > summary{cursor:pointer;font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-cdetails[open] > summary{margin-bottom:4px}
 .pp-unused{padding:2px 0}
+/* A sync inside its service's card: the card's own border is enough. */
+.pp-synccard-bare{padding:0;border:0;border-radius:0;background:none}
+.pp-synccard-bare:hover{border-color:transparent}
+.pp-synccard-bare.pp-synccard-drop{padding:8px;border:1px dashed #1e7e38;border-radius:9px}
+.pp-csub{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-csubtitle{font-size:12px;font-weight:600}
 `;
 
     if (
@@ -3733,6 +3737,252 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       );
     }
 
+    // ── client/service-cards.js
+
+    /** `7 Oct`, for a row that has room for a date and nothing else. */
+    const dayOf = (iso) => {
+      if (!iso) return null;
+      const at = new Date(iso);
+      return Number.isNaN(at.getTime()) ? null : at.toLocaleDateString([], { day: "numeric", month: "short" });
+    };
+
+    /** A card's header: the service's mark, its name and one line under it, and a chip. */
+    function CardHead(props) {
+      return h(
+        "div",
+        { className: "pp-chead" },
+        h("span", { className: "pp-svc pp-svc-" + props.service, "aria-hidden": "true" }, props.mark),
+        h("span", { className: "pp-cname" }, props.name, h("span", { className: "pp-intwhat" }, props.subtitle)),
+        props.chip ? h("span", { className: "pp-chip pp-chip-" + props.chip.tone }, props.chip.text) : null,
+      );
+    }
+
+    /**
+     * Google Sheets: the grade sheets this run reads and writes, and the Google
+     * sign-in that lets it do so without a download.
+     *
+     * Connect Google is on the card while nobody is signed in, because it is the
+     * one thing that turns "download the sheet, drop it here" into a Run press —
+     * and in Details once somebody is, where Disconnect and Switch account belong.
+     */
+    function SheetsCard(props) {
+      const data = props.data;
+      const syncs = props.syncs ? props.syncs.syncs.filter((sync) => sync.service === "sheets") : [];
+      const row = (data.integrations || []).find((entry) => entry.id === "sheets");
+      const google = data.google || {};
+      const checks = useSheetCheck(props.runId, props.sessionId, String(props.revision || 0));
+      const [editing, setEditing] = React.useState(false);
+
+      // The gradebook copy (`extensions.lms.sheet_id`) is the other use of Sheets:
+      // a card is drawn for either.
+      if (!syncs.length && !(row && row.state !== "absent")) return null;
+
+      const ids = new Set(syncs.map((sync) => sync.id));
+      const waiting = props.syncs ? props.syncs.waiting.filter((entry) => ids.has(entry.sync)) : [];
+      const checkOf = (sync) => (checks && checks.checks ? checks.checks.find((entry) => entry.sync === sync.id) : null);
+      const changed = syncs.filter((sync) => {
+        const check = checkOf(sync);
+        return check && check.state === "changed";
+      });
+
+      const subtitle = [
+        google.connected ? "connected as " + (google.account || "your Google account") : "Google not connected · sheets come in as downloads",
+        syncs.length ? syncs.length + " sheet" + (syncs.length === 1 ? "" : "s") : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      const chip = waiting.length
+        ? { text: waiting.length + " waiting", tone: "warn" }
+        : changed.length
+          ? { text: "changed in Google", tone: "warn" }
+          : google.connected
+            ? { text: "ready", tone: "ok" }
+            : null;
+
+      return h(
+        "section",
+        { className: "pp-ccard", id: "pp-card-sheets" },
+        h(CardHead, { service: "sheets", mark: "GS", name: "Google Sheets", subtitle, chip }),
+        syncs.map((sync) =>
+          h(
+            "div",
+            { className: "pp-csub", key: sync.id },
+            h("div", { className: "pp-csubtitle" }, sync.label, h("span", { className: "pp-syncid" }, sync.id)),
+            h(SyncCard, {
+              sync,
+              bare: true,
+              check: checkOf(sync),
+              runId: props.runId,
+              sessionId: props.sessionId,
+              names: props.names,
+              onDone: props.onDone,
+            }),
+          ),
+        ),
+        h(WaitingList, {
+          rows: waiting,
+          students: props.syncs ? props.syncs.students : [],
+          names: props.syncs ? props.syncs.names : false,
+          runId: props.runId,
+          sessionId: props.sessionId,
+          onDone: props.onDone,
+        }),
+        google.connected
+          ? null
+          : h(GoogleConnect, { google, onChanged: props.onRefresh }),
+        h(
+          "details",
+          { className: "pp-cdetails" },
+          h("summary", null, "Details"),
+          google.connected ? h(GoogleConnect, { google, onChanged: props.onRefresh }) : null,
+          h(
+            Fact,
+            {
+              label: "Gradebook copy",
+              note: data.sheet.id
+                ? "The spreadsheet the gradebook is written to · summary tab " + data.sheet.summaryTab
+                : "A spreadsheet the gradebook is written to, if you keep one — extensions.lms.sheet_id on the run",
+            },
+            data.sheet.id || h(Presence, { present: false, no: "none" }),
+          ),
+          row
+            ? h(
+                Fact,
+                { label: "Credential", note: "a Google sign-in, AINAR_SHEETS_TOKEN, or a service-account key" },
+                h(Presence, { present: row.steps[1] && row.steps[1].done, yes: "available", no: "none" }),
+              )
+            : null,
+          row
+            ? h(
+                "div",
+                { className: "pp-approverow" },
+                h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", "aria-pressed": editing, onClick: () => setEditing(!editing) },
+                  data.sheet.id ? "Change the gradebook copy" : "Keep a gradebook copy",
+                ),
+              )
+            : null,
+          editing && row
+            ? h(ProviderSetup, {
+                integration: Object.assign({}, row, { fields: ["sheetId"] }),
+                runId: props.runId,
+                sessionId: props.sessionId,
+                onCancel: () => setEditing(false),
+                onSaved: (body) => {
+                  setEditing(false);
+                  if (props.onSaved) props.onSaved(body);
+                },
+              })
+            : null,
+        ),
+      );
+    }
+
+    /**
+     * GitHub: each homework's starter repository, which students fork.
+     *
+     * A row per assessment that names one, by due date, with where it is and when
+     * this machine last pushed to it. A row opens to Preview and Send — a starter
+     * repository is public and forked, so a push is something students see, and it
+     * waits for a preview like every other press that leaves the machine.
+     */
+    function GithubCard(props) {
+      const data = props.data;
+      const sync = props.syncs ? props.syncs.syncs.find((entry) => entry.service === "github") : null;
+      const rows = (data.assessments || [])
+        .filter((assessment) => assessment.github)
+        .sort((left, right) => String(left.dueAt || "9999").localeCompare(String(right.dueAt || "9999")));
+      const [open, setOpen] = React.useState(null);
+
+      if (!sync && !rows.length) return null;
+      const unpublished = rows.filter((assessment) => !assessment.github.published);
+      const chip = !rows.length
+        ? null
+        : unpublished.length
+          ? { text: unpublished.length + " not published", tone: "warn" }
+          : { text: "all published", tone: "ok" };
+
+      return h(
+        "section",
+        { className: "pp-ccard", id: "pp-card-github" },
+        h(CardHead, {
+          service: "github",
+          mark: "GH",
+          name: "GitHub",
+          subtitle:
+            rows.length + " homework repositor" + (rows.length === 1 ? "y" : "ies") + " · students fork them" +
+            (sync && sync.lastSynced ? " · last pushed " + when(sync.lastSynced) : ""),
+          chip,
+        }),
+        rows.length
+          ? h(
+              "div",
+              { className: "pp-crows" },
+              rows.map((assessment) => {
+                const id = assessment.assessmentId;
+                const repo = assessment.github.repo;
+                const published = assessment.github.published;
+                const expanded = open === id;
+                return h(
+                  "div",
+                  { className: "pp-crow" + (expanded ? " pp-crow-open" : ""), key: id },
+                  h(
+                    "button",
+                    { type: "button", className: "pp-crowhead", "aria-expanded": expanded, onClick: () => setOpen(expanded ? null : id) },
+                    h("span", { className: "pp-crowchev", "aria-hidden": "true" }, expanded ? "▾" : "▸"),
+                    h(
+                      "span",
+                      { className: "pp-crowtitle" },
+                      assessment.title || id,
+                      assessment.dueAt ? h("span", { className: "pp-as" }, " · due " + dayOf(assessment.dueAt)) : null,
+                    ),
+                    h(
+                      "span",
+                      { className: "pp-crowpills" },
+                      h("span", { className: "pp-chip" + (repo ? "" : " pp-chip-warn") }, repo || "no repository named"),
+                      published
+                        ? h("span", { className: "pp-chip pp-chip-ok" }, "published " + dayOf(published.at))
+                        : h("span", { className: "pp-chip pp-chip-warn" }, "not published"),
+                    ),
+                  ),
+                  expanded
+                    ? h(
+                        "div",
+                        { className: "pp-cpanel" },
+                        repo
+                          ? h(
+                              "p",
+                              { className: "pp-as" },
+                              h("a", { href: "https://github.com/" + repo, target: "_blank", rel: "noreferrer" }, repo + " ↗"),
+                              assessment.github.folder ? " · from " + assessment.github.folder : "",
+                              published ? " · last pushed from here " + when(published.at) : " · never pushed from here",
+                            )
+                          : h(
+                              "p",
+                              { className: "pp-as" },
+                              "No repository is named yet. Record one as extensions.github.template_repo on the assessment — /design-assessment writes it when it scaffolds the starter.",
+                            ),
+                        sync
+                          ? h(SyncCard, {
+                              sync,
+                              bare: true,
+                              assessment: id,
+                              runId: props.runId,
+                              sessionId: props.sessionId,
+                              names: props.names,
+                              onDone: props.onDone,
+                            })
+                          : h("p", { className: "pp-as" }, "This run has no homework-repos sync, so there is nothing to push with."),
+                      )
+                    : null,
+                );
+              }),
+            )
+          : h("p", { className: "pp-as" }, "No assessment names a starter repository yet. /design-assessment writes one when it scaffolds the homework."),
+      );
+    }
+
     // ── client/integrations.js
 
     /** The last ready, error-free value of a `useJson`-shaped state, or null. */
@@ -3773,11 +4023,22 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       const [fresh, setFresh] = React.useState(null);
       // A refusal from the credential seam, tagged with the field that caused it.
       const [status, setStatus] = React.useState(null);
-      // The run's marks and syncs, for the Canvas rows and the strip above them.
+      // Bumped after a sync press, so its card's chips and the waiting rows are
+      // read again even where nothing passes `onWrite`.
+      const [tick, setTick] = React.useState(0);
+      // The run's marks and syncs, for the cards and the strip above them. The
+      // syncs in Names mode only when the pane shows names: a waiting row is a
+      // person, and "→ STUDENT-B7K2QA" asks a professor to decide what they
+      // cannot read.
       const unpublished = useUnpublished(props.runId, props.sessionId, props.revision || 0);
       const syncs = useJson(
         scoped(
-          BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + encodeURIComponent(String(props.revision || 0)),
+          BASE +
+            "/api/syncs?run=" +
+            encodeURIComponent(props.runId || "") +
+            (props.names ? "&names=1" : "") +
+            "&r=" +
+            encodeURIComponent(String(props.revision || 0) + "." + tick),
           props.sessionId,
         ),
       );
@@ -3811,6 +4072,21 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
         // counter an approval bumps.
         if (props.onWrite) props.onWrite();
       };
+      // After a sync press: a run writes records, a confirm changes what waits.
+      const onSynced = () => {
+        setTick((value) => value + 1);
+        if (props.onWrite) props.onWrite();
+      };
+      // A Google sign-in changes the registry and the credential store, not the
+      // record, so nothing bumps the revision: read the document again by hand.
+      const refresh = () =>
+        fetch(url, { headers: { accept: "application/json" } })
+          .then((response) => response.json())
+          .then((body) => {
+            if (!body.error) setFresh(body);
+            setTick((value) => value + 1);
+          })
+          .catch(() => null);
 
       // ---- Credentials ---------------------------------------------------
 
@@ -4000,11 +4276,17 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
         sessionId: props.sessionId,
         names: props.names,
         ask: props.ask,
-        openSyncs: props.openSyncs,
+        focus: props.focus,
+        revision: String(props.revision || 0) + "." + tick,
         onSaved,
+        onSynced,
+        onRefresh: refresh,
         onWrite: props.onWrite,
       });
     }
+
+    /** The services that have a card of their own; the rest are drawn as Status drew them. */
+    const CARDED = new Set(["canvas", "sheets", "github"]);
 
     /**
      * Integrations → This course: what needs the professor, then one card per
@@ -4015,44 +4297,76 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
      * each item goes to the rows it is about. A course with nothing to do shows no
      * strip at all rather than a green "all clear" to read past.
      *
-     * Canvas has its card. The others are still drawn as Status drew them, and
-     * only the ones this course uses: a service nobody has set up is one line at
-     * the bottom, not a red row each.
+     * Canvas, Google Sheets and GitHub have cards. Telegram and Moodle are still
+     * drawn as Status drew them, and only when the course uses them: a service
+     * nobody has set up is one line at the bottom, not a red row each. Any sync of
+     * a service with no card is drawn on its own under "Other syncs", so moving
+     * the syncs onto cards cannot lose one.
+     *
+     * `focus` comes from outside — the sheet notice, Students' "Sync from sheet" —
+     * and scrolls the named card into view; its `tick` makes the same jump work
+     * twice.
      */
     function CourseIntegrations(props) {
       const data = props.data;
       const [filter, setFilter] = React.useState({ id: null, tick: 0 });
       const [adding, setAdding] = React.useState(false);
+      const [migrating, setMigrating] = React.useState(null);
       const canvasRow = (data.integrations || []).find((row) => row.id === "canvas");
       const reachable = Boolean(canvasRow) && canvasRow.steps.slice(0, 3).every((step) => step.done);
       const counts = canvasCounts(data, props.unpublished);
+      const syncs = props.syncs ? props.syncs.syncs : [];
       const waiting = props.syncs ? props.syncs.waiting.length : 0;
-      const others = (data.integrations || []).filter((row) => row.id !== "canvas");
-      // A service with a sync on this run is used by it, set up or not: the grade
-      // sheet's sync names its spreadsheet itself, not on the run record the
-      // checklist reads.
-      const synced = new Set(props.syncs ? props.syncs.syncs.map((sync) => sync.service) : []);
+      const others = (data.integrations || []).filter((row) => !CARDED.has(row.id));
+      // A service with a sync on this run is used by it, set up or not.
+      const synced = new Set(syncs.map((sync) => sync.service));
       const isUsed = (row) => row.state !== "absent" || synced.has(row.id);
       const used = others.filter(isUsed);
       const unused = others.filter((row) => !isUsed(row));
+      const loose = syncs.filter((sync) => !CARDED.has(sync.service));
+      const implied = syncs.filter((sync) => sync.implied).length;
 
-      const show = (id) => setFilter((current) => ({ id, tick: current.tick + 1 }));
+      const scrollTo = (id) => {
+        const card = document.getElementById(id);
+        if (card) card.scrollIntoView({ block: "start" });
+      };
+      React.useEffect(() => {
+        if (props.focus && props.focus.service) scrollTo("pp-card-" + props.focus.service);
+      }, [props.focus && props.focus.tick]);
+
+      const show = (id) => {
+        setFilter((current) => ({ id, tick: current.tick + 1 }));
+        scrollTo("pp-card-canvas");
+      };
       const plural = (count, one, many) => count + " " + (count === 1 ? one : many);
+
+      const migrate = () => {
+        setMigrating("working");
+        fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "migrate" }),
+        })
+          .then((response) => response.json())
+          .catch((error) => ({ error: String((error && error.message) || error) }))
+          .then((answer) => {
+            setMigrating(answer);
+            if (props.onSynced) props.onSynced();
+          });
+      };
 
       const needs = [
         waiting
           ? {
               key: "waiting",
-              text: plural(waiting, "name", "names") + " from a sync to confirm",
-              action: props.openSyncs ? "Review" : null,
-              go: props.openSyncs,
+              text: plural(waiting, "name", "names") + " from the grade sheet to confirm",
+              go: () => scrollTo("pp-card-sheets"),
             }
           : null,
         reachable && counts.unlinked.length
           ? {
               key: "unlinked",
               text: plural(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
-              action: "Show",
               go: () => show("unlinked"),
             }
           : null,
@@ -4060,11 +4374,17 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
           ? {
               key: "marks",
               text: "Canvas is missing marks for " + plural(counts.toSend.length, "assessment", "assessments"),
-              action: "Show",
               go: () => show("marks"),
             }
           : null,
       ].filter(Boolean);
+
+      const card = {
+        runId: props.runId,
+        sessionId: props.sessionId,
+        names: props.names,
+        onSaved: props.onSaved,
+      };
 
       return h(
         "div",
@@ -4079,26 +4399,34 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
                   "div",
                   { className: "pp-needsrow", key: item.key },
                   h("span", null, item.text),
-                  item.action
-                    ? h("button", { type: "button", className: "pp-segbtn", onClick: item.go }, item.action)
-                    : null,
+                  h("button", { type: "button", className: "pp-segbtn", onClick: item.go }, "Show"),
                 ),
               ),
             )
           : null,
-        h(CanvasCard, {
-          data,
-          unpublished: props.unpublished,
-          syncs: props.syncs,
-          runId: props.runId,
-          sessionId: props.sessionId,
-          names: props.names,
-          ask: props.ask,
-          filter: filter.id,
-          filterTick: filter.tick,
-          onSaved: props.onSaved,
-          onWrite: props.onWrite,
-        }),
+        h(
+          CanvasCard,
+          Object.assign({}, card, {
+            data,
+            unpublished: props.unpublished,
+            syncs: props.syncs,
+            ask: props.ask,
+            filter: filter.id,
+            filterTick: filter.tick,
+            onWrite: props.onWrite,
+          }),
+        ),
+        h(
+          SheetsCard,
+          Object.assign({}, card, {
+            data,
+            syncs: props.syncs,
+            revision: props.revision,
+            onDone: props.onSynced,
+            onRefresh: props.onRefresh,
+          }),
+        ),
+        h(GithubCard, Object.assign({}, card, { data, syncs: props.syncs, onDone: props.onSynced })),
         used.length
           ? h(IntegrationStatus, {
               integrations: used,
@@ -4108,6 +4436,24 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
               sessionId: props.sessionId,
               onSaved: props.onSaved,
             })
+          : null,
+        loose.length
+          ? h(
+              "div",
+              { className: "pp-syncsection" },
+              h("p", { className: "pp-factgroup" }, "Other syncs"),
+              loose.map((sync) =>
+                h(SyncCard, {
+                  sync,
+                  key: sync.id,
+                  assessments: props.syncs.assessments,
+                  runId: props.runId,
+                  sessionId: props.sessionId,
+                  names: props.names,
+                  onDone: props.onSynced,
+                }),
+              ),
+            )
           : null,
         unused.length
           ? h(
@@ -4134,6 +4480,30 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
                   })
                 : null,
             )
+          : null,
+        // The syncs this run still takes from older settings (lms.toml, the sheet
+        // settings, the publishing profiles) rather than from its own `syncs:`.
+        // They work as they are; this writes them down in one place.
+        implied
+          ? h(
+              "div",
+              { className: "pp-approverow" },
+              h(
+                "span",
+                { className: "pp-as" },
+                (implied === syncs.length ? "All " : implied + " of ") +
+                  plural(syncs.length, "sync is", "syncs are") +
+                  " read from older settings. Saving them writes syncs: into the run's settings.",
+              ),
+              h(
+                "button",
+                { type: "button", className: "pp-segbtn", disabled: migrating === "working", onClick: migrate },
+                migrating === "working" ? "Writing…" : "Save in settings",
+              ),
+            )
+          : null,
+        migrating && migrating !== "working"
+          ? h("pre", { className: "pp-approveout" + (migrating.error ? " pp-approveerr" : "") }, migrating.error || migrating.output)
           : null,
       );
     }
@@ -4197,13 +4567,6 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
         h(DirectionIcon, { role: props.role, size: props.small ? 11 : 14 }),
       );
     }
-
-    /** The groups the syncs are drawn in, by which way the data runs. */
-    const GROUPS = [
-      { role: "source", title: "Coming into the course", hint: "Read from the service; nothing is sent to it." },
-      { role: "target", title: "Going out", hint: "Other people see what these send — preview first." },
-      { role: "both", title: "Both ways", hint: "Whichever side changed since the last sync wins; both changed waits for you." },
-    ];
 
     /** A service's mark: two letters on its own colour. */
     const SERVICE = {
@@ -4306,555 +4669,476 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       );
     }
 
-    function SyncsView(props) {
-      const url = (path) => scoped(BASE + path + "?run=" + encodeURIComponent(props.runId || ""), props.sessionId);
-      const [tick, setTick] = React.useState(0);
-      const [state, setState] = React.useState({ phase: "loading", value: null });
-      // Per sync: the last press's answer, which assessment is chosen, where the
-      // sheet is read from, and whether a preview is on screen (which is what
-      // makes a send available).
-      const [results, setResults] = React.useState({});
-      const [chosen, setChosen] = React.useState({});
-      const [reading, setReading] = React.useState({});
-      const [previewed, setPreviewed] = React.useState({});
+    /** A press to one of the sync routes, answered with the CLI's own words. */
+    const syncPost = (runId, sessionId, path, body) =>
+      fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      })
+        .then((response) => response.json())
+        .catch((error) => ({ error: String(error.message || error) }));
+
+    /**
+     * One sync: its mark, when it last ran, and Preview with Run or Send.
+     *
+     * Its own state — the last answer, the assessment chosen, where a sheet is read
+     * from, whether a preview is on screen — so a card can sit on whichever
+     * service's card it belongs to. `assessment` fixes the assessment (a GitHub
+     * row); without it a sync that needs one offers a picker. `bare` drops the
+     * mark and title, for a service card whose header already says them.
+     *
+     * `onDone` after every press: a preview keeps the rows it could not place for
+     * review, so the waiting list is read again after either.
+     */
+    function SyncCard(props) {
+      const sync = props.sync;
+      const [result, setResult] = React.useState(null);
+      const [picked, setPicked] = React.useState("");
+      const [reading, setReading] = React.useState(null);
+      const [previewed, setPreviewed] = React.useState(false);
       const [busy, setBusy] = React.useState(null);
-      const [others, setOthers] = React.useState({});
-      // The card a file is being dragged over, for its outline.
-      const [dropping, setDropping] = React.useState(null);
-      // Whether each grade sheet changed in Google since its last sync.
-      const sheetCheck = useSheetCheck(props.runId, props.sessionId, (props.revision || 0) + "." + tick);
+      const [dropping, setDropping] = React.useState(false);
 
-      React.useEffect(() => {
-        let live = true;
-        fetch(url("/api/syncs") + (props.names ? "&names=1" : "") + "&r=" + (props.revision || 0) + "." + tick, {
-          headers: { accept: "application/json" },
-        })
-          .then((response) => response.json())
-          .then((value) => live && setState({ phase: "ready", value }))
-          .catch((error) => live && setState({ phase: "ready", value: { error: String(error.message || error) } }));
-        return () => {
-          live = false;
-        };
-      }, [props.runId, props.names, props.revision, tick]);
-
-      if (state.phase === "loading" && !state.value) return h(Message, null, "Reading this run's syncs…");
-      const doc = state.value;
-      if (doc.error) return h(Message, { error: true }, doc.error);
-
-      const post = (body, key) => {
-        setBusy(key);
-        return fetch(url("/api/syncs/action"), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        })
-          .then((response) => response.json())
-          .catch((error) => ({ error: String(error.message || error) }))
-          .then((answer) => {
-            setBusy(null);
-            return answer;
-          });
+      const service = SERVICE[sync.service] || { mark: sync.service.slice(0, 2), name: sync.service };
+      const needsAssessment = sync.needs === "assessment";
+      const assessment = props.assessment || picked;
+      const ready = !needsAssessment || Boolean(assessment);
+      const check = props.check || null;
+      const done = () => {
+        if (props.onDone) props.onDone();
       };
 
       // The sheet itself when this machine can read it; otherwise the copy the
       // professor downloaded. A copy is older than the sheet by definition, so it
       // is never the default when the live read is there.
-      const fromOf = (sync) => reading[sync.id] || (sync.canReadLive ? "live" : "export");
+      const from = reading || (sync.canReadLive ? "live" : "export");
 
-      const press = (sync, action, confirm) => {
-        const body = {
+      const press = (action, confirm) => {
+        setBusy(action);
+        syncPost(props.runId, props.sessionId, "/api/syncs/action", {
           action,
           sync: sync.id,
-          assessment: chosen[sync.id] || "",
-          from: sync.exported && fromOf(sync) === "export" ? "export" : "live",
+          assessment: assessment || "",
+          from: sync.exported && from === "export" ? "export" : "live",
           confirm: Boolean(confirm),
           names: Boolean(props.names),
-        };
-        post(body, sync.id + ":" + action).then((answer) => {
-          setResults((all) => Object.assign({}, all, { [sync.id]: Object.assign({ action }, answer) }));
-          setPreviewed((all) => Object.assign({}, all, { [sync.id]: action === "plan" && !answer.error && answer.ok }));
-          // A preview keeps the rows it could not place for review, so the
-          // Waiting list is read again after either press.
-          setTick((value) => value + 1);
-          if (props.onWrite) props.onWrite();
+        }).then((answer) => {
+          setBusy(null);
+          setResult(Object.assign({ action }, answer));
+          setPreviewed(action === "plan" && !answer.error && Boolean(answer.ok));
+          done();
         });
       };
 
       // A downloaded sheet, dropped on the card or chosen with the button. The host
       // keeps it only if `sync plan` can read it, and answers with that plan, so
       // what comes back is a preview of the new copy.
-      const takeCopy = (sync, file) => {
+      const takeCopy = (file) => {
         if (!file) return;
-        const key = sync.id + ":copy";
         if (/\.(xlsx|xlsm|xls|ods)$/i.test(file.name)) {
-          setResults((all) => Object.assign({}, all, {
-            [sync.id]: { action: "plan", error: "That is a spreadsheet file. In Google Sheets choose File → Download → Comma-separated values (.csv)." },
-          }));
+          setResult({ action: "plan", error: "That is a spreadsheet file. In Google Sheets choose File → Download → Comma-separated values (.csv)." });
           return;
         }
-        setBusy(key);
+        setBusy("copy");
         file
           .text()
           .then((csv) =>
-            fetch(url("/api/syncs/copy"), {
-              method: "POST",
-              headers: { "content-type": "application/json" },
+            syncPost(props.runId, props.sessionId, "/api/syncs/copy", {
+              sync: sync.id,
+              csv,
+              names: Boolean(props.names),
               // When the browser saved the download: how old the sheet in it is.
-              body: JSON.stringify({ sync: sync.id, csv, names: Boolean(props.names), lastModified: file.lastModified }),
-            }).then((response) => response.json()),
+              lastModified: file.lastModified,
+            }),
           )
           .catch((error) => ({ error: String(error.message || error) }))
           .then((answer) => {
             setBusy(null);
-            setResults((all) => Object.assign({}, all, { [sync.id]: Object.assign({ action: "plan" }, answer) }));
+            setResult(Object.assign({ action: "plan" }, answer));
             const kept = !answer.error && answer.ok;
-            if (kept) setReading((all) => Object.assign({}, all, { [sync.id]: "export" }));
-            setPreviewed((all) => Object.assign({}, all, { [sync.id]: kept }));
-            setTick((value) => value + 1);
-            if (props.onWrite) props.onWrite();
+            if (kept) setReading("export");
+            setPreviewed(Boolean(kept));
+            done();
           });
       };
 
-      const confirmRow = (row, to) => {
-        post({ action: "confirm", sync: row.sync, line: row.line, key: row.key, to: to || null }, "confirm:" + row.key).then(
-          (answer) => {
-            if (answer.error || !answer.ok) {
-              setResults((all) => Object.assign({}, all, { [row.sync]: answer }));
-              return;
-            }
-            setTick((value) => value + 1);
-            // Course mode's header counts what is waiting; it reads on the same revision.
-            if (props.onWrite) props.onWrite();
-          },
-        );
-      };
-
-      const migrate = () =>
-        post({ action: "migrate" }, "migrate").then((answer) => {
-          setResults((all) => Object.assign({}, all, { _migrate: answer }));
-          setTick((value) => value + 1);
-          if (props.onWrite) props.onWrite();
-        });
-
-      const person = (candidate) => candidate.name || candidate.student;
-      const implied = doc.syncs.filter((sync) => sync.implied).length;
-      const remembered = doc.syncs.reduce((sum, sync) => sum + (sync.remembered || 0), 0);
-      const latest = doc.syncs
-        .filter((sync) => sync.lastSynced)
-        .sort((a, b) => Date.parse(b.lastSynced) - Date.parse(a.lastSynced))[0];
-      const close = (id) => setResults((all) => Object.assign({}, all, { [id]: null }));
-
-      // ---- one sync ----------------------------------------------------------
-
-      const syncCard = (sync) => {
-        const result = results[sync.id];
-        const service = SERVICE[sync.service] || { mark: sync.service.slice(0, 2), name: sync.service };
-        const needsAssessment = sync.needs === "assessment";
-        const ready = !needsAssessment || chosen[sync.id];
-        const check = sheetCheck && sheetCheck.checks ? sheetCheck.checks.find((entry) => entry.sync === sync.id) : null;
-        const chips = [
-          check && check.state === "changed"
-            ? h(
-                "span",
-                { className: "pp-chip pp-chip-warn", key: "c", title: check.said + " — checked " + new Date(check.checked_at).toLocaleTimeString() },
-                "changed in Google" + (check.modified ? " " + when(check.modified) : ""),
-              )
-            : null,
-          check && check.state === "same"
-            ? h("span", { className: "pp-chip", key: "c", title: "Checked " + new Date(check.checked_at).toLocaleTimeString() }, "up to date")
-            : null,
-          check && check.state === "error" ? h("span", { className: "pp-chip", key: "c", title: check.said }, "could not check") : null,
-          sync.implied ? h("span", { className: "pp-chip", key: "o", title: "Read from " + (sync.from || "older settings") }, "older settings") : null,
-          sync.remembered ? h("span", { className: "pp-chip", key: "r" }, sync.remembered + " remembered") : null,
-          sync.waiting ? h("span", { className: "pp-chip pp-chip-warn", key: "w" }, sync.waiting + " waiting") : null,
-          sync.live ? h("span", { className: "pp-chip pp-chip-live", key: "l" }, "others see it") : null,
-          sync.enabled ? null : h("span", { className: "pp-chip", key: "x" }, "switched off"),
-        ];
-        // A grade sheet this machine cannot open itself comes in as a file the
-        // professor downloads; the whole card takes the drop.
-        const takesFile = Boolean(sync.download) && !sync.canReadLive;
-        const hasFile = (event) => Array.from((event.dataTransfer && event.dataTransfer.types) || []).includes("Files");
-        const dropProps = takesFile
-          ? {
-              onDragOver: (event) => {
-                if (!hasFile(event)) return;
-                event.preventDefault();
-                if (dropping !== sync.id) setDropping(sync.id);
-              },
-              onDragLeave: (event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) setDropping(null);
-              },
-              onDrop: (event) => {
-                if (!hasFile(event)) return;
-                event.preventDefault();
-                setDropping(null);
-                takeCopy(sync, event.dataTransfer.files[0]);
-              },
-            }
-          : {};
-        return h(
-          "div",
-          Object.assign({ className: "pp-synccard" + (dropping === sync.id ? " pp-synccard-drop" : ""), key: sync.id }, dropProps),
-          h(
-            "div",
-            { className: "pp-synctop" },
-            h(
+      const chips = [
+        check && check.state === "changed"
+          ? h(
               "span",
-              { className: "pp-svcwrap" },
-              h("span", { className: "pp-svc pp-svc-" + sync.service, title: service.name, "aria-hidden": "true" }, service.mark),
-              // Which way it runs, on the corner of the service's mark.
-              h(DirectionBadge, { role: sync.role, small: true }),
-            ),
-            h(
-              "div",
-              { className: "pp-syncmain" },
-              h("div", { className: "pp-synctitle" }, sync.label, h("span", { className: "pp-syncid" }, sync.id)),
-              h(
-                "div",
-                {
-                  className: "pp-synclast" + (sync.lastSynced ? "" : " pp-synclast-never"),
-                  title: sync.lastSynced ? new Date(sync.lastSynced).toLocaleString() : "No record of this sync running",
-                },
-                sync.lastSynced ? "Last synced " + when(sync.lastSynced) : "Never synced",
-                // What that run brought, for a grade sheet: the marks, and how old the sheet was.
-                sync.lastEvent
-                  ? " · " +
-                      ([
-                        sync.lastEvent.added ? sync.lastEvent.added + " new" : null,
-                        sync.lastEvent.changed ? sync.lastEvent.changed + " changed" : null,
-                        sync.lastEvent.removed ? sync.lastEvent.removed + " taken back" : null,
-                      ]
-                        .filter(Boolean)
-                        .join(", ") || "no marks changed") +
-                      (sync.lastEvent.read === "file" && sync.lastEvent.saved ? " · sheet saved " + when(sync.lastEvent.saved) : "")
-                  : null,
-              ),
-              h("div", { className: "pp-chips" }, chips),
-            ),
-          ),
-          sync.needs === "message"
-            ? h("p", { className: "pp-as" }, "Announcements are written and sent from Publish.")
-            : h(
-                "div",
-                { className: "pp-syncctl" },
-                needsAssessment
-                  ? h(
-                      "select",
-                      {
-                        value: chosen[sync.id] || "",
-                        onChange: (event) => {
-                          const value = event.target.value;
-                          setChosen((all) => Object.assign({}, all, { [sync.id]: value }));
-                          setPreviewed((all) => Object.assign({}, all, { [sync.id]: false }));
-                        },
-                      },
-                      h("option", { value: "" }, "Choose the assessment…"),
-                      doc.assessments.map((entry) => h("option", { value: entry.id, key: entry.id }, entry.title)),
-                    )
-                  : null,
-                // Where the sheet is read from. Directly when this machine has a
-                // Google login of its own; otherwise from the copy the professor
-                // downloaded, with its date, and the two presses that replace it.
-                sync.exported !== null && sync.exported !== undefined && sync.hasSheet && sync.canReadLive
-                  ? h(
-                      "select",
-                      {
-                        value: fromOf(sync),
-                        onChange: (event) => {
-                          const value = event.target.value;
-                          setReading((all) => Object.assign({}, all, { [sync.id]: value }));
-                          setPreviewed((all) => Object.assign({}, all, { [sync.id]: false }));
-                        },
-                      },
-                      h("option", { value: "live" }, "Read the sheet in Google"),
-                      sync.exported ? h("option", { value: "export" }, "Read the copy of " + when(sync.exported)) : null,
-                    )
-                  : sync.exported !== null && sync.exported !== undefined
-                    ? h(
-                        "span",
-                        { className: "pp-synccopy" + (sync.exported ? "" : " pp-synccopy-none"), title: sync.exported ? new Date(sync.exported).toLocaleString() : "" },
-                        sync.exported ? "Copy of the sheet from " + when(sync.exported) : "No copy of the sheet yet",
-                      )
-                    : null,
-                takesFile
-                  ? h(
-                      "a",
-                      {
-                        className: "pp-syncbtn",
-                        href: sync.download.url,
-                        target: "_blank",
-                        rel: "noreferrer",
-                        title: "Your browser downloads the sheet from Google as a .csv file",
-                      },
-                      "Download from Google",
-                    )
-                  : null,
-                takesFile
-                  ? h(
-                      "label",
-                      { className: "pp-syncbtn" + (busy ? " pp-syncbtn-off" : ""), title: "Choose the .csv file you downloaded, or drop it on this card" },
-                      busy === sync.id + ":copy" ? "Reading…" : "Add the downloaded file",
-                      h("input", {
-                        type: "file",
-                        accept: ".csv,text/csv",
-                        hidden: true,
-                        disabled: Boolean(busy),
-                        onChange: (event) => {
-                          const file = event.target.files && event.target.files[0];
-                          event.target.value = "";
-                          takeCopy(sync, file);
-                        },
-                      }),
-                    )
-                  : null,
-                h("span", { className: "pp-segspacer" }),
-                h(
-                  "button",
-                  { type: "button", className: "pp-syncbtn", disabled: Boolean(busy) || !ready, onClick: () => press(sync, "plan") },
-                  busy === sync.id + ":plan" ? "Looking…" : "Preview",
-                ),
-                sync.live
-                  ? h(
-                      "button",
-                      {
-                        type: "button",
-                        className: "pp-syncbtn pp-syncbtn-send",
-                        disabled: Boolean(busy) || !ready || !previewed[sync.id],
-                        title: previewed[sync.id] ? "Do what the preview shows" : "Preview first",
-                        onClick: () => press(sync, "run", true),
-                      },
-                      busy === sync.id + ":run" ? "Sending…" : "Send",
-                    )
-                  : h(
-                      "button",
-                      {
-                        type: "button",
-                        className: "pp-syncbtn pp-syncbtn-run",
-                        disabled: Boolean(busy) || !ready || !sync.enabled,
-                        onClick: () => press(sync, "run"),
-                      },
-                      busy === sync.id + ":run" ? "Running…" : "Run",
-                    ),
-              ),
-          // How the file gets here, and what would make the step unnecessary: the
-          // missing thing named, so "why do I have to do this" has an answer.
-          takesFile
-            ? h(
-                "p",
-                { className: "pp-synchint" },
-                "This computer has no Google login of its own, so the sheet comes in as a file: press Download from Google" +
-                  (sync.download.tabHint
-                    ? ' (it downloads the first tab; for "' + sync.download.tabHint + '" open that tab and use File → Download → Comma-separated values)'
-                    : "") +
-                  ", then drop the file here. You see what it would change before anything is written.",
-              )
-            : null,
-          result
-            ? h(
-                "div",
-                { className: "pp-syncout" + (result.error || !result.ok ? " pp-syncout-err" : "") },
-                h(
-                  "div",
-                  { className: "pp-syncouthead" },
-                  h("span", null, result.error ? "Could not run" : result.action === "run" ? "Done" : "Preview — nothing was changed"),
-                  h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: () => close(sync.id) }, "×"),
-                ),
-                h("pre", null, result.error || result.output || "(nothing printed)"),
-              )
-            : null,
-        );
-      };
+              { className: "pp-chip pp-chip-warn", key: "c", title: check.said + " — checked " + new Date(check.checked_at).toLocaleTimeString() },
+              "changed in Google" + (check.modified ? " " + when(check.modified) : ""),
+            )
+          : null,
+        check && check.state === "same"
+          ? h("span", { className: "pp-chip", key: "c", title: "Checked " + new Date(check.checked_at).toLocaleTimeString() }, "up to date")
+          : null,
+        check && check.state === "error" ? h("span", { className: "pp-chip", key: "c", title: check.said }, "could not check") : null,
+        sync.remembered ? h("span", { className: "pp-chip", key: "r", title: "Students found by a saved link" }, sync.remembered + " remembered") : null,
+        // On a service's card the header already counts what waits.
+        sync.waiting && !props.bare ? h("span", { className: "pp-chip pp-chip-warn", key: "w" }, sync.waiting + " waiting") : null,
+        sync.live ? h("span", { className: "pp-chip pp-chip-live", key: "l" }, "others see it") : null,
+        sync.enabled ? null : h("span", { className: "pp-chip", key: "x" }, "switched off"),
+      ].filter(Boolean);
 
-      // ---- one waiting row ---------------------------------------------------
+      // A grade sheet this machine cannot open itself comes in as a file the
+      // professor downloads; the whole card takes the drop.
+      const takesFile = Boolean(sync.download) && !sync.canReadLive;
+      const hasFile = (event) => Array.from((event.dataTransfer && event.dataTransfer.types) || []).includes("Files");
+      const dropProps = takesFile
+        ? {
+            onDragOver: (event) => {
+              if (!hasFile(event)) return;
+              event.preventDefault();
+              if (!dropping) setDropping(true);
+            },
+            onDragLeave: (event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setDropping(false);
+            },
+            onDrop: (event) => {
+              if (!hasFile(event)) return;
+              event.preventDefault();
+              setDropping(false);
+              takeCopy(event.dataTransfer.files[0]);
+            },
+          }
+        : {};
 
-      const waitingCard = (row) => {
-        const [best] = row.candidates;
-        const picking = others[row.key];
-        const preview = row.preview;
-        return h(
-          "div",
-          { className: "pp-waitcard", key: row.sync + row.key },
-          h(
-            "div",
-            { className: "pp-waithead" },
-            h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, preview ? "GS" : "··"),
-            h(
-              "span",
-              { className: "pp-waitsource" },
-              row.source,
-              preview && preview.tab ? h("span", { className: "pp-waitwhere" }, " · tab " + preview.tab) : null,
-              row.line ? h("span", { className: "pp-waitwhere" }, " · line " + row.line) : null,
-            ),
-            h("span", { className: "pp-segspacer" }),
-            preview && preview.open
-              ? h("a", { className: "pp-waitopen", href: preview.open, target: "_blank", rel: "noreferrer" }, "Open in Google Sheets ↗")
-              : null,
-          ),
-          preview ? h(SheetPreview, { preview, line: row.line }) : null,
-          h(
-            "div",
-            { className: "pp-waitdecide" },
-            h(
-              "div",
-              { className: "pp-waitpair" },
-              h("span", { className: "pp-waitwritten", title: "As written in the sheet" }, row.written !== null ? "“" + row.written + "”" : "(name hidden)"),
-              h("span", { className: "pp-waitarrow", "aria-hidden": "true" }, "→"),
-              best
-                ? h(
-                    "span",
-                    { className: "pp-waitwho" },
-                    h("span", { className: "pp-avatar", "aria-hidden": "true" }, best.name ? initials(best.name) : "?"),
-                    h("span", { className: "pp-waitname" }, person(best)),
-                  )
-                : h("span", { className: "pp-as" }, "nobody in the class list is close"),
-              h("span", { className: "pp-chip pp-chip-warn", title: row.why.replace(/ of STUDENT-[A-Z0-9]+/, "") }, shortWhy(row.why)),
-            ),
-            row.candidates.length > 1 ? h("div", { className: "pp-as" }, "Also near: " + row.candidates.slice(1).map(person).join(", ")) : null,
-            picking
-              ? h(
-                  "div",
-                  { className: "pp-syncctl" },
-                  h(
-                    "select",
-                    {
-                      value: picking.to || "",
-                      onChange: (event) => {
-                        const to = event.target.value;
-                        setOthers((all) => Object.assign({}, all, { [row.key]: { to } }));
-                      },
-                    },
-                    h("option", { value: "" }, "Who is it?"),
-                    doc.students.map((student) => h("option", { value: student.student, key: student.student }, student.name || student.student)),
-                  ),
-                  h("span", { className: "pp-segspacer" }),
-                  h(
-                    "button",
-                    { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: Boolean(busy) || !picking.to, onClick: () => confirmRow(row, picking.to) },
-                    "Confirm",
-                  ),
-                  h("button", { type: "button", className: "pp-syncbtn", onClick: () => setOthers((all) => Object.assign({}, all, { [row.key]: null })) }, "Cancel"),
-                )
-              : h(
-                  "div",
-                  { className: "pp-syncctl" },
-                  h("span", { className: "pp-segspacer" }),
-                  best
-                    ? h(
-                        "button",
-                        { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: Boolean(busy), onClick: () => confirmRow(row, null) },
-                        "Confirm " + (best.name ? best.name.split(/\s+/)[0] : "it"),
-                      )
-                    : null,
-                  h("button", { type: "button", className: "pp-syncbtn", onClick: () => setOthers((all) => Object.assign({}, all, { [row.key]: { to: "" } })) }, "Someone else"),
-                ),
-          ),
-        );
-      };
-
-      // ---- the page ----------------------------------------------------------
-
-      const tile = (label, value, note, tone) =>
-        h(
-          "div",
-          { className: "pp-stile" + (tone ? " pp-stile-" + tone : "") },
-          h("span", { className: "pp-stilelabel" }, label),
-          h("span", { className: "pp-stilevalue" }, value),
-          note ? h("span", { className: "pp-stilenote" }, note) : null,
-        );
+      const last = h(
+        "div",
+        {
+          className: "pp-synclast" + (sync.lastSynced || props.assessment ? "" : " pp-synclast-never"),
+          title: sync.lastSynced ? new Date(sync.lastSynced).toLocaleString() : "No record of this sync running",
+        },
+        // A card fixed to one assessment says nothing about when: the last run is
+        // per sync, and would be the date of some other assessment's.
+        props.assessment
+          ? sync.live
+            ? "Preview, then send"
+            : "Preview, then run"
+          : sync.lastSynced
+            ? "Last synced " + when(sync.lastSynced)
+            : "Never synced",
+        // What that run brought, for a grade sheet: the marks, and how old the sheet was.
+        sync.lastEvent && !props.assessment
+          ? " · " +
+              ([
+                sync.lastEvent.added ? sync.lastEvent.added + " new" : null,
+                sync.lastEvent.changed ? sync.lastEvent.changed + " changed" : null,
+                sync.lastEvent.removed ? sync.lastEvent.removed + " taken back" : null,
+              ]
+                .filter(Boolean)
+                .join(", ") || "no marks changed") +
+              (sync.lastEvent.read === "file" && sync.lastEvent.saved ? " · sheet saved " + when(sync.lastEvent.saved) : "")
+          : null,
+      );
 
       return h(
         "div",
-        { className: "pp-syncs" },
-        h(
-          "div",
-          { className: "pp-stiles" },
-          tile(
-            "Syncs",
-            doc.syncs.length,
-            h(
-              "span",
-              { className: "pp-stiledirs" },
-              GROUPS.map((group) => {
-                const count = doc.syncs.filter((sync) => sync.role === group.role).length;
-                return count
-                  ? h(
-                      "span",
-                      { className: "pp-stiledir pp-stiledir-" + group.role, key: group.role, title: DIRECTION_WORDS[group.role] },
-                      h(DirectionIcon, { role: group.role, size: 12 }),
-                      count + " " + (group.role === "source" ? "in" : group.role === "target" ? "out" : "both"),
-                    )
-                  : null;
-              }),
-            ),
-          ),
-          tile("Waiting for you", doc.waiting.length, doc.waiting.length ? "rows a sync was not sure of" : "nothing to decide", doc.waiting.length ? "warn" : "ok"),
-          tile("Last synced", latest ? when(latest.lastSynced) : "never", latest ? latest.label : "no sync has run yet"),
-          tile("Remembered", remembered, "students found by a saved link"),
-        ),
-        props.onSetup
-          ? h(
+        Object.assign({ className: "pp-synccard" + (props.bare ? " pp-synccard-bare" : "") + (dropping ? " pp-synccard-drop" : "") }, dropProps),
+        props.bare
+          ? h("div", { className: "pp-syncmain" }, last, chips.length ? h("div", { className: "pp-chips" }, chips) : null)
+          : h(
               "div",
-              { className: "pp-syncnote" },
-              h("span", null, "Addresses, tokens and Canvas links are set up in Integrations → This course."),
-              h("button", { type: "button", className: "pp-syncbtn", title: "Show Integrations here — each service this course uses, and its setup", onClick: props.onSetup }, "Open Integrations"),
-            )
-          : null,
-        implied
-          ? h(
-              "div",
-              { className: "pp-syncnote" },
+              { className: "pp-synctop" },
               h(
                 "span",
-                null,
-                implied === doc.syncs.length ? "All " : implied + " of ",
-                doc.syncs.length + " are read from older settings. Save them in the run's settings so they are written down in one place.",
+                { className: "pp-svcwrap" },
+                h("span", { className: "pp-svc pp-svc-" + sync.service, title: service.name, "aria-hidden": "true" }, service.mark),
+                // Which way it runs, on the corner of the service's mark.
+                h(DirectionBadge, { role: sync.role, small: true }),
               ),
+              h(
+                "div",
+                { className: "pp-syncmain" },
+                h("div", { className: "pp-synctitle" }, props.title || sync.label, h("span", { className: "pp-syncid" }, sync.id)),
+                last,
+                chips.length ? h("div", { className: "pp-chips" }, chips) : null,
+              ),
+            ),
+        sync.needs === "message"
+          ? h("p", { className: "pp-as" }, "Announcements are written and sent from Publish.")
+          : h(
+              "div",
+              { className: "pp-syncctl" },
+              needsAssessment && !props.assessment
+                ? h(
+                    "select",
+                    {
+                      value: picked,
+                      onChange: (event) => {
+                        setPicked(event.target.value);
+                        setPreviewed(false);
+                      },
+                    },
+                    h("option", { value: "" }, "Choose the assessment…"),
+                    (props.assessments || []).map((entry) => h("option", { value: entry.id, key: entry.id }, entry.title)),
+                  )
+                : null,
+              // Where the sheet is read from. Directly when this machine has a
+              // Google login of its own; otherwise from the copy the professor
+              // downloaded, with its date, and the two presses that replace it.
+              sync.exported !== null && sync.exported !== undefined && sync.hasSheet && sync.canReadLive
+                ? h(
+                    "select",
+                    {
+                      value: from,
+                      onChange: (event) => {
+                        setReading(event.target.value);
+                        setPreviewed(false);
+                      },
+                    },
+                    h("option", { value: "live" }, "Read the sheet in Google"),
+                    sync.exported ? h("option", { value: "export" }, "Read the copy of " + when(sync.exported)) : null,
+                  )
+                : sync.exported !== null && sync.exported !== undefined
+                  ? h(
+                      "span",
+                      {
+                        className: "pp-synccopy" + (sync.exported ? "" : " pp-synccopy-none"),
+                        title: sync.exported ? new Date(sync.exported).toLocaleString() : "",
+                      },
+                      sync.exported ? "Copy of the sheet from " + when(sync.exported) : "No copy of the sheet yet",
+                    )
+                  : null,
+              takesFile
+                ? h(
+                    "a",
+                    {
+                      className: "pp-syncbtn",
+                      href: sync.download.url,
+                      target: "_blank",
+                      rel: "noreferrer",
+                      title: "Your browser downloads the sheet from Google as a .csv file",
+                    },
+                    "Download from Google",
+                  )
+                : null,
+              takesFile
+                ? h(
+                    "label",
+                    { className: "pp-syncbtn" + (busy ? " pp-syncbtn-off" : ""), title: "Choose the .csv file you downloaded, or drop it on this card" },
+                    busy === "copy" ? "Reading…" : "Add the downloaded file",
+                    h("input", {
+                      type: "file",
+                      accept: ".csv,text/csv",
+                      hidden: true,
+                      disabled: Boolean(busy),
+                      onChange: (event) => {
+                        const file = event.target.files && event.target.files[0];
+                        event.target.value = "";
+                        takeCopy(file);
+                      },
+                    }),
+                  )
+                : null,
+              h("span", { className: "pp-segspacer" }),
               h(
                 "button",
-                { type: "button", className: "pp-syncbtn", disabled: Boolean(busy), onClick: migrate, title: "Writes syncs: into the run's version.yaml" },
-                busy === "migrate" ? "Writing…" : "Save in settings",
+                { type: "button", className: "pp-syncbtn", disabled: Boolean(busy) || !ready, onClick: () => press("plan") },
+                busy === "plan" ? "Looking…" : "Preview",
               ),
-            )
-          : null,
-        results._migrate ? h("pre", { className: "pp-approveout" }, results._migrate.error || results._migrate.output) : null,
-
-        doc.waiting.length
-          ? h(
-              "section",
-              { className: "pp-syncsection" },
-              h("h3", { className: "pp-synch3" }, "Waiting for you", h("span", { className: "pp-count pp-count-warn" }, doc.waiting.length)),
-              h(
-                "p",
-                { className: "pp-as" },
-                doc.names
-                  ? "Each row as it stands in its sheet, and who it most likely is. A confirmed row is remembered on this computer and applied the next time its sync runs; until then it writes nothing."
-                  : "Names are hidden. Press Names to see who each row is.",
-              ),
-              h("div", { className: "pp-waitlist" }, doc.waiting.map(waitingCard)),
-            )
-          : null,
-
-        GROUPS.map((group) => {
-          const members = doc.syncs.filter((sync) => sync.role === group.role);
-          if (!members.length) return null;
-          return h(
-            "section",
-            { className: "pp-syncsection", key: group.role },
-            h(
-              "h3",
-              { className: "pp-synch3" },
-              h(DirectionBadge, { role: group.role }),
-              group.title,
-              h("span", { className: "pp-count" }, members.length),
+              sync.live
+                ? h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-syncbtn pp-syncbtn-send",
+                      disabled: Boolean(busy) || !ready || !previewed,
+                      title: previewed ? "Do what the preview shows" : "Preview first",
+                      onClick: () => press("run", true),
+                    },
+                    busy === "run" ? "Sending…" : "Send",
+                  )
+                : h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-syncbtn pp-syncbtn-run",
+                      disabled: Boolean(busy) || !ready || !sync.enabled,
+                      onClick: () => press("run"),
+                    },
+                    busy === "run" ? "Running…" : "Run",
+                  ),
             ),
-            h("p", { className: "pp-as" }, group.hint),
-            h("div", { className: "pp-syncgrid" }, members.map(syncCard)),
-          );
-        }),
-        doc.syncs.length ? null : h(Message, null, "This run has no syncs yet."),
-        doc.waiting.length
-          ? null
-          : h("p", { className: "pp-as pp-syncfoot" }, "Nothing is waiting. Rows a sync is not sure of appear at the top after it runs."),
+        // How the file gets here, and what would make the step unnecessary: the
+        // missing thing named, so "why do I have to do this" has an answer.
+        takesFile
+          ? h(
+              "p",
+              { className: "pp-synchint" },
+              "This computer has no Google login of its own, so the sheet comes in as a file: press Download from Google" +
+                (sync.download.tabHint
+                  ? " (it downloads the first tab; for “" +
+                    sync.download.tabHint +
+                    "” open that tab and use File → Download → Comma-separated values)"
+                  : "") +
+                ", then drop the file here. You see what it would change before anything is written.",
+            )
+          : null,
+        result
+          ? h(
+              "div",
+              { className: "pp-syncout" + (result.error || !result.ok ? " pp-syncout-err" : "") },
+              h(
+                "div",
+                { className: "pp-syncouthead" },
+                h("span", null, result.error ? "Could not run" : result.action === "run" ? "Done" : "Preview — nothing was changed"),
+                h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: () => setResult(null) }, "×"),
+              ),
+              h("pre", null, result.error || result.output || "(nothing printed)"),
+            )
+          : null,
+      );
+    }
+
+    /**
+     * One row a sync was not sure of: where it stands in its sheet, who it most
+     * likely is, and Confirm or Someone else. A confirmed row is remembered on this
+     * computer and applied the next time its sync runs; until then it writes
+     * nothing.
+     */
+    function WaitingCard(props) {
+      const row = props.row;
+      const [picking, setPicking] = React.useState(null);
+      const [busy, setBusy] = React.useState(false);
+      const [failed, setFailed] = React.useState(null);
+      const [best] = row.candidates;
+      const preview = row.preview;
+      const person = (candidate) => candidate.name || candidate.student;
+
+      const confirm = (to) => {
+        setBusy(true);
+        setFailed(null);
+        syncPost(props.runId, props.sessionId, "/api/syncs/action", {
+          action: "confirm",
+          sync: row.sync,
+          line: row.line,
+          key: row.key,
+          to: to || null,
+        }).then((answer) => {
+          setBusy(false);
+          if (answer.error || !answer.ok) {
+            setFailed(answer.error || answer.output || "It was not confirmed.");
+            return;
+          }
+          if (props.onDone) props.onDone();
+        });
+      };
+
+      return h(
+        "div",
+        { className: "pp-waitcard" },
+        h(
+          "div",
+          { className: "pp-waithead" },
+          h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, preview ? "GS" : "··"),
+          h(
+            "span",
+            { className: "pp-waitsource" },
+            row.source,
+            preview && preview.tab ? h("span", { className: "pp-waitwhere" }, " · tab " + preview.tab) : null,
+            row.line ? h("span", { className: "pp-waitwhere" }, " · line " + row.line) : null,
+          ),
+          h("span", { className: "pp-segspacer" }),
+          preview && preview.open
+            ? h("a", { className: "pp-waitopen", href: preview.open, target: "_blank", rel: "noreferrer" }, "Open in Google Sheets ↗")
+            : null,
+        ),
+        preview ? h(SheetPreview, { preview, line: row.line }) : null,
+        h(
+          "div",
+          { className: "pp-waitdecide" },
+          h(
+            "div",
+            { className: "pp-waitpair" },
+            h(
+              "span",
+              { className: "pp-waitwritten", title: "As written in the sheet" },
+              row.written !== null ? "“" + row.written + "”" : "(name hidden)",
+            ),
+            h("span", { className: "pp-waitarrow", "aria-hidden": "true" }, "→"),
+            best
+              ? h(
+                  "span",
+                  { className: "pp-waitwho" },
+                  h("span", { className: "pp-avatar", "aria-hidden": "true" }, best.name ? initials(best.name) : "?"),
+                  h("span", { className: "pp-waitname" }, person(best)),
+                )
+              : h("span", { className: "pp-as" }, "nobody in the class list is close"),
+            h("span", { className: "pp-chip pp-chip-warn", title: row.why.replace(/ of STUDENT-[A-Z0-9]+/, "") }, shortWhy(row.why)),
+          ),
+          row.candidates.length > 1
+            ? h("div", { className: "pp-as" }, "Also near: " + row.candidates.slice(1).map(person).join(", "))
+            : null,
+          picking
+            ? h(
+                "div",
+                { className: "pp-syncctl" },
+                h(
+                  "select",
+                  { value: picking.to || "", onChange: (event) => setPicking({ to: event.target.value }) },
+                  h("option", { value: "" }, "Who is it?"),
+                  (props.students || []).map((student) =>
+                    h("option", { value: student.student, key: student.student }, student.name || student.student),
+                  ),
+                ),
+                h("span", { className: "pp-segspacer" }),
+                h(
+                  "button",
+                  { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy || !picking.to, onClick: () => confirm(picking.to) },
+                  "Confirm",
+                ),
+                h("button", { type: "button", className: "pp-syncbtn", onClick: () => setPicking(null) }, "Cancel"),
+              )
+            : h(
+                "div",
+                { className: "pp-syncctl" },
+                h("span", { className: "pp-segspacer" }),
+                best
+                  ? h(
+                      "button",
+                      { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy, onClick: () => confirm(null) },
+                      "Confirm " + (best.name ? best.name.split(/\s+/)[0] : "it"),
+                    )
+                  : null,
+                h("button", { type: "button", className: "pp-syncbtn", onClick: () => setPicking({ to: "" }) }, "Someone else"),
+              ),
+          failed ? h("p", { className: "pp-saveerr" }, failed) : null,
+        ),
+      );
+    }
+
+    /** The rows waiting on a service's syncs, with the sentence that says what Confirm does. */
+    function WaitingList(props) {
+      const rows = props.rows || [];
+      if (!rows.length) return null;
+      return h(
+        "div",
+        { className: "pp-syncsection" },
+        h("h3", { className: "pp-synch3" }, "Waiting for you", h("span", { className: "pp-count pp-count-warn" }, rows.length)),
+        h(
+          "p",
+          { className: "pp-as" },
+          props.names
+            ? "Each row as it stands in its sheet, and who it most likely is. A confirmed row is remembered on this computer and applied the next time its sync runs; until then it writes nothing."
+            : "Names are hidden. Press Names to see who each row is.",
+        ),
+        h(
+          "div",
+          { className: "pp-waitlist" },
+          rows.map((row) =>
+            h(WaitingCard, {
+              row,
+              students: props.students,
+              runId: props.runId,
+              sessionId: props.sessionId,
+              onDone: props.onDone,
+              key: row.sync + row.key,
+            }),
+          ),
+        ),
       );
     }
 
@@ -5194,7 +5478,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
       // Last: not the course but its roads out — Canvas, the sheet, the
       // repositories — and the rows a sync was not sure of, by name.
-      { id: "syncs", label: "Syncs", hint: "Canvas, the grade sheet and the rest: preview, run, and the rows waiting for you" },
+      { id: "integrations", label: "Integrations", hint: "Canvas, the grade sheet and GitHub: where each stands, and what is waiting for you" },
     ];
 
     /** The Status view's words for a connection, as the Integrations tab says them. */
@@ -5208,7 +5492,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       // reading is kept so the weeks come back as they were left.
       const [view, setView] = React.useState(null);
       const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
-      // Integrations, opened from Syncs: the pane's own tab, drawn here so going
+      // Integrations: the pane's own tab, drawn here so going
       // to it does not close course mode. This course first, as in the pane.
       const [integrationsSub, setIntegrationsSub] = React.useState("course");
       // The week Teaching was last stepped to. The page steps without a round
@@ -5274,23 +5558,6 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       const canvasLine = shown.current.canvas;
 
       const viewBody = () => {
-        if (view === "syncs") {
-          return h(
-            "div",
-            { className: "pp-cviewpad" },
-            h(SyncsView, {
-              runId: props.runId,
-              sessionId: props.sessionId,
-              names: props.names,
-              revision: props.reload,
-              onWrite: props.onWrite,
-              // Connections themselves — a host, a token — are the Integrations
-              // tab's. Opened in place: closing course mode to get there read as
-              // the window crashing.
-              onSetup: () => setView("integrations"),
-            }),
-          );
-        }
         if (view === "integrations") {
           return h(
             "div",
@@ -5303,7 +5570,6 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
               revision: props.reload,
               names: props.names,
               ask: props.ask,
-              openSyncs: () => setView("syncs"),
               key: props.runId,
             }),
           );
@@ -5380,7 +5646,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
           entry.label,
         );
       // The views that name people follow the pane's Names / Pseudonyms choice.
-      const named = view === "students" || view === "syncs" || (view === "tasks" && taskSub !== "unpublished");
+      const named = view === "students" || view === "integrations" || (view === "tasks" && taskSub !== "unpublished");
 
       return ReactDOM.createPortal(
         h(
@@ -5438,18 +5704,20 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
                   ),
               // The pane's header, which this veil covers. Publish and Upload
               // open their own windows on top, so course mode is still here when
-              // they close. The wiring line opens the Syncs view in place —
-              // where Canvas stands and what is waiting are both answered there,
-              // and it links on to the pane's Integrations for the setup itself.
+              // they close. The wiring line opens Integrations in place, where
+              // Canvas stands, what is waiting, and the setup are all answered.
               canvasLine || waiting
                 ? h(
                     "button",
                     {
                       type: "button",
                       className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
-                      title: preview ? "Private — not shown while previewing as a student" : "Open Syncs",
+                      title: preview ? "Private — not shown while previewing as a student" : "Open Integrations",
                       disabled: preview,
-                      onClick: () => setView("syncs"),
+                      onClick: () => {
+                        setIntegrationsSub("course");
+                        setView("integrations");
+                      },
                     },
                     [
                       canvasLine ? "Canvas: " + (CONNECTION_STATE[canvasLine.state] || canvasLine.state) : null,
@@ -5526,8 +5794,8 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
                             ? SUBVIEWS.integrations.map((entry) =>
                                 segment(
                                   entry,
-                                  entry.id !== "syncs" && integrationsSub === entry.id,
-                                  () => (entry.id === "syncs" ? setView("syncs") : setIntegrationsSub(entry.id)),
+                                  integrationsSub === entry.id,
+                                  () => setIntegrationsSub(entry.id),
                                   false,
                                 ),
                               )
@@ -11364,6 +11632,15 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       // state — and so that leaving a tab and coming back to it remembers where
       // the professor was, which one shared value could not do.
       const [subViews, setSubViews] = React.useState({});
+      // Which card Integrations → This course should bring into view, from a jump
+      // elsewhere (the sheet notice, Students' "Sync from sheet"). The tick makes
+      // the same jump work twice.
+      const [integrationsFocus, setIntegrationsFocus] = React.useState({ service: null, tick: 0 });
+      const focusCard = (service) => {
+        setTab("integrations");
+        setSubViews((value) => Object.assign({}, value, { integrations: "course" }));
+        setIntegrationsFocus((value) => ({ service, tick: value.tick + 1 }));
+      };
       const subView = (tabId) => subViews[tabId] ?? defaultSub(tabId);
       // ON by default, which reverses the original decision here and is worth
       // recording rather than quietly flipping.
@@ -11721,8 +11998,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
           // The Students tab's "Sync from sheet": the Syncs view, where the sheet
           // is read directly or brought in as a downloaded file.
           if (data.kind === "syncs") {
-            setTab("integrations");
-            setSubViews((current) => Object.assign({}, current, { integrations: "syncs" }));
+            focusCard("sheets");
             if (courseModeRef.current) setCourseMode(false);
             return;
           }
@@ -11897,17 +12173,6 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
             key: current.runId,
           });
         }
-        if (tab === "integrations" && subView(tab) === "syncs") {
-          return h(SyncsView, {
-            runId: current.runId,
-            sessionId: props.sessionId,
-            names: names,
-            // A run writes records, and Save-in-settings writes the run record.
-            onWrite: () => setReload((value) => value + 1),
-            revision: reload,
-            key: current.runId,
-          });
-        }
         if (tab === "integrations") {
           return h(Integrations, {
             runId: current.runId,
@@ -11929,7 +12194,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
             revision: reload,
             names: names,
             ask: props.ask,
-            openSyncs: () => setSubViews((value) => Object.assign({}, value, { integrations: "syncs" })),
+            focus: integrationsFocus,
             key: current.runId,
           });
         }
@@ -12210,8 +12475,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
                 setSubViews((value) => Object.assign({}, value, { progress: "gradebook" }));
               },
               onSync: () => {
-                setTab("integrations");
-                setSubViews((value) => Object.assign({}, value, { integrations: "syncs" }));
+                focusCard("sheets");
               },
             })
           : null,
@@ -12467,12 +12731,10 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
     // alone by `test/desk-page.mjs`, against a mock API and a synthetic voice.
     exports.turnStep = turnStep;
     exports.DefenceDesk = DefenceDesk;
-    // The same, for `test/syncs-page.mjs`: the Syncs view alone, against the real
-    // syncs of a workspace and made-up names in the review list.
-    exports.SyncsView = SyncsView;
+    // The same, for `test/integrations-page.mjs`: Integrations (and course mode
+    // over it, with `?course=1`) against the real run, every write answered from
+    // memory, and made-up names in the review list.
     exports.CourseMode = CourseMode;
-    // And Integrations, for `test/integrations-page.mjs`: the real run read, every
-    // write answered from memory.
     exports.Integrations = Integrations;
     // And the grade sheet's notice and "Last added", against made-up marks.
     exports.SheetNotice = SheetNotice;

@@ -679,9 +679,10 @@ export const integrationsDocument = (workspace, root, runId) => {
   // work — so `usable` is separate from `id`.
   const numeric = /^[0-9]+$/;
 
+  const ledger = Ledger.load(runId);
   // `assessment|canvas course` → the definition as last sent.
   const definitionsSent = {};
-  for (const [key, entry] of Object.entries(Ledger.load(runId).assignments)) {
+  for (const [key, entry] of Object.entries(ledger.assignments)) {
     const assessmentId = key.split("|")[0];
     const at = entry?.at;
     if (typeof at !== "string") continue;
@@ -850,6 +851,21 @@ export const integrationsDocument = (workspace, root, runId) => {
       // went to. From this machine's ledger, so "never" can also mean "sent
       // from another computer" — the Canvas card says "not sent from here".
       definitionSent: definitionsSent[assessment.assessment_id] ?? null,
+      // Its homework starter repository, for the GitHub card: what the record
+      // names (`extensions.github`) and what this machine last pushed there.
+      // Null for an assessment that has no repository at all.
+      github: (() => {
+        const github = assessment?.extensions?.github;
+        const repo = typeof github?.template_repo === "string" && github.template_repo.trim() ? github.template_repo.trim() : null;
+        const folder = typeof github?.local_path === "string" && github.local_path.trim() ? github.local_path.trim() : null;
+        const sent = ledger.publications[`homework|${assessment.assessment_id}`] ?? null;
+        if (!repo && !folder && !sent) return null;
+        return {
+          repo: repo ?? sent?.where ?? null,
+          folder,
+          published: sent ? { at: sent.at ?? null, where: sent.where ?? null, url: sent.reference ?? null } : null,
+        };
+      })(),
     })),
     subgroups: groupsOf(bundle, runId).map((group) => ({ group, students: activeIn(group) })),
     ungrouped: activeIn(""),

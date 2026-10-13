@@ -7,7 +7,8 @@
  * over four of them and the definition push and the assignment links each
  * existed twice. It is being regrouped by service: one card per service, its
  * setup inside it while unfinished, its syncs on it, and the facts a broken
- * push needs folded into the card's Details. Canvas is the first card.
+ * push needs folded into the card's Details. Canvas, Google Sheets and GitHub
+ * have cards; Credentials goes when Accounts replaces it.
  */
 
 import { CanvasCard, canvasCounts } from "./canvas-card.js";
@@ -20,6 +21,8 @@ import {
   Secret,
 } from "./integration-parts.js";
 import { useUnpublished } from "./marks.js";
+import { GithubCard, SheetsCard } from "./service-cards.js";
+import { SyncCard } from "./syncs.js";
 import { h, React } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -61,11 +64,22 @@ export function Integrations(props) {
   const [fresh, setFresh] = React.useState(null);
   // A refusal from the credential seam, tagged with the field that caused it.
   const [status, setStatus] = React.useState(null);
-  // The run's marks and syncs, for the Canvas rows and the strip above them.
+  // Bumped after a sync press, so its card's chips and the waiting rows are
+  // read again even where nothing passes `onWrite`.
+  const [tick, setTick] = React.useState(0);
+  // The run's marks and syncs, for the cards and the strip above them. The
+  // syncs in Names mode only when the pane shows names: a waiting row is a
+  // person, and "→ STUDENT-B7K2QA" asks a professor to decide what they
+  // cannot read.
   const unpublished = useUnpublished(props.runId, props.sessionId, props.revision || 0);
   const syncs = useJson(
     scoped(
-      BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + encodeURIComponent(String(props.revision || 0)),
+      BASE +
+        "/api/syncs?run=" +
+        encodeURIComponent(props.runId || "") +
+        (props.names ? "&names=1" : "") +
+        "&r=" +
+        encodeURIComponent(String(props.revision || 0) + "." + tick),
       props.sessionId,
     ),
   );
@@ -99,6 +113,21 @@ export function Integrations(props) {
     // counter an approval bumps.
     if (props.onWrite) props.onWrite();
   };
+  // After a sync press: a run writes records, a confirm changes what waits.
+  const onSynced = () => {
+    setTick((value) => value + 1);
+    if (props.onWrite) props.onWrite();
+  };
+  // A Google sign-in changes the registry and the credential store, not the
+  // record, so nothing bumps the revision: read the document again by hand.
+  const refresh = () =>
+    fetch(url, { headers: { accept: "application/json" } })
+      .then((response) => response.json())
+      .then((body) => {
+        if (!body.error) setFresh(body);
+        setTick((value) => value + 1);
+      })
+      .catch(() => null);
 
   // ---- Credentials ---------------------------------------------------
 
@@ -288,11 +317,17 @@ export function Integrations(props) {
     sessionId: props.sessionId,
     names: props.names,
     ask: props.ask,
-    openSyncs: props.openSyncs,
+    focus: props.focus,
+    revision: String(props.revision || 0) + "." + tick,
     onSaved,
+    onSynced,
+    onRefresh: refresh,
     onWrite: props.onWrite,
   });
 }
+
+/** The services that have a card of their own; the rest are drawn as Status drew them. */
+const CARDED = new Set(["canvas", "sheets", "github"]);
 
 /**
  * Integrations → This course: what needs the professor, then one card per
@@ -303,44 +338,76 @@ export function Integrations(props) {
  * each item goes to the rows it is about. A course with nothing to do shows no
  * strip at all rather than a green "all clear" to read past.
  *
- * Canvas has its card. The others are still drawn as Status drew them, and
- * only the ones this course uses: a service nobody has set up is one line at
- * the bottom, not a red row each.
+ * Canvas, Google Sheets and GitHub have cards. Telegram and Moodle are still
+ * drawn as Status drew them, and only when the course uses them: a service
+ * nobody has set up is one line at the bottom, not a red row each. Any sync of
+ * a service with no card is drawn on its own under "Other syncs", so moving
+ * the syncs onto cards cannot lose one.
+ *
+ * `focus` comes from outside — the sheet notice, Students' "Sync from sheet" —
+ * and scrolls the named card into view; its `tick` makes the same jump work
+ * twice.
  */
 function CourseIntegrations(props) {
   const data = props.data;
   const [filter, setFilter] = React.useState({ id: null, tick: 0 });
   const [adding, setAdding] = React.useState(false);
+  const [migrating, setMigrating] = React.useState(null);
   const canvasRow = (data.integrations || []).find((row) => row.id === "canvas");
   const reachable = Boolean(canvasRow) && canvasRow.steps.slice(0, 3).every((step) => step.done);
   const counts = canvasCounts(data, props.unpublished);
+  const syncs = props.syncs ? props.syncs.syncs : [];
   const waiting = props.syncs ? props.syncs.waiting.length : 0;
-  const others = (data.integrations || []).filter((row) => row.id !== "canvas");
-  // A service with a sync on this run is used by it, set up or not: the grade
-  // sheet's sync names its spreadsheet itself, not on the run record the
-  // checklist reads.
-  const synced = new Set(props.syncs ? props.syncs.syncs.map((sync) => sync.service) : []);
+  const others = (data.integrations || []).filter((row) => !CARDED.has(row.id));
+  // A service with a sync on this run is used by it, set up or not.
+  const synced = new Set(syncs.map((sync) => sync.service));
   const isUsed = (row) => row.state !== "absent" || synced.has(row.id);
   const used = others.filter(isUsed);
   const unused = others.filter((row) => !isUsed(row));
+  const loose = syncs.filter((sync) => !CARDED.has(sync.service));
+  const implied = syncs.filter((sync) => sync.implied).length;
 
-  const show = (id) => setFilter((current) => ({ id, tick: current.tick + 1 }));
+  const scrollTo = (id) => {
+    const card = document.getElementById(id);
+    if (card) card.scrollIntoView({ block: "start" });
+  };
+  React.useEffect(() => {
+    if (props.focus && props.focus.service) scrollTo("pp-card-" + props.focus.service);
+  }, [props.focus && props.focus.tick]);
+
+  const show = (id) => {
+    setFilter((current) => ({ id, tick: current.tick + 1 }));
+    scrollTo("pp-card-canvas");
+  };
   const plural = (count, one, many) => count + " " + (count === 1 ? one : many);
+
+  const migrate = () => {
+    setMigrating("working");
+    fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "migrate" }),
+    })
+      .then((response) => response.json())
+      .catch((error) => ({ error: String((error && error.message) || error) }))
+      .then((answer) => {
+        setMigrating(answer);
+        if (props.onSynced) props.onSynced();
+      });
+  };
 
   const needs = [
     waiting
       ? {
           key: "waiting",
-          text: plural(waiting, "name", "names") + " from a sync to confirm",
-          action: props.openSyncs ? "Review" : null,
-          go: props.openSyncs,
+          text: plural(waiting, "name", "names") + " from the grade sheet to confirm",
+          go: () => scrollTo("pp-card-sheets"),
         }
       : null,
     reachable && counts.unlinked.length
       ? {
           key: "unlinked",
           text: plural(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
-          action: "Show",
           go: () => show("unlinked"),
         }
       : null,
@@ -348,11 +415,17 @@ function CourseIntegrations(props) {
       ? {
           key: "marks",
           text: "Canvas is missing marks for " + plural(counts.toSend.length, "assessment", "assessments"),
-          action: "Show",
           go: () => show("marks"),
         }
       : null,
   ].filter(Boolean);
+
+  const card = {
+    runId: props.runId,
+    sessionId: props.sessionId,
+    names: props.names,
+    onSaved: props.onSaved,
+  };
 
   return h(
     "div",
@@ -367,26 +440,34 @@ function CourseIntegrations(props) {
               "div",
               { className: "pp-needsrow", key: item.key },
               h("span", null, item.text),
-              item.action
-                ? h("button", { type: "button", className: "pp-segbtn", onClick: item.go }, item.action)
-                : null,
+              h("button", { type: "button", className: "pp-segbtn", onClick: item.go }, "Show"),
             ),
           ),
         )
       : null,
-    h(CanvasCard, {
-      data,
-      unpublished: props.unpublished,
-      syncs: props.syncs,
-      runId: props.runId,
-      sessionId: props.sessionId,
-      names: props.names,
-      ask: props.ask,
-      filter: filter.id,
-      filterTick: filter.tick,
-      onSaved: props.onSaved,
-      onWrite: props.onWrite,
-    }),
+    h(
+      CanvasCard,
+      Object.assign({}, card, {
+        data,
+        unpublished: props.unpublished,
+        syncs: props.syncs,
+        ask: props.ask,
+        filter: filter.id,
+        filterTick: filter.tick,
+        onWrite: props.onWrite,
+      }),
+    ),
+    h(
+      SheetsCard,
+      Object.assign({}, card, {
+        data,
+        syncs: props.syncs,
+        revision: props.revision,
+        onDone: props.onSynced,
+        onRefresh: props.onRefresh,
+      }),
+    ),
+    h(GithubCard, Object.assign({}, card, { data, syncs: props.syncs, onDone: props.onSynced })),
     used.length
       ? h(IntegrationStatus, {
           integrations: used,
@@ -396,6 +477,24 @@ function CourseIntegrations(props) {
           sessionId: props.sessionId,
           onSaved: props.onSaved,
         })
+      : null,
+    loose.length
+      ? h(
+          "div",
+          { className: "pp-syncsection" },
+          h("p", { className: "pp-factgroup" }, "Other syncs"),
+          loose.map((sync) =>
+            h(SyncCard, {
+              sync,
+              key: sync.id,
+              assessments: props.syncs.assessments,
+              runId: props.runId,
+              sessionId: props.sessionId,
+              names: props.names,
+              onDone: props.onSynced,
+            }),
+          ),
+        )
       : null,
     unused.length
       ? h(
@@ -422,6 +521,30 @@ function CourseIntegrations(props) {
               })
             : null,
         )
+      : null,
+    // The syncs this run still takes from older settings (lms.toml, the sheet
+    // settings, the publishing profiles) rather than from its own `syncs:`.
+    // They work as they are; this writes them down in one place.
+    implied
+      ? h(
+          "div",
+          { className: "pp-approverow" },
+          h(
+            "span",
+            { className: "pp-as" },
+            (implied === syncs.length ? "All " : implied + " of ") +
+              plural(syncs.length, "sync is", "syncs are") +
+              " read from older settings. Saving them writes syncs: into the run's settings.",
+          ),
+          h(
+            "button",
+            { type: "button", className: "pp-segbtn", disabled: migrating === "working", onClick: migrate },
+            migrating === "working" ? "Writing…" : "Save in settings",
+          ),
+        )
+      : null,
+    migrating && migrating !== "working"
+      ? h("pre", { className: "pp-approveout" + (migrating.error ? " pp-approveerr" : "") }, migrating.error || migrating.output)
       : null,
   );
 }

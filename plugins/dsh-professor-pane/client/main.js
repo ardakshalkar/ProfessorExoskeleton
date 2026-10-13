@@ -44,7 +44,6 @@
  */
 
 import { DefenceDesk } from "./defence-desk.js";
-import { SyncsView } from "./syncs.js";
 import { Integrations } from "./integrations.js";
 import { CourseMode } from "./materials.js";
 import { RecentMarks, SheetNotice } from "./marks.js";
@@ -159,12 +158,10 @@ exports.inject = inject;
 // alone by `test/desk-page.mjs`, against a mock API and a synthetic voice.
 exports.turnStep = turnStep;
 exports.DefenceDesk = DefenceDesk;
-// The same, for `test/syncs-page.mjs`: the Syncs view alone, against the real
-// syncs of a workspace and made-up names in the review list.
-exports.SyncsView = SyncsView;
+// The same, for `test/integrations-page.mjs`: Integrations (and course mode
+// over it, with `?course=1`) against the real run, every write answered from
+// memory, and made-up names in the review list.
 exports.CourseMode = CourseMode;
-// And Integrations, for `test/integrations-page.mjs`: the real run read, every
-// write answered from memory.
 exports.Integrations = Integrations;
 // And the grade sheet's notice and "Last added", against made-up marks.
 exports.SheetNotice = SheetNotice;

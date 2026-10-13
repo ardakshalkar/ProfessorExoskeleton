@@ -352,9 +352,9 @@ that the token is an environment variable, and that Telegram is in a JSON file
 under a different dot-directory again. Four of those are invisible from every
 other tab.
 
-Being regrouped by service (since 2026-10-13), so everything about one service
-is in one place. Three sub-views for now: **This course**, **Syncs** and
-**Credentials**.
+Regrouped by service (2026-10-13), so everything about one service is in one
+place. Two sub-views: **This course** and **Credentials**. Credentials goes
+when Accounts replaces it.
 
 **This course** opens on a *Needs you* strip, which appears only when there is
 something to do: names a sync could not place, assessments with no Canvas
@@ -367,12 +367,33 @@ pills: its column, its definition ("brief"), and its marks. A row opens to the
 link per course, the definition push, the marks send (the same `CanvasMarks`
 the Scans tab uses) and the hand-ins sync. **Details** holds what a broken push
 needs: where the host is read from, the token variable, the course ids, the
-gradebook target, the run record, and the section mapping. Services the course
-doesn't use are one line at the foot, not a red row each. Syncs and Credentials
-go when the sheet and GitHub get cards and when Accounts replaces Credentials.
+gradebook target, the run record, and the section mapping.
 
-`test/integrations-page.mjs` draws the tab against a real workspace with every
-write mocked (`--ready` makes Canvas look reachable).
+The **Google Sheets card** and the **GitHub card** replaced the Syncs view.
+
+- **Google Sheets** shows each grade sheet's sync: whether it is read live or
+  from a downloaded copy, and whether it changed in Google. The rows that sync
+  wasn't sure of sit on the same card, each shown as a small grid of the sheet.
+  While nobody is signed in, *Connect Google* is on the card; once someone is,
+  it moves into Details, beside the gradebook copy.
+- **GitHub** has one row per assessment that names a starter repository. Each
+  row shows where the repository is and when this machine last pushed to it.
+  A row opens to Preview, then Send.
+
+Both cards are built from `SyncCard` and `WaitingList` in `client/syncs.js`,
+which hold the Syncs view's presses, moved rather than rewritten. A sync of a
+service with no card (Telegram's announcements, say) is drawn under *Other
+syncs*, so none can go missing. Syncs still read from older settings get a
+*Save in settings* line at the foot. Telegram and Moodle are still drawn as
+Status drew them, and only when the course uses them.
+
+Jumps that used to open Syncs now open This course with the sheet card scrolled
+into view: the sheet-changed notice, and the Students tab's "Sync from sheet".
+In course mode, the Syncs window became Integrations.
+
+`test/integrations-page.mjs` draws the tab against a real workspace, with every
+write mocked. `--ready` makes Canvas look reachable, `--waiting` adds made-up
+rows to confirm, and `?course=1` puts course mode over it.
 
 **No credential is ever drawn.** Presence, the variable's name, the layer it
 comes from, and the path it would be read from — never a value.

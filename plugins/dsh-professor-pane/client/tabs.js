@@ -180,13 +180,11 @@ export const SUBVIEWS = {
     // marks Canvas does not have, materials changed since publishing.
     { id: "unpublished", label: "Unpublished" },
   ],
-  // Being regrouped by service (2026-10-13). This course is one card per
-  // service — Canvas's took over Status, Targets and Links. Syncs goes when
-  // the sheet and GitHub get cards of their own, and Credentials when
-  // Accounts replaces it.
+  // Regrouped by service (2026-10-13). This course is one card per service —
+  // Canvas's took over Status, Targets and Links, and the sheet's and
+  // GitHub's took over Syncs. Credentials goes when Accounts replaces it.
   integrations: [
     { id: "course", label: "This course" },
-    { id: "syncs", label: "Syncs" },
     { id: "credentials", label: "Credentials" },
   ],
 };
