@@ -256,6 +256,62 @@ export function ProfessorPane(props) {
           .catch(() => setReload((count) => count + 1));
         return;
       }
+      // A fork the student brought in person (`defence fork`). A link the
+      // command refuses comes back as its own words, since the frame that
+      // asked has no place to show them.
+      if (data.kind === "defence-fork") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run = currentRunRef.current;
+        if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+        if (typeof data.url !== "string" || !/^https:\/\/\S+$/.test(data.url.trim())) {
+          window.alert("A fork link starts with https://");
+          setReload((count) => count + 1);
+          return;
+        }
+        fetch(
+          scoped(
+            BASE + "/api/defence/fork?run=" + encodeURIComponent(run) +
+              "&assessment=" + encodeURIComponent(data.assessment) +
+              "&student=" + encodeURIComponent(data.student) +
+              "&url=" + encodeURIComponent(data.url.trim()),
+            props.sessionId,
+          ),
+          { method: "POST" },
+        )
+          .then((response) => response.json())
+          .then((result) => {
+            if (!result.ok) {
+              const said = String(result.error || result.output || "the link was not saved").trim().split("\n").slice(-2).join(" ");
+              window.alert(said);
+            }
+            setReload((count) => count + 1);
+          })
+          .catch(() => setReload((count) => count + 1));
+        return;
+      }
+      // One rubric criterion checked at the defence (`defence mark --criterion`):
+      // the mark changes in the course, and the redraw shows it.
+      if (data.kind === "defence-check") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run = currentRunRef.current;
+        if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student)) || !id.test(String(data.criterion))) return;
+        if (!["confirmed", "partly", "not_confirmed", "clear"].includes(data.outcome)) return;
+        const score = typeof data.score === "number" && Number.isFinite(data.score) ? "&score=" + data.score : "";
+        fetch(
+          scoped(
+            BASE + "/api/defence/mark?run=" + encodeURIComponent(run) +
+              "&assessment=" + encodeURIComponent(data.assessment) +
+              "&student=" + encodeURIComponent(data.student) +
+              "&criterion=" + encodeURIComponent(data.criterion) +
+              "&outcome=" + encodeURIComponent(data.outcome) + score,
+            props.sessionId,
+          ),
+          { method: "POST" },
+        )
+          .then(() => setReload((count) => count + 1))
+          .catch(() => setReload((count) => count + 1));
+        return;
+      }
       if (data.kind === "defence") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run = currentRunRef.current;

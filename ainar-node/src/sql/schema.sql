@@ -503,6 +503,7 @@ CREATE TABLE IF NOT EXISTS assessment.evaluations (
     decision_comment TEXT,
     decided_by      TEXT,
     decided_at      TIMESTAMPTZ,
+    decided_defence TEXT CHECK (decided_defence IN ('confirmed', 'partly', 'not_confirmed')),
 
     extensions      JSONB NOT NULL DEFAULT '{}',
     UNIQUE (submission_id, criterion_id),
@@ -515,6 +516,10 @@ CREATE TABLE IF NOT EXISTS assessment.evaluations (
         OR (decided_score IS NOT NULL AND decided_by IS NOT NULL AND decided_at IS NOT NULL)
     )
 );
+
+-- Added 2026-10-12; a database loaded before then has the table without it.
+ALTER TABLE assessment.evaluations ADD COLUMN IF NOT EXISTS decided_defence TEXT
+    CHECK (decided_defence IN ('confirmed', 'partly', 'not_confirmed'));
 
 CREATE INDEX IF NOT EXISTS evaluations_awaiting_decision
     ON assessment.evaluations (criterion_id) WHERE decided_at IS NULL;

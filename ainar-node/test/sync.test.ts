@@ -512,3 +512,13 @@ test("sync link and confirm write the private link table", async () => {
   assert.equal(after.get("hw", nameLinkKey("Ostanin Artym"))!.how, "confirmed");
   assert.equal(after.queued("hw").length, 0);
 });
+
+test("the gradebook copy with no assessment named previews and pushes the whole run", async () => {
+  const run = { syncs: [{ sync_id: "gradebook-copy", service: "sheets", role: "target", stream: "grades", where: { sheet: "1XyZ" } }] };
+  const calls: string[][] = [];
+  const deps = { out: () => undefined, delegate: (argv: string[]) => (calls.push(argv), 0) };
+  await runSync(args({ subcommand: "plan", sync: "gradebook-copy" }), runBundle(run), "/nowhere", deps);
+  assert.deepEqual(calls[0], ["lms", "push", RUN, "--target", "sheets-api", "--sheet", "1XyZ", "--all"]);
+  await runSync(args({ subcommand: "plan", sync: "gradebook-copy", passthrough: ["--assessment", "ASSESSMENT-HW1"] }), runBundle(run), "/nowhere", deps);
+  assert.deepEqual(calls[1], ["lms", "plan", RUN, "--target", "sheets-api", "--sheet", "1XyZ", "--assessment", "ASSESSMENT-HW1"]);
+});

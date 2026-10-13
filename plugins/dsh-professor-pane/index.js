@@ -643,23 +643,57 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     // *Defended* / *Not defended* in the Students view: the professor's word,
     // set on the submission by `ainar defence mark`. A press is the decision,
     // so nothing is drafted and nothing waits for approval.
-    if (path === "/api/defence/mark") {
+    // A fork the student brought in person, pasted in the Students view:
+    // `ainar defence fork` puts the link on their submission, or makes one.
+    if (path === "/api/defence/fork") {
       if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
       const assessmentId = url.searchParams.get("assessment") ?? "";
       const studentId = url.searchParams.get("student") ?? "";
-      const outcome = url.searchParams.get("outcome") ?? "";
+      const link = (url.searchParams.get("url") ?? "").trim();
       if (!/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId) || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(studentId)) {
         return sendJson(res, 200, { error: "An assessment and a student id, please." });
       }
-      if (!["defended", "not_defended", "clear"].includes(outcome)) {
-        return sendJson(res, 200, { error: "defended, not_defended or clear." });
-      }
+      if (!/^https:\/\/\S{3,300}$/.test(link)) return sendJson(res, 200, { error: "A fork link starts with https://" });
       try {
         loadedRun(workspace, runId); // the run has to be this workspace's
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }
-      return runScans(["defence", "mark", runId, "--assessment", assessmentId, "--student", studentId, "--outcome", outcome], root)
+      return runScans(["defence", "fork", runId, "--assessment", assessmentId, "--student", studentId, "--url", link], root)
+        .then((result) => sendJson(res, 200, result))
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    if (path === "/api/defence/mark") {
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      const assessmentId = url.searchParams.get("assessment") ?? "";
+      const studentId = url.searchParams.get("student") ?? "";
+      const outcome = url.searchParams.get("outcome") ?? "";
+      // With a criterion, one line of the rubric checked at the defence.
+      const criterionId = url.searchParams.get("criterion") ?? "";
+      const score = url.searchParams.get("score") ?? "";
+      if (!/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId) || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(studentId)) {
+        return sendJson(res, 200, { error: "An assessment and a student id, please." });
+      }
+      if (criterionId && !/^CRIT-[A-Z0-9][A-Z0-9-]*$/.test(criterionId)) {
+        return sendJson(res, 200, { error: "A criterion id, please." });
+      }
+      if (score && !/^\d+(\.\d+)?$/.test(score)) return sendJson(res, 200, { error: "A score is a number." });
+      const outcomes = criterionId ? ["confirmed", "partly", "not_confirmed", "clear"] : ["defended", "not_defended", "clear"];
+      if (!outcomes.includes(outcome)) return sendJson(res, 200, { error: outcomes.join(", ") + "." });
+      try {
+        loadedRun(workspace, runId); // the run has to be this workspace's
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      return runScans(
+        [
+          "defence", "mark", runId, "--assessment", assessmentId, "--student", studentId, "--outcome", outcome,
+          ...(criterionId ? ["--criterion", criterionId] : []),
+          ...(score ? ["--score", score] : []),
+        ],
+        root,
+      )
         .then((result) => sendJson(res, 200, result))
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }

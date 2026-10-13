@@ -149,6 +149,8 @@ export const SubmissionStatus = z.enum([
 ]);
 /** The professor's word on an oral defence. Absent means not yet held, or not asked. */
 export const DefenceOutcome = z.enum(["defended", "not_defended"]);
+/** The professor's check of one rubric criterion at the defence. */
+export const DefenceCheck = z.enum(["confirmed", "partly", "not_confirmed"]);
 export const EvaluationStatus = z.enum(["suggested", "in_review", "approved", "overridden"]);
 /**
  * Whether a person stands behind a record an agent wrote.

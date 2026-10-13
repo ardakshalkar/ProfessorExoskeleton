@@ -824,6 +824,8 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       decision_comment: e.professor_decision ? e.professor_decision.comment : null,
       decided_by: e.professor_decision ? e.professor_decision.decided_by : null,
       decided_at: e.professor_decision ? e.professor_decision.decided_at : null,
+      // Only when there is one, for the reason `url` is: the golden import predates it.
+      ...(e.professor_decision?.defence ? { decided_defence: e.professor_decision.defence } : {}),
       extensions: e.extensions,
     })),
   );

@@ -85,7 +85,7 @@ import { alignmentMarkdown, syllabusMarkdown } from "../src/report.ts";
 import { coverage, validate } from "../src/validate.ts";
 import { IssueList, describe } from "../src/issues.ts";
 import { AGENT_WRITABLE, approvedView, drafts as draftsIn, withRecords } from "../src/approval.ts";
-import { candidateFiles, editRecords } from "../src/record-edit.ts";
+import { candidateFiles, editRecords, setRecordFields } from "../src/record-edit.ts";
 import {
   dominantMisconception,
   emptyResult,
@@ -155,7 +155,11 @@ import {
   transcribeTake,
   writeDefence,
   writePin,
+  repoUrl,
 } from "../src/defence.ts";
+import { checkDefence } from "../src/defence-check.ts";
+import { pulledSubmissionId } from "../src/lms/pull.ts";
+import { gradeChanges, realChanges } from "../src/grade-changes.ts";
 import { configFromRegistry, describeTranscription, estimate, transcriber } from "../src/transcribe.ts";
 import {
   RECORDING_TYPES,
@@ -407,7 +411,11 @@ const deriveEvidence = (
   }
 
   const issues = new IssueList();
-  issues.extend(validate(withRecords(bundle, { evidence: produced }), { root }));
+  // A refreshed record replaces its old self, as `writeRecords` will: checked
+  // beside it instead, every re-derivation is a duplicate id.
+  const fresh = new Set(produced.map((e) => e.evidence_id as string));
+  const kept = { ...bundle, evidence: (bundle.evidence as any[]).filter((e) => !fresh.has(e.evidence_id)) } as typeof bundle;
+  issues.extend(validate(withRecords(kept, { evidence: produced }), { root }));
   if (issues.errors.length) return { produced: [], refreshed: 0, errors: issues.errors.map(describe) };
   if (!dryRun) {
     for (const path of writeRecords(courseDir, { evidence: produced as never[] })) {
@@ -427,6 +435,8 @@ const HELP = `ainar — the AINAR course model CLI
   gradebook RUN [--assessment A] [--group G]
   pending RUN [--assessment A]
   rubric ASSESSMENT
+  grade-changes RUN [--assessment A] [--student S] [--all] [--json]
+                           when and how each grade changed, oldest first
   student RUN STUDENT
   class-progress RUN [--group G]
   inbox RUN [--date D] [--group G]
@@ -504,9 +514,19 @@ const HELP = `ainar — the AINAR course model CLI
                      [--connection NAME]   transcribe recorded takes through the
                                            \`transcription\` connection
   defence mark RUN --assessment A --student S --outcome defended|not_defended|clear
+  defence fork RUN --assessment A --student S (--url URL | --clear)
+                                           a fork the student brought, not handed
+                                           in through Canvas: the link a defence
+                                           clones
                                            the professor's word on whether the
                                            student defended it, on the submission
 
+  defence mark RUN --assessment A --student S --criterion C[,C…]
+                     --outcome confirmed|partly|not_confirmed|clear [--score N]
+                                           the defence checked against the rubric:
+                                           partly halves the written mark, not
+                                           confirmed is 0, --score overrides;
+                                           clear restores the written mark
   Grading a written exam, question by question (the pane's Grade view). The
   grouping of answers is groups.yaml beside the scans; marks go to the course:
 
@@ -1178,6 +1198,35 @@ try {
       break;
     case "pending":
       out(pendingPayload(forRun(rest[0]!), rest[0]!, flag("assessment")));
+    case "grade-changes": {
+      // Read back out of each evaluation's history (src/grade-changes.ts).
+      // Codes, not names: this prints to wherever the output goes.
+      if (!rest[0]) {
+        console.error("usage: grade-changes RUN [--assessment A] [--student S] [--all] [--json]");
+        process.exit(2);
+      }
+      const every = gradeChanges(forRun(rest[0]), rest[0], { assessment: flag("assessment"), student: flag("student") });
+      const changes = args.includes("--all") ? every : realChanges(every);
+      if (args.includes("--json")) {
+        out(changes);
+        break;
+      }
+      if (!changes.length) {
+        out("no decided grades to show");
+        break;
+      }
+      const shown = (value: number | null) => (value === null ? "—" : String(Math.round(value * 100) / 100));
+      for (const change of changes) {
+        out(
+          `${(change.at ?? "(undated)").slice(0, 16).replace("T", " ")}  ${change.student_id}  ${change.assessment_id}  ` +
+            `${change.criterion_id}  ${shown(change.from)} → ${shown(change.to)}${change.maximum != null ? ` of ${shown(change.maximum)}` : ""}  ` +
+            `${change.how}${change.defence ? ` (${change.defence.replace("_", " ")})` : ""}${change.by ? `  ${change.by}` : ""}`,
+        );
+      }
+      out(`
+${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists decisions that kept the same score"}`);
+      break;
+    }
       break;
     case "rubric":
       out(rubricPayload(workspace.findAssessment(rest[0]!), rest[0]!));
@@ -3102,14 +3151,96 @@ try {
 
       if (sub === "mark") {
         // The professor's word on the defence, as a fact on the submission —
+      if (sub === "fork") {
+        // A fork the student brought in person, not handed in through Canvas.
+        // The link goes onto their submission for the homework, or onto a new
+        // one under the id the grade sheet gives it, so the sheet's next sync
+        // adopts it rather than calling it a submission from elsewhere.
+        const forkRun = rest[1];
+        const forkAssessment = flag("assessment");
+        const forkStudent = flag("student");
+        const given = flag("url");
+        const clear = args.includes("--clear");
+        if (!forkRun || !forkAssessment || !forkStudent || (!given && !clear)) {
+          console.error("usage: defence fork RUN --assessment A --student S (--url https://github.com/OWNER/REPO | --clear)");
+          process.exit(2);
+        }
+        const bundle = forRun(forkRun);
+        const assessment = (bundle.assessments as any[]).find(
+          (entry) => entry.assessment_id === forkAssessment && entry.course_version_id === forkRun,
+        );
+        if (!assessment) throw new Error(`${forkRun} has no assessment ${forkAssessment}`);
+        if (!enrolledIn(bundle, forkRun).some((entry) => entry.student_id === forkStudent)) {
+          throw new Error(`${forkStudent} is not enrolled in ${forkRun}`);
+        }
+        const courseId = (bundle.course as any).course_id as string;
+        const courseDir = join(root, "courses", courseId);
+        const submission = (bundle.submissions as any[])
+          .filter((entry) => entry.assessment_id === forkAssessment && entry.student_id === forkStudent)
+          .sort((a, b) => (b.attempt ?? 1) - (a.attempt ?? 1))[0];
+        if (clear) {
+          if (!submission?.url) {
+            out(`${forkStudent} has no fork link for ${forkAssessment}`);
+            break;
+          }
+          editRecords({
+            root,
+            courseId,
+            patterns: COLLECTIONS.submissions,
+            idField: "submission_id",
+            collection: "submissions",
+            edits: new Map([[submission.submission_id, (node: any) => node.delete("url")]]),
+          });
+          out(`${submission.submission_id}: fork link removed`);
+          break;
+        }
+        const url = repoUrl(given!);
+        if (submission) {
+          setRecordFields({
+            root,
+            courseId,
+            patterns: COLLECTIONS.submissions,
+            idField: "submission_id",
+            collection: "submissions",
+            edits: new Map([[submission.submission_id, { url }]]),
+          });
+          out(`${submission.submission_id}: fork ${url}`);
+        } else {
+          const id = pulledSubmissionId(forkStudent, forkAssessment);
+          for (const path of writeRecords(courseDir, {
+            submissions: [
+              {
+                submission_id: id,
+                assessment_id: forkAssessment,
+                student_id: forkStudent,
+                url,
+                status: "submitted",
+                note: "Fork brought to the professor, not handed in through Canvas",
+                extensions: { source: "fork" },
+              },
+            ] as never[],
+          })) {
+            out(`wrote ${relative(root, path)}`);
+          }
+          out(`${id}: fork ${url} — no hand-in time, so a defence clones the fork as it is now`);
+        }
+        out(`Next: Start defence in the Students view, or defence prepare ${forkRun} --assessment ${forkAssessment} --student ${forkStudent}`);
+        break;
+      }
+
         // the pane's Defended / Not defended toggle, or said in chat. Nothing
         // private is read: whether a defence was recorded here does not matter.
         const markRun = rest[1];
         const markAssessment = flag("assessment");
         const markStudent = flag("student");
         const outcome = (flag("outcome") ?? "").replace("-", "_");
-        if (!markRun || !markAssessment || !markStudent || !["defended", "not_defended", "clear"].includes(outcome)) {
-          console.error("usage: defence mark RUN --assessment A --student S --outcome defended|not_defended|clear");
+        const markCriteria = (flag("criterion") ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+        const allowed = markCriteria.length ? ["confirmed", "partly", "not_confirmed", "clear"] : ["defended", "not_defended", "clear"];
+        if (!markRun || !markAssessment || !markStudent || !allowed.includes(outcome)) {
+          console.error(
+            "usage: defence mark RUN --assessment A --student S --outcome defended|not_defended|clear\n" +
+              "       defence mark RUN --assessment A --student S --criterion C[,C…] --outcome confirmed|partly|not_confirmed|clear [--score N]",
+          );
           process.exit(2);
         }
         const bundle = forRun(markRun);
@@ -3120,6 +3251,63 @@ try {
         const id = submission.submission_id as string;
         const { written } = editRecords({
           root,
+
+        if (markCriteria.length) {
+          // Criterion by criterion, against the homework's own rubric: the
+          // word changes the mark (src/defence-check.ts), the written mark
+          // stays in the evaluation's history, and `clear` puts it back.
+          const markScore = flag("score");
+          const score = markScore == null ? null : Number(markScore);
+          if (score != null && !Number.isFinite(score)) throw new Error(`--score takes a number, not ${markScore}`);
+          const run = runById(bundle).get(markRun) as { timezone?: string; instructors?: string[] } | undefined;
+          const checked = checkDefence({
+            bundle,
+            submission,
+            marks: markCriteria.map((criterion) => ({ criterion, outcome: outcome as any, score })),
+            by: flag("by") ?? run?.instructors?.[0] ?? "",
+            at: decidedAt(run?.timezone),
+          });
+          const courseDir = join(root, "courses", (bundle.course as any).course_id);
+          if (checked.evaluations.length) {
+            for (const path of writeRecords(courseDir, { evaluations: checked.evaluations as never[] })) {
+              out(`wrote ${relative(root, path)}`);
+            }
+            // A record edited where it was written by hand keeps a key the new
+            // one leaves out, so what `clear` took away is deleted by name.
+            editRecords({
+              root,
+              courseId: (bundle.course as any).course_id,
+              patterns: COLLECTIONS.evaluations,
+              idField: "evaluation_id",
+              collection: "evaluations",
+              edits: new Map(
+                checked.evaluations.map((evaluation: any) => [
+                  evaluation.evaluation_id,
+                  (node: any) => {
+                    if (!evaluation.professor_decision && node.has("professor_decision")) node.delete("professor_decision");
+                    if (!evaluation.extensions) {
+                      if (node.has("extensions")) node.delete("extensions");
+                      return;
+                    }
+                    for (const key of ["history", "decided_via"]) {
+                      if (!(key in evaluation.extensions) && node.hasIn(["extensions", key])) node.deleteIn(["extensions", key]);
+                    }
+                    if (node.hasIn(["professor_decision", "defence"]) && !evaluation.professor_decision?.defence) {
+                      node.deleteIn(["professor_decision", "defence"]);
+                    }
+                  },
+                ]),
+              ),
+            });
+          }
+          if (checked.removed.length) removeRecords(courseDir, "evaluations", checked.removed);
+          for (const line of checked.said) out(`  ${line}`);
+          if (checked.evaluations.length || checked.removed.length) {
+            const evidence = deriveEvidence(forRun(markRun), markRun, { list: false });
+            if (evidence.errors.length) out(`evidence not derived — validation failed: ${evidence.errors.join("; ")}`);
+          }
+          break;
+        }
           courseId: (bundle.course as any).course_id,
           patterns: COLLECTIONS.submissions,
           idField: "submission_id",

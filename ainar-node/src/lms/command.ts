@@ -34,6 +34,7 @@ import {
   canvasCourses,
   effectiveSheetTab,
   effectiveSummaryTab,
+  CHANGES_TAB,
   isPerSubgroup,
   sheetId,
   sheetTab,
@@ -86,6 +87,7 @@ import {
 } from "./canvas-api.ts";
 import { type Criterion, type Grid, STUDENT, TOTAL, assessmentGrid, padded, summaryGrid, totals, width } from "./grid.ts";
 import { decide } from "../sync/reconcile.ts";
+import { changesGrid, gradeChanges, realChanges } from "../grade-changes.ts";
 import { FetchTransport, type Transport } from "./http.ts";
 import { Ledger } from "./ledger.ts";
 import { writeSheet } from "./sheet.ts";
@@ -1037,7 +1039,7 @@ const pushAllToSheets = async (
   }) as Record<string, any>;
 
   deps.out(
-    `${args.run} -> sheets-api: ${assessments.length + 1} tab(s) in spreadsheet ` +
+    `${args.run} -> sheets-api: ${assessments.length + 2} tab(s) in spreadsheet ` +
       `${context.spreadsheetId}`,
   );
 
@@ -1067,6 +1069,21 @@ const pushAllToSheets = async (
         `${width(grid)} col  ${titles.includes(tab) ? "exists" : "will be created"}`,
     );
   }
+
+  // When and how each grade changed, newest first. Derived like the summary,
+  // so rewritten whole; before the summary, which stays last.
+  const changes = realChanges(gradeChanges(bundle, args.run));
+  const changesTable = changesGrid(changes, {
+    names: namesFor(args, context, [...new Set(changes.map((change) => change.student_id))]),
+  });
+  const changesExisting = titles.includes(CHANGES_TAB)
+    ? await context.sheets!.read(context.spreadsheetId!, `${quoteTab(CHANGES_TAB)}!A1:ZZ`)
+    : [];
+  planned.push([CHANGES_TAB, changesTable, changesExisting, !titles.includes(CHANGES_TAB), null]);
+  deps.out(
+    `    ${CHANGES_TAB.padEnd(12)} ${"(log)".padEnd(15)} ${changesTable.rows.length} change(s)  ` +
+      `${titles.includes(CHANGES_TAB) ? "exists" : "will be created"}`,
+  );
 
   const summaryTab = effectiveSummaryTab(runOf(bundle, args.run));
   const summary = summaryGrid(payload, {

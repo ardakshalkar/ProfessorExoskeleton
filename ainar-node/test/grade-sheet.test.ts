@@ -155,3 +155,51 @@ test("a flag goes into the roster under the run, and comes off again", () => {
   assert.equal(applyFlags(people, RUN, ["STUDENT-AAAAAA"], {}), 1);
   assert.equal(people.people["STUDENT-AAAAAA"]!.sheet_flags, undefined);
 });
+
+test("a mark checked at the defence is kept out of quietly, and not taken back", () => {
+  const first = plan(grid("T", "T"));
+  const checked = first.evaluations.map((entry: any) =>
+    entry.criterion_id === "CRIT-HW1-HARD" && entry.submission_id.includes("AAAAAA")
+      ? {
+          ...entry,
+          professor_decision: { ...entry.professor_decision, score: 0.75, defence: "partly" },
+          extensions: { decided_via: "defence", history: [{ ...entry.professor_decision, via: "grade-sheet" }] },
+        }
+      : entry,
+  );
+  const again = plan(grid("LT", "T"), bundle(first.submissions, checked));
+  assert.deepEqual(again.problems, []);
+  assert.ok(!again.evaluations.some((entry: any) => entry.criterion_id === "CRIT-HW1-HARD" && entry.submission_id.includes("AAAAAA")));
+  const emptied = plan(grid("", "T"), bundle(first.submissions, checked));
+  assert.ok(!emptied.remove.evaluations.some((id: string) => id.includes("AAAAAA-HW1-HARD")));
+});
+
+test("a mark the sheet changes keeps the one it replaced in the history", () => {
+  const first = plan(grid("T", "T"));
+  const again = plan(grid("LT", "T"), bundle(first.submissions, first.evaluations));
+  const changed = again.evaluations.find((entry: any) => entry.criterion_id === "CRIT-HW1-HARD") as any;
+  assert.equal(changed.professor_decision.score, 1.2);
+  assert.equal(changed.extensions.history.length, 1);
+  assert.equal(changed.extensions.history[0].score, 1.5);
+  assert.equal(changed.extensions.history[0].via, "grade-sheet");
+});
+
+test("a fork brought in person is adopted by the sheet, keeps its link, and outlives an emptied cell", () => {
+  const fork = {
+    submission_id: "SUB-AAAAAA-HW1",
+    assessment_id: "ASSESSMENT-HW1",
+    student_id: "STUDENT-AAAAAA",
+    url: "https://github.com/student-a/hw1",
+    status: "submitted",
+    extensions: { source: "fork" },
+  };
+  const first = plan(grid("T", "T"), bundle([fork]));
+  assert.deepEqual(first.problems, []);
+  const adopted = first.submissions.find((entry: any) => entry.submission_id === "SUB-AAAAAA-HW1") as any;
+  assert.equal(adopted.url, "https://github.com/student-a/hw1");
+  assert.equal(adopted.extensions.source, "grade-sheet");
+
+  const emptied = plan(grid("", "T"), bundle(first.submissions, first.evaluations));
+  assert.ok(!emptied.remove.submissions.includes("SUB-AAAAAA-HW1"), "the fork stays");
+  assert.equal(emptied.remove.evaluations.filter((id: string) => id.includes("AAAAAA")).length, 2, "its sheet marks go");
+});

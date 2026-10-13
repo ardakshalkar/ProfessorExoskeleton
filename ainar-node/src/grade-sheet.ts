@@ -479,7 +479,11 @@ export const planSync = (options: {
       }
 
       const already = submissions.filter((entry) => entry.assessment_id === assessmentId && entry.student_id === student);
-      const foreign = already.find((entry) => !ours(entry));
+      // A fork the student brought in person (`defence fork`) is filed under
+      // the id this sync uses, to be adopted here rather than refused.
+      const brought = (entry: any) =>
+        entry?.extensions?.source === "fork" && entry.submission_id === pulledSubmissionId(student, assessmentId);
+      const foreign = already.find((entry) => !ours(entry) && !brought(entry));
       if (foreign) {
         plan.problems.push({
           line: row.line,
@@ -500,6 +504,10 @@ export const planSync = (options: {
           student_id: student,
           status: mark.status,
           note,
+          // The fork link and the hand-in time are not the sheet's to know, and
+          // a rewrite of the record must not drop them.
+          ...(before?.url ? { url: before.url } : {}),
+          ...(before?.submitted_at ? { submitted_at: before.submitted_at } : {}),
           extensions: { ...(before?.extensions ?? {}), source: SOURCE, mark: word },
         });
       }
@@ -507,6 +515,12 @@ export const planSync = (options: {
       for (const criterion of criteria) {
         const id = evaluationId(student, criterion.criterion_id);
         const existing = evaluations.get(id);
+        // Checked at the defence: the professor's later word on the sheet's
+        // mark, which the sheet keeps out of. Not a problem — the intent.
+        if (existing?.extensions?.decided_via === "defence" && existing.professor_decision) {
+          plan.unchanged += 1;
+          continue;
+        }
         if (existing && !decidedHere(existing) && existing.professor_decision) {
           plan.problems.push({
             line: row.line,
@@ -530,7 +544,26 @@ export const planSync = (options: {
           ...(existing?.ai_suggestion ? { ai_suggestion: existing.ai_suggestion } : {}),
           professor_decision: { score, comment, decided_by: options.decidedBy, decided_at: options.decidedAt },
           status: "approved",
-          extensions: { ...(existing?.extensions ?? {}), decided_via: SOURCE },
+          extensions: {
+            ...(existing?.extensions ?? {}),
+            // The mark this replaces, kept as every decision writer keeps it,
+            // so when and how a grade changed can be read back (grade-changes.ts).
+            ...(previous
+              ? {
+                  history: [
+                    ...(Array.isArray(existing?.extensions?.history) ? existing.extensions.history : []),
+                    {
+                      score: previous.score,
+                      comment: previous.comment ?? null,
+                      decided_by: previous.decided_by ?? null,
+                      decided_at: previous.decided_at ?? null,
+                      via: existing?.extensions?.decided_via ?? null,
+                    },
+                  ],
+                }
+              : {}),
+            decided_via: SOURCE,
+          },
         });
       }
     }
@@ -550,6 +583,9 @@ export const planSync = (options: {
   for (const submission of submissions) {
     if (!ours(submission) || !covered.has(submission.assessment_id)) continue;
     if (wantedSubmissions.has(submission.submission_id)) continue;
+    // A submission carrying a fork link is the student's work, which an
+    // emptied cell does not take away; the marks on it still go below.
+    if (submission.url) continue;
     if (!rowOf.has(submission.student_id) && heldAssessments.has(submission.assessment_id)) {
       plan.kept.push(submission.submission_id);
     } else {

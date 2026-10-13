@@ -199,11 +199,21 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
         return 1;
       }
       const [verb, sub, ...after] = planning ? route.plan : route.run;
+      // The gradebook copy with no assessment named is the whole of it — every
+      // tab, the Grade changes log and the summary — rather than a refusal.
+      const whole =
+        sync.service === "sheets" && sync.stream === "grades" && !args.passthrough.includes("--assessment") &&
+        !args.passthrough.includes("--summary") && !args.passthrough.includes("--all")
+          ? ["--all"]
+          : [];
       const argv = [
         verb!,
-        sub!,
+        // `lms plan` is per assessment; `lms push --all` without --confirm is the
+        // whole run's preview, and writes nothing.
+        whole.length && sub === "plan" ? "push" : sub!,
         ...args.extra,
         ...after,
+        ...whole,
         ...(sync.connection ? ["--connection", sync.connection] : []),
         ...args.passthrough,
       ];

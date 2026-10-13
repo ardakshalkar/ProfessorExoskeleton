@@ -38,6 +38,7 @@ import {
   SubmissionId,
   SubmissionStatus,
   DefenceOutcome,
+  DefenceCheck,
   UserId,
   Weight,
   CognitiveLevel,
@@ -248,6 +249,9 @@ export const ProfessorDecision = entity({
   comment: z.string().nullish(),
   decided_by: UserId.nullish(),
   decided_at: awareDatetime().nullish(),
+  // Set when the decision came from the defence: how far the student stood
+  // behind this criterion. The written mark is in the evaluation's history.
+  defence: DefenceCheck.nullish(),
 });
 
 export const Evaluation = entity({

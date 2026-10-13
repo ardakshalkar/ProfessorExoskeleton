@@ -105,6 +105,33 @@ with the CLI, never by hand:
 <cli> defence mark <RUN> --assessment <ASSESSMENT_ID> --student <STUDENT_ID> --outcome defended|not_defended|clear --root "<workspace>"
 ```
 
+The defence can also be checked **against the homework's own rubric**, and
+that changes the grade. Per criterion the professor says `confirmed` (the
+written mark stands), `partly` (half of it, or the points they name) or
+`not_confirmed` (0, or the points they name):
+
+```bash
+<cli> defence mark <RUN> --assessment <A> --student <S> --criterion <CRIT>[,<CRIT>…] --outcome confirmed|partly|not_confirmed|clear [--score N] --root "<workspace>"
+```
+
+It writes the evaluation's `professor_decision` with `defence:` set and
+`decided_via: defence`; the written mark goes into `extensions.history`, and
+`clear` restores it. The grade sheet's sync leaves such a mark alone. Name the
+criteria from `<cli> rubric <A>`; "partly on the second one, 1 point" is
+`--criterion <that id> --outcome partly --score 1`. Read the lines it prints
+back to the professor — old mark → new mark per criterion.
+
+A student who **forked and showed the professor** without handing in through
+Canvas has no link to defend from. When the professor gives you the fork:
+
+```bash
+<cli> defence fork <RUN> --assessment <A> --student <S> --url https://github.com/OWNER/REPO --root "<workspace>"
+```
+
+It puts the link on their submission, or files one under the id the grade
+sheet uses (so the sheet adopts it). With no hand-in time, a defence clones the
+fork as it is now. The pane does the same from *Fork link* / *Add a fork*.
+
 Several students: one command each. Resolve "HW2" to its `ASSESSMENT-…` id
 from the run's assessments. Students are named by their `STUDENT-…` code; a
 real name is not yours to look up (`roster whois` is private), so if the
@@ -150,7 +177,10 @@ you wrote, into which files, and that it is waiting for the professor.
 **Not you.** Never write `approval: approved`, a `professor_decision`, or an
 approved status (`approved`, `overridden`, an approved intervention) — not on
 your own work, not on anyone's. Accepting is the professor's act, and the only
-thing that makes a proposal a record. An older skill that says to run
+thing that makes a proposal a record. The one way a decision reaches the
+course through you is `defence mark`, when the professor has just told you, in
+their own words, what the defence showed — you are typing their decision, not
+making one, and you never infer it. An older skill that says to run
 `ainar approve` is out of date: the command is gone and only prints a message
 saying so.
 

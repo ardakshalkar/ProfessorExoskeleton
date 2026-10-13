@@ -297,6 +297,13 @@ submissions:
     defence: defended        # the professor's word on the oral defence
 ```
 
+A fork the student brought in person rather than handed in through Canvas is
+recorded the same way, by `ainar defence fork` or the Students view's *Fork
+link*: `url` on their submission, or a new one under the grade sheet's id with
+`extensions.source: fork`, which the sheet adopts; no `submitted_at`, so a
+defence clones the fork as it is. The sheet never removes a submission with a
+`url`.
+
 `defence` is `defended` or `not_defended`, and absent until the professor says
 which, from the Students view's buttons or `ainar defence mark`. The defence
 itself (questions, recordings, transcripts) stays private, beside the fork.
@@ -433,6 +440,20 @@ evaluations:
       decided_by: USER-ARD-A01
       decided_at: 2026-10-22T18:10:00+05:00
 ```
+
+A criterion checked at the oral defence (`defence mark --criterion`) carries
+`professor_decision.defence: confirmed | partly | not_confirmed` and
+`extensions.decided_via: defence`. The written mark it replaced is the last
+entry of `extensions.history`, which is what *clear* restores, and the grade
+sheet's sync does not touch it.
+
+Every writer of a decision — the Grade view, the grade sheet's sync, the
+defence — keeps the decision it replaces in `extensions.history` and marks the
+new one with `decided_via`, so when and how a grade changed is read back from
+the record itself: `ainar grade-changes RUN`, the Students view's *Grade
+changes*, and a **Grade changes** tab in the Sheets gradebook copy
+(`lms push --target sheets-api --all`, or syncing the gradebook copy with no assessment named). A mark the sheet takes back when
+its cell is emptied goes with its evaluation; git has that one.
 
 ```yaml
 # records/evidence.yaml — derived from approved grades; no approval field

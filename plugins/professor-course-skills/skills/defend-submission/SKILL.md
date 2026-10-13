@@ -202,3 +202,9 @@ the professor says so — `bin/ainar defence mark RUN --assessment ASSESSMENT
 --student STUDENT --outcome defended|not_defended|clear` — or let them press
 **Defended / Not defended** in the Students view. Never infer it from the
 answers.
+
+The same goes for the check **against the homework's own rubric**, which changes
+the grade: `bin/ainar defence mark RUN --assessment ASSESSMENT --student STUDENT
+--criterion CRIT --outcome confirmed|partly|not_confirmed|clear [--score N]`, or
+the Students view's *Check against the rubric*. Your proposed grade (`defence
+grade`) is a suggestion beside the mark; this is the professor's word on it.

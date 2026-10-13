@@ -4,6 +4,7 @@
 
 import { allRubrics, assessmentsOf, enrollmentsOf, runById } from "@ainar/core/src/bundle.ts";
 import { exportPath, loadSheetConfig } from "@ainar/core/src/grade-sheet.ts";
+import { gradeChanges } from "@ainar/core/src/grade-changes.ts";
 import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
 
 import { BASE } from "./http.js";
@@ -584,15 +585,15 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
    * that lists an oral defence, or one already marked — not on a quiz or an
    * exam paper. Pressing the word that is on clears it.
    */
+  const defensibleAssessment = (assessment) =>
+    assessment.type === "assignment" ||
+    assessment.type === "project" ||
+    (Array.isArray(assessment.submission_type) && assessment.submission_type.includes("oral_defense"));
+  const defensibles = [...assessmentTitles.values()].filter(defensibleAssessment);
+
   const defendedRow = (submission) => {
     const assessment = assessmentTitles.get(submission.assessment_id) ?? {};
-    const types = Array.isArray(assessment.submission_type) ? assessment.submission_type : [];
-    const defensible =
-      submission.url ||
-      submission.defence ||
-      assessment.type === "assignment" ||
-      assessment.type === "project" ||
-      types.includes("oral_defense");
+    const defensible = submission.url || submission.defence || defensibleAssessment(assessment);
     if (!defensible) return "";
     const press = (outcome, text) => {
       const on = submission.defence === outcome;
@@ -617,14 +618,191 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
       press("defended", "Defended") +
       press("not_defended", "Not defended") +
       (submission.defence ? "" : ' <span class="dim">not marked</span>') +
-      "</p>"
+      "</p>" +
+      rubricCheck(submission, assessment)
+    );
+  };
+
+  // Every evaluation by submission and criterion, for the rubric check.
+  const evaluationOf = new Map(
+    (bundle.evaluations ?? []).map((entry) => [entry.submission_id + " " + entry.criterion_id, entry]),
+  );
+
+  /*
+   * The defence checked against the homework's own rubric, one criterion at a
+   * time (`defence mark --criterion`, src/defence-check.ts): *Confirmed* keeps
+   * the written mark, *Partly* halves it — or takes the points typed beside
+   * it — and *Not confirmed* makes it 0. The written mark stays in the
+   * evaluation's history; pressing the word that is on puts it back.
+   */
+  // A mark to two places: rubric points come in quarters, which `number` rounds away.
+  const points = (value) => String(Math.round(value * 100) / 100);
+  const rubricCheck = (submission, assessment) => {
+    const rubric = assessment.rubric ?? rubricsById.get(assessment.rubric_id ?? "");
+    const criteria = rubric && Array.isArray(rubric.criteria) ? rubric.criteria : [];
+    if (!criteria.length) return "";
+    let checked = 0;
+    const rows = criteria
+      .map((criterion) => {
+        const evaluation = evaluationOf.get(submission.submission_id + " " + criterion.criterion_id);
+        const decision =
+          evaluation && ["approved", "overridden"].includes(evaluation.status) ? evaluation.professor_decision : null;
+        const fromDefence = Boolean(decision && evaluation.extensions?.decided_via === "defence");
+        const word = fromDefence ? decision.defence : null;
+        if (word) checked += 1;
+        const history = Array.isArray(evaluation?.extensions?.history) ? evaluation.extensions.history : [];
+        const written = fromDefence
+          ? [...history].reverse().find((entry) => entry && entry.via !== "defence")
+          : decision;
+        const writtenScore = written && written.score != null ? Number(written.score) : null;
+        const attrs =
+          ' data-criterion="' +
+          escapeText(criterion.criterion_id) +
+          '" data-assessment="' +
+          escapeText(submission.assessment_id) +
+          '" data-student="' +
+          escapeText(submission.student_id) +
+          '"';
+        const press = (outcome, text) => {
+          const on = word === outcome;
+          return (
+            '<button type="button" class="chip" data-check="' +
+            (on ? "clear" : outcome) +
+            '"' +
+            attrs +
+            ' aria-pressed="' +
+            String(on) +
+            '"' +
+            (on ? ' title="Press again to restore the written mark"' : "") +
+            ">" +
+            escapeText(text) +
+            "</button>"
+          );
+        };
+        const maximum = Number(criterion.maximum_score);
+        return (
+          "<tr><td>" +
+          escapeText(String(criterion.title ?? criterion.criterion_id)) +
+          ' <span class="dim">/ ' +
+          escapeText(points(maximum)) +
+          "</span></td>" +
+          '<td class="dcm">' +
+          (decision ? escapeText(points(Number(decision.score))) : '<span class="dim">—</span>') +
+          (fromDefence && writtenScore != null && writtenScore !== Number(decision.score)
+            ? ' <span class="dim">was ' + escapeText(points(writtenScore)) + "</span>"
+            : "") +
+          "</td><td>" +
+          press("confirmed", "Confirmed") +
+          press("partly", "Partly") +
+          press("not_confirmed", "Not confirmed") +
+          '<input class="dcs" type="number" min="0" max="' +
+          escapeText(String(maximum)) +
+          '" step="0.25" aria-label="Points for Partly" title="Points for Partly — empty halves the written mark" placeholder="' +
+          escapeText(writtenScore != null ? points(Math.round((writtenScore / 2) * 100) / 100) : "pts") +
+          '"' +
+          attrs +
+          "></td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<details class="dc"><summary>Check against the rubric <span class="dim">' +
+      escapeText(String(checked)) +
+      " of " +
+      escapeText(String(criteria.length)) +
+      " checked</span></summary><table>" +
+      rows +
+      "</table></details>"
+    );
+  };
+
+  // Every mark that moved after its first decision, by submission (grade-changes.ts).
+  const changesOf = new Map();
+  for (const change of gradeChanges(bundle, runId)) {
+    if (change.from === null || change.from === change.to) continue;
+    const key = change.student_id + " " + change.assessment_id;
+    if (!changesOf.has(key)) changesOf.set(key, []);
+    changesOf.get(key).push(change);
+  }
+
+  /** When and how this submission's marks changed, newest first; nothing when none did. */
+  const changesBlock = (submission) => {
+    const list = changesOf.get(submission.student_id + " " + submission.assessment_id) ?? [];
+    if (!list.length) return "";
+    return (
+      '<details class="dc"><summary>Grade changes <span class="dim">' +
+      escapeText(String(list.length)) +
+      "</span></summary><table>" +
+      [...list]
+        .reverse()
+        .map(
+          (change) =>
+            "<tr><td>" +
+            escapeText(change.at ? stamp(change.at) : "undated") +
+            "</td><td>" +
+            escapeText(change.criterion) +
+            '</td><td class="dcm">' +
+            escapeText(points(change.from) + " → " + points(change.to)) +
+            "</td><td>" +
+            escapeText(change.how + (change.defence ? " (" + change.defence.replace("_", " ") + ")" : "")) +
+            "</td></tr>",
+        )
+        .join("") +
+      "</table></details>"
+    );
+  };
+
+  /*
+   * A fork the student brought in person rather than handed in through
+   * Canvas (`defence fork`): its link, pasted here, is what Start defence
+   * clones. On a submission with no link, and — at the foot of the panel — for
+   * a homework the student has no submission for at all.
+   */
+  const forkRow = (submission) => {
+    if (submission.url || !defensibleAssessment(assessmentTitles.get(submission.assessment_id) ?? {})) return "";
+    return (
+      '<p class="fork"><span class="dim">Fork link:</span> ' +
+      '<input class="fk" type="url" placeholder="https://github.com/…/…" aria-label="Fork link"> ' +
+      '<button type="button" class="chip" data-fork="' +
+      escapeText(submission.assessment_id) +
+      '" data-student="' +
+      escapeText(submission.student_id) +
+      '">Save</button> <span class="dim">brought to you, not in Canvas</span></p>'
+    );
+  };
+  const unsubmitted = (studentId) => {
+    const list = submissionsOf.get(studentId) ?? [];
+    return defensibles.filter((assessment) => !list.some((entry) => entry.assessment_id === assessment.assessment_id));
+  };
+  const bringFork = (studentId) => {
+    const missing = unsubmitted(studentId);
+    if (!missing.length) return "";
+    return (
+      '<div class="fork"><h3>A fork brought in person</h3><p>' +
+      '<select class="fka" aria-label="Homework">' +
+      missing
+        .map(
+          (assessment) =>
+            '<option value="' +
+            escapeText(assessment.assessment_id) +
+            '">' +
+            escapeText(assessment.title ?? assessment.assessment_id) +
+            "</option>",
+        )
+        .join("") +
+      "</select> " +
+      '<input class="fk" type="url" placeholder="https://github.com/…/…" aria-label="Fork link"> ' +
+      '<button type="button" class="chip" data-fork="" data-student="' +
+      escapeText(studentId) +
+      '">Save</button></p>' +
+      '<p class="dim">For a student who forked and showed you, with nothing in Canvas. Then Start defence appears on it.</p></div>'
     );
   };
 
   /** Everything one student handed in, closed until asked for. */
   const workPanel = (entry) => {
     const list = submissionsOf.get(entry.student_id) ?? [];
-    if (!list.length) return "";
+    if (!list.length && !unsubmitted(entry.student_id).length) return "";
     return (
       '<div class="row work" data-group="' +
       escapeText(label(entry)) +
@@ -669,7 +847,9 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
               : "") +
             responses.map(answer).join("") +
             files.map(fileRow).join("") +
+            forkRow(submission) +
             defendedRow(submission) +
+            changesBlock(submission) +
             defenceBlock(submission) +
             // Handed in, and nothing to read: a file-only submission whose
             // bytes are elsewhere, or a row created before any answer was
@@ -680,6 +860,7 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
           );
         })
         .join("") +
+      bringFork(entry.student_id) +
       "</div></div>"
     );
   };
@@ -747,7 +928,13 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
    */
   const workButton = (entry) => {
     const count = (submissionsOf.get(entry.student_id) ?? []).length;
-    if (count === 0) return "";
+    if (count === 0) {
+      return unsubmitted(entry.student_id).length
+        ? ' <button type="button" class="chip" aria-expanded="false" data-workbtn="' +
+            escapeText(String(entry.student_id ?? "")) +
+            '" title="Nothing handed in — add a fork they brought you">Add a fork</button>'
+        : "";
+    }
     return (
       '<br><button type="button" class="chip" aria-expanded="false" data-workbtn="' +
       escapeText(String(entry.student_id ?? "")) +
@@ -1067,8 +1254,18 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     ".defence{margin:8px 0 4px}" +
     ".defence .chip{margin-left:4px}" +
     ".defended{margin:6px 0 2px}" +
+    ".fork{margin:6px 0 2px}" +
+    ".fork .fk{width:min(320px,60%);font:inherit;font-size:13px}" +
+    ".fork .fka{font:inherit;font-size:13px;max-width:40%}" +
     ".defended .chip{margin-left:6px}" +
-    ".defended .chip[aria-pressed=true]{border-color:var(--info);color:var(--info);font-weight:600}" +
+    ".defended .chip[aria-pressed=true],.dc .chip[aria-pressed=true]{border-color:var(--info);color:var(--info);font-weight:600}" +
+    ".dc{margin:2px 0 8px}" +
+    ".dc summary{cursor:pointer;font-size:13px}" +
+    ".dc table{border-collapse:collapse;margin-top:4px;width:100%}" +
+    ".dc td{padding:3px 6px 3px 0;vertical-align:middle;border-top:1px solid var(--line);font-size:13px}" +
+    ".dc .chip{margin:1px 3px 1px 0}" +
+    ".dc .dcm{white-space:nowrap;font-variant-numeric:tabular-nums}" +
+    ".dc .dcs{width:58px;margin-left:2px;font:inherit;font-size:12px}" +
     ".dq{margin:4px 0 0;padding-left:20px}" +
     ".dq li{margin:0 0 8px}" +
     ".dq p{margin:0 0 2px;overflow-wrap:anywhere}" +
@@ -1106,6 +1303,15 @@ export const studentsDocument = (workspace, runId, dark, withNames, origin, sess
     "var k=e.target.closest&&e.target.closest('button[data-ask]');" +
     "if(k){if(k.disabled)return;k.disabled=true;k.textContent='Asked…';" +
     "parent.postMessage({source:'professor-pane',kind:'ask',prompt:k.getAttribute('data-ask')},'*');return;}" +
+    "var f=e.target.closest&&e.target.closest('button[data-fork]');" +
+    "if(f){if(f.disabled)return;var p=f.parentNode,u=p.querySelector('input.fk'),s=p.querySelector('select.fka')," +
+    "a=f.getAttribute('data-fork')||(s&&s.value)||'',v=u?u.value.trim():'';if(!a||!v){if(u)u.focus();return;}" +
+    "f.disabled=true;f.textContent='Saving…';parent.postMessage({source:'professor-pane',kind:'defence-fork'," +
+    "assessment:a,student:f.getAttribute('data-student'),url:v},'*');return;}" +
+    "var c=e.target.closest&&e.target.closest('button[data-check]');" +
+    "if(c){if(c.disabled)return;var o=c.getAttribute('data-check'),x=c.parentNode.querySelector('input.dcs'),v=o==='partly'&&x&&x.value!==''?Number(x.value):null;" +
+    "c.disabled=true;parent.postMessage({source:'professor-pane',kind:'defence-check',outcome:o,score:v," +
+    "criterion:c.getAttribute('data-criterion'),assessment:c.getAttribute('data-assessment'),student:c.getAttribute('data-student')},'*');return;}" +
     "var m=e.target.closest&&e.target.closest('button[data-defended]');" +
     "if(m){if(m.disabled)return;m.disabled=true;" +
     "parent.postMessage({source:'professor-pane',kind:'defended',outcome:m.getAttribute('data-defended')," +

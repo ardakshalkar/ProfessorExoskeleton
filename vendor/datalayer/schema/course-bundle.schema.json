@@ -1,5 +1,14 @@
 {
   "$defs": {
+    "DefenceCheck": {
+      "enum": [
+        "confirmed",
+        "partly",
+        "not_confirmed"
+      ],
+      "title": "DefenceCheck",
+      "type": "string"
+    },
     "DefenceOutcome": {
       "enum": [
         "defended",
@@ -2969,6 +2978,18 @@
           ],
           "default": null,
           "title": "Decided At"
+        },
+        "defence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DefenceCheck"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set when the decision came from the defence: how far the student stood behind this criterion."
         }
       },
       "required": [

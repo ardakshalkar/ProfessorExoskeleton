@@ -224,6 +224,8 @@ const FORBIDDEN_IN_TAB = new Set("[]*?/\\:");
 const MAX_TAB_LENGTH = 100;
 
 export const SUMMARY_TAB = "Summary";
+/** The log of when and how each grade changed (grade-changes.ts), beside the gradebook. */
+export const CHANGES_TAB = "Grade changes";
 
 const sanitise = (name: string): string => {
   const cleaned = [...name]
