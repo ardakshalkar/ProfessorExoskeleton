@@ -10,6 +10,7 @@ import { join, relative, resolve, sep } from "node:path";
 import { assessmentsOf, enrollmentsOf, groupsOf, runById } from "@ainar/core/src/bundle.ts";
 
 import { REFRESH_TOKEN_ENV } from "@ainar/core/src/connections/google.ts";
+import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 
 import { googleStatus } from "./google.js";
 import { isTodo } from "./page.js";
@@ -678,6 +679,16 @@ export const integrationsDocument = (workspace, root, runId) => {
   // work — so `usable` is separate from `id`.
   const numeric = /^[0-9]+$/;
 
+  // `assessment|canvas course` → the definition as last sent.
+  const definitionsSent = {};
+  for (const [key, entry] of Object.entries(Ledger.load(runId).assignments)) {
+    const assessmentId = key.split("|")[0];
+    const at = entry?.at;
+    if (typeof at !== "string") continue;
+    const seen = definitionsSent[assessmentId];
+    if (!seen || Date.parse(at) > Date.parse(seen)) definitionsSent[assessmentId] = at;
+  }
+
   const activeIn = (group) =>
     enrolled.filter(
       (entry) => entry.status === "active" && String(entry.group ?? "").trim() === group,
@@ -834,6 +845,11 @@ export const integrationsDocument = (workspace, root, runId) => {
       })(),
       sheetTab: lmsString(assessment, "sheet_tab"),
       defaultSheetTab: defaultSheetTab(assessment.assessment_id),
+      dueAt: assessment.due_at ?? null,
+      // When the definition last went to Canvas, newest over every course it
+      // went to. From this machine's ledger, so "never" can also mean "sent
+      // from another computer" — the Canvas card says "not sent from here".
+      definitionSent: definitionsSent[assessment.assessment_id] ?? null,
     })),
     subgroups: groupsOf(bundle, runId).map((group) => ({ group, students: activeIn(group) })),
     ungrouped: activeIn(""),

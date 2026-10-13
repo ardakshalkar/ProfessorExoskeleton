@@ -341,7 +341,7 @@ const TOKEN_HINT = {
  * remembers and the other does not is a form that invites somebody to
  * press Save with an empty token and wonder why it stopped working.
  */
-function ProviderSetup(props) {
+export function ProviderSetup(props) {
   const spec = props.integration;
   const [values, setValues] = React.useState({});
   const [phase, setPhase] = React.useState("idle");
@@ -534,7 +534,7 @@ const suggestPairs = (assessments, assignments) => {
  * the mapping wholesale, so sending only what is on screen would unbind
  * every other subgroup silently.
  */
-function AssignmentBinder(props) {
+export function AssignmentBinder(props) {
   const subgroups = (props.subgroups || []).map((entry) => entry.group);
   const perSubgroup = subgroups.length > 0 && props.courseMap;
   const [group, setGroup] = React.useState(perSubgroup ? subgroups[0] : null);

@@ -676,8 +676,8 @@ export function SyncsView(props) {
       ? h(
           "div",
           { className: "pp-syncnote" },
-          h("span", null, "Addresses, tokens and Canvas links are set up in Integrations."),
-          h("button", { type: "button", className: "pp-syncbtn", title: "Show Integrations here — Status, Targets, Credentials, Links", onClick: props.onSetup }, "Open Integrations"),
+          h("span", null, "Addresses, tokens and Canvas links are set up in Integrations → This course."),
+          h("button", { type: "button", className: "pp-syncbtn", title: "Show Integrations here — each service this course uses, and its setup", onClick: props.onSetup }, "Open Integrations"),
         )
       : null,
     implied

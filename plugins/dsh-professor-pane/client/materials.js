@@ -356,8 +356,8 @@ export function CourseMode(props) {
   const [view, setView] = React.useState(null);
   const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
   // Integrations, opened from Syncs: the pane's own tab, drawn here so going
-  // to it does not close course mode. Status first, as in the pane.
-  const [integrationsSub, setIntegrationsSub] = React.useState("status");
+  // to it does not close course mode. This course first, as in the pane.
+  const [integrationsSub, setIntegrationsSub] = React.useState("course");
   // The week Teaching was last stepped to. The page steps without a round
   // trip and reports each step; it is held in a ref so a step redraws
   // nothing, and copied into `week` only when Teaching is drawn again — on
@@ -448,6 +448,9 @@ export function CourseMode(props) {
           sessionId: props.sessionId,
           onWrite: props.onWrite,
           revision: props.reload,
+          names: props.names,
+          ask: props.ask,
+          openSyncs: () => setView("syncs"),
           key: props.runId,
         }),
       );

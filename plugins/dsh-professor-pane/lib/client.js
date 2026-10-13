@@ -235,27 +235,14 @@ window.__ModuleLoader__.load({
         // marks Canvas does not have, materials changed since publishing.
         { id: "unpublished", label: "Unpublished" },
       ],
-      // Targets first, because "where would a grade go" is the question that
-      // brings a professor here; Credentials second, because it is the usual
-      // answer to why it would not get there; Links last, because it is the
-      // longest and the only one that writes.
-      //
-      // Unlike every other row in this table these are NOT separate documents
-      // — `/api/integrations` answers all three at once, and the row picks
-      // which sections of that one payload to draw. Three fetches for three
-      // views of five small files would be three chances to show a professor a
-      // host from one read and a token from another.
+      // Being regrouped by service (2026-10-13). This course is one card per
+      // service — Canvas's took over Status, Targets and Links. Syncs goes when
+      // the sheet and GitHub get cards of their own, and Credentials when
+      // Accounts replaces it.
       integrations: [
-        // First, and therefore the default. The question a professor opens
-        // this tab with is "is it set up", and the three views below answer
-        // it only by making them read five facts and do the arithmetic.
-        { id: "status", label: "Status" },
-        // Second: "is it set up" is answered above; this is "what moves, and
-        // what is waiting for me" — the rows a sync was not sure of.
+        { id: "course", label: "This course" },
         { id: "syncs", label: "Syncs" },
-        { id: "targets", label: "Targets" },
         { id: "credentials", label: "Credentials" },
-        { id: "links", label: "Links" },
       ],
     };
 
@@ -1080,6 +1067,45 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);
   background:var(--dsw-alias-bg-l1,#fff);color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-publishcount{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+/* Integrations → This course. A strip of what needs the professor, then one
+   card per service. The card is the sync card's shape, grown: a header with
+   the service's mark, its rows below, and Details folded at the foot. */
+.pp-course{display:flex;flex-direction:column;gap:10px}
+.pp-needs{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;
+  background:rgba(214,130,32,.09);border:1px solid rgba(214,130,32,.28)}
+.pp-needstitle{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#b4600f;font-weight:600}
+.pp-needsrow{display:flex;gap:8px;align-items:center;font-size:12px}
+.pp-needsrow > span{flex:1;min-width:0}
+.pp-ccard{display:flex;flex-direction:column;gap:8px;padding:11px 12px;border-radius:12px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-chead{display:flex;gap:10px;align-items:center}
+.pp-cname{flex:1;min-width:0;font-weight:600;font-size:13px;overflow-wrap:anywhere}
+.pp-chip-ok{background:rgba(47,138,78,.13);color:#2f6b3c}
+.pp-chip-quiet{background:transparent;color:var(--dsw-alias-label-tertiary,#9a9a9a);padding-left:0}
+.pp-csetup{padding:2px 0}
+.pp-cread{display:flex;flex-direction:column}
+.pp-creadline{display:flex;gap:6px;align-items:center;font-size:12px}
+.pp-creadname{flex:1;min-width:0}
+.pp-ctools{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding-top:6px;
+  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-crows{display:flex;flex-direction:column}
+.pp-crow{border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-crow:last-child{border-bottom:none}
+.pp-crowhead{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;width:100%;padding:6px 0;
+  background:none;border:0;font:inherit;font-size:12px;text-align:left;cursor:pointer;color:inherit}
+.pp-crowhead:hover .pp-crowtitle{text-decoration:underline}
+.pp-crowchev{flex:none;width:10px;font-size:10px;color:var(--dsw-alias-label-tertiary,#9a9a9a)}
+.pp-crowtitle{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
+.pp-crowpills{display:flex;gap:4px;flex-wrap:wrap;margin-left:16px}
+.pp-crow-open .pp-crowtitle{font-weight:600}
+.pp-cpanel{margin:0 0 10px 16px;padding:2px 0 4px 10px;border-left:2px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cpanel .pp-factgroup:first-child{margin-top:4px}
+.pp-ccol{flex:1;min-width:0;font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);font-size:11px}
+.pp-ccol a{color:inherit}
+.pp-cdetails{border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6);padding-top:6px;font-size:12px}
+.pp-cdetails > summary{cursor:pointer;font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cdetails[open] > summary{margin-bottom:4px}
+.pp-unused{padding:2px 0}
 `;
 
     if (
@@ -2644,18 +2670,1088 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       );
     }
 
+    // ── client/canvas-card.js
+
+    /** `https://canvas.example.edu/` → `canvas.example.edu`. */
+    const hostName = (url) =>
+      String(url || "")
+        .replace(/^https?:\/\//, "")
+        .replace(/\/+$/, "");
+
+    /** `7 Oct`, for a row that has room for a date and nothing else. */
+    const shortDate = (iso) => {
+      if (!iso) return null;
+      const at = new Date(iso);
+      return Number.isNaN(at.getTime()) ? null : at.toLocaleDateString([], { day: "numeric", month: "short" });
+    };
+
+    /**
+     * The Canvas courses this run is taught in, keyed by subgroup — or by "" for
+     * a run that is one Canvas course. Empty when none is recorded.
+     */
+    const canvasCoursesOf = (data) => {
+      const perSubgroup = data.subgroupCourses || { map: {}, perSubgroup: false };
+      if (perSubgroup.perSubgroup) return perSubgroup.map;
+      return data.canvasCourse && data.canvasCourse.id ? { "": data.canvasCourse.id } : {};
+    };
+
+    /** Which of the run's Canvas courses this assessment has a column in. */
+    const columnsOf = (assessment, courses) => {
+      const groups = Object.keys(courses);
+      if (groups.length === 1 && groups[0] === "") {
+        return { "": assessment.canvasAssignmentId || null };
+      }
+      const out = {};
+      for (const group of groups) out[group] = (assessment.canvasAssignments || {})[group] || null;
+      return out;
+    };
+
+    const assignmentUrl = (host, courseId, assignmentId) =>
+      host && courseId && assignmentId
+        ? String(host).replace(/\/+$/, "") + "/courses/" + courseId + "/assignments/" + assignmentId
+        : null;
+
+    /** Due date first, undated last, then by title: the order a term is taught in. */
+    const byDue = (left, right) =>
+      String(left.a.dueAt || "9999").localeCompare(String(right.a.dueAt || "9999")) ||
+      String(left.a.title || left.a.assessmentId).localeCompare(String(right.a.title || right.a.assessmentId));
+
+    /** A press to `/api/syncs/action`, answered with the CLI's own words. */
+    const postSync = (runId, sessionId, body) =>
+      fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(runId || ""), sessionId), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      })
+        .then((response) => response.json())
+        .catch((error) => ({ error: String((error && error.message) || error) }));
+
+    /**
+     * One sync that only reads from Canvas — the class list, or one assessment's
+     * hand-ins — as a line with Preview and Run. Nothing it does reaches students,
+     * so Run needs no preview first; a sync that does is not drawn here.
+     */
+    function CanvasRead(props) {
+      const [busy, setBusy] = React.useState(null);
+      const [result, setResult] = React.useState(null);
+      const sync = props.sync;
+      if (!sync) return null;
+
+      const press = (action) => {
+        setBusy(action);
+        postSync(props.runId, props.sessionId, {
+          action,
+          sync: sync.id,
+          assessment: props.assessmentId || "",
+          confirm: false,
+          names: Boolean(props.names),
+        }).then((answer) => {
+          setBusy(null);
+          setResult(Object.assign({ action }, answer));
+          if (action === "run" && props.onWrite) props.onWrite();
+        });
+      };
+
+      return h(
+        "div",
+        { className: "pp-cread" },
+        h(
+          "div",
+          { className: "pp-creadline" },
+          h(
+            "span",
+            { className: "pp-creadname" },
+            props.label,
+            h(
+              "span",
+              { className: "pp-as" },
+              // The last run is per sync, not per assessment, so a hand-ins line
+              // under one assessment says nothing about when: it would be the date
+              // some other assessment's hand-ins came in.
+              props.assessmentId ? "" : sync.lastSynced ? " · " + when(sync.lastSynced) : " · never",
+            ),
+          ),
+          h(
+            "button",
+            { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => press("plan") },
+            busy === "plan" ? "Looking…" : "Preview",
+          ),
+          sync.live
+            ? null
+            : h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-segbtn",
+                  disabled: Boolean(busy) || !sync.enabled,
+                  onClick: () => press("run"),
+                },
+                busy === "run" ? "Running…" : "Run",
+              ),
+        ),
+        result
+          ? h(
+              "pre",
+              { className: "pp-approveout" + (result.error || !result.ok ? " pp-approveerr" : "") },
+              (result.error ? "" : result.action === "run" ? "Done.\n" : "Preview — nothing was changed.\n") +
+                (result.error || result.output || "(nothing printed)"),
+            )
+          : null,
+      );
+    }
+
+    /**
+     * Sending an assessment's DEFINITION to Canvas — its title, points, dates,
+     * what may be handed in, and the brief as the description.
+     *
+     * Moved here from the Links view, where it chose the assessment from a list;
+     * on the card it sits under the assessment's own row and that choice is made.
+     * Everything else about it is as it was, and each rule is the reason for a
+     * shape:
+     *
+     * * **preview first, always.** The send button does not exist until a plan
+     *   has come back, and the plan is the CLI's own words.
+     * * **the send button is the only red thing here**, the pane's signal for a
+     *   press that writes outside this machine.
+     * * **drift needs its own press.** A field somebody edited in Canvas is left
+     *   alone; replacing it is a checkbox that appears only when the plan reported
+     *   drift, cleared after every send so it cannot carry into the next one.
+     * * **every subgroup by default**, which is what the command does: one
+     *   definition serves the class, and a send that reached CS-401 and not CS-402
+     *   is how two halves end up being told different things.
+     */
+    function DefinitionPush(props) {
+      const subgroups = (props.subgroups || []).map((entry) => entry.group);
+      const [group, setGroup] = React.useState("");
+      const [phase, setPhase] = React.useState("idle");
+      const [result, setResult] = React.useState(null);
+      const [overwrite, setOverwrite] = React.useState(false);
+
+      // A plan belongs to the subgroup it was asked about. Changing it throws the
+      // plan away, so the red button can never send something other than what
+      // was read.
+      const reset = () => {
+        setResult(null);
+        setOverwrite(false);
+      };
+
+      const call = (confirm) => {
+        setPhase(confirm ? "sending" : "planning");
+        fetch(
+          scoped(BASE + "/api/canvas/assignment?run=" + encodeURIComponent(props.runId || ""), props.sessionId),
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              assessment: props.assessmentId,
+              group,
+              confirm,
+              overwriteDrift: confirm && overwrite,
+            }),
+          },
+        )
+          .then((response) => response.json())
+          .then((body) => {
+            setPhase("idle");
+            if (body.error) {
+              setResult({ failed: true, text: body.error, sent: false });
+              return;
+            }
+            setResult({
+              failed: !body.ok,
+              text: body.output || (body.ok ? "Canvas had nothing to change." : "No output."),
+              sent: confirm && body.ok,
+            });
+            // A send consumes the preview: what is on screen now describes a
+            // state that no longer exists.
+            if (confirm) {
+              setOverwrite(false);
+              // A created assignment's id was written into the record.
+              if (body.ok && props.onWrite) props.onWrite();
+            }
+          })
+          .catch((error) => {
+            setPhase("idle");
+            setResult({ failed: true, text: String((error && error.message) || error), sent: false });
+          });
+      };
+
+      const sawDrift = Boolean(result) && !result.failed && /edited in Canvas/.test(result.text);
+      const previewed = Boolean(result) && !result.failed && !result.sent;
+
+      return h(
+        "div",
+        null,
+        h(
+          "div",
+          { className: "pp-approverow" },
+          subgroups.length
+            ? h(
+                "select",
+                {
+                  className: "pp-bindsel",
+                  value: group,
+                  "aria-label": "Which subgroup's Canvas course",
+                  onChange: (event) => {
+                    setGroup(event.target.value);
+                    reset();
+                  },
+                },
+                [h("option", { value: "", key: "*" }, "Every subgroup")].concat(
+                  subgroups.map((name) => h("option", { value: name, key: name }, name)),
+                ),
+              )
+            : null,
+          h(
+            "button",
+            { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: () => call(false) },
+            phase === "planning" ? "Asking Canvas…" : "Preview what Canvas would get",
+          ),
+          previewed
+            ? h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-segbtn pp-danger",
+                  disabled: phase !== "idle",
+                  onClick: () => call(true),
+                },
+                phase === "sending" ? "Sending…" : "Send to Canvas",
+              )
+            : null,
+        ),
+        sawDrift
+          ? h(
+              "label",
+              { className: "pp-savenote" },
+              h("input", {
+                type: "checkbox",
+                checked: overwrite,
+                onChange: (event) => setOverwrite(event.target.checked),
+              }),
+              " Also replace what was edited in Canvas",
+            )
+          : null,
+        result
+          ? h("pre", { className: "pp-approveout" + (result.failed ? " pp-approveerr" : "") }, result.text)
+          : null,
+      );
+    }
+
+    /**
+     * Which Canvas assignment this assessment is, in each of the run's courses.
+     *
+     * One course at a time: each is asked for its own assignment list only when
+     * the professor presses Choose, because the list costs a Canvas request with
+     * their token. What is saved is the whole mapping for this assessment — the
+     * writer replaces it wholesale, and sending only the course being edited
+     * would unbind the others.
+     */
+    function ColumnLinks(props) {
+      const { assessment, courses, host } = props;
+      const columns = columnsOf(assessment, courses);
+      const single = Object.keys(courses).length === 1 && Object.keys(courses)[0] === "";
+      const [lists, setLists] = React.useState({});
+      const [picks, setPicks] = React.useState({});
+      const [phase, setPhase] = React.useState("idle");
+      const [failed, setFailed] = React.useState(null);
+
+      const choose = (group) => {
+        setLists((all) => Object.assign({}, all, { [group]: "loading" }));
+        fetch(scoped(BASE + "/api/canvas/assignments?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ courseId: courses[group] }),
+        })
+          .then((response) => response.json())
+          .then((body) =>
+            setLists((all) => Object.assign({}, all, { [group]: body.error ? { error: body.error } : body.assignments || [] })),
+          )
+          .catch((error) => setLists((all) => Object.assign({}, all, { [group]: { error: String(error) } })));
+      };
+
+      const save = (group, value) => {
+        setPhase("saving");
+        setFailed(null);
+        let link;
+        if (single) link = value || null;
+        else {
+          const merged = Object.assign({}, assessment.canvasAssignments || {});
+          if (value) merged[group] = value;
+          else delete merged[group];
+          link = Object.keys(merged).length ? merged : null;
+        }
+        fetch(scoped(BASE + "/api/canvas/assignment-map?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ links: { [assessment.assessmentId]: link } }),
+        })
+          .then((response) => response.json())
+          .then((body) => {
+            setPhase("idle");
+            if (body.error) return setFailed(body.error);
+            setLists((all) => Object.assign({}, all, { [group]: undefined }));
+            setPicks((all) => Object.assign({}, all, { [group]: undefined }));
+            if (props.onSaved) props.onSaved(body);
+          })
+          .catch((error) => {
+            setPhase("idle");
+            setFailed(String((error && error.message) || error));
+          });
+      };
+
+      return h(
+        "div",
+        null,
+        Object.keys(columns).map((group) => {
+          const id = columns[group];
+          const list = lists[group];
+          const url = assignmentUrl(host, courses[group], id);
+          return h(
+            "div",
+            { className: "pp-bind", key: group || "run" },
+            h("span", { className: "pp-bindname" }, group || "Canvas"),
+            Array.isArray(list)
+              ? h(
+                  React.Fragment,
+                  null,
+                  h(
+                    "select",
+                    {
+                      className: "pp-bindsel",
+                      value: picks[group] ?? id ?? "",
+                      onChange: (event) => setPicks((all) => Object.assign({}, all, { [group]: event.target.value })),
+                    },
+                    h("option", { value: "" }, "— not linked —"),
+                    list.map((assignment) =>
+                      h(
+                        "option",
+                        { value: assignment.id, key: assignment.id },
+                        assignment.name + (assignment.points == null ? "" : " · " + assignment.points + " pts"),
+                      ),
+                    ),
+                  ),
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-segbtn",
+                      disabled: phase !== "idle" || (picks[group] ?? id ?? "") === (id ?? ""),
+                      onClick: () => save(group, picks[group] ?? ""),
+                    },
+                    phase === "saving" ? "Saving…" : "Save",
+                  ),
+                )
+              : h(
+                  React.Fragment,
+                  null,
+                  h(
+                    "span",
+                    { className: "pp-ccol" + (id ? "" : " pp-no") },
+                    id
+                      ? url
+                        ? h("a", { href: url, target: "_blank", rel: "noreferrer", title: "Open it in Canvas" }, id + " ↗")
+                        : id
+                      : "not linked",
+                  ),
+                  list && list.error
+                    ? h("span", { className: "pp-saveerr" }, list.error)
+                    : h(
+                        "button",
+                        {
+                          type: "button",
+                          className: "pp-segbtn",
+                          disabled: list === "loading",
+                          title: "Ask Canvas for this course's assignments. A read; it sends your token.",
+                          onClick: () => choose(group),
+                        },
+                        list === "loading" ? "Asking Canvas…" : id ? "Change…" : "Choose…",
+                      ),
+                ),
+          );
+        }),
+        failed ? h("p", { className: "pp-saveerr" }, failed) : null,
+      );
+    }
+
+    /**
+     * Which Canvas section or student group feeds which subgroup of this run.
+     *
+     * Moved from the Links view unchanged in what it does. It lives in the card's
+     * Details because it is set once, at the start of a term, and read by nobody
+     * afterwards but the roster sync.
+     */
+    function CanvasSections(props) {
+      const data = props.data;
+      const seed = (rows) => {
+        const out = {};
+        for (const row of rows || []) {
+          out[row.kind + ":" + row.id] = { id: row.id, kind: row.kind, name: row.name, group: row.group };
+        }
+        return out;
+      };
+      const [catalogue, setCatalogue] = React.useState(null);
+      const [fetching, setFetching] = React.useState(false);
+      const [picked, setPicked] = React.useState(null);
+      const [status, setStatus] = React.useState(null);
+      const chosen = picked || seed(data.selections);
+      const key = (option) => option.kind + ":" + option.id;
+
+      // A Save hands back the record as it now is; start again from it.
+      React.useEffect(() => setPicked(null), [data]);
+
+      const load = () => {
+        setFetching(true);
+        setStatus(null);
+        fetch(scoped(BASE + "/api/canvas/catalogue?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
+          method: "POST",
+        })
+          .then((response) => response.json())
+          .then((body) => {
+            setFetching(false);
+            if (body.error) return setStatus({ error: body.error });
+            setCatalogue(body);
+          })
+          .catch((error) => {
+            setFetching(false);
+            setStatus({ error: String((error && error.message) || error) });
+          });
+      };
+
+      const toggle = (option) =>
+        setPicked(() => {
+          const next = Object.assign({}, chosen);
+          if (Object.hasOwn(next, key(option))) delete next[key(option)];
+          else {
+            next[key(option)] = {
+              id: option.id,
+              kind: option.kind,
+              name: option.name,
+              // One subgroup and nothing to decide: bind it.
+              group: data.subgroups.length === 1 ? data.subgroups[0].group : null,
+            };
+          }
+          return next;
+        });
+
+      const bind = (option, group) =>
+        setPicked(() => {
+          const next = Object.assign({}, chosen);
+          if (!next[key(option)]) return next;
+          next[key(option)] = Object.assign({}, next[key(option)], { group: group || null });
+          return next;
+        });
+
+      const save = () => {
+        setStatus("saving");
+        fetch(scoped(BASE + "/api/canvas/selection?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ selections: Object.values(chosen) }),
+        })
+          .then((response) => response.json())
+          .then((body) => {
+            if (body.error) return setStatus({ error: body.error });
+            setStatus({ saved: body.saved });
+            if (props.onSaved) props.onSaved(body);
+          })
+          .catch((error) => setStatus({ error: String((error && error.message) || error) }));
+      };
+
+      // The live list once fetched, otherwise what the record holds, so a mapping
+      // can be read and undone without spending a Canvas request.
+      const offered = catalogue
+        ? catalogue.options
+        : data.selections.map((row) => ({ id: row.id, kind: row.kind, name: row.name || row.id, students: null, sisId: null }));
+
+      // Order-insensitive, joined on NUL for `grading.js`'s reason: a section name
+      // is free text and may hold any separator a registrar typed.
+      const canonical = (table) =>
+        Object.keys(table)
+          .sort()
+          .map((entry) => `${entry}\u0000${table[entry].group || ""}\u0000${table[entry].name || ""}`)
+          .join("\u0000\u0000");
+      const dirty = canonical(seed(data.selections)) !== canonical(chosen);
+
+      return h(
+        "div",
+        null,
+        h("p", { className: "pp-factgroup" }, "Sections and groups"),
+        h(
+          "p",
+          { className: "pp-as" },
+          data.subgroups.length
+            ? "Which Canvas section or student group feeds which subgroup. The class list sync reads this." +
+                (data.ungrouped
+                  ? " " + data.ungrouped + " active student" + (data.ungrouped === 1 ? "" : "s") + " carry no subgroup."
+                  : "")
+            : "This run has no subgroups, so a section ticked here only says it belongs to this run.",
+        ),
+        h(
+          "div",
+          { className: "pp-approverow" },
+          h(
+            "button",
+            { type: "button", className: "pp-segbtn", disabled: fetching, onClick: load },
+            fetching ? "Asking Canvas…" : catalogue ? "Fetch again" : "Fetch from Canvas",
+          ),
+          catalogue ? h("span", { className: "pp-savenote" }, catalogue.options.length + " in course " + catalogue.courseId) : null,
+        ),
+        offered.length === 0
+          ? h("p", { className: "pp-as" }, catalogue ? "Canvas returned no sections or groups." : "Nothing is mapped yet.")
+          : offered.map((option) => {
+              const on = Object.hasOwn(chosen, key(option));
+              return h(
+                "div",
+                { className: "pp-pick", key: key(option) },
+                h("input", {
+                  type: "checkbox",
+                  className: "pp-pickbox",
+                  checked: on,
+                  onChange: () => toggle(option),
+                  "aria-label": option.name,
+                }),
+                h(
+                  "span",
+                  { className: "pp-picklabel" },
+                  option.name,
+                  h(
+                    "span",
+                    { className: "pp-factnote" },
+                    option.kind +
+                      " " +
+                      option.id +
+                      (option.students == null ? "" : " · " + option.students + " students") +
+                      (option.sisId ? " · SIS " + option.sisId : ""),
+                  ),
+                ),
+                on && data.subgroups.length
+                  ? h(
+                      "select",
+                      {
+                        className: "pp-prefctl pp-picksel",
+                        value: (chosen[key(option)] && chosen[key(option)].group) || "",
+                        onChange: (event) => bind(option, event.target.value),
+                        "aria-label": "Which subgroup " + option.name + " feeds",
+                      },
+                      [h("option", { value: "", key: "" }, "the whole run")].concat(
+                        data.subgroups.map((entry) =>
+                          h("option", { value: entry.group, key: entry.group }, entry.group + " (" + entry.students + ")"),
+                        ),
+                      ),
+                    )
+                  : null,
+              );
+            }),
+        dirty || (status && (status.error || status.saved))
+          ? h(
+              "div",
+              { className: "pp-approverow" },
+              dirty
+                ? h(
+                    "button",
+                    { type: "button", className: "pp-segbtn", disabled: status === "saving", onClick: save },
+                    status === "saving" ? "Saving…" : "Save",
+                  )
+                : null,
+              dirty
+                ? h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-segbtn",
+                      onClick: () => {
+                        setPicked(null);
+                        setStatus(null);
+                      },
+                    },
+                    "Revert",
+                  )
+                : null,
+              status && status.error ? h("span", { className: "pp-saveerr" }, status.error) : null,
+              status && status.saved && !dirty
+                ? h("span", { className: "pp-savenote" }, "Saved to " + status.saved.path + ".")
+                : null,
+            )
+          : null,
+      );
+    }
+
+    /** One assessment's three states, as the pills its row has room for. */
+    const rowPills = (entry, reachable) => {
+      const pills = [];
+      const { linked, of } = entry.link;
+      // Until Canvas can be reached there is no column to speak of either way.
+      if (!reachable) {
+        // nothing
+      } else if (linked === of) {
+        pills.push({ key: "col", text: "linked", tone: "ok" });
+      } else {
+        pills.push({ key: "col", text: linked ? linked + " of " + of + " linked" : "not linked", tone: "warn" });
+      }
+      pills.push(
+        entry.a.definitionSent
+          ? { key: "def", text: "brief sent " + shortDate(entry.a.definitionSent), tone: "" }
+          : { key: "def", text: "brief not sent", tone: "quiet" },
+      );
+      const c = entry.u && entry.u.canvas;
+      if (!c || c.ready === 0) pills.push({ key: "marks", text: "no marks yet", tone: "quiet" });
+      else if (c.unsent + c.changed === 0) pills.push({ key: "marks", text: "all " + c.ready + " marks in", tone: "ok" });
+      else pills.push({ key: "marks", text: c.unsent + c.changed + " marks to send", tone: "warn" });
+      return pills;
+    };
+
+    /** What the card counts, for its own header and for the strip above it. */
+    const canvasCounts = (data, unpublished) => {
+      const courses = canvasCoursesOf(data);
+      const usage = {};
+      for (const entry of (unpublished && unpublished.assessments) || []) usage[entry.id] = entry;
+      const rows = (data.assessments || []).map((a) => {
+        const columns = columnsOf(a, courses);
+        const ids = Object.values(columns);
+        return {
+          a,
+          u: usage[a.assessmentId] || null,
+          link: { linked: ids.filter(Boolean).length, of: Math.max(ids.length, 1) },
+        };
+      });
+      rows.sort(byDue);
+      const unlinked = rows.filter((entry) => entry.link.linked < entry.link.of);
+      const toSend = rows.filter((entry) => entry.u && entry.u.canvas && entry.u.canvas.unsent + entry.u.canvas.changed > 0);
+      return { courses, rows, unlinked, toSend };
+    };
+
+    /**
+     * The card.
+     *
+     * `filter` comes from the strip above it, so "13 assessments have no Canvas
+     * column → Show" lands on exactly those rows; `filterTick` makes the same
+     * press work twice after the professor has changed the filter by hand.
+     */
+    function CanvasCard(props) {
+      const data = props.data;
+      const row = (data.integrations || []).find((entry) => entry.id === "canvas");
+      const [filter, setFilter] = React.useState(props.filter || "all");
+      const [open, setOpen] = React.useState(null);
+      const [binding, setBinding] = React.useState(false);
+      const [editing, setEditing] = React.useState(null);
+      const [tokenError, setTokenError] = React.useState(null);
+      React.useEffect(() => {
+        if (props.filter) setFilter(props.filter);
+      }, [props.filter, props.filterTick]);
+
+      if (!row) return null;
+      const [hostStep, tokenStep, courseStep] = row.steps;
+      const reachable = hostStep.done && tokenStep.done && courseStep.done;
+      const { courses, rows, unlinked, toSend } = canvasCounts(data, props.unpublished);
+      const courseCount = Object.keys(courses).length;
+      const subgroupCourses = data.subgroupCourses || { map: {}, perSubgroup: false, conflict: false };
+      const rosterSync = props.syncs ? props.syncs.syncs.find((sync) => sync.service === "canvas" && sync.stream === "roster") : null;
+      const handInSync = props.syncs
+        ? props.syncs.syncs.find((sync) => sync.service === "canvas" && sync.stream === "submissions")
+        : null;
+
+      const saved = (body) => {
+        if (props.onSaved) props.onSaved(body);
+      };
+
+      const subtitle = [
+        data.canvas.host ? hostName(data.canvas.host) : "no address",
+        tokenStep.done ? "token saved" : "no token",
+        subgroupCourses.perSubgroup
+          ? courseCount + " course" + (courseCount === 1 ? "" : "s") + ", one per subgroup"
+          : data.canvasCourse.id
+            ? "course " + data.canvasCourse.id
+            : "no course",
+      ].join(" · ");
+
+      const chip = !reachable
+        ? { text: "setup needed", tone: "warn" }
+        : unlinked.length
+          ? { text: rows.length - unlinked.length + " of " + rows.length + " linked", tone: "warn" }
+          : { text: "ready", tone: "ok" };
+
+      const shown = rows.filter((entry) =>
+        filter === "unlinked" ? unlinked.includes(entry) : filter === "marks" ? toSend.includes(entry) : true,
+      );
+
+      // ---- setup, while Canvas cannot be reached -----------------------------
+
+      const setup = reachable
+        ? null
+        : h(
+            "div",
+            { className: "pp-csetup" },
+            h(
+              "ul",
+              { className: "pp-steps" },
+              [hostStep, tokenStep, courseStep].map((entry, index) =>
+                h(
+                  "li",
+                  { className: "pp-step " + (entry.done ? "pp-step-done" : "pp-step-todo"), key: index },
+                  h("span", { className: "pp-stepmark" }, entry.done ? "✓" : "·"),
+                  h("span", null, entry.label),
+                ),
+              ),
+            ),
+            !hostStep.done
+              ? h(ProviderSetup, { integration: row, runId: props.runId, sessionId: props.sessionId, onSaved: saved })
+              : !tokenStep.done
+                ? // The address is known, so only the token is asked for — the
+                  // setup form would make the professor type the address again.
+                  h(
+                    "div",
+                    null,
+                    h(Secret, {
+                      name: data.canvas.tokenEnv,
+                      status: ((data.credentials || {}).refs || {})[data.canvas.tokenEnv],
+                      runId: props.runId,
+                      sessionId: props.sessionId,
+                      onSaved: saved,
+                      onStatus: (next) => setTokenError(next && next.error ? next.error : null),
+                    }),
+                    h(
+                      "p",
+                      { className: "pp-as" },
+                      "Canvas → Account → Settings → New Access Token. It goes to the credential store and is never shown again.",
+                    ),
+                    tokenError ? h("p", { className: "pp-saveerr" }, tokenError) : null,
+                  )
+                : data.subgroups.length
+                ? h(SubgroupCourses, {
+                    runId: props.runId,
+                    sessionId: props.sessionId,
+                    subgroups: data.subgroups,
+                    state: subgroupCourses,
+                    onSaved: saved,
+                  })
+                : h(
+                    "p",
+                    { className: "pp-as" },
+                    "Record the Canvas course on the run as extensions.lms.canvas_course_id — the number in the " +
+                      "course's Canvas address" +
+                      (data.run.recordPath ? ", in " + data.run.recordPath : "") +
+                      ".",
+                  ),
+            data.setup && data.setup.provider === "canvas" && data.setup.checkFailed
+              ? h("p", { className: "pp-saveerr" }, data.setup.checkFailed)
+              : null,
+          );
+
+      // ---- one assessment ----------------------------------------------------
+
+      const panel = (entry) =>
+        h(
+          "div",
+          { className: "pp-cpanel" },
+          h("p", { className: "pp-factgroup" }, "Canvas assignment"),
+          h(ColumnLinks, {
+            assessment: entry.a,
+            courses,
+            host: data.canvas.host,
+            runId: props.runId,
+            sessionId: props.sessionId,
+            onSaved: saved,
+          }),
+          h("p", { className: "pp-factgroup" }, "Definition"),
+          h(
+            "p",
+            { className: "pp-as" },
+            "Title, points, dates, what may be handed in, and the brief as the description. " +
+              (entry.a.definitionSent
+                ? "Last sent from this computer " + when(entry.a.definitionSent) + "."
+                : "Not sent from this computer. Where there is no assignment yet, sending creates it and links it."),
+          ),
+          h(DefinitionPush, {
+            assessmentId: entry.a.assessmentId,
+            subgroups: subgroupCourses.perSubgroup ? data.subgroups : [],
+            runId: props.runId,
+            sessionId: props.sessionId,
+            onWrite: props.onWrite,
+          }),
+          h("p", { className: "pp-factgroup" }, "Marks"),
+          h(CanvasMarks, {
+            runId: props.runId,
+            sessionId: props.sessionId,
+            assessmentId: entry.a.assessmentId,
+            title: entry.a.title || entry.a.assessmentId,
+            canvas: entry.u ? entry.u.canvas : null,
+            ask: props.ask,
+            onSent: () => {
+              if (props.onWrite) props.onWrite();
+            },
+          }),
+          handInSync
+            ? h(
+                React.Fragment,
+                null,
+                h("p", { className: "pp-factgroup" }, "Hand-ins"),
+                h(CanvasRead, {
+                  sync: handInSync,
+                  label: "What students handed in, from Canvas",
+                  assessmentId: entry.a.assessmentId,
+                  runId: props.runId,
+                  sessionId: props.sessionId,
+                  names: props.names,
+                  onWrite: props.onWrite,
+                }),
+              )
+            : null,
+        );
+
+      const assessmentRow = (entry) => {
+        const id = entry.a.assessmentId;
+        const expanded = open === id;
+        return h(
+          "div",
+          { className: "pp-crow" + (expanded ? " pp-crow-open" : ""), key: id },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-crowhead",
+              "aria-expanded": expanded,
+              onClick: () => setOpen(expanded ? null : id),
+            },
+            h("span", { className: "pp-crowchev", "aria-hidden": "true" }, expanded ? "▾" : "▸"),
+            h(
+              "span",
+              { className: "pp-crowtitle" },
+              entry.a.title || id,
+              entry.a.dueAt ? h("span", { className: "pp-as" }, " · due " + shortDate(entry.a.dueAt)) : null,
+            ),
+            h(
+              "span",
+              { className: "pp-crowpills" },
+              rowPills(entry, reachable).map((pill) =>
+                h("span", { className: "pp-chip" + (pill.tone ? " pp-chip-" + pill.tone : ""), key: pill.key }, pill.text),
+              ),
+            ),
+          ),
+          expanded ? panel(entry) : null,
+        );
+      };
+
+      // ---- details -----------------------------------------------------------
+
+      const details = h(
+        "details",
+        { className: "pp-cdetails" },
+        h("summary", null, "Details"),
+        h(
+          Fact,
+          { label: "Address", note: data.canvas.hostFrom || "not configured", missing: !data.canvas.host },
+          data.canvas.host || h(Presence, { present: false, no: "not set" }),
+        ),
+        h(
+          Fact,
+          { label: "Token", note: data.canvas.tokenEnv + " — never shown, only whether it is there", missing: !tokenStep.done },
+          h(Presence, { present: tokenStep.done, yes: "saved", no: "not set" }),
+        ),
+        Object.keys(courses).map((group) =>
+          h(
+            Fact,
+            { label: group ? "Course · " + group : "Course", key: "course:" + group },
+            data.canvas.host
+              ? h(
+                  "a",
+                  { href: String(data.canvas.host).replace(/\/+$/, "") + "/courses/" + courses[group], target: "_blank", rel: "noreferrer" },
+                  courses[group] + " ↗",
+                )
+              : courses[group],
+          ),
+        ),
+        data.canvasCourse.fromColumn && !data.canvasCourse.fromExtension && !subgroupCourses.perSubgroup
+          ? h(
+              "p",
+              { className: "pp-saveerr" },
+              "The course id is in lms_course_id, which a push does not read. It reads extensions.lms.canvas_course_id.",
+            )
+          : null,
+        subgroupCourses.conflict
+          ? h(
+              "p",
+              { className: "pp-saveerr" },
+              "The run also sets a single Canvas course (" + subgroupCourses.singleId + "). A record cannot hold both.",
+            )
+          : null,
+        h(
+          Fact,
+          {
+            label: "Grades go to",
+            note: data.target.value === null ? "the run's gradebook target, not recorded yet" : "the run's gradebook target",
+            missing: data.target.value === null || data.target.supported === false,
+          },
+          data.target.value || h(Presence, { present: false, no: "not recorded" }),
+        ),
+        data.run.recordPath ? h(Fact, { label: "Run record", note: "where the course ids and columns are written" }, data.run.recordPath) : null,
+        h(
+          "div",
+          { className: "pp-approverow" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              "aria-pressed": editing === "access",
+              onClick: () => setEditing(editing === "access" ? null : "access"),
+            },
+            "Change address or token",
+          ),
+          data.subgroups.length
+            ? h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-segbtn",
+                  "aria-pressed": editing === "courses",
+                  onClick: () => setEditing(editing === "courses" ? null : "courses"),
+                },
+                "Change courses",
+              )
+            : null,
+        ),
+        editing === "access"
+          ? h(ProviderSetup, {
+              integration: row,
+              runId: props.runId,
+              sessionId: props.sessionId,
+              onCancel: () => setEditing(null),
+              onSaved: (body) => {
+                setEditing(null);
+                saved(body);
+              },
+            })
+          : null,
+        editing === "courses"
+          ? h(SubgroupCourses, {
+              runId: props.runId,
+              sessionId: props.sessionId,
+              subgroups: data.subgroups,
+              state: subgroupCourses,
+              onSaved: (body) => {
+                setEditing(null);
+                saved(body);
+              },
+            })
+          : null,
+        reachable ? h(CanvasSections, { data, runId: props.runId, sessionId: props.sessionId, onSaved: saved }) : null,
+      );
+
+      // ---- the card ----------------------------------------------------------
+
+      const filters = [
+        { id: "all", label: "All " + rows.length },
+        { id: "unlinked", label: "Not linked " + unlinked.length, hide: !reachable || !unlinked.length },
+        { id: "marks", label: "Marks to send " + toSend.length, hide: !toSend.length },
+      ].filter((entry) => !entry.hide);
+
+      return h(
+        "section",
+        { className: "pp-ccard" },
+        h(
+          "div",
+          { className: "pp-chead" },
+          h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"),
+          h("span", { className: "pp-cname" }, "Canvas", h("span", { className: "pp-intwhat" }, subtitle)),
+          h("span", { className: "pp-chip pp-chip-" + chip.tone }, chip.text),
+        ),
+        setup,
+        reachable && rosterSync
+          ? h(CanvasRead, {
+              sync: rosterSync,
+              label: "Class list",
+              runId: props.runId,
+              sessionId: props.sessionId,
+              names: props.names,
+              onWrite: props.onWrite,
+            })
+          : null,
+        rows.length
+          ? h(
+              React.Fragment,
+              null,
+              h(
+                "div",
+                { className: "pp-ctools" },
+                filters.length > 1
+                  ? filters.map((entry) =>
+                      h(
+                        "button",
+                        {
+                          type: "button",
+                          className: "pp-segbtn",
+                          key: entry.id,
+                          "aria-pressed": filter === entry.id,
+                          onClick: () => setFilter(entry.id),
+                        },
+                        entry.label,
+                      ),
+                    )
+                  : h("span", { className: "pp-as" }, rows.length + " assessments"),
+                h("span", { className: "pp-segspacer" }),
+                reachable && unlinked.length
+                  ? h(
+                      "button",
+                      {
+                        type: "button",
+                        className: "pp-segbtn",
+                        "aria-pressed": binding,
+                        title: "Fetch each course's assignments and pair them with the unlinked assessments by title and points",
+                        onClick: () => setBinding(!binding),
+                      },
+                      "Suggest pairs",
+                    )
+                  : null,
+              ),
+              binding
+                ? h(
+                    "div",
+                    { className: "pp-cpanel" },
+                    h(AssignmentBinder, {
+                      runId: props.runId,
+                      sessionId: props.sessionId,
+                      subgroups: data.subgroups,
+                      courseMap: subgroupCourses.perSubgroup ? subgroupCourses.map : null,
+                      singleCourseId: data.canvasCourse.id,
+                      assessments: data.assessments,
+                      onSaved: (body) => {
+                        setBinding(false);
+                        saved(body);
+                      },
+                    }),
+                  )
+                : null,
+              h(
+                "div",
+                { className: "pp-crows" },
+                shown.length ? shown.map(assessmentRow) : h("p", { className: "pp-as" }, "Nothing here."),
+              ),
+            )
+          : h("p", { className: "pp-as" }, "This run has no assessments yet. Drafting one is /design-assessment."),
+        details,
+      );
+    }
+
     // ── client/integrations.js
+
+    /** The last ready, error-free value of a `useJson`-shaped state, or null. */
+    function useSteady(state) {
+      const last = React.useRef(null);
+      if (state.phase === "ready" && state.value && !state.value.error) last.current = state.value;
+      return last.current;
+    }
 
     /**
      * What this run is wired to, and what it is not.
      *
      * Drawn here rather than served as a document for `WidgetFrame`'s reason:
-     * the Links view has a form, and a frame with no `allow-same-origin` cannot
-     * call back to the routes it would post to.
+     * the views post back, and a frame with no `allow-same-origin` cannot call
+     * the routes they post to.
      *
-     * One fetch for three sub-views. `/api/integrations` reads five files and
-     * five environment variables, and splitting it per view would be three
-     * chances to show a host from one read beside a token from another.
+     * One fetch of `/api/integrations` for every view. It reads five files and
+     * five environment variables, and splitting it per view would be chances to
+     * show a host from one read beside a token from another.
      */
     function Integrations(props) {
       const url = scoped(
@@ -2663,10 +3759,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
           "/api/integrations?run=" +
           encodeURIComponent(props.runId || "") +
           // The revision counter, in the URL because `useJson` re-fetches when
-          // its URL changes and on nothing else. The route does not read `r`
-          // and does not need to — its only job is to make an `ainar lms` run
-          // in a terminal, or a hand-edited version.yaml, redraw this tab. See
-          // the `revision` prop in the pane for why this is not a remount.
+          // its URL changes and on nothing else. The route does not read `r`;
+          // its only job is to make an `ainar lms` run in a terminal, or a
+          // hand-edited version.yaml, redraw this tab without a remount.
           "&r=" +
           encodeURIComponent(String(props.revision || 0)),
         props.sessionId,
@@ -2676,240 +3771,46 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       // over the fetch for the reason `Preferences` prefers it: the form should
       // redraw from disk rather than from its own memory of what was ticked.
       const [fresh, setFresh] = React.useState(null);
-      // The live Canvas answer. Never fetched on render — only when the
-      // professor presses for it, because the request spends their API quota
-      // and sends their token. `null` means nobody has asked yet, which is a
-      // different state from "asked and Canvas returned nothing".
-      const [catalogue, setCatalogue] = React.useState(null);
-      const [fetching, setFetching] = React.useState(false);
-      // Ticked sections, keyed `<kind>:<id>`, with the subgroup each feeds.
-      // Seeded from the record and reseeded after a Save, so Revert has
-      // something true to go back to.
-      const [picked, setPicked] = React.useState(null);
-      // One slot for both buttons, and therefore tagged with `from`.
-      //
-      // Untagged, this printed every failure in both places: a Canvas
-      // precondition error appeared under `Fetch from Canvas` AND again beside
-      // `Save to the run record`, which reads as two separate faults and
-      // blames the save for something the fetch said. A message belongs under
-      // the button that produced it.
+      // A refusal from the credential seam, tagged with the field that caused it.
       const [status, setStatus] = React.useState(null);
-      const failure = (from) =>
-        status && status.error && status.from === from ? status.error : null;
+      // The run's marks and syncs, for the Canvas rows and the strip above them.
+      const unpublished = useUnpublished(props.runId, props.sessionId, props.revision || 0);
+      const syncs = useJson(
+        scoped(
+          BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + encodeURIComponent(String(props.revision || 0)),
+          props.sessionId,
+        ),
+      );
 
-      const data =
-        fresh || (state.phase === "ready" && !state.value.error ? state.value : null);
-
-      const seed = (rows) => {
-        const out = {};
-        for (const row of rows || []) {
-          out[row.kind + ":" + row.id] = { id: row.id, kind: row.kind, name: row.name, group: row.group };
-        }
-        return out;
-      };
-
-      // Reseed when the record changes under the form.
-      //
-      // Nothing here has to clear the fetched catalogue when the run changes,
-      // and that is worth stating because it looks like an omission: the pane
-      // keys this component on the run id, so a run switch REMOUNTS it and
-      // every piece of state above starts empty. Which is the behaviour the
-      // catalogue needs — a list of sections belongs to the Canvas course it
-      // came from, and one left on screen across a switch would be offering
-      // another course's sections to map.
+      // A read that lands after a Save is at least as new as what the Save
+      // handed back, so it takes over.
       React.useEffect(() => {
-        if (data) setPicked(seed(data.selections));
+        if (state.phase !== "ready") return;
+        setFresh(null);
         setStatus(null);
-      }, [state.phase, fresh]);
+      }, [state]);
 
-      if (state.phase === "loading") return h(Message, null, "Reading what this run is wired to…");
-      if (state.value && state.value.error) return h(Message, { error: true }, state.value.error);
-      if (!data) return h(Message, null, "Nothing to show.");
+      // Every Save bumps the revision, and `useJson` goes back to loading on each
+      // one. The last answer stays on screen meanwhile: blanking the tab would
+      // unmount the Canvas card and close the row the professor was working in.
+      const fetched = useSteady(state);
+      const marks = useSteady(unpublished);
+      const roads = useSteady(syncs);
 
-      const chosen = picked || seed(data.selections);
-      const sub = props.subView || "targets";
-
-      // ---- Targets -------------------------------------------------------
-
-      if (sub === "status") {
-        return h(
-          "div",
-          null,
-          h(
-            "p",
-            { className: "pp-absent" },
-            "What this run is wired to, and how much of each is done. A push reaches " +
-              "nothing until every line below it is ticked.",
-          ),
-          h(IntegrationStatus, {
-            integrations: data.integrations,
-            setup: data.setup,
-            data,
-            runId: props.runId,
-            sessionId: props.sessionId,
-            onSaved: (body) => {
-              setFresh(body);
-              setStatus(null);
-              // A connection is machine configuration and changes nothing in
-              // courses/; a spreadsheet id does. Cheaper to refresh always
-              // than to reason about which provider just wrote where.
-              if (props.onWrite) props.onWrite();
-            },
-          }),
-        );
+      if (state.phase === "ready" && state.value && state.value.error && !fresh) {
+        return h(Message, { error: true }, state.value.error);
       }
+      const data = fresh || fetched;
+      if (!data) return h(Message, null, "Reading what this run is wired to…");
 
-      if (sub === "targets") {
-        const target = data.target;
-        return h(
-          "div",
-          { className: "pp-scroll" },
-          h("p", { className: "pp-factgroup" }, "Where an approved grade would go"),
-          h(
-            Fact,
-            {
-              label: "Gradebook target",
-              note:
-                target.value === null
-                  ? "Set once at onboarding. Without it every push has to be told."
-                  : target.supported === false
-                    ? "Recorded, but this workspace cannot reach it. Supported: " +
-                      target.options.join(", ")
-                    : target.live
-                      ? "A live target: a push changes something students can see, and needs --confirm"
-                      : "Produces a file. Inert until somebody uploads it",
-              missing: target.value === null || target.supported === false,
-            },
-            target.value === null
-              ? h(Presence, { present: false, no: "not recorded" })
-              : target.value,
-          ),
-          h(
-            Fact,
-            {
-              label: "Canvas course",
-              note:
-                data.canvasCourse.fromExtension === null && data.canvasCourse.fromColumn
-                  ? "In lms_course_id, which `ainar lms push` does not read. It reads " +
-                    "extensions.lms.canvas_course_id"
-                  : data.canvasCourse.fromExtension
-                    ? "extensions.lms.canvas_course_id, which is the field the push reads"
-                    : "extensions.lms.canvas_course_id on the run record. The number is in " +
-                      "the Canvas course URL",
-              missing: !data.canvasCourse.usable,
-            },
-            data.canvasCourse.fromExtension ||
-              data.canvasCourse.fromColumn ||
-              h(Presence, { present: false, no: "not recorded" }),
-          ),
-          h(
-            Fact,
-            {
-              label: "Canvas host",
-              note:
-                data.canvas.hostFrom ||
-                "A canvas connection in " +
-                  data.canvas.registryPath +
-                  " — `ainar connections migrate` builds one from what is already here",
-              missing: !data.canvas.host,
-            },
-            data.canvas.host || h(Presence, { present: false, no: "not configured" }),
-          ),
-          // No setup form here. Status owns that, and a form offered in two
-          // places is two places to keep true.
-          data.canvas.host
-            ? null
-            : h(
-                "p",
-                { className: "pp-absent" },
-                "No Canvas host yet. Status, above, is where it is set up.",
-              ),
-          h(
-            Fact,
-            {
-              label: "Canvas token",
-              // The variable's NAME, which is not a secret and is the thing a
-              // professor needs when a push is refused. Guessing between
-              // AINAR_CANVAS_TOKEN and the bare CANVAS_TOKEN the publishing
-              // profiles used to fall back to is exactly the confusion the
-              // merged registry exists to end.
-              note: data.canvas.tokenEnv,
-              missing: !data.canvas.tokenInEnv,
-            },
-            h(Presence, {
-              present: data.canvas.tokenInEnv,
-              yes: "set",
-              no: "not set",
-            }),
-          ),
-          h(
-            Fact,
-            {
-              label: "Spreadsheet",
-              note: data.sheet.id
-                ? "Summary tab: " + data.sheet.summaryTab
-                : "extensions.lms.sheet_id — the string between /d/ and /edit",
-              missing: !data.sheet.id,
-            },
-            data.sheet.id || h(Presence, { present: false, no: "not recorded" }),
-          ),
-          h(SubgroupCourses, {
-            runId: props.runId,
-            sessionId: props.sessionId,
-            subgroups: data.subgroups || [],
-            state: data.subgroupCourses || { map: {}, perSubgroup: false, conflict: false },
-            onSaved: (body) => {
-              setFresh(body);
-              setStatus(null);
-              // The run record changed, so every other view of it is stale —
-              // the same counter an approval bumps.
-              if (props.onWrite) props.onWrite();
-            },
-          }),
-          h("p", { className: "pp-factgroup" }, "What students would be told"),
-          data.connections.profiles.filter((profile) => profile.type !== "canvas").length === 0
-            ? h(
-                "p",
-                { className: "pp-absent" },
-                "No Moodle or Telegram profile in " +
-                  data.connections.path +
-                  ". Announcing to a channel is /publish-telegram, which reads that file.",
-              )
-            : data.connections.profiles
-                .filter((profile) => profile.type !== "canvas")
-                .map((profile) =>
-                  h(
-                    Fact,
-                    {
-                      label: profile.name,
-                      note:
-                        profile.type +
-                        (profile.chatId
-                          ? " · chat " + profile.chatId
-                          : profile.baseUrl
-                            ? " · " + profile.baseUrl
-                            : ""),
-                      missing: !profile.supported,
-                      key: profile.name,
-                    },
-                    profile.supported
-                      ? h(Presence, {
-                          present: profile.tokenInEnv || profile.tokenInFile,
-                          yes: "ready",
-                          no: "no token",
-                        })
-                      : "unsupported type",
-                  ),
-                ),
-          h(
-            "p",
-            { className: "pp-absent" },
-            data.run.recordPath
-              ? "The run's own linkages live in " + data.run.recordPath + "."
-              : "This run's record could not be located.",
-          ),
-        );
-      }
+      const sub = props.subView || "course";
+      const onSaved = (body) => {
+        setFresh(body);
+        setStatus(null);
+        // The run record changed, so every other view of it is stale — the same
+        // counter an approval bumps.
+        if (props.onWrite) props.onWrite();
+      };
 
       // ---- Credentials ---------------------------------------------------
 
@@ -3089,519 +3990,149 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
         );
       }
 
-      // ---- Links ---------------------------------------------------------
+      // ---- This course ---------------------------------------------------
 
-      const key = (option) => option.kind + ":" + option.id;
-
-      const toggle = (option) =>
-        setPicked((current) => {
-          const next = Object.assign({}, current || chosen);
-          if (Object.hasOwn(next, key(option))) delete next[key(option)];
-          else {
-            next[key(option)] = {
-              id: option.id,
-              kind: option.kind,
-              name: option.name,
-              // One subgroup and nothing to decide: bind it, rather than
-              // making the professor pick from a list of one. A run with none
-              // stays null, which means "the whole run".
-              group: data.subgroups.length === 1 ? data.subgroups[0].group : null,
-            };
-          }
-          return next;
-        });
-
-      const bind = (option, group) =>
-        setPicked((current) => {
-          const next = Object.assign({}, current || chosen);
-          if (!next[key(option)]) return next;
-          next[key(option)] = Object.assign({}, next[key(option)], { group: group || null });
-          return next;
-        });
-
-      const load = () => {
-        setFetching(true);
-        setStatus(null);
-        fetch(
-          scoped(
-            BASE + "/api/canvas/catalogue?run=" + encodeURIComponent(props.runId || ""),
-            props.sessionId,
-          ),
-          { method: "POST" },
-        )
-          .then((response) => response.json())
-          .then((body) => {
-            setFetching(false);
-            if (body.error) {
-              setStatus({ error: body.error, from: "fetch" });
-              return;
-            }
-            setCatalogue(body);
-          })
-          .catch((error) => {
-            setFetching(false);
-            setStatus({ error: String((error && error.message) || error), from: "fetch" });
-          });
-      };
-
-      const save = () => {
-        setStatus("saving");
-        fetch(
-          scoped(
-            BASE + "/api/canvas/selection?run=" + encodeURIComponent(props.runId || ""),
-            props.sessionId,
-          ),
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ selections: Object.values(chosen) }),
-          },
-        )
-          .then((response) => response.json())
-          .then((body) => {
-            if (body.error) {
-              setStatus({ error: body.error, from: "save" });
-              return;
-            }
-            setFresh(body);
-            setStatus({ saved: body.saved });
-            // The record changed, so every other view of it has to be
-            // re-fetched — the same counter an approval bumps.
-            if (props.onWrite) props.onWrite();
-          })
-          .catch((error) =>
-            setStatus({ error: String((error && error.message) || error), from: "save" }),
-          );
-      };
-
-      // What is offered to tick: the live catalogue once fetched, otherwise
-      // whatever the RECORD holds — so a professor with no token still sees the
-      // mapping they have and can still unmap one.
-      //
-      // From the record and deliberately not from `chosen`: an unticked row has
-      // to stay on screen. Deriving the list from what is currently ticked would
-      // make a row vanish the moment it was unticked, so changing your mind
-      // would cost another Canvas request to get it back.
-      const offered = catalogue
-        ? catalogue.options
-        : data.selections.map((row) => ({
-            id: row.id,
-            kind: row.kind,
-            name: row.name || row.id,
-            students: null,
-            sisId: null,
-          }));
-
-      const saved = status && status.saved;
-      // Order-insensitive, because `chosen` is keyed by insertion and a
-      // professor who unticks a section and ticks it again has changed nothing.
-      // Comparing the stringified objects directly reported that as unsaved
-      // work and offered a Save that would write the file back as it already
-      // was.
-      //
-      // Joined on NUL, written as an escape rather than as the byte — the
-      // spelling `grading.js`'s `pair()` settled on, and for its reason. A
-      // separator that can occur inside a value lets two different selections
-      // canonicalise to one string, and a Canvas section name is free text that
-      // may hold any punctuation a registrar typed. NUL cannot occur in any of
-      // the three halves. The escape is what keeps this file readable as text:
-      // a literal NUL makes git store the whole thing as binary, which is how
-      // two files in this repo ended up with no reviewable diff at all.
-      const canonical = (table) =>
-        Object.keys(table)
-          .sort()
-          .map((entry) => {
-            const row = table[entry];
-            return `${entry}\u0000${row.group || ""}\u0000${row.name || ""}`;
-          })
-          .join("\u0000\u0000");
-      const dirty = canonical(seed(data.selections)) !== canonical(chosen);
-
-      return h(
-        "div",
-        { className: "pp-scroll" },
-        h("p", { className: "pp-factgroup" }, "Canvas sections and groups"),
-        h(
-          "p",
-          { className: "pp-absent" },
-          data.subgroups.length
-            ? "Which Canvas section or student group feeds which subgroup of this run. " +
-              "Leave a selection on the whole run when it is not a subgroup's." +
-              // Worth saying here rather than only on the class list: a run
-              // where some students carry no subgroup is a run where a
-              // per-subgroup mapping does not cover everybody, and this is the
-              // screen where that matters.
-              (data.ungrouped
-                ? " " +
-                  data.ungrouped +
-                  " active student" +
-                  (data.ungrouped === 1 ? "" : "s") +
-                  " carry no subgroup, so no per-subgroup selection covers them."
-                : "")
-            : "This run has no subgroups, so a selection here says only that the section " +
-              "belongs to this run.",
-        ),
-        h(
-          "div",
-          { className: "pp-saverow pp-saverow-top" },
-          h(
-            "button",
-            {
-              type: "button",
-              className: "pp-segbtn",
-              disabled: fetching,
-              title:
-                "Ask Canvas for this course's sections and student groups. A read, " +
-                "but it sends your token, so it happens only when you press this.",
-              onClick: load,
-            },
-            fetching ? "Asking Canvas…" : catalogue ? "Fetch again" : "Fetch from Canvas",
-          ),
-          catalogue
-            ? h(
-                "span",
-                { className: "pp-savenote" },
-                catalogue.options.length +
-                  " from " +
-                  catalogue.host +
-                  " · course " +
-                  catalogue.courseId,
-              )
-            : null,
-        ),
-        failure("fetch") ? h("p", { className: "pp-saveerr" }, failure("fetch")) : null,
-        offered.length === 0
-          ? h(
-              "p",
-              { className: "pp-absent" },
-              catalogue
-                ? "Canvas returned no sections or groups for this course."
-                : "Nothing is mapped yet. Fetching from Canvas is what fills this in.",
-            )
-          : offered.map((option) => {
-              const on = Object.hasOwn(chosen, key(option));
-              return h(
-                "div",
-                { className: "pp-pick", key: key(option) },
-                h("input", {
-                  type: "checkbox",
-                  className: "pp-pickbox",
-                  checked: on,
-                  onChange: () => toggle(option),
-                  "aria-label": option.name,
-                }),
-                h(
-                  "span",
-                  { className: "pp-picklabel" },
-                  option.name,
-                  h(
-                    "span",
-                    { className: "pp-factnote" },
-                    option.kind +
-                      " " +
-                      option.id +
-                      (option.students === null ? "" : " · " + option.students + " students") +
-                      (option.sisId ? " · SIS " + option.sisId : ""),
-                  ),
-                ),
-                on && data.subgroups.length
-                  ? h(
-                      "select",
-                      {
-                        className: "pp-prefctl pp-picksel",
-                        value: (chosen[key(option)] && chosen[key(option)].group) || "",
-                        onChange: (event) => bind(option, event.target.value),
-                        "aria-label": "Which subgroup " + option.name + " feeds",
-                      },
-                      [h("option", { value: "", key: "" }, "the whole run")].concat(
-                        data.subgroups.map((entry) =>
-                          h(
-                            "option",
-                            { value: entry.group, key: entry.group },
-                            entry.group + " (" + entry.students + ")",
-                          ),
-                        ),
-                      ),
-                    )
-                  : null,
-              );
-            }),
-        h(
-          "div",
-          { className: "pp-saverow" },
-          h(
-            "button",
-            {
-              type: "button",
-              className: "pp-segbtn" + (dirty ? " pp-danger" : ""),
-              disabled: status === "saving" || !dirty,
-              title: data.run.recordPath
-                ? "Write extensions.lms.canvas_sections to " + data.run.recordPath
-                : "This run's record could not be located",
-              onClick: save,
-            },
-            status === "saving" ? "Saving…" : "Save to the run record",
-          ),
-          h(
-            "button",
-            {
-              type: "button",
-              className: "pp-segbtn",
-              disabled: !dirty,
-              onClick: () => {
-                setPicked(seed(data.selections));
-                setStatus(null);
-              },
-            },
-            "Revert",
-          ),
-          failure("save")
-            ? h("span", { className: "pp-saveerr" }, failure("save"))
-            : saved
-              ? h(
-                  "span",
-                  { className: "pp-savenote" },
-                  "Wrote " +
-                    saved.count +
-                    " selection" +
-                    (saved.count === 1 ? "" : "s") +
-                    " to " +
-                    saved.path +
-                    ".",
-                )
-              : null,
-        ),
-
-        h("p", { className: "pp-factgroup" }, "Assessments"),
-        data.assessments.length === 0
-          ? h(
-              "p",
-              { className: "pp-absent" },
-              "This run has no assessments yet, so there is nothing to link. " +
-                "Drafting one is /design-assessment.",
-            )
-          : data.assessments.map((assessment) =>
-              h(
-                Fact,
-                {
-                  label: assessment.title || assessment.assessmentId,
-                  note:
-                    assessment.assessmentId +
-                    " · sheet tab " +
-                    (assessment.sheetTab || assessment.defaultSheetTab) +
-                    (assessment.sheetTab ? "" : " (derived)"),
-                  missing: assessment.canvasAssignmentId === null,
-                  key: assessment.assessmentId,
-                },
-                assessment.canvasAssignmentId ||
-                  h(Presence, { present: false, no: "no Canvas column" }),
-              ),
-            ),
-        data.assessments.some((assessment) => assessment.canvasAssignmentId === null)
-          ? h(
-              "p",
-              { className: "pp-absent" },
-              "A Canvas column goes on the assessment as extensions.lms." +
-                "canvas_assignment_id. Without one, a push has no column to write and " +
-                "`ainar lms plan` says so — though sending the definition below " +
-                "creates the assignment and writes its id here for you.",
-            )
-          : null,
-        h(DefinitionPush, {
-          runId: props.runId,
-          sessionId: props.sessionId,
-          assessments: data.assessments,
-          subgroups: data.subgroups,
-        }),
-      );
+      return h(CourseIntegrations, {
+        data,
+        unpublished: marks,
+        syncs: roads,
+        runId: props.runId,
+        sessionId: props.sessionId,
+        names: props.names,
+        ask: props.ask,
+        openSyncs: props.openSyncs,
+        onSaved,
+        onWrite: props.onWrite,
+      });
     }
 
     /**
-     * Sending an assessment's DEFINITION to Canvas — its title, points, dates,
-     * what may be handed in, and the brief as the description.
+     * Integrations → This course: what needs the professor, then one card per
+     * service.
      *
-     * Everything else on this tab RECORDS a linkage: which Canvas assignment
-     * is which. This is the one control that changes something a class can
-     * see, so it is shaped like the approval strip rather than like its
-     * neighbours:
+     * The strip names only what a person has to do — a name a sync could not
+     * place, an assessment with no Canvas column, marks Canvas does not have — and
+     * each item goes to the rows it is about. A course with nothing to do shows no
+     * strip at all rather than a green "all clear" to read past.
      *
-     * * **preview first, always.** The send button does not exist until a plan
-     *   has come back, and the plan is the CLI's own words. A professor who has
-     *   not read what would change cannot send it.
-     * * **the send button is the only red thing here**, which is the pane's
-     *   existing signal for a press that writes outside this machine.
-     * * **drift needs its own press.** A field somebody edited in Canvas is
-     *   left alone by default; replacing it is a second checkbox that only
-     *   appears when the plan actually reported drift, and it is cleared again
-     *   after every send so it cannot carry over to the next one.
-     *
-     * The subgroup selector defaults to "every subgroup", which is what the
-     * command does and is the point of it: one definition serves the whole
-     * class, and a send that reached CS-401 and not CS-402 is how two halves
-     * end up being told different things.
+     * Canvas has its card. The others are still drawn as Status drew them, and
+     * only the ones this course uses: a service nobody has set up is one line at
+     * the bottom, not a red row each.
      */
-    function DefinitionPush(props) {
-      const assessments = props.assessments || [];
-      const subgroups = (props.subgroups || []).map((entry) => entry.group);
-      const [assessment, setAssessment] = React.useState(
-        assessments.length ? assessments[0].assessmentId : "",
-      );
-      const [group, setGroup] = React.useState("");
-      const [phase, setPhase] = React.useState("idle");
-      const [result, setResult] = React.useState(null);
-      const [overwrite, setOverwrite] = React.useState(false);
+    function CourseIntegrations(props) {
+      const data = props.data;
+      const [filter, setFilter] = React.useState({ id: null, tick: 0 });
+      const [adding, setAdding] = React.useState(false);
+      const canvasRow = (data.integrations || []).find((row) => row.id === "canvas");
+      const reachable = Boolean(canvasRow) && canvasRow.steps.slice(0, 3).every((step) => step.done);
+      const counts = canvasCounts(data, props.unpublished);
+      const waiting = props.syncs ? props.syncs.waiting.length : 0;
+      const others = (data.integrations || []).filter((row) => row.id !== "canvas");
+      // A service with a sync on this run is used by it, set up or not: the grade
+      // sheet's sync names its spreadsheet itself, not on the run record the
+      // checklist reads.
+      const synced = new Set(props.syncs ? props.syncs.syncs.map((sync) => sync.service) : []);
+      const isUsed = (row) => row.state !== "absent" || synced.has(row.id);
+      const used = others.filter(isUsed);
+      const unused = others.filter((row) => !isUsed(row));
 
-      // A plan belongs to the assessment and subgroup it was asked about.
-      // Changing either throws it away, so the red button can never send
-      // something other than what was read.
-      const reset = () => {
-        setResult(null);
-        setOverwrite(false);
-      };
+      const show = (id) => setFilter((current) => ({ id, tick: current.tick + 1 }));
+      const plural = (count, one, many) => count + " " + (count === 1 ? one : many);
 
-      const call = (confirm) => {
-        setPhase(confirm ? "sending" : "planning");
-        fetch(
-          scoped(
-            BASE + "/api/canvas/assignment?run=" + encodeURIComponent(props.runId || ""),
-            props.sessionId,
-          ),
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              assessment: assessment,
-              group: group,
-              confirm: confirm,
-              overwriteDrift: confirm && overwrite,
-            }),
-          },
-        )
-          .then((response) => response.json())
-          .then((body) => {
-            setPhase("idle");
-            if (body.error) {
-              setResult({ failed: true, text: body.error, sent: false });
-              return;
+      const needs = [
+        waiting
+          ? {
+              key: "waiting",
+              text: plural(waiting, "name", "names") + " from a sync to confirm",
+              action: props.openSyncs ? "Review" : null,
+              go: props.openSyncs,
             }
-            setResult({
-              failed: !body.ok,
-              text: body.output || (body.ok ? "Canvas had nothing to change." : "No output."),
-              sent: confirm && body.ok,
-            });
-            // A send consumes the preview: what is on screen now describes a
-            // state that no longer exists.
-            if (confirm) setOverwrite(false);
-          })
-          .catch((error) => {
-            setPhase("idle");
-            setResult({ failed: true, text: String((error && error.message) || error), sent: false });
-          });
-      };
-
-      if (!assessments.length) return null;
-
-      // Only offered when the plan said somebody had edited Canvas by hand.
-      const sawDrift = Boolean(result) && !result.failed && /edited in Canvas/.test(result.text);
-      const previewed = Boolean(result) && !result.failed && !result.sent;
+          : null,
+        reachable && counts.unlinked.length
+          ? {
+              key: "unlinked",
+              text: plural(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
+              action: "Show",
+              go: () => show("unlinked"),
+            }
+          : null,
+        counts.toSend.length
+          ? {
+              key: "marks",
+              text: "Canvas is missing marks for " + plural(counts.toSend.length, "assessment", "assessments"),
+              action: "Show",
+              go: () => show("marks"),
+            }
+          : null,
+      ].filter(Boolean);
 
       return h(
         "div",
-        null,
-        h("p", { className: "pp-factgroup" }, "Send a definition to Canvas"),
-        h(
-          "p",
-          { className: "pp-absent" },
-          "Title, points, dates, what may be handed in, and the brief as the " +
-            "assignment description. Not the marks — those are ainar lms push.",
-        ),
-        h(
-          "div",
-          { className: "pp-bind" },
-          h("span", { className: "pp-bindname" }, "Assessment"),
-          h(
-            "select",
-            {
-              className: "pp-bindsel",
-              value: assessment,
-              onChange: (event) => {
-                setAssessment(event.target.value);
-                reset();
-              },
-            },
-            assessments.map((entry) =>
-              h(
-                "option",
-                { value: entry.assessmentId, key: entry.assessmentId },
-                entry.title || entry.assessmentId,
-              ),
-            ),
-          ),
-        ),
-        subgroups.length
+        { className: "pp-scroll pp-course" },
+        needs.length
           ? h(
               "div",
-              { className: "pp-bind" },
-              h("span", { className: "pp-bindname" }, "Subgroup"),
-              h(
-                "select",
-                {
-                  className: "pp-bindsel",
-                  value: group,
-                  onChange: (event) => {
-                    setGroup(event.target.value);
-                    reset();
-                  },
-                },
-                [h("option", { value: "", key: "*" }, "Every subgroup")].concat(
-                  subgroups.map((name) => h("option", { value: name, key: name }, name)),
+              { className: "pp-needs", role: "status" },
+              h("span", { className: "pp-needstitle" }, "Needs you"),
+              needs.map((item) =>
+                h(
+                  "div",
+                  { className: "pp-needsrow", key: item.key },
+                  h("span", null, item.text),
+                  item.action
+                    ? h("button", { type: "button", className: "pp-segbtn", onClick: item.go }, item.action)
+                    : null,
                 ),
               ),
             )
           : null,
-        h(
-          "div",
-          { className: "pp-saverow-top" },
-          h(
-            "button",
-            {
-              type: "button",
-              className: "pp-segbtn",
-              disabled: phase !== "idle",
-              onClick: () => call(false),
-            },
-            phase === "planning" ? "Asking Canvas…" : "Preview what Canvas would get",
-          ),
-          previewed
-            ? h(
-                "button",
-                {
-                  type: "button",
-                  className: "pp-segbtn pp-danger",
-                  disabled: phase !== "idle",
-                  onClick: () => call(true),
-                },
-                phase === "sending" ? "Sending…" : "Send to Canvas",
-              )
-            : null,
-        ),
-        sawDrift
-          ? h(
-              "label",
-              { className: "pp-savenote" },
-              h("input", {
-                type: "checkbox",
-                checked: overwrite,
-                onChange: (event) => setOverwrite(event.target.checked),
-              }),
-              " Also replace what was edited in Canvas",
-            )
+        h(CanvasCard, {
+          data,
+          unpublished: props.unpublished,
+          syncs: props.syncs,
+          runId: props.runId,
+          sessionId: props.sessionId,
+          names: props.names,
+          ask: props.ask,
+          filter: filter.id,
+          filterTick: filter.tick,
+          onSaved: props.onSaved,
+          onWrite: props.onWrite,
+        }),
+        used.length
+          ? h(IntegrationStatus, {
+              integrations: used,
+              setup: data.setup,
+              data,
+              runId: props.runId,
+              sessionId: props.sessionId,
+              onSaved: props.onSaved,
+            })
           : null,
-        result
+        unused.length
           ? h(
-              "pre",
-              { className: "pp-approveout" + (result.failed ? " pp-approveerr" : "") },
-              result.text,
+              "div",
+              { className: "pp-unused" },
+              h(
+                "div",
+                { className: "pp-approverow" },
+                h("span", { className: "pp-as" }, "Not used by this course: " + unused.map((row) => row.label).join(", ")),
+                h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", "aria-pressed": adding, onClick: () => setAdding(!adding) },
+                  adding ? "Close" : "Set one up",
+                ),
+              ),
+              adding
+                ? h(IntegrationStatus, {
+                    integrations: unused,
+                    setup: data.setup,
+                    data,
+                    runId: props.runId,
+                    sessionId: props.sessionId,
+                    onSaved: props.onSaved,
+                  })
+                : null,
             )
           : null,
       );
@@ -4264,8 +4795,8 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
           ? h(
               "div",
               { className: "pp-syncnote" },
-              h("span", null, "Addresses, tokens and Canvas links are set up in Integrations."),
-              h("button", { type: "button", className: "pp-syncbtn", title: "Show Integrations here — Status, Targets, Credentials, Links", onClick: props.onSetup }, "Open Integrations"),
+              h("span", null, "Addresses, tokens and Canvas links are set up in Integrations → This course."),
+              h("button", { type: "button", className: "pp-syncbtn", title: "Show Integrations here — each service this course uses, and its setup", onClick: props.onSetup }, "Open Integrations"),
             )
           : null,
         implied
@@ -4678,8 +5209,8 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       const [view, setView] = React.useState(null);
       const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
       // Integrations, opened from Syncs: the pane's own tab, drawn here so going
-      // to it does not close course mode. Status first, as in the pane.
-      const [integrationsSub, setIntegrationsSub] = React.useState("status");
+      // to it does not close course mode. This course first, as in the pane.
+      const [integrationsSub, setIntegrationsSub] = React.useState("course");
       // The week Teaching was last stepped to. The page steps without a round
       // trip and reports each step; it is held in a ref so a step redraws
       // nothing, and copied into `week` only when Teaching is drawn again — on
@@ -4770,6 +5301,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
               sessionId: props.sessionId,
               onWrite: props.onWrite,
               revision: props.reload,
+              names: props.names,
+              ask: props.ask,
+              openSyncs: () => setView("syncs"),
               key: props.runId,
             }),
           );
@@ -11393,6 +11927,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
             // puts this in its own fetch URL instead, so the record is re-read
             // and the catalogue survives.
             revision: reload,
+            names: names,
+            ask: props.ask,
+            openSyncs: () => setSubViews((value) => Object.assign({}, value, { integrations: "syncs" })),
             key: current.runId,
           });
         }
@@ -11934,6 +12471,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
     // syncs of a workspace and made-up names in the review list.
     exports.SyncsView = SyncsView;
     exports.CourseMode = CourseMode;
+    // And Integrations, for `test/integrations-page.mjs`: the real run read, every
+    // write answered from memory.
+    exports.Integrations = Integrations;
     // And the grade sheet's notice and "Last added", against made-up marks.
     exports.SheetNotice = SheetNotice;
     exports.RecentMarks = RecentMarks;

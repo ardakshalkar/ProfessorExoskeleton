@@ -609,6 +609,9 @@ export function ProfessorPane(props) {
         // puts this in its own fetch URL instead, so the record is re-read
         // and the catalogue survives.
         revision: reload,
+        names: names,
+        ask: props.ask,
+        openSyncs: () => setSubViews((value) => Object.assign({}, value, { integrations: "syncs" })),
         key: current.runId,
       });
     }

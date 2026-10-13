@@ -45,6 +45,7 @@
 
 import { DefenceDesk } from "./defence-desk.js";
 import { SyncsView } from "./syncs.js";
+import { Integrations } from "./integrations.js";
 import { CourseMode } from "./materials.js";
 import { RecentMarks, SheetNotice } from "./marks.js";
 import { turnStep } from "./defence-turn.js";
@@ -162,6 +163,9 @@ exports.DefenceDesk = DefenceDesk;
 // syncs of a workspace and made-up names in the review list.
 exports.SyncsView = SyncsView;
 exports.CourseMode = CourseMode;
+// And Integrations, for `test/integrations-page.mjs`: the real run read, every
+// write answered from memory.
+exports.Integrations = Integrations;
 // And the grade sheet's notice and "Last added", against made-up marks.
 exports.SheetNotice = SheetNotice;
 exports.RecentMarks = RecentMarks;

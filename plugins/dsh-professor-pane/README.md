@@ -352,10 +352,27 @@ that the token is an environment variable, and that Telegram is in a JSON file
 under a different dot-directory again. Four of those are invisible from every
 other tab.
 
-Three sub-views: **Targets** (where an approved grade would go, and what
-students would be told), **Credentials** (which of five environment variables
-and three files hold something), and **Links** (the Canvas sections, and each
-assessment's Canvas column).
+Being regrouped by service (since 2026-10-13), so everything about one service
+is in one place. Three sub-views for now: **This course**, **Syncs** and
+**Credentials**.
+
+**This course** opens on a *Needs you* strip, which appears only when there is
+something to do: names a sync could not place, assessments with no Canvas
+column, and marks Canvas does not have. Each item opens the rows it is about.
+Below the strip is one card per service. The **Canvas card** replaced Status,
+Targets and Links. Its header gives the host, whether a token is saved, and the
+courses. While setup is unfinished, the missing steps are shown in the card.
+Under that is a row per assessment, ordered by due date. Each row has three
+pills: its column, its definition ("brief"), and its marks. A row opens to the
+link per course, the definition push, the marks send (the same `CanvasMarks`
+the Scans tab uses) and the hand-ins sync. **Details** holds what a broken push
+needs: where the host is read from, the token variable, the course ids, the
+gradebook target, the run record, and the section mapping. Services the course
+doesn't use are one line at the foot, not a red row each. Syncs and Credentials
+go when the sheet and GitHub get cards and when Accounts replaces Credentials.
+
+`test/integrations-page.mjs` draws the tab against a real workspace with every
+write mocked (`--ready` makes Canvas look reachable).
 
 **No credential is ever drawn.** Presence, the variable's name, the layer it
 comes from, and the path it would be read from — never a value.
@@ -393,8 +410,8 @@ refuse it and to tell the professor to reissue.
 
 ### Sending a definition to Canvas
 
-**Links** ends with the one control in this pane that changes something a class
-can see: it sends an assessment's *definition* — title, points, dates, what may
+An assessment's row on the Canvas card holds a control that changes something
+a class can see: it sends an assessment's *definition* — title, points, dates, what may
 be handed in, and the brief as the Canvas description. Not the marks; those are
 sent from the Scans tab, beside the pile they were graded from (see *Sending the
 marks to Canvas*).

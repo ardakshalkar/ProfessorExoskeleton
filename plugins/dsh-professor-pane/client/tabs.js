@@ -180,27 +180,14 @@ export const SUBVIEWS = {
     // marks Canvas does not have, materials changed since publishing.
     { id: "unpublished", label: "Unpublished" },
   ],
-  // Targets first, because "where would a grade go" is the question that
-  // brings a professor here; Credentials second, because it is the usual
-  // answer to why it would not get there; Links last, because it is the
-  // longest and the only one that writes.
-  //
-  // Unlike every other row in this table these are NOT separate documents
-  // — `/api/integrations` answers all three at once, and the row picks
-  // which sections of that one payload to draw. Three fetches for three
-  // views of five small files would be three chances to show a professor a
-  // host from one read and a token from another.
+  // Being regrouped by service (2026-10-13). This course is one card per
+  // service — Canvas's took over Status, Targets and Links. Syncs goes when
+  // the sheet and GitHub get cards of their own, and Credentials when
+  // Accounts replaces it.
   integrations: [
-    // First, and therefore the default. The question a professor opens
-    // this tab with is "is it set up", and the three views below answer
-    // it only by making them read five facts and do the arithmetic.
-    { id: "status", label: "Status" },
-    // Second: "is it set up" is answered above; this is "what moves, and
-    // what is waiting for me" — the rows a sync was not sure of.
+    { id: "course", label: "This course" },
     { id: "syncs", label: "Syncs" },
-    { id: "targets", label: "Targets" },
     { id: "credentials", label: "Credentials" },
-    { id: "links", label: "Links" },
   ],
 };
 

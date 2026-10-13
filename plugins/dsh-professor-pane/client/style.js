@@ -735,6 +735,45 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);
   background:var(--dsw-alias-bg-l1,#fff);color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-publishcount{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+/* Integrations → This course. A strip of what needs the professor, then one
+   card per service. The card is the sync card's shape, grown: a header with
+   the service's mark, its rows below, and Details folded at the foot. */
+.pp-course{display:flex;flex-direction:column;gap:10px}
+.pp-needs{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;
+  background:rgba(214,130,32,.09);border:1px solid rgba(214,130,32,.28)}
+.pp-needstitle{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#b4600f;font-weight:600}
+.pp-needsrow{display:flex;gap:8px;align-items:center;font-size:12px}
+.pp-needsrow > span{flex:1;min-width:0}
+.pp-ccard{display:flex;flex-direction:column;gap:8px;padding:11px 12px;border-radius:12px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-chead{display:flex;gap:10px;align-items:center}
+.pp-cname{flex:1;min-width:0;font-weight:600;font-size:13px;overflow-wrap:anywhere}
+.pp-chip-ok{background:rgba(47,138,78,.13);color:#2f6b3c}
+.pp-chip-quiet{background:transparent;color:var(--dsw-alias-label-tertiary,#9a9a9a);padding-left:0}
+.pp-csetup{padding:2px 0}
+.pp-cread{display:flex;flex-direction:column}
+.pp-creadline{display:flex;gap:6px;align-items:center;font-size:12px}
+.pp-creadname{flex:1;min-width:0}
+.pp-ctools{display:flex;gap:4px;align-items:center;flex-wrap:wrap;padding-top:6px;
+  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-crows{display:flex;flex-direction:column}
+.pp-crow{border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-crow:last-child{border-bottom:none}
+.pp-crowhead{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;width:100%;padding:6px 0;
+  background:none;border:0;font:inherit;font-size:12px;text-align:left;cursor:pointer;color:inherit}
+.pp-crowhead:hover .pp-crowtitle{text-decoration:underline}
+.pp-crowchev{flex:none;width:10px;font-size:10px;color:var(--dsw-alias-label-tertiary,#9a9a9a)}
+.pp-crowtitle{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
+.pp-crowpills{display:flex;gap:4px;flex-wrap:wrap;margin-left:16px}
+.pp-crow-open .pp-crowtitle{font-weight:600}
+.pp-cpanel{margin:0 0 10px 16px;padding:2px 0 4px 10px;border-left:2px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cpanel .pp-factgroup:first-child{margin-top:4px}
+.pp-ccol{flex:1;min-width:0;font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);font-size:11px}
+.pp-ccol a{color:inherit}
+.pp-cdetails{border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6);padding-top:6px;font-size:12px}
+.pp-cdetails > summary{cursor:pointer;font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cdetails[open] > summary{margin-bottom:4px}
+.pp-unused{padding:2px 0}
 `;
 
 if (

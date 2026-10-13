@@ -424,7 +424,7 @@ export function CanvasMarks(props) {
 }
 
 /** `/api/unpublished` for one run, re-read whenever the course is written. */
-function useUnpublished(runId, sessionId, revision) {
+export function useUnpublished(runId, sessionId, revision) {
   const [state, setState] = React.useState({ phase: "loading", value: null });
   React.useEffect(() => {
     let live = true;
