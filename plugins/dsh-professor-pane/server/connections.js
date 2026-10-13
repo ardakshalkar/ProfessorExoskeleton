@@ -6,6 +6,7 @@
 
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 
 import { AINAR_CLI } from "./actions.js";
 
@@ -22,27 +23,44 @@ import { AINAR_CLI } from "./actions.js";
  * It cannot carry a credential: the command has no `--token` flag. The token
  * goes through the credential seam separately, in the route below.
  */
-export const addConnection = (root, fields) =>
+export const addConnection = (root, fields) => {
+  const args = ["add", fields.name];
+  for (const [flag, value] of [
+    ["--type", fields.type],
+    ["--base-url", fields.baseUrl],
+    ["--course-id", fields.courseId],
+    ["--chat-id", fields.chatId],
+    // Connect Google's three: the variable's NAME, the credential kind, and
+    // the account it answered as. None of them is a secret.
+    ["--token-env", fields.tokenEnv],
+    ["--credential", fields.credential],
+    ["--account", fields.account],
+  ]) {
+    if (value) args.push(flag, String(value));
+  }
+  if (fields.makeDefault) args.push("--default");
+  return connectionsCommand(root, args);
+};
+
+/** Take one connection out of the registry. Its credential is the caller's to clear. */
+export const removeConnection = (root, name) => connectionsCommand(root, ["remove", name]);
+
+/**
+ * `ainar connections …`, spawned. A connection is machine configuration, so a
+ * caller with no workspace — Google's callback has none — runs it from home.
+ */
+const connectionsCommand = (root, rest) =>
   new Promise((resolve) => {
     if (!existsSync(AINAR_CLI)) {
       resolve({ error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.` });
       return;
     }
-    const args = ["--experimental-strip-types", AINAR_CLI, "connections", "add", fields.name];
-    for (const [flag, value] of [
-      ["--type", fields.type],
-      ["--base-url", fields.baseUrl],
-      ["--course-id", fields.courseId],
-      ["--chat-id", fields.chatId],
-    ]) {
-      if (value) args.push(flag, String(value));
-    }
-    if (fields.makeDefault) args.push("--default");
+    const args = ["--experimental-strip-types", AINAR_CLI, "connections", ...rest];
 
     execFile(
       process.execPath,
       args,
-      { cwd: root, timeout: 30000, maxBuffer: 1024 * 1024 },
+      { cwd: root ?? homedir(), timeout: 30000, maxBuffer: 1024 * 1024 },
       (error, stdout, stderr) => {
         const output = [stdout, stderr].filter(Boolean).join("\n").trim();
         if (error) {

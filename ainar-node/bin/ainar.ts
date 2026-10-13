@@ -735,7 +735,9 @@ const HELP = `ainar — the AINAR course model CLI
                        [--forum-id F] [--key-file P] [--token-env VAR]
                        [--provider openai|elevenlabs] [--model M]
                        [--price-per-minute USD]   (transcription)
+                       [--credential oauth] [--account EMAIL]   (sheets, Connect Google)
                        [--default] [--dry-run]
+  connections remove NAME [--dry-run]      take one out; its credential is left alone
   connections migrate [--dry-run]          build it from what is already here
   connections path                         where the registry lives
 
@@ -1377,6 +1379,8 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           model: flag("model") ?? null,
           pricePerMinute: flag("price-per-minute") ? Number(flag("price-per-minute")) : null,
           makeDefault: args.includes("--default"),
+          credential: flag("credential") ?? null,
+          account: flag("account") ?? null,
         },
         { out: (line) => out(line) },
       );

@@ -55,6 +55,7 @@ const CSS = `
 .pp-segbtn{background:0 0;cursor:pointer;padding:2px 8px;font:inherit;font-size:11px;border-radius:20px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+a.pp-segbtn{text-decoration:none;display:inline-block}
 .pp-segbtn[aria-pressed=true]{color:var(--dsw-alias-label-primary,#111);font-weight:600;
   border-color:var(--dsw-alias-label-primary,#111)}
 /* A press that goes to the chat rather than changing a record. The same glyph

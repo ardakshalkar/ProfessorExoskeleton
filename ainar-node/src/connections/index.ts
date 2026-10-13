@@ -114,6 +114,13 @@ export interface Connection {
   model: string | null;
   /** `transcription` only: US dollars per minute of audio, for the cost shown before a batch. */
   pricePerMinute: number | null;
+  /**
+   * `sheets` only: `oauth` when `tokenEnv` holds a Google REFRESH token from
+   * Connect Google rather than an access token. See `google.ts`.
+   */
+  credential: "oauth" | null;
+  /** The Google account Connect Google signed in as. A label, not an authorisation. */
+  account: string | null;
   issues: Issue[];
 }
 
@@ -299,6 +306,18 @@ export const readConnection = (name: string, raw: unknown): Connection => {
     }
   }
 
+  const credential = text(source.credential);
+  if (credential !== null && !(credential === "oauth" && type === "sheets")) {
+    issues.push({
+      code: "bad_credential",
+      severity: "error",
+      message:
+        credential === "oauth"
+          ? `credential 'oauth' is for a sheets connection, not ${type}`
+          : `credential '${credential}' is not one this registry knows — only 'oauth', on sheets`,
+    });
+  }
+
   const keyFile = text(source.keyFile);
   if (type === "sheets" && keyFile && !existsSync(expand(keyFile))) {
     issues.push({
@@ -321,6 +340,8 @@ export const readConnection = (name: string, raw: unknown): Connection => {
     provider,
     model,
     pricePerMinute: price,
+    credential: credential === "oauth" ? "oauth" : null,
+    account: text(source.account),
     issues,
   };
 };
@@ -382,7 +403,9 @@ export const tokenFor = (connection: Connection): string => {
 
 /** Where the professor gets the token this connection wants. */
 export const hintFor = (connection: Connection): string =>
-  ({
+  connection.credential === "oauth"
+    ? "Connect Google in the pane, under Integrations → Credentials. The sign-in is saved there; nothing is typed."
+    : ({
     canvas: "Canvas → Account → Settings → New Access Token. It can change a grade; keep it out of the repository.",
     sheets:
       "An access token from `gcloud auth print-access-token`, or set keyFile to a service-account key and share the spreadsheet with its address.",
@@ -514,6 +537,8 @@ export const connectionAsJson = (connection: Connection): Record<string, unknown
   if (connection.pricePerMinute !== null && connection.pricePerMinute !== undefined) {
     stored.pricePerMinute = connection.pricePerMinute;
   }
+  if (connection.credential) stored.credential = connection.credential;
+  if (connection.account) stored.account = connection.account;
   return stored;
 };
 

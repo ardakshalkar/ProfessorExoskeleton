@@ -9,10 +9,15 @@
  * reads the tab before it writes, compares what is there against the decisions
  * and against the ledger, and refuses to overwrite anything it did not put there.
  *
- * Two ways to authenticate, and the choice is about what your IT department
+ * Three ways to authenticate, and the choice is about what your IT department
  * allows:
  *
- * **A service account** (recommended). Create one, download its JSON key, share
+ * **Connect Google**, in the pane. The professor signs in with their own
+ * account; the refresh token is kept in the harness's credential store and
+ * traded for an access token here (`OAuthRefresh`). Nothing to download or
+ * share. See `connections/google.ts`.
+ *
+ * **A service account**. Create one, download its JSON key, share
  * the spreadsheet with the account's email address as an editor. No browser flow,
  * no expiring token.
  *
@@ -32,7 +37,7 @@
  * tests exercise a real write without one leaving the machine.
  */
 
-import { createSign } from "node:crypto";
+import { createHash, createSign } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { type Grid, STUDENT, TOTAL, height, width } from "./grid.ts";
@@ -46,16 +51,25 @@ import {
   usable,
 } from "../connections/index.ts";
 import { resolveVariable } from "../connections/store.ts";
+import {
+  type ClientConfig,
+  GoogleAuthError,
+  SHEETS_SCOPE,
+  TOKEN_URL,
+  clientConfig,
+  clientPath,
+  refreshAccess,
+} from "../connections/google.ts";
 
 const API_ROOT = "https://sheets.googleapis.com/v4/spreadsheets";
-const TOKEN_URL = "https://oauth2.googleapis.com/token";
 /**
  * Sheets to read and write; Drive metadata to ask only when a file last
  * changed (`modifiedTime`), never what is in it. A key whose project has the
  * Drive API switched off still gets a token — the one question it cannot
- * answer is "when", and `modifiedTime` then says null.
+ * answer is "when", and `modifiedTime` then says null. Defined beside Connect
+ * Google so the two ways in ask for the same thing.
  */
-const SCOPE = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.metadata.readonly";
+const SCOPE = SHEETS_SCOPE;
 const DRIVE_FILES = "https://www.googleapis.com/drive/v3/files";
 
 export const TOKEN_ENV = "AINAR_SHEETS_TOKEN";
@@ -190,6 +204,73 @@ export class ServiceAccount implements Credentials {
   }
 }
 
+/**
+ * Access tokens from a Connect Google refresh token, by refresh-token digest.
+ *
+ * Module-wide rather than per instance because `loadCredentials` builds a new
+ * instance per command, and a sync that reads four tabs should not ask Google
+ * for four tokens. Keyed on a digest so the refresh token itself is held by
+ * nothing longer-lived than the instance that was given it.
+ */
+const accessCache = new Map<string, { value: string; expires: number }>();
+
+/** A Connect Google sign-in: a refresh token, traded for an hour at a time. */
+export class OAuthRefresh implements Credentials {
+  private refreshToken: string;
+  private client: ClientConfig;
+  /** The account it signed in as, when the connection recorded one. */
+  account: string | null;
+
+  constructor(refreshToken: string, client: ClientConfig, account: string | null = null) {
+    this.refreshToken = refreshToken;
+    this.client = client;
+    this.account = account;
+  }
+
+  async token(transport: Transport): Promise<string> {
+    const key = createHash("sha256").update(this.refreshToken).digest("hex");
+    const now = Math.floor(Date.now() / 1000);
+    const cached = accessCache.get(key);
+    if (cached && cached.expires > now + 60) return cached.value;
+    try {
+      const fresh = await refreshAccess(this.client, this.refreshToken, transport);
+      accessCache.set(key, { value: fresh.value, expires: now + fresh.expiresIn });
+      return fresh.value;
+    } catch (error) {
+      // A revoked grant must not keep answering from the cache either.
+      accessCache.delete(key);
+      if (error instanceof GoogleAuthError) throw new SheetsError(error.message);
+      throw error;
+    }
+  }
+}
+
+/** Forget cached access tokens. For tests. */
+export const forgetAccessTokens = (): void => accessCache.clear();
+
+/**
+ * The credential an `oauth` connection stands for, or an error that says
+ * which half is missing. Both halves are needed: the refresh token from the
+ * store, and the client it was issued to.
+ */
+export const oauthCredentials = (connection: Connection): OAuthRefresh => {
+  const refresh = resolveVariable(connection.tokenEnv)?.value;
+  if (!refresh) {
+    throw new Error(
+      `connection '${connection.name}' is a Google sign-in, but none is saved ` +
+        `(${connection.tokenEnv} is empty). Connect Google in Integrations → Credentials.`,
+    );
+  }
+  const client = clientConfig();
+  if (!client) {
+    throw new Error(
+      `connection '${connection.name}' is a Google sign-in, but the OAuth client it was issued ` +
+        `to is not at ${clientPath()}. Put the Desktop client JSON back there.`,
+    );
+  }
+  return new OAuthRefresh(refresh, client, connection.account);
+};
+
 const isFile = (path: string): boolean => {
   try {
     return statSync(path).isFile();
@@ -210,7 +291,8 @@ const isFile = (path: string): boolean => {
  * The same ordering as Canvas, and for the same reason: the registry is the
  * answer, and the two explicit overrides above it are how one command is
  * pointed elsewhere without editing it. A registry connection contributes a
- * `keyFile` or the NAME of a variable — never a credential value.
+ * `keyFile` or the NAME of a variable — never a credential value. An `oauth`
+ * connection's variable holds a refresh token, not an access token.
  */
 export const loadCredentials = (
   directory: string | null = null,
@@ -233,6 +315,7 @@ export const loadCredentials = (
     if (chosen.type !== "sheets") {
       throw new Error(`connection '${connection}' is a ${chosen.type} connection, not sheets`);
     }
+    if (chosen.credential === "oauth") return oauthCredentials(chosen);
     const named = resolveVariable(chosen.tokenEnv)?.value;
     if (named) return new StaticToken(named);
     const key = keyFilePath(chosen);
@@ -248,6 +331,7 @@ export const loadCredentials = (
 
   const found = findConnection(registry, { type: "sheets" });
   if (found && usable(found)) {
+    if (found.credential === "oauth") return oauthCredentials(found);
     const named = resolveVariable(found.tokenEnv)?.value;
     if (named) return new StaticToken(named);
     const key = keyFilePath(found);

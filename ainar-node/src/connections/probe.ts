@@ -17,7 +17,7 @@
  */
 
 import { type Transport, FetchTransport, TransportError, json } from "../lms/http.ts";
-import { ServiceAccount, StaticToken } from "../lms/sheets.ts";
+import { ServiceAccount, StaticToken, oauthCredentials } from "../lms/sheets.ts";
 import {
   type Connection,
   hintFor,
@@ -187,6 +187,17 @@ const probeTelegram = async (connection: Connection, transport: Transport): Prom
  * that is better than a green tick that stands for nothing.
  */
 const probeSheets = async (connection: Connection, transport: Transport): Promise<Probe> => {
+  // A Connect Google sign-in proves itself the same way a key does: Google
+  // either trades the refresh token for an access token or says it is gone.
+  if (connection.credential === "oauth") {
+    const signIn = oauthCredentials(connection);
+    await signIn.token(transport);
+    return answered(
+      connection,
+      connection.account,
+      "Google accepted the sign-in. Any spreadsheet that account can edit can be synced.",
+    );
+  }
   const key = keyFilePath(connection);
   if (key) {
     const account = new ServiceAccount(key);

@@ -5,6 +5,7 @@
  *     ainar connections show NAME           one connection, in full
  *     ainar connections doctor [NAME]       ask each provider whether it agrees
  *     ainar connections add NAME --type T   write one connection
+ *     ainar connections remove NAME         take one out (its credential stays)
  *     ainar connections migrate             build the registry from what exists
  *     ainar connections path                where the file is
  *
@@ -74,6 +75,10 @@ export interface ConnectionsArgs {
   pricePerMinute?: number | null;
   /** `add --default`: make this the one its type resolves to. */
   makeDefault?: boolean;
+  /** `add`, a `sheets` connection: `oauth` for a Connect Google refresh token. */
+  credential?: string | null;
+  /** `add`: the account a Connect Google sign-in answered as. */
+  account?: string | null;
 }
 
 export interface Sink {
@@ -97,6 +102,9 @@ const table = (rows: string[][]): string[] => {
 /** What this connection points at, in one cell. */
 const destination = (connection: Connection): string => {
   if (connection.type === "telegram") return connection.chatId ?? "—";
+  if (connection.type === "sheets" && connection.credential === "oauth") {
+    return connection.account ? `Google · ${connection.account}` : "Google sign-in";
+  }
   if (connection.type === "sheets") return connection.keyFile ?? "(token only)";
   const host = connection.baseUrl ?? "—";
   return connection.courseId ? `${host} · course ${connection.courseId}` : host;
@@ -116,6 +124,7 @@ const credential = (connection: Connection): string => {
   // the shell shadows one saved in the pane and cannot be changed from there,
   // so a professor whose newly saved token has no effect needs to see that an
   // old one is still exported.
+  if (connection.credential === "oauth" && source === "file") return "Google sign-in ✓ (saved)";
   if (source === "env") return `${connection.tokenEnv} ✓ (shell)`;
   if (source === "file") return `${connection.tokenEnv} ✓ (saved)`;
   if (connection.type === "sheets" && connection.keyFile) return "(service-account key)";
@@ -399,6 +408,8 @@ export const runConnections = async (
         provider: args.provider ?? existing?.provider ?? null,
         model: args.model ?? existing?.model ?? null,
         pricePerMinute: args.pricePerMinute ?? existing?.pricePerMinute ?? null,
+        credential: args.credential ?? existing?.credential ?? null,
+        account: args.account ?? existing?.account ?? null,
       });
 
       if (!usable(merged)) {
@@ -432,6 +443,47 @@ export const runConnections = async (
       return 0;
     }
 
+    /**
+     * Take one connection out, and its default with it.
+     *
+     * The registry entry only. A credential the connection named stays where it
+     * is, because this command cannot reach the store and must not pretend to:
+     * the pane's Disconnect revokes and clears it before calling this.
+     */
+    case "remove": {
+      if (!args.name) {
+        sink.out("usage: connections remove NAME");
+        return 1;
+      }
+      if (registry.error) {
+        sink.out(`${registry.path} could not be read: ${registry.error}`);
+        return 1;
+      }
+      const existing = registry.connections.find((entry) => entry.name === args.name);
+      if (!existing) {
+        sink.out(`no connection called '${args.name}' in ${registry.path}; nothing to remove.`);
+        return 0;
+      }
+      const defaults = { ...registry.defaults };
+      for (const [type, named] of Object.entries(defaults)) {
+        if (named === args.name) delete defaults[type as keyof typeof defaults];
+      }
+      if (args.dryRun) {
+        sink.out(`Would remove ${args.name} from ${path}.`);
+        return 0;
+      }
+      saveRegistry(
+        path,
+        registry.connections.filter((entry) => entry.name !== args.name),
+        defaults,
+      );
+      sink.out(`Removed ${args.name} from ${path}.`);
+      if (tokenPresent(existing)) {
+        sink.out(`${existing.tokenEnv} is still set; it was not touched.`);
+      }
+      return 0;
+    }
+
     case "migrate": {
       if (registry.error) {
         sink.out(`${registry.path} could not be read: ${registry.error}`);
@@ -457,7 +509,7 @@ export const runConnections = async (
 
     default: {
       sink.out(`unknown connections subcommand '${args.subcommand}'`);
-      sink.out("usage: connections {list|show|doctor|add|migrate|path}");
+      sink.out("usage: connections {list|show|doctor|add|remove|migrate|path}");
       sink.out("");
       sink.out(`Types: ${TYPES.join(", ")}`);
       sink.out(`Registry: ${path}`);

@@ -400,6 +400,7 @@ window.__ModuleLoader__.load({
 .pp-segbtn{background:0 0;cursor:pointer;padding:2px 8px;font:inherit;font-size:11px;border-radius:20px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+a.pp-segbtn{text-decoration:none;display:inline-block}
 .pp-segbtn[aria-pressed=true]{color:var(--dsw-alias-label-primary,#111);font-weight:600;
   border-color:var(--dsw-alias-label-primary,#111)}
 /* A press that goes to the chat rather than changing a record. The same glyph
@@ -1671,6 +1672,130 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
     }
 
     /**
+     * Connect Google: sign in once, and the grade-sheet syncs reach the
+     * professor's own spreadsheets with no key to download or share.
+     *
+     * Connect is a LINK into a new tab, not a button that fetches and then opens
+     * one: a window opened after an await is a pop-up, and browsers block those.
+     * The tab goes to Google and comes back to the pane's server, which saves the
+     * sign-in and says so. Nothing comes back to this page, so it re-reads when
+     * the professor returns to it — the first focus after pressing Connect.
+     *
+     * The token is never on this page in any form. What is drawn is whether a
+     * sign-in is saved and the account it answered as.
+     */
+    function GoogleConnect(props) {
+      const google = props.google || {};
+      const client = google.client || {};
+      const [waiting, setWaiting] = React.useState(false);
+      const [phase, setPhase] = React.useState("idle");
+      const [error, setError] = React.useState(null);
+      const [note, setNote] = React.useState(null);
+
+      React.useEffect(() => {
+        if (!waiting) return undefined;
+        const back = () => {
+          setWaiting(false);
+          if (props.onChanged) props.onChanged();
+        };
+        window.addEventListener("focus", back);
+        return () => window.removeEventListener("focus", back);
+      }, [waiting]);
+
+      const disconnect = () => {
+        setPhase("working");
+        setError(null);
+        setNote(null);
+        fetch(BASE + "/api/google/disconnect", { method: "POST" })
+          .then((response) => response.json())
+          .then((body) => {
+            setPhase("idle");
+            if (body.error) {
+              setError(body.error);
+              return;
+            }
+            setNote(body.detail || "Disconnected. Google has been told to forget the sign-in.");
+            if (props.onChanged) props.onChanged();
+          })
+          .catch((failure) => {
+            setPhase("idle");
+            setError(String((failure && failure.message) || failure));
+          });
+      };
+
+      const connectLink = (label) =>
+        h(
+          "a",
+          {
+            className: "pp-segbtn",
+            href: BASE + "/api/google/start",
+            target: "_blank",
+            rel: "noopener",
+            title: "Opens Google's sign-in in a new tab. It comes back to this machine, not to any server.",
+            onClick: () => {
+              setError(null);
+              setNote(null);
+              setWaiting(true);
+            },
+          },
+          label,
+        );
+
+      let body;
+      if (!client.present) {
+        body = h(
+          "p",
+          { className: "pp-absent" },
+          "Not set up on this machine yet. Download the Desktop app OAuth client from the Google " +
+            "Cloud console (Google Auth Platform → Clients) and save it as " +
+            client.path +
+            ". Then come back here.",
+        );
+      } else if (client.error) {
+        body = h("p", { className: "pp-saveerr" }, client.error);
+      } else if (google.connected) {
+        body = h(
+          "div",
+          { className: "pp-saverow" },
+          h(Presence, { present: true, yes: google.account ? "connected as " + google.account : "connected" }),
+          h(
+            "button",
+            { type: "button", className: "pp-segbtn", disabled: phase === "working", onClick: disconnect },
+            phase === "working" ? "Disconnecting…" : "Disconnect",
+          ),
+          connectLink("Switch account"),
+        );
+      } else {
+        body = h(
+          "div",
+          { className: "pp-saverow" },
+          connectLink(google.broken ? "Reconnect Google" : "Connect Google"),
+          waiting
+            ? h("span", { className: "pp-savenote" }, "Finish the sign-in in the new tab, then come back here.")
+            : google.broken
+              ? h("span", { className: "pp-saveerr" }, "The saved sign-in is incomplete. Connecting again fixes it.")
+              : null,
+        );
+      }
+
+      return h(
+        "div",
+        null,
+        h("p", { className: "pp-factgroup" }, "Google"),
+        h(
+          "p",
+          { className: "pp-absent" },
+          "Lets the grade-sheet syncs read and write the spreadsheets your Google account can edit. " +
+            "The sign-in is kept in the harness's credential store; grades go from Google to this " +
+            "machine with no server in between.",
+        ),
+        body,
+        error ? h("p", { className: "pp-saveerr" }, error) : null,
+        note ? h("p", { className: "pp-savenote" }, note) : null,
+      );
+    }
+
+    /**
      * What each provider's setup form asks for.
      *
      * A table rather than a component per provider, because the four forms
@@ -2798,10 +2923,26 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
             "Presence only. This pane never shows a credential's value — a Canvas " +
               "token can change a grade, and this screen gets projected.",
           ),
+          h(GoogleConnect, {
+            google: data.google,
+            // Re-read the whole document: the sign-in changed the registry and
+            // the store, and the Status checklist reads both.
+            onChanged: () =>
+              fetch(url, { headers: { accept: "application/json" } })
+                .then((response) => response.json())
+                .then((body) => {
+                  if (!body.error) setFresh(body);
+                })
+                .catch(() => null),
+          }),
           h("p", { className: "pp-factgroup" }, "Credentials"),
           (() => {
             const refs = (data.credentials && data.credentials.refs) || {};
-            const names = Object.keys(refs).sort();
+            // The Google sign-in is Connect's, above, and is never pasted.
+            const google = data.google && data.google.tokenEnv;
+            const names = Object.keys(refs)
+              .filter((name) => name !== google)
+              .sort();
             if (!names.length) {
               return h(
                 "p",

@@ -1302,15 +1302,28 @@ is worth building.
       link, published **In production**. "Testing" status expires refresh
       tokens every 7 days. The client ID ships in the harness; a desktop
       client's secret is not a secret, and PKCE is used anyway. `S` · depends: —
-- [ ] **GAU-2** The sign-in in the pane: a Connect button in Integrations →
+  2026-10-13: a Desktop client exists in the *Professors Harness* project,
+  consent screen in **Testing** (7-day refresh tokens), scopes still the
+  service account's two. Not yet shipped in the harness: each machine reads
+  `~/.ainar/google-client.json` (`AINAR_GOOGLE_CLIENT` overrides).
+- [x] **GAU-2** The sign-in in the pane: a Connect button in Integrations →
       Credentials, a loopback redirect to the pane's server, PKCE, the refresh
       token saved as a `sheets` connection with an `oauth` credential in
       `connections.json` (token value in the managed store, never in the
       registry), and Disconnect, which revokes it. `M` · depends: GAU-1
-- [ ] **GAU-3** `loadCredentials` learns the `oauth` credential: exchange the
+      Done 2026-10-13: `src/connections/google.ts`; the pane's
+      `server/google.js` answers `/api/google/{start,callback,disconnect}`
+      ahead of workspace resolution; `connections add --credential oauth
+      --account`, and a new `connections remove`. The redirect is always
+      `127.0.0.1:<the pane's port>`, so a pane reached through Caddy or the
+      Cloudflare tunnel refuses with a sentence — Connect works only on the
+      machine the harness runs on until a hosted redirect exists.
+- [x] **GAU-3** `loadCredentials` learns the `oauth` credential: exchange the
       refresh token for an access token, cache it until expiry, and report a
       revoked grant as "Reconnect Google in Integrations", not as an HTTP code.
       Probe support in `connections/probe.ts`. `S` · depends: GAU-2
+      Done 2026-10-13: `OAuthRefresh` in `lms/sheets.ts`, cached module-wide
+      by refresh-token digest; `test/google.test.ts`.
 - [ ] **GAU-4** The Google Picker when a sync's sheet is set or changed, so the
       chosen sheet is the one `drive.file` grants. A sheet linked before
       connecting asks to be picked once. `M` · depends: GAU-2

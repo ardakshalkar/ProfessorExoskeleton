@@ -3,7 +3,14 @@
  */
 
 import { Message, useJson } from "./common.js";
-import { Fact, IntegrationStatus, Presence, Secret, SubgroupCourses } from "./integration-parts.js";
+import {
+  Fact,
+  GoogleConnect,
+  IntegrationStatus,
+  Presence,
+  Secret,
+  SubgroupCourses,
+} from "./integration-parts.js";
 import { h, React } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -284,10 +291,26 @@ export function Integrations(props) {
         "Presence only. This pane never shows a credential's value — a Canvas " +
           "token can change a grade, and this screen gets projected.",
       ),
+      h(GoogleConnect, {
+        google: data.google,
+        // Re-read the whole document: the sign-in changed the registry and
+        // the store, and the Status checklist reads both.
+        onChanged: () =>
+          fetch(url, { headers: { accept: "application/json" } })
+            .then((response) => response.json())
+            .then((body) => {
+              if (!body.error) setFresh(body);
+            })
+            .catch(() => null),
+      }),
       h("p", { className: "pp-factgroup" }, "Credentials"),
       (() => {
         const refs = (data.credentials && data.credentials.refs) || {};
-        const names = Object.keys(refs).sort();
+        // The Google sign-in is Connect's, above, and is never pasted.
+        const google = data.google && data.google.tokenEnv;
+        const names = Object.keys(refs)
+          .filter((name) => name !== google)
+          .sort();
         if (!names.length) {
           return h(
             "p",

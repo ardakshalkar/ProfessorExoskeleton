@@ -122,6 +122,7 @@ import {
   statementFor,
   transcriptionInfo,
 } from "./server/defence-desk.js";
+import { disconnect, finishSignIn, startSignIn } from "./server/google.js";
 import { answerPage, gradeDocument, groupsStamp } from "./server/grade.js";
 import { BASE, readBody, readBytes, send, sendErrorPage, sendJson } from "./server/http.js";
 import {
@@ -130,6 +131,7 @@ import {
   credentialRefsIn,
   integrationsAnswer,
   integrationsDocument,
+  registryConnections,
   resolveCredential,
 } from "./server/integrations.js";
 import {
@@ -205,6 +207,22 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
   const view = path.startsWith("/view/") ? path.slice("/view/".length) : null;
   const fail = (text) =>
     view === null ? sendJson(res, 200, { error: text }) : sendErrorPage(res, text);
+
+  // Connect Google, ahead of the workspace: Google's redirect back cannot carry
+  // the session id, and a connection is the machine's, not a course's. See
+  // server/google.js.
+  if (path === "/api/google/start") return startSignIn(req, res);
+  if (path === "/api/google/callback") {
+    return finishSignIn(url, res, credentials).catch((error) =>
+      sendErrorPage(res, String(error?.message ?? error)),
+    );
+  }
+  if (path === "/api/google/disconnect") {
+    if (req.method !== "POST") return sendJson(res, 405, { error: "disconnecting Google is POST only" });
+    return disconnect(res, credentials, registryConnections()).catch((error) =>
+      sendJson(res, 200, { error: String(error?.message ?? error) }),
+    );
+  }
 
   let resolved;
   try {
@@ -1121,6 +1139,17 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
               error:
                 `'${ref}' is not a variable any connection in this run names. This route ` +
                 "writes only those, so that it cannot be used to set anything else on the machine.",
+            });
+          }
+          // A Google sign-in is made by signing in, not by pasting. A value
+          // typed here would be a token Google never issued to this client.
+          if (
+            document.registry.connections.some(
+              (connection) => connection.credential === "oauth" && connection.tokenEnv === ref,
+            )
+          ) {
+            return sendJson(res, 200, {
+              error: `${ref} holds a Google sign-in. Use Connect Google or Disconnect instead.`,
             });
           }
 

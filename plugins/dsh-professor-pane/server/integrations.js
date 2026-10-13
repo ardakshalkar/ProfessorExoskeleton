@@ -9,6 +9,9 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { assessmentsOf, enrollmentsOf, groupsOf, runById } from "@ainar/core/src/bundle.ts";
 
+import { REFRESH_TOKEN_ENV } from "@ainar/core/src/connections/google.ts";
+
+import { googleStatus } from "./google.js";
 import { isTodo } from "./page.js";
 import { loadedRun, rosterDir, rosterPath, rosterPeople } from "./workspace.js";
 
@@ -153,7 +156,7 @@ const registryPath = () => {
   return fromEnv ? resolve(fromEnv) : join(homedir(), ".ainar", "connections.json");
 };
 
-const registryConnections = () => {
+export const registryConnections = () => {
   const path = registryPath();
   let parsed;
   try {
@@ -194,6 +197,10 @@ const registryConnections = () => {
         chatId: entry?.chatId ?? null,
         forumId: entry?.forumId ?? null,
         keyFile: entry?.keyFile ?? null,
+        // Connect Google: `oauth` means the variable holds a refresh token,
+        // and `account` is who it signed in as. Neither is a secret.
+        credential: entry?.credential === "oauth" ? "oauth" : null,
+        account: entry?.account ?? null,
         tokenEnv: variable,
         tokenInEnv: variable ? envPresent(variable) : false,
         // Never true in a healthy registry. Reported so that it cannot be true
@@ -307,10 +314,16 @@ export const resolveCredential = async (service, name) => {
  */
 export const integrationsAnswer = async (workspace, root, runId, credentials, extra = {}) => {
   const document = integrationsDocument(workspace, root, runId);
-  const refs = await credentialStatus(credentials.service, credentialRefsIn(document));
+  const refs = await credentialStatus(credentials.service, [
+    ...credentialRefsIn(document),
+    // Asked about even before anyone connects, so the status can tell
+    // "never connected" from "the token is there and the record is not".
+    REFRESH_TOKEN_ENV,
+  ]);
   return {
     ...document,
     credentials: { available: Boolean(credentials.service), refs },
+    google: googleStatus(document.registry, refs),
     integrations: integrationsFor(document, refs),
     ...extra,
   };
@@ -409,13 +422,18 @@ const integrationsFor = (document, refs) => {
     ),
   ];
 
-  const sheetsConnection = ofType("sheets")[0] ?? null;
+  const sheetsConnections = ofType("sheets");
+  const signedIn = sheetsConnections.some(
+    (entry) => entry.credential === "oauth" && configured(entry.tokenEnv),
+  );
   const sheetsSteps = [
     step("Spreadsheet", Boolean(document.sheet?.id), "extensions.lms.sheet_id on the run"),
     step(
       "Credential",
-      configured("AINAR_SHEETS_TOKEN") || Boolean(sheetsConnection?.keyFile),
-      "AINAR_SHEETS_TOKEN, or a service-account key",
+      signedIn ||
+        configured("AINAR_SHEETS_TOKEN") ||
+        sheetsConnections.some((entry) => Boolean(entry.keyFile)),
+      "Connect Google under Credentials, or AINAR_SHEETS_TOKEN, or a service-account key",
     ),
   ];
 

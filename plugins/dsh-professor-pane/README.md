@@ -609,6 +609,9 @@ the built file is out of step with the sources.
 | `POST /professor-pane/api/preferences?course=&term=` | write one layer; body is `{scope, values}` |
 | `GET /professor-pane/api/integrations?run=` | what this run is wired to: target, Canvas course and host, spreadsheet, credential presence, per-assessment links, subgroups, recorded sections |
 | `POST /professor-pane/api/credentials?run=` | store one credential; body is `{ref, value}`, an empty value clears it. Write-only: the response carries presence, never a value |
+| `GET /professor-pane/api/google/start` | Connect Google: redirect to Google's sign-in (PKCE, loopback redirect). Needs `~/.ainar/google-client.json`, a Desktop OAuth client; refused unless the pane was opened on 127.0.0.1/localhost |
+| `GET /professor-pane/api/google/callback` | where Google returns: the refresh token goes to the credential store as `AINAR_GOOGLE_REFRESH_TOKEN`, and a `google` sheets connection with `credential: oauth` is written |
+| `POST /professor-pane/api/google/disconnect` | revoke at Google, clear the stored sign-in, remove the connection |
 | `POST /professor-pane/api/canvas/catalogue?run=` | ask Canvas for this course's sections and student groups |
 | `POST /professor-pane/api/canvas/selection?run=` | write `extensions.lms.canvas_sections`; body is `{selections}` |
 | `GET /professor-pane/api/unpublished?run=` | per assessment: graded, and marks sent to / not in / changed since Canvas; drafts a publication leaves out; materials changed since published. Local files only — the gradebook, the sync ledger, the checksums of what was sent; Canvas is not asked |
