@@ -114,7 +114,7 @@ export const when = (iso) => {
   return days < 14 ? days + " days ago · " + date : date;
 };
 
-const initials = (name) =>
+export const initials = (name) =>
   String(name || "")
     .split(/\s+/)
     .filter(Boolean)

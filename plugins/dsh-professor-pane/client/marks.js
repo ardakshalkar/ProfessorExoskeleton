@@ -5,7 +5,7 @@
 
 import { Message } from "./common.js";
 import { h, React, ReactDOM } from "./react.js";
-import { when } from "./syncs.js";
+import { initials, when } from "./syncs.js";
 import { BASE, scoped } from "./tabs.js";
 
 // ---------------------------------------------------------------- scans
@@ -461,6 +461,26 @@ const markState = (entry) => {
 const dueOrder = (a, b) => String(a.due_at || "9999").localeCompare(String(b.due_at || "9999"));
 
 /**
+ * "HW2 - A grant office…" as a short tag and the rest, when the title leads
+ * with one; otherwise no tag. Only for the eye: the record keeps one title.
+ */
+const titleParts = (title) => {
+  const match = /^(\S{1,8}(?: \d{1,3})?)\s+[-–—:]\s+(.+)$/.exec(String(title || ""));
+  return match ? { tag: match[1], rest: match[2] } : { tag: null, rest: String(title || "") };
+};
+
+/** A title as tag chip + text, the way both Gradebook strips print it. */
+const TitleWithTag = (props) => {
+  const parts = titleParts(props.title);
+  return h(
+    "span",
+    { className: "pp-titletag", title: props.title },
+    parts.tag ? h("span", { className: "pp-tag" + (/^quiz|^exam|^mid|^final/i.test(parts.tag) ? " pp-tag-quiz" : "") }, parts.tag) : null,
+    h("span", { className: "pp-titletext" }, parts.rest),
+  );
+};
+
+/**
  * Above Progress · Gradebook: per assessment, how far its marking has got
  * and how much of it Canvas has. The gradebook widget is shared with the
  * chat clients and knows nothing of Canvas, so this line is the pane's.
@@ -472,20 +492,48 @@ export function GradebookStatus(props) {
   if (state.phase === "loading" || !state.value || state.value.error) return null;
   const rows = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0).sort(dueOrder);
   if (!rows.length) return null;
+  const waiting = rows.reduce((n, entry) => n + (entry.canvas.unsent || 0) + (entry.canvas.changed || 0), 0);
   return h(
     "div",
-    { className: "pp-next pp-bookstatus" },
+    { className: "pp-bookcard pp-bookstatus" },
+    h(
+      "div",
+      { className: "pp-cardhead" },
+      h("b", null, "Marking"),
+      h(
+        "span",
+        { className: waiting ? "pp-chip pp-chip-warn" : "pp-chip pp-chip-ok" },
+        waiting ? waiting + " marks waiting for Canvas" : "Canvas has every mark",
+      ),
+    ),
     rows.map((entry) => {
       const said = markState(entry);
+      const of = Math.max(entry.submitted, entry.graded, 1);
+      const done = Math.min(100, (100 * entry.graded) / of);
+      const part = Math.min(100 - done, (100 * (entry.partial || 0)) / of);
       return h(
         "div",
-        { className: "pp-approverow", key: entry.id },
-        h("b", null, entry.title),
-        h("span", null, said.marking),
-        said.canvas ? h("span", { className: said.behind ? "pp-behind" : "pp-as" }, said.canvas) : null,
-        said.behind
-          ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.openUnpublished() }, "Send…")
-          : null,
+        { className: "pp-bookrow", key: entry.id },
+        h(TitleWithTag, { title: entry.title }),
+        h(
+          "span",
+          { className: "pp-bookprogress", title: said.marking },
+          h(
+            "span",
+            { className: "pp-bar", "aria-hidden": "true" },
+            h("i", { className: "pp-bar-done", style: { width: done + "%" } }),
+            part ? h("i", { className: "pp-bar-part", style: { width: part + "%" } }) : null,
+          ),
+          h("span", { className: "pp-booknum" }, entry.submitted === 0 && entry.graded === 0 ? "—" : entry.graded + "/" + entry.submitted),
+        ),
+        h(
+          "span",
+          { className: "pp-bookcanvas" },
+          said.canvas ? h("span", { className: "pp-chip " + (said.behind ? "pp-chip-warn" : "pp-chip-ok") }, said.canvas) : null,
+          said.behind
+            ? h("button", { type: "button", className: "pp-segbtn pp-sendbtn", onClick: () => props.openUnpublished() }, "Send…")
+            : null,
+        ),
       );
     }),
   );
@@ -730,10 +778,11 @@ export function RecentMarks(props) {
   const more = events.length > 2 || shown.some((event) => event.changes.length > SHOWN);
   return h(
     "div",
-    { className: "pp-next pp-recentmarks" },
+    { className: "pp-bookcard pp-recentmarks" },
     h(
       "div",
-      { className: "pp-recenthead" },
+      { className: "pp-cardhead" },
+      h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, "GS"),
       h("b", null, "Last added from the grade sheet"),
       more ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setOpen(!open) }, open ? "Fewer" : "Show all") : null,
     ),
@@ -741,12 +790,13 @@ export function RecentMarks(props) {
       const rows = open ? event.changes : event.changes.slice(0, SHOWN);
       return h(
         "div",
-        { className: "pp-recentrun", key: event.sync + event.at },
+        { className: "pp-recentrun" + (event.changes.length ? "" : " pp-recentquiet"), key: event.sync + event.at },
         h(
           "div",
           { className: "pp-recentwhen", title: "Synced " + new Date(event.at).toLocaleString() + (event.saved ? "; sheet as of " + new Date(event.saved).toLocaleString() : "") },
           h("span", null, when(event.at)),
-          h("span", { className: "pp-as" }, (event.changes.length ? countWords(event) : "nothing changed") + " · " + sourceWords(event)),
+          event.changes.length ? h("span", { className: "pp-chip pp-chip-ok" }, countWords(event)) : h("span", { className: "pp-chip" }, "nothing changed"),
+          h("span", { className: "pp-as" }, sourceWords(event)),
         ),
         rows.length
           ? h(
@@ -756,8 +806,9 @@ export function RecentMarks(props) {
                 h(
                   "li",
                   { key: change.student + change.assessment },
+                  h("span", { className: "pp-avatar", "aria-hidden": "true" }, initials(change.name || change.student)),
                   h("span", { className: "pp-recentwho" }, change.name || change.student),
-                  h("span", { className: "pp-as" }, change.title),
+                  h(TitleWithTag, { title: change.title }),
                   h(
                     "span",
                     { className: change.to === null && change.score_to === null ? "pp-behind" : "pp-recentmark" },

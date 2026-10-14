@@ -411,7 +411,37 @@ a.pp-segbtn{text-decoration:none;display:inline-block}
 /* Behind: something decided here that has not gone out. Amber, the colour the
    Scans bar gives a step that is yours. */
 .pp-behind{font-size:12px;color:#a15c00}
-.pp-bookstatus{flex:0 0 auto;max-height:35%;overflow:auto;margin:8px 14px 0}
+/* The two strips over the Gradebook: cards with a header, one row per thing. */
+.pp-bookcard{flex:0 0 auto;overflow:auto;margin:10px 14px 0;padding:0 0 4px;border-radius:10px;
+  font-size:11.5px;line-height:1.45;background:var(--dsw-alias-bg-l1,#fff);
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);box-shadow:0 1px 2px rgba(0,0,0,.04);container-type:inline-size}
+.pp-cardhead{position:sticky;top:0;z-index:1;display:flex;align-items:center;gap:8px;padding:8px 12px;
+  background:inherit;border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cardhead b{font-weight:600;font-size:12px;flex:1;min-width:0}
+.pp-bookstatus{max-height:38%}
+.pp-bookrow{display:grid;grid-template-columns:minmax(0,1fr) 120px auto;gap:12px;align-items:center;
+  padding:6px 12px;border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.05))}
+.pp-cardhead + .pp-bookrow{border-top:0}
+.pp-bookrow:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-titletag{display:flex;align-items:center;gap:6px;min-width:0}
+.pp-titletext{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-bookrow .pp-titletext{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-tag{flex:none;font-size:10px;font-weight:700;letter-spacing:.02em;padding:1px 6px;border-radius:5px;
+  background:rgba(47,98,168,.12);color:#2f62a8;white-space:nowrap}
+.pp-tag-quiz{background:rgba(124,77,182,.12);color:#6d43a8}
+.pp-bookprogress{display:flex;align-items:center;gap:7px}
+.pp-bar{flex:1;display:flex;height:6px;border-radius:3px;overflow:hidden;
+  background:var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-bar i{display:block;height:100%}
+.pp-bar-done{background:#2e7d4f}
+.pp-bar-part{background:rgba(46,125,79,.4)}
+.pp-booknum{font-size:11px;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#555);min-width:4.5ch;text-align:right}
+.pp-bookcanvas{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.pp-sendbtn{color:#a15c00;border-color:rgba(161,92,0,.45);font-weight:600}
+.pp-sendbtn:hover{background:rgba(161,92,0,.08)}
+/* A narrow pane: the Canvas chip and its press go under the title. */
+@container (max-width:560px){.pp-bookrow{grid-template-columns:minmax(0,1fr) 110px}
+  .pp-bookcanvas{grid-column:1 / -1;justify-content:flex-start}}
 /* What the grade sheet brought in: a notice over every tab until seen, and the
    last runs above the Gradebook. Green, the colour of a thing that arrived. */
 .pp-sheetnotice{flex:none;display:flex;align-items:center;gap:8px;margin:8px 14px 0;padding:7px 9px;
@@ -421,17 +451,28 @@ a.pp-segbtn{text-decoration:none;display:inline-block}
 /* Changed in Google, not yet in: amber, the colour of a step that is yours. */
 .pp-sheetnotice-changed{border-color:rgba(161,92,0,.4);background:rgba(161,92,0,.08)}
 .pp-sheetnoticetext{flex:1;min-width:0}
-.pp-recentmarks{flex:0 0 auto;max-height:30%;overflow:auto;margin:8px 14px 0}
-.pp-recenthead{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 4px}
-.pp-recenthead b{font-weight:600}
-.pp-recentrun{padding:4px 0;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-.pp-recentwhen{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
-.pp-recentwhen > span:first-child{font-weight:600}
-.pp-recentlist{list-style:none;margin:3px 0 0;padding:0}
-.pp-recentlist li{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:1px 0}
-.pp-recentwho{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%}
-.pp-recentmark{margin-left:auto;font-variant-numeric:tabular-nums;color:#2e7d4f}
-.pp-recentlist .pp-behind{margin-left:auto}
+.pp-recentmarks{max-height:34%}
+/* Each sync a step on a timeline: a dot on a rail, green when marks came in. */
+.pp-recentrun{position:relative;padding:8px 12px 6px 30px}
+.pp-recentrun::before{content:"";position:absolute;left:15px;top:0;bottom:0;width:2px;
+  background:var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cardhead + .pp-recentrun::before{top:14px}
+.pp-recentrun:last-child::before{bottom:calc(100% - 16px)}
+.pp-recentrun::after{content:"";position:absolute;left:11px;top:11px;width:10px;height:10px;border-radius:50%;
+  background:#2e7d4f;box-shadow:0 0 0 3px var(--dsw-alias-bg-l1,#fff)}
+.pp-recentquiet::after{background:var(--dsw-alias-label-tertiary,#9a9a9a)}
+.pp-recentwhen{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pp-recentwhen > span:first-child{font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-recentlist{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+.pp-recentlist li{display:grid;grid-template-columns:22px minmax(0,13em) minmax(0,1fr) auto;gap:8px;align-items:center;
+  padding:3px 6px;margin:0 -6px;border-radius:6px}
+.pp-recentlist li:hover{background:var(--dsw-alias-fill-secondary,#f5f5f7)}
+.pp-recentlist .pp-titletext{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-recentwho{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.pp-recentmark{font-variant-numeric:tabular-nums;color:#2e7d4f;font-weight:600}
+.pp-recentrun > .pp-as{display:block;margin:2px 0 0 36px}
+@container (max-width:560px){.pp-recentlist li{grid-template-columns:22px minmax(0,1fr) auto}
+  .pp-recentlist .pp-titletag{grid-column:2 / -1;grid-row:2}}
 .pp-linkask{margin:8px 0;padding:8px 10px;border-left:3px solid #a15c00}
 .pp-linkask p{margin:0 0 6px}
 .pp-approveout{margin:8px 0 0;padding:8px 10px;max-height:180px;overflow:auto;
@@ -6713,6 +6754,26 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
     const dueOrder = (a, b) => String(a.due_at || "9999").localeCompare(String(b.due_at || "9999"));
 
     /**
+     * "HW2 - A grant office…" as a short tag and the rest, when the title leads
+     * with one; otherwise no tag. Only for the eye: the record keeps one title.
+     */
+    const titleParts = (title) => {
+      const match = /^(\S{1,8}(?: \d{1,3})?)\s+[-–—:]\s+(.+)$/.exec(String(title || ""));
+      return match ? { tag: match[1], rest: match[2] } : { tag: null, rest: String(title || "") };
+    };
+
+    /** A title as tag chip + text, the way both Gradebook strips print it. */
+    const TitleWithTag = (props) => {
+      const parts = titleParts(props.title);
+      return h(
+        "span",
+        { className: "pp-titletag", title: props.title },
+        parts.tag ? h("span", { className: "pp-tag" + (/^quiz|^exam|^mid|^final/i.test(parts.tag) ? " pp-tag-quiz" : "") }, parts.tag) : null,
+        h("span", { className: "pp-titletext" }, parts.rest),
+      );
+    };
+
+    /**
      * Above Progress · Gradebook: per assessment, how far its marking has got
      * and how much of it Canvas has. The gradebook widget is shared with the
      * chat clients and knows nothing of Canvas, so this line is the pane's.
@@ -6724,20 +6785,48 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       if (state.phase === "loading" || !state.value || state.value.error) return null;
       const rows = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0).sort(dueOrder);
       if (!rows.length) return null;
+      const waiting = rows.reduce((n, entry) => n + (entry.canvas.unsent || 0) + (entry.canvas.changed || 0), 0);
       return h(
         "div",
-        { className: "pp-next pp-bookstatus" },
+        { className: "pp-bookcard pp-bookstatus" },
+        h(
+          "div",
+          { className: "pp-cardhead" },
+          h("b", null, "Marking"),
+          h(
+            "span",
+            { className: waiting ? "pp-chip pp-chip-warn" : "pp-chip pp-chip-ok" },
+            waiting ? waiting + " marks waiting for Canvas" : "Canvas has every mark",
+          ),
+        ),
         rows.map((entry) => {
           const said = markState(entry);
+          const of = Math.max(entry.submitted, entry.graded, 1);
+          const done = Math.min(100, (100 * entry.graded) / of);
+          const part = Math.min(100 - done, (100 * (entry.partial || 0)) / of);
           return h(
             "div",
-            { className: "pp-approverow", key: entry.id },
-            h("b", null, entry.title),
-            h("span", null, said.marking),
-            said.canvas ? h("span", { className: said.behind ? "pp-behind" : "pp-as" }, said.canvas) : null,
-            said.behind
-              ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.openUnpublished() }, "Send…")
-              : null,
+            { className: "pp-bookrow", key: entry.id },
+            h(TitleWithTag, { title: entry.title }),
+            h(
+              "span",
+              { className: "pp-bookprogress", title: said.marking },
+              h(
+                "span",
+                { className: "pp-bar", "aria-hidden": "true" },
+                h("i", { className: "pp-bar-done", style: { width: done + "%" } }),
+                part ? h("i", { className: "pp-bar-part", style: { width: part + "%" } }) : null,
+              ),
+              h("span", { className: "pp-booknum" }, entry.submitted === 0 && entry.graded === 0 ? "—" : entry.graded + "/" + entry.submitted),
+            ),
+            h(
+              "span",
+              { className: "pp-bookcanvas" },
+              said.canvas ? h("span", { className: "pp-chip " + (said.behind ? "pp-chip-warn" : "pp-chip-ok") }, said.canvas) : null,
+              said.behind
+                ? h("button", { type: "button", className: "pp-segbtn pp-sendbtn", onClick: () => props.openUnpublished() }, "Send…")
+                : null,
+            ),
           );
         }),
       );
@@ -6982,10 +7071,11 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
       const more = events.length > 2 || shown.some((event) => event.changes.length > SHOWN);
       return h(
         "div",
-        { className: "pp-next pp-recentmarks" },
+        { className: "pp-bookcard pp-recentmarks" },
         h(
           "div",
-          { className: "pp-recenthead" },
+          { className: "pp-cardhead" },
+          h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, "GS"),
           h("b", null, "Last added from the grade sheet"),
           more ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setOpen(!open) }, open ? "Fewer" : "Show all") : null,
         ),
@@ -6993,12 +7083,13 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
           const rows = open ? event.changes : event.changes.slice(0, SHOWN);
           return h(
             "div",
-            { className: "pp-recentrun", key: event.sync + event.at },
+            { className: "pp-recentrun" + (event.changes.length ? "" : " pp-recentquiet"), key: event.sync + event.at },
             h(
               "div",
               { className: "pp-recentwhen", title: "Synced " + new Date(event.at).toLocaleString() + (event.saved ? "; sheet as of " + new Date(event.saved).toLocaleString() : "") },
               h("span", null, when(event.at)),
-              h("span", { className: "pp-as" }, (event.changes.length ? countWords(event) : "nothing changed") + " · " + sourceWords(event)),
+              event.changes.length ? h("span", { className: "pp-chip pp-chip-ok" }, countWords(event)) : h("span", { className: "pp-chip" }, "nothing changed"),
+              h("span", { className: "pp-as" }, sourceWords(event)),
             ),
             rows.length
               ? h(
@@ -7008,8 +7099,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
                     h(
                       "li",
                       { key: change.student + change.assessment },
+                      h("span", { className: "pp-avatar", "aria-hidden": "true" }, initials(change.name || change.student)),
                       h("span", { className: "pp-recentwho" }, change.name || change.student),
-                      h("span", { className: "pp-as" }, change.title),
+                      h(TitleWithTag, { title: change.title }),
                       h(
                         "span",
                         { className: change.to === null && change.score_to === null ? "pp-behind" : "pp-recentmark" },
