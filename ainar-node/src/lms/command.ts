@@ -1195,24 +1195,33 @@ const runPush = async (args: LmsArgs, context: LmsContext, deps: Deps): Promise<
   }
   // A sheet is a whole view, not a set of changed cells: criteria, statuses and
   // who is still unmarked are worth regenerating even when no total moved.
+  // Canvas already holds exactly these values but this machine never noted
+  // them — typically a send whose job finished after `waitFor` gave up. A
+  // confirmed Canvas push notes them as well as sending the rest, so "not in
+  // Canvas" stops saying so. Only `unchanged` rows: the value read back from
+  // Canvas is ours.
+  const held =
+    args.target === "canvas-api" && args.confirm
+      ? plan.rows.filter((row) => row.action === "unchanged" && row.last_prepared === null)
+      : [];
+  const noteHeld = (): void => {
+    if (!held.length) return;
+    const at = decidedAt(runOf(context.bundle, args.run)?.timezone);
+    const touched = ledger.record(args.target, context.assessment.assessment_id, held, { at, state: "applied" });
+    deps.out(`Canvas already holds ${held.length} of these: noted ${touched} applied value(s) in ${ledger.save()}`);
+  };
+
   if (!writable(plan).length && args.target !== "sheets-api") {
     deps.out("\nnothing to send — no row would change in the target");
-    // Canvas already holds exactly these values — typically a send whose job
-    // finished after `waitFor` gave up, so nothing was recorded then. A
-    // confirmed push records them now, so "not in Canvas" stops saying so.
-    // Only `unchanged` rows: the value read back from Canvas is ours.
-    if (args.target === "canvas-api" && args.confirm) {
-      const held = plan.rows.filter((row) => row.action === "unchanged" && row.last_prepared === null);
-      if (held.length) {
-        const at = decidedAt(runOf(context.bundle, args.run)?.timezone);
-        const touched = ledger.record(args.target, context.assessment.assessment_id, held, { at, state: "applied" });
-        deps.out(`Canvas already holds ${held.length} of these: noted ${touched} applied value(s) in ${ledger.save()}`);
-      }
-    }
+    noteHeld();
     return 0;
   }
 
-  if (args.target === "canvas-api") return pushToCanvas(args, context, plan, ledger, deps);
+  if (args.target === "canvas-api") {
+    const code = await pushToCanvas(args, context, plan, ledger, deps);
+    noteHeld();
+    return code;
+  }
   if (args.target === "sheets-api") return pushToSheets(args, context, plan, ledger, rows, deps);
 
   mkdirSync(dirname(out!), { recursive: true });

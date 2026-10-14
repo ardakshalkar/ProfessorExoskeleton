@@ -294,24 +294,33 @@ const sendOutcome = (entry) => {
     const lines = out.split("\n").map((line) => line.trim()).filter(Boolean);
     return { kind: "fail", words: "Not sent — " + (lines[lines.length - 1] || "the send failed") };
   }
+  const already = held ? " (" + held[1] + " were already there)" : "";
+  if (/has not finished the job yet/.test(out)) {
+    return { kind: "wait", count: 0, words: "Canvas accepted the marks but is still processing them" + already + ". Check again in a minute." };
+  }
   if (posted) {
     return {
       kind: "ok",
-      words: "Sent " + posted[1] + " marks" + (manual ? " — this assignment posts manually: post them in Canvas for students to see" : " — students can see them now"),
+      count: Number(posted[1]) + (held ? Number(held[1]) : 0),
+      words:
+        "Sent " + posted[1] + " marks" + already +
+        (manual ? " — this assignment posts manually: post them in Canvas for students to see" : " — students can see them"),
     };
   }
-  if (/has not finished the job yet/.test(out)) {
-    return { kind: "wait", words: "Canvas accepted the marks but is still processing them. Check again in a minute." };
-  }
-  if (held) return { kind: "ok", words: "Recorded " + held[1] + " marks Canvas already had" };
-  if (/nothing to send/.test(out)) return { kind: "same", words: "Nothing to send — Canvas already matches" };
-  return { kind: "ok", words: "Done" };
+  if (held) return { kind: "ok", count: Number(held[1]), words: "Canvas already had all " + held[1] + " marks — confirmed" };
+  if (/nothing to send/.test(out)) return { kind: "ok", count: 0, words: "Nothing to send — Canvas already matches" };
+  return { kind: "ok", count: 0, words: "Done" };
 };
 
 function SendResult(props) {
   const outcomes = props.groups.map((entry) => ({ entry, said: sendOutcome(entry) }));
   const worst = outcomes.some((o) => o.said.kind === "fail") ? "fail" : outcomes.some((o) => o.said.kind === "wait") ? "wait" : "ok";
-  const headline = { ok: "Sent to Canvas", wait: "Sent — Canvas is still processing", fail: "Some marks were not sent" }[worst];
+  const landed = outcomes.reduce((n, o) => n + (o.said.count || 0), 0);
+  const headline = {
+    ok: landed ? "Sent — Canvas has these " + landed + " marks" : "Sent — Canvas is up to date",
+    wait: "Sent, but Canvas is still processing",
+    fail: "Not everything was sent",
+  }[worst];
   return h(
     "div",
     { className: "pp-sendresult pp-sendresult-" + worst, role: "status" },
@@ -320,7 +329,6 @@ function SendResult(props) {
       { className: "pp-sendresulthead" },
       h("span", { className: "pp-sendresulticon", "aria-hidden": "true" }, { ok: "✓", wait: "…", fail: "!" }[worst]),
       h("b", null, headline),
-      h("button", { type: "button", className: "pp-segbtn", disabled: props.busy, onClick: props.again }, "Check Canvas again"),
     ),
     h(
       "ul",
@@ -340,6 +348,28 @@ function SendResult(props) {
       h("summary", null, "What the CLI said"),
       outcomes.map((o) => h("pre", { className: "pp-approveout", key: "o" + (o.entry.group || "run") }, o.entry.output)),
     ),
+  );
+}
+
+/**
+ * Where a Canvas send stands, as three steps: check what Canvas has, send,
+ * done. Each step is done, the one in progress, or still ahead; a step that
+ * failed says so in red.
+ */
+function SendSteps(props) {
+  const labels = ["Check Canvas", "Send", props.failed ? "Not sent" : "In Canvas"];
+  return h(
+    "ol",
+    { className: "pp-sendsteps", "aria-label": "Canvas send progress" },
+    labels.map((label, i) => {
+      const state = i < props.at ? "done" : i === props.at ? (props.failed && i === 2 ? "fail" : props.busy ? "busy" : "now") : "todo";
+      return h(
+        "li",
+        { key: label, className: "pp-sendstep pp-sendstep-" + state, "aria-current": i === props.at ? "step" : undefined },
+        h("span", { className: "pp-sendstepdot", "aria-hidden": "true" }, state === "done" ? "✓" : state === "fail" ? "!" : String(i + 1)),
+        h("span", null, label),
+      );
+    }),
   );
 }
 
@@ -383,6 +413,37 @@ export function CanvasMarks(props) {
         setPhase("idle");
         setFailed(String((error && error.message) || error));
       });
+  };
+
+  // A send goes course by course, so the press can show each one landing.
+  const [progress, setProgress] = React.useState(null);
+  const send = async () => {
+    const targets = ((plan && plan.groups) || []).filter((entry) => entry.ok && !entry.unlinked);
+    if (!targets.length) return;
+    setPhase("sending");
+    setFailed(null);
+    const results = [];
+    for (let i = 0; i < targets.length; i++) {
+      const entry = targets[i];
+      setProgress({ done: i, total: targets.length, now: entry.group || "Canvas" });
+      try {
+        const body = await postJson("/api/canvas/marks", {
+          assessment: props.assessmentId,
+          names: Boolean(props.names),
+          confirm: true,
+          group: entry.group || "",
+        });
+        if (body.error) results.push({ group: entry.group, courseId: entry.courseId, ok: false, output: body.error });
+        else results.push(...(body.groups || []));
+      } catch (error) {
+        results.push({ group: entry.group, courseId: entry.courseId, ok: false, output: String((error && error.message) || error) });
+      }
+    }
+    setProgress({ done: targets.length, total: targets.length, now: null });
+    setPhase("idle");
+    setPlan({ confirmed: true, groups: results });
+    setCreating({});
+    props.onSent();
   };
 
   // Opened from a Send… press: the preview only reads Canvas, so it runs at
@@ -446,77 +507,94 @@ export function CanvasMarks(props) {
     (n, entry) => n + (entry.rows || []).filter((row) => row.action === "unchanged" && row.last_prepared === null).length,
     0,
   );
-  const sendable = previewed && planned > 0;
-  const recordable = previewed && planned === 0 && unrecorded > 0;
+  // One send covers both: marks Canvas lacks are posted, and marks Canvas
+  // already holds but this machine never noted are confirmed.
+  const sendCount = planned + unrecorded;
+  const sendable = previewed && sendCount > 0;
   const name = (entry) => entry.group || "the run's Canvas course";
   const busy = phase !== "idle";
   const c = props.canvas || { ready: 0, unsent: 0, changed: 0 };
   const toSend = c.unsent + c.changed;
+  const inCanvas = groups.reduce((n, entry) => n + ((entry.counts || {}).unchanged || 0), 0);
   // `lead`: this is the Scans headline's one action. The headline already
-  // says how many marks wait, so the count is not repeated, and Preview is
-  // the view's primary button.
+  // says how many marks wait, so the count is not repeated.
   const lead = Boolean(props.lead);
+
+  // Where the send stands: 0 checking, 1 ready to send / sending, 3 done.
+  const confirmed = Boolean(plan && plan.confirmed);
+  const sentFailed = confirmed && groups.some((entry) => !entry.ok);
+  const at = phase === "planning" || !plan ? 0 : phase === "sending" ? 1 : confirmed ? (sentFailed ? 2 : 3) : previewed && !sendCount ? 3 : 1;
+
+  // What the preview found, in one sentence — the preview's truth over the
+  // pane's own count, which is only as current as this machine's record.
+  const headline =
+    c.ready === 0
+      ? "No whole marks to send yet."
+      : phase === "planning"
+        ? "Checking what Canvas has for these " + c.ready + " marks…"
+        : phase === "sending"
+          ? "Sending to Canvas — keep this open until it finishes."
+          : confirmed
+            ? null
+            : previewed
+              ? planned
+                ? planned + " of " + c.ready + " marks are not in Canvas yet" + (inCanvas ? "; " + inCanvas + " already are." : ".")
+                : unrecorded
+                  ? "Canvas already has these " + unrecorded + " marks — sending confirms them here; students see no change."
+                  : "Canvas has every mark (" + inCanvas + ")."
+              : toSend === 0
+                ? "Canvas has every mark (" + c.ready + ")."
+                : toSend + " of " + c.ready + " marks are not in Canvas.";
+
+  // The forward press: its label and look follow the step it would take.
+  const pct = progress && progress.total ? Math.round((100 * progress.done) / progress.total) : 0;
+  const forward =
+    c.ready === 0 || confirmed
+      ? null
+      : phase === "planning"
+        ? h("button", { type: "button", className: "pp-primary", disabled: true, "aria-busy": "true" }, "Checking Canvas…")
+        : phase === "sending"
+          ? h(
+              "button",
+              {
+                type: "button",
+                className: "pp-primary pp-danger pp-btn-progress",
+                disabled: true,
+                "aria-busy": "true",
+                style: { "--pp-progress": pct + "%" },
+              },
+              "Sending… " + (progress && progress.total > 1 ? "course " + Math.min(progress.done + 1, progress.total) + " of " + progress.total : ""),
+            )
+          : sendable
+            ? h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-primary pp-danger",
+                  disabled: busy,
+                  title: "Students see a posted grade within seconds",
+                  onClick: send,
+                },
+                "Send " + sendCount + " marks to Canvas",
+              )
+            : !plan
+              ? h("button", { type: "button", className: "pp-primary", disabled: busy, onClick: () => marks({}, "planning") }, "Check Canvas")
+              : null;
 
   return h(
     "div",
-    { className: lead ? "" : "pp-next" },
+    { className: lead ? "pp-sendflow" : "pp-next pp-sendflow" },
+    c.ready > 0 ? h(SendSteps, { at: at, busy: busy, failed: sentFailed }) : null,
+    headline && !(lead && !plan && phase === "idle") ? h("p", { className: "pp-sendheadline" }, headline) : null,
     h(
       "div",
       { className: "pp-approverow" },
-      lead
-        ? null
-        : h(
-            "span",
-            null,
-            c.ready === 0
-              ? "No whole marks to send yet."
-              : toSend === 0
-                ? "Canvas has every mark (" + c.ready + ")."
-                : toSend + " of " + c.ready + " marks are not in Canvas. ",
-          ),
-      c.ready > 0
-        ? h(
-            "button",
-            { type: "button", className: lead && !plan ? "pp-primary" : "pp-segbtn", disabled: busy, onClick: () => marks({}, "planning") },
-            phase === "planning" ? "Asking Canvas…" : plan ? "Preview again" : "Preview the Canvas send",
-          )
-        : null,
-      sendable
-        ? h(
-            "button",
-            {
-              type: "button",
-              className: "pp-segbtn pp-danger",
-              disabled: busy,
-              title: "Students see a posted grade within seconds",
-              onClick: () => marks({ confirm: true }, "sending"),
-            },
-            phase === "sending" ? "Sending…" : "Send " + planned + " marks to Canvas",
-          )
-        : null,
-      recordable
-        ? h(
-            "button",
-            {
-              type: "button",
-              className: "pp-segbtn",
-              disabled: busy,
-              title: "Writes nothing to Canvas; notes here that Canvas has these marks",
-              onClick: () => marks({ confirm: true }, "sending"),
-            },
-            phase === "sending" ? "Recording…" : "Record " + unrecorded + " as sent",
-          )
+      forward,
+      plan && !busy
+        ? h("button", { type: "button", className: "pp-segbtn", onClick: () => marks({}, "planning") }, confirmed ? "Check Canvas again" : "Check again")
         : null,
     ),
-    recordable
-      ? h(
-          "p",
-          { className: "pp-as" },
-          "Canvas already has all of these marks, but this pane never recorded them as sent — usually because Canvas finished the job after the send stopped waiting. Recording them changes nothing in Canvas.",
-        )
-      : null,
-    phase === "sending" ? h("p", { className: "pp-sendresult pp-sendresult-wait" }, "Sending to Canvas… this can take a minute per course.") : null,
-    plan && plan.confirmed && phase !== "sending" ? h(SendResult, { groups: groups, name: name, again: () => marks({}, "planning"), busy: busy }) : null,
+    confirmed && phase !== "sending" ? h(SendResult, { groups: groups, name: name }) : null,
     failed ? h("pre", { className: "pp-approveout pp-approveerr" }, failed) : null,
     unlinked.length && props.ask
       ? h(
@@ -544,7 +622,9 @@ export function CanvasMarks(props) {
           ),
         )
       : null,
-    groups.map((entry) =>
+    // The preview, course by course. After a send the result above says it
+    // all, so the courses' own sections go.
+    (confirmed ? [] : groups).map((entry) =>
       h(
         "div",
         { key: entry.group || "run" },

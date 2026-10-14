@@ -300,8 +300,15 @@ export const runMarksPush = async (workspace, root, runId, body) => {
   const confirm = body.confirm === true;
   // Names in Names mode only, as every other view; codes otherwise.
   const people = body.names === true ? rosterPeople() : null;
+  // `group` narrows the request to one Canvas course ("" for a run with one),
+  // so the pane can send course by course and show each one land.
+  let targets = groups.length ? groups : [null];
+  if (typeof body.group === "string") {
+    if (groups.length && !groups.includes(body.group)) return { error: `${runId} has no Canvas course for '${body.group}'.` };
+    targets = groups.length ? [body.group] : [null];
+  }
   const results = [];
-  for (const group of groups.length ? groups : [null]) {
+  for (const group of targets) {
     // A preview asks for the plan as JSON, so the pane can show it student by
     // student rather than as the CLI's text.
     const args = ["lms", confirm ? "push" : "plan", runId, "--assessment", assessment, "--target", "canvas-api"];

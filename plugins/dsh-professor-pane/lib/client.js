@@ -353,12 +353,7 @@ window.__ModuleLoader__.load({
 /* The one control in the header that changes something outside this machine.
    An outline rather than a fill: it opens a dialog and publishes nothing by
    itself, so it should not look like the red button two presses further in. */
-.pp-publishbtn{flex:none;font:inherit;font-size:11px;line-height:1;cursor:pointer;
-  padding:4px 9px;border-radius:20px;color:var(--dsw-alias-label-secondary,#444);
-  background:var(--dsw-alias-fill-l2,transparent);
-  border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-.pp-publishbtn:hover{color:var(--dsw-alias-label-primary,#111);
-  border-color:var(--dsw-alias-label-tertiary,#9a9a9a)}
+.pp-publishbtn{flex:none}
 .pp-close{flex:none;background:0 0;border:0;cursor:pointer;padding:2px 4px;border-radius:6px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);font-size:14px;line-height:1}
 .pp-close:hover{color:var(--dsw-alias-label-secondary,#444)}
@@ -382,12 +377,68 @@ window.__ModuleLoader__.load({
 .pp-seg{display:flex;flex-wrap:wrap;gap:4px;row-gap:4px;flex:none;padding:8px 12px 0;
   align-items:center}
 .pp-segspacer{flex:1}
-.pp-segbtn{background:0 0;cursor:pointer;padding:2px 8px;font:inherit;font-size:11px;border-radius:20px;
-  color:var(--dsw-alias-label-tertiary,#6b6b6b);
+/* ---- Buttons. One system for every press in the pane, by role, not by view:
+   secondary  .pp-segbtn .pp-syncbtn .pp-publishbtn   outline: most presses
+   primary    .pp-primary .pp-syncbtn-run             filled green: the step forward
+   danger     .pp-danger .pp-syncbtn-send             filled red: reaches students
+   toggle     .pp-segbtn[aria-pressed]                a choice of view, selected
+   quiet      .pp-linkbtn .pp-morebtn                 underlined text
+   One height, one pill shape, one type size; the same hover, focus, disabled
+   and busy states. A press that is working says so with [aria-busy=true]: a
+   spinner, moving stripes, and, with .pp-btn-progress and --pp-progress, a
+   fill that grows as the work does. */
+.pp-segbtn,.pp-syncbtn,.pp-publishbtn,.pp-primary,.pp-danger{
+  position:relative;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  box-sizing:border-box;min-height:26px;padding:0 12px;border-radius:999px;cursor:pointer;
+  font:inherit;font-size:11.5px;font-weight:500;line-height:1;white-space:nowrap;text-decoration:none;
+  color:var(--dsw-alias-label-primary,#1d1d1f);background:transparent;
+  border:1px solid var(--dsw-alias-border-l3,#d2d2d7);
+  transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s}
+.pp-segbtn:hover:not(:disabled),.pp-syncbtn:hover:not(:disabled),.pp-publishbtn:hover:not(:disabled){
+  background:var(--dsw-alias-fill-secondary,#f2f2f4);border-color:var(--dsw-alias-label-tertiary,#9a9a9f)}
+.pp-segbtn[aria-pressed=false]{color:var(--dsw-alias-label-tertiary,#6b6b6b);font-weight:500}
+.pp-segbtn[aria-pressed=true]{color:var(--dsw-alias-bg-l1,#fff);background:var(--dsw-alias-label-primary,#1d1d1f);
+  border-color:var(--dsw-alias-label-primary,#1d1d1f);font-weight:600}
+.pp-segbtn[aria-pressed=true]:hover:not(:disabled){background:var(--dsw-alias-label-primary,#1d1d1f)}
+.pp-primary,.pp-syncbtn-run{color:#fff;background:#2f8a4e;border-color:#2f8a4e;font-weight:600}
+.pp-primary:hover:not(:disabled),.pp-syncbtn-run:hover:not(:disabled){background:#28794a;border-color:#28794a}
+.pp-danger,.pp-syncbtn-send:not(:disabled){color:#fff;background:#b4342a;border-color:#b4342a;font-weight:600}
+.pp-danger:hover:not(:disabled),.pp-syncbtn-send:hover:not(:disabled){background:#9e2c23;border-color:#9e2c23}
+.pp-segbtn:focus-visible,.pp-syncbtn:focus-visible,.pp-publishbtn:focus-visible,.pp-primary:focus-visible,
+.pp-danger:focus-visible,.pp-linkbtn:focus-visible,.pp-morebtn:focus-visible{outline:2px solid #2f6fd6;outline-offset:2px}
+.pp-segbtn:disabled,.pp-syncbtn:disabled,.pp-publishbtn:disabled,.pp-primary:disabled,.pp-danger:disabled{
+  opacity:.45;cursor:default}
+/* Working: stays at full strength, so it reads as progress, not as off. */
+[aria-busy=true].pp-segbtn,[aria-busy=true].pp-syncbtn,[aria-busy=true].pp-primary,[aria-busy=true].pp-danger{
+  opacity:1;cursor:progress;
+  background-image:repeating-linear-gradient(-45deg,rgba(255,255,255,.16) 0 8px,transparent 8px 16px);
+  background-size:23px 23px;animation:pp-btn-stripes .7s linear infinite}
+[aria-busy=true].pp-segbtn,[aria-busy=true].pp-syncbtn{
+  background-image:repeating-linear-gradient(-45deg,rgba(0,0,0,.05) 0 8px,transparent 8px 16px)}
+[aria-busy=true].pp-segbtn::before,[aria-busy=true].pp-syncbtn::before,
+[aria-busy=true].pp-primary::before,[aria-busy=true].pp-danger::before{
+  content:"";flex:none;width:10px;height:10px;border-radius:50%;
+  border:2px solid currentColor;border-right-color:transparent;animation:pp-btn-spin .8s linear infinite}
+/* The fill: how much of the work is done, behind the label. */
+.pp-btn-progress::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--pp-progress,0%);
+  background:rgba(255,255,255,.28);transition:width .4s ease;pointer-events:none}
+@keyframes pp-btn-stripes{to{background-position:23px 0}}
+@keyframes pp-btn-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){[aria-busy=true]{animation:none!important}
+  [aria-busy=true]::before{animation:none!important}}
+a.pp-segbtn{display:inline-flex}
+/* A press that goes to the chat rather than changing a record. The same glyph
+   server/page.js puts on [data-ask] in the frames, so it means one thing everywhere. */
+.pp-chat::after{content:"\\2726";margin-left:.35em;font-size:.85em;opacity:.75}
+/* The repository name, typed when the assessment does not record one. Sized to
+   owner/name and no wider: it sits in a row of buttons, and a field that
+   stretched would read as the subject of the strip rather than a gap in it. */
+.pp-input{font:inherit;font-size:11px;padding:2px 8px;border-radius:20px;width:18ch;
+  background:0 0;color:var(--dsw-alias-label-primary,#111);
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-a.pp-segbtn{text-decoration:none;display:inline-block}
-.pp-segbtn[aria-pressed=true]{color:var(--dsw-alias-label-primary,#111);font-weight:600;
-  border-color:var(--dsw-alias-label-primary,#111)}
+/* Names, while they are showing. The one control in the pane that changes what
+   is safe to have on a projector, so it does not look like the others while it
+   is engaged. */
 /* A press that goes to the chat rather than changing a record. The same glyph
    server/page.js puts on [data-ask] in the frames, so it means one thing everywhere. */
 .pp-chat::after{content:"\\2726";margin-left:.35em;font-size:.85em;opacity:.75}
@@ -407,7 +458,6 @@ a.pp-segbtn{text-decoration:none;display:inline-block}
 .pp-as{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 /* The writing button is the only red thing in the pane, and it is red only
    once a preview has been read. */
-.pp-danger{color:#b4342a;border-color:#b4342a}
 /* Behind: something decided here that has not gone out. Amber, the colour the
    Scans bar gives a step that is yours. */
 .pp-behind{font-size:12px;color:#a15c00}
@@ -437,8 +487,6 @@ a.pp-segbtn{text-decoration:none;display:inline-block}
 .pp-bar-part{background:rgba(46,125,79,.4)}
 .pp-booknum{font-size:11px;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#555);min-width:4.5ch;text-align:right}
 .pp-bookcanvas{display:flex;align-items:center;justify-content:flex-end;gap:6px}
-.pp-sendbtn{color:#a15c00;border-color:rgba(161,92,0,.45);font-weight:600}
-.pp-sendbtn:hover{background:rgba(161,92,0,.08)}
 /* A Send… open under its row: the preview, then the red press. */
 .pp-bookstatus-open{max-height:75%}
 .pp-bookrow-open{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
@@ -455,6 +503,28 @@ a.pp-segbtn{text-decoration:none;display:inline-block}
 .pp-plantable .pp-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .pp-plantable td:last-child{text-align:right}
 .pp-planwho{max-width:0;width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+/* A Canvas send as three steps — check, send, in Canvas — each done (green
+   tick), working (pulsing), the one you are on (outlined) or ahead (grey). */
+.pp-sendflow{display:flex;flex-direction:column;gap:8px}
+.pp-sendsteps{display:flex;align-items:center;list-style:none;margin:0;padding:0;font-size:11px;
+  color:var(--dsw-alias-label-tertiary,#8a8a8f)}
+.pp-sendstep{display:flex;align-items:center;gap:6px;flex:none}
+.pp-sendstep + .pp-sendstep::before{content:"";width:28px;height:2px;margin:0 8px;border-radius:1px;
+  background:var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-sendstep-done + .pp-sendstep::before{background:#2e7d4f}
+.pp-sendstepdot{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:10.5px;font-weight:700;box-sizing:border-box;border:1.5px solid var(--dsw-alias-border-l3,#d2d2d7);
+  background:var(--dsw-alias-bg-l1,#fff)}
+.pp-sendstep-done{color:#2e7d4f}
+.pp-sendstep-done .pp-sendstepdot{color:#fff;background:#2e7d4f;border-color:#2e7d4f}
+.pp-sendstep-now,.pp-sendstep-busy{color:var(--dsw-alias-label-primary,#1d1d1f);font-weight:600}
+.pp-sendstep-now .pp-sendstepdot{border-color:var(--dsw-alias-label-primary,#1d1d1f)}
+.pp-sendstep-busy .pp-sendstepdot{border-color:#2f6fd6;color:#2f6fd6;animation:pp-step-pulse 1.1s ease-in-out infinite}
+.pp-sendstep-fail{color:#b4342a;font-weight:600}
+.pp-sendstep-fail .pp-sendstepdot{color:#fff;background:#b4342a;border-color:#b4342a}
+@keyframes pp-step-pulse{0%,100%{box-shadow:0 0 0 0 rgba(47,111,214,.35)}50%{box-shadow:0 0 0 5px rgba(47,111,214,0)}}
+@media (prefers-reduced-motion:reduce){.pp-sendstep-busy .pp-sendstepdot{animation:none}}
+.pp-sendheadline{margin:0;font-size:12px;font-weight:500;color:var(--dsw-alias-label-primary,#1d1d1f)}
 /* What a send did: green landed, amber still processing, red failed. */
 .pp-sendresult{margin:8px 0;padding:9px 11px;border-radius:8px;font-size:11.5px;line-height:1.45;
   border:1px solid rgba(46,125,79,.35);background:rgba(46,125,79,.08)}
@@ -808,9 +878,6 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-reviewfoot{flex:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 12px;
   border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-reviewfoot .pp-as{flex:1;min-width:0}
-.pp-primary{font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:6px 14px;border-radius:20px;
-  color:#fff;background:#2f8a4e;border:1px solid #2f8a4e}
-.pp-primary:disabled{opacity:.5;cursor:default}
 /* Syncs. Tiles say how much there is; the rows waiting for a person come
    first, each as the sheet shows it (letters across, lines down, the row lit)
    with the decision under it; then the roads, grouped by which way data runs,
@@ -887,19 +954,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-syncctl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .pp-syncctl select{flex:1;min-width:0;max-width:100%;font:inherit;font-size:11.5px;padding:4px 6px;border-radius:7px;
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);color:inherit}
-.pp-syncbtn{font:inherit;font-size:11.5px;font-weight:600;cursor:pointer;padding:4px 12px;border-radius:20px;
-  background:transparent;color:var(--dsw-alias-label-primary,#111);border:1px solid var(--dsw-alias-border-l3,#cfcfd6)}
-.pp-syncbtn:hover:not(:disabled){background:var(--dsw-alias-fill-secondary,#f0f0f2)}
-.pp-syncbtn:disabled{opacity:.45;cursor:default}
-a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
+a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-syncbtn-off{opacity:.45;pointer-events:none}
 /* A downloaded sheet is dropped on its card; the outline says where it lands. */
 .pp-synccard-drop{border:1px dashed #1e7e38;background:rgba(30,142,62,.06)}
 .pp-synchint{margin:0;font-size:11px;line-height:1.45;color:var(--dsw-alias-label-secondary,#555)}
-.pp-syncbtn-run{color:#fff;background:#2f8a4e;border-color:#2f8a4e}
-.pp-syncbtn-run:hover:not(:disabled){background:#28794a}
-.pp-syncbtn-send{color:#b4342a;border-color:#b4342a}
-.pp-syncbtn-send:not(:disabled){color:#fff;background:#b4342a}
 .pp-syncout{border-radius:9px;overflow:hidden;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-syncout-err{border-color:rgba(180,52,42,.45)}
 .pp-syncouthead{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 4px 10px;font-size:11px;font-weight:600;
@@ -6624,24 +6683,33 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
         const lines = out.split("\n").map((line) => line.trim()).filter(Boolean);
         return { kind: "fail", words: "Not sent — " + (lines[lines.length - 1] || "the send failed") };
       }
+      const already = held ? " (" + held[1] + " were already there)" : "";
+      if (/has not finished the job yet/.test(out)) {
+        return { kind: "wait", count: 0, words: "Canvas accepted the marks but is still processing them" + already + ". Check again in a minute." };
+      }
       if (posted) {
         return {
           kind: "ok",
-          words: "Sent " + posted[1] + " marks" + (manual ? " — this assignment posts manually: post them in Canvas for students to see" : " — students can see them now"),
+          count: Number(posted[1]) + (held ? Number(held[1]) : 0),
+          words:
+            "Sent " + posted[1] + " marks" + already +
+            (manual ? " — this assignment posts manually: post them in Canvas for students to see" : " — students can see them"),
         };
       }
-      if (/has not finished the job yet/.test(out)) {
-        return { kind: "wait", words: "Canvas accepted the marks but is still processing them. Check again in a minute." };
-      }
-      if (held) return { kind: "ok", words: "Recorded " + held[1] + " marks Canvas already had" };
-      if (/nothing to send/.test(out)) return { kind: "same", words: "Nothing to send — Canvas already matches" };
-      return { kind: "ok", words: "Done" };
+      if (held) return { kind: "ok", count: Number(held[1]), words: "Canvas already had all " + held[1] + " marks — confirmed" };
+      if (/nothing to send/.test(out)) return { kind: "ok", count: 0, words: "Nothing to send — Canvas already matches" };
+      return { kind: "ok", count: 0, words: "Done" };
     };
 
     function SendResult(props) {
       const outcomes = props.groups.map((entry) => ({ entry, said: sendOutcome(entry) }));
       const worst = outcomes.some((o) => o.said.kind === "fail") ? "fail" : outcomes.some((o) => o.said.kind === "wait") ? "wait" : "ok";
-      const headline = { ok: "Sent to Canvas", wait: "Sent — Canvas is still processing", fail: "Some marks were not sent" }[worst];
+      const landed = outcomes.reduce((n, o) => n + (o.said.count || 0), 0);
+      const headline = {
+        ok: landed ? "Sent — Canvas has these " + landed + " marks" : "Sent — Canvas is up to date",
+        wait: "Sent, but Canvas is still processing",
+        fail: "Not everything was sent",
+      }[worst];
       return h(
         "div",
         { className: "pp-sendresult pp-sendresult-" + worst, role: "status" },
@@ -6650,7 +6718,6 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
           { className: "pp-sendresulthead" },
           h("span", { className: "pp-sendresulticon", "aria-hidden": "true" }, { ok: "✓", wait: "…", fail: "!" }[worst]),
           h("b", null, headline),
-          h("button", { type: "button", className: "pp-segbtn", disabled: props.busy, onClick: props.again }, "Check Canvas again"),
         ),
         h(
           "ul",
@@ -6670,6 +6737,28 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
           h("summary", null, "What the CLI said"),
           outcomes.map((o) => h("pre", { className: "pp-approveout", key: "o" + (o.entry.group || "run") }, o.entry.output)),
         ),
+      );
+    }
+
+    /**
+     * Where a Canvas send stands, as three steps: check what Canvas has, send,
+     * done. Each step is done, the one in progress, or still ahead; a step that
+     * failed says so in red.
+     */
+    function SendSteps(props) {
+      const labels = ["Check Canvas", "Send", props.failed ? "Not sent" : "In Canvas"];
+      return h(
+        "ol",
+        { className: "pp-sendsteps", "aria-label": "Canvas send progress" },
+        labels.map((label, i) => {
+          const state = i < props.at ? "done" : i === props.at ? (props.failed && i === 2 ? "fail" : props.busy ? "busy" : "now") : "todo";
+          return h(
+            "li",
+            { key: label, className: "pp-sendstep pp-sendstep-" + state, "aria-current": i === props.at ? "step" : undefined },
+            h("span", { className: "pp-sendstepdot", "aria-hidden": "true" }, state === "done" ? "✓" : state === "fail" ? "!" : String(i + 1)),
+            h("span", null, label),
+          );
+        }),
       );
     }
 
@@ -6713,6 +6802,37 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
             setPhase("idle");
             setFailed(String((error && error.message) || error));
           });
+      };
+
+      // A send goes course by course, so the press can show each one landing.
+      const [progress, setProgress] = React.useState(null);
+      const send = async () => {
+        const targets = ((plan && plan.groups) || []).filter((entry) => entry.ok && !entry.unlinked);
+        if (!targets.length) return;
+        setPhase("sending");
+        setFailed(null);
+        const results = [];
+        for (let i = 0; i < targets.length; i++) {
+          const entry = targets[i];
+          setProgress({ done: i, total: targets.length, now: entry.group || "Canvas" });
+          try {
+            const body = await postJson("/api/canvas/marks", {
+              assessment: props.assessmentId,
+              names: Boolean(props.names),
+              confirm: true,
+              group: entry.group || "",
+            });
+            if (body.error) results.push({ group: entry.group, courseId: entry.courseId, ok: false, output: body.error });
+            else results.push(...(body.groups || []));
+          } catch (error) {
+            results.push({ group: entry.group, courseId: entry.courseId, ok: false, output: String((error && error.message) || error) });
+          }
+        }
+        setProgress({ done: targets.length, total: targets.length, now: null });
+        setPhase("idle");
+        setPlan({ confirmed: true, groups: results });
+        setCreating({});
+        props.onSent();
       };
 
       // Opened from a Send… press: the preview only reads Canvas, so it runs at
@@ -6776,77 +6896,94 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
         (n, entry) => n + (entry.rows || []).filter((row) => row.action === "unchanged" && row.last_prepared === null).length,
         0,
       );
-      const sendable = previewed && planned > 0;
-      const recordable = previewed && planned === 0 && unrecorded > 0;
+      // One send covers both: marks Canvas lacks are posted, and marks Canvas
+      // already holds but this machine never noted are confirmed.
+      const sendCount = planned + unrecorded;
+      const sendable = previewed && sendCount > 0;
       const name = (entry) => entry.group || "the run's Canvas course";
       const busy = phase !== "idle";
       const c = props.canvas || { ready: 0, unsent: 0, changed: 0 };
       const toSend = c.unsent + c.changed;
+      const inCanvas = groups.reduce((n, entry) => n + ((entry.counts || {}).unchanged || 0), 0);
       // `lead`: this is the Scans headline's one action. The headline already
-      // says how many marks wait, so the count is not repeated, and Preview is
-      // the view's primary button.
+      // says how many marks wait, so the count is not repeated.
       const lead = Boolean(props.lead);
+
+      // Where the send stands: 0 checking, 1 ready to send / sending, 3 done.
+      const confirmed = Boolean(plan && plan.confirmed);
+      const sentFailed = confirmed && groups.some((entry) => !entry.ok);
+      const at = phase === "planning" || !plan ? 0 : phase === "sending" ? 1 : confirmed ? (sentFailed ? 2 : 3) : previewed && !sendCount ? 3 : 1;
+
+      // What the preview found, in one sentence — the preview's truth over the
+      // pane's own count, which is only as current as this machine's record.
+      const headline =
+        c.ready === 0
+          ? "No whole marks to send yet."
+          : phase === "planning"
+            ? "Checking what Canvas has for these " + c.ready + " marks…"
+            : phase === "sending"
+              ? "Sending to Canvas — keep this open until it finishes."
+              : confirmed
+                ? null
+                : previewed
+                  ? planned
+                    ? planned + " of " + c.ready + " marks are not in Canvas yet" + (inCanvas ? "; " + inCanvas + " already are." : ".")
+                    : unrecorded
+                      ? "Canvas already has these " + unrecorded + " marks — sending confirms them here; students see no change."
+                      : "Canvas has every mark (" + inCanvas + ")."
+                  : toSend === 0
+                    ? "Canvas has every mark (" + c.ready + ")."
+                    : toSend + " of " + c.ready + " marks are not in Canvas.";
+
+      // The forward press: its label and look follow the step it would take.
+      const pct = progress && progress.total ? Math.round((100 * progress.done) / progress.total) : 0;
+      const forward =
+        c.ready === 0 || confirmed
+          ? null
+          : phase === "planning"
+            ? h("button", { type: "button", className: "pp-primary", disabled: true, "aria-busy": "true" }, "Checking Canvas…")
+            : phase === "sending"
+              ? h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-primary pp-danger pp-btn-progress",
+                    disabled: true,
+                    "aria-busy": "true",
+                    style: { "--pp-progress": pct + "%" },
+                  },
+                  "Sending… " + (progress && progress.total > 1 ? "course " + Math.min(progress.done + 1, progress.total) + " of " + progress.total : ""),
+                )
+              : sendable
+                ? h(
+                    "button",
+                    {
+                      type: "button",
+                      className: "pp-primary pp-danger",
+                      disabled: busy,
+                      title: "Students see a posted grade within seconds",
+                      onClick: send,
+                    },
+                    "Send " + sendCount + " marks to Canvas",
+                  )
+                : !plan
+                  ? h("button", { type: "button", className: "pp-primary", disabled: busy, onClick: () => marks({}, "planning") }, "Check Canvas")
+                  : null;
 
       return h(
         "div",
-        { className: lead ? "" : "pp-next" },
+        { className: lead ? "pp-sendflow" : "pp-next pp-sendflow" },
+        c.ready > 0 ? h(SendSteps, { at: at, busy: busy, failed: sentFailed }) : null,
+        headline && !(lead && !plan && phase === "idle") ? h("p", { className: "pp-sendheadline" }, headline) : null,
         h(
           "div",
           { className: "pp-approverow" },
-          lead
-            ? null
-            : h(
-                "span",
-                null,
-                c.ready === 0
-                  ? "No whole marks to send yet."
-                  : toSend === 0
-                    ? "Canvas has every mark (" + c.ready + ")."
-                    : toSend + " of " + c.ready + " marks are not in Canvas. ",
-              ),
-          c.ready > 0
-            ? h(
-                "button",
-                { type: "button", className: lead && !plan ? "pp-primary" : "pp-segbtn", disabled: busy, onClick: () => marks({}, "planning") },
-                phase === "planning" ? "Asking Canvas…" : plan ? "Preview again" : "Preview the Canvas send",
-              )
-            : null,
-          sendable
-            ? h(
-                "button",
-                {
-                  type: "button",
-                  className: "pp-segbtn pp-danger",
-                  disabled: busy,
-                  title: "Students see a posted grade within seconds",
-                  onClick: () => marks({ confirm: true }, "sending"),
-                },
-                phase === "sending" ? "Sending…" : "Send " + planned + " marks to Canvas",
-              )
-            : null,
-          recordable
-            ? h(
-                "button",
-                {
-                  type: "button",
-                  className: "pp-segbtn",
-                  disabled: busy,
-                  title: "Writes nothing to Canvas; notes here that Canvas has these marks",
-                  onClick: () => marks({ confirm: true }, "sending"),
-                },
-                phase === "sending" ? "Recording…" : "Record " + unrecorded + " as sent",
-              )
+          forward,
+          plan && !busy
+            ? h("button", { type: "button", className: "pp-segbtn", onClick: () => marks({}, "planning") }, confirmed ? "Check Canvas again" : "Check again")
             : null,
         ),
-        recordable
-          ? h(
-              "p",
-              { className: "pp-as" },
-              "Canvas already has all of these marks, but this pane never recorded them as sent — usually because Canvas finished the job after the send stopped waiting. Recording them changes nothing in Canvas.",
-            )
-          : null,
-        phase === "sending" ? h("p", { className: "pp-sendresult pp-sendresult-wait" }, "Sending to Canvas… this can take a minute per course.") : null,
-        plan && plan.confirmed && phase !== "sending" ? h(SendResult, { groups: groups, name: name, again: () => marks({}, "planning"), busy: busy }) : null,
+        confirmed && phase !== "sending" ? h(SendResult, { groups: groups, name: name }) : null,
         failed ? h("pre", { className: "pp-approveout pp-approveerr" }, failed) : null,
         unlinked.length && props.ask
           ? h(
@@ -6874,7 +7011,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none;display:inline-block}
               ),
             )
           : null,
-        groups.map((entry) =>
+        // The preview, course by course. After a send the result above says it
+        // all, so the courses' own sections go.
+        (confirmed ? [] : groups).map((entry) =>
           h(
             "div",
             { key: entry.group || "run" },
