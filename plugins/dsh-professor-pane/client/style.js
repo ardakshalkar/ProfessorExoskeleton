@@ -109,6 +109,43 @@ a.pp-segbtn{text-decoration:none;display:inline-block}
 .pp-bookcanvas{display:flex;align-items:center;justify-content:flex-end;gap:6px}
 .pp-sendbtn{color:#a15c00;border-color:rgba(161,92,0,.45);font-weight:600}
 .pp-sendbtn:hover{background:rgba(161,92,0,.08)}
+/* A Send… open under its row: the preview, then the red press. */
+.pp-bookstatus-open{max-height:75%}
+.pp-bookrow-open{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-bookdrawer{padding:8px 12px 12px;background:var(--dsw-alias-fill-secondary,#f7f7f9);
+  border-top:1px dashed var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-bookdrawer .pp-approverow{gap:8px}
+.pp-plan{margin:6px 0 0}
+.pp-plansum{margin:4px 0 6px;font-weight:600;color:var(--dsw-alias-label-primary,#111)}
+.pp-plantable{width:100%;border-collapse:collapse;font-size:11.5px;background:var(--dsw-alias-bg-l1,#fff);
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:8px;overflow:hidden}
+.pp-plantable th{text-align:left;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b);padding:5px 10px;border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-plantable td{padding:4px 10px;border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.05))}
+.pp-plantable .pp-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.pp-plantable td:last-child{text-align:right}
+.pp-planwho{max-width:0;width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+/* What a send did: green landed, amber still processing, red failed. */
+.pp-sendresult{margin:8px 0;padding:9px 11px;border-radius:8px;font-size:11.5px;line-height:1.45;
+  border:1px solid rgba(46,125,79,.35);background:rgba(46,125,79,.08)}
+.pp-sendresult-wait{border-color:rgba(161,92,0,.4);background:rgba(161,92,0,.08)}
+.pp-sendresult-fail{border-color:rgba(180,52,42,.4);background:rgba(180,52,42,.07)}
+.pp-sendresulthead{display:flex;align-items:center;gap:8px}
+.pp-sendresulthead b{flex:1;font-size:12.5px;color:var(--dsw-alias-label-primary,#111)}
+.pp-sendresulticon{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-weight:700;color:#fff;background:#2e7d4f}
+.pp-sendresult-wait .pp-sendresulticon{background:#a15c00}
+.pp-sendresult-fail .pp-sendresulticon{background:#b4342a}
+.pp-sendresult ul{list-style:none;margin:6px 0 4px 28px;padding:0}
+.pp-sendresult li{display:flex;gap:8px;margin:2px 0}
+.pp-sendresult li.pp-sendresult-fail{color:#b4342a}
+.pp-sendresult li.pp-sendresult-wait{color:#a15c00}
+.pp-sendcourse{flex:none;min-width:9em;font-weight:600}
+.pp-sendresult .pp-plannotes{margin:4px 0 0 28px}
+.pp-plannotes{margin:0 0 6px;font-size:11px}
+.pp-plannotes summary{cursor:pointer;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-plannotes p{margin:3px 0 0 12px}
+.pp-planquiet td{color:var(--dsw-alias-label-tertiary,#8a8a8a)}
 /* A narrow pane: the Canvas chip and its press go under the title. */
 @container (max-width:560px){.pp-bookrow{grid-template-columns:minmax(0,1fr) 110px}
   .pp-bookcanvas{grid-column:1 / -1;justify-content:flex-start}}

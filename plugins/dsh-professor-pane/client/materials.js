@@ -455,10 +455,9 @@ export function CourseMode(props) {
           runId: props.runId,
           sessionId: props.sessionId,
           revision: props.reload,
-          openUnpublished: () => {
-            setView("tasks");
-            setTaskSub("unpublished");
-          },
+          names: props.names,
+          ask: props.ask,
+          onWrite: props.onWrite,
         }),
         h(RecentMarks, { runId: props.runId, sessionId: props.sessionId, revision: props.reload, names: props.names }),
         h(WidgetFrame, {
@@ -480,6 +479,7 @@ export function CourseMode(props) {
         onWrite: props.onWrite,
         openPublish: props.openPublish,
         ask: props.ask,
+        names: props.names,
       });
     }
     return h(WidgetFrame, {

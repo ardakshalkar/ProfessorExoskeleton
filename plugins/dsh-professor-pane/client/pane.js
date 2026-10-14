@@ -619,6 +619,7 @@ export function ProfessorPane(props) {
         onWrite: () => setReload((value) => value + 1),
         openPublish: openPublish,
         ask: props.ask,
+        names: names,
         key: current.runId,
       });
     }
@@ -662,10 +663,9 @@ export function ProfessorPane(props) {
           sessionId: props.sessionId,
           revision: reload,
           key: "status|" + current.runId,
-          openUnpublished: () => {
-            setTab("tasks");
-            setSubViews((value) => Object.assign({}, value, { tasks: "unpublished" }));
-          },
+          names: names,
+          ask: props.ask,
+          onWrite: () => setReload((value) => value + 1),
         }),
         h(RecentMarks, {
           runId: current.runId,

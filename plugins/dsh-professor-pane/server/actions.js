@@ -20,7 +20,7 @@ import {
   lmsString,
 } from "./integrations.js";
 import { recordAssessmentLinks } from "./lms-writes.js";
-import { loadedRun } from "./workspace.js";
+import { loadedRun, rosterPeople } from "./workspace.js";
 
 /**
  * The `ainar` CLI this pane is allowed to run: the TypeScript one, in this
@@ -298,22 +298,48 @@ export const runMarksPush = async (workspace, root, runId, body) => {
   }
 
   const confirm = body.confirm === true;
+  // Names in Names mode only, as every other view; codes otherwise.
+  const people = body.names === true ? rosterPeople() : null;
   const results = [];
   for (const group of groups.length ? groups : [null]) {
+    // A preview asks for the plan as JSON, so the pane can show it student by
+    // student rather than as the CLI's text.
     const args = ["lms", confirm ? "push" : "plan", runId, "--assessment", assessment, "--target", "canvas-api"];
     if (group) args.push("--group", group);
     if (confirm) args.push("--confirm");
+    else args.push("--json");
     const result = await runScans(args, root);
+    const output = result.output ?? result.error ?? "";
+    const plan = !confirm && result.ok ? planOf(output) : null;
     results.push({
       group,
       courseId: group ? String(courseOf[group] ?? "") : lmsString(run, "canvas_course_id"),
       ok: result.ok,
       // No assignment bound for this course: it is linked or created first,
       // and the send stays unavailable until it is.
-      unlinked: /has no Canvas assignment/.test(result.output ?? ""),
+      unlinked: /has no Canvas assignment/.test(output),
       command: result.command,
-      output: result.output ?? result.error ?? "",
+      output: plan ? "" : output,
+      counts: plan ? plan.counts || {} : null,
+      notes: plan ? plan.notes || [] : [],
+      rows: plan
+        ? (plan.rows || []).map((row) =>
+            Object.assign({}, row, { name: people && people[row.student_id]?.name ? String(people[row.student_id].name) : null }),
+          )
+        : null,
     });
   }
   return { confirmed: confirm, groups: results };
+};
+
+/** `lms plan --json`'s object, out of output that may carry a warning line around it. */
+const planOf = (output) => {
+  const start = output.indexOf("{");
+  const end = output.lastIndexOf("}");
+  if (start < 0 || end < start) return null;
+  try {
+    return JSON.parse(output.slice(start, end + 1));
+  } catch {
+    return null;
+  }
 };

@@ -198,6 +198,151 @@ export function MatchReview(props) {
   );
 }
 
+/** What happens to one student's mark, in the preview's words, and its chip. */
+const PLAN_ACTIONS = {
+  new: { words: "will be sent", chip: "pp-chip-warn", order: 0 },
+  change: { words: "will be updated", chip: "pp-chip-warn", order: 1 },
+  drift: { words: "edited in Canvas — left alone", chip: "pp-chip-live", order: 2 },
+  unmatched: { words: "not found in Canvas", chip: "pp-chip-live", order: 3 },
+  skip: { words: "not sent", chip: "", order: 4 },
+  unchanged: { words: "already in Canvas", chip: "pp-chip-ok", order: 5 },
+};
+
+const planScore = (value) => (value === null || value === undefined ? "—" : String(Math.round(value * 100) / 100));
+
+/**
+ * One Canvas course's preview, student by student: the mark here, what Canvas
+ * holds now, and what a send would do — those it would send first.
+ */
+function PlanTable(props) {
+  const rows = props.entry.rows
+    .slice()
+    .sort(
+      (a, b) =>
+        (PLAN_ACTIONS[a.action] || PLAN_ACTIONS.skip).order - (PLAN_ACTIONS[b.action] || PLAN_ACTIONS.skip).order ||
+        String(a.name || a.student_id).localeCompare(String(b.name || b.student_id)),
+    );
+  const counts = props.entry.counts || {};
+  const sending = (counts.new || 0) + (counts.change || 0);
+  const skipWhy = [...new Set(rows.filter((row) => row.action === "skip" && row.reason).map((row) => row.reason))];
+  const summary = [
+    sending ? sending + " will be sent" : "nothing to send",
+    counts.unchanged ? counts.unchanged + " already in Canvas" : null,
+    counts.drift ? counts.drift + " edited in Canvas" : null,
+    counts.unmatched ? counts.unmatched + " not found in Canvas" : null,
+    counts.skip ? counts.skip + " not sent" + (skipWhy.length === 1 ? " (" + skipWhy[0] + ")" : "") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return h(
+    "div",
+    { className: "pp-plan" },
+    h("p", { className: "pp-plansum" }, summary),
+    // What the CLI says about the course — host, assignment, scale — is worth
+    // having but not worth reading before the names; folded.
+    props.entry.notes && props.entry.notes.length
+      ? h(
+          "details",
+          { className: "pp-plannotes" },
+          h("summary", null, "About this Canvas course"),
+          props.entry.notes.map((note, i) => h("p", { className: "pp-as", key: "n" + i }, note)),
+        )
+      : null,
+    h(
+      "table",
+      { className: "pp-plantable" },
+      h(
+        "thead",
+        null,
+        h("tr", null, h("th", null, "Student"), h("th", { className: "pp-num" }, "Mark"), h("th", { className: "pp-num" }, "Canvas now"), h("th", null, "")),
+      ),
+      h(
+        "tbody",
+        null,
+        rows.map((row) => {
+          const said = PLAN_ACTIONS[row.action] || PLAN_ACTIONS.skip;
+          return h(
+            "tr",
+            { key: row.student_id, className: row.action === "unchanged" ? "pp-planquiet" : "" },
+            h("td", { className: "pp-planwho", title: row.student_id }, row.name || row.student_id),
+            h("td", { className: "pp-num" }, planScore(row.score) + (row.maximum ? " / " + planScore(row.maximum) : "")),
+            h("td", { className: "pp-num" }, planScore(row.current)),
+            h(
+              "td",
+              null,
+              // A skipped row says why ("no submission"); the rest say what happens.
+              h("span", { className: "pp-chip " + said.chip, title: row.reason || "" }, row.action === "skip" && row.reason ? row.reason : said.words),
+            ),
+          );
+        }),
+      ),
+    ),
+  );
+}
+
+/**
+ * What a send did, course by course, read from the CLI's own lines: posted
+ * and landed, already there and now recorded, still processing in Canvas, or
+ * failed — with the CLI's words a press away.
+ */
+const sendOutcome = (entry) => {
+  const out = entry.output || "";
+  const posted = /Canvas finished: (\d+) grade/.exec(out);
+  const held = /Canvas already holds (\d+)/.exec(out);
+  const manual = /posts manually/.test(out);
+  if (!entry.ok) {
+    const lines = out.split("\n").map((line) => line.trim()).filter(Boolean);
+    return { kind: "fail", words: "Not sent — " + (lines[lines.length - 1] || "the send failed") };
+  }
+  if (posted) {
+    return {
+      kind: "ok",
+      words: "Sent " + posted[1] + " marks" + (manual ? " — this assignment posts manually: post them in Canvas for students to see" : " — students can see them now"),
+    };
+  }
+  if (/has not finished the job yet/.test(out)) {
+    return { kind: "wait", words: "Canvas accepted the marks but is still processing them. Check again in a minute." };
+  }
+  if (held) return { kind: "ok", words: "Recorded " + held[1] + " marks Canvas already had" };
+  if (/nothing to send/.test(out)) return { kind: "same", words: "Nothing to send — Canvas already matches" };
+  return { kind: "ok", words: "Done" };
+};
+
+function SendResult(props) {
+  const outcomes = props.groups.map((entry) => ({ entry, said: sendOutcome(entry) }));
+  const worst = outcomes.some((o) => o.said.kind === "fail") ? "fail" : outcomes.some((o) => o.said.kind === "wait") ? "wait" : "ok";
+  const headline = { ok: "Sent to Canvas", wait: "Sent — Canvas is still processing", fail: "Some marks were not sent" }[worst];
+  return h(
+    "div",
+    { className: "pp-sendresult pp-sendresult-" + worst, role: "status" },
+    h(
+      "div",
+      { className: "pp-sendresulthead" },
+      h("span", { className: "pp-sendresulticon", "aria-hidden": "true" }, { ok: "✓", wait: "…", fail: "!" }[worst]),
+      h("b", null, headline),
+      h("button", { type: "button", className: "pp-segbtn", disabled: props.busy, onClick: props.again }, "Check Canvas again"),
+    ),
+    h(
+      "ul",
+      null,
+      outcomes.map((o) =>
+        h(
+          "li",
+          { key: o.entry.group || "run", className: "pp-sendresult-" + o.said.kind },
+          h("span", { className: "pp-sendcourse" }, props.name(o.entry)),
+          h("span", null, o.said.words),
+        ),
+      ),
+    ),
+    h(
+      "details",
+      { className: "pp-plannotes" },
+      h("summary", null, "What the CLI said"),
+      outcomes.map((o) => h("pre", { className: "pp-approveout", key: "o" + (o.entry.group || "run") }, o.entry.output)),
+    ),
+  );
+}
+
 /**
  * The marks of one assessment, sent to Canvas from beside the pile.
  *
@@ -226,7 +371,7 @@ export function CanvasMarks(props) {
   const marks = (extra, label) => {
     setPhase(label);
     setFailed(null);
-    postJson("/api/canvas/marks", Object.assign({ assessment: props.assessmentId }, extra || {}))
+    postJson("/api/canvas/marks", Object.assign({ assessment: props.assessmentId, names: Boolean(props.names) }, extra || {}))
       .then((body) => {
         setPhase("idle");
         if (body.error) return setFailed(body.error);
@@ -239,6 +384,12 @@ export function CanvasMarks(props) {
         setFailed(String((error && error.message) || error));
       });
   };
+
+  // Opened from a Send… press: the preview only reads Canvas, so it runs at
+  // once and the first thing on screen is what would be sent.
+  React.useEffect(() => {
+    if (props.autoPreview && props.canvas && props.canvas.ready > 0) marks({}, "planning");
+  }, []);
 
   const listFor = (entry) => {
     postJson("/api/canvas/assignments", { courseId: entry.courseId })
@@ -285,7 +436,18 @@ export function CanvasMarks(props) {
         "Do not send any marks — I send those from the pane once every course is linked.",
     );
   };
-  const sendable = plan && !plan.confirmed && groups.length > 0 && !unlinked.length && groups.every((entry) => entry.ok);
+  const previewed = plan && !plan.confirmed && groups.length > 0 && !unlinked.length && groups.every((entry) => entry.ok);
+  // What the preview says a send would do — not the pane's own count, which
+  // is only as current as the ledger.
+  const planned = groups.reduce((n, entry) => n + ((entry.counts || {}).new || 0) + ((entry.counts || {}).change || 0), 0);
+  // Already in Canvas at our value but never recorded here: a send whose
+  // Canvas job finished after the CLI stopped waiting.
+  const unrecorded = groups.reduce(
+    (n, entry) => n + (entry.rows || []).filter((row) => row.action === "unchanged" && row.last_prepared === null).length,
+    0,
+  );
+  const sendable = previewed && planned > 0;
+  const recordable = previewed && planned === 0 && unrecorded > 0;
   const name = (entry) => entry.group || "the run's Canvas course";
   const busy = phase !== "idle";
   const c = props.canvas || { ready: 0, unsent: 0, changed: 0 };
@@ -329,10 +491,32 @@ export function CanvasMarks(props) {
               title: "Students see a posted grade within seconds",
               onClick: () => marks({ confirm: true }, "sending"),
             },
-            phase === "sending" ? "Sending…" : "Send " + (toSend || c.ready) + " marks to Canvas",
+            phase === "sending" ? "Sending…" : "Send " + planned + " marks to Canvas",
+          )
+        : null,
+      recordable
+        ? h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              disabled: busy,
+              title: "Writes nothing to Canvas; notes here that Canvas has these marks",
+              onClick: () => marks({ confirm: true }, "sending"),
+            },
+            phase === "sending" ? "Recording…" : "Record " + unrecorded + " as sent",
           )
         : null,
     ),
+    recordable
+      ? h(
+          "p",
+          { className: "pp-as" },
+          "Canvas already has all of these marks, but this pane never recorded them as sent — usually because Canvas finished the job after the send stopped waiting. Recording them changes nothing in Canvas.",
+        )
+      : null,
+    phase === "sending" ? h("p", { className: "pp-sendresult pp-sendresult-wait" }, "Sending to Canvas… this can take a minute per course.") : null,
+    plan && plan.confirmed && phase !== "sending" ? h(SendResult, { groups: groups, name: name, again: () => marks({}, "planning"), busy: busy }) : null,
     failed ? h("pre", { className: "pp-approveout pp-approveerr" }, failed) : null,
     unlinked.length && props.ask
       ? h(
@@ -413,9 +597,10 @@ export function CanvasMarks(props) {
                 : h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => create(entry, false) }, "Preview creating it"),
             )
           : null,
+        entry.rows && !(creating[entry.group] || {}).output ? h(PlanTable, { entry: entry }) : null,
         // An unlinked course's own message is the CLI explaining its data
         // model; the sentence above says the same in the professor's terms.
-        (creating[entry.group] || {}).output || !entry.unlinked
+        (creating[entry.group] || {}).output || (!entry.unlinked && entry.output && !plan.confirmed)
           ? h("pre", { className: "pp-approveout" + (entry.ok || entry.unlinked ? "" : " pp-approveerr") }, (creating[entry.group] || {}).output || entry.output)
           : null,
       ),
@@ -489,13 +674,15 @@ const TitleWithTag = (props) => {
  */
 export function GradebookStatus(props) {
   const state = useUnpublished(props.runId, props.sessionId, props.revision);
+  // The one assessment whose Canvas send is open under its row.
+  const [open, setOpen] = React.useState(null);
   if (state.phase === "loading" || !state.value || state.value.error) return null;
   const rows = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0).sort(dueOrder);
   if (!rows.length) return null;
   const waiting = rows.reduce((n, entry) => n + (entry.canvas.unsent || 0) + (entry.canvas.changed || 0), 0);
   return h(
     "div",
-    { className: "pp-bookcard pp-bookstatus" },
+    { className: "pp-bookcard pp-bookstatus" + (open ? " pp-bookstatus-open" : "") },
     h(
       "div",
       { className: "pp-cardhead" },
@@ -512,8 +699,11 @@ export function GradebookStatus(props) {
       const done = Math.min(100, (100 * entry.graded) / of);
       const part = Math.min(100 - done, (100 * (entry.partial || 0)) / of);
       return h(
+        React.Fragment,
+        { key: entry.id },
+        h(
         "div",
-        { className: "pp-bookrow", key: entry.id },
+        { className: "pp-bookrow" + (open === entry.id ? " pp-bookrow-open" : "") },
         h(TitleWithTag, { title: entry.title }),
         h(
           "span",
@@ -530,10 +720,32 @@ export function GradebookStatus(props) {
           "span",
           { className: "pp-bookcanvas" },
           said.canvas ? h("span", { className: "pp-chip " + (said.behind ? "pp-chip-warn" : "pp-chip-ok") }, said.canvas) : null,
-          said.behind
-            ? h("button", { type: "button", className: "pp-segbtn pp-sendbtn", onClick: () => props.openUnpublished() }, "Send…")
+          said.behind || open === entry.id
+            ? h(
+                "button",
+                { type: "button", className: "pp-segbtn pp-sendbtn", "aria-expanded": open === entry.id, onClick: () => setOpen(open === entry.id ? null : entry.id) },
+                open === entry.id ? "Close" : "Send…",
+              )
             : null,
         ),
+        ),
+        open === entry.id
+          ? h(
+              "div",
+              { className: "pp-bookdrawer" },
+              h(CanvasMarks, {
+                runId: props.runId,
+                sessionId: props.sessionId,
+                assessmentId: entry.id,
+                title: entry.title,
+                ask: props.ask,
+                names: props.names,
+                canvas: entry.canvas,
+                autoPreview: true,
+                onSent: props.onWrite,
+              }),
+            )
+          : null,
       );
     }),
   );
@@ -883,7 +1095,9 @@ export function Unpublished(props) {
                 assessmentId: entry.id,
                 title: entry.title,
                 ask: props.ask,
+                names: props.names,
                 canvas: entry.canvas,
+                autoPreview: true,
                 onSent: props.onWrite,
               })
             : null,

@@ -1197,6 +1197,18 @@ const runPush = async (args: LmsArgs, context: LmsContext, deps: Deps): Promise<
   // who is still unmarked are worth regenerating even when no total moved.
   if (!writable(plan).length && args.target !== "sheets-api") {
     deps.out("\nnothing to send — no row would change in the target");
+    // Canvas already holds exactly these values — typically a send whose job
+    // finished after `waitFor` gave up, so nothing was recorded then. A
+    // confirmed push records them now, so "not in Canvas" stops saying so.
+    // Only `unchanged` rows: the value read back from Canvas is ours.
+    if (args.target === "canvas-api" && args.confirm) {
+      const held = plan.rows.filter((row) => row.action === "unchanged" && row.last_prepared === null);
+      if (held.length) {
+        const at = decidedAt(runOf(context.bundle, args.run)?.timezone);
+        const touched = ledger.record(args.target, context.assessment.assessment_id, held, { at, state: "applied" });
+        deps.out(`Canvas already holds ${held.length} of these: noted ${touched} applied value(s) in ${ledger.save()}`);
+      }
+    }
     return 0;
   }
 
