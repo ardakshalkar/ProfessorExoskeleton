@@ -339,6 +339,38 @@ export const runMarksPush = async (workspace, root, runId, body) => {
   return { confirmed: confirm, groups: results };
 };
 
+/**
+ * What Canvas holds for a whole run — `ainar lms check --json` — kept per run
+ * on this server, so the Gradebook can draw from the ledger at once and then
+ * correct itself from Canvas without asking Canvas on every tab change.
+ *
+ * The check writes nothing to Canvas; it notes in the ledger the marks Canvas
+ * already holds at the decided value, which is why the pane's counts move
+ * after it. One check per run at a time: a second request joins the first.
+ */
+const checks = new Map(); // runId -> { at, value, error, running }
+
+export const canvasCheckState = (runId) => {
+  const entry = checks.get(runId);
+  if (!entry) return { state: "none" };
+  return { state: entry.running ? "running" : "ready", at: entry.at, value: entry.value, error: entry.error };
+};
+
+export const runCanvasCheck = (root, runId) => {
+  const entry = checks.get(runId) || {};
+  if (entry.running) return entry.running;
+  entry.running = runScans(["lms", "check", runId, "--target", "canvas-api", "--json"], root).then((result) => {
+    const value = result.ok ? planOf(result.output ?? "") : null;
+    entry.at = new Date().toISOString();
+    entry.value = value;
+    entry.error = value ? null : (result.output || result.error || "The check gave no answer.").trim();
+    entry.running = null;
+    return canvasCheckState(runId);
+  });
+  checks.set(runId, entry);
+  return entry.running;
+};
+
 /** `lms plan --json`'s object, out of output that may carry a warning line around it. */
 const planOf = (output) => {
   const start = output.indexOf("{");

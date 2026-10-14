@@ -90,6 +90,8 @@ import {
   DOTS_BUNDLE,
   readSummary,
   runAssignmentPush,
+  canvasCheckState,
+  runCanvasCheck,
   runMarksPush,
   runPublish,
   runScans,
@@ -1561,6 +1563,18 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
           }
           return sendJson(res, 200, await runMarksPush(workspace, root, runId, body ?? {}));
         })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // What Canvas holds for the whole run. GET answers from the last check on
+    // this server at once; POST runs a check (reads Canvas, notes in the
+    // ledger what Canvas already holds) and answers when it is done.
+    if (path === "/api/canvas/check") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      if (req.method === "GET") return sendJson(res, 200, canvasCheckState(runId));
+      if (req.method !== "POST") return sendJson(res, 405, { error: "GET the last check, or POST to run one" });
+      return runCanvasCheck(root, runId)
+        .then((state) => sendJson(res, 200, state))
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }
 

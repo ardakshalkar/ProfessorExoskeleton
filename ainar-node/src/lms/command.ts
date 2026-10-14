@@ -2067,6 +2067,108 @@ const runGroups = async (args: LmsArgs, bundle: CourseBundle, root: string, deps
 };
 
 // --------------------------------------------------------------------------
+// What Canvas holds, for the whole run
+// --------------------------------------------------------------------------
+
+/** One assessment in one Canvas course, as `lms check` found it. */
+interface CheckCell {
+  group: string | null;
+  linked: boolean;
+  ok: boolean;
+  course: string | null;
+  counts: Record<string, number>;
+  /** Marks Canvas held at our value that this machine had never noted — noted now. */
+  recorded: number;
+  /** Values someone changed in Canvas: what Canvas holds, what this workspace decided. */
+  edited: { student_id: string; in_canvas: number | null; here: number | null }[];
+  error: string | null;
+}
+
+/**
+ * `lms check RUN [--assessment A] [--json]` — what Canvas holds right now, for
+ * every assessment with marks and every Canvas course the run is taught in.
+ *
+ * The question the ledger cannot answer by itself. The ledger says what this
+ * machine saw Canvas confirm; it misses a send whose grading job finished
+ * after the push stopped waiting, and it never sees a grade somebody changed
+ * in Canvas by hand. This asks Canvas, through the same plan a push would
+ * make, and so sees both.
+ *
+ * Nothing is written to Canvas. Locally, Canvas wins where it agrees: a mark
+ * Canvas holds at exactly the value decided here, and that the ledger had no
+ * record of, is noted as applied — the only write, and only of a fact Canvas
+ * just stated. A value edited in Canvas is reported, never adopted.
+ */
+const runCheck = async (args: LmsArgs, bundle: CourseBundle, root: string, deps: Deps): Promise<number> => {
+  const run = runOf(bundle, args.run);
+  if (!run) throw new Error(`unknown run '${args.run}'`);
+  const groups: (string | null)[] = isPerSubgroup(run) ? [...canvasCourses(run).keys()].sort() : [null];
+  const wanted = assessmentsOf(bundle, args.run).filter(
+    (entry: any) => !args.assessment || entry.assessment_id === args.assessment,
+  );
+  if (args.assessment && !wanted.length) throw new Error(`unknown assessment '${args.assessment}' in ${args.run}`);
+  // Each cell opens its own context, which narrates; the check reports once.
+  const quiet: Deps = { ...deps, out: () => {} };
+  const at = decidedAt(run?.timezone);
+  const results: { assessment_id: string; title: string; groups: CheckCell[] }[] = [];
+
+  for (const assessment of wanted) {
+    const id = String(assessment.assessment_id);
+    const marked = (gradeRows(bundle, args.run, { assessmentId: id }).get(id) ?? []).some((row) => row.score !== null);
+    if (!marked) continue;
+    const cells: CheckCell[] = [];
+    for (const group of groups) {
+      const cell: CheckCell = { group, linked: true, ok: false, course: null, counts: {}, recorded: 0, edited: [], error: null };
+      if (!canvasAssignmentFor(assessment, group)) {
+        cell.linked = false;
+        cells.push(cell);
+        continue;
+      }
+      const one: LmsArgs = { ...args, subcommand: "plan", target: "canvas-api", assessment: id, group, confirm: false };
+      try {
+        const context = await openContext(one, bundle, root, quiet);
+        const { plan, ledger } = makePlan(one, context);
+        cell.course = context.courseId;
+        cell.counts = counts(plan);
+        const held = plan.rows.filter((row) => row.action === "unchanged" && row.last_prepared === null);
+        if (held.length) {
+          cell.recorded = ledger.record("canvas-api", id, held, { at, state: "applied" });
+          ledger.save();
+        }
+        cell.edited = drift(plan).map((row) => ({ student_id: row.student_id, in_canvas: row.current, here: row.score }));
+        cell.ok = true;
+      } catch (error) {
+        cell.error = String((error as Error).message ?? error).trim();
+      }
+      cells.push(cell);
+    }
+    results.push({ assessment_id: id, title: String(assessment.title ?? id), groups: cells });
+  }
+
+  if (args.json) {
+    deps.out(JSON.stringify({ run: args.run, checked_at: new Date().toISOString(), assessments: results }, null, 2));
+    return 0;
+  }
+  for (const entry of results) {
+    deps.out(`${entry.assessment_id} — ${entry.title}`);
+    for (const cell of entry.groups) {
+      const where = cell.group ?? "the run's course";
+      if (!cell.linked) deps.out(`  ${where}: no Canvas assignment linked`);
+      else if (!cell.ok) deps.out(`  ${where}: could not read Canvas — ${cell.error}`);
+      else {
+        const c = cell.counts;
+        deps.out(
+          `  ${where}: ${c.unchanged ?? 0} in Canvas, ${(c.new ?? 0) + (c.change ?? 0)} not yet, ` +
+            `${c.drift ?? 0} edited in Canvas` + (cell.recorded ? ` — noted ${cell.recorded} Canvas already had` : ""),
+        );
+      }
+    }
+  }
+  deps.out("Nothing in Canvas was changed.");
+  return 0;
+};
+
+// --------------------------------------------------------------------------
 // The entry point
 // --------------------------------------------------------------------------
 
@@ -2105,6 +2207,8 @@ export const runLms = async (
   if (args.subcommand === "assignments") return runAssignmentList(args, bundle, deps);
   if (args.subcommand === "link") return runLink(args, bundle, root, deps);
   if (args.subcommand === "groups") return runGroups(args, bundle, root, deps);
+  // Opens a context per assessment and course itself.
+  if (args.subcommand === "check") return runCheck(args, bundle, root, deps);
 
   const context = await openContext(args, bundle, root, deps);
   switch (args.subcommand) {
@@ -2119,7 +2223,7 @@ export const runLms = async (
     default:
       throw new Error(
         `unknown lms subcommand '${args.subcommand}'. It is one of: plan, push, ` +
-          "diff, import-submissions, assignment-plan, assignment-push, assignments, link, groups",
+          "diff, check, import-submissions, assignment-plan, assignment-push, assignments, link, groups",
       );
   }
 };

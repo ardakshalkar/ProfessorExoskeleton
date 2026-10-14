@@ -469,6 +469,14 @@ a.pp-segbtn{display:inline-flex}
   background:inherit;border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-cardhead b{font-weight:600;font-size:12px;flex:1;min-width:0}
 .pp-bookstatus{max-height:38%}
+/* Where the Canvas figures come from: checking, checked when, or unreachable. */
+.pp-checkstate{display:inline-flex;align-items:center;gap:6px;font-size:11px;white-space:nowrap;
+  color:var(--dsw-alias-label-tertiary,#8a8a8f)}
+.pp-checkstate-off{color:#a15c00}
+.pp-checkspin{width:9px;height:9px;border-radius:50%;border:1.5px solid currentColor;border-right-color:transparent;
+  animation:pp-btn-spin .8s linear infinite}
+/* A press that is only a glyph: square, the same height as every other. */
+.pp-iconbtn{width:26px;padding:0;font-size:13px}
 .pp-bookrow{display:grid;grid-template-columns:minmax(0,1fr) 120px auto;gap:12px;align-items:center;
   padding:6px 12px;border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.05))}
 .pp-cardhead + .pp-bookrow{border-top:0}
@@ -520,6 +528,8 @@ a.pp-segbtn{display:inline-flex}
 .pp-sendstep-now,.pp-sendstep-busy{color:var(--dsw-alias-label-primary,#1d1d1f);font-weight:600}
 .pp-sendstep-now .pp-sendstepdot{border-color:var(--dsw-alias-label-primary,#1d1d1f)}
 .pp-sendstep-busy .pp-sendstepdot{border-color:#2f6fd6;color:#2f6fd6;animation:pp-step-pulse 1.1s ease-in-out infinite}
+.pp-sendstep-warn{color:#a15c00;font-weight:600}
+.pp-sendstep-warn .pp-sendstepdot{color:#fff;background:#a15c00;border-color:#a15c00}
 .pp-sendstep-fail{color:#b4342a;font-weight:600}
 .pp-sendstep-fail .pp-sendstepdot{color:#fff;background:#b4342a;border-color:#b4342a}
 @keyframes pp-step-pulse{0%,100%{box-shadow:0 0 0 0 rgba(47,111,214,.35)}50%{box-shadow:0 0 0 5px rgba(47,111,214,0)}}
@@ -6746,16 +6756,29 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
      * failed says so in red.
      */
     function SendSteps(props) {
-      const labels = ["Check Canvas", "Send", props.failed ? "Not sent" : "In Canvas"];
+      // `partial`: everything that can go is in Canvas, but some marks have
+      // nowhere to go — amber, and saying how many, never a green tick.
+      const labels = ["Check Canvas", "Send", props.failed ? "Not sent" : props.partial || "In Canvas"];
       return h(
         "ol",
         { className: "pp-sendsteps", "aria-label": "Canvas send progress" },
         labels.map((label, i) => {
-          const state = i < props.at ? "done" : i === props.at ? (props.failed && i === 2 ? "fail" : props.busy ? "busy" : "now") : "todo";
+          const state =
+            i < props.at
+              ? "done"
+              : i === props.at
+                ? props.failed && i === 2
+                  ? "fail"
+                  : props.partial && i === 2
+                    ? "warn"
+                    : props.busy
+                      ? "busy"
+                      : "now"
+                : "todo";
           return h(
             "li",
-            { key: label, className: "pp-sendstep pp-sendstep-" + state, "aria-current": i === props.at ? "step" : undefined },
-            h("span", { className: "pp-sendstepdot", "aria-hidden": "true" }, state === "done" ? "✓" : state === "fail" ? "!" : String(i + 1)),
+            { key: "s" + i, className: "pp-sendstep pp-sendstep-" + state, "aria-current": i === props.at ? "step" : undefined },
+            h("span", { className: "pp-sendstepdot", "aria-hidden": "true" }, state === "done" ? "✓" : state === "fail" || state === "warn" ? "!" : String(i + 1)),
             h("span", null, label),
           );
         }),
@@ -6912,7 +6935,19 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       // Where the send stands: 0 checking, 1 ready to send / sending, 3 done.
       const confirmed = Boolean(plan && plan.confirmed);
       const sentFailed = confirmed && groups.some((entry) => !entry.ok);
-      const at = phase === "planning" || !plan ? 0 : phase === "sending" ? 1 : confirmed ? (sentFailed ? 2 : 3) : previewed && !sendCount ? 3 : 1;
+      // Marks whose student is not in the Canvas course: no send places them.
+      const unplaced = groups.reduce((n, entry) => n + ((entry.counts || {}).unmatched || 0), 0);
+      const students = (n) => (n === 1 ? "1 student isn't" : n + " students aren't");
+      const unplacedWords = unplaced
+        ? " " + students(unplaced) + " in the Canvas course, so " + (unplaced === 1 ? "that mark has" : "those marks have") +
+          " nowhere to go — add them in Canvas, then check again."
+        : "";
+      // Done is a green tick only when every mark is placed; otherwise amber,
+      // saying how many are in.
+      const finished = (previewed && !sendCount) || (confirmed && !sentFailed);
+      const partial = finished && unplaced ? inCanvas + " of " + (inCanvas + unplaced) + " in Canvas" : null;
+      const at =
+        phase === "planning" || !plan ? 0 : phase === "sending" ? 1 : confirmed && sentFailed ? 2 : finished ? (partial ? 2 : 3) : 1;
 
       // What the preview found, in one sentence — the preview's truth over the
       // pane's own count, which is only as current as this machine's record.
@@ -6927,10 +6962,12 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                 ? null
                 : previewed
                   ? planned
-                    ? planned + " of " + c.ready + " marks are not in Canvas yet" + (inCanvas ? "; " + inCanvas + " already are." : ".")
+                    ? planned + " of " + c.ready + " marks are not in Canvas yet" + (inCanvas ? "; " + inCanvas + " already are." : ".") + unplacedWords
                     : unrecorded
-                      ? "Canvas already has these " + unrecorded + " marks — sending confirms them here; students see no change."
-                      : "Canvas has every mark (" + inCanvas + ")."
+                      ? "Canvas already has these " + unrecorded + " marks — sending confirms them here; students see no change." + unplacedWords
+                      : unplaced
+                        ? "Canvas has " + inCanvas + " of " + (inCanvas + unplaced) + " marks." + unplacedWords
+                        : "Canvas has every mark (" + inCanvas + ")."
                   : toSend === 0
                     ? "Canvas has every mark (" + c.ready + ")."
                     : toSend + " of " + c.ready + " marks are not in Canvas.";
@@ -6973,7 +7010,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       return h(
         "div",
         { className: lead ? "pp-sendflow" : "pp-next pp-sendflow" },
-        c.ready > 0 ? h(SendSteps, { at: at, busy: busy, failed: sentFailed }) : null,
+        c.ready > 0 ? h(SendSteps, { at: at, busy: busy, failed: sentFailed, partial: partial }) : null,
         headline && !(lead && !plan && phase === "idle") ? h("p", { className: "pp-sendheadline" }, headline) : null,
         h(
           "div",
@@ -7095,21 +7132,103 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       return state;
     }
 
-    /** One assessment's marking and Canvas, as the few words a row has room for. */
-    const markState = (entry) => {
+    /** How old a check of Canvas may be before opening the Gradebook asks again. */
+    const CANVAS_CHECK_FRESH = 5 * 60 * 1000;
+
+    /**
+     * `/api/canvas/check` for one run: what Canvas holds, asked of Canvas. The
+     * last answer comes back at once; if there is none, or it is older than five
+     * minutes, a new check runs in the background. `onChecked` fires when one
+     * finishes — the check notes in the ledger what Canvas already holds, so the
+     * counts drawn from the ledger are re-read then.
+     */
+    function useCanvasCheck(runId, sessionId, onChecked) {
+      const [state, setState] = React.useState({ phase: "loading", value: null });
+      const live = React.useRef(true);
+      const url = scoped(BASE + "/api/canvas/check?run=" + encodeURIComponent(runId || ""), sessionId);
+      const run = React.useCallback(() => {
+        setState((current) => Object.assign({}, current, { phase: "running" }));
+        fetch(url, { method: "POST", headers: { accept: "application/json" } })
+          .then((response) => response.json())
+          .then((answer) => {
+            if (!live.current) return;
+            setState({ phase: "ready", value: answer });
+            if (onChecked) onChecked();
+          })
+          .catch((error) => live.current && setState({ phase: "ready", value: { error: String(error) } }));
+      }, [url]);
+      React.useEffect(() => {
+        live.current = true;
+        if (!runId) return undefined;
+        fetch(url, { headers: { accept: "application/json" } })
+          .then((response) => response.json())
+          .then((answer) => {
+            if (!live.current) return;
+            if (answer.state === "running") return run();
+            const stale = answer.state !== "ready" || !answer.at || Date.now() - Date.parse(answer.at) > CANVAS_CHECK_FRESH;
+            setState({ phase: "ready", value: answer });
+            if (stale) run();
+          })
+          .catch(() => live.current && run());
+        return () => {
+          live.current = false;
+        };
+      }, [url]);
+      return [state, run];
+    }
+
+    /** Per assessment, the marks someone changed in Canvas, from the last check. */
+    const editedIn = (check) => {
+      const found = new Map();
+      for (const entry of (check && check.value && check.value.value && check.value.value.assessments) || []) {
+        const edited = [];
+        for (const cell of entry.groups || []) for (const row of cell.edited || []) edited.push(Object.assign({ group: cell.group }, row));
+        found.set(entry.assessment_id, edited);
+      }
+      return found;
+    };
+
+    /**
+     * Per assessment, marks that cannot go to Canvas because their student is not
+     * in the Canvas course — not "not sent yet", which a press would fix, but
+     * "nowhere to send", which only an enrolment in Canvas fixes.
+     */
+    const unplacedIn = (check) => {
+      const found = new Map();
+      for (const entry of (check && check.value && check.value.value && check.value.value.assessments) || []) {
+        found.set(entry.assessment_id, (entry.groups || []).reduce((n, cell) => n + ((cell.counts || {}).unmatched || 0), 0));
+      }
+      return found;
+    };
+
+    /**
+     * One assessment's marking and Canvas, as the few words a row has room for.
+     * `unplaced` — marks whose student is not in the Canvas course, from the last
+     * check — are taken out of "not in Canvas", which a send would fix, and said
+     * on their own, which it would not.
+     */
+    const markState = (entry, unplaced = 0) => {
       const c = entry.canvas;
       const marking =
         entry.submitted === 0 && entry.graded === 0
           ? "nothing handed in"
           : entry.graded + " of " + entry.submitted + " graded" + (entry.partial ? " · " + entry.partial + " part-graded" : "");
+      const stuck = Math.min(unplaced, c.unsent);
+      const unsent = c.unsent - stuck;
       let canvas = null;
       if (c.ready > 0) {
         canvas =
-          c.unsent === 0 && c.changed === 0
-            ? "all " + c.ready + " in Canvas"
-            : [c.unsent ? c.unsent + " not in Canvas" : null, c.changed ? c.changed + " changed since sent" : null].filter(Boolean).join(" · ");
+          unsent === 0 && c.changed === 0
+            ? (stuck ? c.ready - stuck + " of " + c.ready : "all " + c.ready) + " in Canvas"
+            : [unsent ? unsent + " not in Canvas" : null, c.changed ? c.changed + " changed since sent" : null].filter(Boolean).join(" · ");
       }
-      return { marking, canvas, behind: c.unsent > 0 || c.changed > 0 };
+      return {
+        marking,
+        canvas,
+        behind: unsent > 0 || c.changed > 0,
+        waiting: unsent + c.changed,
+        stuck: stuck ? stuck + " not in the Canvas course" : null,
+      };
     };
 
     const dueOrder = (a, b) => String(a.due_at || "9999").localeCompare(String(b.due_at || "9999"));
@@ -7142,13 +7261,22 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
      * saying "nothing handed in" would bury the two that matter.
      */
     function GradebookStatus(props) {
-      const state = useUnpublished(props.runId, props.sessionId, props.revision);
+      // Re-read after a check of Canvas: it notes in the ledger what Canvas holds.
+      const [checked, setChecked] = React.useState(0);
+      const state = useUnpublished(props.runId, props.sessionId, props.revision + "." + checked);
+      const [check, recheck] = useCanvasCheck(props.runId, props.sessionId, () => setChecked((value) => value + 1));
       // The one assessment whose Canvas send is open under its row.
       const [open, setOpen] = React.useState(null);
       if (state.phase === "loading" || !state.value || state.value.error) return null;
       const rows = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0).sort(dueOrder);
       if (!rows.length) return null;
-      const waiting = rows.reduce((n, entry) => n + (entry.canvas.unsent || 0) + (entry.canvas.changed || 0), 0);
+      const edited = editedIn(check);
+      const unplaced = unplacedIn(check);
+      const said = new Map(rows.map((entry) => [entry.id, markState(entry, unplaced.get(entry.id) || 0)]));
+      const waiting = rows.reduce((n, entry) => n + said.get(entry.id).waiting, 0);
+      const answer = check.value || {};
+      const checking = check.phase === "running" || check.phase === "loading";
+      const unreachable = !checking && (answer.error || (answer.state === "ready" && !answer.value));
       return h(
         "div",
         { className: "pp-bookcard pp-bookstatus" + (open ? " pp-bookstatus-open" : "") },
@@ -7161,9 +7289,38 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
             { className: waiting ? "pp-chip pp-chip-warn" : "pp-chip pp-chip-ok" },
             waiting ? waiting + " marks waiting for Canvas" : "Canvas has every mark",
           ),
+          // Where the Canvas figures come from: a check under way, the last one,
+          // or this machine's record because Canvas could not be reached.
+          h(
+            "span",
+            { className: "pp-checkstate" + (unreachable ? " pp-checkstate-off" : ""), title: unreachable ? String(answer.error || "") : "" },
+            checking
+              ? h("span", { className: "pp-checkspin", "aria-hidden": "true" })
+              : null,
+            checking
+              ? "Checking Canvas…"
+              : unreachable
+                ? "Couldn't reach Canvas — this machine's record"
+                : answer.at
+                  ? "Checked Canvas " + when(answer.at)
+                  : "",
+          ),
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn pp-iconbtn",
+              disabled: checking,
+              "aria-busy": checking ? "true" : undefined,
+              "aria-label": "Check Canvas again",
+              title: "Check Canvas again",
+              onClick: recheck,
+            },
+            checking ? "" : "↻",
+          ),
         ),
         rows.map((entry) => {
-          const said = markState(entry);
+          const state = said.get(entry.id);
           const of = Math.max(entry.submitted, entry.graded, 1);
           const done = Math.min(100, (100 * entry.graded) / of);
           const part = Math.min(100 - done, (100 * (entry.partial || 0)) / of);
@@ -7176,7 +7333,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
             h(TitleWithTag, { title: entry.title }),
             h(
               "span",
-              { className: "pp-bookprogress", title: said.marking },
+              { className: "pp-bookprogress", title: state.marking },
               h(
                 "span",
                 { className: "pp-bar", "aria-hidden": "true" },
@@ -7188,8 +7345,31 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
             h(
               "span",
               { className: "pp-bookcanvas" },
-              said.canvas ? h("span", { className: "pp-chip " + (said.behind ? "pp-chip-warn" : "pp-chip-ok") }, said.canvas) : null,
-              said.behind || open === entry.id
+              state.canvas ? h("span", { className: "pp-chip " + (state.behind ? "pp-chip-warn" : "pp-chip-ok") }, state.canvas) : null,
+              // Nowhere to send these: the student is not in the Canvas course.
+              state.stuck
+                ? h(
+                    "span",
+                    {
+                      className: "pp-chip",
+                      title: "These students are not enrolled in the Canvas course, so their marks have nowhere to go. Add them in Canvas, then check again.",
+                    },
+                    state.stuck,
+                  )
+                : null,
+              // Someone changed these in Canvas itself; the check reports them and
+              // never adopts them. The preview under Send… shows whose.
+              (edited.get(entry.id) || []).length
+                ? h(
+                    "span",
+                    {
+                      className: "pp-chip pp-chip-live",
+                      title: "Changed in Canvas, not here. Open Send… to see whose; a send would leave them alone.",
+                    },
+                    edited.get(entry.id).length + " changed in Canvas",
+                  )
+                : null,
+              state.behind || open === entry.id
                 ? h(
                     "button",
                     { type: "button", className: "pp-segbtn pp-sendbtn", "aria-expanded": open === entry.id, onClick: () => setOpen(open === entry.id ? null : entry.id) },

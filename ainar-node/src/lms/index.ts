@@ -6,6 +6,7 @@
  *     ainar lms push   RUN --assessment A --out file.csv         write a file
  *     ainar lms push   RUN --assessment A --target canvas-api --confirm
  *     ainar lms diff   RUN --assessment A                        three-way comparison
+ *     ainar lms check  RUN [--assessment A]                      what Canvas holds, every course
  *     ainar lms import-submissions RUN --assessment A
  *
  *     ainar lms assignment-plan RUN --assessment A               the definition

@@ -25,8 +25,9 @@ import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import { approvedView } from "@ainar/core/src/approval.ts";
-import { enrolledIn } from "@ainar/core/src/bundle.ts";
+import { assessmentsOf, enrolledIn, runById } from "@ainar/core/src/bundle.ts";
 import { exportable, gradeRows } from "@ainar/core/src/gradebook.ts";
+import { lmsScale, rescales, toLms } from "@ainar/core/src/lms-scale.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { RosterStore } from "@ainar/core/src/roster.ts";
 import {
@@ -92,12 +93,19 @@ export const canvasMarks = ({ bundle, runId, assessmentId, ledger }) => {
   const rows = gradeRows(approvedView(bundle), runId, { assessmentId }).get(assessmentId) ?? [];
   const ready = rows.filter(exportable);
   const sent = ledger.prepared("canvas-api", assessmentId);
+  // The ledger holds what Canvas was sent, on Canvas's scale — which the
+  // grading scheme may make other than the marks here (4 here, 13.33 there).
+  // Compared on the same scale, or every rescaled mark reads as changed.
+  const assessments = assessmentsOf(bundle, runId);
+  const record = assessments.find((entry) => entry.assessment_id === assessmentId);
+  const scale = record ? lmsScale(runById(bundle).get(runId), record, assessments) : null;
+  const onCanvas = (score) => (scale && rescales(scale) && !scale.problem ? toLms(score, scale) : score);
   let unsent = 0;
   let changed = 0;
   for (const row of ready) {
     const value = sent[row.student_id];
     if (value === undefined) unsent += 1;
-    else if (Math.abs(value - row.score) > 1e-9) changed += 1;
+    else if (Math.abs(value - onCanvas(row.score)) > 1e-3) changed += 1;
   }
   return { ready: ready.length, sent: ready.length - unsent - changed, unsent, changed };
 };

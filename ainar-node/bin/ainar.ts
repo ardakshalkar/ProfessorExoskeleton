@@ -1398,7 +1398,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       const subcommand = rest[0];
       if (!subcommand || !rest[1]) {
         console.error(
-          "usage: lms {plan|push|diff|import-submissions|assignment-plan|" +
+          "usage: lms {plan|push|diff|check|import-submissions|assignment-plan|" +
             "assignment-push|assignments|link|groups} RUN --assessment A [--target T]",
         );
         process.exit(1);

@@ -139,6 +139,14 @@ a.pp-segbtn{display:inline-flex}
   background:inherit;border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-cardhead b{font-weight:600;font-size:12px;flex:1;min-width:0}
 .pp-bookstatus{max-height:38%}
+/* Where the Canvas figures come from: checking, checked when, or unreachable. */
+.pp-checkstate{display:inline-flex;align-items:center;gap:6px;font-size:11px;white-space:nowrap;
+  color:var(--dsw-alias-label-tertiary,#8a8a8f)}
+.pp-checkstate-off{color:#a15c00}
+.pp-checkspin{width:9px;height:9px;border-radius:50%;border:1.5px solid currentColor;border-right-color:transparent;
+  animation:pp-btn-spin .8s linear infinite}
+/* A press that is only a glyph: square, the same height as every other. */
+.pp-iconbtn{width:26px;padding:0;font-size:13px}
 .pp-bookrow{display:grid;grid-template-columns:minmax(0,1fr) 120px auto;gap:12px;align-items:center;
   padding:6px 12px;border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.05))}
 .pp-cardhead + .pp-bookrow{border-top:0}
@@ -190,6 +198,8 @@ a.pp-segbtn{display:inline-flex}
 .pp-sendstep-now,.pp-sendstep-busy{color:var(--dsw-alias-label-primary,#1d1d1f);font-weight:600}
 .pp-sendstep-now .pp-sendstepdot{border-color:var(--dsw-alias-label-primary,#1d1d1f)}
 .pp-sendstep-busy .pp-sendstepdot{border-color:#2f6fd6;color:#2f6fd6;animation:pp-step-pulse 1.1s ease-in-out infinite}
+.pp-sendstep-warn{color:#a15c00;font-weight:600}
+.pp-sendstep-warn .pp-sendstepdot{color:#fff;background:#a15c00;border-color:#a15c00}
 .pp-sendstep-fail{color:#b4342a;font-weight:600}
 .pp-sendstep-fail .pp-sendstepdot{color:#fff;background:#b4342a;border-color:#b4342a}
 @keyframes pp-step-pulse{0%,100%{box-shadow:0 0 0 0 rgba(47,111,214,.35)}50%{box-shadow:0 0 0 5px rgba(47,111,214,0)}}

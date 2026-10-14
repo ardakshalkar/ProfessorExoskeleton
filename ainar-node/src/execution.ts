@@ -180,6 +180,7 @@ export const ACTIONS: readonly ActionPolicy[] = [
   ...[
     "lms-plan",
     "lms-diff",
+    "lms-check",
     "lms-import-submissions",
     "notion-pull",
     "notion-diff",
