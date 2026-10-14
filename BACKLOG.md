@@ -1418,6 +1418,56 @@ is worth building.
       over, and writes that it did to `records/events.yaml`. `S` · depends:
       STO-2
 
+## E32 · Background sync: Canvas and the grade sheet checked with nobody looking — no `FUTURE.md` section yet
+
+> **Rank: with E18, sharing its scheduler.** Proposed 2026-10-14. Today every
+> sync is started by the open pane: opening the Gradebook runs `lms check`
+> (what Canvas holds), the pane asks every five minutes whether the grade
+> sheet changed, and a send is a press. With the browser closed nothing is
+> checked, so a Canvas job that finished late, a grade changed in Canvas by
+> hand, or new marks in the sheet wait until the professor next opens the
+> pane — and the first open after a restart costs a 20-second check. The work
+> already runs on the backend (the harness server spawning `ainar`); what is
+> missing is something that starts it on a schedule. It reads, and notes what
+> it read; it never sends anything students see.
+
+- [ ] **BGS-1** Where the schedule lives: the harness server while it runs on
+      the professor's machine, the OS scheduler (Task Scheduler / cron calling
+      the CLI), or the deployed server (`deploy/oracle`, the Cloudflare
+      container) so it runs with the laptop shut. Probably all three behind one
+      command, BGS-2, with the deployed server the one that matters.
+      `decision`
+- [ ] **BGS-2** `ainar sync tick [RUN | --all]`: one unattended pass doing what
+      opening the pane does — `lms check` per run (Canvas wins where it agrees,
+      hand edits reported), and for each grade-sheet sync whose watcher says
+      the sheet changed, the same pull the Syncs press runs, with unsure
+      matches held for the professor as they are now. Reads and local notes
+      only. `M` · depends: BGS-1
+- [ ] **BGS-3** The scheduler: per-run interval (default hourly) and quiet
+      hours; one pass at a time per run, sharing a lock with the pane's own
+      check so the two never run together; back off on a Canvas rate limit or
+      Google's quota instead of retrying into it. `M` · depends: BGS-1, BGS-2
+- [ ] **BGS-4** The last check kept on disk, beside the ledger in
+      `~/.ainar/sync/`, not in the server's memory as `/api/canvas/check`
+      keeps it now — so the pane opens on the last background result, and a
+      restart costs nothing. `S` · depends: BGS-2
+- [ ] **BGS-5** "While you were away": a notice in the pane like the
+      grade-sheet one — *HW1: 44 marks confirmed in Canvas · Quiz 1: 2 grades
+      changed in Canvas by hand · grade sheet: 5 new marks* — and the same lines
+      handed to the digest (NOT-1) so they reach the phone. `S` · depends:
+      BGS-4
+- [ ] **BGS-6** Credentials without a browser: the Canvas token and Google's
+      refresh token usable by an unattended process, from the deployed
+      server's own connection registry; an expired or revoked one stops that
+      run's tick and says so in the pane and the digest, once, rather than
+      failing every hour. `M` · depends: BGS-1, GAU-3
+- [ ] **BGS-7** Never sends: a tick runs only read actions (`lms-check`,
+      sheet check and pull — `INTEGRATION_READ` in `execution.ts`) and a test
+      fails if it spawns a push. Grades to Canvas and anything students see
+      stay the professor's press. `S` · depends: BGS-2
+- [ ] **BGS-8** Background sync in Integrations, per run: on or off, interval,
+      last and next pass, and the last error in words. `S` · depends: BGS-3
+
 ---
 
 ## Suggested order
