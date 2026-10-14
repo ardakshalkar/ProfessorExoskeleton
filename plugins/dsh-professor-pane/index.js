@@ -53,6 +53,7 @@
  * routes spawn are in `server/actions.js`.
  */
 
+import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -147,6 +148,7 @@ import { withMaterialLinks } from "./server/materials.js";
 import { widgetDocument } from "./server/page.js";
 import { preferencesDocument, writePreferences } from "./server/preferences.js";
 import { paperCrop, scansDocument } from "./server/scans.js";
+import { filesDocument, filesFolder } from "./server/files.js";
 import { sendBrief, sendMaterial, sendOutline, sendStarter } from "./server/serve-file.js";
 import { studentScreenPage } from "./server/student-screen.js";
 import { studentsDocument } from "./server/students.js";
@@ -749,6 +751,41 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
       )
         .then((result) => sendJson(res, 200, result))
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    // Files: the run's scans and recordings, where they live and how much
+    // there is (GET), and that folder opened in the file manager (POST
+    // /reveal). The folder is built here from the run and a checked id;
+    // a path never comes from the request.
+    if (path === "/api/files" || path === "/api/files/reveal") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      const assessmentId = url.searchParams.get("assessment") ?? "";
+      if (assessmentId && !/^[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) {
+        return sendJson(res, 200, { error: `${assessmentId} is not an assessment id.` });
+      }
+      let submissions;
+      try {
+        submissions = submissionsDir(null);
+        refuseInsideRepo(submissions, root);
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      if (path === "/api/files") {
+        try {
+          return sendJson(res, 200, filesDocument({ bundle: loadedRun(workspace, runId).bundle, runId, submissions }));
+        } catch (error) {
+          return sendJson(res, 200, { error: String(error?.message ?? error) });
+        }
+      }
+      if (req.method !== "POST") return sendJson(res, 405, { error: "reveal is POST only" });
+      const folder = filesFolder(submissions, runId, assessmentId);
+      if (!existsSync(folder)) return sendJson(res, 200, { error: "Nothing is stored for this yet, so there is no folder to open." });
+      // The file manager of the machine this server runs on — which is the
+      // professor's own only when the pane is served locally.
+      const opener = process.platform === "win32" ? "explorer.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+      // explorer.exe exits 1 even when it opened the folder, so its exit is not the answer.
+      execFile(opener, [folder], () => {});
+      return sendJson(res, 200, { ok: true, folder });
     }
 
     if (path === "/api/scans" || path.startsWith("/api/scans/")) {

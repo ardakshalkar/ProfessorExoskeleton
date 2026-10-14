@@ -918,6 +918,9 @@ export function ProfessorPane(props) {
             desk !== null || grading !== null || scansPile !== null,
           onPublish: () => openPublish("page"),
           onUpload: () => setUploading(true),
+          // For Files: a pile in the Scans window, the batch in the recordings dialog.
+          onOpenScans: (assessment) => setScansPile(assessment),
+          onRecordings: () => setBatch(true),
           // For Students, Gradebook and Tasks: the pane's own identity choice, and what the
           // Unpublished view needs to send — the same props its tab gets.
           names: names,

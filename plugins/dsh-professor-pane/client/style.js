@@ -205,6 +205,27 @@ a.pp-segbtn{display:inline-flex}
 @keyframes pp-step-pulse{0%,100%{box-shadow:0 0 0 0 rgba(47,111,214,.35)}50%{box-shadow:0 0 0 5px rgba(47,111,214,0)}}
 @media (prefers-reduced-motion:reduce){.pp-sendstep-busy .pp-sendstepdot{animation:none}}
 .pp-sendheadline{margin:0;font-size:12px;font-weight:500;color:var(--dsw-alias-label-primary,#1d1d1f)}
+/* Files: where the private material is, totals as tiles, a table per kind. */
+.pp-files{display:flex;flex-direction:column;gap:14px;font-size:12px}
+.pp-fileswhere{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;border-radius:10px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-fileswheretext{flex:1;min-width:220px;display:flex;flex-direction:column;gap:3px}
+.pp-fileswheretext b{font-weight:600}
+.pp-fileswheretext code{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:var(--dsw-alias-label-secondary,#555)}
+.pp-filetiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.pp-filetile{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-filetile b{font-size:15px;font-weight:600}
+.pp-filetilehead{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-filetile-wait{border-color:rgba(161,92,0,.4);background:rgba(161,92,0,.06)}
+.pp-filetile-wait b{color:#a15c00}
+.pp-filesection h3{margin:0 0 6px;font-size:12.5px;font-weight:600}
+.pp-filetable td{vertical-align:middle}
+.pp-filetable td:first-child{max-width:0;width:55%}
+.pp-filewait td{background:rgba(161,92,0,.05)}
+.pp-fileacts{display:flex;gap:6px;justify-content:flex-end}
 /* What a send did: green landed, amber still processing, red failed. */
 .pp-sendresult{margin:8px 0;padding:9px 11px;border-radius:8px;font-size:11.5px;line-height:1.45;
   border:1px solid rgba(46,125,79,.35);background:rgba(46,125,79,.08)}

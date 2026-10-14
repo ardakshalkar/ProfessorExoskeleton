@@ -62,6 +62,7 @@ export const ORDER = [
   "materials.js",
   "publish.js",
   "marks.js",
+  "files.js",
   "grade-board.js",
   "scans.js",
   "defence-turn.js",

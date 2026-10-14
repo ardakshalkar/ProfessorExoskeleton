@@ -843,8 +843,8 @@ const titleParts = (title) => {
   return match ? { tag: match[1], rest: match[2] } : { tag: null, rest: String(title || "") };
 };
 
-/** A title as tag chip + text, the way both Gradebook strips print it. */
-const TitleWithTag = (props) => {
+/** A title as tag chip + text, the way the Gradebook strips and Files print it. */
+export const TitleWithTag = (props) => {
   const parts = titleParts(props.title);
   return h(
     "span",

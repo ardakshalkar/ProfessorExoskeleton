@@ -6,6 +6,7 @@
 import { decodeIssues, Message, useJson } from "./common.js";
 import { courseModeEscape } from "./course-escape.js";
 import { GradebookStatus, RecentMarks, Unpublished } from "./marks.js";
+import { Files } from "./files.js";
 import { Integrations } from "./integrations.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, DRAFT_MODES, IDENTITY_MODES, scoped, SUBVIEWS } from "./tabs.js";
@@ -338,6 +339,9 @@ const COURSE_VIEWS = [
   { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
   { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
+  // The private material itself — scanned papers, recorded answers — which
+  // lives outside the course folder, so has no other place to be seen whole.
+  { id: "files", label: "Files", hint: "Scans and audio: where they are stored, how much there is, each pile" },
   // Last: not the course but its roads out — Canvas, the sheet, the
   // repositories — and the rows a sync was not sure of, by name.
   { id: "integrations", label: "Integrations", hint: "Canvas, the grade sheet and GitHub: where each stands, and what is waiting for you" },
@@ -420,6 +424,21 @@ export function CourseMode(props) {
   const canvasLine = shown.current.canvas;
 
   const viewBody = () => {
+    if (view === "files") {
+      return h(
+        "div",
+        { className: "pp-cviewpad" },
+        h(Files, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          revision: props.reload,
+          onUpload: props.onUpload,
+          onOpenScans: props.onOpenScans,
+          onRecordings: props.onRecordings,
+          key: props.runId,
+        }),
+      );
+    }
     if (view === "integrations") {
       return h(
         "div",
