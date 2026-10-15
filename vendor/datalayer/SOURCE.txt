@@ -5,3 +5,6 @@ That link is cut. This directory is source: edit it here. Nothing writes into
 it from outside this repository any more, and there is no setup step to re-run.
 
 See PROVENANCE.md at the repository root for where every tree came from.
+
+Fork, 2026-10-15 (MOD-1): schema/preference_profile.schema.json `scope` gains
+`institution` and `run`, matching the layers ainar-node/src/profile.ts resolves.

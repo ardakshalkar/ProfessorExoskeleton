@@ -56,8 +56,10 @@
     "scope": {
       "enum": [
         "system",
+        "institution",
         "professor",
         "course",
+        "run",
         "task"
       ],
       "title": "Scope",
