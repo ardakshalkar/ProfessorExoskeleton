@@ -271,10 +271,49 @@ is worth building.
 > nothing follows them, because the answer is probably "in more places than
 > expected" and that changes the estimate.
 
-- [ ] **LNG-1** Audit where a language is assumed — skills, templates, deck
-      grammars, the persona. `S` · depends: —
-- [ ] **LNG-2** Audit where a grading scale, credit system or marking convention
-      is assumed. `S` · depends: —
+- [x] **LNG-1** Audit where a language is assumed — skills, templates, deck
+      grammars, the persona. Done 2026-10-15 (read-only). 14 places, almost all
+      hard-wired. The pane's English UI (about 25k lines, no i18n layer) is the
+      largest. Others that matter:
+      - the persona has no rule for what language to reply in;
+      - `<html lang="en">` is hard-coded on the course page, the dashboard and
+        the student screen;
+      - deck text-fit is tuned for Latin letters, so Cyrillic overflow is
+        under-estimated (`slides/deck.ts`);
+      - Russian and Kazakh word lists are hard-wired in `roster`, `paper-import`,
+        `scans`, `recordings`, `lms/command`, `grading-policy`, `scan-read` and
+        `defence`. They work for en/ru/kk and silently fail for any fourth
+        language.
+
+      `vendor/datalayer/preferences/defaults.yaml` `language.default` is the
+      only language key, and only the pane reads it.
+- [x] **LNG-2** Audit where a grading scale, credit system or marking convention
+      is assumed. Done 2026-10-15 (read-only). It found 37 places: 9 timezone, 13
+      grading, 9 institution, 7 credits/term. There are no letter grades, GPA or
+      pass marks anywhere, so a "scale" would be new work rather than a refactor.
+      The hard-wired ones that cost most:
+      - `records-write.ts:101,111`: falls back to `Asia/Almaty`, and to +05:00
+        when `Intl` fails;
+      - `PRESETS` and the type-to-block `WORK` routing (`grading-policy.ts`);
+      - final detection by title words, in English and Russian
+        (`grading-policy.ts:180`);
+      - exactly two periods, split at the first midterm (`boundaryOf`);
+      - plan-term seeds 30/30/40 midterm shells and writes a "Narxoz policy"
+        note into the record;
+      - the `narxoz.instructure.com` hint (`lms/canvas-api.ts:192`);
+      - course ids and term ids fixed to `XXX-0000` and
+        `YYYY-FALL|SPRING|SUMMER|WINTER`;
+      - "6 credits" with no credit system;
+      - a 15-week term offered as the default.
+
+      The "professor" preference layer is read from four different paths, and
+      the run layer's documented path is not the one the code reads
+      (`server/preferences.js:148`).
+- [ ] **LNG-6** Date arithmetic in UTC. `grading-policy.ts:194`, `bundle.ts:292`,
+      `outline.ts:44` and `validate.ts:1004` compare dates in UTC rather than in
+      the run's timezone, so a date can land in the wrong week or period by up
+      to a day at a term boundary. This is a correctness bug, not a
+      configuration gap, and can be fixed before MOD-1. `S` · depends: —
 - [ ] **LNG-3** Workspace-level locale and scale configuration. `M` · depends:
       LNG-1, LNG-2 · the code side is spelled out in MOD-1 (E33)
 - [ ] **LNG-4** Material generation honours it without being asked each time.
@@ -1494,6 +1533,37 @@ is worth building.
       [§12](FUTURE.md#12-language-and-institutional-fit)**: it is LNG-3 made
       concrete and should be done as LNG-3, after LNG-1 and LNG-2 have counted
       the places. `M` · depends: LNG-1, LNG-2
+
+      The audit (2026-10-15) proposes this shape.
+      - **One reader.** A new `ainar-node/src/profile.ts`, used by the CLI, the
+        pane (in place of `server/preferences.js`'s own copy) and the skills
+        (through the CLI). `ainar-node` has no preference reader today.
+      - **Layers.** system → institution → professor → course → run → task. A
+        run's own recorded values (timezone, dates) beat any default. The
+        institution layer is the one that is new.
+      - **Institution packs** ship with the harness, e.g. `profiles/narxoz.yaml`
+        holding the ВСК/РК presets, `Asia/Almaty`, 15 weeks, the T/LT/LLT
+        marks and the id pattern. A workspace opts in with
+        `institution: narxoz`, so ВСК stops being the product's default.
+      - **Keys:**
+        - `locale.{language, ui, reply_language, timezone, week_start, lexicon}`
+        - `calendar.{terms, teaching_weeks, meetings, periods}`
+        - `credits.{system, default, hours_per_credit}`
+        - `grading.{presets, default_preset, scale, rounding, final_matchers}`
+        - `marking.{late_marks, defence.partial_factor}`
+        - `display.bands`
+        - `ids.course_pattern`, `print.page_size`, `lms.canvas.base_url`,
+          `homework.github_org`
+      - **Carrier.** `preference_profile.schema.json` can carry the scalar
+        keys. It needs three changes:
+        - an `institution` value in `scope`, which forks the vendored schema;
+        - a resolver that merges nested objects;
+        - a structured file of its own for `grading.presets`, because the
+          pane's option walker cannot edit arrays.
+      - **Order.** Do the six costly hard-wired items first: the timezone
+        fallback, `PRESETS`, final detection, `boundaryOf`, `DEFAULT_MARKS`
+        (already overridable per run) and the plan-term 30/30/40 seed. Pane UI
+        strings are a separate, larger i18n job and stay out of MOD-1.
 - [ ] **MOD-2** An LMS adapter interface. Targets are a closed list
       (`lms/index.ts:74`) and `lms/command.ts` (2,200 lines) branches on
       `"canvas-api"` and its siblings throughout; Canvas keys are read straight
@@ -1570,7 +1640,8 @@ LNG-2, INT-1, INT-5, PRI-3, REC-3.
 
 **Before a second professor:** MOD-3a is done (2026-10-15); MOD-3b is small
 and can follow whenever the pane's write files are next open. Then MOD-5 ahead of
-the STORAGE §10 loader work, and MOD-1 once LNG-1 and LNG-2 have run. MOD-2 and
+the STORAGE §10 loader work, and MOD-1 now that LNG-1 and LNG-2 have run
+(LNG-6, the UTC date bug, is small and can go first). MOD-2 and
 MOD-4 are large and wait for the request that needs them (a second LMS; a
 command that cannot be found in `bin/ainar.ts`).
 
