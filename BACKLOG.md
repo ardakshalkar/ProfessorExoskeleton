@@ -287,6 +287,9 @@ is worth building.
 
       `vendor/datalayer/preferences/defaults.yaml` `language.default` is the
       only language key, and only the pane reads it.
+      Row-level audit: `C:\Users\Ardak Shalkar\AppData\Roaming\Claude\side-session-notes\local_489dbda1-e970-4b6a-b7d0-53646899f573\lng-1-2-audit.md` (52 rows: language 14, timezone 9, grading 13,
+      institution 9, credits/term 7). LNG-1's rows are L1-L14; MOD-1 closed none
+      of them (L2 only gained a neutral `locale.timezone` sibling; UI i18n L7 is LNG-3).
 - [x] **LNG-2** Audit where a grading scale, credit system or marking convention
       is assumed. Done 2026-10-15 (read-only). It found 37 places: 9 timezone, 13
       grading, 9 institution, 7 credits/term. There are no letter grades, GPA or
@@ -309,6 +312,9 @@ is worth building.
       The "professor" preference layer is read from four different paths, and
       the run layer's documented path is not the one the code reads
       (`server/preferences.js:148`).
+      Same audit (timezone 9, grading 13, institution 9, credits/term 7). MOD-1
+      has closed T1, T2, T5, T6, G1, G3, G6, G7 and G4 partly (the boundary rule,
+      not the two-period shape). Open: T3, T4, T7-T9, G2, G5, G8-G13, I1-I9, C1-C7.
 - [ ] **LNG-6** Date arithmetic in UTC. `grading-policy.ts:194`, `bundle.ts:292`,
       `outline.ts:44` and `validate.ts:1004` compare dates in UTC rather than in
       the run's timezone, so a date can land in the wrong week or period by up
