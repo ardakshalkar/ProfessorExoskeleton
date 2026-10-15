@@ -6,7 +6,8 @@
             "runtimeExecutable": "cmd",
             "runtimeArgs": [
                 "/c",
-                "bin\\sample.cmd"
+                "bin\\sample.cmd",
+                "--no-open"
             ],
             "port": 3080
         },

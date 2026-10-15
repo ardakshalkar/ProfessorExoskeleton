@@ -87,3 +87,42 @@ test("the document carries presets without their filing rules, and the lock", ()
   const run = runById(plain).get(RUN) as any;
   assert.equal(doc.has_scheme, Boolean(run.grading_scheme));
 });
+
+// ---------------------------------------------------------------- proposals
+
+import { cpSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { dropProposals, proposalsOf, recordProposal } from "../src/grading-proposals.ts";
+
+/** A throwaway copy of the sample workspace, so a proposal can be written. */
+const scratch = () => {
+  const dir = mkdtempSync(join(tmpdir(), "gp-"));
+  cpSync(ROOT, dir, { recursive: true });
+  return dir;
+};
+
+test("a proposal is checked, recorded beside the policy, and taken back — the policy never moves", () => {
+  const dir = scratch();
+  const load = () => new Workspace(dir, "flag").findRun(RUN);
+  const before = currentProposal(load(), RUN);
+  const proposal = fromPreset(load(), RUN, "vsk");
+  const { entry } = recordProposal(dir, load(), RUN, proposal, { request: "ВСК please", note: "Two halves and a final." });
+  assert.match(entry.id, /^P-[0-9A-F]{8}$/);
+  assert.ok(entry.summary.length > 0);
+  const after = load();
+  assert.deepEqual(currentProposal(after, RUN), before, "recording a proposal changes nothing about the policy");
+  assert.equal(proposalsOf(after, RUN).length, 1);
+  assert.equal(proposalsOf(after, RUN)[0]!.request, "ВСК please");
+
+  assert.throws(() => recordProposal(dir, after, RUN, currentProposal(after, RUN)), /changes nothing/);
+  assert.throws(
+    () => recordProposal(dir, after, RUN, { components: [{ component_id: "A", title: "a", weight: 1, parent: "A" }], assignments: {} }),
+    /would not hold together|inside itself/,
+  );
+  assert.equal(proposalsOf(load(), RUN).length, 1, "a refused proposal writes nothing");
+
+  assert.equal(dropProposals(dir, load(), RUN, entry.id).dropped, 1);
+  assert.equal(proposalsOf(load(), RUN).length, 0);
+});

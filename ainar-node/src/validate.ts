@@ -604,7 +604,8 @@ export const gradingSchemeIssues = (run: any, assessments: any[], issues: IssueL
           : `component ${assessment.component}, but the run has no grading_scheme`,
         assessment.assessment_id,
       );
-    } else if (!assessment.component && components.length && assessment.weight != null) {
+    } else if (!assessment.component && components.length && assessment.weight != null && assessment.weight > 0) {
+      // Weight 0 and no block is how an assessment is taken out of the grade; its marks stay.
       issues.warn("grading.unassigned", "counts in the grade but names no component of the grading scheme", assessment.assessment_id);
     }
   }

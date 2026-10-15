@@ -164,6 +164,8 @@ import {
 import { checkDefence } from "../src/defence-check.ts";
 import { pulledSubmissionId } from "../src/lms/pull.ts";
 import { gradeChanges, realChanges } from "../src/grade-changes.ts";
+import { currentProposal, policyDocument } from "../src/grading-policy.ts";
+import { dropProposals, proposalsOf, recordProposal } from "../src/grading-proposals.ts";
 import { configFromRegistry, describeTranscription, estimate, transcriber } from "../src/transcribe.ts";
 import {
   RECORDING_TYPES,
@@ -441,6 +443,15 @@ const HELP = `ainar — the AINAR course model CLI
   pending RUN [--assessment A]
   grade-changes RUN [--assessment A] [--student S] [--all] [--json]
                            when and how each grade changed, oldest first
+  grading RUN [--json]     the grading policy as an editable proposal: blocks,
+                           every assessment's block and weight, lock, pending
+                           proposals
+  grading propose RUN --file P.json [--note WHY] [--request WORDS] [--by WHO]
+                           record a proposed policy for the professor to load in
+                           the Gradebook's editor; checked like the editor's own
+                           write, refused when locked or broken. Changes nothing
+  grading discard RUN (ID | --all)
+                           take a pending proposal back
   rubric ASSESSMENT
   student RUN STUDENT
   class-progress RUN [--group G]
@@ -1239,6 +1250,79 @@ try {
       }
       out(`
 ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists decisions that kept the same score"}`);
+      break;
+    }
+    case "grading": {
+      // The policy and the assistant's proposals for it (src/grading-proposals.ts).
+      // A proposal is never the change: the professor applies it in the pane.
+      const sub = ["propose", "discard"].includes(rest[0] ?? "") ? rest[0]! : null;
+      const runId = sub ? rest[1] : rest[0];
+      if (!runId) {
+        console.error("usage: grading RUN [--json] | grading propose RUN --file P.json [--note WHY] [--request WORDS] | grading discard RUN (ID | --all)");
+        process.exit(2);
+      }
+      const bundle = forRun(runId);
+      if (sub === "propose") {
+        const file = flag("file");
+        if (!file) {
+          console.error("grading propose needs --file P.json: {components: [...], points, assignments: {ASSESSMENT: {component, weight}}}");
+          process.exit(2);
+        }
+        let raw: unknown;
+        try {
+          raw = JSON.parse(readFileSync(file, "utf-8"));
+        } catch (error) {
+          console.error(`${file} is not JSON: ${String((error as Error).message)}`);
+          process.exit(2);
+        }
+        try {
+          const { entry, written } = recordProposal(root, bundle, runId, raw, {
+            note: flag("note") ?? null,
+            request: flag("request") ?? null,
+            by: flag("by") ?? null,
+          });
+          out(`proposal ${entry.id} recorded for ${runId}`);
+          for (const line of entry.summary) out(`  - ${line}`);
+          for (const path of written) out(`wrote ${path}`);
+          out("The policy itself is unchanged; the professor loads the proposal in the Gradebook and applies it there.");
+        } catch (error) {
+          console.error(`not recorded: ${String((error as Error).message)}`);
+          process.exit(1);
+        }
+        break;
+      }
+      if (sub === "discard") {
+        const id = args.includes("--all") ? null : rest[2];
+        if (id === undefined) {
+          console.error("usage: grading discard RUN (ID | --all)");
+          process.exit(2);
+        }
+        const { dropped } = dropProposals(root, bundle, runId, id);
+        out(dropped ? `discarded ${dropped} proposal(s)` : "nothing to discard");
+        break;
+      }
+      const doc = policyDocument(bundle, runId);
+      if (args.includes("--json")) {
+        out({ ...doc, proposals: proposalsOf(bundle, runId) });
+        break;
+      }
+      const policy = currentProposal(bundle, runId);
+      const children = (parent: string | null, depth: number): void => {
+        for (const component of policy.components.filter((c) => (c.parent ?? null) === parent)) {
+          out(`${"  ".repeat(depth)}${component.component_id}  ${component.title}  ${+(component.weight * 100).toFixed(4)}%${component.points ? `  out of ${component.points}` : ""}`);
+          for (const [id, a] of Object.entries(policy.assignments).filter(([, a]) => a.component === component.component_id)) {
+            out(`${"  ".repeat(depth + 1)}· ${id}  ${a.weight == null ? "—" : +(a.weight * 100).toFixed(4) + "%"}`);
+          }
+          children(component.component_id, depth + 1);
+        }
+      };
+      out(`${runId} grading policy${doc.locked ? " (locked)" : ""}`);
+      children(null, 1);
+      const loose = Object.entries(policy.assignments).filter(([, a]) => !a.component);
+      if (loose.length) out("  in no block: " + loose.map(([id, a]) => `${id} ${a.weight == null ? "—" : +(a.weight * 100).toFixed(4) + "%"}`).join(", "));
+      for (const issue of doc.issues) out(`  ${issue.level}: ${issue.location ?? ""} ${issue.message}`);
+      const pending = proposalsOf(bundle, runId);
+      if (pending.length) out(`${pending.length} pending proposal(s): ${pending.map((p) => p.id).join(", ")}`);
       break;
     }
     case "pending":

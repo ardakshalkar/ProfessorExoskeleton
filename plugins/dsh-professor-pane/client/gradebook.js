@@ -29,18 +29,34 @@ const gpRound = (value, digits) => {
   return Math.round(value * factor) / factor;
 };
 const gpUrl = (path, runId, sessionId, extra) => scoped(BASE + path + "?run=" + encodeURIComponent(runId || "") + (extra || ""), sessionId);
-const gpGet = (path, runId, sessionId, extra) =>
-  fetch(gpUrl(path, runId, sessionId, extra), { headers: { accept: "application/json" } })
+/**
+ * Every read and write here gives up after twenty seconds and says so. A
+ * request the browser never sends — its six connections to this host held by
+ * other tabs — or a harness that went away mid-answer would otherwise leave
+ * "Reading the policy…" on screen for good, which reads as slowness, not as
+ * the failure it is.
+ */
+const GP_TIMEOUT_MS = 20000;
+const gpFetch = (url, init) => {
+  const abort = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = abort ? setTimeout(() => abort.abort(), GP_TIMEOUT_MS) : null;
+  return fetch(url, Object.assign({}, init, abort ? { signal: abort.signal } : {}))
     .then((response) => response.json())
-    .catch((error) => ({ error: String(error.message || error) }));
+    .catch((error) => ({
+      error:
+        error && error.name === "AbortError"
+          ? "No answer from the pane's server in " + GP_TIMEOUT_MS / 1000 + " seconds. If several tabs of the harness are open, close the extras and press Retry; otherwise the harness may need a restart."
+          : String((error && error.message) || error),
+    }))
+    .finally(() => timer && clearTimeout(timer));
+};
+const gpGet = (path, runId, sessionId, extra) => gpFetch(gpUrl(path, runId, sessionId, extra), { headers: { accept: "application/json" } });
 const gpPost = (path, runId, sessionId, body) =>
-  fetch(gpUrl(path, runId, sessionId), {
+  gpFetch(gpUrl(path, runId, sessionId), {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify(body),
-  })
-    .then((response) => response.json())
-    .catch((error) => ({ error: String(error.message || error) }));
+  });
 
 const FAMILY_WORDS = {
   period: "by period",
@@ -142,19 +158,21 @@ function LastChanges(props) {
   const [state, setState] = React.useState({ phase: "loading" });
   const [filter, setFilter] = React.useState("all");
   const [open, setOpen] = React.useState(false);
+  const [attempt, setAttempt] = React.useState(0);
   React.useEffect(() => {
     let live = true;
-    gpGet("/api/gradebook/changes", props.runId, props.sessionId, (props.names ? "&names=1" : "") + "&r=" + encodeURIComponent(props.revision)).then(
+    setState({ phase: "loading" });
+    gpGet("/api/gradebook/changes", props.runId, props.sessionId, (props.names ? "&names=1" : "") + "&r=" + encodeURIComponent(props.revision) + "&a=" + attempt).then(
       (value) => live && setState({ phase: "ready", value: value }),
     );
     return () => {
       live = false;
     };
-  }, [props.runId, props.sessionId, props.names, props.revision]);
+  }, [props.runId, props.sessionId, props.names, props.revision, attempt]);
 
   const body = () => {
     if (state.phase === "loading") return h("div", { className: "pp-as pp-gbpad" }, "Reading what changed…");
-    if (state.value.error) return h(Message, { error: true }, state.value.error);
+    if (state.value.error) return h(GpFailed, { error: state.value.error, retry: () => setAttempt((n) => n + 1) });
     const events = state.value.events.filter((event) => filter === "all" || event.kind === filter);
     if (!events.length) {
       return h(
@@ -297,14 +315,26 @@ function ChangeLine(props) {
 
 function usePolicy(runId, sessionId, revision) {
   const [state, setState] = React.useState({ phase: "loading" });
+  const [attempt, setAttempt] = React.useState(0);
   React.useEffect(() => {
     let live = true;
-    gpGet("/api/grading/policy", runId, sessionId, "&r=" + encodeURIComponent(revision)).then((value) => live && setState({ phase: "ready", value: value }));
+    setState({ phase: "loading" });
+    gpGet("/api/grading/policy", runId, sessionId, "&r=" + encodeURIComponent(revision) + "&a=" + attempt).then((value) => live && setState({ phase: "ready", value: value }));
     return () => {
       live = false;
     };
-  }, [runId, sessionId, revision]);
-  return state;
+  }, [runId, sessionId, revision, attempt]);
+  return Object.assign({ retry: () => setAttempt((n) => n + 1) }, state);
+}
+
+/** A failure with the one press that tries again. */
+function GpFailed(props) {
+  return h(
+    "div",
+    null,
+    h(Message, { error: true }, props.error),
+    props.retry ? h("button", { type: "button", className: "pp-segbtn", style: { margin: "0 14px 10px" }, onClick: props.retry }, "Retry") : null,
+  );
 }
 
 function PolicyCard(props) {
@@ -354,7 +384,7 @@ function PolicyCard(props) {
 
   if (state.phase === "loading") return h("section", { className: "pp-bookcard pp-gbpane" }, head(null), h("div", { className: "pp-as pp-gbpad" }, "Reading the policy…"));
   const doc = state.value;
-  if (doc.error) return h("section", { className: "pp-bookcard pp-gbpane" }, head(null), h(Message, { error: true }, doc.error));
+  if (doc.error) return h("section", { className: "pp-bookcard pp-gbpane" }, head(null), h(GpFailed, { error: doc.error, retry: state.retry }));
 
   return h(
     "section",
@@ -521,11 +551,34 @@ function PolicyEditor(props) {
   const [writing, setWriting] = React.useState(false);
   const [failed, setFailed] = React.useState(null);
   const [asked, setAsked] = React.useState(false);
+  const [proposals, setProposals] = React.useState([]);
+  const [loaded, setLoaded] = React.useState(null); // the proposal id now in the editor
+  const [showAssistant, setShowAssistant] = React.useState(() => typeof window === "undefined" || window.innerWidth >= 1100);
   const doc = state.phase === "ready" && !state.value.error ? state.value : null;
 
   React.useEffect(() => {
     if (doc && draft === null) setDraft(gpCopy(props.start || doc.policy));
+    if (doc) setProposals(doc.proposals || []);
   }, [doc]);
+
+  /** Read the proposals again, without redrawing the editor: the policy read, proposals only. */
+  const refreshProposals = () =>
+    gpGet("/api/grading/policy", props.runId, props.sessionId, "&p=" + Date.now()).then((value) => {
+      if (value && !value.error) setProposals(value.proposals || []);
+      return value;
+    });
+
+  const loadProposal = (entry) => {
+    setDraft(gpCopy(entry.proposal));
+    setLoaded(entry.id);
+    setOrigin("Proposal " + entry.id + " from the assistant" + (entry.request ? " — for “" + entry.request + "”" : "") + ". Edit it here like any draft; nothing is written until you apply.");
+  };
+  const discardProposal = (entry) =>
+    gpPost("/api/grading/discard", props.runId, props.sessionId, { id: entry.id }).then((answer) => {
+      if (answer.error) setFailed(answer.error);
+      if (loaded === entry.id) setLoaded(null);
+      return refreshProposals();
+    });
 
   // The impact, asked again on every pause: 450ms after the last keystroke.
   React.useEffect(() => {
@@ -588,8 +641,8 @@ function PolicyEditor(props) {
   };
 
   const content = () => {
+    if (state.phase === "ready" && state.value.error) return h("div", { className: "pp-review" }, h(GpFailed, { error: state.value.error, retry: state.retry }));
     if (state.phase === "loading" || !draft) return h("div", { className: "pp-review" }, h("div", { className: "pp-as" }, "Reading the policy…"));
-    if (state.value.error) return h("div", { className: "pp-review" }, h(Message, { error: true }, state.value.error));
     if (doc.locked) return h("div", { className: "pp-review" }, h(Message, { error: true }, "The policy is locked. Close this and unlock it first."));
     return h(
       "div",
@@ -615,9 +668,24 @@ function PolicyEditor(props) {
           "div",
           { className: "pp-review" },
           impact.value && impact.value.error ? h(Message, { error: true }, impact.value.error) : null,
-          result ? h(ImpactReport, { impact: result, names: props.names }) : h("div", { className: "pp-as" }, "Counting…"),
+          result
+            ? h(ImpactReport, { impact: result, names: props.names, before: doc.policy, after: draft, assessments: doc.assessments })
+            : h("div", { className: "pp-as" }, "Counting…"),
         ),
       ),
+      showAssistant
+        ? h(AssistantPanel, {
+            runId: props.runId,
+            ask: props.ask,
+            doc: doc,
+            draft: draft,
+            proposals: proposals,
+            loaded: loaded,
+            refresh: refreshProposals,
+            onLoad: loadProposal,
+            onDiscard: discardProposal,
+          })
+        : null,
     );
   };
 
@@ -632,8 +700,13 @@ function PolicyEditor(props) {
           "div",
           { className: "pp-modalhead" },
           h("div", { className: "pp-modaltitle" }, "Change the grading policy · " + props.runId),
+          h(
+            "button",
+            { type: "button", className: "pp-segbtn", "aria-pressed": showAssistant, onClick: () => setShowAssistant(!showAssistant), title: "Ask for a change in words; the assistant proposes, you load and apply" },
+            "✦ Assistant" + (proposals.length ? " · " + proposals.length : ""),
+          ),
           draft && doc
-            ? h("button", { type: "button", className: "pp-modallink", onClick: () => (setDraft(gpCopy(doc.policy)), setOrigin(null)) }, "Start again from the current policy")
+            ? h("button", { type: "button", className: "pp-modallink", onClick: () => (setDraft(gpCopy(doc.policy)), setOrigin(null), setLoaded(null)) }, "Start again from the current policy")
             : null,
           h("button", { type: "button", className: "pp-close", "aria-label": "Close", disabled: writing, onClick: props.onClose }, "×"),
         ),
@@ -945,7 +1018,13 @@ function ImpactReport(props) {
   return h(
     "div",
     null,
-    h("ul", { className: "pp-gbsummary pp-gbsummary-big" }, impact.summary.map((line, i) => h("li", { key: i }, line))),
+    props.before && props.after ? h(PolicyDiff, { before: props.before, after: props.after, assessments: props.assessments }) : null,
+    h(
+      "details",
+      { className: "pp-gbwords", open: !(props.before && props.after) },
+      h("summary", null, "In words"),
+      h("ul", { className: "pp-gbsummary pp-gbsummary-big" }, impact.summary.map((line, i) => h("li", { key: i }, line))),
+    ),
     impact.errors.length
       ? section("Would not hold together", h("ul", { className: "pp-gbissues" }, impact.errors.map((e, i) => h("li", { key: i, className: "pp-gbissue-err" }, (e.location ? e.location + ": " : "") + e.message))))
       : null,
@@ -1018,5 +1097,321 @@ function ImpactReport(props) {
           ),
         )
       : null,
+  );
+}
+
+// ---------------------------------------------------------------- the diff
+
+/**
+ * Two policies compared, for people. Blocks in the tree order of the new
+ * policy, with every removed block shown where it was; each block marked new,
+ * removed, changed or the same, and what changed on it. Assessments that move
+ * are grouped by where they go from and to, because "four quizzes ВСК2 →
+ * Quizzes" is one decision; a weight change is its own list, largest first.
+ */
+const gpDiff = (before, after) => {
+  const was = new Map(before.components.map((c) => [c.component_id, c]));
+  const now = new Map(after.components.map((c) => [c.component_id, c]));
+  const blocks = [];
+  const oldDepth = new Map(gpTree(before.components).map((entry) => [entry.component.component_id, entry.depth]));
+  for (const entry of gpTree(after.components)) {
+    const c = entry.component;
+    const old = was.get(c.component_id);
+    const changes = [];
+    if (old) {
+      if (Math.abs(Number(old.weight) - Number(c.weight)) > 1e-9) changes.push({ what: "weight", from: gpPct(old.weight), to: gpPct(c.weight) });
+      if ((old.points || null) !== (c.points || null)) changes.push({ what: "out of", from: old.points || "—", to: c.points || "—" });
+      if ((old.parent || null) !== (c.parent || null)) changes.push({ what: "inside", from: old.parent || "top", to: c.parent || "top" });
+      if (old.title !== c.title) changes.push({ what: "title", from: old.title, to: c.title });
+    }
+    blocks.push({ id: c.component_id, title: c.title, weight: c.weight, depth: entry.depth, status: !old ? "added" : changes.length ? "changed" : "same", changes: changes });
+  }
+  for (const c of before.components) {
+    if (now.has(c.component_id)) continue;
+    blocks.push({ id: c.component_id, title: c.title, weight: c.weight, depth: oldDepth.get(c.component_id) || 0, status: "removed", changes: [] });
+  }
+  const moves = new Map();
+  const weights = [];
+  for (const id of Object.keys(after.assignments)) {
+    const from = before.assignments[id] || { component: null, weight: null };
+    const to = after.assignments[id];
+    if ((from.component || null) !== (to.component || null)) {
+      const key = (from.component || "") + "→" + (to.component || "");
+      if (!moves.has(key)) moves.set(key, { from: from.component || null, to: to.component || null, ids: [] });
+      moves.get(key).ids.push(id);
+    }
+    const a = from.weight === null || from.weight === undefined ? null : Number(from.weight);
+    const b = to.weight === null || to.weight === undefined ? null : Number(to.weight);
+    if (a !== b && !(a !== null && b !== null && Math.abs(a - b) < 1e-9)) weights.push({ id: id, from: a, to: b, dropped: !b });
+  }
+  weights.sort((x, y) => Math.abs((y.to || 0) - (y.from || 0)) - Math.abs((x.to || 0) - (x.from || 0)));
+  const pointsChanged = (before.points || null) !== (after.points || null);
+  return {
+    blocks: blocks,
+    moves: [...moves.values()],
+    weights: weights,
+    points: pointsChanged ? { from: before.points || "—", to: after.points || "—" } : null,
+    empty: !blocks.some((b) => b.status !== "same") && !moves.size && !weights.length && !pointsChanged,
+  };
+};
+
+const DIFF_MARK = { added: "+", removed: "−", changed: "~", same: "" };
+
+/** The top-level split as one bar, the blocks that changed outlined. */
+function DiffBar(props) {
+  const top = props.components.filter((c) => !c.parent);
+  if (!top.length) return h("span", { className: "pp-gbbar pp-gbbar-mini pp-gbbar-flat" }, "no blocks — Σ weights");
+  return h(
+    "span",
+    { className: "pp-gbbar pp-gbbar-mini" },
+    top.map((c, i) =>
+      h(
+        "span",
+        {
+          key: c.component_id,
+          className: "pp-gbseg pp-gbseg" + (i % 6) + (props.marked && props.marked.has(c.component_id) ? " pp-gbseg-marked" : ""),
+          style: { flexGrow: Math.max(Number(c.weight) || 0, 0.0001) },
+          title: c.title + " " + gpPct(c.weight),
+        },
+        c.component_id + " " + gpPct(c.weight),
+      ),
+    ),
+  );
+}
+
+function PolicyDiff(props) {
+  const diff = gpDiff(props.before, props.after);
+  const titles = new Map((props.assessments || []).map((a) => [a.assessment_id, a.title]));
+  const name = (id) => titles.get(id) || id;
+  const blockName = (id) => (id ? id : "no block");
+  if (diff.empty) return h("div", { className: "pp-as" }, "Same as the current policy.");
+  const marked = new Set(diff.blocks.filter((b) => b.status !== "same").map((b) => b.id));
+  const shownBlocks = props.compact ? diff.blocks.filter((b) => b.status !== "same") : diff.blocks;
+  const weights = props.compact ? diff.weights.slice(0, 6) : diff.weights;
+  const maxWeight = Math.max(0.0001, ...diff.weights.map((w) => Math.max(w.from || 0, w.to || 0)));
+
+  return h(
+    "div",
+    { className: "pp-gbdiff" + (props.compact ? " pp-gbdiff-compact" : "") },
+    h(
+      "div",
+      { className: "pp-gbdiffbars" },
+      h("span", { className: "pp-gbdifflabel" }, "Now"),
+      h(DiffBar, { components: props.before.components }),
+      h("span", { className: "pp-gbdifflabel" }, "After"),
+      h(DiffBar, { components: props.after.components, marked: marked }),
+    ),
+    diff.points ? h("div", { className: "pp-gbdiffline pp-gbd-changed" }, h("b", null, "~"), " The course is out of " + diff.points.from + " → " + diff.points.to + " in the LMS") : null,
+    shownBlocks.length
+      ? h(
+          "div",
+          { className: "pp-gbdiffsec" },
+          props.compact ? null : h("div", { className: "pp-gbdiffhead" }, "Blocks"),
+          shownBlocks.map((b) =>
+            h(
+              "div",
+              { key: b.status + b.id, className: "pp-gbdiffline pp-gbd-" + b.status, style: { paddingLeft: 6 + b.depth * 14 + "px" } },
+              h("b", { className: "pp-gbdmark", "aria-label": b.status }, DIFF_MARK[b.status]),
+              h("span", { className: "pp-tag" }, b.id),
+              h("span", { className: "pp-gbdtitle" }, b.title),
+              b.status === "same" || b.status === "removed" || b.status === "added"
+                ? h("span", { className: "pp-gbdval" }, gpPct(b.weight))
+                : null,
+              b.changes.map((c, i) =>
+                h("span", { key: i, className: "pp-gbdchange" }, c.what + " ", h("s", null, String(c.from)), " → ", h("b", null, String(c.to))),
+              ),
+              b.status === "removed" ? h("span", { className: "pp-as" }, "removed") : b.status === "added" ? h("span", { className: "pp-as" }, "new") : null,
+            ),
+          ),
+        )
+      : null,
+    diff.moves.length
+      ? h(
+          "div",
+          { className: "pp-gbdiffsec" },
+          h("div", { className: "pp-gbdiffhead" }, "Moves between blocks"),
+          diff.moves.map((m) =>
+            h(
+              "div",
+              { key: (m.from || "") + (m.to || ""), className: "pp-gbmove" },
+              h("span", { className: "pp-gbmoveroute" }, h("span", { className: m.from ? "pp-tag" : "pp-as" }, blockName(m.from)), " → ", h("span", { className: m.to ? "pp-tag" : "pp-gbissue-err" }, blockName(m.to))),
+              h(
+                "span",
+                { className: "pp-gbmoveitems" },
+                (props.compact ? m.ids.slice(0, 5) : m.ids).map((id) => h("span", { key: id, className: "pp-gbmark" }, name(id))),
+                props.compact && m.ids.length > 5 ? h("span", { className: "pp-as" }, "+" + (m.ids.length - 5)) : null,
+              ),
+            ),
+          ),
+        )
+      : null,
+    weights.length
+      ? h(
+          "div",
+          { className: "pp-gbdiffsec" },
+          h("div", { className: "pp-gbdiffhead" }, "Weights" + (props.compact && diff.weights.length > weights.length ? " (" + weights.length + " of " + diff.weights.length + ")" : "")),
+          weights.map((w) =>
+            h(
+              "div",
+              { key: w.id, className: "pp-gbwrow" + (w.dropped ? " pp-gbwrow-dropped" : "") },
+              h("span", { className: "pp-titletext", title: w.id }, name(w.id)),
+              h(
+                "span",
+                { className: "pp-gbwbars", "aria-hidden": "true" },
+                h("span", { className: "pp-gbwbar pp-gbwbar-was", style: { width: ((w.from || 0) / maxWeight) * 100 + "%" } }),
+                h("span", { className: "pp-gbwbar pp-gbwbar-now", style: { width: ((w.to || 0) / maxWeight) * 100 + "%" } }),
+              ),
+              h("span", { className: "pp-gbwnums" }, h("s", null, gpPct(w.from)), " → ", w.dropped ? h("b", { className: "pp-gbissue-err" }, "not counted") : h("b", null, gpPct(w.to))),
+            ),
+          ),
+        )
+      : null,
+  );
+}
+
+// ---------------------------------------------------------------- the assistant
+
+const ASSISTANT_EXAMPLES = [
+  "Drop HW8 and spread its weight over the other ВСК 2 homework",
+  "Make the quizzes 10% of each ВСК, taken from homework",
+  "Switch to the admission rating (РК 1, РК 2, exam 40) and keep my filing",
+  "Put both midterms in one Midterms block worth 20%",
+];
+
+/** How long the panel watches for the assistant's proposal after a request. */
+const ASSISTANT_WAIT_MS = 8 * 60 * 1000;
+
+/**
+ * What the session is sent for a request: the skill, the run, the professor's
+ * words, and the policy as it stands in the editor — unsaved edits included —
+ * so "make it 25% instead" means 25% of what is on screen. Ids and weights only.
+ */
+const assistantPrompt = (runId, request, draft) =>
+  "/grading-proposal " +
+  runId +
+  " — " +
+  request.trim() +
+  "\n\nThe policy as it stands in the Gradebook editor (unsaved edits included) — propose against this, as a whole policy:\n```json\n" +
+  JSON.stringify({ components: draft.components, points: draft.points, assignments: draft.assignments }) +
+  "\n```";
+
+function AssistantPanel(props) {
+  const [text, setText] = React.useState("");
+  const [waiting, setWaiting] = React.useState(null); // { since, known: Set, request }
+  const [sent, setSent] = React.useState([]); // this editor's requests, newest last
+  const known = (props.proposals || []).map((p) => p.id);
+
+  // While a request is out, ask every three seconds whether a proposal arrived.
+  React.useEffect(() => {
+    if (!waiting) return undefined;
+    const timer = setInterval(() => {
+      if (Date.now() - waiting.since > ASSISTANT_WAIT_MS) {
+        setWaiting(null);
+        return;
+      }
+      props.refresh();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [waiting]);
+  React.useEffect(() => {
+    if (waiting && known.some((id) => !waiting.known.has(id))) {
+      setWaiting(null);
+      const fresh = props.proposals.filter((p) => !waiting.known.has(p.id)).pop();
+      // The answer to what was just asked goes straight into the editor; the
+      // diff and the impact are what the professor reads next.
+      if (fresh && !fresh.stale) props.onLoad(fresh);
+    }
+  }, [known.join(",")]);
+
+  const send = () => {
+    const request = text.trim();
+    if (!request || !props.ask) return;
+    props.ask(assistantPrompt(props.runId, request, props.draft));
+    setSent((list) => list.concat([{ at: new Date().toISOString(), request: request }]));
+    setWaiting({ since: Date.now(), known: new Set(known), request: request });
+    setText("");
+  };
+
+  const cards = [...(props.proposals || [])].reverse();
+  return h(
+    "div",
+    { className: "pp-modalpane pp-gbassist" },
+    h("div", { className: "pp-modalpanelabel" }, "✦ Assistant — ask for a change in words"),
+    h(
+      "div",
+      { className: "pp-review pp-gbthread" },
+      !props.ask ? h(Message, { error: true }, "No session is open beside the pane, so there is nobody to ask. Open one and come back.") : null,
+      !cards.length && !waiting
+        ? h(
+            "div",
+            { className: "pp-as pp-gbassisthint" },
+            "Say what you want; the assistant reads the course and proposes a whole policy. It never writes the policy — you load a proposal, read the diff and the impact, and apply it yourself.",
+            h(
+              "div",
+              { className: "pp-gbexamples" },
+              ASSISTANT_EXAMPLES.map((example) => h("button", { key: example, type: "button", className: "pp-gbexample", onClick: () => setText(example) }, example)),
+            ),
+          )
+        : null,
+      waiting
+        ? h(
+            "div",
+            { className: "pp-gbwaiting", role: "status" },
+            h("span", { className: "pp-checkspin" }),
+            h("span", null, h("b", null, "Asked: "), "“" + waiting.request + "” — the assistant is reading the course. Its proposal appears here and opens in the editor."),
+            h("button", { type: "button", className: "pp-linkbtn", onClick: () => setWaiting(null) }, "stop waiting"),
+          )
+        : null,
+      cards.map((entry) =>
+        h(
+          "div",
+          { key: entry.id, className: "pp-gbcard" + (props.loaded === entry.id ? " pp-gbcard-loaded" : "") + (entry.stale ? " pp-gbcard-stale" : "") },
+          h(
+            "div",
+            { className: "pp-gbcardhead" },
+            h("b", null, "Proposal " + entry.id),
+            h("span", { className: "pp-gbwhen" }, when(entry.at) || ""),
+            props.loaded === entry.id ? h("span", { className: "pp-chip pp-chip-ok" }, "in the editor") : null,
+            entry.stale ? h("span", { className: "pp-chip pp-chip-warn", title: "The policy changed after this was proposed" }, "made for an older policy") : null,
+          ),
+          entry.request ? h("div", { className: "pp-gbyou" }, h("span", { className: "pp-as" }, "You: "), entry.request) : null,
+          entry.note ? h("div", { className: "pp-gbwhy" }, h("span", { className: "pp-as" }, "Why: "), entry.note) : null,
+          h(PolicyDiff, { before: props.doc.policy, after: entry.proposal, assessments: props.doc.assessments, compact: true }),
+          h(
+            "div",
+            { className: "pp-gbrow" },
+            h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onDiscard(entry) }, "Discard"),
+            h("button", { type: "button", className: "pp-primary", disabled: props.loaded === entry.id, onClick: () => props.onLoad(entry) }, props.loaded === entry.id ? "Loaded" : "Load into editor"),
+          ),
+        ),
+      ),
+      sent.length && !waiting && cards.length === 0
+        ? h("div", { className: "pp-as" }, "No proposal came back. The session may have asked you something — look at the conversation.")
+        : null,
+    ),
+    h(
+      "div",
+      { className: "pp-gbcompose" },
+      h("textarea", {
+        className: "pp-gbinput pp-gbask",
+        rows: 3,
+        placeholder: "e.g. drop HW8 and give its weight to the final project",
+        value: text,
+        disabled: !props.ask,
+        onChange: (e) => setText(e.target.value),
+        onKeyDown: (e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            send();
+          }
+        },
+      }),
+      h(
+        "div",
+        { className: "pp-gbrow" },
+        h("span", { className: "pp-as", style: { flex: 1 } }, "Ctrl+Enter sends. Ids and weights only — no names."),
+        h("button", { type: "button", className: "pp-primary", disabled: !props.ask || !text.trim() || Boolean(waiting), onClick: send }, waiting ? "Waiting…" : "Ask"),
+      ),
+    ),
   );
 }

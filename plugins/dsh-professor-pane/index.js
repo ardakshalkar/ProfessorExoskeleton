@@ -151,6 +151,7 @@ import {
   gradebookChanges,
   gradingImpact,
   gradingPolicy,
+  discardGradingProposal,
   historyProposal,
   writeGradingLock,
   writeGradingPolicy,
@@ -1551,7 +1552,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }
     }
-    if (path === "/api/grading/impact" || path === "/api/grading/apply" || path === "/api/grading/lock") {
+    if (path === "/api/grading/impact" || path === "/api/grading/apply" || path === "/api/grading/lock" || path === "/api/grading/discard") {
       if (req.method !== "POST") return sendJson(res, 405, { error: "the grading policy is POST only here" });
       if (!runId) return sendJson(res, 200, { error: "No run chosen." });
       return readBody(req)
@@ -1567,7 +1568,9 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
               ? gradingImpact(workspace, runId, body)
               : path === "/api/grading/apply"
                 ? writeGradingPolicy(workspace, root, runId, body)
-                : writeGradingLock(workspace, root, runId, body);
+                : path === "/api/grading/discard"
+                  ? discardGradingProposal(workspace, root, runId, body)
+                  : writeGradingLock(workspace, root, runId, body);
           return sendJson(res, 200, answer);
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));

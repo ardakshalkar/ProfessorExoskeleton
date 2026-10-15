@@ -70,3 +70,18 @@ check(
 
 const version = readFileSync(root + "/courses/CSS-4007/version.yaml", "utf8");
 console.log("\n--- version.yaml grading_scheme ---\n" + version.slice(version.indexOf("grading_scheme:"), version.indexOf("grading_scheme:") + 1400));
+
+// The assistant's road: a proposal recorded, shown with the policy, discarded;
+// another recorded and then cleared by an apply.
+const { recordProposal } = await import("@ainar/core/src/grading-proposals.ts");
+const { discardGradingProposal } = await import("../server/grading-writes.js");
+const { loadedRun } = await import("../server/workspace.js");
+const fresh = () => loadedRun(workspace, RUN).bundle;
+const offer = gradingImpact(workspace, RUN, { preset: "categories" }).proposal;
+const first = recordProposal(root, fresh(), RUN, offer, { request: "by kind", note: "smoke" }).entry;
+const shown = gradingPolicy(workspace, RUN);
+check("proposal shown with the policy", shown.proposals.length === 1 && shown.proposals[0].id === first.id && shown.proposals[0].stale === false);
+check("discarded", discardGradingProposal(workspace, root, RUN, { id: first.id }).dropped === 1 && gradingPolicy(workspace, RUN).proposals.length === 0);
+recordProposal(root, fresh(), RUN, offer, { request: "by kind again" });
+const applied = writeGradingPolicy(workspace, root, RUN, { proposal: offer, base: gradingPolicy(workspace, RUN).base, acknowledged: true });
+check("apply clears pending proposals", applied.written === true && gradingPolicy(workspace, RUN).proposals.length === 0, applied.error);

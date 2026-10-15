@@ -42,6 +42,7 @@ import {
   stripped,
 } from "@ainar/core/src/grading-policy.ts";
 import { gradeChanges, realChanges } from "@ainar/core/src/grade-changes.ts";
+import { dropProposals, proposalsOf } from "@ainar/core/src/grading-proposals.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { parseDocument as parseYamlDocument } from "yaml";
 
@@ -62,7 +63,22 @@ export const gradingPolicy = (workspace, runId) => {
   const doc = policyDocument(bundle, runId);
   const sent = sentCounts(bundle, runId);
   doc.assessments = doc.assessments.map((entry) => ({ ...entry, sent: sent.get(entry.assessment_id) ?? 0 }));
+  // The assistant's proposals, newest last, each marked stale when the policy
+  // moved since it was made (grading-proposals.ts).
+  doc.proposals = proposalsOf(bundle, runId).map((entry) => ({ ...entry, stale: entry.base !== doc.base }));
   return doc;
+};
+
+/** Take one of the assistant's proposals back; `all` takes every one. */
+export const discardGradingProposal = (workspace, root, runId, body) => {
+  const { bundle } = loadedRun(workspace, runId);
+  const id = body?.all === true ? null : String(body?.id ?? "").trim();
+  if (id !== null && !/^P-[0-9A-F]{8}$/.test(id)) return { error: "Not a proposal id." };
+  try {
+    return { written: true, ...dropProposals(root, bundle, runId, id) };
+  } catch (error) {
+    return { error: String(error?.message ?? error) };
+  }
 };
 
 /**
@@ -149,6 +165,8 @@ export const writeGradingPolicy = (workspace, root, runId, body) => {
   if (proposal.points == null) document.deleteIn(["grading_scheme", "points"]);
   else document.setIn(["grading_scheme", "points"], proposal.points);
   pushHistory(document, entry);
+  // Every pending proposal was made against the policy this replaces.
+  document.deleteIn(["grading_scheme", "extensions", "proposals"]);
 
   // The assessments: block and weight, one scalar each; a cleared one is a deleted key.
   const before = currentProposal(bundle, runId);
