@@ -3,6 +3,7 @@
  * registry, credential presence, and the document `/api/integrations` answers.
  */
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative, resolve, sep } from "node:path";
@@ -183,6 +184,8 @@ export const registryConnections = () => {
     sheets: "AINAR_SHEETS_TOKEN",
     moodle: "AINAR_MOODLE_TOKEN",
     telegram: "AINAR_TELEGRAM_BOT_TOKEN",
+    github: "AINAR_GITHUB_TOKEN",
+    transcription: "AINAR_TRANSCRIPTION_TOKEN",
   };
 
   const connections = Object.entries(table)
@@ -202,6 +205,12 @@ export const registryConnections = () => {
         // and `account` is who it signed in as. Neither is a secret.
         credential: entry?.credential === "oauth" ? "oauth" : null,
         account: entry?.account ?? null,
+        // `github`: where a created repository lands. `transcription`: the
+        // wire protocol, the model, and what a minute of audio costs.
+        owner: entry?.owner ?? null,
+        provider: entry?.provider ?? null,
+        model: entry?.model ?? null,
+        pricePerMinute: typeof entry?.pricePerMinute === "number" ? entry.pricePerMinute : null,
         tokenEnv: variable,
         tokenInEnv: variable ? envPresent(variable) : false,
         // Never true in a healthy registry. Reported so that it cannot be true
@@ -320,13 +329,70 @@ export const integrationsAnswer = async (workspace, root, runId, credentials, ex
     // Asked about even before anyone connects, so the status can tell
     // "never connected" from "the token is there and the record is not".
     REFRESH_TOKEN_ENV,
+    GITHUB_TOKEN_ENV,
   ]);
   return {
     ...document,
     credentials: { available: Boolean(credentials.service), refs },
     google: googleStatus(document.registry, refs),
+    github: githubStatus(document.registry, refs),
     integrations: integrationsFor(document, refs),
     ...extra,
+  };
+};
+
+/** The variable a GitHub connection names when it names none. */
+export const GITHUB_TOKEN_ENV = "AINAR_GITHUB_TOKEN";
+
+/** How long the answer of `gh auth status` is kept: it spawns a process. */
+const GH_CHECK_EVERY = 2 * 60 * 1000;
+let ghChecked = null;
+
+/**
+ * Whether the `gh` CLI is installed and signed in, and as whom — the second
+ * of the two ways `ainar` reaches GitHub (`resolveAuth` in homework.ts tries a
+ * token connection first, then `gh`). Asked at most every two minutes,
+ * because every Integrations read would otherwise spawn it.
+ *
+ * Never a token: `gh auth status` prints a masked one, and only the account
+ * name is taken from what it says.
+ */
+const ghLogin = () => {
+  if (ghChecked && Date.now() - ghChecked.at < GH_CHECK_EVERY) return ghChecked.answer;
+  let answer;
+  const run = spawnSync("gh", ["auth", "status", "--hostname", "github.com"], {
+    encoding: "utf-8",
+    timeout: 8000,
+    windowsHide: true,
+  });
+  if (run.error) answer = { installed: false, account: null };
+  else {
+    const said = `${run.stdout ?? ""}\n${run.stderr ?? ""}`;
+    // "Logged in to github.com account NAME (keyring)", or "… as NAME" from
+    // older releases.
+    const found = /Logged in to github\.com (?:account|as) ([A-Za-z0-9-]+)/.exec(said);
+    answer = { installed: true, account: run.status === 0 && found ? found[1] : null };
+  }
+  ghChecked = { at: Date.now(), answer };
+  return answer;
+};
+
+/**
+ * GitHub, the way `ainar` would reach it: a `github` connection whose token is
+ * stored, else the signed-in `gh` CLI, else neither.
+ */
+const githubStatus = (registry, refs) => {
+  const connection = (registry?.connections ?? []).find((entry) => entry.type === "github") ?? null;
+  const tokenEnv = connection?.tokenEnv ?? GITHUB_TOKEN_ENV;
+  const tokenSaved = Boolean(refs[tokenEnv]?.configured);
+  const gh = ghLogin();
+  return {
+    connection: connection?.name ?? null,
+    owner: connection?.owner ?? null,
+    tokenEnv,
+    tokenSaved,
+    gh,
+    via: connection && tokenSaved ? "token" : gh.account ? "gh" : null,
   };
 };
 

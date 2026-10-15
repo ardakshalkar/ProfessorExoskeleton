@@ -180,13 +180,8 @@ export const SUBVIEWS = {
     // marks Canvas does not have, materials changed since publishing.
     { id: "unpublished", label: "Unpublished" },
   ],
-  // Regrouped by service (2026-10-13). This course is one card per service —
-  // Canvas's took over Status, Targets and Links, and the sheet's and
-  // GitHub's took over Syncs. Credentials goes when Accounts replaces it.
-  integrations: [
-    { id: "course", label: "This course" },
-    { id: "credentials", label: "Credentials" },
-  ],
+  // No row for Integrations since 2026-10-13: it is one card per service on
+  // This course, with Accounts behind a button in its own header.
 };
 
 /** The default sub-view for a tab: the first one listed. */

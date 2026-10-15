@@ -273,11 +273,16 @@ export function GoogleConnect(props) {
     );
   }
 
+  // `bare`: inside an Accounts row, whose header already names Google.
   return h(
     "div",
     null,
-    h("p", { className: "pp-factgroup" }, "Google"),
-    h(
+    props.bare ? null : h("p", { className: "pp-factgroup" }, "Google"),
+    // `compact`: the button and its outcome only, where the sentence around
+    // it already says what connecting does.
+    props.compact
+      ? null
+      : h(
       "p",
       { className: "pp-absent" },
       "Lets the grade-sheet syncs read and write the spreadsheets your Google account can edit. " +
@@ -327,6 +332,7 @@ const TOKEN_HINT = {
   telegram: "the token @BotFather gave you when the bot was created",
   moodle: "Moodle → Preferences → Security keys",
   sheets: "an access token, or leave empty and use a service-account key",
+  github: "GitHub → Settings → Developer settings → Personal access tokens",
 };
 
 /**

@@ -104,6 +104,7 @@ import {
   canvasCourseList,
   canvasWhoAmI,
   connectionNameFor,
+  githubWhoAmI,
   moodleWhoAmI,
   spreadsheetIdFrom,
   telegramWhoAmI,
@@ -145,6 +146,7 @@ import {
   writeRunLmsValue,
 } from "./server/lms-writes.js";
 import { withMaterialLinks } from "./server/materials.js";
+import { writeAssessmentDates } from "./server/plan-writes.js";
 import { widgetDocument } from "./server/page.js";
 import { preferencesDocument, writePreferences } from "./server/preferences.js";
 import { paperCrop, scansDocument } from "./server/scans.js";
@@ -226,6 +228,19 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     return disconnect(res, credentials, registryConnections()).catch((error) =>
       sendJson(res, 200, { error: String(error?.message ?? error) }),
     );
+  }
+
+  // The dots animation on the defence desk: `dots-swarm` (MIT), bundled once
+  // into vendor/ by vendor/build-dots.mjs. A script with no data in it, and
+  // ahead of the workspace for that reason: a `<script src>` carries no
+  // session, and behind the check it got the "no course workspace" JSON
+  // instead — the desk's circle drew empty.
+  if (path === "/vendor/dots-swarm.js") {
+    try {
+      return send(res, 200, "text/javascript; charset=utf-8", readFileSync(DOTS_BUNDLE));
+    } catch {
+      return send(res, 404, "text/plain; charset=utf-8", "the dots bundle is not built");
+    }
   }
 
   let resolved;
@@ -329,16 +344,6 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     // folder, which is why it is the pane's and not the session's. The answer
     // is transcribed in this process too — no judgement in it, and the
     // provider is the professor's `transcription` connection.
-    // The dots animation on the defence desk: `dots-swarm` (MIT), bundled once
-    // into vendor/ by vendor/build-dots.mjs. A script with no data in it.
-    if (path === "/vendor/dots-swarm.js") {
-      try {
-        return send(res, 200, "text/javascript; charset=utf-8", readFileSync(DOTS_BUNDLE));
-      } catch {
-        return send(res, 404, "text/plain; charset=utf-8", "the dots bundle is not built");
-      }
-    }
-
     // The student's screen (AGT-4): a page with no data in it. Everything it
     // shows arrives from the desk over a BroadcastChannel; see
     // server/student-screen.js for why it fetches nothing.
@@ -1258,13 +1263,25 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
           const chatId = String(body.chatId ?? "").trim();
           const sheetId = spreadsheetIdFrom(body.sheetId);
 
-          if (!["canvas", "telegram", "moodle", "sheets"].includes(provider)) {
+          if (!["canvas", "telegram", "moodle", "sheets", "github"].includes(provider)) {
             return sendJson(res, 200, { error: `'${provider}' is not an integration this pane sets up.` });
           }
 
           // ---- the destination ------------------------------------------
           let connectionName = null;
-          if (provider === "sheets") {
+          if (provider === "github") {
+            // GitHub has no address to type: api.github.com, and repositories
+            // land under the token's own account. A token is the whole setup,
+            // so one is required — a connection with none would only make
+            // `ainar` skip the signed-in gh CLI and then fail.
+            if (!token) return sendJson(res, 200, { error: "A GitHub token is needed." });
+            const existing = registryConnections().connections.find((entry) => entry.type === "github");
+            connectionName = existing?.name ?? "github";
+            if (!existing) {
+              const added = await addConnection(root, { name: connectionName, type: "github", makeDefault: true });
+              if (added.error) return sendJson(res, 200, { error: added.error });
+            }
+          } else if (provider === "sheets") {
             if (sheetId) {
               const written = writeRunLmsValue(workspace, root, runId, "sheet_id", sheetId);
               if (written.error) return sendJson(res, 200, written);
@@ -1301,6 +1318,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
             telegram: "AINAR_TELEGRAM_BOT_TOKEN",
             moodle: "AINAR_MOODLE_TOKEN",
             sheets: "AINAR_SHEETS_TOKEN",
+            github: "AINAR_GITHUB_TOKEN",
           }[provider];
 
           if (token) {
@@ -1333,6 +1351,8 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
                 answered = await telegramWhoAmI(live);
               } else if (provider === "moodle" && baseUrl) {
                 answered = await moodleWhoAmI(baseUrl, live);
+              } else if (provider === "github") {
+                answered = await githubWhoAmI(live);
               }
               // Sheets is not checked here, deliberately: proving a Google
               // token means reading a spreadsheet, and a green tick that
@@ -1467,6 +1487,29 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
             200,
             await integrationsAnswer(workspace, root, runId, credentials, { saved: result }),
           );
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
+     * A piece of graded work's two dates, from Planning's drag and its form.
+     *
+     * The body is `{assessment, opens_at, due_at}`, each date a timestamp with
+     * its offset; an empty `opens_at` clears it. `writeAssessmentDates` says
+     * why the pane may write this and how.
+     */
+    if (path === "/api/plan/dates") {
+      if (req.method !== "POST") return sendJson(res, 405, { error: "setting dates is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then((text) => {
+          let body;
+          try {
+            body = JSON.parse(text || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The dates body is not JSON." });
+          }
+          return sendJson(res, 200, writeAssessmentDates(workspace, root, runId, body));
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }

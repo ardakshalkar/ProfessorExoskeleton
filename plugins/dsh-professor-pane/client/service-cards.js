@@ -107,12 +107,17 @@ export function SheetsCard(props) {
     }),
     google.connected
       ? null
-      : h(GoogleConnect, { google, onChanged: props.onRefresh }),
+      : h(
+          "div",
+          { className: "pp-cnudge" },
+          h("span", null, "Connect Google and this card reads the sheet itself — no download."),
+          h(GoogleConnect, { google, bare: true, compact: true, onChanged: props.onRefresh }),
+        ),
     h(
       "details",
       { className: "pp-cdetails" },
       h("summary", null, "Details"),
-      google.connected ? h(GoogleConnect, { google, onChanged: props.onRefresh }) : null,
+      google.connected ? h(GoogleConnect, { google, bare: true, compact: true, onChanged: props.onRefresh }) : null,
       h(
         Fact,
         {
@@ -217,11 +222,12 @@ export function GithubCard(props) {
                 ),
                 h(
                   "span",
-                  { className: "pp-crowpills" },
-                  h("span", { className: "pp-chip" + (repo ? "" : " pp-chip-warn") }, repo || "no repository named"),
+                  { className: "pp-crowstate" },
+                  repo ? h("span", { className: "pp-st-quiet" }, repo) : h("span", { className: "pp-st-warn" }, "no repository named"),
+                  h("span", { className: "pp-crowsep", "aria-hidden": "true" }, " · "),
                   published
-                    ? h("span", { className: "pp-chip pp-chip-ok" }, "published " + dayOf(published.at))
-                    : h("span", { className: "pp-chip pp-chip-warn" }, "not published"),
+                    ? h("span", { className: "pp-st-ok" }, "published " + dayOf(published.at))
+                    : h("span", { className: "pp-st-warn" }, "not published"),
                 ),
               ),
               expanded

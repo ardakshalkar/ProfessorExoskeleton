@@ -237,9 +237,9 @@ export const studentsDocument = (
     return match ? match[1] : String(index + 1);
   };
   /*
-   * Every cell opens its item's line in the student's detail — what was
+   * Every cell opens its hand-in in the drawer — what was
    * handed in, the fork, the defence, or what can still be done about it. The
-   * attributes are read by the press in `workScript`.
+   * attributes are read by the press in `drawerScript`.
    */
   const opens = (studentId, assessment) =>
     studentId
@@ -484,7 +484,8 @@ export const studentsDocument = (
 
     const scored =
       response.score === null || response.score === undefined
-        ? '<span class="todo">not scored</span>'
+        ? // Marked as a whole, as most papers are: not a grading left undone.
+          '<span class="dim">no mark per question</span>'
         : escapeText(String(response.score)) +
           (item && typeof item.maximum_score === "number"
             ? " of " + escapeText(String(item.maximum_score))
@@ -518,42 +519,23 @@ export const studentsDocument = (
     );
   };
 
+  /** A titled part of one hand-in: Defence, Repository, Answers, Files. */
+  const part = (title, body, aside = "") =>
+    body ? '<div class="part"><h3 class="sh">' + escapeText(title) + (aside ? ' <span class="dim">' + aside + "</span>" : "") + "</h3>" + body + "</div>" : "";
+
+  const prepared = (submission) =>
+    defenceOf ? defenceOf(submission.assessment_id, submission.student_id) : { pin: null, questions: null, recorded: null };
+
   /**
-   * The repository a student handed in, and their oral defence of it.
-   *
-   * Only for a submission with a link. The repository opens on GitHub in a
-   * tab of its own — it is somebody else's site, not a material this pane can
-   * frame. *Start defence* clones it in the harness's process and then asks
-   * the session to draft the questions (`/defend-submission`), so the model
-   * drafting them is whichever one the professor is talking to.
-   *
-   * Once drafted, the questions are drawn here in the order they will be
-   * asked, each with the criterion it is evidence for and the lines it is
-   * about, marked draft until the professor has read them.
+   * The repository a student handed in, opened on GitHub in a tab of its own
+   * — somebody else's site, not a material this pane can frame — with the
+   * commit the defence is pinned to once it is cloned.
    */
-  const defenceBlock = (submission) => {
-    if (!submission.url) return "";
-    const prepared = defenceOf ? defenceOf(submission.assessment_id, submission.student_id) : { pin: null, questions: null };
-    const criteria = new Map(
-      ((rubricsById.get(assessmentTitles.get(submission.assessment_id)?.rubric_id ?? "") ?? {}).criteria ?? []).map(
-        (criterion) => [criterion.criterion_id, criterion.title],
-      ),
-    );
-    const questions = prepared.questions && Array.isArray(prepared.questions.questions) ? prepared.questions.questions : [];
-    const pin = prepared.pin;
-    const press = (label) =>
-      '<button type="button" class="chip" data-defence="' +
-      escapeText(submission.assessment_id) +
-      '" data-student="' +
-      escapeText(submission.student_id) +
-      '">' +
-      escapeText(label) +
-      "</button>";
+  const repositoryLine = (submission) => {
+    const pin = prepared(submission).pin;
     return (
-      '<div class="defence">' +
-      '<p><a class="chip-link" href="' +
-      escapeText(submission.url) +
-      '" target="_blank" rel="noopener">repository</a>' +
+      '<p><a class="chip-link" href="' + escapeText(submission.url) + '" target="_blank" rel="noopener">' +
+      escapeText(submission.url.replace(/^https?:\/\/(www\.)?github\.com\//, "")) + "</a>" +
       (pin
         ? ' <span class="dim">at <code>' +
           escapeText(String(pin.commit).slice(0, 7)) +
@@ -562,16 +544,75 @@ export const studentsDocument = (
           (pin.head && pin.head !== pin.commit ? " · moved on since" : "") +
           "</span>"
         : "") +
-      " " +
-      (questions.length
-        ? '<button type="button" class="chip" data-desk="' +
-          escapeText(submission.assessment_id) +
-          '" data-student="' +
-          escapeText(submission.student_id) +
-          '">Open defence desk</button>' +
-          press("Draft again")
-        : press("Start defence")) +
-      "</p>" +
+      "</p>"
+    );
+  };
+
+  /*
+   * The recording, first in the Defence part: what was recorded and *Open
+   * defence*, which opens the desk on it — every take's audio and
+   * transcript are there, and nowhere on this page. Nothing recorded yet:
+   * *Audio defence*, the same desk, ready to record.
+   */
+  const minutesOf = (seconds) =>
+    seconds >= 60 ? Math.round(seconds / 60) + " min" : Math.max(1, Math.round(seconds)) + " s";
+  const recordingLine = (submission) => {
+    const recorded = prepared(submission).recorded;
+    const desk = (label, primary) =>
+      '<button type="button" class="chip' + (primary ? " act" : "") + '" data-desk="' + escapeText(submission.assessment_id) +
+      '" data-student="' + escapeText(submission.student_id) + '">' + escapeText(label) + "</button>";
+    if (!recorded) {
+      return '<div class="rec"><span class="dim">Not recorded yet</span>' + desk("Audio defence", false) + "</div>";
+    }
+    const transcribed =
+      recorded.transcribed === recorded.takes ? "transcribed" : recorded.transcribed + " of " + recorded.takes + " transcribed";
+    return (
+      '<div class="rec on"><span class="recdot" aria-hidden="true"></span><span class="rect"><b>Recorded</b> ' +
+      escapeText(
+        [
+          recorded.seconds ? minutesOf(recorded.seconds) : "",
+          recorded.whole ? "whole defence" : recorded.takes + (recorded.takes === 1 ? " answer" : " answers"),
+          transcribed,
+          recorded.last ? stamp(recorded.last) : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      ) +
+      "</span>" + desk("Open defence", true) + "</div>"
+    );
+  };
+
+  /**
+   * The questions drafted for a handed-in repository, folded under the
+   * recording. *Draft questions* clones it in the harness's process and then
+   * asks the session to draft them (`/defend-submission`), so the model
+   * drafting them is whichever one the professor is talking to. Once drafted
+   * they are drawn in the order they will be asked, each with the criterion
+   * it is evidence for and the lines it is about, marked draft until read.
+   */
+  const defenceBlock = (submission) => {
+    if (!submission.url) return "";
+    const ready = prepared(submission);
+    const criteria = new Map(
+      ((rubricsById.get(assessmentTitles.get(submission.assessment_id)?.rubric_id ?? "") ?? {}).criteria ?? []).map(
+        (criterion) => [criterion.criterion_id, criterion.title],
+      ),
+    );
+    const questions = ready.questions && Array.isArray(ready.questions.questions) ? ready.questions.questions : [];
+    const press = (label) =>
+      '<button type="button" class="chip" data-defence="' +
+      escapeText(submission.assessment_id) +
+      '" data-student="' +
+      escapeText(submission.student_id) +
+      '">' +
+      escapeText(label) +
+      "</button>";
+    if (!questions.length) {
+      return '<p class="defence"><span class="dim">No questions drafted</span> ' + press("Draft questions") + "</p>";
+    }
+    return (
+      '<details class="dc defence"><summary>Drafted questions <span class="dim">' + questions.length + "</span></summary>" +
+      '<p class="dqa">' + press("Draft again") + "</p>" +
       (questions.length
         ? "<ol class=\"dq\">" +
           questions
@@ -599,7 +640,7 @@ export const studentsDocument = (
             .join("") +
           "</ol>"
         : "")
-      + "</div>"
+      + "</details>"
     );
   };
 
@@ -615,10 +656,11 @@ export const studentsDocument = (
     assessment.type === "project" ||
     (Array.isArray(assessment.submission_type) && assessment.submission_type.includes("oral_defense"));
 
-  const defendedRow = (submission) => {
-    const assessment = assessmentTitles.get(submission.assessment_id) ?? {};
-    const defensible = submission.url || submission.defence || defensibleAssessment(assessment);
-    if (!defensible) return "";
+  const defensibleSubmission = (submission) =>
+    Boolean(submission.url || submission.defence || defensibleAssessment(assessmentTitles.get(submission.assessment_id) ?? {}));
+
+  // The verdict, one segmented pair: the word that is on is the filled one.
+  const verdictRow = (submission) => {
     const press = (outcome, text) => {
       const on = submission.defence === outcome;
       return (
@@ -638,14 +680,29 @@ export const studentsDocument = (
       );
     };
     return (
-      '<p class="defended"><span class="dim">Defence:</span>' +
+      '<div class="defended"><span class="segl">Verdict</span><span class="segg">' +
       press("defended", "Defended") +
       press("not_defended", "Not defended") +
+      "</span>" +
       (submission.defence ? "" : ' <span class="dim">not marked</span>') +
-      "</p>" +
-      rubricCheck(submission, assessment)
+      "</div>"
     );
   };
+
+  /*
+   * One hand-in's Defence part: the recording and *Open defence*, the
+   * verdict, the rubric check, and the questions drafted for a repository.
+   */
+  const defencePart = (submission) =>
+    defensibleSubmission(submission)
+      ? part(
+          "Defence",
+          recordingLine(submission) +
+            verdictRow(submission) +
+            rubricCheck(submission, assessmentTitles.get(submission.assessment_id) ?? {}) +
+            defenceBlock(submission),
+        )
+      : "";
 
   // Every evaluation by submission and criterion, for the rubric check.
   const evaluationOf = new Map(
@@ -704,39 +761,41 @@ export const studentsDocument = (
           );
         };
         const maximum = Number(criterion.maximum_score);
+        // A card per criterion: its name and mark on one line, the three
+        // words joined underneath with the points for *Partly* at their end.
         return (
-          "<tr><td>" +
+          '<div class="crit' + (word ? " done" : "") + '"><div class="cth"><span class="ctt">' +
           escapeText(String(criterion.title ?? criterion.criterion_id)) +
-          ' <span class="dim">/ ' +
-          escapeText(points(maximum)) +
-          "</span></td>" +
-          '<td class="dcm">' +
-          (decision ? escapeText(points(Number(decision.score))) : '<span class="dim">—</span>') +
+          '</span><span class="ctm">' +
+          (decision ? "<b>" + escapeText(points(Number(decision.score))) + "</b>" : '<span class="dim">—</span>') +
+          '<span class="dim"> / ' + escapeText(points(maximum)) + "</span>" +
           (fromDefence && writtenScore != null && writtenScore !== Number(decision.score)
             ? ' <span class="dim">was ' + escapeText(points(writtenScore)) + "</span>"
             : "") +
-          "</td><td>" +
+          '</span></div><div class="seg"><span class="segg">' +
           press("confirmed", "Confirmed") +
           press("partly", "Partly") +
           press("not_confirmed", "Not confirmed") +
-          '<input class="dcs" type="number" min="0" max="' +
+          '</span><input class="dcs" type="number" min="0" max="' +
           escapeText(String(maximum)) +
           '" step="0.25" aria-label="Points for Partly" title="Points for Partly — empty halves the written mark" placeholder="' +
           escapeText(writtenScore != null ? points(Math.round((writtenScore / 2) * 100) / 100) : "pts") +
           '"' +
           attrs +
-          "></td></tr>"
+          "></div></div>"
         );
       })
       .join("");
     return (
-      '<details class="dc"><summary>Check against the rubric <span class="dim">' +
+      '<details class="dc rubric"><summary>Check against the rubric <span class="dim">' +
       escapeText(String(checked)) +
       " of " +
       escapeText(String(criteria.length)) +
-      " checked</span></summary><table>" +
+      " checked</span>" +
+      '<span class="cbar" aria-hidden="true"><span style="width:' + Math.round((checked / criteria.length) * 100) + '%"></span></span>' +
+      "</summary>" +
       rows +
-      "</table></details>"
+      "</details>"
     );
   };
 
@@ -854,8 +913,12 @@ export const studentsDocument = (
       (fork.pushed_at ? " · pushed " + escapeText(stamp(fork.pushed_at)) : "") + "</option>";
     const likely = unclaimed.filter(looksLike);
     const others = unclaimed.filter((fork) => !looksLike(fork));
+    // Eighty forks in one select is a scroll, not a choice: past a dozen the
+    // list gets a box that narrows it as the professor types.
+    const narrow =
+      unclaimed.length > 12 ? '<input class="fkq" type="search" placeholder="Filter forks" aria-label="Filter forks"> ' : "";
     return (
-      '<span class="fp"><select class="fks" aria-label="Their fork"><option value="">Pick their fork…</option>' +
+      '<span class="fp">' + narrow + '<select class="fks" aria-label="Their fork"><option value="">Pick their fork…</option>' +
       (likely.length
         ? '<optgroup label="Looks like their name">' + likely.map(option).join("") + "</optgroup>" +
           '<optgroup label="Every other fork">' + others.map(option).join("") + "</optgroup>"
@@ -865,22 +928,14 @@ export const studentsDocument = (
     );
   };
 
-  /*
-   * *Audio defence*: the defence desk on this homework, which records the
-   * whole conversation by default — drafted questions are optional, and so is
-   * the fork. The desk asks for the student's consent before anything records.
+  /**
+   * One hand-in, in full, in the order a professor works through it: the
+   * defence (recording, verdict, rubric check), the repository, then what was
+   * written, then how the mark moved. `picker` is the fork picker for the
+   * latest hand-in when it has no repository — *Audio defence* records the
+   * whole conversation without one, so the fork stays optional.
    */
-  const audioRow = (submission) =>
-    defensibleAssessment(assessmentTitles.get(submission.assessment_id) ?? {}) || submission.url
-      ? '<p class="audio"><button type="button" class="chip act" data-desk="' +
-        escapeText(submission.assessment_id) +
-        '" data-student="' +
-        escapeText(submission.student_id) +
-        '">Audio defence</button> <span class="dim">record the defence — questions are optional</span></p>'
-      : "";
-
-  /** One hand-in, in full: the answers, the files, the fork, the defence. */
-  const submissionSection = (submission) => {
+  const submissionSection = (submission, graded, picker) => {
     const responses = (responsesOf.get(submission.submission_id) ?? [])
       .slice()
       .sort((a, b) => {
@@ -894,28 +949,34 @@ export const studentsDocument = (
         );
       });
     const files = Array.isArray(submission.files) ? submission.files : [];
+    // When, which attempt, in what state — the id is the hover, not the line:
+    // it is for typing back into a command, not for reading.
+    const facts = [
+      submission.submitted_at ? "handed in " + stamp(submission.submitted_at) : "",
+      submission.status && submission.status !== "submitted" ? String(submission.status) : "",
+      submission.attempt && submission.attempt > 1 ? "attempt " + submission.attempt : "",
+    ].filter(Boolean);
     return (
-      '<section class="sub">' +
-      '<p class="dim">' +
-      (submission.submitted_at ? "handed in " + escapeText(stamp(submission.submitted_at)) : "no time recorded") +
-      (submission.status && submission.status !== "submitted" ? " · " + escapeText(String(submission.status)) : "") +
-      (submission.attempt && submission.attempt > 1 ? " · attempt " + escapeText(String(submission.attempt)) : "") +
-      ' · <span class="id">' + escapeText(submission.submission_id) + "</span>" +
-      "</p>" +
+      '<section class="sub" title="' + escapeText(submission.submission_id) + '">' +
+      (facts.length ? '<p class="dim">' + escapeText(facts.join(" · ")) + "</p>" : "") +
       (submission.note ? '<p class="dim">' + escapeText(String(submission.note)) + "</p>" : "") +
-      responses.map(answer).join("") +
-      files.map(fileRow).join("") +
-      // A hand-in with no fork link gets its picker on the line itself, not here.
-      defendedRow(submission) +
+      defencePart(submission) +
+      part(
+        "Repository",
+        submission.url ? repositoryLine(submission) : picker ? '<p class="fork"><span class="dim">None linked</span> ' + picker + "</p>" : "",
+      ) +
+      part("Answers", responses.map(answer).join(""), responses.length ? String(responses.length) : "") +
+      part("Files", files.map(fileRow).join("")) +
       changesBlock(submission) +
-      defenceBlock(submission) +
       // Handed in, and nothing to read: a file-only submission whose bytes
       // are elsewhere, or a row created before any answer was recorded. Both
-      // are facts, and an empty panel would look broken.
-      (responses.length === 0 && files.length === 0 && !submission.url
-        ? '<p class="dim">Nothing is recorded under this submission — no answers, no files.</p>'
+      // are facts, and an empty panel would look broken. A sheet mark is the
+      // common case, and "nothing recorded" beside 4 / 4 read as a contradiction.
+      (responses.length === 0 && files.length === 0 && !submission.url && !prepared(submission).recorded
+        ? '<p class="dim nothing">' +
+          (graded ? "Only the mark is recorded — no answers or files." : "Nothing is recorded under this submission — no answers, no files.") +
+          "</p>"
         : "") +
-      audioRow(submission) +
       "</section>"
     );
   };
@@ -927,11 +988,13 @@ export const studentsDocument = (
    * things a professor does at the foot of it, behind a dropdown of
    * homework. Now each assessment is a line saying where it stands, with
    * what can be done about it on the same line, and what was handed in
-   * folded under it. Past-due lines come first and open; the rest fold into
-   * one summary line. A cell in the row opens its line here.
+   * folded under it. Past-due lines come first; the rest follow under
+   * one summary line that counts them.
    *
-   * Answers stay closed until their line is pressed, for the reason the
-   * whole detail does: this pane is projected.
+   * The detail is shown in the drawer (see `drawerScript`). Pressing a line
+   * there, or a cell in the row, turns the drawer to that one hand-in: the
+   * line alone, its answers, files, fork and defence. Answers stay closed
+   * until then, for the reason the whole detail does: this pane is projected.
    */
   const headOf = (title) => {
     const split = /^(.{1,16}?)\s+[-–—:]\s+(.+)$/.exec(title);
@@ -983,25 +1046,38 @@ export const studentsDocument = (
                 ? "due " + stamp(assessment.due_at)
                 : "no due date";
     const defensible = defensibleAssessment(assessment);
-    const actions =
-      !subs.length && defensible && (state === "missing" || state === "ahead" || state === "unrecorded")
-        ? forkPicker(id, studentId) +
-          ' <button type="button" class="chip act" data-audio-new data-assessment="' + escapeText(id) +
-          '" data-student="' + escapeText(studentId) + '" title="Defended in person, nothing handed in">Audio defence</button>'
-        : latest && !latest.url && defensible
-          ? forkPicker(id, studentId)
-          : "";
-    const body = subs.map(submissionSection).join("");
+    /*
+     * Nothing handed in: the fork and the audio defence, drawn only once the
+     * line is the drawer's one hand-in. On the student's list it is a single
+     * *Bring it in…* — three lines of a class-wide fork list stacked under one
+     * student was the loudest thing in the panel and the least often used.
+     */
+    const bring =
+      !subs.length && defensible && (state === "missing" || state === "ahead" || state === "unrecorded");
+    const actions = bring
+      ? '<button type="button" class="chip bring" data-bring>Bring it in…</button>' +
+        '<span class="ione">' + forkPicker(id, studentId) +
+        ' <button type="button" class="chip act" data-audio-new data-assessment="' + escapeText(id) +
+        '" data-student="' + escapeText(studentId) + '" title="Defended in person, nothing handed in">Audio defence</button></span>'
+      : "";
+    // Handed in without a repository — a sheet mark, a Canvas text entry: the
+    // link can still be brought, in the latest hand-in's Repository part.
+    const body = subs
+      .map((submission) =>
+        submissionSection(
+          submission,
+          state === "graded",
+          submission === latest && !latest.url && defensible ? forkPicker(id, studentId) : "",
+        ),
+      )
+      .join("");
     const head = headOf(assessment.title ?? id);
     return (
       '<div class="it" data-it="' + escapeText(id) + '">' +
-      (body
-        ? '<button type="button" class="ih" aria-expanded="false" title="' + escapeText(id) + '">' +
-          '<span class="car" aria-hidden="true"></span>' + head + "</button>"
-        : '<span class="ih" title="' + escapeText(id) + '"><span class="car none" aria-hidden="true"></span>' + head + "</span>") +
+      '<button type="button" class="ih" title="' + escapeText(id) + '">' + head + "</button>" +
       '<span class="is"><span class="tag ' + state + '">' + escapeText(tag) + "</span></span>" +
       '<span class="ia">' + actions + "</span>" +
-      (body ? '<div class="ib" hidden>' + body + "</div>" : "") +
+      (body ? '<div class="ib">' + body + "</div>" : "") +
       "</div>"
     );
   };
@@ -1024,7 +1100,9 @@ export const studentsDocument = (
       '<div class="items" data-work="' + escapeText(studentId) + '">' +
       (due.length ? '<p class="ihd">Past due</p>' + due.map((item) => itemLine(item, studentId)).join("") : "") +
       (rest.length
-        ? '<details class="more"' + (due.length ? "" : " open") + "><summary>" + escapeText(folded) + "</summary>" +
+        ? // Open: the drawer has the height an inline panel did not, and the
+          // whole list is what a row press is for. The summary still counts it.
+          '<details class="more" open><summary>' + escapeText(folded) + "</summary>" +
           rest.map((item) => itemLine(item, studentId)).join("") +
           "</details>"
         : "") +
@@ -1080,8 +1158,9 @@ export const studentsDocument = (
           "</span>"
         : '<span class="dim">—</span>';
 
-    // Opened by pressing the row, closed on load: this pane is projected. One
-    // sentence, then a line per assessment — the row's strip is not repeated.
+    // Hidden under the row and moved into the drawer when the row is pressed,
+    // closed on load: this pane is projected. One sentence, then a line per
+    // assessment — the row's strip is not repeated.
     // The pseudonym sits at the end, quiet: it is the identifier every other
     // surface uses, so a named row must still lead to it.
     const detail = dimmed
@@ -1349,17 +1428,16 @@ export const studentsDocument = (
   const legend = weighted.length
     ? '<p class="legend dim"><span class="m graded"></span>graded <span class="m in"></span>handed in ' +
       '<span class="m missing"></span>missing <span class="m unrecorded"></span>not imported <span class="m ahead"></span>not due · ' +
-      "press a row for marks and work</p>"
+      "press a row for the student, a cell for that hand-in · ↑ ↓ next student, ← → next assessment</p>"
     : "";
 
   /*
-   * Filter, search, sort and the row disclosure, as DOM toggling.
+   * Filter, search and sort, as DOM toggling.
    *
    * `hidden` rather than a class, so a filtered row is out of the
-   * accessibility tree as well as off the screen. A row opens its detail by
-   * click or Enter; a press on a link, button or input inside it is that
-   * control's, not the row's. The departed list filters by group and search
-   * and drops out under "Needs attention" — nobody who left owes work.
+   * accessibility tree as well as off the screen. The departed list filters
+   * by group and search and drops out under "Needs attention" — nobody who
+   * left owes work. Pressing a row is the drawer's (`drawerScript`).
    */
   const filterScript =
     "<script>(function(){" +
@@ -1388,12 +1466,6 @@ export const studentsDocument = (
     "else if(by==='share'||by==='floor')d=Number(a.dataset[by])-Number(b.dataset[by]);" +
     "return d||a.dataset.name.localeCompare(b.dataset.name);});" +
     "list.forEach(function(r){box.appendChild(r);});}" +
-    "function toggle(row){var d=row.parentNode.querySelector('.detail');if(!d)return;" +
-    "d.hidden=!d.hidden;row.setAttribute('aria-expanded',String(!d.hidden));}" +
-    "document.addEventListener('click',function(e){var row=e.target.closest&&e.target.closest('.sr[role=button]');" +
-    "if(!row||e.target.closest('a,button,input,select,[data-hw]'))return;toggle(row);});" +
-    "document.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;" +
-    "var row=e.target.closest&&e.target.closest('.sr[role=button]');if(!row||e.target!==row)return;e.preventDefault();toggle(row);});" +
     "chips.forEach(function(c){c.addEventListener('click',function(){want=c.dataset.filter;apply();});});" +
     "if(only)only.addEventListener('click',function(){attn=!attn;apply();});" +
     "if(find)find.addEventListener('input',function(){q=find.value.trim().toLowerCase();apply();});" +
@@ -1401,41 +1473,109 @@ export const studentsDocument = (
     "})();</script>";
 
   /*
-   * The item lines, as DOM toggling.
+   * The drawer: one student, or one of their hand-ins, beside the list.
    *
-   * `hidden` rather than a class, for the filter's reason: a line nobody has
-   * opened should be out of the accessibility tree as well as off the screen.
-   * A screen reader running down a class list must not read every student's
-   * answers aloud.
+   * It used to open inline under the row, and that pushed the row's own
+   * cells off screen — the next homework of the same student was a scroll
+   * up, the same homework of the next student was close, find, open. The
+   * drawer keeps the list where it is and the pressed row and column lit.
    *
-   * A cell in the row opens the student's detail, unfolds the summary if the
-   * line is in it, opens the line's hand-in and marks the line for a moment —
-   * the line is found inside that student's own `.st`, so a reordered list
-   * cannot open the wrong person's work. The fork picker's two small presses
-   * (`paste a link`, the select's last option) only reveal its link field.
+   * A row shows the student: the summary, where they stand, a line per
+   * assessment. A cell, or a line in the drawer, shows that one hand-in.
+   * ↑ ↓ walk the visible list in its current sort and filter, keeping the
+   * assessment when there is one — one homework through the class — and
+   * ← → walk the student's assessments in the row's order. Esc steps back
+   * out of a hand-in, then closes.
+   *
+   * The student's `.detail` is MOVED into the drawer, not copied, and moved
+   * back on close: a half-typed fork link or an open rubric check survives
+   * stepping out and in, and the detail is found inside the student's own
+   * `.st`, so a reordered list cannot open the wrong person's work. Every
+   * line's answers are rendered here and hidden by the stylesheet until the
+   * drawer is turned to that line — out of the accessibility tree as well,
+   * so a screen reader running down a class list does not read every
+   * student's answers aloud.
+   *
+   * The fork picker's small presses (`paste a link`, the select's last
+   * option) reveal its link field; its filter box narrows the select.
    */
-  const workScript =
+  const drawer =
+    '<aside class="drawer" hidden tabindex="-1" role="dialog" aria-labelledby="dwt">' +
+    '<div class="dwh">' +
+    '<button type="button" class="dwk" data-dw="back" title="Back to the student (Esc)" hidden>‹</button>' +
+    '<div class="dwt" id="dwt"></div>' +
+    '<button type="button" class="dwk" data-dw="left" title="Previous assessment (←)" hidden>←</button>' +
+    '<button type="button" class="dwk" data-dw="right" title="Next assessment (→)" hidden>→</button>' +
+    '<button type="button" class="dwk" data-dw="up" title="Previous student (↑)">↑</button>' +
+    '<button type="button" class="dwk" data-dw="down" title="Next student (↓)">↓</button>' +
+    '<button type="button" class="dwk" data-dw="close" aria-label="Close" title="Close (Esc)">×</button>' +
+    "</div>" +
+    '<div class="dwbody"></div>' +
+    "</aside>";
+  const drawerScript =
     "<script>(function(){" +
-    "function show(line,on){var b=line.querySelector('.ib'),h=line.querySelector('button.ih');if(!b)return;" +
-    "b.hidden=!on;if(h)h.setAttribute('aria-expanded',String(on));}" +
-    "function open(c){var a=c.getAttribute('data-hw');" +
-    "var st=c.closest('.st'),d=st&&st.querySelector('.detail');if(!d)return;" +
-    "d.hidden=false;var r=st.querySelector('.sr');if(r)r.setAttribute('aria-expanded','true');" +
-    "var line=null;[].forEach.call(d.querySelectorAll('[data-it]'),function(x){if(x.getAttribute('data-it')===a)line=x;});" +
-    "if(!line)return;var m=line.closest('details');if(m)m.open=true;show(line,true);" +
-    "line.classList.remove('flash');void line.offsetWidth;line.classList.add('flash');" +
-    "line.scrollIntoView({block:'nearest'});}" +
+    "var dw=document.querySelector('.drawer'),body=dw.querySelector('.dwbody'),title=document.getElementById('dwt')," +
+    "box=document.getElementById('list'),cur=null;" +
+    "function all(s,el){return [].slice.call((el||document).querySelectorAll(s));}" +
+    "function rows(){return all('.st',box).filter(function(s){return !s.hidden&&s.querySelector('.sr[role=button]');});}" +
+    "function lineOf(d,a){var f=null;all('[data-it]',d).forEach(function(x){if(x.getAttribute('data-it')===a)f=x;});return f;}" +
+    // The row's order first, so → is the next cell along; then what only the detail lists.
+    "function ids(){var out=all('[data-hw]',cur.st.querySelector('.sr')).map(function(c){return c.getAttribute('data-hw');});" +
+    "all('[data-it]',cur.d).forEach(function(x){var a=x.getAttribute('data-it');if(out.indexOf(a)<0)out.push(a);});" +
+    "return out.filter(function(a){return lineOf(cur.d,a);});}" +
+    "function unlight(){all('.lit').forEach(function(x){x.classList.remove('lit');});}" +
+    "function light(a){unlight();var r=cur.st.querySelector('.sr');r.classList.add('lit');if(!a)return;" +
+    "var cells=all('[data-hw]',r),i=-1;cells.forEach(function(c,k){if(c.getAttribute('data-hw')===a)i=k;});if(i<0)return;" +
+    "cells[i].classList.add('lit');var n=all('.th .n')[i];if(n)n.classList.add('lit');" +
+    "cells[i].scrollIntoView({block:'nearest',inline:'nearest'});}" +
+    "function park(){if(!cur)return;all('.it.on',cur.d).forEach(function(x){x.classList.remove('on');});" +
+    "cur.d.hidden=true;cur.st.appendChild(cur.d);cur.st.querySelector('.sr').setAttribute('aria-expanded','false');unlight();cur=null;}" +
+    "function show(st,a){" +
+    "if(!cur||cur.st!==st){park();var d=st.querySelector('.detail');if(!d)return;" +
+    "body.appendChild(d);d.hidden=false;cur={st:st,d:d,a:null};st.querySelector('.sr').setAttribute('aria-expanded','true');}" +
+    "var line=a?lineOf(cur.d,a):null;if(!line)a=null;" +
+    "all('.it.on',cur.d).forEach(function(x){x.classList.remove('on');});cur.a=a;dw.classList.toggle('one',!!line);" +
+    "if(line){line.classList.add('on');var m=line.closest('details');if(m)m.open=true;}" +
+    "var nm=st.querySelector('.nm');title.textContent=nm&&nm.firstChild?nm.firstChild.textContent:'';" +
+    "if(line){var s=document.createElement('span');s.className='dim';s.textContent=' \\u203a ';title.appendChild(s);" +
+    "var b=document.createElement('b');b.textContent=line.querySelector('.ih').textContent.trim();title.appendChild(b);}" +
+    "['back','left','right'].forEach(function(k){dw.querySelector('[data-dw='+k+']').hidden=!line;});" +
+    "dw.hidden=false;document.body.classList.add('dwopen');light(a);" +
+    "st.querySelector('.sr').scrollIntoView({block:'nearest'});body.scrollTop=0;" +
+    "if(!dw.contains(document.activeElement))dw.focus({preventScroll:true});}" +
+    "function close(){var st=cur&&cur.st;park();dw.hidden=true;dw.classList.remove('one');document.body.classList.remove('dwopen');" +
+    "if(st)st.querySelector('.sr').focus({preventScroll:true});}" +
+    "function step(by){if(!cur)return;var list=rows(),n=list[list.indexOf(cur.st)+by];if(n)show(n,cur.a);}" +
+    "function side(by){if(!cur||!cur.a)return;var list=ids(),n=list[list.indexOf(cur.a)+by];if(n)show(cur.st,n);}" +
+    // Back to the student, the line just left marked for a moment.
+    "function back(){if(!cur)return;var a=cur.a;show(cur.st,null);var l=a&&lineOf(cur.d,a);if(!l)return;" +
+    "var m=l.closest('details');if(m)m.open=true;l.scrollIntoView({block:'nearest'});" +
+    "l.classList.remove('flash');void l.offsetWidth;l.classList.add('flash');}" +
     "function reveal(fp){var i=fp.querySelector('input.fk'),s=fp.querySelector('button[data-fork]');" +
     "if(i){i.hidden=false;i.focus();}if(s)s.hidden=false;}" +
+    "var ACT={close:close,back:back,up:function(){step(-1);},down:function(){step(1);},left:function(){side(-1);},right:function(){side(1);}};" +
     "document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;" +
-    "var c=t.closest('[data-hw]');if(c){open(c);return;}" +
-    "var h=t.closest('button.ih');if(h){var line=h.closest('.it');show(line,h.getAttribute('aria-expanded')!=='true');return;}" +
-    "var p=t.closest('[data-paste]');if(p){var fp=p.closest('.fp');if(fp)reveal(fp);}});" +
+    "var k=t.closest('[data-dw]');if(k){ACT[k.getAttribute('data-dw')]();return;}" +
+    "var p=t.closest('[data-paste]');if(p){var fp=p.closest('.fp');if(fp)reveal(fp);return;}" +
+    "var c=t.closest('[data-hw]');if(c){var cs=c.closest('.st'),ca=c.getAttribute('data-hw');" +
+    "if(cur&&cur.st===cs&&cur.a===ca)close();else show(cs,ca);return;}" +
+    "if(cur&&dw.contains(t)){var it=t.closest('.it');" +
+    "if(it&&!cur.a&&(t.closest('[data-bring],button.ih')||!t.closest('a,button,input,select,textarea,label,summary')))show(cur.st,it.getAttribute('data-it'));" +
+    "return;}" +
+    "var r=t.closest('.sr[role=button]');if(!r||t.closest('a,button,input,select'))return;" +
+    "var st=r.closest('.st');if(cur&&cur.st===st&&!cur.a)close();else show(st,null);});" +
     "document.addEventListener('change',function(e){var s=e.target;if(!s.matches||!s.matches('select.fks'))return;" +
     "var fp=s.closest('.fp'),i=fp&&fp.querySelector('input.fk');if(!i)return;" +
     "if(s.value==='paste')reveal(fp);else i.hidden=true;});" +
-    "document.addEventListener('keydown',function(e){if(e.key!=='Enter'&&e.key!==' ')return;" +
-    "var c=e.target.closest&&e.target.closest('[data-hw]');if(!c||e.target!==c)return;e.preventDefault();open(c);});" +
+    "document.addEventListener('input',function(e){var f=e.target;if(!f.matches||!f.matches('input.fkq'))return;" +
+    "var s=f.parentNode.querySelector('select.fks'),w=f.value.trim().toLowerCase();if(!s)return;" +
+    "all('option',s).forEach(function(o){if(o.value&&o.value!=='paste')o.hidden=!!w&&o.textContent.toLowerCase().indexOf(w)<0;});" +
+    "all('optgroup',s).forEach(function(g){g.hidden=!all('option',g).some(function(o){return !o.hidden;});});});" +
+    "document.addEventListener('keydown',function(e){var t=e.target;" +
+    "if((e.key==='Enter'||e.key===' ')&&t.matches&&t.matches('[data-hw],.sr[role=button]')){e.preventDefault();t.click();return;}" +
+    "if(!cur||(t.closest&&t.closest('input,select,textarea')))return;" +
+    "var go={Escape:cur.a?back:close,ArrowUp:ACT.up,ArrowDown:ACT.down,ArrowLeft:cur.a?ACT.left:null,ArrowRight:cur.a?ACT.right:null}[e.key];" +
+    "if(go){e.preventDefault();go();}});" +
     "})();</script>";
 
   /*
@@ -1449,25 +1589,50 @@ export const studentsDocument = (
   const workStyle =
     "<style>" +
     "[data-hw]{cursor:pointer}" +
-    "[data-hw]:hover,[data-hw]:focus-visible{outline:2px solid var(--accent-line,var(--info));outline-offset:1px}" +
-    ".ib[hidden],.fp [hidden]{display:none}" +
-    ".audio{margin:6px 0 4px}" +
+    "[data-hw]:hover,[data-hw]:focus-visible,[data-hw].lit{outline:2px solid var(--accent-line,var(--info));outline-offset:1px}" +
+    ".th .n.lit{color:var(--info);font-weight:700}" +
+    ".fp [hidden]{display:none}" +
+    // The drawer. Its own surface: the page is transparent over the pane's,
+    // and a panel over the list must not let the rows show through.
+    ":root{--dwbg:#ffffff}" +
+    (dark ? ":root{--dwbg:#1e1e1e}" : "@media(prefers-color-scheme:dark){:root{--dwbg:#1e1e1e}}") +
+    ".drawer{position:fixed;top:0;right:0;bottom:0;width:min(500px,44vw);display:flex;flex-direction:column;" +
+    "background:var(--dwbg);border-left:1px solid var(--line);box-shadow:-6px 0 18px rgba(0,0,0,.12);z-index:10;outline:none}" +
+    ".drawer[hidden]{display:none}" +
+    // Wide enough, the list gives the drawer its room rather than sitting under it.
+    "@media(min-width:900px){body.dwopen{padding-right:calc(min(500px,44vw) + 16px)}}" +
+    "@media(max-width:899px){.drawer{width:min(560px,100%)}}" +
+    ".dwh{display:flex;align-items:center;gap:4px;padding:8px 10px 8px 14px;border-bottom:1px solid var(--line)}" +
+    ".dwt{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    ".dwt b{font-weight:600}" +
+    ".dwk{font:inherit;font-size:14px;line-height:1;min-width:26px;height:26px;padding:0 6px;border:1px solid var(--line);" +
+    "border-radius:4px;background:transparent;color:var(--fg);cursor:pointer}" +
+    ".dwk:hover{background:var(--infobg)}.dwk[hidden]{display:none}" +
+    ".dwk[data-dw=back]{border:0;font-size:20px;padding:0 4px}" +
+    ".dwbody{flex:1;min-height:0;overflow:auto;padding:10px 14px 16px}" +
+    // A student: every line, no answers. One hand-in: that line, open.
+    ".drawer:not(.one) .ib,.drawer:not(.one) .ione,.drawer.one .bring{display:none}" +
+    ".drawer.one .sum,.drawer.one .standing,.drawer.one .ihd,.drawer.one .more>summary,.drawer.one .it:not(.on){display:none}" +
+    ".drawer.one .it.on{border-top:0;padding:0;cursor:default}" +
+    ".drawer.one .it.on .ih{cursor:default;white-space:normal}" +
+    ".drawer.one .it.on .ih:hover .iname{text-decoration:none}" +
+    ".drawer.one .ione{display:flex;flex-wrap:wrap;gap:6px;align-items:center}" +
+    ".fkq{font:inherit;font-size:12px;width:130px}" +
     // The opening sentence, the pseudonym quiet at its end.
     ".detail .sum{margin:0 0 6px;display:flex;flex-wrap:wrap;gap:4px 0;align-items:baseline}" +
     ".pid{margin-left:auto;font-size:11px;color:var(--dim);background:none;padding:0}" +
     // One line per assessment: what it is, where it stands, what can be done.
     ".items{margin:4px 0 2px}" +
     ".ihd{margin:6px 0 2px;font-size:12px;color:var(--dim)}" +
-    ".it{display:grid;grid-template-columns:minmax(180px,1.3fr) minmax(110px,auto) minmax(0,2fr);gap:4px 12px;" +
-    "align-items:center;padding:5px 6px;border-top:1px solid var(--line)}" +
+    ".it{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 10px;" +
+    "align-items:center;padding:5px 6px;border-top:1px solid var(--line);cursor:pointer}" +
+    ".drawer:not(.one) .it:hover{background:var(--infobg)}" +
     ".it.flash{animation:flash 1.2s ease-out}" +
     "@keyframes flash{from{background:var(--infobg)}to{background:transparent}}" +
     ".ih{display:flex;align-items:baseline;gap:6px;min-width:0;font:inherit;color:inherit;background:none;border:0;padding:0;" +
     "text-align:left;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}" +
     "button.ih{cursor:pointer}button.ih:hover .iname{text-decoration:underline}" +
     ".iname{font-weight:600}" +
-    ".car{display:inline-block;width:10px;flex:none;color:var(--dim)}" +
-    ".car::before{content:'\\25B8'}button.ih[aria-expanded=true] .car::before{content:'\\25BE'}.car.none::before{content:''}" +
     ".tag{font-size:12px;padding:1px 7px;border-radius:4px;white-space:nowrap;font-variant-numeric:tabular-nums}" +
     ".tag.missing{background:var(--warnbg);color:var(--warn)}" +
     ".tag.graded{background:var(--infobg)}" +
@@ -1480,12 +1645,13 @@ export const studentsDocument = (
     ".fp a{font-size:12px;overflow-wrap:anywhere}" +
     ".lnk{font:inherit;font-size:12px;background:none;border:0;padding:0;color:var(--dim);text-decoration:underline;" +
     "text-underline-offset:2px;cursor:pointer}.lnk:hover{color:var(--fg)}" +
-    ".ib{grid-column:1/-1;padding:4px 0 6px 16px}" +
+    ".ia:empty{display:none}" +
+    ".ib{grid-column:1/-1;padding:8px 0 6px}" +
+    ".drawer.one .ia{grid-column:1/-1}" +
     ".sub{margin:0 0 8px}.sub+.sub{border-top:1px dashed var(--line);padding-top:6px}" +
     ".sub p{margin:0 0 4px}" +
     ".more summary{cursor:pointer;font-size:12px;color:var(--dim);padding:6px 6px;border-top:1px solid var(--line)}" +
     ".more summary:hover{color:var(--fg)}" +
-    "@media(max-width:720px){.it{grid-template-columns:minmax(0,1fr) auto}.ia{grid-column:1/-1}}" +
     ".qa{margin:6px 0 10px}" +
     ".qa .q{font-weight:600}" +
     ".qa .a{margin:0 0 2px}" +
@@ -1497,19 +1663,50 @@ export const studentsDocument = (
     "white-space:pre-wrap;overflow-wrap:anywhere}" +
     ".ok{color:var(--info)}" +
     ".bad{color:var(--warn)}" +
-    ".defence{margin:8px 0 4px}" +
-    ".defence .chip{margin-left:4px}" +
-    ".defended{margin:6px 0 2px}" +
-    ".fork{margin:6px 0 2px}" +
-    ".defended .chip{margin-left:6px}" +
-    ".defended .chip[aria-pressed=true],.dc .chip[aria-pressed=true]{border-color:var(--info);color:var(--info);font-weight:600}" +
-    ".dc{margin:2px 0 8px}" +
-    ".dc summary{cursor:pointer;font-size:13px}" +
-    ".dc table{border-collapse:collapse;margin-top:4px;width:100%}" +
+    // One hand-in's parts: Defence, Repository, Answers, Files — each under a
+    // small heading, so the eye finds the recording before the fork list.
+    ".part{margin:12px 0 0;padding-top:10px;border-top:1px solid var(--line)}" +
+    ".sh{margin:0 0 8px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}" +
+    ".sh .dim{font-weight:400;letter-spacing:0}" +
+    ".nothing{margin-top:10px}" +
+    ".chip.act{color:var(--info);border-color:var(--info);font-weight:600}" +
+    // The recording line: a light that says it exists, what it is, and the
+    // press that opens it — filled, the one primary button of the hand-in.
+    ".rec{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;margin:0 0 10px}" +
+    ".rec.on{background:var(--infobg);border-color:transparent}" +
+    ".rect{flex:1;min-width:0}" +
+    ".recdot{width:8px;height:8px;border-radius:50%;background:#c43030;flex:none}" +
+    ".rec .chip{font-size:12px;padding:3px 12px;margin-left:auto}" +
+    ".rec.on .chip.act{background:var(--info);color:var(--dwbg);border-color:var(--info)}" +
+    // A segmented control: the words joined, the one that is on filled.
+    ".segg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden;vertical-align:middle}" +
+    ".segg .chip{border:0;border-radius:0;margin:0;padding:3px 10px;font-size:12px;color:var(--fg)}" +
+    ".segg .chip+.chip{border-left:1px solid var(--line)}" +
+    ".segg .chip:hover{background:var(--infobg)}" +
+    ".segg .chip[aria-pressed=true]{background:var(--info);color:var(--dwbg);font-weight:600}" +
+    ".segl{font-size:12px;color:var(--dim);margin-right:8px}" +
+    ".defended{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 8px}" +
+    ".fork{margin:0}" +
+    // Folded parts — the rubric check, drafted questions, grade changes.
+    ".dc{margin:6px 0 8px;border:1px solid var(--line);border-radius:8px}" +
+    ".dc>summary{cursor:pointer;font-size:13px;padding:7px 10px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}" +
+    ".dc[open]>summary{border-bottom:1px solid var(--line)}" +
+    ".dc>table,.dc>.dqa,.dc>.dq{margin:8px 10px}" +
+    ".dc table{border-collapse:collapse;width:calc(100% - 20px)}" +
     ".dc td{padding:3px 6px 3px 0;vertical-align:middle;border-top:1px solid var(--line);font-size:13px}" +
-    ".dc .chip{margin:1px 3px 1px 0}" +
     ".dc .dcm{white-space:nowrap;font-variant-numeric:tabular-nums}" +
-    ".dc .dcs{width:58px;margin-left:2px;font:inherit;font-size:12px}" +
+    ".cbar{flex:1;min-width:60px;max-width:140px;height:4px;border-radius:2px;background:var(--line);margin-left:auto;overflow:hidden}" +
+    ".cbar span{display:block;height:100%;background:var(--info)}" +
+    // A criterion: name and mark on one line, the three words under it.
+    ".crit{padding:8px 10px;border-top:1px solid var(--line)}" +
+    ".rubric[open]>summary+.crit{border-top:0}" +
+    ".crit.done{box-shadow:inset 3px 0 0 var(--info)}" +
+    ".cth{display:flex;gap:10px;align-items:baseline;justify-content:space-between}" +
+    ".ctt{min-width:0;font-size:13px}" +
+    ".ctm{white-space:nowrap;font-variant-numeric:tabular-nums;font-size:13px}" +
+    ".seg{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:5px}" +
+    ".dcs{width:56px;font:inherit;font-size:12px;padding:2px 4px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--fg)}" +
+    ".defence{margin:6px 0 0}" +
     ".dq{margin:4px 0 0;padding-left:20px}" +
     ".dq li{margin:0 0 8px}" +
     ".dq p{margin:0 0 2px;overflow-wrap:anywhere}" +
@@ -1538,7 +1735,8 @@ export const studentsDocument = (
     ".th button[aria-pressed=true]{color:var(--fg);font-weight:600}" +
     ".th button[aria-pressed=true]::after{content:' \\2193'}" +
     ".sr{padding:6px 4px;border-bottom:1px solid var(--line);cursor:pointer}" +
-    ".sr:hover,.sr[aria-expanded=true]{background:var(--infobg)}" +
+    ".sr:hover,.sr.lit{background:var(--infobg)}" +
+    ".sr.lit{box-shadow:inset 3px 0 0 var(--info)}" +
     ".sr:focus-visible{outline:2px solid var(--info);outline-offset:-2px}" +
     ".sr.gone{cursor:default;color:var(--dim)}.sr.gone:hover{background:none}" +
     ".sr .rest{grid-column:3/-1}" +
@@ -1570,7 +1768,6 @@ export const studentsDocument = (
     ".m.unrecorded{color:var(--dim)}" +
     ".m.unrecorded{border-style:dotted;border-color:var(--dim)}" +
     ".legend{font-size:11px;margin:8px 0 16px}.legend .m{margin:0 3px 0 8px}.legend .m:first-child{margin-left:0}" +
-    ".detail{padding:8px 12px 10px;border-bottom:1px solid var(--line);border-left:2px solid var(--info)}" +
     ".detail>p{margin:0 0 4px}" +
     "section.tbl{margin-top:18px}" +
     // A narrow pane keeps who, where they are heading, and what they owe.
@@ -1611,7 +1808,7 @@ export const studentsDocument = (
     "if(n){if(n.disabled)return;n.disabled=true;n.textContent='Opening…';parent.postMessage({source:'professor-pane',kind:'defence-audio'," +
     "assessment:n.getAttribute('data-assessment'),student:n.getAttribute('data-student')},'*');return;}" +
     "var c=e.target.closest&&e.target.closest('button[data-check]');" +
-    "if(c){if(c.disabled)return;var o=c.getAttribute('data-check'),x=c.parentNode.querySelector('input.dcs'),v=o==='partly'&&x&&x.value!==''?Number(x.value):null;" +
+    "if(c){if(c.disabled)return;var o=c.getAttribute('data-check'),x=c.closest('.crit').querySelector('input.dcs'),v=o==='partly'&&x&&x.value!==''?Number(x.value):null;" +
     "c.disabled=true;parent.postMessage({source:'professor-pane',kind:'defence-check',outcome:o,score:v," +
     "criterion:c.getAttribute('data-criterion'),assessment:c.getAttribute('data-assessment'),student:c.getAttribute('data-student')},'*');return;}" +
     "var m=e.target.closest&&e.target.closest('button[data-defended]');" +
@@ -1628,7 +1825,7 @@ export const studentsDocument = (
     "});})();</script>";
 
   return documentPage(
-    workStyle + header + filterBar + list + legend + departed + filterScript + workScript + defenceScript + VIEW_SCRIPT,
+    workStyle + header + filterBar + list + legend + departed + drawer + filterScript + drawerScript + defenceScript + VIEW_SCRIPT,
     dark,
   );
 };

@@ -118,6 +118,8 @@ const RUN = ${JSON.stringify(RUN)};
 function App() {
   const [revision, setRevision] = React.useState(0);
   const [sub, setSub] = React.useState("course");
+  // Remounted on a button press, because the view reads subView only once.
+  const [mount, setMount] = React.useState(0);
   const [names, setNames] = React.useState(true);
   const [drafts, setDrafts] = React.useState(false);
   const [focus, setFocus] = React.useState({ service: null, tick: 0 });
@@ -133,12 +135,12 @@ function App() {
   }
   return h(React.Fragment, null,
     ReactDOM.createPortal([
-      ...["course", "credentials"].map((id) => h("button", { key: id, onClick: () => setSub(id) }, id)),
+      ...["course", "accounts"].map((id) => h("button", { key: id, onClick: () => { setSub(id); setMount((value) => value + 1); } }, id)),
       h("button", { key: "names", onClick: () => setNames(!names) }, names ? "Show codes" : "Show names"),
       h("button", { key: "focus", onClick: () => { setSub("course"); setFocus((value) => ({ service: "sheets", tick: value.tick + 1 })); } }, "Jump to sheet"),
     ], document.getElementById("bar")),
     h(window.__client.Integrations, {
-      runId: RUN, sessionId: "", subView: sub, revision, names, focus,
+      runId: RUN, sessionId: "", subView: sub, revision, names, focus, key: "m" + mount,
       ask: (text) => window.__asked.push(text),
       onWrite,
     }));

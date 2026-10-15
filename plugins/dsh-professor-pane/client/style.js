@@ -109,18 +109,6 @@ a.pp-segbtn{display:inline-flex}
 /* Names, while they are showing. The one control in the pane that changes what
    is safe to have on a projector, so it does not look like the others while it
    is engaged. */
-/* A press that goes to the chat rather than changing a record. The same glyph
-   server/page.js puts on [data-ask] in the frames, so it means one thing everywhere. */
-.pp-chat::after{content:"\\2726";margin-left:.35em;font-size:.85em;opacity:.75}
-/* The repository name, typed when the assessment does not record one. Sized to
-   owner/name and no wider: it sits in a row of buttons, and a field that
-   stretched would read as the subject of the strip rather than a gap in it. */
-.pp-input{font:inherit;font-size:11px;padding:2px 8px;border-radius:20px;width:18ch;
-  background:0 0;color:var(--dsw-alias-label-primary,#111);
-  border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-/* Names, while they are showing. The one control in the pane that changes what
-   is safe to have on a projector, so it does not look like the others while it
-   is engaged. */
 .pp-segbtn-warn[aria-pressed=true]{color:#a5561f;border-color:#a5561f;
   background:rgba(165,86,31,.10)}
 .pp-approve{flex:none;padding:8px 12px 0}
@@ -223,7 +211,12 @@ a.pp-segbtn{display:inline-flex}
 .pp-filetile-wait b{color:#a15c00}
 .pp-filesection h3{margin:0 0 6px;font-size:12.5px;font-weight:600}
 .pp-filetable td{vertical-align:middle}
-.pp-filetable td:first-child{max-width:0;width:55%}
+.pp-filetable td:first-child{max-width:0;width:30%}
+.pp-pileprog{display:flex;align-items:center;gap:10px}
+.pp-pileprog .pp-pilebar{width:70px}
+.pp-pileprog .pp-pilebar i{height:6px;border-radius:3px}
+.pp-pileprogtext{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.pp-pileprogstep{font-weight:600;white-space:nowrap}
 .pp-filewait td{background:rgba(161,92,0,.05)}
 .pp-fileacts{display:flex;gap:6px;justify-content:flex-end}
 /* What a send did: green landed, amber still processing, red failed. */
@@ -859,7 +852,10 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-stagelive{border-color:#c43030;background:rgba(196,48,48,.05)}
 .pp-stagedots{display:block;width:130px;height:130px;margin-top:-10px}
 .pp-stagebtnlabel{position:absolute;bottom:14px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary,#444)}
-.pp-stagetr{max-width:720px;min-height:3em;font-size:clamp(17px,2.2vw,24px);line-height:1.45;overflow-wrap:anywhere}
+.pp-stagetr{max-width:720px;width:100%;min-height:3em;font-size:clamp(17px,2.2vw,24px);line-height:1.45;overflow-wrap:anywhere;
+  display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;max-height:calc(1.45em * 4)}
+@media(max-height:620px){.pp-stagetr{max-height:calc(1.45em * 3)}}
+.pp-stagetrlong{-webkit-mask-image:linear-gradient(to bottom,transparent,#000 1.6em);mask-image:linear-gradient(to bottom,transparent,#000 1.6em)}
 .pp-stagetrold{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-stagerow{justify-content:center;min-height:28px}
 .pp-dsplit{margin-top:6px;display:flex;flex-direction:column;gap:4px}
@@ -911,7 +907,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
   background:rgba(214,130,32,.09);border:1px solid rgba(214,130,32,.28)}
 .pp-needstitle{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#b4600f;font-weight:600}
 .pp-needsrow{display:flex;gap:8px;align-items:center;font-size:12px}
-.pp-needsrow > span{flex:1;min-width:0}
+.pp-needsrow > span:not(.pp-svc){flex:1;min-width:0}
 .pp-ccard{display:flex;flex-direction:column;gap:8px;padding:11px 12px;border-radius:12px;
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
 .pp-chead{display:flex;gap:10px;align-items:center}
@@ -948,6 +944,45 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-synccard-bare.pp-synccard-drop{padding:8px;border:1px dashed #1e7e38;border-radius:9px}
 .pp-csub{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-csubtitle{font-size:12px;font-weight:600}
+/* Integrations' own header: This course, and the button to Accounts. */
+.pp-ihead{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.pp-ihtitle{font-size:12.5px;font-weight:600}
+/* Accounts: one row per service this computer is signed in to. */
+.pp-accts{display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:12px;
+  background:var(--dsw-alias-bg-l1,#fff)}
+.pp-acct{padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-acct:last-child{border-bottom:none}
+.pp-acct-off .pp-svc{opacity:.55}
+.pp-acctbody{padding:8px 0 2px 42px}
+/* The design pass (2026-10-13): one size of button inside a card, colour only
+   on what needs something, and lists that open on what matters. */
+.pp-crowstate{display:block;margin-left:16px;font-size:11px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-crowsep{color:var(--dsw-alias-label-tertiary,#b0b0b0)}
+.pp-st-ok{color:#2f6b3c}
+.pp-st-warn{color:#b4600f;font-weight:600}
+.pp-st-quiet{color:var(--dsw-alias-label-tertiary,#9a9a9a)}
+.pp-morebtn{align-self:flex-start;margin:4px 0 0 16px;padding:0;border:0;background:none;font:inherit;font-size:11.5px;
+  cursor:pointer;color:var(--dsw-alias-label-secondary,#555);text-decoration:underline;text-underline-offset:2px}
+.pp-cnudge{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 9px;border-radius:8px;font-size:11.5px;
+  background:var(--dsw-alias-fill-secondary,#f3f3f5)}
+.pp-cnudge > span{flex:1;min-width:160px}
+.pp-cnudge .pp-saverow{border:0;margin:0;padding:0}
+.pp-waittitle{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.pp-waitrow{display:flex;flex-direction:column;gap:3px;padding:7px 0;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-waitline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pp-waitline .pp-waitpair{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
+.pp-waitline .pp-avatar{width:18px;height:18px;font-size:8.5px;flex:none}
+.pp-waitmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pp-waitwhy{flex:1 1 160px;min-width:0}
+.pp-syncsection .pp-waitlist{gap:0}
+.pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}
+.pp-waitmeta{font-size:11px;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.pp-linkbtn{margin-left:8px;padding:0;border:0;background:none;font:inherit;font-size:11px;cursor:pointer;
+  color:var(--dsw-alias-label-secondary,#555);text-decoration:underline;text-underline-offset:2px}
+.pp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;
+  background:var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-dot-on{background:#2f8a4e}
+.pp-needsrow .pp-svc-small{width:18px;height:18px;font-size:8.5px;border-radius:5px}
 `;
 
 if (

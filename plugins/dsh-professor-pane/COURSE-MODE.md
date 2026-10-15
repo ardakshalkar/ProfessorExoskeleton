@@ -20,7 +20,7 @@ Six buttons, sixteen views, two crosscutting toggles and an overlay.
 | Progress | Concepts · Gradebook | how it is going | the professor's |
 | Tasks | Pending · Ready · Checklist | what is waiting for you | the professor's |
 | Preferences | — | what the skills assume | the machine's |
-| Integrations | Status · Targets · Credentials · Links | what this is wired to | the machine's |
+| Integrations | This course · Accounts (header button) | what this is wired to | the machine's |
 
 Crosscutting: **Record / + drafts** (which half of the course), **Names /
 Pseudonyms** (whether a projector is in the room). Over the top of all of it,
@@ -280,8 +280,8 @@ happens.
    written → name in the class list*. The header line now reads *Canvas:
    connected · 5 waiting* and opens it in place rather than closing course
    mode; *Open Integrations* inside it is the jump to the pane for setup.
-   Since 2026-10-13 that window is **Integrations** itself (This course ·
-   Credentials): the Syncs view was folded into the service cards, and the
+   Since 2026-10-13 that window is **Integrations** itself (This course, with
+   Accounts behind a button): the Syncs view was folded into the service cards, and the
    header line opens it.
 5. ~~**Evidence**, as its own document~~ — **built** (2026-10-07), as course
    mode's fourth reading. `mode=evidence` asks the host for `class_progress`,

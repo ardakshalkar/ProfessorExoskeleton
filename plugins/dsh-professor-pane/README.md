@@ -179,10 +179,13 @@ neither.
 This pane gets screen-shared and thrown at lecture-hall projectors — the whole
 reason the class list has a `Pseudonyms` press and a coloured rule when names
 are showing. A view that unfolded every student's written answers on load would
-put a room's work on the wall behind the lecturer. So every panel starts
-`hidden`, one press opens one person, and `.row.work[hidden]` is declared
-**after** `.row.work` on purpose: the two selectors score the same, the later
-one wins, and with them the other way round every panel was open on load.
+put a room's work on the wall behind the lecturer. So every student's detail
+starts `hidden` under their row, and one press moves one person into the drawer
+beside the list. A row shows the student, a line per assessment and no answers;
+a cell, or a line in the drawer, shows that one hand-in, answers included.
+↑ ↓ walk the list keeping the assessment, ← → walk the student's assessments,
+Esc steps back out. The answers are hidden by the stylesheet until their line
+is the drawer's, which keeps them out of the accessibility tree too.
 
 Rendered inline rather than fetched when pressed, and that is forced rather
 than chosen. These documents are delivered into a frame with an opaque origin,
@@ -353,8 +356,9 @@ under a different dot-directory again. Four of those are invisible from every
 other tab.
 
 Regrouped by service (2026-10-13), so everything about one service is in one
-place. Two sub-views: **This course** and **Credentials**. Credentials goes
-when Accounts replaces it.
+place. There are no sub-views: the tab opens on **This course**, and an
+**Accounts** button in its header switches to what this computer is signed in
+to.
 
 **This course** opens on a *Needs you* strip, which appears only when there is
 something to do: names a sync could not place, assessments with no Canvas
@@ -391,6 +395,24 @@ Jumps that used to open Syncs now open This course with the sheet card scrolled
 into view: the sheet-changed notice, and the Students tab's "Sync from sheet".
 In course mode, the Syncs window became Integrations.
 
+**Accounts** replaced Credentials. It is about the machine, so every course on
+it uses the same accounts. It has one row per service:
+
+- **Canvas:** the host, and whether a token is saved.
+- **Google:** who is signed in.
+- **GitHub:** a saved token, or else the signed-in `gh` CLI. `ainar` tries the
+  token first, as `resolveAuth` does, and the pane checks `gh auth status` at
+  most every two minutes.
+- **Telegram** and **Moodle.**
+- **Transcription:** each connection with its provider, model and price.
+
+Each row says who the service is connected as. Its button opens the form to
+connect it or replace its token. GitHub can now be set up from here too: a
+token creates a `github` connection, and GitHub is asked whose token it is.
+The environment variables and files Credentials used to list are under *Where
+these are read from*, folded at the foot. A token found in a file is still
+reported outside the fold.
+
 `test/integrations-page.mjs` draws the tab against a real workspace, with every
 write mocked. `--ready` makes Canvas look reachable, `--waiting` adds made-up
 rows to confirm, and `?course=1` puts course mode over it.
@@ -404,7 +426,7 @@ tab is for.
 
 ### Typing a token in
 
-**Credentials** has a field per variable the run's connections name. What is
+Each **Accounts** row has a field for the variable its connection names. What is
 typed there goes through `ctx.credentials` into the harness's managed store —
 the same one the Models page writes API keys to — and never into a file in this
 repository. The field is write-only in the strong sense: no route returns a

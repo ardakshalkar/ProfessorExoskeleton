@@ -24,6 +24,9 @@ import { extname, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
 import { assessmentsOf } from "@ainar/core/src/bundle.ts";
+import { Ledger } from "@ainar/core/src/lms/ledger.ts";
+
+import { scanPiles } from "./scans.js";
 
 const AUDIO = new Set([".m4a", ".mp4", ".mp3", ".wav", ".webm", ".ogg"]);
 const STUDENT = /^STUDENT-/;
@@ -135,11 +138,25 @@ const batchRecordings = (folder) => {
 export const filesDocument = ({ bundle, runId, submissions }) => {
   const folder = join(submissions, runId);
   const titles = new Map(assessmentsOf(bundle, runId).map((entry) => [entry.assessment_id, entry.title || entry.assessment_id]));
+  // How far each scan pile has got — identify, match, read, rubric, grade,
+  // approve, Canvas — exactly as the Scans window reckons it, so the two never
+  // disagree. A pile the standings cannot read still lists its files.
+  let piles = new Map();
+  try {
+    const found = scanPiles({ bundle, runId, submissions, ledger: Ledger.load(runId) });
+    piles = new Map(
+      found.piles.map((pile) => [pile.id, { now: pile.now, progress: pile.progress, stages: found.standings.get(pile.id)?.stages ?? null }]),
+    );
+  } catch {
+    // Files without standings, rather than no Files at all.
+  }
   const assessments = [];
   for (const entry of dirs(folder)) {
     if (!entry.isDirectory() || entry.name.startsWith("_")) continue;
     const found = assessmentFiles(join(folder, entry.name));
     if (!found.scans.uploaded && !found.scans.papers && !found.audio.takes) continue;
+    const pile = piles.get(entry.name);
+    if (pile) found.scans.standing = pile;
     assessments.push({ id: entry.name, title: titles.get(entry.name) || entry.name, known: titles.has(entry.name), ...found });
   }
   // In the course's own order, unknown folders last.

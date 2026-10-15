@@ -636,29 +636,36 @@ function CanvasSections(props) {
   );
 }
 
-/** One assessment's three states, as the pills its row has room for. */
-const rowPills = (entry, reachable) => {
-  const pills = [];
+/**
+ * One assessment's three states, as one line of words. Only a problem is
+ * coloured: "linked" on nineteen rows in green is nineteen things to read past
+ * on the way to the two that need something.
+ */
+const rowState = (entry, reachable) => {
+  const parts = [];
   const { linked, of } = entry.link;
   // Until Canvas can be reached there is no column to speak of either way.
-  if (!reachable) {
-    // nothing
-  } else if (linked === of) {
-    pills.push({ key: "col", text: "linked", tone: "ok" });
-  } else {
-    pills.push({ key: "col", text: linked ? linked + " of " + of + " linked" : "not linked", tone: "warn" });
+  if (reachable) {
+    parts.push(
+      linked === of
+        ? { key: "col", text: "linked", tone: "ok" }
+        : { key: "col", text: linked ? linked + " of " + of + " linked" : "not linked", tone: "warn" },
+    );
   }
-  pills.push(
+  parts.push(
     entry.a.definitionSent
       ? { key: "def", text: "brief sent " + shortDate(entry.a.definitionSent), tone: "" }
-      : { key: "def", text: "brief not sent", tone: "quiet" },
+      : { key: "def", text: "no brief sent", tone: "quiet" },
   );
   const c = entry.u && entry.u.canvas;
-  if (!c || c.ready === 0) pills.push({ key: "marks", text: "no marks yet", tone: "quiet" });
-  else if (c.unsent + c.changed === 0) pills.push({ key: "marks", text: "all " + c.ready + " marks in", tone: "ok" });
-  else pills.push({ key: "marks", text: c.unsent + c.changed + " marks to send", tone: "warn" });
-  return pills;
+  if (!c || c.ready === 0) parts.push({ key: "marks", text: "no marks yet", tone: "quiet" });
+  else if (c.unsent + c.changed === 0) parts.push({ key: "marks", text: "all " + c.ready + " marks in", tone: "ok" });
+  else parts.push({ key: "marks", text: c.unsent + c.changed + " marks to send", tone: "warn" });
+  return parts;
 };
+
+/** How many rows a list shows before "Show N more". */
+const ROWS_AT_FIRST = 8;
 
 /** What the card counts, for its own header and for the strip above it. */
 export const canvasCounts = (data, unpublished) => {
@@ -690,13 +697,19 @@ export const canvasCounts = (data, unpublished) => {
 export function CanvasCard(props) {
   const data = props.data;
   const row = (data.integrations || []).find((entry) => entry.id === "canvas");
-  const [filter, setFilter] = React.useState(props.filter || "all");
+  // Opens on what needs something, when anything does; `null` until then,
+  // because which that is depends on data the first render may not have.
+  const [filter, setFilter] = React.useState(props.filter || null);
+  const [more, setMore] = React.useState(false);
   const [open, setOpen] = React.useState(null);
   const [binding, setBinding] = React.useState(false);
   const [editing, setEditing] = React.useState(null);
   const [tokenError, setTokenError] = React.useState(null);
   React.useEffect(() => {
-    if (props.filter) setFilter(props.filter);
+    if (props.filter) {
+      setFilter(props.filter);
+      setMore(false);
+    }
   }, [props.filter, props.filterTick]);
 
   if (!row) return null;
@@ -716,13 +729,17 @@ export function CanvasCard(props) {
 
   const subtitle = [
     data.canvas.host ? hostName(data.canvas.host) : "no address",
-    tokenStep.done ? "token saved" : "no token",
+    // The token is the account's (Integrations → Accounts); said here only
+    // when it is missing.
+    tokenStep.done ? null : "no token",
     subgroupCourses.perSubgroup
       ? courseCount + " course" + (courseCount === 1 ? "" : "s") + ", one per subgroup"
       : data.canvasCourse.id
         ? "course " + data.canvasCourse.id
         : "no course",
-  ].join(" · ");
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   const chip = !reachable
     ? { text: "setup needed", tone: "warn" }
@@ -730,9 +747,25 @@ export function CanvasCard(props) {
       ? { text: rows.length - unlinked.length + " of " + rows.length + " linked", tone: "warn" }
       : { text: "ready", tone: "ok" };
 
-  const shown = rows.filter((entry) =>
-    filter === "unlinked" ? unlinked.includes(entry) : filter === "marks" ? toSend.includes(entry) : true,
+  // What needs something: no column (once Canvas can be reached), or marks
+  // Canvas does not have. A brief not sent is not on it — plenty of
+  // assessments are never described in Canvas at all.
+  const attention = rows.filter((entry) => (reachable && unlinked.includes(entry)) || toSend.includes(entry));
+  const current = filter || (attention.length ? "attention" : "all");
+  const matching = rows.filter((entry) =>
+    current === "unlinked"
+      ? unlinked.includes(entry)
+      : current === "marks"
+        ? toSend.includes(entry)
+        : current === "attention"
+          ? attention.includes(entry)
+          : true,
   );
+  const shown = more ? matching : matching.slice(0, ROWS_AT_FIRST);
+  const choose = (id) => {
+    setFilter(id);
+    setMore(false);
+  };
 
   // ---- setup, while Canvas cannot be reached -----------------------------
 
@@ -881,9 +914,14 @@ export function CanvasCard(props) {
         ),
         h(
           "span",
-          { className: "pp-crowpills" },
-          rowPills(entry, reachable).map((pill) =>
-            h("span", { className: "pp-chip" + (pill.tone ? " pp-chip-" + pill.tone : ""), key: pill.key }, pill.text),
+          { className: "pp-crowstate" },
+          rowState(entry, reachable).map((part, index) =>
+            h(
+              React.Fragment,
+              { key: part.key },
+              index ? h("span", { className: "pp-crowsep", "aria-hidden": "true" }, " · ") : null,
+              h("span", { className: part.tone ? "pp-st-" + part.tone : null }, part.text),
+            ),
           ),
         ),
       ),
@@ -999,15 +1037,19 @@ export function CanvasCard(props) {
 
   // ---- the card ----------------------------------------------------------
 
+  // Two filters a professor chooses, and a third shown only while the strip
+  // above has chosen it, so the row says what is being looked at.
   const filters = [
+    { id: "attention", label: "Needs something " + attention.length, hide: !attention.length },
     { id: "all", label: "All " + rows.length },
-    { id: "unlinked", label: "Not linked " + unlinked.length, hide: !reachable || !unlinked.length },
-    { id: "marks", label: "Marks to send " + toSend.length, hide: !toSend.length },
+    { id: "unlinked", label: "Not linked " + unlinked.length, hide: current !== "unlinked" },
+    { id: "marks", label: "Marks to send " + toSend.length, hide: current !== "marks" },
   ].filter((entry) => !entry.hide);
 
   return h(
     "section",
-    { className: "pp-ccard" },
+    // The id is what the Needs-you strip's Show scrolls to.
+    { className: "pp-ccard", id: "pp-card-canvas" },
     h(
       "div",
       { className: "pp-chead" },
@@ -1041,8 +1083,8 @@ export function CanvasCard(props) {
                       type: "button",
                       className: "pp-segbtn",
                       key: entry.id,
-                      "aria-pressed": filter === entry.id,
-                      onClick: () => setFilter(entry.id),
+                      "aria-pressed": current === entry.id,
+                      onClick: () => choose(entry.id),
                     },
                     entry.label,
                   ),
@@ -1086,6 +1128,13 @@ export function CanvasCard(props) {
             { className: "pp-crows" },
             shown.length ? shown.map(assessmentRow) : h("p", { className: "pp-as" }, "Nothing here."),
           ),
+          matching.length > shown.length
+            ? h(
+                "button",
+                { type: "button", className: "pp-morebtn", onClick: () => setMore(true) },
+                "Show " + (matching.length - shown.length) + " more",
+              )
+            : null,
         )
       : h("p", { className: "pp-as" }, "This run has no assessments yet. Drafting one is /design-assessment."),
     details,

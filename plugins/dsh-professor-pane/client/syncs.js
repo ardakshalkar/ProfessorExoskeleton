@@ -472,19 +472,14 @@ export function SyncCard(props) {
                 busy === "run" ? "Running…" : "Run",
               ),
         ),
-    // How the file gets here, and what would make the step unnecessary: the
-    // missing thing named, so "why do I have to do this" has an answer.
+    // How the file gets here, and what would make the step unnecessary.
     takesFile
       ? h(
           "p",
           { className: "pp-synchint" },
-          "This computer has no Google login of its own, so the sheet comes in as a file: press Download from Google" +
-            (sync.download.tabHint
-              ? " (it downloads the first tab; for “" +
-                sync.download.tabHint +
-                "” open that tab and use File → Download → Comma-separated values)"
-              : "") +
-            ", then drop the file here. You see what it would change before anything is written.",
+          "No Google login on this computer: download the sheet" +
+            (sync.download.tabHint ? " (from its \u201c" + sync.download.tabHint + "\u201d tab: File → Download → CSV)" : "") +
+            ", then drop the file on this card. Nothing is written before a preview.",
         )
       : null,
     result
@@ -504,16 +499,20 @@ export function SyncCard(props) {
 }
 
 /**
- * One row a sync was not sure of: where it stands in its sheet, who it most
- * likely is, and Confirm or Someone else. A confirmed row is remembered on this
- * computer and applied the next time its sync runs; until then it writes
- * nothing.
+ * One row a sync was not sure of, as the decision it is: the name as written,
+ * who it most likely is, and Confirm. Where it stands in the sheet — the row
+ * and its neighbours as a small grid — opens under it on request: it answers
+ * "which line 23", which is the question only some rows raise.
+ *
+ * A confirmed row is remembered on this computer and applied the next time its
+ * sync runs; until then it writes nothing.
  */
 function WaitingCard(props) {
   const row = props.row;
   const [picking, setPicking] = React.useState(null);
   const [busy, setBusy] = React.useState(false);
   const [failed, setFailed] = React.useState(null);
+  const [showing, setShowing] = React.useState(false);
   const [best] = row.candidates;
   const preview = row.preview;
   const person = (candidate) => candidate.name || candidate.student;
@@ -537,37 +536,18 @@ function WaitingCard(props) {
     });
   };
 
+  const where = [row.line ? "line " + row.line : null, preview && preview.tab ? "tab " + preview.tab : null].filter(Boolean).join(" · ");
+
   return h(
     "div",
-    { className: "pp-waitcard" },
+    { className: "pp-waitrow" },
     h(
       "div",
-      { className: "pp-waithead" },
-      h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, preview ? "GS" : "··"),
+      { className: "pp-waitline" },
       h(
         "span",
-        { className: "pp-waitsource" },
-        row.source,
-        preview && preview.tab ? h("span", { className: "pp-waitwhere" }, " · tab " + preview.tab) : null,
-        row.line ? h("span", { className: "pp-waitwhere" }, " · line " + row.line) : null,
-      ),
-      h("span", { className: "pp-segspacer" }),
-      preview && preview.open
-        ? h("a", { className: "pp-waitopen", href: preview.open, target: "_blank", rel: "noreferrer" }, "Open in Google Sheets ↗")
-        : null,
-    ),
-    preview ? h(SheetPreview, { preview, line: row.line }) : null,
-    h(
-      "div",
-      { className: "pp-waitdecide" },
-      h(
-        "div",
         { className: "pp-waitpair" },
-        h(
-          "span",
-          { className: "pp-waitwritten", title: "As written in the sheet" },
-          row.written !== null ? "“" + row.written + "”" : "(name hidden)",
-        ),
+        h("span", { className: "pp-waitwritten", title: "As written in the sheet" }, row.written !== null ? "\u201c" + row.written + "\u201d" : "(name hidden)"),
         h("span", { className: "pp-waitarrow", "aria-hidden": "true" }, "→"),
         best
           ? h(
@@ -576,64 +556,82 @@ function WaitingCard(props) {
               h("span", { className: "pp-avatar", "aria-hidden": "true" }, best.name ? initials(best.name) : "?"),
               h("span", { className: "pp-waitname" }, person(best)),
             )
-          : h("span", { className: "pp-as" }, "nobody in the class list is close"),
-        h("span", { className: "pp-chip pp-chip-warn", title: row.why.replace(/ of STUDENT-[A-Z0-9]+/, "") }, shortWhy(row.why)),
+          : h("span", { className: "pp-as" }, "nobody close"),
       ),
-      row.candidates.length > 1
-        ? h("div", { className: "pp-as" }, "Also near: " + row.candidates.slice(1).map(person).join(", "))
-        : null,
-      picking
-        ? h(
-            "div",
-            { className: "pp-syncctl" },
-            h(
-              "select",
-              { value: picking.to || "", onChange: (event) => setPicking({ to: event.target.value }) },
-              h("option", { value: "" }, "Who is it?"),
-              (props.students || []).map((student) =>
-                h("option", { value: student.student, key: student.student }, student.name || student.student),
-              ),
-            ),
-            h("span", { className: "pp-segspacer" }),
-            h(
+    ),
+    // The names get the whole first line — they are what is being decided —
+    // and the presses sit at the end of the second.
+    h(
+      "div",
+      { className: "pp-waitmeta" },
+      h(
+        "span",
+        { className: "pp-waitwhy" },
+        h("span", { className: "pp-st-warn", title: row.why.replace(/ of STUDENT-[A-Z0-9]+/, "") }, shortWhy(row.why)),
+        row.candidates.length > 1 ? " · also near " + row.candidates.slice(1).map(person).join(", ") : null,
+        where ? " · " + where : null,
+        preview
+          ? h(
               "button",
-              { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy || !picking.to, onClick: () => confirm(picking.to) },
-              "Confirm",
-            ),
-            h("button", { type: "button", className: "pp-syncbtn", onClick: () => setPicking(null) }, "Cancel"),
-          )
+              { type: "button", className: "pp-linkbtn", "aria-expanded": showing, onClick: () => setShowing(!showing) },
+              showing ? "hide the sheet" : "show in the sheet",
+            )
+          : null,
+        preview && preview.open
+          ? h("a", { className: "pp-linkbtn", href: preview.open, target: "_blank", rel: "noreferrer" }, "open ↗")
+          : null,
+      ),
+      picking
+        ? null
         : h(
-            "div",
-            { className: "pp-syncctl" },
-            h("span", { className: "pp-segspacer" }),
+            "span",
+            { className: "pp-waitacts" },
             best
-              ? h(
-                  "button",
-                  { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy, onClick: () => confirm(null) },
-                  "Confirm " + (best.name ? best.name.split(/\s+/)[0] : "it"),
-                )
+              ? h("button", { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy, onClick: () => confirm(null) }, busy ? "…" : "Confirm")
               : null,
             h("button", { type: "button", className: "pp-syncbtn", onClick: () => setPicking({ to: "" }) }, "Someone else"),
           ),
-      failed ? h("p", { className: "pp-saveerr" }, failed) : null,
     ),
+    showing && preview ? h(SheetPreview, { preview, line: row.line }) : null,
+    picking
+      ? h(
+          "div",
+          { className: "pp-syncctl" },
+          h(
+            "select",
+            { value: picking.to || "", onChange: (event) => setPicking({ to: event.target.value }) },
+            h("option", { value: "" }, "Who is it?"),
+            (props.students || []).map((student) => h("option", { value: student.student, key: student.student }, student.name || student.student)),
+          ),
+          h(
+            "button",
+            { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy || !picking.to, onClick: () => confirm(picking.to) },
+            "Confirm",
+          ),
+          h("button", { type: "button", className: "pp-syncbtn", onClick: () => setPicking(null) }, "Cancel"),
+        )
+      : null,
+    failed ? h("p", { className: "pp-saveerr" }, failed) : null,
   );
 }
 
-/** The rows waiting on a service's syncs, with the sentence that says what Confirm does. */
+/** The rows waiting on a service's syncs. */
 export function WaitingList(props) {
   const rows = props.rows || [];
   if (!rows.length) return null;
   return h(
     "div",
     { className: "pp-syncsection" },
-    h("h3", { className: "pp-synch3" }, "Waiting for you", h("span", { className: "pp-count pp-count-warn" }, rows.length)),
     h(
-      "p",
-      { className: "pp-as" },
-      props.names
-        ? "Each row as it stands in its sheet, and who it most likely is. A confirmed row is remembered on this computer and applied the next time its sync runs; until then it writes nothing."
-        : "Names are hidden. Press Names to see who each row is.",
+      "div",
+      { className: "pp-waittitle" },
+      h("span", { className: "pp-csubtitle" }, "Names to confirm"),
+      h("span", { className: "pp-count pp-count-warn" }, rows.length),
+      h(
+        "span",
+        { className: "pp-as" },
+        props.names ? "a confirmed name is used from the next sync on" : "names are hidden — press Names to see who each is",
+      ),
     ),
     h(
       "div",

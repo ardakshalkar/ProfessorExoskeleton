@@ -1,6 +1,6 @@
 /**
  * The Integrations tab: This course (each service the run uses, Canvas first),
- * and Credentials until Accounts replaces it.
+ * and Accounts (what this computer is signed in to).
  *
  * The tab used to be five sub-views cut along the code's lines — Status,
  * Syncs, Targets, Credentials, Links — so everything about Canvas was spread
@@ -8,18 +8,14 @@
  * existed twice. It is being regrouped by service: one card per service, its
  * setup inside it while unfinished, its syncs on it, and the facts a broken
  * push needs folded into the card's Details. Canvas, Google Sheets and GitHub
- * have cards; Credentials goes when Accounts replaces it.
+ * have cards. Accounts replaced Credentials: one row per service saying who it
+ * is connected as, rather than a list of variables.
  */
 
 import { CanvasCard, canvasCounts } from "./canvas-card.js";
 import { Message, useJson } from "./common.js";
-import {
-  Fact,
-  GoogleConnect,
-  IntegrationStatus,
-  Presence,
-  Secret,
-} from "./integration-parts.js";
+import { Accounts } from "./accounts.js";
+import { IntegrationStatus } from "./integration-parts.js";
 import { useUnpublished } from "./marks.js";
 import { GithubCard, SheetsCard } from "./service-cards.js";
 import { SyncCard } from "./syncs.js";
@@ -62,8 +58,8 @@ export function Integrations(props) {
   // over the fetch for the reason `Preferences` prefers it: the form should
   // redraw from disk rather than from its own memory of what was ticked.
   const [fresh, setFresh] = React.useState(null);
-  // A refusal from the credential seam, tagged with the field that caused it.
-  const [status, setStatus] = React.useState(null);
+  // Accounts, in place of This course. Opened by its button in the header.
+  const [accounts, setAccounts] = React.useState(props.subView === "accounts");
   // Bumped after a sync press, so its card's chips and the waiting rows are
   // read again even where nothing passes `onWrite`.
   const [tick, setTick] = React.useState(0);
@@ -89,8 +85,11 @@ export function Integrations(props) {
   React.useEffect(() => {
     if (state.phase !== "ready") return;
     setFresh(null);
-    setStatus(null);
   }, [state]);
+  // A jump to a card (the sheet notice) is a jump to This course.
+  React.useEffect(() => {
+    if (props.focus && props.focus.service) setAccounts(false);
+  }, [props.focus && props.focus.tick]);
 
   // Every Save bumps the revision, and `useJson` goes back to loading on each
   // one. The last answer stays on screen meanwhile: blanking the tab would
@@ -105,10 +104,8 @@ export function Integrations(props) {
   const data = fresh || fetched;
   if (!data) return h(Message, null, "Reading what this run is wired to…");
 
-  const sub = props.subView || "course";
   const onSaved = (body) => {
     setFresh(body);
-    setStatus(null);
     // The run record changed, so every other view of it is stale — the same
     // counter an approval bumps.
     if (props.onWrite) props.onWrite();
@@ -129,201 +126,70 @@ export function Integrations(props) {
       })
       .catch(() => null);
 
-  // ---- Credentials ---------------------------------------------------
+  // ---- the two views -------------------------------------------------
+  //
+  // This course, and Accounts behind a button in the same header: Accounts
+  // is the machine's and is opened twice a term, so it does not get a
+  // segment of its own beside the course it is not about.
 
-  if (sub === "credentials") {
+  const head = h(
+    "div",
+    { className: "pp-ihead" },
+    accounts
+      ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setAccounts(false) }, "← This course")
+      : h("span", { className: "pp-ihtitle" }, "This course"),
+    h("span", { className: "pp-segspacer" }),
+    accounts
+      ? h("span", { className: "pp-ihtitle" }, "Accounts")
+      : h(
+          "button",
+          {
+            type: "button",
+            className: "pp-segbtn",
+            title: "Canvas, Google, GitHub and the rest, as this computer is signed in to them",
+            onClick: () => setAccounts(true),
+          },
+          "Accounts",
+        ),
+  );
+
+  if (accounts) {
     return h(
       "div",
-      { className: "pp-scroll" },
-      h(
-        "p",
-        { className: "pp-absent" },
-        "Presence only. This pane never shows a credential's value — a Canvas " +
-          "token can change a grade, and this screen gets projected.",
-      ),
-      h(GoogleConnect, {
-        google: data.google,
-        // Re-read the whole document: the sign-in changed the registry and
-        // the store, and the Status checklist reads both.
-        onChanged: () =>
-          fetch(url, { headers: { accept: "application/json" } })
-            .then((response) => response.json())
-            .then((body) => {
-              if (!body.error) setFresh(body);
-            })
-            .catch(() => null),
+      null,
+      head,
+      h(Accounts, {
+        data,
+        runId: props.runId,
+        sessionId: props.sessionId,
+        // A token or a connection is machine configuration, not the record,
+        // so nothing else needs to redraw; `onWrite` is not called.
+        onSaved: (body) => setFresh(body),
+        onRefresh: refresh,
       }),
-      h("p", { className: "pp-factgroup" }, "Credentials"),
-      (() => {
-        const refs = (data.credentials && data.credentials.refs) || {};
-        // The Google sign-in is Connect's, above, and is never pasted.
-        const google = data.google && data.google.tokenEnv;
-        const names = Object.keys(refs)
-          .filter((name) => name !== google)
-          .sort();
-        if (!names.length) {
-          return h(
-            "p",
-            { className: "pp-absent" },
-            "No connection in this run names a credential yet.",
-          );
-        }
-        return [
-          h(
-            "p",
-            { className: "pp-absent", key: "why" },
-            data.credentials && data.credentials.available
-              ? "Type a token here and it goes to the harness's credential store, " +
-                  "not into any file in this repository. It is never shown again — " +
-                  "there is no code path that reads one back."
-              : "No credential provider is mounted, so these can only be set in the " +
-                  "environment. The names are what to export.",
-          ),
-          ...names.map((name) =>
-            h(Secret, {
-              key: name,
-              name,
-              status: refs[name],
-              runId: props.runId,
-              sessionId: props.sessionId,
-              onSaved: (body) => {
-                setFresh(body);
-                setStatus(null);
-                // A token is not the record, so `onWrite` is deliberately
-                // not called: nothing in courses/ changed and re-fetching
-                // every other view would be work for no new fact.
-              },
-              onStatus: (next) => setStatus(next),
-            }),
-          ),
-          ...names
-            .filter((name) => refs[name] && refs[name].why)
-            .map((name) =>
-              h("p", { className: "pp-absent", key: name + ":why" }, name + ": " + refs[name].why),
-            ),
-          // A refusal from the seam belongs under the field that caused
-          // it, and `status.from` carries the variable's name for exactly
-          // that — the same tagging the Fetch and Save buttons use so one
-          // button's failure is never printed beside the other's.
-          status && status.error && names.includes(status.from)
-            ? h("p", { className: "pp-saveerr", key: "err" }, status.error)
-            : null,
-        ];
-      })(),
-      h("p", { className: "pp-factgroup" }, "Environment"),
-      data.environment.map((variable) =>
-        h(
-          Fact,
-          { label: variable.name, note: variable.what, key: variable.name },
-          h(Presence, { present: variable.present }),
-        ),
-      ),
-      h("p", { className: "pp-factgroup" }, "Files"),
-      h(
-        Fact,
-        {
-          // First, because it is the file every tool now reads first.
-          // The two below it are where the same answer used to live, and
-          // they are still shown: during a migration the honest picture is
-          // all three, and "the host you can see is in the file the pusher
-          // does not read" is the diagnosis this tab exists to give.
-          label: "connections.json",
-          note:
-            data.registry.error ||
-            data.registry.path + " — the shared registry, `ainar connections`",
-          missing: !data.registry.present || Boolean(data.registry.error),
-        },
-        data.registry.present
-          ? data.registry.error
-            ? "unreadable"
-            : data.registry.connections.length +
-              " connection" +
-              (data.registry.connections.length === 1 ? "" : "s")
-          : h(Presence, { present: false, no: "not migrated yet" }),
-      ),
-      h(
-        Fact,
-        {
-          label: "lms.toml",
-          note: data.canvas.configPath,
-          missing: !data.canvas.host && !data.canvas.tokenInFile,
-        },
-        data.canvas.tokenInFile
-          ? h(Presence, { present: true, yes: "host and token" })
-          : data.canvas.host && data.canvas.hostFrom !== "AINAR_CANVAS_URL"
-            ? h(Presence, { present: true, yes: "host only" })
-            : h(Presence, { present: false, no: "nothing read" }),
-      ),
-      h(
-        Fact,
-        {
-          label: "profiles (legacy)",
-          note: data.connections.error || data.connections.path,
-          missing: !data.connections.present || Boolean(data.connections.error),
-        },
-        data.connections.present
-          ? data.connections.error
-            ? "unreadable"
-            : data.connections.profiles.length +
-              " profile" +
-              (data.connections.profiles.length === 1 ? "" : "s")
-          : h(Presence, { present: false, no: "no file" }),
-      ),
-      h(
-        Fact,
-        {
-          label: "people.json",
-          note:
-            data.roster.path +
-            " — the identity store, outside the repository. The course record " +
-            "holds pseudonyms; the real names are only here",
-          missing: !data.roster.present,
-        },
-        data.roster.present
-          ? data.roster.count === null
-            ? "unreadable"
-            : data.roster.count + " known"
-          : h(Presence, { present: false, no: "no roster" }),
-      ),
-      data.registry.connections.some((connection) => connection.tokenInFile)
-        ? h(
-            "p",
-            { className: "pp-saveerr" },
-            "A connection in the registry holds a literal token, which that file is " +
-              "not supposed to contain at all. Revoke it at the provider, export a " +
-              "fresh one under the variable the connection names, and delete the line.",
-          )
-        : null,
-      data.connections.profiles.some((profile) => profile.tokenInFile)
-        ? h(
-            "p",
-            { className: "pp-saveerr" },
-            "A legacy profile holds a literal token. It still works, but a token in a " +
-              "file that gets backed up and synced should be treated as exposed: " +
-              "`ainar connections migrate` says what to do about it, and does not " +
-              "copy the token forward.",
-          )
-        : null,
     );
   }
 
-  // ---- This course ---------------------------------------------------
-
-  return h(CourseIntegrations, {
-    data,
-    unpublished: marks,
-    syncs: roads,
-    runId: props.runId,
-    sessionId: props.sessionId,
-    names: props.names,
-    ask: props.ask,
-    focus: props.focus,
-    revision: String(props.revision || 0) + "." + tick,
-    onSaved,
-    onSynced,
-    onRefresh: refresh,
-    onWrite: props.onWrite,
-  });
+  return h(
+    "div",
+    null,
+    head,
+    h(CourseIntegrations, {
+      data,
+      unpublished: marks,
+      syncs: roads,
+      runId: props.runId,
+      sessionId: props.sessionId,
+      names: props.names,
+      ask: props.ask,
+      focus: props.focus,
+      revision: String(props.revision || 0) + "." + tick,
+      onSaved,
+      onSynced,
+      onRefresh: refresh,
+      onWrite: props.onWrite,
+    }),
+  );
 }
 
 /** The services that have a card of their own; the rest are drawn as Status drew them. */
@@ -400,6 +266,8 @@ function CourseIntegrations(props) {
     waiting
       ? {
           key: "waiting",
+          service: "sheets",
+          mark: "GS",
           text: plural(waiting, "name", "names") + " from the grade sheet to confirm",
           go: () => scrollTo("pp-card-sheets"),
         }
@@ -407,6 +275,8 @@ function CourseIntegrations(props) {
     reachable && counts.unlinked.length
       ? {
           key: "unlinked",
+          service: "canvas",
+          mark: "Cv",
           text: plural(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
           go: () => show("unlinked"),
         }
@@ -414,6 +284,8 @@ function CourseIntegrations(props) {
     counts.toSend.length
       ? {
           key: "marks",
+          service: "canvas",
+          mark: "Cv",
           text: "Canvas is missing marks for " + plural(counts.toSend.length, "assessment", "assessments"),
           go: () => show("marks"),
         }
@@ -439,6 +311,7 @@ function CourseIntegrations(props) {
             h(
               "div",
               { className: "pp-needsrow", key: item.key },
+              h("span", { className: "pp-svc pp-svc-small pp-svc-" + item.service, "aria-hidden": "true" }, item.mark),
               h("span", null, item.text),
               h("button", { type: "button", className: "pp-segbtn", onClick: item.go }, "Show"),
             ),

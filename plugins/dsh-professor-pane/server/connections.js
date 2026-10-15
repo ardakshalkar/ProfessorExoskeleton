@@ -149,6 +149,29 @@ export const telegramWhoAmI = async (token) => {
 };
 
 /**
+ * Ask GitHub whose token this is. The token goes in the header; the login comes
+ * back, and is what the Accounts view names the connection by.
+ */
+export const githubWhoAmI = async (token) => {
+  const response = await fetch("https://api.github.com/user", {
+    headers: {
+      authorization: `Bearer ${token}`,
+      accept: "application/vnd.github+json",
+      "user-agent": "ainar-professor-pane",
+    },
+  });
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      `GitHub refused the token (${response.status}). A fine-grained token needs ` +
+        "Administration and Contents read/write on the repositories it creates.",
+    );
+  }
+  if (!response.ok) throw new Error(`GitHub returned ${response.status}.`);
+  const body = await response.json();
+  return body?.login ?? null;
+};
+
+/**
  * Ask Moodle for its site info, by POST.
  *
  * Every example in Moodle's documentation puts the token in the query string.

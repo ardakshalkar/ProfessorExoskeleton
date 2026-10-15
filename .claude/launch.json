@@ -38,6 +38,15 @@
             "port": 3093
         },
         {
+            "name": "planning-test",
+            "runtimeExecutable": "cmd",
+            "runtimeArgs": [
+                "/c",
+                "set AINAR_WORKSPACE=C:\\Users\\ARDAKS~1\\AppData\\Local\\Temp\\claude\\plan-ws&& node --experimental-strip-types plugins/dsh-professor-pane/test/planning-page.mjs CSS-4008-2026-FALL"
+            ],
+            "port": 3095
+        },
+        {
             "name": "integrations-test",
             "runtimeExecutable": "cmd",
             "runtimeArgs": [

@@ -48,7 +48,9 @@ export function DefenceStage(props) {
             : desk.manualLevel > 0.02
               ? "speaking"
               : "waiting"
-        : splitting
+        : // Transcribing a recording is the desk working, not waiting for a
+          // voice: a microphone there read as "still listening".
+          splitting || desk.sending
           ? "thinking"
           : "idle";
   const stageQuestionId = handsFree && handsFree.question ? handsFree.question : recording ? recording.question : null;
@@ -192,12 +194,18 @@ export function DefenceStage(props) {
         h("span", { className: "pp-stagebtnlabel" }, bigLabel + (recording ? " · " + clock(desk.elapsed) : "")),
       ),
       h("div", { className: "pp-approverow pp-stagerow" }, stageRow()),
+      /*
+       * A fixed few lines, the newest at the bottom: the box is anchored to
+       * its foot and clips the top, fading it, so a long answer never pushes
+       * the circle off the stage or the latest words below the fold. Every
+       * word is still in the drawer and in the take's transcript.
+       */
       h(
         "div",
-        { className: "pp-stagetr" + (stale ? " pp-stagetrold" : ""), "aria-live": "polite" },
+        { className: "pp-stagetr" + (stale ? " pp-stagetrold" : "") + (heardWords.length > 30 ? " pp-stagetrlong" : ""), "aria-live": "polite" },
         words && (spoken.length || words.partial)
           ? h(
-              React.Fragment,
+              "div",
               null,
               spoken.join(" "),
               words.partial ? h("span", { className: "pp-dpartial" }, " " + words.partial) : null,

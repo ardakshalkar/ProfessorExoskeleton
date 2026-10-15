@@ -357,11 +357,7 @@ export function CourseMode(props) {
   // A course-wide view, when one is chosen, in place of the reading; the
   // reading is kept so the weeks come back as they were left.
   const [view, setView] = React.useState(null);
-  const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
-  // Integrations: the pane's own tab, drawn here so going
-  // to it does not close course mode. This course first, as in the pane.
-  const [integrationsSub, setIntegrationsSub] = React.useState("course");
-  // The week Teaching was last stepped to. The page steps without a round
+  const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);  // The week Teaching was last stepped to. The page steps without a round
   // trip and reports each step; it is held in a ref so a step redraws
   // nothing, and copied into `week` only when Teaching is drawn again — on
   // coming back to it, or when the record or the drafts toggle changes.
@@ -445,7 +441,6 @@ export function CourseMode(props) {
         { className: "pp-cviewpad" },
         h(Integrations, {
           runId: props.runId,
-          subView: integrationsSub,
           sessionId: props.sessionId,
           onWrite: props.onWrite,
           revision: props.reload,
@@ -595,10 +590,7 @@ export function CourseMode(props) {
                   className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
                   title: preview ? "Private — not shown while previewing as a student" : "Open Integrations",
                   disabled: preview,
-                  onClick: () => {
-                    setIntegrationsSub("course");
-                    setView("integrations");
-                  },
+                  onClick: () => setView("integrations"),
                 },
                 [
                   canvasLine ? "Canvas: " + (CONNECTION_STATE[canvasLine.state] || canvasLine.state) : null,
@@ -665,22 +657,11 @@ export function CourseMode(props) {
             ? h(
                 "section",
                 { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || { label: "Integrations" }).label },
-                view === "tasks" || view === "integrations" || named
+                view === "tasks" || named
                   ? h(
                       "div",
                       { className: "pp-cviewbar" },
                       view === "tasks" ? SUBVIEWS.tasks.map((entry) => segment(entry, taskSub === entry.id, () => setTaskSub(entry.id), false)) : null,
-                      // Integrations' own row; its Syncs entry goes back to the Syncs view.
-                      view === "integrations"
-                        ? SUBVIEWS.integrations.map((entry) =>
-                            segment(
-                              entry,
-                              integrationsSub === entry.id,
-                              () => setIntegrationsSub(entry.id),
-                              false,
-                            ),
-                          )
-                        : null,
                       h("span", { className: "pp-segspacer" }),
                       // The pane's own choice, the same state, so the two never differ.
                       named

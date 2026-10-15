@@ -75,8 +75,9 @@ import { loadedRun } from "./workspace.js";
  * and a class list that silently omitted them would undo the point of that.
  */
 /**
- * What has been prepared for one student's oral defence: the pin (is the fork
- * cloned) and the drafted questions, each null when there is none yet.
+ * What has been prepared for one student's oral defence and what has been
+ * recorded of it: the pin (is the fork cloned), the drafted questions, and the
+ * takes counted (`recordedOf`), each null when there is none yet.
  *
  * A function rather than a value, so the class list reads these files only for
  * submissions that carry a link. A submissions folder that cannot be resolved
@@ -91,13 +92,31 @@ export const defenceReader = (root, runId) => {
     submissions = null;
   }
   return (assessmentId, studentId) => {
-    if (submissions === null) return { pin: null, questions: null };
+    if (submissions === null) return { pin: null, questions: null, recorded: null };
     const place = defencePlace(submissions, root, runId, assessmentId, studentId);
     try {
-      return { pin: readPin(place.pin), questions: readDefence(place.questions) };
+      return { pin: readPin(place.pin), questions: readDefence(place.questions), recorded: recordedOf(readSession(place.session)) };
     } catch {
-      return { pin: null, questions: null };
+      return { pin: null, questions: null, recorded: null };
     }
+  };
+};
+
+/**
+ * What has been recorded of a defence, counted: the takes, their length, how
+ * many are transcribed, and when the last was. Null when nothing is — the
+ * class list offers to record one then, and *Open defence* otherwise. A
+ * withdrawn take is kept on disk but not counted: it is never cited.
+ */
+const recordedOf = (session) => {
+  const takes = (session?.answers ?? []).filter((answer) => !answer.withdrawn);
+  if (!takes.length) return null;
+  return {
+    takes: takes.length,
+    seconds: takes.reduce((sum, answer) => sum + (typeof answer.seconds === "number" ? answer.seconds : 0), 0),
+    transcribed: takes.filter((answer) => answer.transcript).length,
+    last: takes.map((answer) => answer.recorded_at).filter(Boolean).sort().slice(-1)[0] ?? null,
+    whole: takes.some((answer) => answer.question_id === "Q0"),
   };
 };
 

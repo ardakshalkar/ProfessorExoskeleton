@@ -32,8 +32,11 @@
  * harness, accepted only if it is this app's own `/file` route). A hole is a
  * verb: pressing "Draft deck" asks for the deck, naming the week, the module
  * and the meetings, so the model starts with the record rather than a search.
- * Nothing here approves, writes or decides; accepting a draft is the professor
- * changing `approval: draft` in its record.
+ * Nothing here approves or decides; accepting a draft is the professor
+ * changing `approval: draft` in its record. The one write is Planning's: a
+ * bar dragged to another week sends a third message, `dates`, carrying the
+ * two dates the professor settled in its form (`PLAN_SCRIPT`), and the pane
+ * writes them (`server/plan-writes.js`).
  */
 
 const esc = (value) =>
@@ -218,7 +221,34 @@ table.plan td.lane{width:16%;min-width:140px;padding:0 6px}
 .lseg{display:flex;flex-direction:column;justify-content:center;gap:1px;min-height:30px;border-left:3px solid var(--lane);padding:3px 8px;font-size:12px;color:var(--ink);text-decoration:none;background:color-mix(in srgb,var(--lane) 12%,var(--surface))}
 .lseg.first{border-top-right-radius:6px}.lseg.last{border-bottom-right-radius:6px}
 .lseg.draft{border-left-style:dashed}
-.segt{font-weight:600}.segd{font-variant-numeric:tabular-nums}
+.segt{font-weight:600;color:inherit;text-decoration:none}a.segt:hover{text-decoration:underline}
+.segd{font-variant-numeric:tabular-nums}
+button.segd{all:unset;font-variant-numeric:tabular-nums;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
+button.segd:focus-visible{outline:2px solid var(--accent)}
+.lseg[draggable="true"]{position:relative;cursor:grab}
+.lseg.lifted{opacity:.35}
+.grip{position:absolute;left:-3px;right:0;height:7px;cursor:ns-resize;z-index:1}
+.grip.top{top:-1px}.grip.bottom{bottom:-1px}
+.grip::after{content:"";position:absolute;left:30%;right:30%;top:2px;height:3px;border-radius:2px;background:var(--lane);opacity:0;transition:opacity .12s}
+.lseg:hover .grip::after{opacity:.55}.grip:hover::after{opacity:1!important}
+table.plan tr.drop td{background:var(--accent-tint);box-shadow:inset 0 1px 0 var(--accent-line),inset 0 -1px 0 var(--accent-line)}
+table.plan tr.drop .wkn b{color:var(--accent)}
+.tray{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:10px 12px;border:1px dashed var(--flag-line);border-radius:12px;background:var(--surface)}
+.tray>b{font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:center;margin-right:4px;color:var(--flag)}
+.tray>small{color:var(--muted);font-size:12px}
+.traychip{cursor:grab}
+.planform{position:fixed;z-index:40;width:290px;max-width:calc(100vw - 24px);display:flex;flex-direction:column;gap:8px;padding:13px 15px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.planform[hidden]{display:none}
+.planform .pf-title{font-size:14px}
+.planform small{color:var(--muted);font-size:12px}
+.planform label{display:grid;grid-template-columns:48px 1fr;align-items:center;gap:2px 8px;font-size:13px}
+.planform label small{grid-column:2}
+.planform label small.off{color:var(--flag)}
+.planform input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--sunk);color:var(--ink);color-scheme:inherit}
+.planform .pf-error{margin:0;color:var(--flag);font-size:12px}
+.pf-actions{display:flex;gap:8px;align-items:center}
+.pf-actions .chip{cursor:pointer}
+.planform .primary[disabled]{opacity:.5;cursor:default}
 .q{--lane:var(--draft)}.hw{--lane:var(--hw)}.pj{--lane:var(--accent)}.ex,.ot{--lane:var(--muted)}
 .trio-wrap{display:flex;flex-direction:column;gap:12px}.trio-wrap[hidden]{display:none}
 .stepper{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -300,6 +330,85 @@ document.addEventListener('click',function(e){
   e.preventDefault();
   parent.postMessage({source:'professor-pane',kind:'view',url:a.getAttribute('href'),label:a.getAttribute('data-view'),format:a.getAttribute('data-format'),papers:a.getAttribute('data-papers')},'*');
 });})();<\/script>`;
+
+/**
+ * Planning's hands: drag a bar to another week, or one of its ends, and
+ * settle the day in a small form before anything is written.
+ *
+ * A drop moves by whole weeks — seven days per week crossed — so a quiz due
+ * Friday at 23:59 is still due Friday at 23:59, three weeks later. That is
+ * the default the form opens with, never a write: the professor reads the
+ * two dates, changes the day if the week is not the whole story, and saves.
+ * Saving is one `dates` message up to the pane, which writes the record and
+ * redraws this page from it. The page keeps each date's own offset, so it
+ * does no time-zone arithmetic: what the input shows is the record's wall
+ * time, and what goes back is that wall time with the same offset.
+ *
+ * Work with no dates comes from the tray and opens the form with the due
+ * date at the end of the week it was dropped on. Nothing listens in a tab
+ * opened by itself, so there the page draws the bars and takes no drags.
+ */
+const PLAN_SCRIPT = `<script>(function(){
+var form=document.querySelector('.planform'),island=document.getElementById('plan-items');
+if(!form||!island||parent===window)return;
+var items=JSON.parse(island.textContent),table=document.querySelector('table.plan'),OFF=table.getAttribute('data-offset')||'+00:00';
+var rows=[].slice.call(document.querySelectorAll('tr[data-week]')).map(function(r){return{n:+r.getAttribute('data-week'),from:r.getAttribute('data-from'),to:r.getAttribute('data-to')};});
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function rowOf(n){for(var i=0;i<rows.length;i++)if(rows[i].n===n)return rows[i];return null;}
+function weekOf(d){for(var i=0;i<rows.length;i++)if(d>=rows[i].from&&d<=rows[i].to)return rows[i].n;return null;}
+function nice(d){var p=d.split('-');return MON[+p[1]-1]+' '+(+p[2]);}
+function addDays(d,n){var p=d.split('-');return new Date(Date.UTC(+p[0],+p[1]-1,+p[2]+n)).toISOString().slice(0,10);}
+function local(s){return s?String(s).slice(0,16):'';}
+function offOf(s){var m=/(Z|[+-][0-9][0-9]:[0-9][0-9])$/.exec(s||'');return m?(m[1]==='Z'?'+00:00':m[1]):OFF;}
+function shift(v,n){return v?addDays(v.slice(0,10),n)+v.slice(10):v;}
+var f={title:form.querySelector('.pf-title'),week:form.querySelector('.pf-week'),opens:form.querySelector('.pf-opens'),due:form.querySelector('.pf-due'),
+  opensWk:form.querySelector('.pf-opens-wk'),dueWk:form.querySelector('.pf-due-wk'),error:form.querySelector('.pf-error'),save:form.querySelector('.pf-save')};
+function hint(input,out){var v=input.value;if(!v){out.textContent=input===f.opens?'no opening date':'';out.classList.remove('off');return;}
+  var w=weekOf(v.slice(0,10));out.textContent=w?'week '+w+' \\u00b7 '+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(v.slice(0,10)+'T12:00:00Z').getUTCDay()]:'outside the term';out.classList.toggle('off',!w);}
+function check(){hint(f.opens,f.opensWk);hint(f.due,f.dueWk);
+  var bad=!f.due.value?'It needs a due date.':f.opens.value&&f.opens.value>f.due.value?'It would open after it is due.':'';
+  f.error.textContent=bad;f.error.hidden=!bad;f.save.disabled=!!bad;}
+f.opens.addEventListener('input',check);f.due.addEventListener('input',check);
+function open(id,opens,due,week,x,y){var it=items[id];if(!it)return;
+  form.setAttribute('data-id',id);f.title.textContent=it.title||id;
+  var r=week?rowOf(week):null;f.week.textContent=r?'Week '+r.n+' \\u00b7 '+nice(r.from)+' \\u2013 '+nice(r.to):'';
+  f.opens.value=opens||'';f.due.value=due||'';f.save.textContent='Save dates';check();
+  form.hidden=false;var w=form.offsetWidth,h=form.offsetHeight;
+  form.style.left=Math.max(12,Math.min(x+14,innerWidth-w-12))+'px';form.style.top=Math.max(12,Math.min(y+14,innerHeight-h-12))+'px';
+  (due?f.due:f.opens).focus();}
+function close(){form.hidden=true;form.removeAttribute('data-id');}
+form.querySelector('.pf-cancel').addEventListener('click',close);
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!form.hidden){e.stopPropagation();close();}});
+f.save.addEventListener('click',function(){var id=form.getAttribute('data-id'),it=items[id];if(!it||f.save.disabled)return;
+  parent.postMessage({source:'professor-pane',kind:'dates',assessment:id,
+    opens_at:f.opens.value?f.opens.value+':00'+offOf(it.opens_at||it.due_at):'',due_at:f.due.value+':00'+offOf(it.due_at)},'*');
+  f.save.disabled=true;f.save.textContent='Saving\\u2026';});
+document.addEventListener('mousedown',function(e){
+  if(!form.hidden&&!form.contains(e.target)&&!(e.target.closest&&e.target.closest('[data-edit]')))close();},true);
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-edit]');if(!b)return;
+  e.preventDefault();var id=b.getAttribute('data-edit'),it=items[id];if(!it)return;var r=b.getBoundingClientRect();
+  open(id,local(it.opens_at),local(it.due_at),it.due_at?weekOf(it.due_at.slice(0,10)):null,r.left,r.bottom);});
+var grip=null,drag=null,over=null;
+document.addEventListener('mousedown',function(e){grip=e.target.closest&&e.target.closest('[data-edge]');},true);
+function lift(id,on){document.querySelectorAll('[data-a="'+id+'"]').forEach(function(s){s.classList.toggle('lifted',on);});}
+function end(){if(over)over.classList.remove('drop');over=null;if(drag)lift(drag.id,false);drag=null;}
+document.addEventListener('dragstart',function(e){
+  var el=e.target.closest&&e.target.closest('[data-a][draggable="true"]');if(!el||!items[el.getAttribute('data-a')])return;
+  var id=el.getAttribute('data-a');close();
+  drag={id:id,edge:grip&&el.contains(grip)?grip.getAttribute('data-edge'):'both',from:+el.getAttribute('data-wk')||null};
+  e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',id);}catch(x){}
+  setTimeout(function(){if(drag)lift(id,true);},0);});
+document.addEventListener('dragover',function(e){if(!drag)return;var r=e.target.closest&&e.target.closest('tr[data-week]');if(!r)return;
+  e.preventDefault();e.dataTransfer.dropEffect='move';if(over!==r){if(over)over.classList.remove('drop');over=r;r.classList.add('drop');}});
+document.addEventListener('dragleave',function(e){if(over&&!(e.relatedTarget&&over.contains(e.relatedTarget))){over.classList.remove('drop');over=null;}});
+document.addEventListener('drop',function(e){if(!drag)return;var r=e.target.closest&&e.target.closest('tr[data-week]');if(!r)return;
+  e.preventDefault();var d=drag,to=+r.getAttribute('data-week'),it=items[d.id],row=rowOf(to);end();
+  var opens=local(it.opens_at),due=local(it.due_at);
+  if(!it.due_at){opens='';due=row.to+'T23:59';}
+  else if(d.from!==null){var n=(to-d.from)*7;if(d.edge!=='due')opens=shift(opens,n);if(d.edge!=='opens')due=shift(due,n);}
+  open(d.id,opens,due,to,e.clientX,e.clientY);});
+document.addEventListener('dragend',end);
+})();<\/script>`;
 
 // ------------------------------------------------------------------ prompts
 
@@ -479,6 +588,10 @@ const planningBody = (data, { student }) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];
   const weekOf = (date) => (date ? weeks.find((w) => date >= w.starts_on && date <= w.ends_on)?.week ?? null : null);
+  // Dates move by hand here, except in the student preview, which shows the
+  // record and nothing that changes it.
+  const editable = !student;
+  const offset = runOffset(data);
 
   // Weights by kind of work, against the model's own total and verdict.
   const groups = [];
@@ -505,6 +618,11 @@ const planningBody = (data, { student }) => {
     return { a, lane: laneOf(a.type), start: weekOf(a.opens_on) ?? end, end };
   });
   const lanes = LANES.concat([["other", "Other", "ot"]]).filter((l) => spans.some((s) => s.lane[1] === l[1]));
+
+  // Work with no due date has no bar. It waits in a tray above the table,
+  // from which it is dragged onto a week like any bar.
+  const undated = [...weeks.flatMap((w) => w.undated ?? []), ...(data.unplaced?.assessments ?? [])]
+    .filter((a, i, all) => all.findIndex((b) => b.assessment_id === a.assessment_id) === i);
 
   // Faults, as sentences. Unplanned runs, quiet runs, undated work, weights.
   const faults = [];
@@ -533,8 +651,9 @@ const planningBody = (data, { student }) => {
           "there, given what those weeks teach? Propose it as a draft; change nothing else.",
         "Suggest an assessment"]);
     }
-    const undated = [...weeks.flatMap((w) => w.undated ?? []), ...(data.unplaced?.assessments ?? [])];
-    for (const a of undated) faults.push(["flag", "calendar", `${a.title} has no dates`, datesPrompt(a, run), "Set dates"]);
+    // Undated work is set here, by hand, rather than asked of the session:
+    // the two dates are the professor's and nothing on disk knows them.
+    for (const a of undated) faults.push(["flag", "calendar", `${a.title} has no dates`, null, "Set dates", a.assessment_id]);
     if (!grading.complete) {
       faults.push(["flag", "weight", grading.note || "The weights do not add up to 100%",
         `The weights in ${run.id} do not settle the grading policy: ${grading.note || "they do not add up"} ` +
@@ -545,8 +664,12 @@ const planningBody = (data, { student }) => {
     ? ""
     : faults.length
       ? `<ul class="faults">${faults
-          .map(([tone, ic, text, prompt, verb]) =>
-            `<li class="${tone}">${icon(ic)}<span>${esc(text)}</span>${askButton(prompt, verb, "chip ask strong")}</li>`)
+          .map(([tone, ic, text, prompt, verb, dated]) =>
+            `<li class="${tone}">${icon(ic)}<span>${esc(text)}</span>${
+              dated
+                ? `<button type="button" class="chip ask strong" data-edit="${esc(dated)}">${icon("calendar")}${esc(verb)}</button>`
+                : askButton(prompt, verb, "chip ask strong")
+            }</li>`)
           .join("")}</ul>`
       : '<p class="calm">Every week has a topic, the graded work is spread, and the weights add up.</p>';
 
@@ -562,21 +685,41 @@ const planningBody = (data, { student }) => {
             .map((s) => {
               const first = w.week === s.start;
               const last = w.week === s.end;
-              const inner =
-                (first ? `<span class="segt">${esc(s.a.title)}</span>` : "") +
-                (last ? `<span class="segd">due ${esc(shortDate(s.a.due_on))} · ${esc(pct(s.a.weight) || "no weight")}</span>` : "");
-              const cls = `lseg ${s.lane[2]}${first ? " first" : ""}${last ? " last" : ""}${s.a.draft ? " draft" : ""}`;
               const href = s.a.viewable && s.a.url ? s.a.url : s.a.brief_url;
-              const tip = `${s.a.title}${s.a.opens_on ? " · opens " + shortDate(s.a.opens_on) : ""} · due ${shortDate(s.a.due_on)}`;
-              return href
-                ? `<a class="${cls}" href="${esc(href)}" target="_blank" rel="noopener" data-view="${esc(s.a.title)}" ` +
-                    `data-format="${esc(s.a.viewable && s.a.url ? s.a.format : "html")}" title="${esc(tip)}">${inner}</a>`
-                : `<span class="${cls}" title="${esc(tip)}">${inner}</span>`;
+              const id = esc(s.a.assessment_id);
+              // The title opens the brief; the due line opens the date form.
+              // Neither is draggable itself, so a drag always moves the bar.
+              const title = !first
+                ? ""
+                : href
+                  ? `<a class="segt" draggable="false" href="${esc(href)}" target="_blank" rel="noopener" data-view="${esc(s.a.title)}" ` +
+                    `data-format="${esc(s.a.viewable && s.a.url ? s.a.format : "html")}">${esc(s.a.title)}</a>`
+                  : `<span class="segt">${esc(s.a.title)}</span>`;
+              const dueWords = `due ${esc(shortDate(s.a.due_on))} · ${esc(pct(s.a.weight) || "no weight")}`;
+              const due = !last
+                ? ""
+                : editable
+                  ? `<button type="button" class="segd" data-edit="${id}" title="Change the dates">${dueWords}</button>`
+                  : `<span class="segd">${dueWords}</span>`;
+              // Grips on the ends: the top one moves only the opening, the
+              // bottom one only the due date. Work with no opening date, or
+              // one outside the term, has no top grip: the bar's top is then
+              // its due week, and there is no opening there to move.
+              const grips = editable
+                ? (first && s.a.opens_on && weekOf(s.a.opens_on) === s.start ?`<span class="grip top" data-edge="opens" title="Drag to move when it opens"></span>` : "") +
+                  (last ? `<span class="grip bottom" data-edge="due" title="Drag to move when it is due"></span>` : "")
+                : "";
+              const cls = `lseg ${s.lane[2]}${first ? " first" : ""}${last ? " last" : ""}${s.a.draft ? " draft" : ""}`;
+              const tip = `${s.a.title}${s.a.opens_on ? " · opens " + shortDate(s.a.opens_on) : ""} · due ${shortDate(s.a.due_on)}` +
+                (editable ? " — drag to another week" : "");
+              return `<div class="${cls}" data-a="${id}" data-wk="${w.week}"${editable ? ' draggable="true"' : ""} title="${esc(tip)}">` +
+                `${grips}${title}${due}</div>`;
             })
             .join("")}</td>`;
         })
         .join("");
-      return `<tr class="${w.when === "current" ? "now" : ""}"><td class="wkn"><b>${w.week}</b><small>${esc(shortDate(w.starts_on))}</small></td>` +
+      return `<tr class="${w.when === "current" ? "now" : ""}" data-week="${w.week}" data-from="${esc(w.starts_on)}" data-to="${esc(w.ends_on)}">` +
+        `<td class="wkn"><b>${w.week}</b><small>${esc(shortDate(w.starts_on))}</small></td>` +
         `<td class="topic">${
           title
             ? `<span class="${draft ? "draftword" : ""}">${esc(title)}</span>${n ? `<small>${n} ${n === 1 ? "concept" : "concepts"}</small>` : ""}${draft ? "<small>draft</small>" : ""}`
@@ -585,11 +728,65 @@ const planningBody = (data, { student }) => {
     })
     .join("");
 
-  return `<div class="mode"><div class="weights">${cards}</div>${faultList}` +
-    `<table class="plan"><thead><tr><th>Week</th><th>Topic</th>${lanes
+  // What the page's script needs to move a piece of work: its two dates as
+  // the record holds them. A JSON island rather than attributes on every
+  // segment, because a bar is drawn once per week it runs through.
+  const items = {};
+  for (const a of [...(data.assessments ?? []), ...undated]) {
+    items[a.assessment_id] = { title: a.title, opens_at: a.opens_at ?? null, due_at: a.due_at ?? null };
+  }
+  const tray = editable && undated.length
+    ? `<div class="tray"><b>${icon("calendar")}Not on the calendar</b>${undated
+        .map((a) => `<span class="chip traychip" draggable="true" data-a="${esc(a.assessment_id)}" title="Drag onto a week">` +
+          `${icon(WORK_ICON[a.type] ?? "file")}${esc(a.title)}</span>`)
+        .join("")}<small>Drag one onto a week, then settle the day.</small></div>`
+    : "";
+  const form = editable
+    ? `<div class="planform" hidden role="dialog" aria-label="Dates"><b class="pf-title"></b><small class="pf-week"></small>` +
+      `<label><span>Opens</span><input type="datetime-local" class="pf-opens"><small class="pf-opens-wk"></small></label>` +
+      `<label><span>Due</span><input type="datetime-local" class="pf-due" required><small class="pf-due-wk"></small></label>` +
+      `<p class="pf-error" hidden></p><div class="pf-actions"><button type="button" class="primary pf-save">Save dates</button>` +
+      `<button type="button" class="chip pf-cancel">Cancel</button></div>` +
+      `<small class="pf-note">Writes opens_at and due_at into its record. Canvas keeps its own copy until the definition is sent again.</small></div>` +
+      `<script type="application/json" id="plan-items">${JSON.stringify(items).replace(/</g, "\\u003c")}</script>`
+    : "";
+
+  return `<div class="mode"><div class="weights">${cards}</div>${faultList}${tray}` +
+    `<table class="plan" data-offset="${esc(offset)}"><thead><tr><th>Week</th><th>Topic</th>${lanes
       .map((l) => `<th class="lanehead ${l[2]}">${esc(l[1])}</th>`)
       .join("")}</tr></thead><tbody>${rows}</tbody></table>` +
-    `<p class="foot">Each bar runs from the week a piece of work opens to the week it is due. Rooms, times and decks are in Teaching.</p></div>`;
+    `<p class="foot">Each bar runs from the week a piece of work opens to the week it is due.${
+      editable
+        ? " Drag a bar to another week to move both dates — the weekday and the time come with it. Drag its top edge to move" +
+          " only the opening, its bottom edge to move only the due date, and press the due line to set the day by hand."
+        : ""
+    } Rooms, times and decks are in Teaching.</p>${form}</div>`;
+};
+
+/**
+ * The offset a new date is written with, for work that has none yet: the
+ * run's own time zone on the day the run starts, else the offset the run's
+ * other dates already carry, else UTC. A record's timestamp always carries
+ * one; the form never makes a naive time.
+ */
+const runOffset = (data) => {
+  const run = data.run ?? {};
+  try {
+    if (run.timezone && run.start_date) {
+      const name = new Intl.DateTimeFormat("en-US", { timeZone: run.timezone, timeZoneName: "longOffset" })
+        .formatToParts(new Date(`${run.start_date}T12:00:00Z`))
+        .find((p) => p.type === "timeZoneName")?.value ?? "";
+      const m = /GMT([+-]\d{2}:\d{2})?/.exec(name);
+      if (m) return m[1] ?? "+00:00";
+    }
+  } catch {
+    // An unknown zone name falls through to the records' own offset.
+  }
+  for (const a of data.assessments ?? []) {
+    const m = /([+-]\d{2}:\d{2}|Z)$/.exec(String(a.due_at ?? a.opens_at ?? ""));
+    if (m) return m[1] === "Z" ? "+00:00" : m[1];
+  }
+  return "+00:00";
 };
 
 // ---------------------------------------------------------------- teaching
@@ -1054,7 +1251,13 @@ export const courseModeDocument = (
 
   let main;
   if (mode === "planning") {
-    main = strip("does the term hold together") + studentBanner + planningBody(data, { student }) + structureFoot;
+    // The one reading that writes, and only dates: so its foot says so.
+    main = strip("does the term hold together") + studentBanner + planningBody(data, { student }) +
+      (student
+        ? structureFoot
+        : `<p class="foot">Structure only — nothing here is derived from student work. Moving a bar changes its ` +
+          `<span class="mono">opens_at</span> and <span class="mono">due_at</span> and nothing else; accepting a draft is ` +
+          `still changing <span class="mono">approval: draft</span> in its record.</p>` + PLAN_SCRIPT);
   } else if (mode === "teaching") {
     main = strip("this week, between the last and the next") + teachingBody(data, evidence ?? {}, status, focus);
   } else if (mode === "evidence") {

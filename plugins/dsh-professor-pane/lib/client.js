@@ -235,13 +235,8 @@ window.__ModuleLoader__.load({
         // marks Canvas does not have, materials changed since publishing.
         { id: "unpublished", label: "Unpublished" },
       ],
-      // Regrouped by service (2026-10-13). This course is one card per service —
-      // Canvas's took over Status, Targets and Links, and the sheet's and
-      // GitHub's took over Syncs. Credentials goes when Accounts replaces it.
-      integrations: [
-        { id: "course", label: "This course" },
-        { id: "credentials", label: "Credentials" },
-      ],
+      // No row for Integrations since 2026-10-13: it is one card per service on
+      // This course, with Accounts behind a button in its own header.
     };
 
     /** The default sub-view for a tab: the first one listed. */
@@ -439,18 +434,6 @@ a.pp-segbtn{display:inline-flex}
 /* Names, while they are showing. The one control in the pane that changes what
    is safe to have on a projector, so it does not look like the others while it
    is engaged. */
-/* A press that goes to the chat rather than changing a record. The same glyph
-   server/page.js puts on [data-ask] in the frames, so it means one thing everywhere. */
-.pp-chat::after{content:"\\2726";margin-left:.35em;font-size:.85em;opacity:.75}
-/* The repository name, typed when the assessment does not record one. Sized to
-   owner/name and no wider: it sits in a row of buttons, and a field that
-   stretched would read as the subject of the strip rather than a gap in it. */
-.pp-input{font:inherit;font-size:11px;padding:2px 8px;border-radius:20px;width:18ch;
-  background:0 0;color:var(--dsw-alias-label-primary,#111);
-  border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
-/* Names, while they are showing. The one control in the pane that changes what
-   is safe to have on a projector, so it does not look like the others while it
-   is engaged. */
 .pp-segbtn-warn[aria-pressed=true]{color:#a5561f;border-color:#a5561f;
   background:rgba(165,86,31,.10)}
 .pp-approve{flex:none;padding:8px 12px 0}
@@ -553,7 +536,12 @@ a.pp-segbtn{display:inline-flex}
 .pp-filetile-wait b{color:#a15c00}
 .pp-filesection h3{margin:0 0 6px;font-size:12.5px;font-weight:600}
 .pp-filetable td{vertical-align:middle}
-.pp-filetable td:first-child{max-width:0;width:55%}
+.pp-filetable td:first-child{max-width:0;width:30%}
+.pp-pileprog{display:flex;align-items:center;gap:10px}
+.pp-pileprog .pp-pilebar{width:70px}
+.pp-pileprog .pp-pilebar i{height:6px;border-radius:3px}
+.pp-pileprogtext{display:flex;flex-direction:column;min-width:0;line-height:1.3}
+.pp-pileprogstep{font-weight:600;white-space:nowrap}
 .pp-filewait td{background:rgba(161,92,0,.05)}
 .pp-fileacts{display:flex;gap:6px;justify-content:flex-end}
 /* What a send did: green landed, amber still processing, red failed. */
@@ -1189,7 +1177,10 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-stagelive{border-color:#c43030;background:rgba(196,48,48,.05)}
 .pp-stagedots{display:block;width:130px;height:130px;margin-top:-10px}
 .pp-stagebtnlabel{position:absolute;bottom:14px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary,#444)}
-.pp-stagetr{max-width:720px;min-height:3em;font-size:clamp(17px,2.2vw,24px);line-height:1.45;overflow-wrap:anywhere}
+.pp-stagetr{max-width:720px;width:100%;min-height:3em;font-size:clamp(17px,2.2vw,24px);line-height:1.45;overflow-wrap:anywhere;
+  display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;max-height:calc(1.45em * 4)}
+@media(max-height:620px){.pp-stagetr{max-height:calc(1.45em * 3)}}
+.pp-stagetrlong{-webkit-mask-image:linear-gradient(to bottom,transparent,#000 1.6em);mask-image:linear-gradient(to bottom,transparent,#000 1.6em)}
 .pp-stagetrold{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-stagerow{justify-content:center;min-height:28px}
 .pp-dsplit{margin-top:6px;display:flex;flex-direction:column;gap:4px}
@@ -1241,7 +1232,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
   background:rgba(214,130,32,.09);border:1px solid rgba(214,130,32,.28)}
 .pp-needstitle{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#b4600f;font-weight:600}
 .pp-needsrow{display:flex;gap:8px;align-items:center;font-size:12px}
-.pp-needsrow > span{flex:1;min-width:0}
+.pp-needsrow > span:not(.pp-svc){flex:1;min-width:0}
 .pp-ccard{display:flex;flex-direction:column;gap:8px;padding:11px 12px;border-radius:12px;
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
 .pp-chead{display:flex;gap:10px;align-items:center}
@@ -1278,6 +1269,45 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-synccard-bare.pp-synccard-drop{padding:8px;border:1px dashed #1e7e38;border-radius:9px}
 .pp-csub{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-csubtitle{font-size:12px;font-weight:600}
+/* Integrations' own header: This course, and the button to Accounts. */
+.pp-ihead{display:flex;align-items:center;gap:8px;margin:0 0 10px}
+.pp-ihtitle{font-size:12.5px;font-weight:600}
+/* Accounts: one row per service this computer is signed in to. */
+.pp-accts{display:flex;flex-direction:column;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:12px;
+  background:var(--dsw-alias-bg-l1,#fff)}
+.pp-acct{padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-acct:last-child{border-bottom:none}
+.pp-acct-off .pp-svc{opacity:.55}
+.pp-acctbody{padding:8px 0 2px 42px}
+/* The design pass (2026-10-13): one size of button inside a card, colour only
+   on what needs something, and lists that open on what matters. */
+.pp-crowstate{display:block;margin-left:16px;font-size:11px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-crowsep{color:var(--dsw-alias-label-tertiary,#b0b0b0)}
+.pp-st-ok{color:#2f6b3c}
+.pp-st-warn{color:#b4600f;font-weight:600}
+.pp-st-quiet{color:var(--dsw-alias-label-tertiary,#9a9a9a)}
+.pp-morebtn{align-self:flex-start;margin:4px 0 0 16px;padding:0;border:0;background:none;font:inherit;font-size:11.5px;
+  cursor:pointer;color:var(--dsw-alias-label-secondary,#555);text-decoration:underline;text-underline-offset:2px}
+.pp-cnudge{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 9px;border-radius:8px;font-size:11.5px;
+  background:var(--dsw-alias-fill-secondary,#f3f3f5)}
+.pp-cnudge > span{flex:1;min-width:160px}
+.pp-cnudge .pp-saverow{border:0;margin:0;padding:0}
+.pp-waittitle{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.pp-waitrow{display:flex;flex-direction:column;gap:3px;padding:7px 0;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-waitline{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pp-waitline .pp-waitpair{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
+.pp-waitline .pp-avatar{width:18px;height:18px;font-size:8.5px;flex:none}
+.pp-waitmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pp-waitwhy{flex:1 1 160px;min-width:0}
+.pp-syncsection .pp-waitlist{gap:0}
+.pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}
+.pp-waitmeta{font-size:11px;color:var(--dsw-alias-label-tertiary,#8a8a8a)}
+.pp-linkbtn{margin-left:8px;padding:0;border:0;background:none;font:inherit;font-size:11px;cursor:pointer;
+  color:var(--dsw-alias-label-secondary,#555);text-decoration:underline;text-underline-offset:2px}
+.pp-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:1px;
+  background:var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-dot-on{background:#2f8a4e}
+.pp-needsrow .pp-svc-small{width:18px;height:18px;font-size:8.5px;border-radius:5px}
 `;
 
     if (
@@ -1976,11 +2006,16 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
         );
       }
 
+      // `bare`: inside an Accounts row, whose header already names Google.
       return h(
         "div",
         null,
-        h("p", { className: "pp-factgroup" }, "Google"),
-        h(
+        props.bare ? null : h("p", { className: "pp-factgroup" }, "Google"),
+        // `compact`: the button and its outcome only, where the sentence around
+        // it already says what connecting does.
+        props.compact
+          ? null
+          : h(
           "p",
           { className: "pp-absent" },
           "Lets the grade-sheet syncs read and write the spreadsheets your Google account can edit. " +
@@ -2030,6 +2065,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       telegram: "the token @BotFather gave you when the bot was created",
       moodle: "Moodle → Preferences → Security keys",
       sheets: "an access token, or leave empty and use a service-account key",
+      github: "GitHub → Settings → Developer settings → Personal access tokens",
     };
 
     /**
@@ -3449,29 +3485,36 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       );
     }
 
-    /** One assessment's three states, as the pills its row has room for. */
-    const rowPills = (entry, reachable) => {
-      const pills = [];
+    /**
+     * One assessment's three states, as one line of words. Only a problem is
+     * coloured: "linked" on nineteen rows in green is nineteen things to read past
+     * on the way to the two that need something.
+     */
+    const rowState = (entry, reachable) => {
+      const parts = [];
       const { linked, of } = entry.link;
       // Until Canvas can be reached there is no column to speak of either way.
-      if (!reachable) {
-        // nothing
-      } else if (linked === of) {
-        pills.push({ key: "col", text: "linked", tone: "ok" });
-      } else {
-        pills.push({ key: "col", text: linked ? linked + " of " + of + " linked" : "not linked", tone: "warn" });
+      if (reachable) {
+        parts.push(
+          linked === of
+            ? { key: "col", text: "linked", tone: "ok" }
+            : { key: "col", text: linked ? linked + " of " + of + " linked" : "not linked", tone: "warn" },
+        );
       }
-      pills.push(
+      parts.push(
         entry.a.definitionSent
           ? { key: "def", text: "brief sent " + shortDate(entry.a.definitionSent), tone: "" }
-          : { key: "def", text: "brief not sent", tone: "quiet" },
+          : { key: "def", text: "no brief sent", tone: "quiet" },
       );
       const c = entry.u && entry.u.canvas;
-      if (!c || c.ready === 0) pills.push({ key: "marks", text: "no marks yet", tone: "quiet" });
-      else if (c.unsent + c.changed === 0) pills.push({ key: "marks", text: "all " + c.ready + " marks in", tone: "ok" });
-      else pills.push({ key: "marks", text: c.unsent + c.changed + " marks to send", tone: "warn" });
-      return pills;
+      if (!c || c.ready === 0) parts.push({ key: "marks", text: "no marks yet", tone: "quiet" });
+      else if (c.unsent + c.changed === 0) parts.push({ key: "marks", text: "all " + c.ready + " marks in", tone: "ok" });
+      else parts.push({ key: "marks", text: c.unsent + c.changed + " marks to send", tone: "warn" });
+      return parts;
     };
+
+    /** How many rows a list shows before "Show N more". */
+    const ROWS_AT_FIRST = 8;
 
     /** What the card counts, for its own header and for the strip above it. */
     const canvasCounts = (data, unpublished) => {
@@ -3503,13 +3546,19 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
     function CanvasCard(props) {
       const data = props.data;
       const row = (data.integrations || []).find((entry) => entry.id === "canvas");
-      const [filter, setFilter] = React.useState(props.filter || "all");
+      // Opens on what needs something, when anything does; `null` until then,
+      // because which that is depends on data the first render may not have.
+      const [filter, setFilter] = React.useState(props.filter || null);
+      const [more, setMore] = React.useState(false);
       const [open, setOpen] = React.useState(null);
       const [binding, setBinding] = React.useState(false);
       const [editing, setEditing] = React.useState(null);
       const [tokenError, setTokenError] = React.useState(null);
       React.useEffect(() => {
-        if (props.filter) setFilter(props.filter);
+        if (props.filter) {
+          setFilter(props.filter);
+          setMore(false);
+        }
       }, [props.filter, props.filterTick]);
 
       if (!row) return null;
@@ -3529,13 +3578,17 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 
       const subtitle = [
         data.canvas.host ? hostName(data.canvas.host) : "no address",
-        tokenStep.done ? "token saved" : "no token",
+        // The token is the account's (Integrations → Accounts); said here only
+        // when it is missing.
+        tokenStep.done ? null : "no token",
         subgroupCourses.perSubgroup
           ? courseCount + " course" + (courseCount === 1 ? "" : "s") + ", one per subgroup"
           : data.canvasCourse.id
             ? "course " + data.canvasCourse.id
             : "no course",
-      ].join(" · ");
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
       const chip = !reachable
         ? { text: "setup needed", tone: "warn" }
@@ -3543,9 +3596,25 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
           ? { text: rows.length - unlinked.length + " of " + rows.length + " linked", tone: "warn" }
           : { text: "ready", tone: "ok" };
 
-      const shown = rows.filter((entry) =>
-        filter === "unlinked" ? unlinked.includes(entry) : filter === "marks" ? toSend.includes(entry) : true,
+      // What needs something: no column (once Canvas can be reached), or marks
+      // Canvas does not have. A brief not sent is not on it — plenty of
+      // assessments are never described in Canvas at all.
+      const attention = rows.filter((entry) => (reachable && unlinked.includes(entry)) || toSend.includes(entry));
+      const current = filter || (attention.length ? "attention" : "all");
+      const matching = rows.filter((entry) =>
+        current === "unlinked"
+          ? unlinked.includes(entry)
+          : current === "marks"
+            ? toSend.includes(entry)
+            : current === "attention"
+              ? attention.includes(entry)
+              : true,
       );
+      const shown = more ? matching : matching.slice(0, ROWS_AT_FIRST);
+      const choose = (id) => {
+        setFilter(id);
+        setMore(false);
+      };
 
       // ---- setup, while Canvas cannot be reached -----------------------------
 
@@ -3694,9 +3763,14 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
             ),
             h(
               "span",
-              { className: "pp-crowpills" },
-              rowPills(entry, reachable).map((pill) =>
-                h("span", { className: "pp-chip" + (pill.tone ? " pp-chip-" + pill.tone : ""), key: pill.key }, pill.text),
+              { className: "pp-crowstate" },
+              rowState(entry, reachable).map((part, index) =>
+                h(
+                  React.Fragment,
+                  { key: part.key },
+                  index ? h("span", { className: "pp-crowsep", "aria-hidden": "true" }, " · ") : null,
+                  h("span", { className: part.tone ? "pp-st-" + part.tone : null }, part.text),
+                ),
               ),
             ),
           ),
@@ -3812,15 +3886,19 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 
       // ---- the card ----------------------------------------------------------
 
+      // Two filters a professor chooses, and a third shown only while the strip
+      // above has chosen it, so the row says what is being looked at.
       const filters = [
+        { id: "attention", label: "Needs something " + attention.length, hide: !attention.length },
         { id: "all", label: "All " + rows.length },
-        { id: "unlinked", label: "Not linked " + unlinked.length, hide: !reachable || !unlinked.length },
-        { id: "marks", label: "Marks to send " + toSend.length, hide: !toSend.length },
+        { id: "unlinked", label: "Not linked " + unlinked.length, hide: current !== "unlinked" },
+        { id: "marks", label: "Marks to send " + toSend.length, hide: current !== "marks" },
       ].filter((entry) => !entry.hide);
 
       return h(
         "section",
-        { className: "pp-ccard" },
+        // The id is what the Needs-you strip's Show scrolls to.
+        { className: "pp-ccard", id: "pp-card-canvas" },
         h(
           "div",
           { className: "pp-chead" },
@@ -3854,8 +3932,8 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                           type: "button",
                           className: "pp-segbtn",
                           key: entry.id,
-                          "aria-pressed": filter === entry.id,
-                          onClick: () => setFilter(entry.id),
+                          "aria-pressed": current === entry.id,
+                          onClick: () => choose(entry.id),
                         },
                         entry.label,
                       ),
@@ -3899,6 +3977,13 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                 { className: "pp-crows" },
                 shown.length ? shown.map(assessmentRow) : h("p", { className: "pp-as" }, "Nothing here."),
               ),
+              matching.length > shown.length
+                ? h(
+                    "button",
+                    { type: "button", className: "pp-morebtn", onClick: () => setMore(true) },
+                    "Show " + (matching.length - shown.length) + " more",
+                  )
+                : null,
             )
           : h("p", { className: "pp-as" }, "This run has no assessments yet. Drafting one is /design-assessment."),
         details,
@@ -3997,12 +4082,17 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
         }),
         google.connected
           ? null
-          : h(GoogleConnect, { google, onChanged: props.onRefresh }),
+          : h(
+              "div",
+              { className: "pp-cnudge" },
+              h("span", null, "Connect Google and this card reads the sheet itself — no download."),
+              h(GoogleConnect, { google, bare: true, compact: true, onChanged: props.onRefresh }),
+            ),
         h(
           "details",
           { className: "pp-cdetails" },
           h("summary", null, "Details"),
-          google.connected ? h(GoogleConnect, { google, onChanged: props.onRefresh }) : null,
+          google.connected ? h(GoogleConnect, { google, bare: true, compact: true, onChanged: props.onRefresh }) : null,
           h(
             Fact,
             {
@@ -4107,11 +4197,12 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                     ),
                     h(
                       "span",
-                      { className: "pp-crowpills" },
-                      h("span", { className: "pp-chip" + (repo ? "" : " pp-chip-warn") }, repo || "no repository named"),
+                      { className: "pp-crowstate" },
+                      repo ? h("span", { className: "pp-st-quiet" }, repo) : h("span", { className: "pp-st-warn" }, "no repository named"),
+                      h("span", { className: "pp-crowsep", "aria-hidden": "true" }, " · "),
                       published
-                        ? h("span", { className: "pp-chip pp-chip-ok" }, "published " + dayOf(published.at))
-                        : h("span", { className: "pp-chip pp-chip-warn" }, "not published"),
+                        ? h("span", { className: "pp-st-ok" }, "published " + dayOf(published.at))
+                        : h("span", { className: "pp-st-warn" }, "not published"),
                     ),
                   ),
                   expanded
@@ -4148,6 +4239,364 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
               }),
             )
           : h("p", { className: "pp-as" }, "No assessment names a starter repository yet. /design-assessment writes one when it scaffolds the homework."),
+      );
+    }
+
+    // ── client/accounts.js
+
+    /** `https://canvas.example.edu/` → `canvas.example.edu`. */
+    const bareHost = (url) =>
+      String(url || "")
+        .replace(/^https?:\/\//, "")
+        .replace(/\/+$/, "");
+
+    /**
+     * One account: its mark, who it is connected as, and a chip; pressing the row's
+     * button opens what changes it.
+     */
+    function AccountRow(props) {
+      return h(
+        "div",
+        { className: "pp-acct" + (props.connected ? "" : " pp-acct-off") },
+        h(
+          "div",
+          { className: "pp-chead" },
+          h("span", { className: "pp-svc pp-svc-" + props.service, "aria-hidden": "true" }, props.mark),
+          h(
+            "span",
+            { className: "pp-cname" },
+            props.name,
+            h(
+              "span",
+              { className: "pp-intwhat" },
+              // One dot says connected or not; the words beside it say as whom.
+              h("span", { className: "pp-dot" + (props.connected ? " pp-dot-on" : ""), title: props.connected ? "Connected" : "Not connected" }),
+              props.status,
+            ),
+          ),
+          props.action
+            ? h(
+                "button",
+                { type: "button", className: "pp-segbtn", "aria-pressed": props.open, onClick: props.onToggle },
+                props.open ? "Close" : props.action,
+              )
+            : null,
+        ),
+        props.open ? h("div", { className: "pp-acctbody" }, props.children) : null,
+        props.error ? h("p", { className: "pp-saveerr" }, props.error) : null,
+      );
+    }
+
+    function Accounts(props) {
+      const data = props.data;
+      const refs = (data.credentials && data.credentials.refs) || {};
+      const connections = (data.registry && data.registry.connections) || [];
+      const [open, setOpen] = React.useState(null);
+      const [errors, setErrors] = React.useState({});
+      const toggle = (id) => setOpen(open === id ? null : id);
+      const saved = (body) => {
+        setErrors({});
+        if (props.onSaved) props.onSaved(body);
+      };
+      const failed = (id) => (next) => setErrors((all) => Object.assign({}, all, { [id]: next && next.error ? next.error : null }));
+      const configured = (name) => Boolean(name && refs[name] && refs[name].configured);
+      const integration = (id) => (data.integrations || []).find((row) => row.id === id) || { id, fields: [] };
+      const ofType = (type) => connections.filter((entry) => entry.type === type);
+      // Telegram and Moodle may still be in the older publishing profiles.
+      const legacy = (type) => ((data.connections && data.connections.profiles) || []).filter((entry) => entry.type === type);
+      const secret = (id, name) =>
+        h(Secret, {
+          name,
+          status: refs[name],
+          runId: props.runId,
+          sessionId: props.sessionId,
+          onSaved: saved,
+          onStatus: failed(id),
+        });
+
+      // ---- Canvas -----------------------------------------------------------
+      const canvas = data.canvas || {};
+      const canvasToken = configured(canvas.tokenEnv) || canvas.tokenInEnv;
+      const canvasRow = h(
+        AccountRow,
+        {
+          service: "canvas",
+          mark: "Cv",
+          name: "Canvas",
+          key: "canvas",
+          connected: Boolean(canvas.host) && canvasToken,
+          status: canvas.host
+            ? bareHost(canvas.host) + " · " + (canvasToken ? "token saved" : "no token")
+            : "no address yet",
+          action: canvas.host ? (canvasToken ? "Change" : "Add the token") : "Connect",
+          open: open === "canvas",
+          onToggle: () => toggle("canvas"),
+          error: errors.canvas,
+        },
+        canvas.host
+          ? h(
+              React.Fragment,
+              null,
+              h("p", { className: "pp-as" }, (canvasToken ? "Replace the token" : "Paste a token") + " — Canvas → Account → Settings → New Access Token."),
+              secret("canvas", canvas.tokenEnv),
+              h("p", { className: "pp-factgroup" }, "Or a different Canvas"),
+              h(ProviderSetup, { integration: integration("canvas"), runId: props.runId, sessionId: props.sessionId, onSaved: saved }),
+            )
+          : h(ProviderSetup, { integration: integration("canvas"), runId: props.runId, sessionId: props.sessionId, onSaved: saved }),
+      );
+
+      // ---- Google -----------------------------------------------------------
+      const google = data.google || {};
+      const googleRow = h(
+        AccountRow,
+        {
+          service: "sheets",
+          mark: "G",
+          name: "Google",
+          key: "google",
+          connected: Boolean(google.connected),
+          status: google.connected
+            ? "signed in as " + (google.account || "your Google account") + " · grade sheets are read directly"
+            : "not signed in · grade sheets come in as downloads",
+          action: google.connected ? "Change" : "Connect",
+          open: open === "google",
+          onToggle: () => toggle("google"),
+        },
+        h(GoogleConnect, { google, bare: true, onChanged: props.onRefresh }),
+      );
+
+      // ---- GitHub -----------------------------------------------------------
+      const github = data.github || { gh: {} };
+      const githubRow = h(
+        AccountRow,
+        {
+          service: "github",
+          mark: "GH",
+          name: "GitHub",
+          key: "github",
+          connected: Boolean(github.via),
+          status:
+            github.via === "token"
+              ? "token saved" + (github.owner ? " · repositories under " + github.owner : "")
+              : github.via === "gh"
+                ? "through the gh CLI, signed in as " + github.gh.account
+                : github.gh && github.gh.installed
+                  ? "the gh CLI is installed but not signed in"
+                  : "no token, and no gh CLI",
+          action: github.via === "token" ? "Change" : github.via === "gh" ? "Use a token" : "Connect",
+          open: open === "github",
+          onToggle: () => toggle("github"),
+        },
+        h(
+          "p",
+          { className: "pp-as" },
+          github.via === "gh"
+            ? "Homework repositories are pushed as " + github.gh.account + ". A token below takes over from the gh CLI, if you would rather use one."
+            : "Either sign the gh CLI in — run gh auth login in a terminal, and this row picks it up — or paste a token. A token is tried first.",
+        ),
+        github.connection
+          ? secret("github", github.tokenEnv)
+          : h(ProviderSetup, {
+              integration: { id: "github", fields: ["token"] },
+              runId: props.runId,
+              sessionId: props.sessionId,
+              onSaved: saved,
+            }),
+      );
+
+      // ---- Telegram and Moodle ----------------------------------------------
+      const announce = (type, mark, name, describe) => {
+        const entry = ofType(type)[0] || legacy(type)[0] || null;
+        const token = Boolean(entry) && (configured(entry.tokenEnv) || entry.tokenInEnv || entry.tokenInFile);
+        return h(
+          AccountRow,
+          {
+            service: type,
+            mark,
+            name,
+            key: type,
+            connected: Boolean(entry) && token,
+            status: entry ? describe(entry) + " · " + (token ? "token saved" : "no token") : "not set up",
+            action: entry ? "Change" : "Connect",
+            open: open === type,
+            onToggle: () => toggle(type),
+            error: errors[type],
+          },
+          entry && entry.tokenEnv && !token ? secret(type, entry.tokenEnv) : null,
+          h(ProviderSetup, { integration: integration(type), runId: props.runId, sessionId: props.sessionId, onSaved: saved }),
+        );
+      };
+      const telegramRow = announce("telegram", "Tg", "Telegram", (entry) => "posts to " + (entry.chatId || "a channel"));
+      const moodleRow = announce("moodle", "Md", "Moodle", (entry) => bareHost(entry.baseUrl) || "a Moodle site");
+
+      // ---- Transcription ----------------------------------------------------
+      const voices = ofType("transcription");
+      const transcriptionRow = h(
+        AccountRow,
+        {
+          service: "file",
+          mark: "Tx",
+          name: "Transcription",
+          key: "transcription",
+          connected: voices.some((entry) => configured(entry.tokenEnv) || entry.tokenInEnv),
+          status: voices.length
+            ? voices
+                .map(
+                  (entry) =>
+                    entry.name +
+                    " · " +
+                    [entry.provider, entry.model].filter(Boolean).join(" ") +
+                    (entry.pricePerMinute === null ? "" : " · $" + entry.pricePerMinute + "/min") +
+                    (configured(entry.tokenEnv) || entry.tokenInEnv ? "" : " · no token"),
+                )
+                .join("; ")
+            : "not set up · the defence desk records answers without transcribing them",
+          action: voices.length ? "Change" : "How to connect",
+          open: open === "transcription",
+          onToggle: () => toggle("transcription"),
+          error: errors.transcription,
+        },
+        voices.map((entry) => h("div", { key: entry.name }, secret("transcription", entry.tokenEnv))),
+        h(
+          "p",
+          { className: "pp-as" },
+          "A transcription service is added with ainar connections add NAME --type transcription --provider openai|elevenlabs --model M " +
+            "--price-per-minute USD; its token is then pasted here.",
+        ),
+      );
+
+      // ---- everything else the registry names -------------------------------
+      const covered = new Set(
+        [
+          canvas.tokenEnv,
+          google.tokenEnv,
+          github.tokenEnv,
+          ...connections.filter((entry) => ["telegram", "moodle", "transcription"].includes(entry.type)).map((entry) => entry.tokenEnv),
+        ].filter(Boolean),
+      );
+      const others = Object.keys(refs)
+        .filter((name) => !covered.has(name) && refs[name] && (refs[name].configured || connections.some((entry) => entry.tokenEnv === name)))
+        .sort();
+
+      return h(
+        "div",
+        { className: "pp-scroll pp-course" },
+        h(
+          "p",
+          { className: "pp-as" },
+          "On this computer, for every course on it. A token goes to the credential store and is never shown again — " +
+            "this screen gets projected.",
+        ),
+        data.credentials && data.credentials.available
+          ? null
+          : h(
+              "p",
+              { className: "pp-saveerr" },
+              "No credential store is mounted, so a token cannot be saved from here. Each row names the variable to export instead.",
+            ),
+        // Connected first, in their own order; then the rest, under a label, so
+        // the services this computer actually uses are the top of the list.
+        (() => {
+          const all = [canvasRow, googleRow, githubRow, telegramRow, moodleRow, transcriptionRow];
+          const on = all.filter((row) => row.props.connected);
+          const off = all.filter((row) => !row.props.connected);
+          return h(
+            React.Fragment,
+            null,
+            on.length ? h("div", { className: "pp-accts" }, on) : null,
+            off.length ? h("p", { className: "pp-factgroup" }, on.length ? "Not connected" : "Nothing connected yet") : null,
+            off.length ? h("div", { className: "pp-accts" }, off) : null,
+          );
+        })(),
+        data.setup && data.setup.answered
+          ? h("p", { className: "pp-ok" }, data.setup.provider + " answered as " + data.setup.answered + ".")
+          : null,
+        data.setup && data.setup.checkFailed ? h("p", { className: "pp-saveerr" }, data.setup.checkFailed) : null,
+        h(
+          "details",
+          { className: "pp-cdetails" },
+          h("summary", null, "Where these are read from"),
+          others.length
+            ? h(
+                React.Fragment,
+                null,
+                h("p", { className: "pp-factgroup" }, "Other credentials"),
+                others.map((name) => h("div", { key: name }, secret("other", name))),
+                errors.other ? h("p", { className: "pp-saveerr" }, errors.other) : null,
+              )
+            : null,
+          h("p", { className: "pp-factgroup" }, "Environment"),
+          (data.environment || []).map((variable) =>
+            h(Fact, { label: variable.name, note: variable.what, key: variable.name }, h(Presence, { present: variable.present })),
+          ),
+          h("p", { className: "pp-factgroup" }, "Files"),
+          h(
+            Fact,
+            {
+              label: "connections.json",
+              note: data.registry.error || data.registry.path + " — the shared registry, ainar connections",
+              missing: !data.registry.present || Boolean(data.registry.error),
+            },
+            data.registry.present
+              ? data.registry.error
+                ? "unreadable"
+                : connections.length + " connection" + (connections.length === 1 ? "" : "s")
+              : h(Presence, { present: false, no: "not migrated yet" }),
+          ),
+          h(
+            Fact,
+            { label: "lms.toml", note: canvas.configPath, missing: !canvas.host && !canvas.tokenInFile },
+            canvas.tokenInFile
+              ? h(Presence, { present: true, yes: "host and token" })
+              : canvas.host && canvas.hostFrom !== "AINAR_CANVAS_URL"
+                ? h(Presence, { present: true, yes: "host only" })
+                : h(Presence, { present: false, no: "nothing read" }),
+          ),
+          h(
+            Fact,
+            {
+              label: "profiles (legacy)",
+              note: data.connections.error || data.connections.path,
+              missing: !data.connections.present || Boolean(data.connections.error),
+            },
+            data.connections.present
+              ? data.connections.error
+                ? "unreadable"
+                : data.connections.profiles.length + " profile" + (data.connections.profiles.length === 1 ? "" : "s")
+              : h(Presence, { present: false, no: "no file" }),
+          ),
+          h(
+            Fact,
+            {
+              label: "people.json",
+              note: data.roster.path + " — the identity store, outside the repository. The course record holds pseudonyms; the real names are only here",
+              missing: !data.roster.present,
+            },
+            data.roster.present
+              ? data.roster.count === null
+                ? "unreadable"
+                : data.roster.count + " known"
+              : h(Presence, { present: false, no: "no roster" }),
+          ),
+        ),
+        // Said outside the fold: a token in a file is a problem to act on, not a
+        // fact to look up.
+        connections.some((connection) => connection.tokenInFile)
+          ? h(
+              "p",
+              { className: "pp-saveerr" },
+              "A connection in the registry holds a literal token, which that file is not supposed to contain at all. " +
+                "Revoke it at the provider, paste a fresh one into its row above, and delete the line.",
+            )
+          : null,
+        data.connections.profiles.some((profile) => profile.tokenInFile)
+          ? h(
+              "p",
+              { className: "pp-saveerr" },
+              "A legacy profile holds a literal token. It still works, but a token in a file that gets backed up and synced " +
+                "should be treated as exposed: ainar connections migrate says what to do about it, and does not copy the token forward.",
+            )
+          : null,
       );
     }
 
@@ -4189,8 +4638,8 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       // over the fetch for the reason `Preferences` prefers it: the form should
       // redraw from disk rather than from its own memory of what was ticked.
       const [fresh, setFresh] = React.useState(null);
-      // A refusal from the credential seam, tagged with the field that caused it.
-      const [status, setStatus] = React.useState(null);
+      // Accounts, in place of This course. Opened by its button in the header.
+      const [accounts, setAccounts] = React.useState(props.subView === "accounts");
       // Bumped after a sync press, so its card's chips and the waiting rows are
       // read again even where nothing passes `onWrite`.
       const [tick, setTick] = React.useState(0);
@@ -4216,8 +4665,11 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       React.useEffect(() => {
         if (state.phase !== "ready") return;
         setFresh(null);
-        setStatus(null);
       }, [state]);
+      // A jump to a card (the sheet notice) is a jump to This course.
+      React.useEffect(() => {
+        if (props.focus && props.focus.service) setAccounts(false);
+      }, [props.focus && props.focus.tick]);
 
       // Every Save bumps the revision, and `useJson` goes back to loading on each
       // one. The last answer stays on screen meanwhile: blanking the tab would
@@ -4232,10 +4684,8 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       const data = fresh || fetched;
       if (!data) return h(Message, null, "Reading what this run is wired to…");
 
-      const sub = props.subView || "course";
       const onSaved = (body) => {
         setFresh(body);
-        setStatus(null);
         // The run record changed, so every other view of it is stale — the same
         // counter an approval bumps.
         if (props.onWrite) props.onWrite();
@@ -4256,201 +4706,70 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
           })
           .catch(() => null);
 
-      // ---- Credentials ---------------------------------------------------
+      // ---- the two views -------------------------------------------------
+      //
+      // This course, and Accounts behind a button in the same header: Accounts
+      // is the machine's and is opened twice a term, so it does not get a
+      // segment of its own beside the course it is not about.
 
-      if (sub === "credentials") {
+      const head = h(
+        "div",
+        { className: "pp-ihead" },
+        accounts
+          ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setAccounts(false) }, "← This course")
+          : h("span", { className: "pp-ihtitle" }, "This course"),
+        h("span", { className: "pp-segspacer" }),
+        accounts
+          ? h("span", { className: "pp-ihtitle" }, "Accounts")
+          : h(
+              "button",
+              {
+                type: "button",
+                className: "pp-segbtn",
+                title: "Canvas, Google, GitHub and the rest, as this computer is signed in to them",
+                onClick: () => setAccounts(true),
+              },
+              "Accounts",
+            ),
+      );
+
+      if (accounts) {
         return h(
           "div",
-          { className: "pp-scroll" },
-          h(
-            "p",
-            { className: "pp-absent" },
-            "Presence only. This pane never shows a credential's value — a Canvas " +
-              "token can change a grade, and this screen gets projected.",
-          ),
-          h(GoogleConnect, {
-            google: data.google,
-            // Re-read the whole document: the sign-in changed the registry and
-            // the store, and the Status checklist reads both.
-            onChanged: () =>
-              fetch(url, { headers: { accept: "application/json" } })
-                .then((response) => response.json())
-                .then((body) => {
-                  if (!body.error) setFresh(body);
-                })
-                .catch(() => null),
+          null,
+          head,
+          h(Accounts, {
+            data,
+            runId: props.runId,
+            sessionId: props.sessionId,
+            // A token or a connection is machine configuration, not the record,
+            // so nothing else needs to redraw; `onWrite` is not called.
+            onSaved: (body) => setFresh(body),
+            onRefresh: refresh,
           }),
-          h("p", { className: "pp-factgroup" }, "Credentials"),
-          (() => {
-            const refs = (data.credentials && data.credentials.refs) || {};
-            // The Google sign-in is Connect's, above, and is never pasted.
-            const google = data.google && data.google.tokenEnv;
-            const names = Object.keys(refs)
-              .filter((name) => name !== google)
-              .sort();
-            if (!names.length) {
-              return h(
-                "p",
-                { className: "pp-absent" },
-                "No connection in this run names a credential yet.",
-              );
-            }
-            return [
-              h(
-                "p",
-                { className: "pp-absent", key: "why" },
-                data.credentials && data.credentials.available
-                  ? "Type a token here and it goes to the harness's credential store, " +
-                      "not into any file in this repository. It is never shown again — " +
-                      "there is no code path that reads one back."
-                  : "No credential provider is mounted, so these can only be set in the " +
-                      "environment. The names are what to export.",
-              ),
-              ...names.map((name) =>
-                h(Secret, {
-                  key: name,
-                  name,
-                  status: refs[name],
-                  runId: props.runId,
-                  sessionId: props.sessionId,
-                  onSaved: (body) => {
-                    setFresh(body);
-                    setStatus(null);
-                    // A token is not the record, so `onWrite` is deliberately
-                    // not called: nothing in courses/ changed and re-fetching
-                    // every other view would be work for no new fact.
-                  },
-                  onStatus: (next) => setStatus(next),
-                }),
-              ),
-              ...names
-                .filter((name) => refs[name] && refs[name].why)
-                .map((name) =>
-                  h("p", { className: "pp-absent", key: name + ":why" }, name + ": " + refs[name].why),
-                ),
-              // A refusal from the seam belongs under the field that caused
-              // it, and `status.from` carries the variable's name for exactly
-              // that — the same tagging the Fetch and Save buttons use so one
-              // button's failure is never printed beside the other's.
-              status && status.error && names.includes(status.from)
-                ? h("p", { className: "pp-saveerr", key: "err" }, status.error)
-                : null,
-            ];
-          })(),
-          h("p", { className: "pp-factgroup" }, "Environment"),
-          data.environment.map((variable) =>
-            h(
-              Fact,
-              { label: variable.name, note: variable.what, key: variable.name },
-              h(Presence, { present: variable.present }),
-            ),
-          ),
-          h("p", { className: "pp-factgroup" }, "Files"),
-          h(
-            Fact,
-            {
-              // First, because it is the file every tool now reads first.
-              // The two below it are where the same answer used to live, and
-              // they are still shown: during a migration the honest picture is
-              // all three, and "the host you can see is in the file the pusher
-              // does not read" is the diagnosis this tab exists to give.
-              label: "connections.json",
-              note:
-                data.registry.error ||
-                data.registry.path + " — the shared registry, `ainar connections`",
-              missing: !data.registry.present || Boolean(data.registry.error),
-            },
-            data.registry.present
-              ? data.registry.error
-                ? "unreadable"
-                : data.registry.connections.length +
-                  " connection" +
-                  (data.registry.connections.length === 1 ? "" : "s")
-              : h(Presence, { present: false, no: "not migrated yet" }),
-          ),
-          h(
-            Fact,
-            {
-              label: "lms.toml",
-              note: data.canvas.configPath,
-              missing: !data.canvas.host && !data.canvas.tokenInFile,
-            },
-            data.canvas.tokenInFile
-              ? h(Presence, { present: true, yes: "host and token" })
-              : data.canvas.host && data.canvas.hostFrom !== "AINAR_CANVAS_URL"
-                ? h(Presence, { present: true, yes: "host only" })
-                : h(Presence, { present: false, no: "nothing read" }),
-          ),
-          h(
-            Fact,
-            {
-              label: "profiles (legacy)",
-              note: data.connections.error || data.connections.path,
-              missing: !data.connections.present || Boolean(data.connections.error),
-            },
-            data.connections.present
-              ? data.connections.error
-                ? "unreadable"
-                : data.connections.profiles.length +
-                  " profile" +
-                  (data.connections.profiles.length === 1 ? "" : "s")
-              : h(Presence, { present: false, no: "no file" }),
-          ),
-          h(
-            Fact,
-            {
-              label: "people.json",
-              note:
-                data.roster.path +
-                " — the identity store, outside the repository. The course record " +
-                "holds pseudonyms; the real names are only here",
-              missing: !data.roster.present,
-            },
-            data.roster.present
-              ? data.roster.count === null
-                ? "unreadable"
-                : data.roster.count + " known"
-              : h(Presence, { present: false, no: "no roster" }),
-          ),
-          data.registry.connections.some((connection) => connection.tokenInFile)
-            ? h(
-                "p",
-                { className: "pp-saveerr" },
-                "A connection in the registry holds a literal token, which that file is " +
-                  "not supposed to contain at all. Revoke it at the provider, export a " +
-                  "fresh one under the variable the connection names, and delete the line.",
-              )
-            : null,
-          data.connections.profiles.some((profile) => profile.tokenInFile)
-            ? h(
-                "p",
-                { className: "pp-saveerr" },
-                "A legacy profile holds a literal token. It still works, but a token in a " +
-                  "file that gets backed up and synced should be treated as exposed: " +
-                  "`ainar connections migrate` says what to do about it, and does not " +
-                  "copy the token forward.",
-              )
-            : null,
         );
       }
 
-      // ---- This course ---------------------------------------------------
-
-      return h(CourseIntegrations, {
-        data,
-        unpublished: marks,
-        syncs: roads,
-        runId: props.runId,
-        sessionId: props.sessionId,
-        names: props.names,
-        ask: props.ask,
-        focus: props.focus,
-        revision: String(props.revision || 0) + "." + tick,
-        onSaved,
-        onSynced,
-        onRefresh: refresh,
-        onWrite: props.onWrite,
-      });
+      return h(
+        "div",
+        null,
+        head,
+        h(CourseIntegrations, {
+          data,
+          unpublished: marks,
+          syncs: roads,
+          runId: props.runId,
+          sessionId: props.sessionId,
+          names: props.names,
+          ask: props.ask,
+          focus: props.focus,
+          revision: String(props.revision || 0) + "." + tick,
+          onSaved,
+          onSynced,
+          onRefresh: refresh,
+          onWrite: props.onWrite,
+        }),
+      );
     }
 
     /** The services that have a card of their own; the rest are drawn as Status drew them. */
@@ -4527,6 +4846,8 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
         waiting
           ? {
               key: "waiting",
+              service: "sheets",
+              mark: "GS",
               text: plural(waiting, "name", "names") + " from the grade sheet to confirm",
               go: () => scrollTo("pp-card-sheets"),
             }
@@ -4534,6 +4855,8 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
         reachable && counts.unlinked.length
           ? {
               key: "unlinked",
+              service: "canvas",
+              mark: "Cv",
               text: plural(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
               go: () => show("unlinked"),
             }
@@ -4541,6 +4864,8 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
         counts.toSend.length
           ? {
               key: "marks",
+              service: "canvas",
+              mark: "Cv",
               text: "Canvas is missing marks for " + plural(counts.toSend.length, "assessment", "assessments"),
               go: () => show("marks"),
             }
@@ -4566,6 +4891,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                 h(
                   "div",
                   { className: "pp-needsrow", key: item.key },
+                  h("span", { className: "pp-svc pp-svc-small pp-svc-" + item.service, "aria-hidden": "true" }, item.mark),
                   h("span", null, item.text),
                   h("button", { type: "button", className: "pp-segbtn", onClick: item.go }, "Show"),
                 ),
@@ -5130,19 +5456,14 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                     busy === "run" ? "Running…" : "Run",
                   ),
             ),
-        // How the file gets here, and what would make the step unnecessary: the
-        // missing thing named, so "why do I have to do this" has an answer.
+        // How the file gets here, and what would make the step unnecessary.
         takesFile
           ? h(
               "p",
               { className: "pp-synchint" },
-              "This computer has no Google login of its own, so the sheet comes in as a file: press Download from Google" +
-                (sync.download.tabHint
-                  ? " (it downloads the first tab; for “" +
-                    sync.download.tabHint +
-                    "” open that tab and use File → Download → Comma-separated values)"
-                  : "") +
-                ", then drop the file here. You see what it would change before anything is written.",
+              "No Google login on this computer: download the sheet" +
+                (sync.download.tabHint ? " (from its \u201c" + sync.download.tabHint + "\u201d tab: File → Download → CSV)" : "") +
+                ", then drop the file on this card. Nothing is written before a preview.",
             )
           : null,
         result
@@ -5162,16 +5483,20 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
     }
 
     /**
-     * One row a sync was not sure of: where it stands in its sheet, who it most
-     * likely is, and Confirm or Someone else. A confirmed row is remembered on this
-     * computer and applied the next time its sync runs; until then it writes
-     * nothing.
+     * One row a sync was not sure of, as the decision it is: the name as written,
+     * who it most likely is, and Confirm. Where it stands in the sheet — the row
+     * and its neighbours as a small grid — opens under it on request: it answers
+     * "which line 23", which is the question only some rows raise.
+     *
+     * A confirmed row is remembered on this computer and applied the next time its
+     * sync runs; until then it writes nothing.
      */
     function WaitingCard(props) {
       const row = props.row;
       const [picking, setPicking] = React.useState(null);
       const [busy, setBusy] = React.useState(false);
       const [failed, setFailed] = React.useState(null);
+      const [showing, setShowing] = React.useState(false);
       const [best] = row.candidates;
       const preview = row.preview;
       const person = (candidate) => candidate.name || candidate.student;
@@ -5195,37 +5520,18 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
         });
       };
 
+      const where = [row.line ? "line " + row.line : null, preview && preview.tab ? "tab " + preview.tab : null].filter(Boolean).join(" · ");
+
       return h(
         "div",
-        { className: "pp-waitcard" },
+        { className: "pp-waitrow" },
         h(
           "div",
-          { className: "pp-waithead" },
-          h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, preview ? "GS" : "··"),
+          { className: "pp-waitline" },
           h(
             "span",
-            { className: "pp-waitsource" },
-            row.source,
-            preview && preview.tab ? h("span", { className: "pp-waitwhere" }, " · tab " + preview.tab) : null,
-            row.line ? h("span", { className: "pp-waitwhere" }, " · line " + row.line) : null,
-          ),
-          h("span", { className: "pp-segspacer" }),
-          preview && preview.open
-            ? h("a", { className: "pp-waitopen", href: preview.open, target: "_blank", rel: "noreferrer" }, "Open in Google Sheets ↗")
-            : null,
-        ),
-        preview ? h(SheetPreview, { preview, line: row.line }) : null,
-        h(
-          "div",
-          { className: "pp-waitdecide" },
-          h(
-            "div",
             { className: "pp-waitpair" },
-            h(
-              "span",
-              { className: "pp-waitwritten", title: "As written in the sheet" },
-              row.written !== null ? "“" + row.written + "”" : "(name hidden)",
-            ),
+            h("span", { className: "pp-waitwritten", title: "As written in the sheet" }, row.written !== null ? "\u201c" + row.written + "\u201d" : "(name hidden)"),
             h("span", { className: "pp-waitarrow", "aria-hidden": "true" }, "→"),
             best
               ? h(
@@ -5234,64 +5540,82 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                   h("span", { className: "pp-avatar", "aria-hidden": "true" }, best.name ? initials(best.name) : "?"),
                   h("span", { className: "pp-waitname" }, person(best)),
                 )
-              : h("span", { className: "pp-as" }, "nobody in the class list is close"),
-            h("span", { className: "pp-chip pp-chip-warn", title: row.why.replace(/ of STUDENT-[A-Z0-9]+/, "") }, shortWhy(row.why)),
+              : h("span", { className: "pp-as" }, "nobody close"),
           ),
-          row.candidates.length > 1
-            ? h("div", { className: "pp-as" }, "Also near: " + row.candidates.slice(1).map(person).join(", "))
-            : null,
-          picking
-            ? h(
-                "div",
-                { className: "pp-syncctl" },
-                h(
-                  "select",
-                  { value: picking.to || "", onChange: (event) => setPicking({ to: event.target.value }) },
-                  h("option", { value: "" }, "Who is it?"),
-                  (props.students || []).map((student) =>
-                    h("option", { value: student.student, key: student.student }, student.name || student.student),
-                  ),
-                ),
-                h("span", { className: "pp-segspacer" }),
-                h(
+        ),
+        // The names get the whole first line — they are what is being decided —
+        // and the presses sit at the end of the second.
+        h(
+          "div",
+          { className: "pp-waitmeta" },
+          h(
+            "span",
+            { className: "pp-waitwhy" },
+            h("span", { className: "pp-st-warn", title: row.why.replace(/ of STUDENT-[A-Z0-9]+/, "") }, shortWhy(row.why)),
+            row.candidates.length > 1 ? " · also near " + row.candidates.slice(1).map(person).join(", ") : null,
+            where ? " · " + where : null,
+            preview
+              ? h(
                   "button",
-                  { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy || !picking.to, onClick: () => confirm(picking.to) },
-                  "Confirm",
-                ),
-                h("button", { type: "button", className: "pp-syncbtn", onClick: () => setPicking(null) }, "Cancel"),
-              )
+                  { type: "button", className: "pp-linkbtn", "aria-expanded": showing, onClick: () => setShowing(!showing) },
+                  showing ? "hide the sheet" : "show in the sheet",
+                )
+              : null,
+            preview && preview.open
+              ? h("a", { className: "pp-linkbtn", href: preview.open, target: "_blank", rel: "noreferrer" }, "open ↗")
+              : null,
+          ),
+          picking
+            ? null
             : h(
-                "div",
-                { className: "pp-syncctl" },
-                h("span", { className: "pp-segspacer" }),
+                "span",
+                { className: "pp-waitacts" },
                 best
-                  ? h(
-                      "button",
-                      { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy, onClick: () => confirm(null) },
-                      "Confirm " + (best.name ? best.name.split(/\s+/)[0] : "it"),
-                    )
+                  ? h("button", { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy, onClick: () => confirm(null) }, busy ? "…" : "Confirm")
                   : null,
                 h("button", { type: "button", className: "pp-syncbtn", onClick: () => setPicking({ to: "" }) }, "Someone else"),
               ),
-          failed ? h("p", { className: "pp-saveerr" }, failed) : null,
         ),
+        showing && preview ? h(SheetPreview, { preview, line: row.line }) : null,
+        picking
+          ? h(
+              "div",
+              { className: "pp-syncctl" },
+              h(
+                "select",
+                { value: picking.to || "", onChange: (event) => setPicking({ to: event.target.value }) },
+                h("option", { value: "" }, "Who is it?"),
+                (props.students || []).map((student) => h("option", { value: student.student, key: student.student }, student.name || student.student)),
+              ),
+              h(
+                "button",
+                { type: "button", className: "pp-syncbtn pp-syncbtn-run", disabled: busy || !picking.to, onClick: () => confirm(picking.to) },
+                "Confirm",
+              ),
+              h("button", { type: "button", className: "pp-syncbtn", onClick: () => setPicking(null) }, "Cancel"),
+            )
+          : null,
+        failed ? h("p", { className: "pp-saveerr" }, failed) : null,
       );
     }
 
-    /** The rows waiting on a service's syncs, with the sentence that says what Confirm does. */
+    /** The rows waiting on a service's syncs. */
     function WaitingList(props) {
       const rows = props.rows || [];
       if (!rows.length) return null;
       return h(
         "div",
         { className: "pp-syncsection" },
-        h("h3", { className: "pp-synch3" }, "Waiting for you", h("span", { className: "pp-count pp-count-warn" }, rows.length)),
         h(
-          "p",
-          { className: "pp-as" },
-          props.names
-            ? "Each row as it stands in its sheet, and who it most likely is. A confirmed row is remembered on this computer and applied the next time its sync runs; until then it writes nothing."
-            : "Names are hidden. Press Names to see who each row is.",
+          "div",
+          { className: "pp-waittitle" },
+          h("span", { className: "pp-csubtitle" }, "Names to confirm"),
+          h("span", { className: "pp-count pp-count-warn" }, rows.length),
+          h(
+            "span",
+            { className: "pp-as" },
+            props.names ? "a confirmed name is used from the next sync on" : "names are hidden — press Names to see who each is",
+          ),
         ),
         h(
           "div",
@@ -5662,11 +5986,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       // A course-wide view, when one is chosen, in place of the reading; the
       // reading is kept so the weeks come back as they were left.
       const [view, setView] = React.useState(null);
-      const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);
-      // Integrations: the pane's own tab, drawn here so going
-      // to it does not close course mode. This course first, as in the pane.
-      const [integrationsSub, setIntegrationsSub] = React.useState("course");
-      // The week Teaching was last stepped to. The page steps without a round
+      const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);  // The week Teaching was last stepped to. The page steps without a round
       // trip and reports each step; it is held in a ref so a step redraws
       // nothing, and copied into `week` only when Teaching is drawn again — on
       // coming back to it, or when the record or the drafts toggle changes.
@@ -5750,7 +6070,6 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
             { className: "pp-cviewpad" },
             h(Integrations, {
               runId: props.runId,
-              subView: integrationsSub,
               sessionId: props.sessionId,
               onWrite: props.onWrite,
               revision: props.reload,
@@ -5900,10 +6219,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                       className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
                       title: preview ? "Private — not shown while previewing as a student" : "Open Integrations",
                       disabled: preview,
-                      onClick: () => {
-                        setIntegrationsSub("course");
-                        setView("integrations");
-                      },
+                      onClick: () => setView("integrations"),
                     },
                     [
                       canvasLine ? "Canvas: " + (CONNECTION_STATE[canvasLine.state] || canvasLine.state) : null,
@@ -5970,22 +6286,11 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                 ? h(
                     "section",
                     { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || { label: "Integrations" }).label },
-                    view === "tasks" || view === "integrations" || named
+                    view === "tasks" || named
                       ? h(
                           "div",
                           { className: "pp-cviewbar" },
                           view === "tasks" ? SUBVIEWS.tasks.map((entry) => segment(entry, taskSub === entry.id, () => setTaskSub(entry.id), false)) : null,
-                          // Integrations' own row; its Syncs entry goes back to the Syncs view.
-                          view === "integrations"
-                            ? SUBVIEWS.integrations.map((entry) =>
-                                segment(
-                                  entry,
-                                  integrationsSub === entry.id,
-                                  () => setIntegrationsSub(entry.id),
-                                  false,
-                                ),
-                              )
-                            : null,
                           h("span", { className: "pp-segspacer" }),
                           // The pane's own choice, the same state, so the two never differ.
                           named
@@ -7856,6 +8161,40 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 
     const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 
+    const WHOSE_MOVE = { you: "Your move", assistant: "Assistant", done: "Done" };
+
+    /**
+     * How far a pile has got through recognition and grading — the Scans window's
+     * seven steps as its bar, the step it is on, what is left in a few words and
+     * whose move it is. Every step's detail is a hover away.
+     */
+    function PileProgress(props) {
+      const standing = props.standing;
+      if (!standing || !standing.now) return h("span", { className: "pp-as" }, "not set up as a pile");
+      const now = standing.now;
+      const stages = standing.stages || [];
+      const tip = stages
+        .map((stage, i) => (stage.state === "done" ? "✓ " : i === now.index ? "→ " : "   ") + stage.label + " — " + stage.detail)
+        .join("\n");
+      const at = now.index < now.total ? (stages[now.index] || {}).label : null;
+      return h(
+        "span",
+        { className: "pp-pileprog", title: tip },
+        h(
+          "span",
+          { className: "pp-pilebar", "aria-hidden": "true" },
+          (standing.progress || []).map((state, i) => h("i", { key: i, className: state === "done" ? "pp-s-done" : i === now.index ? "pp-s-now" : "" })),
+        ),
+        h(
+          "span",
+          { className: "pp-pileprogtext" },
+          h("span", { className: "pp-pileprogstep" }, at ? "Step " + (now.index + 1) + " of " + now.total + " · " + at : "All steps done"),
+          h("span", { className: "pp-as" }, now.phrase),
+        ),
+        h("span", { className: "pp-whose pp-whose-" + now.whose }, WHOSE_MOVE[now.whose] || now.whose),
+      );
+    }
+
     /** `/api/files` for one run, re-read whenever the course is written. */
     function useFiles(runId, sessionId, revision) {
       const [state, setState] = React.useState({ phase: "loading", value: null });
@@ -7990,7 +8329,16 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                       h(
                         "thead",
                         null,
-                        h("tr", null, h("th", null, "Assessment"), h("th", { className: "pp-num" }, "Uploaded"), h("th", { className: "pp-num" }, "Papers filed"), h("th", { className: "pp-num" }, "Size"), h("th", null, "")),
+                        h(
+                          "tr",
+                          null,
+                          h("th", null, "Assessment"),
+                          h("th", null, "Progress"),
+                          h("th", { className: "pp-num" }, "Uploaded"),
+                          h("th", { className: "pp-num" }, "Papers filed"),
+                          h("th", { className: "pp-num" }, "Size"),
+                          h("th", null, ""),
+                        ),
                       ),
                       h(
                         "tbody",
@@ -8000,6 +8348,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                               "tr",
                               { key: "_unfiled", className: "pp-filewait" },
                               h("td", null, h("b", null, "Not yet filed to an assessment")),
+                              h("td", null, h("span", { className: "pp-as" }, "waiting to be given to an assessment")),
                               h("td", { className: "pp-num" }, String(doc.unfiled.count)),
                               h("td", { className: "pp-num" }, "—"),
                               h("td", { className: "pp-num" }, size(doc.unfiled.bytes)),
@@ -8011,6 +8360,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                             "tr",
                             { key: entry.id },
                             h("td", null, h(TitleWithTag, { title: entry.title })),
+                            h("td", null, h(PileProgress, { standing: entry.scans.standing })),
                             h("td", { className: "pp-num" }, String(entry.scans.uploaded)),
                             h("td", { className: "pp-num" }, String(entry.scans.papers)),
                             h("td", { className: "pp-num" }, size(entry.scans.bytes)),
@@ -10959,7 +11309,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                 : desk.manualLevel > 0.02
                   ? "speaking"
                   : "waiting"
-            : splitting
+            : // Transcribing a recording is the desk working, not waiting for a
+              // voice: a microphone there read as "still listening".
+              splitting || desk.sending
               ? "thinking"
               : "idle";
       const stageQuestionId = handsFree && handsFree.question ? handsFree.question : recording ? recording.question : null;
@@ -11103,12 +11455,18 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
             h("span", { className: "pp-stagebtnlabel" }, bigLabel + (recording ? " · " + clock(desk.elapsed) : "")),
           ),
           h("div", { className: "pp-approverow pp-stagerow" }, stageRow()),
+          /*
+           * A fixed few lines, the newest at the bottom: the box is anchored to
+           * its foot and clips the top, fading it, so a long answer never pushes
+           * the circle off the stage or the latest words below the fold. Every
+           * word is still in the drawer and in the take's transcript.
+           */
           h(
             "div",
-            { className: "pp-stagetr" + (stale ? " pp-stagetrold" : ""), "aria-live": "polite" },
+            { className: "pp-stagetr" + (stale ? " pp-stagetrold" : "") + (heardWords.length > 30 ? " pp-stagetrlong" : ""), "aria-live": "polite" },
             words && (spoken.length || words.partial)
               ? h(
-                  React.Fragment,
+                  "div",
                   null,
                   spoken.join(" "),
                   words.partial ? h("span", { className: "pp-dpartial" }, " " + words.partial) : null,
@@ -12942,6 +13300,26 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                   "/defend-submission " + data.assessment + " " + run + " " + data.student +
                     " — the clone failed: " + said,
                 );
+              })
+              .catch(() => setReload((count) => count + 1));
+            return;
+          }
+          // Planning's drag and its form: a piece of graded work's two dates,
+          // written into its record by the server. The redraw is the answer; a
+          // refusal is said in its own words, as the other writes here say it.
+          if (data.kind === "dates") {
+            const run = currentRunRef.current;
+            if (!run || !/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+            const stamp = (value) => (typeof value === "string" ? value : "");
+            fetch(scoped(BASE + "/api/plan/dates?run=" + encodeURIComponent(run), props.sessionId), {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ assessment: data.assessment, opens_at: stamp(data.opens_at), due_at: stamp(data.due_at) }),
+            })
+              .then((response) => response.json())
+              .then((result) => {
+                if (result.error) window.alert(String(result.error));
+                setReload((count) => count + 1);
               })
               .catch(() => setReload((count) => count + 1));
             return;

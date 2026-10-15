@@ -56,6 +56,7 @@ export const ORDER = [
   "integration-parts.js",
   "canvas-card.js",
   "service-cards.js",
+  "accounts.js",
   "integrations.js",
   "syncs.js",
   "course-escape.js",

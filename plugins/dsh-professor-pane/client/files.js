@@ -27,6 +27,40 @@ const minutes = (seconds) => (seconds ? Math.max(1, Math.round(seconds / 60)) + 
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
 
+const WHOSE_MOVE = { you: "Your move", assistant: "Assistant", done: "Done" };
+
+/**
+ * How far a pile has got through recognition and grading — the Scans window's
+ * seven steps as its bar, the step it is on, what is left in a few words and
+ * whose move it is. Every step's detail is a hover away.
+ */
+function PileProgress(props) {
+  const standing = props.standing;
+  if (!standing || !standing.now) return h("span", { className: "pp-as" }, "not set up as a pile");
+  const now = standing.now;
+  const stages = standing.stages || [];
+  const tip = stages
+    .map((stage, i) => (stage.state === "done" ? "✓ " : i === now.index ? "→ " : "   ") + stage.label + " — " + stage.detail)
+    .join("\n");
+  const at = now.index < now.total ? (stages[now.index] || {}).label : null;
+  return h(
+    "span",
+    { className: "pp-pileprog", title: tip },
+    h(
+      "span",
+      { className: "pp-pilebar", "aria-hidden": "true" },
+      (standing.progress || []).map((state, i) => h("i", { key: i, className: state === "done" ? "pp-s-done" : i === now.index ? "pp-s-now" : "" })),
+    ),
+    h(
+      "span",
+      { className: "pp-pileprogtext" },
+      h("span", { className: "pp-pileprogstep" }, at ? "Step " + (now.index + 1) + " of " + now.total + " · " + at : "All steps done"),
+      h("span", { className: "pp-as" }, now.phrase),
+    ),
+    h("span", { className: "pp-whose pp-whose-" + now.whose }, WHOSE_MOVE[now.whose] || now.whose),
+  );
+}
+
 /** `/api/files` for one run, re-read whenever the course is written. */
 function useFiles(runId, sessionId, revision) {
   const [state, setState] = React.useState({ phase: "loading", value: null });
@@ -161,7 +195,16 @@ export function Files(props) {
                   h(
                     "thead",
                     null,
-                    h("tr", null, h("th", null, "Assessment"), h("th", { className: "pp-num" }, "Uploaded"), h("th", { className: "pp-num" }, "Papers filed"), h("th", { className: "pp-num" }, "Size"), h("th", null, "")),
+                    h(
+                      "tr",
+                      null,
+                      h("th", null, "Assessment"),
+                      h("th", null, "Progress"),
+                      h("th", { className: "pp-num" }, "Uploaded"),
+                      h("th", { className: "pp-num" }, "Papers filed"),
+                      h("th", { className: "pp-num" }, "Size"),
+                      h("th", null, ""),
+                    ),
                   ),
                   h(
                     "tbody",
@@ -171,6 +214,7 @@ export function Files(props) {
                           "tr",
                           { key: "_unfiled", className: "pp-filewait" },
                           h("td", null, h("b", null, "Not yet filed to an assessment")),
+                          h("td", null, h("span", { className: "pp-as" }, "waiting to be given to an assessment")),
                           h("td", { className: "pp-num" }, String(doc.unfiled.count)),
                           h("td", { className: "pp-num" }, "—"),
                           h("td", { className: "pp-num" }, size(doc.unfiled.bytes)),
@@ -182,6 +226,7 @@ export function Files(props) {
                         "tr",
                         { key: entry.id },
                         h("td", null, h(TitleWithTag, { title: entry.title })),
+                        h("td", null, h(PileProgress, { standing: entry.scans.standing })),
                         h("td", { className: "pp-num" }, String(entry.scans.uploaded)),
                         h("td", { className: "pp-num" }, String(entry.scans.papers)),
                         h("td", { className: "pp-num" }, size(entry.scans.bytes)),

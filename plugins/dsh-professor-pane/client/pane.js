@@ -399,6 +399,26 @@ export function ProfessorPane(props) {
           .catch(() => setReload((count) => count + 1));
         return;
       }
+      // Planning's drag and its form: a piece of graded work's two dates,
+      // written into its record by the server. The redraw is the answer; a
+      // refusal is said in its own words, as the other writes here say it.
+      if (data.kind === "dates") {
+        const run = currentRunRef.current;
+        if (!run || !/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+        const stamp = (value) => (typeof value === "string" ? value : "");
+        fetch(scoped(BASE + "/api/plan/dates?run=" + encodeURIComponent(run), props.sessionId), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ assessment: data.assessment, opens_at: stamp(data.opens_at), due_at: stamp(data.due_at) }),
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error) window.alert(String(result.error));
+            setReload((count) => count + 1);
+          })
+          .catch(() => setReload((count) => count + 1));
+        return;
+      }
       // From an assessment chip in course mode: the Grade view, or the Scans
       // tab as a window on that pile. Each opens over course mode, which stays.
       if (data.kind === "grade" || data.kind === "scans") {
