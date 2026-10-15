@@ -115,6 +115,19 @@
           ],
           "default": null,
           "title": "Description"
+        },
+        "locked": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The professor has frozen the policy. A writer that changes components, weights or which block an assessment counts in refuses while this is true; unlocking is its own recorded step.",
+          "title": "Locked"
         }
       },
       "title": "GradingScheme",

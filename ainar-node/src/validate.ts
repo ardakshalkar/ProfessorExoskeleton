@@ -584,7 +584,7 @@ const checkAssessments = (b: CourseBundle, issues: IssueList): void => {
  * members add up to 31% instead of 30% is a decision the professor has not made
  * yet, not a record that fails to load.
  */
-const gradingSchemeIssues = (run: any, assessments: any[], issues: IssueList): void => {
+export const gradingSchemeIssues = (run: any, assessments: any[], issues: IssueList): void => {
   const where = run.course_version_id;
   const components = (run.grading_scheme?.components ?? []) as any[];
   const byId = new Map<string, any>();

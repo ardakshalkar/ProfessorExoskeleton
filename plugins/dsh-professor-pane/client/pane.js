@@ -6,7 +6,8 @@
 import { Message, useDark, useJson } from "./common.js";
 import { DefenceDesk } from "./defence-desk.js";
 import { Integrations } from "./integrations.js";
-import { GradebookStatus, RecentMarks, SheetNotice, Unpublished } from "./marks.js";
+import { GradebookPanes } from "./gradebook.js";
+import { GradebookStatus, SheetNotice, Unpublished } from "./marks.js";
 import { CourseMode, MaterialModal, materialUrl, WidgetFrame } from "./materials.js";
 import { Preferences } from "./preferences.js";
 import { PublishModal } from "./publish.js";
@@ -687,12 +688,14 @@ export function ProfessorPane(props) {
           ask: props.ask,
           onWrite: () => setReload((value) => value + 1),
         }),
-        h(RecentMarks, {
+        h(GradebookPanes, {
           runId: current.runId,
           sessionId: props.sessionId,
           revision: reload,
           names: names,
-          key: "recent|" + current.runId,
+          ask: props.ask,
+          key: "panes|" + current.runId,
+          onWrite: () => setReload((value) => value + 1),
         }),
         frame,
       );

@@ -47,6 +47,12 @@ about an afternoon and has not been done.
   properties — so no existing byte moved; a parse-and-dump round trip would
   have turned every `1.0` into `1`. Which student a row is never appears here:
   links are private, in `~/.ainar/links/`.
+- **2026-10-15 — the policy lock.** `locked` on `GradingScheme`: the professor
+  froze the division of the grade, and writers of components, weights or
+  `Assessment.component` refuse until it is unlocked. Each change to the
+  scheme, the lock included, keeps the state it replaced in the scheme's
+  `extensions.history` — the same convention as an evaluation's — so no new
+  property was needed for the log. Inserted as text after `description`.
 
 ## Conventions
 

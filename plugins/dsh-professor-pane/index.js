@@ -147,6 +147,14 @@ import {
 } from "./server/lms-writes.js";
 import { withMaterialLinks } from "./server/materials.js";
 import { writeAssessmentDates } from "./server/plan-writes.js";
+import {
+  gradebookChanges,
+  gradingImpact,
+  gradingPolicy,
+  historyProposal,
+  writeGradingLock,
+  writeGradingPolicy,
+} from "./server/grading-writes.js";
 import { widgetDocument } from "./server/page.js";
 import { preferencesDocument, writePreferences } from "./server/preferences.js";
 import { paperCrop, scansDocument } from "./server/scans.js";
@@ -1510,6 +1518,57 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
             return sendJson(res, 200, { error: "The dates body is not JSON." });
           }
           return sendJson(res, 200, writeAssessmentDates(workspace, root, runId, body));
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
+     * The grading policy from the Gradebook. A read; an impact, which writes
+     * nothing; the change itself; and the lock. `grading-writes.js` says why
+     * the pane may write it and what guards the write.
+     */
+    if (path === "/api/grading/policy") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      try {
+        return sendJson(res, 200, gradingPolicy(workspace, runId));
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+    }
+    if (path === "/api/grading/history") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      try {
+        return sendJson(res, 200, historyProposal(workspace, runId, url.searchParams.get("index")));
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+    }
+    if (path === "/api/gradebook/changes") {
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      try {
+        return sendJson(res, 200, gradebookChanges(workspace, runId, { names: url.searchParams.get("names") === "1" }));
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+    }
+    if (path === "/api/grading/impact" || path === "/api/grading/apply" || path === "/api/grading/lock") {
+      if (req.method !== "POST") return sendJson(res, 405, { error: "the grading policy is POST only here" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then((text) => {
+          let body;
+          try {
+            body = JSON.parse(text || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The body is not JSON." });
+          }
+          const answer =
+            path === "/api/grading/impact"
+              ? gradingImpact(workspace, runId, body)
+              : path === "/api/grading/apply"
+                ? writeGradingPolicy(workspace, root, runId, body)
+                : writeGradingLock(workspace, root, runId, body);
+          return sendJson(res, 200, answer);
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     }

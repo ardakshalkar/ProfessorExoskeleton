@@ -983,6 +983,108 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
   background:var(--dsw-alias-border-l3,#cfcfd6)}
 .pp-dot-on{background:#2f8a4e}
 .pp-needsrow .pp-svc-small{width:18px;height:18px;font-size:8.5px;border-radius:5px}
+/* ---- Gradebook, top half: last changes | grading policy. Two columns when
+   there is room, one under the other in the conversation's column. Each pane
+   scrolls on its own so the gradebook widget below keeps its place. */
+.pp-gbwrap{flex:0 0 auto;margin:10px 14px 0;container-type:inline-size;min-height:0}
+.pp-gbpanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:10px;height:min(46vh,520px)}
+.pp-gbpanes > .pp-gbpane{margin:0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+@container (max-width:680px){.pp-gbpanes{grid-template-columns:minmax(0,1fr);height:auto}
+  .pp-gbpanes > .pp-gbpane{max-height:300px}}
+.pp-gbpanebody{flex:1;min-height:0;overflow:auto;padding:6px 12px 8px}
+.pp-gbpad{padding:6px 0}
+.pp-gbfilters{display:inline-flex;gap:3px;flex-wrap:wrap}
+.pp-gbfilter{min-height:20px;padding:0 8px;font-size:10.5px}
+.pp-gblog{list-style:none;margin:0;padding:0}
+.pp-gbline{display:flex;gap:8px;align-items:flex-start;padding:6px 0;
+  border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.05))}
+.pp-gbline:first-child{border-top:0}
+.pp-gbline .pp-avatar,.pp-gbline .pp-svc{flex:none;margin-top:1px}
+.pp-gbicon{flex:none;width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:700;background:rgba(47,111,214,.12);color:#2f6fd6}
+.pp-gbline-policy{background:rgba(47,111,214,.04);border-radius:8px;padding:6px;margin:2px -6px}
+.pp-gbwhat{flex:1;min-width:0}
+.pp-gbwhat b{font-weight:600}
+.pp-gbwhen{margin-left:6px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#8a8a8f)}
+.pp-gbsummary{margin:3px 0 2px;padding-left:16px;font-size:11px;color:var(--dsw-alias-label-secondary,#444)}
+.pp-gbsummary li{margin:1px 0;overflow-wrap:anywhere}
+.pp-gbsummary-big{font-size:12px;line-height:1.5;padding-left:18px}
+.pp-gbmarks{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
+.pp-gbmark{font-size:10.5px;padding:1px 6px;border-radius:5px;background:var(--dsw-alias-fill-secondary,#f2f2f4)}
+.pp-gbmore{margin:6px 0 0}
+/* The policy: one bar for the top-level blocks, then each block as a row
+   that opens to what is in it. */
+.pp-gbbar{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:4px 0 8px;font-size:10.5px;font-weight:600}
+.pp-gbbar-mini{height:16px;margin:4px 0;font-size:9.5px}
+.pp-gbbar-flat{align-items:center;justify-content:center;background:var(--dsw-alias-fill-secondary,#f0f0f2);
+  color:var(--dsw-alias-label-tertiary,#6b6b6b);font-weight:500}
+.pp-gbseg{flex-basis:0;min-width:0;display:flex;align-items:center;justify-content:center;padding:0 4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
+.pp-gbseg + .pp-gbseg{border-left:2px solid var(--dsw-alias-bg-l1,#fff)}
+.pp-gbseg0{background:#2f6fd6}.pp-gbseg1{background:#2f8a4e}.pp-gbseg2{background:#b4600f}
+.pp-gbseg3{background:#7a4cc2}.pp-gbseg4{background:#0f8a8a}.pp-gbseg5{background:#b4342a}
+.pp-gbblock{border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.05))}
+.pp-gbblock > summary{display:flex;align-items:center;gap:6px;padding:5px 0;cursor:pointer;list-style:none}
+.pp-gbblock > summary::-webkit-details-marker{display:none}
+.pp-gbblock > summary::before{content:"▸";font-size:9px;color:var(--dsw-alias-label-tertiary,#8a8a8f);width:8px}
+.pp-gbblock[open] > summary::before{content:"▾"}
+.pp-gbbtitle{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-gbbw{font-variant-numeric:tabular-nums;font-weight:600}
+.pp-gbsum{font-size:10.5px;padding:1px 6px;border-radius:20px;white-space:nowrap}
+.pp-gbsum-ok{background:rgba(47,138,78,.13);color:#2f6b3c}
+.pp-gbsum-off{background:rgba(214,130,32,.15);color:#b4600f}
+.pp-gbmembers{list-style:none;margin:0 0 6px;padding:0 0 0 14px}
+.pp-gbmembers li{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:11px}
+.pp-gbmembers .pp-titletext{flex:1}
+.pp-gbmw{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#444)}
+.pp-gbloose{margin-top:6px}
+.pp-gbdesc{margin:8px 0 4px;line-height:1.45}
+.pp-gbissues{margin:6px 0 0;padding-left:16px;font-size:11px;color:#a15c00}
+.pp-gbissues-fixed{color:#2f6b3c}
+.pp-gbissue-err{color:#b4342a}
+.pp-gbok{margin-top:6px;color:#2f6b3c}
+.pp-gbunlock{display:flex;flex-direction:column;gap:6px;padding:8px;margin:4px 0 10px;border-radius:8px;
+  border:1px solid rgba(180,52,42,.35);background:rgba(180,52,42,.05)}
+.pp-gbunlock p{margin:0}
+.pp-gbrow{display:flex;gap:6px;justify-content:flex-end}
+.pp-gbinput{font:inherit;font-size:11.5px;padding:3px 6px;border-radius:6px;min-width:0;color:inherit;
+  background:var(--dsw-alias-bg-l1,#fff);border:1px solid var(--dsw-alias-border-l3,#d2d2d7)}
+.pp-gbinput:focus{outline:2px solid #2f6fd6;outline-offset:-1px}
+.pp-gbnum{width:64px;text-align:right;font-variant-numeric:tabular-nums}
+.pp-gbpctfield{display:inline-flex;align-items:center;gap:2px;white-space:nowrap}
+/* The editor sheet: the policy on the left, what it changes on the right. */
+.pp-gbveil .pp-modal{max-width:1500px;margin:0 auto;width:100%;font-size:11.5px;line-height:1.45;
+  color:var(--dsw-alias-label-primary,#1d1d1f)}
+.pp-gbimpactpane{flex:0.9;background:var(--dsw-alias-bg-l2,#f8f8f9)}
+.pp-gbpresetgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin-bottom:12px}
+.pp-gbpreset{display:flex;flex-direction:column;gap:3px;text-align:left;font:inherit;cursor:pointer;padding:8px 9px;
+  border-radius:10px;color:inherit;background:var(--dsw-alias-bg-l1,#fff);border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-gbpreset:hover{border-color:#2f6fd6;box-shadow:0 0 0 1px #2f6fd6}
+.pp-gbpresethead{display:flex;align-items:center;gap:6px;justify-content:space-between}
+.pp-gbpresethead b{font-size:12px;font-weight:600}
+.pp-gborigin{font-size:11px;padding:6px 8px;margin:0 0 10px;border-radius:6px;background:rgba(47,111,214,.08);color:#2f5aa8}
+.pp-gbeditsec{margin-bottom:14px}
+.pp-gbblocks{display:flex;flex-direction:column;gap:3px}
+.pp-gbblockrow{display:grid;grid-template-columns:110px minmax(120px,1fr) 84px 110px 64px 96px auto;gap:6px;align-items:center}
+.pp-gbblockhead{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#8a8a8f)}
+.pp-gbid{font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace)}
+.pp-gbfill{display:flex;align-items:center;gap:2px}
+.pp-gbfill .pp-linkbtn{margin-left:4px}
+.pp-gbrowbtns{display:flex;align-items:center;gap:2px;white-space:nowrap}
+.pp-gbcoursepoints{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:8px;font-size:11.5px}
+.pp-gbfiling{display:flex;flex-direction:column}
+.pp-gbfilerow{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,220px) 84px;gap:8px;align-items:center;padding:3px 0;
+  border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.05))}
+.pp-gbfiletitle{display:flex;align-items:center;gap:6px;min-width:0}
+.pp-gbfiletitle .pp-titletext{font-weight:600}
+.pp-gbimpactsec{margin-top:12px}
+.pp-gbtable td,.pp-gbtable th{padding:3px 6px;text-align:left}
+.pp-gbhot td{background:rgba(180,52,42,.06)}
+.pp-gbup{color:#2f8a4e;font-weight:600}.pp-gbdown{color:#b4342a;font-weight:600}
+.pp-gback{display:inline-flex;align-items:center;gap:4px;color:var(--dsw-alias-label-primary,#111);font-size:11.5px}
+.pp-gbnote{width:min(260px,30vw)}
+@media (max-width:900px){.pp-gbblockrow{grid-template-columns:90px minmax(90px,1fr) 78px 90px 56px}
+  .pp-gbblockhead{display:none}}
 `;
 
 if (

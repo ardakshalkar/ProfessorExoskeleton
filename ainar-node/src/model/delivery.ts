@@ -75,6 +75,14 @@ export const GradingScheme = entity({
   components: z.array(GradingComponent).default([]),
   points: z.number().positive().nullish(),
   description: z.string().nullish(),
+  /**
+   * The professor has frozen the policy. Every writer that changes the
+   * components, a weight, or which block an assessment counts in refuses while
+   * this is true, and unlocking is a step of its own in the scheme's history
+   * (`extensions.history`, `grading-policy.ts`). Marks already in an LMS were
+   * scaled by this policy; a lock is how it stays the one they were scaled by.
+   */
+  locked: z.boolean().nullish(),
 });
 
 export const CourseVersion = entity({

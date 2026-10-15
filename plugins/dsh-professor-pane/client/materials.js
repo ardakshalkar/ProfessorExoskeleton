@@ -5,7 +5,8 @@
 
 import { decodeIssues, Message, useJson } from "./common.js";
 import { courseModeEscape } from "./course-escape.js";
-import { GradebookStatus, RecentMarks, Unpublished } from "./marks.js";
+import { GradebookPanes } from "./gradebook.js";
+import { GradebookStatus, Unpublished } from "./marks.js";
 import { Files } from "./files.js";
 import { Integrations } from "./integrations.js";
 import { h, React, ReactDOM } from "./react.js";
@@ -473,7 +474,14 @@ export function CourseMode(props) {
           ask: props.ask,
           onWrite: props.onWrite,
         }),
-        h(RecentMarks, { runId: props.runId, sessionId: props.sessionId, revision: props.reload, names: props.names }),
+        h(GradebookPanes, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          revision: props.reload,
+          names: props.names,
+          ask: props.ask,
+          onWrite: props.onWrite,
+        }),
         h(WidgetFrame, {
           key: "gradebook|" + props.dark + "|" + props.drafts + "|" + props.reload,
           view: "gradebook",
