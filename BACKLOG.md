@@ -246,7 +246,8 @@ is worth building.
       runs from an agent turn, drift is reported and left alone. `S` ·
       depends: —
 - [ ] **INT-2** Lift the ledger and drift machinery out of `src/lms/ledger.ts`
-      into something a second integration can use. `M` · depends: INT-1
+      into something a second integration can use. `M` · depends: INT-1 ·
+      done together with MOD-2 (E33), the adapter interface it belongs to
 - [ ] **INT-3** Decide what a meeting is to a calendar consumer — one event per
       meeting, per week, or per deadline. `decision` · depends: —
 - [ ] **INT-4** Calendar feed: the term plan already holds real dates and
@@ -275,7 +276,7 @@ is worth building.
 - [ ] **LNG-2** Audit where a grading scale, credit system or marking convention
       is assumed. `S` · depends: —
 - [ ] **LNG-3** Workspace-level locale and scale configuration. `M` · depends:
-      LNG-1, LNG-2
+      LNG-1, LNG-2 · the code side is spelled out in MOD-1 (E33)
 - [ ] **LNG-4** Material generation honours it without being asked each time.
       `M` · depends: LNG-3
 - [ ] **LNG-5** Produce the example course's materials in Russian and in Kazakh
@@ -1468,6 +1469,75 @@ is worth building.
 - [ ] **BGS-8** Background sync in Integrations, per run: on or off, interval,
       last and next pass, and the last error in words. `S` · depends: BGS-3
 
+## E33 · Changeable for the next professor: five seams in the code — partly [§12](FUTURE.md#12-language-and-institutional-fit), partly [STORAGE §10](STORAGE.md#10-where-the-code-differs-today)
+
+> **Rank: before anyone outside this course is onboarded.** Proposed
+> 2026-10-15, from an architecture review. The course *data* is already
+> modular: a new assessment, rubric, week or grading preset is a record or an
+> array entry. What is not modular is everything a course is *connected to* —
+> institution, LMS, sync target — and the two places that grew by accretion,
+> the CLI and the pane server. Each item below names one seam where a request
+> from a professor elsewhere would today cost edits in many files. Several
+> overlap existing epics and are written so they land there, not twice.
+
+- [ ] **MOD-1** An institution / professor profile. Timezone, language,
+      grading scale and the default grading presets come from workspace
+      configuration instead of code: `Asia/Almaty` is the built-in default in
+      four places (`model/delivery.ts:96`, `records-write.ts:101`,
+      `scaffold.ts:94`, `sql/schema.sql:181`); the ВСК/РК presets are the
+      shipped `PRESETS` (`grading-policy.ts:108`) and their strings appear in
+      the pane (`client/gradebook.js` — "ВСК is out of 100", the assistant's
+      examples); `vendor/datalayer/schema/preference_profile.schema.json`
+      (scope `system | professor | course | task`) exists and nothing in
+      `ainar-node` reads it. Presets become a profile's list, with ВСК the
+      Narxoz profile's, not the product's. **This is the code side of
+      [§12](FUTURE.md#12-language-and-institutional-fit)**: it is LNG-3 made
+      concrete and should be done as LNG-3, after LNG-1 and LNG-2 have counted
+      the places. `M` · depends: LNG-1, LNG-2
+- [ ] **MOD-2** An LMS adapter interface. Targets are a closed list
+      (`lms/index.ts:74`) and `lms/command.ts` (2,200 lines) branches on
+      `"canvas-api"` and its siblings throughout; Canvas keys are read straight
+      from `extensions.lms`; `validate.ts:1509–1560` re-declares the target list
+      and the sheet-tab helpers on purpose. Extract one interface — plan,
+      directory, push, check, assignment link — with Canvas and Sheets as its
+      first two implementations, and let the validator ask the registry instead
+      of copying it. Moodle (INT-7) then becomes one new file. Shares its ledger
+      half with INT-2 and should be done with it. `L` · depends: INT-1
+- [ ] **MOD-3** One road for grade arithmetic and one for writes in the pane.
+      `server/students.js:172` recomputes weighted standing that
+      `gradebook.ts` already computes; assessment-type tables exist three times
+      (`server/students.js`, `server/grading-view.js`, `server/upload.js`);
+      some writes spawn `ainar`, others call core functions in-process
+      (`grading-writes.js`, `plan-writes.js`). The pane computes nothing a
+      student's mark depends on: what it needs that `gradebook.ts` lacks (the
+      floor/ceiling bounds) moves into core with a test, and every write goes
+      through one path. Two gradebooks that can disagree is the risk this
+      removes. `M` · depends: —
+- [ ] **MOD-4** A command registry for the CLI. `bin/ainar.ts` is ~4,900 lines:
+      a hand-written `HELP` string and a 46-case `switch` with whole subsystems
+      inline (`defence` ~690 lines, `scans`, `roster`, `publish`,
+      `import-paper`). Each command becomes a module exporting its name, help
+      and `run(args)`, as `lms`, `connections` and `sync` already half do; help
+      is generated from the registry. The same move for the pane's `index.js`
+      (~75 `if (path === …)` branches, integration setup and the defence flow
+      inline) — a route table of handlers in `server/`. Only three tests spawn
+      the CLI today; the registry is where a smoke test per command becomes
+      cheap. `L` · depends: —
+- [ ] **MOD-5** One collection registry. A new record type is edited into
+      `model/*.ts`, `bundle.ts` `COLLECTION_SCHEMAS`, `loader.ts` `COLLECTIONS`,
+      `schema.ts` `SCHEMA_MODELS`, `validate.ts` `ID_FIELDS`, `sqlgen.ts`,
+      `sql/schema.sql`, and the vendor JSON Schema by hand — which already
+      drifts from zod (`vendor/datalayer/schema/README.md`). One declaration
+      per collection (model, file globs, id field, table) from which the rest
+      derive, and `ainar schema` able to regenerate the vendor JSON. **Lands
+      before the loader half of [STORAGE §10](STORAGE.md#10-where-the-code-differs-today)**
+      (`approval` on Concept/Module, `generated.yaml`, `publications`,
+      `provenance` everywhere), since each of those is otherwise another
+      eight-place edit. Sync targets have the same shape in miniature —
+      `RUNNABLE_SYNCS` in `validate.ts:1689` copies `sync/command.ts`, and
+      `sync/registry.ts` hard-codes Canvas and Sheets — and fold into MOD-2's
+      registry. `M` · depends: —
+
 ---
 
 ## Suggested order
@@ -1492,6 +1562,12 @@ calendar event is). Each gates work that is much larger than the decision.
 
 **Cheap things that can be picked up between anything:** GRD-3, INS-5, LNG-1,
 LNG-2, INT-1, INT-5, PRI-3, REC-3.
+
+**Before a second professor:** MOD-3 first — it is the one seam where today's
+code can show two different marks for the same student — then MOD-5 ahead of
+the STORAGE §10 loader work, and MOD-1 once LNG-1 and LNG-2 have run. MOD-2 and
+MOD-4 are large and wait for the request that needs them (a second LMS; a
+command that cannot be found in `bin/ainar.ts`).
 
 **Deliberately not now:** INT-6, INT-7, INT-9, EVA-3, GRD-4, MAT-5, DEP-2.
 Each waits on a real user asking for it. If one is started anyway, the question
