@@ -1503,16 +1503,21 @@ is worth building.
       first two implementations, and let the validator ask the registry instead
       of copying it. Moodle (INT-7) then becomes one new file. Shares its ledger
       half with INT-2 and should be done with it. `L` · depends: INT-1
-- [ ] **MOD-3** One road for grade arithmetic and one for writes in the pane.
-      `server/students.js:172` recomputes weighted standing that
-      `gradebook.ts` already computes; assessment-type tables exist three times
-      (`server/students.js`, `server/grading-view.js`, `server/upload.js`);
-      some writes spawn `ainar`, others call core functions in-process
-      (`grading-writes.js`, `plan-writes.js`). The pane computes nothing a
-      student's mark depends on: what it needs that `gradebook.ts` lacks (the
-      floor/ceiling bounds) moves into core with a test, and every write goes
-      through one path. Two gradebooks that can disagree is the risk this
-      removes. `M` · depends: —
+- [x] **MOD-3a** One road for grade arithmetic in the pane (2026-10-15).
+      `server/students.js` recomputed weighted standing beside `gradebook.ts`;
+      it now reads `finalRange(payload, student)` from `gradebook.ts`, which
+      derives floor, ceiling, open and pace from the payload's own `totals`
+      (kept out of the payload, which the golden fixtures hold to Python). The
+      two hand-kept assessment-type tables (`students.js`, `grading-view.js`)
+      had drifted — one listed `homework`/`lab`/`midterm`/`final`, which the
+      model never allows, the other lacked `oral_defense` — and are now
+      `ASSESSMENT_KINDS` in `src/assessment-kinds.ts`, keyed by the model's
+      `AssessmentType`. Tests: `test/final-range.test.ts`.
+- [ ] **MOD-3b** One road for writes from the pane. Some spawn `ainar`, others
+      call core functions in-process (`grading-writes.js`, `plan-writes.js`).
+      Pick one per kind of write and say why; the record-edit path is likely
+      the right one for small field edits, the CLI for anything that pushes.
+      `S`–`M` · depends: —
 - [ ] **MOD-4** A command registry for the CLI. `bin/ainar.ts` is ~4,900 lines:
       a hand-written `HELP` string and a 46-case `switch` with whole subsystems
       inline (`defence` ~690 lines, `scans`, `roster`, `publish`,
@@ -1563,8 +1568,8 @@ calendar event is). Each gates work that is much larger than the decision.
 **Cheap things that can be picked up between anything:** GRD-3, INS-5, LNG-1,
 LNG-2, INT-1, INT-5, PRI-3, REC-3.
 
-**Before a second professor:** MOD-3 first — it is the one seam where today's
-code can show two different marks for the same student — then MOD-5 ahead of
+**Before a second professor:** MOD-3a is done (2026-10-15); MOD-3b is small
+and can follow whenever the pane's write files are next open. Then MOD-5 ahead of
 the STORAGE §10 loader work, and MOD-1 once LNG-1 and LNG-2 have run. MOD-2 and
 MOD-4 are large and wait for the request that needs them (a second LMS; a
 command that cannot be found in `bin/ainar.ts`).

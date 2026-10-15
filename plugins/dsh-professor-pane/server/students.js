@@ -6,7 +6,8 @@ import { allRubrics, assessmentsOf, enrollmentsOf, runById } from "@ainar/core/s
 import { forkChoices, recordedLogins } from "@ainar/core/src/forks.ts";
 import { loadSheetConfig } from "@ainar/core/src/grade-sheet.ts";
 import { gradeChanges } from "@ainar/core/src/grade-changes.ts";
-import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
+import { finalRange, gradebookPayload } from "@ainar/core/src/gradebook.ts";
+import { ASSESSMENT_KINDS } from "@ainar/core/src/assessment-kinds.ts";
 
 import { BASE } from "./http.js";
 import { escapeText } from "./markdown.js";
@@ -97,10 +98,10 @@ export const studentsDocument = (
    * what each quiz came to, and where the course can still end up for them.
    * Every figure is the gradebook's row for that student and assessment — its
    * status and its score — so a mark that is not on the Gradebook tab cannot
-   * appear here either. Only the bounds are new arithmetic, and they are the
-   * plainest there is: the floor is every open assessment at nothing, the
-   * ceiling every one at full marks, and the pace the student's own share of
-   * what has been graded carried over the rest.
+   * appear here either. The bounds are the gradebook's too (`finalRange`): the
+   * floor is every open assessment at nothing, the ceiling every one at full
+   * marks, and the pace the student's own share of what has been graded
+   * carried over the rest. This screen adds no arithmetic over grades.
    *
    * "Missing" means past its `due_at` with nothing handed in. An assessment
    * with no due date is never missing, only not yet in — a fabricated deadline
@@ -115,7 +116,6 @@ export const studentsDocument = (
         String(a.due_at ?? "9999").localeCompare(String(b.due_at ?? "9999")) ||
         String(a.assessment_id).localeCompare(String(b.assessment_id)),
     );
-  const courseWeight = weighted.reduce((sum, assessment) => sum + assessment.weight, 0);
   const rowFor = new Map();
   for (const assessment of weighted) {
     for (const entry of assessment.rows ?? []) rowFor.set(assessment.assessment_id + "|" + entry.student_id, entry);
@@ -136,17 +136,15 @@ export const studentsDocument = (
       })
       .map((assessment) => assessment.assessment_id),
   );
-  const KINDS = [
-    { label: "Homework", types: ["assignment", "homework", "lab"] },
-    { label: "Quizzes", types: ["quiz"] },
-    { label: "Exams", types: ["exam", "midterm", "final"] },
-    { label: "Projects", types: ["project"] },
-  ];
-  const kindOf = (type) => KINDS.find((kind) => kind.types.includes(String(type ?? ""))) ?? null;
-  const kinds = [
-    ...KINDS.map((kind) => ({ ...kind, assessments: weighted.filter((a) => kindOf(a.type) === kind) })),
-    { label: "Other", types: [], assessments: weighted.filter((a) => !kindOf(a.type)) },
-  ].filter((kind) => kind.assessments.length);
+  // One column per kind present, in core's reading order; a type the model
+  // does not know (an old record) lands under Other rather than vanishing.
+  const known = new Set(ASSESSMENT_KINDS.map((kind) => kind.type));
+  const kinds = ASSESSMENT_KINDS.map((kind) => ({
+    label: kind.many,
+    assessments: weighted.filter((a) =>
+      kind.type === "other" ? a.type === "other" || !known.has(a.type) : a.type === kind.type,
+    ),
+  })).filter((kind) => kind.assessments.length);
 
   // The scheme's top-level blocks, in its own order: ВСК 1, ВСК 2, Final. A
   // nested block is already inside its parent's figure.
@@ -156,11 +154,8 @@ export const studentsDocument = (
 
   const number = (value) => String(Math.round(value * 10) / 10);
 
-  /** One student's state on every weighted assessment, and the bounds that follow. */
+  /** One student's state on every weighted assessment, and the gradebook's bounds. */
   const standingOf = (studentId) => {
-    let earned = 0;
-    let gradedWeight = 0;
-    let open = 0;
     const cells = new Map();
     let missing = 0;
     let waiting = 0;
@@ -169,11 +164,8 @@ export const studentsDocument = (
       const due = assessment.due_at ? Date.parse(assessment.due_at) : NaN;
       let state;
       if (entry && entry.status === "graded" && entry.score !== null && entry.maximum) {
-        earned += (entry.score / entry.maximum) * assessment.weight;
-        gradedWeight += assessment.weight;
         state = "graded";
       } else {
-        open += assessment.weight;
         if (entry && entry.submission_id) {
           state = "in";
           waiting += 1;
@@ -188,16 +180,7 @@ export const studentsDocument = (
       }
       cells.set(assessment.assessment_id, { state, entry, due });
     }
-    const share = gradedWeight ? earned / gradedWeight : null;
-    return {
-      cells,
-      missing,
-      waiting,
-      share,
-      floor: courseWeight ? (earned / courseWeight) * 100 : null,
-      ceiling: courseWeight ? ((earned + open) / courseWeight) * 100 : null,
-      open: courseWeight ? (open / courseWeight) * 100 : null,
-    };
+    return { cells, missing, waiting, ...finalRange(book, studentId) };
   };
 
   /** What one cell says when hovered: the assessment, its state, its deadline. */

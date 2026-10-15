@@ -522,3 +522,37 @@ export const gradebookPayload = (
     notes,
   };
 };
+
+/**
+ * Where one student's course can still end, read off a payload's own totals.
+ *
+ * The floor is every assessment not yet graded at nothing, the ceiling every
+ * one at full marks; `share` is the pace — the student's share of what has
+ * been graded. All three come from the row `totals` already computed, so a
+ * screen that draws a range cannot disagree with the gradebook it sits beside.
+ * Kept out of the payload itself: the payload is held word for word to the
+ * Python gradebook by the golden fixtures.
+ *
+ * Percent of the whole course weight. A student with no totals row (nothing
+ * weighted, or a role the gradebook does not total) is all open: 0 – 100.
+ * `null` throughout when nothing in the run carries a weight.
+ */
+export const finalRange = (
+  payload: any,
+  studentId: string,
+): { floor: number | null; ceiling: number | null; open: number | null; share: number | null } => {
+  const courseWeight = ((payload?.assessments ?? []) as any[])
+    .filter((a) => typeof a.weight === "number" && a.weight > 0)
+    .reduce((sum, a) => sum + a.weight, 0);
+  const row = ((payload?.totals ?? []) as any[]).find((t) => t.student_id === studentId);
+  const earned = row?.earned_weighted ?? 0;
+  const graded = row?.weight_graded ?? 0;
+  if (!courseWeight) return { floor: null, ceiling: null, open: null, share: graded ? earned / graded : null };
+  const open = courseWeight - graded;
+  return {
+    floor: (earned / courseWeight) * 100,
+    ceiling: ((earned + open) / courseWeight) * 100,
+    open: (open / courseWeight) * 100,
+    share: graded ? earned / graded : null,
+  };
+};

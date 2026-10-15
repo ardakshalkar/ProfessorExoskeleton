@@ -18,6 +18,8 @@
  * ones `ainar validate` checks, at the same tolerance.
  */
 
+import { assessmentKind } from "@ainar/core/src/assessment-kinds.ts";
+
 const TOLERANCE = 0.001;
 
 const escape = (text) =>
@@ -33,17 +35,8 @@ const pct = (fraction) => {
   return (Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0$/, "")) + "%";
 };
 
-/** The kinds of work, in the order a block is read: the big pieces first. */
-const KINDS = [
-  { type: "exam", one: "Exam", many: "Exams" },
-  { type: "project", one: "Project", many: "Projects" },
-  { type: "assignment", one: "Homework", many: "Homework" },
-  { type: "quiz", one: "Quiz", many: "Quizzes" },
-  { type: "lab", one: "Lab", many: "Labs" },
-  { type: "presentation", one: "Presentation", many: "Presentations" },
-  { type: "participation", one: "Participation", many: "Participation" },
-];
-const kindOf = (type) => KINDS.find((kind) => kind.type === type) ?? { type, one: type ?? "Other", many: type ?? "Other" };
+/** The kinds of work and what each is called: core's one table. A block sorts them by weight below. */
+const kindOf = assessmentKind;
 
 const shortDate = (iso) => (iso ? String(iso).slice(5, 10).replace("-", ".") : null);
 
