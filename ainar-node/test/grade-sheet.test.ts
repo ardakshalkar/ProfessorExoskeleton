@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { DEFAULT_MARKS, type SheetConfig, applyFlags, applyGithubLogins, planSync, sheetRows } from "../src/grade-sheet.ts";
+import { defaultMarks, type SheetConfig, applyFlags, applyGithubLogins, planSync, sheetRows } from "../src/grade-sheet.ts";
 import { RosterStore } from "../src/roster.ts";
 
 const RUN = "CSS-1-2026-FALL";
@@ -12,7 +12,7 @@ const config: SheetConfig = {
   name_column: "Name",
   flag_column: "Note",
   columns: { "1Task": "ASSESSMENT-HW1" },
-  marks: DEFAULT_MARKS,
+  marks: defaultMarks(),
   students: {},
 };
 

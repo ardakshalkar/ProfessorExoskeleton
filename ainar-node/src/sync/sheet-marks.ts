@@ -15,7 +15,7 @@ import { join, resolve } from "node:path";
 
 import { enrolledIn } from "../bundle.ts";
 import {
-  DEFAULT_MARKS,
+  defaultMarks,
   GITHUB_ANCHOR,
   NAME_ANCHOR,
   NOTE_ANCHOR,
@@ -53,7 +53,7 @@ export const sheetConfigFromSync = (sync: RunSync, legacy: SheetConfig | null): 
             : { factor: Number(mark.factor), status: mark.status === "late" ? ("late" as const) : ("submitted" as const), label: String(mark.label ?? mark.status ?? "handed in") },
         ]),
       )
-    : (legacy?.marks ?? DEFAULT_MARKS);
+    : (legacy?.marks ?? defaultMarks());
   return {
     run: legacy?.run ?? "",
     url: (where.sheet as string | undefined) ?? legacy?.url ?? null,

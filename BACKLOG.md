@@ -1564,6 +1564,27 @@ is worth building.
         fallback, `PRESETS`, final detection, `boundaryOf`, `DEFAULT_MARKS`
         (already overridable per run) and the plan-term 30/30/40 seed. Pane UI
         strings are a separate, larger i18n job and stay out of MOD-1.
+      **Done on `claude/mod1-profile-89c00e` (2026-10-15).** `profile.ts`
+      (resolver, six layers, `ainar profile`); `profiles/narxoz.yaml`; neutral
+      `locale.timezone`, `grading.{final_matchers, period_boundary, presets}`
+      and `marking.defence.partial_factor` in the system defaults; the timezone
+      sites, `PRESETS`, `isFinal`, `boundaryOf`, `DEFAULT_MARKS` →
+      `defaultMarks()` and the defence "partly" factor read the profile; the
+      pane's run layer now lives at `versions/<TERM>/preferences.yaml`.
+      **Transition:** a workspace that names no `institution:` gets `narxoz`
+      (`LEGACY_INSTITUTION`, reported as `legacy-default`) so the course is
+      unchanged; the course workspace should add `institution: narxoz` to its
+      professor preferences, then the constant goes.
+      **Left:** the plan-term 30/30/40 seed and other skill prose (G10, G11,
+      T7, T8, C3, I2, I7: skills must call `ainar profile`); `sql/schema.sql`
+      and the three vendored schema timezone defaults; `calendar.*`,
+      `credits.*`, `locale.{lexicon,week_start}`, `display.bands`,
+      `ids.*`, `print.page_size`, `lms.canvas.base_url`, `grading.scale` and
+      `rounding` keys (unread today); `grading.default_preset`; scaffold's
+      `language: [en]` / credits 6; the persona slot (L1); T9 run-zone date
+      arithmetic; the pane's own Narxoz example strings (G9, L14). UI-string
+      i18n (L7) stays out. A professor-layer edit mid-session reaches the CLI
+      on its next call and the pane on its next request.
 - [ ] **MOD-2** An LMS adapter interface. Targets are a closed list
       (`lms/index.ts:74`) and `lms/command.ts` (2,200 lines) branches on
       `"canvas-api"` and its siblings throughout; Canvas keys are read straight

@@ -6,7 +6,8 @@
  * `partly` or `not_confirmed` — and that word changes the mark:
  *
  *   confirmed      the written mark stands
- *   partly         half the written mark, unless the professor gives a score
+ *   partly         the profile's `marking.defence.partial_factor` of the written
+ *                  mark (half unless changed), unless the professor gives a score
  *   not_confirmed  0, unless the professor gives a score
  *
  * The written mark is the decision the criterion had before any defence — the
@@ -22,6 +23,7 @@
 import type { CourseBundle } from "./bundle.ts";
 import { allRubrics } from "./bundle.ts";
 import { evaluationId } from "./grade-board.ts";
+import { activeProfile } from "./profile.ts";
 
 export const DEFENCE_VIA = "defence";
 
@@ -168,7 +170,7 @@ export const checkDefence = (options: {
     else if (mark.outcome === "not_confirmed") score = 0;
     else if (base == null) {
       throw new Error(`${mark.criterion} has no mark yet, so "${mark.outcome}" needs a --score (0–${maximum})`);
-    } else score = mark.outcome === "partly" ? round(base / 2) : base;
+    } else score = mark.outcome === "partly" ? round(base * activeProfile().marking.defence.partial_factor) : base;
 
     const previous = before && ["approved", "overridden"].includes(before.status) ? before.professor_decision : null;
     if (previous && before.extensions?.decided_via === DEFENCE_VIA && previous.defence === mark.outcome && Number(previous.score) === score) {

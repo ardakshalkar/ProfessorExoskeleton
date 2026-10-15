@@ -1,0 +1,252 @@
+# Institution pack: Narxoz University (Almaty, Kazakhstan).
+#
+# Shipped with the harness. A workspace opts in with `institution: narxoz` in its
+# preferences (professor, course or run layer); a workspace that names none gets
+# this pack for now, which is how the harness behaved before profiles existed
+# (see `LEGACY_INSTITUTION` in ainar-node/src/profile.ts).
+#
+# Everything here is an override of the neutral system layer
+# (vendor/datalayer/preferences/defaults.yaml).
+
+version: 1
+profile_id: institution-narxoz
+scope: institution
+
+values:
+  locale:
+    timezone: Asia/Almaty
+
+  grading:
+    # "Final" is recognised by its id or title: English, Russian and Kazakh-era
+    # registrar words.
+    final_matchers:
+      - '\bfinal\b'
+      - 'итог|экзамен|финал'
+    # ВСК 1 closes with the first midterm, whatever the calendar's middle is.
+    period_boundary: first_midterm
+    presets:
+      - id: vsk
+        title: ВСК 1 · ВСК 2 · Final
+        family: period
+        summary: "By period, as Narxoz divides it: each half of the term is a ВСК worth 30% and out of 100 in the journal, the final is 40%. Work due before the middle of the term goes to ВСК 1."
+        points: null
+        components:
+          - component_id: VSK1
+            title: ВСК 1
+            weight: 0.3
+            parent: null
+            points: 100
+            takes:
+              half: 1
+              same:
+                - RK1
+          - component_id: VSK2
+            title: ВСК 2
+            weight: 0.3
+            parent: null
+            points: 100
+            takes:
+              half: 2
+              same:
+                - RK2
+          - component_id: FINAL
+            title: Final / Экзамен
+            weight: 0.4
+            parent: null
+            points: null
+            takes:
+              final: true
+              same:
+                - EXAM
+      - id: vsk-blocks
+        title: ВСК with blocks inside
+        family: hybrid
+        summary: "Period and kind at once: each ВСК holds a midterm, a homework block and a quiz block of its own (10 / 16 / 4 of its 30), so a category can be reweighted without moving work between halves."
+        points: null
+        components:
+          - component_id: VSK1
+            title: ВСК 1
+            weight: 0.3
+            parent: null
+            points: 100
+            takes:
+              same:
+                - RK1
+          - component_id: VSK1-MID
+            title: Midterm 1
+            weight: 0.1
+            parent: VSK1
+            points: null
+            takes:
+              half: 1
+              types:
+                - exam
+          - component_id: VSK1-HW
+            title: Homework (ВСК 1)
+            weight: 0.16
+            parent: VSK1
+            points: null
+            takes:
+              half: 1
+              types:
+                - assignment
+                - presentation
+                - participation
+                - other
+                - project
+          - component_id: VSK1-QZ
+            title: Quizzes (ВСК 1)
+            weight: 0.04
+            parent: VSK1
+            points: null
+            takes:
+              half: 1
+              types:
+                - quiz
+                - oral_defense
+          - component_id: VSK2
+            title: ВСК 2
+            weight: 0.3
+            parent: null
+            points: 100
+            takes:
+              same:
+                - RK2
+          - component_id: VSK2-MID
+            title: Midterm 2
+            weight: 0.1
+            parent: VSK2
+            points: null
+            takes:
+              half: 2
+              types:
+                - exam
+          - component_id: VSK2-HW
+            title: Homework (ВСК 2)
+            weight: 0.16
+            parent: VSK2
+            points: null
+            takes:
+              half: 2
+              types:
+                - assignment
+                - presentation
+                - participation
+                - other
+                - project
+          - component_id: VSK2-QZ
+            title: Quizzes (ВСК 2)
+            weight: 0.04
+            parent: VSK2
+            points: null
+            takes:
+              half: 2
+              types:
+                - quiz
+                - oral_defense
+          - component_id: FINAL
+            title: Final / Экзамен
+            weight: 0.4
+            parent: null
+            points: null
+            takes:
+              final: true
+              same:
+                - EXAM
+      - id: admission
+        title: Admission rating 60 · Exam 40
+        family: admission
+        summary: "Kazakhstan's standard: РК 1 and РК 2 (рубежный контроль) make the admission rating — 60% between them, each out of 100 — and the exam is 40%. The rating is the gate, so it is a block of its own above the two."
+        points: null
+        components:
+          - component_id: ADMISSION
+            title: Рейтинг допуска
+            weight: 0.6
+            parent: null
+            points: null
+          - component_id: RK1
+            title: РК 1
+            weight: 0.3
+            parent: ADMISSION
+            points: 100
+            takes:
+              half: 1
+              same:
+                - VSK1
+          - component_id: RK2
+            title: РК 2
+            weight: 0.3
+            parent: ADMISSION
+            points: 100
+            takes:
+              half: 2
+              same:
+                - VSK2
+          - component_id: EXAM
+            title: Экзамен
+            weight: 0.4
+            parent: null
+            points: 100
+            takes:
+              final: true
+              same:
+                - FINAL
+      - id: categories
+        title: Homework · Quizzes · Midterms · Final
+        family: category
+        summary: "By kind of work, the usual split outside a ВСК system: each block holds every assessment of its kind across the term. Canvas assignment groups usually look like this."
+        points: 100
+        components:
+          - component_id: HW
+            title: Homework
+            weight: 0.3
+            parent: null
+            points: null
+            takes:
+              types:
+                - assignment
+                - presentation
+                - participation
+                - other
+                - project
+          - component_id: QUIZ
+            title: Quizzes
+            weight: 0.1
+            parent: null
+            points: null
+            takes:
+              types:
+                - quiz
+                - oral_defense
+          - component_id: MIDTERMS
+            title: Midterms
+            weight: 0.2
+            parent: null
+            points: null
+            takes:
+              types:
+                - exam
+          - component_id: FINAL
+            title: Final
+            weight: 0.4
+            parent: null
+            points: null
+            takes:
+              final: true
+      - id: flat
+        title: No blocks
+        family: flat
+        summary: Every assessment counts on its own, by its weight. The grade is the sum; nothing is grouped and no block has its own scale.
+        points: null
+        components: []
+    
+
+  marking:
+    # The grade sheet's late-work words: handed in on time, late, very late.
+    late_marks:
+      - { word: T, factor: 1, status: submitted, label: handed in }
+      - { word: LT, factor: 0.8, status: late, label: late }
+      - { word: LLT, factor: 0.5, status: late, label: very late }
+    defence:
+      # "Partly confirmed" is half the written mark.
+      partial_factor: 0.5

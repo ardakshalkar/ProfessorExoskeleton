@@ -85,6 +85,7 @@ import {
   realtimeSession,
   transcriber,
 } from "@ainar/core/src/transcribe.ts";
+import { useWorkspaceProfile } from "@ainar/core/src/profile.ts";
 import { ToolError } from "@ainar/core/src/workspace.ts";
 
 import {
@@ -266,6 +267,9 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     return fail(String(error.message ?? error));
   }
   const { workspace, root } = resolved;
+  // This workspace's profile for everything the request reads (timezone,
+  // grading shapes, marks); the pane serves several workspaces, so per request.
+  useWorkspaceProfile({ root });
 
   try {
     if (path === "/api/runs") {

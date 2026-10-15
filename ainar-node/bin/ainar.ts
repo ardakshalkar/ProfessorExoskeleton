@@ -103,7 +103,7 @@ import {
   refuseInsideRepo,
   rosterDir,
 } from "../src/roster.ts";
-import { DEFAULT_MARKS, type SheetConfig, configPath, loadSheetConfig, saveSheetConfig } from "../src/grade-sheet.ts";
+import { defaultMarks, type SheetConfig, configPath, loadSheetConfig, saveSheetConfig } from "../src/grade-sheet.ts";
 import { runSync } from "../src/sync/command.ts";
 import { syncsOf } from "../src/sync/registry.ts";
 import { runMarksSync } from "../src/sync/sheet-marks.ts";
@@ -162,6 +162,7 @@ import {
   repoUrl,
 } from "../src/defence.ts";
 import { checkDefence } from "../src/defence-check.ts";
+import { resolveProfile, useWorkspaceProfile } from "../src/profile.ts";
 import { pulledSubmissionId } from "../src/lms/pull.ts";
 import { gradeChanges, realChanges } from "../src/grade-changes.ts";
 import { currentProposal, policyDocument } from "../src/grading-policy.ts";
@@ -351,6 +352,8 @@ const rest = positional.slice(1);
 const rootFlag = flag("root");
 const root = resolve(rootFlag ?? process.cwd());
 const workspace = new Workspace(root, rootFlag ? "flag" : "cwd");
+// The profile (institution, timezone, grading shapes, marks) every command below reads.
+useWorkspaceProfile({ root });
 
 const out = (value: unknown): void =>
   console.log(typeof value === "string" ? value : JSON.stringify(value, null, 2));
@@ -995,7 +998,7 @@ const gradeSheet = async (step: string, runId: string | undefined): Promise<void
       name_column: "Name",
       flag_column: null,
       columns: {},
-      marks: DEFAULT_MARKS,
+      marks: defaultMarks(),
       students: {},
     };
     if (flag("url")) config.url = flag("url")!;
@@ -3924,6 +3927,14 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         `\nEverything written is approval: draft.${existing ? "" : " The weight and the outcomes are yours to fill in."}\n` +
           `Next: \`ainar validate ${courseId}\`, then the scans — \`scans plan ${runId} --assessment ${assessmentId}\`.`,
       );
+      break;
+    }
+
+    // The resolved profile, for skills and for a professor asking "what does it assume?".
+    // `--course` and `--term` add those layers; `layers` says which files said what.
+    case "profile": {
+      const resolved = resolveProfile({ root, courseId: flag("course"), term: flag("term") });
+      out({ institution: resolved.profile.institution, institution_source: resolved.institutionSource, layers: resolved.layers, profile: resolved.profile });
       break;
     }
 

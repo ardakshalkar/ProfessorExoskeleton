@@ -29,6 +29,7 @@ import {
   entity,
   plainDate,
 } from "./common.ts";
+import { activeProfile } from "../profile.ts";
 import { Sync } from "./sync.ts";
 
 export const User = entity({
@@ -93,7 +94,7 @@ export const CourseVersion = entity({
   end_date: plainDate(),
   instructors: z.array(UserId).default([]),
   assistants: z.array(UserId).default([]),
-  timezone: z.string().default("Asia/Almaty"),
+  timezone: z.string().default(() => activeProfile().locale.timezone),
   status: RunStatus.default("planned"),
   lms_course_id: z.string().nullish(),
   section: z.string().nullish(),

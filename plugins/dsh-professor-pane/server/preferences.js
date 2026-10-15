@@ -93,6 +93,9 @@ const preferenceSchema = () => {
         walk(value, here);
         continue;
       }
+      // Lists (grading presets, matchers, late marks) are structures an
+      // institution pack or a hand-edit owns; a text box would write one back as a string.
+      if (Array.isArray(value)) continue;
       const options = ambiguous.has(key) ? null : choices.get(key) ?? null;
       fields.push({
         path: here.join("."),
@@ -148,7 +151,9 @@ const preferenceLayerPaths = (root, courseId, term) => {
       candidates.push({
         scope: "run",
         label: `${courseId} ${term}`,
-        path: join(root, "courses", courseId, "preferences.yaml"),
+        // Not the course file again: that made a run-layer Save overwrite the
+        // course layer. Matches `resolveProfile` in ainar-node/src/profile.ts.
+        path: join(root, "courses", courseId, "versions", term, "preferences.yaml"),
       });
     }
   }

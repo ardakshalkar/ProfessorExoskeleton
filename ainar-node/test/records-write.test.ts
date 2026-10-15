@@ -178,7 +178,7 @@ test("the stamp carries the run's offset, not the machine's", () => {
   assert.equal(stamp, "2026-10-18T09:00:00+05:00");
 });
 
-test("an unknown timezone falls back to +05:00 rather than to UTC", () => {
+test("an unknown timezone falls back to the profile's offset rather than to UTC", () => {
   // Silently substituting UTC would misreport when a person decided, by five
   // hours — the same fallback `run_timezone` made.
   const stamp = decidedAt("Not/AZone", new Date("2026-10-18T04:00:00Z"));

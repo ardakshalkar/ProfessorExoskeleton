@@ -46,6 +46,7 @@ import { join } from "node:path";
 import { allRubrics } from "./bundle.ts";
 import { githubLogin } from "./forks.ts";
 import { evaluationId } from "./grade-board.ts";
+import { activeProfile } from "./profile.ts";
 import { pulledSubmissionId } from "./lms/pull.ts";
 import { type RosterStore } from "./roster.ts";
 import { LinkTable, type RowContext, adoptPins } from "./sync/links.ts";
@@ -85,11 +86,11 @@ export interface SheetConfig {
   synced_at?: string | null;
 }
 
-export const DEFAULT_MARKS: Record<string, SheetMark> = {
-  T: { factor: 1, status: "submitted", label: "handed in" },
-  LT: { factor: 0.8, status: "late", label: "late" },
-  LLT: { factor: 0.5, status: "late", label: "very late" },
-};
+/** The profile's `marking.late_marks`, as the sheet config holds them (word → what it is worth). */
+export const defaultMarks = (): Record<string, SheetMark> =>
+  Object.fromEntries(
+    activeProfile().marking.late_marks.map(({ word, factor, status, label }) => [word, { factor, status, label } as SheetMark]),
+  );
 
 export const sheetsDir = (): string =>
   process.env.AINAR_SHEETS_DIR ? process.env.AINAR_SHEETS_DIR : join(homedir(), ".ainar", "sheets");
@@ -111,7 +112,7 @@ export const loadSheetConfig = (runId: string, directory = sheetsDir()): SheetCo
     flag_column: raw.flag_column ?? null,
     github_column: raw.github_column ?? null,
     columns: raw.columns ?? {},
-    marks: raw.marks ?? DEFAULT_MARKS,
+    marks: raw.marks ?? defaultMarks(),
     students: raw.students ?? {},
     synced_at: raw.synced_at ?? null,
   };

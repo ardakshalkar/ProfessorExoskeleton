@@ -28,6 +28,8 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { resolveProfile } from "./profile.ts";
+
 const COURSE_TEMPLATE = `course_id: {course_id}
 title: {title}
 description: TODO
@@ -91,7 +93,7 @@ term: {term}
 start_date: {start}
 end_date: {end}
 instructors: []
-timezone: Asia/Almaty
+timezone: {timezone}
 status: planned
 `;
 
@@ -189,6 +191,8 @@ export const newRun = (options: NewRunOptions): Written[] => {
     term: options.term,
     start: options.start,
     end: options.end,
+    // The profile's: the workspace's institution, professor, course and run layers.
+    timezone: resolveProfile({ root: options.root, courseId: options.courseId, term: options.term }).profile.locale.timezone,
   };
   writeIfAbsent(join(courseDir, "version.yaml"), fill(VERSION_TEMPLATE, values), written);
   writeIfAbsent(join(courseDir, "assessments.yaml"), fill(ASSESSMENTS_TEMPLATE, values), written);

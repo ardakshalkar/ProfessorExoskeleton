@@ -19,6 +19,7 @@ import { z } from "zod";
 import { AGENT_WRITABLE, ID_FIELDS } from "./approval.ts";
 import { COLLECTIONS } from "./loader.ts";
 import { candidateFiles, editRecords } from "./record-edit.ts";
+import { activeProfile } from "./profile.ts";
 import { dump } from "./yaml-out.ts";
 
 /**
@@ -97,25 +98,33 @@ export const recordFile = (collection: string, record: Record_, context: PlaceCo
  * it. Two mechanisms for one question is how two records of the same moment end
  * up an hour apart.
  */
-export const zoneOffsetMinutes = (timezone: string | undefined, now: Date = new Date()): number => {
-  const zone = timezone || "Asia/Almaty";
+const offsetOf = (zone: string, now: Date): number | null => {
   try {
-    const format = new Intl.DateTimeFormat("en-US", {
-      timeZone: zone,
-      timeZoneName: "longOffset",
-    });
-    const part = format.formatToParts(now).find((entry) => entry.type === "timeZoneName")?.value;
-    const match = /GMT([+-])(\d{2}):(\d{2})/.exec(part ?? "");
-    return match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) : 300;
+    const format = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" });
+    const part = format.formatToParts(now).find((entry) => entry.type === "timeZoneName")?.value ?? "";
+    if (part === "GMT") return 0; // UTC itself carries no offset to read
+    const match = /GMT([+-])(\d{2}):(\d{2})/.exec(part);
+    return match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) : null;
   } catch {
-    return 300; // +05:00, the same fallback `run_timezone` uses
+    return null;
   }
+};
+
+export const zoneOffsetMinutes = (timezone: string | undefined, now: Date = new Date()): number => {
+  const home = activeProfile().locale.timezone;
+  // A run's zone Intl does not know falls back to the profile's, never to a
+  // guessed constant: a stamp with the wrong offset misreports when it happened.
+  const offset = offsetOf(timezone || home, now) ?? offsetOf(home, now);
+  if (offset === null) {
+    throw new Error(`"${home}" is not a timezone this runtime knows. Set a valid one in the profile (locale.timezone).`);
+  }
+  return offset;
 };
 
 /**
  * `datetime.now(run_timezone(...)).replace(microsecond=0).isoformat()`.
  *
- * The offset comes from the run's own `timezone`, falling back to Asia/Almaty —
+ * The offset comes from the run's own `timezone`, falling back to the profile's `locale.timezone` —
  * a stamp is the record of when something happened, so a silent UTC
  * substitution would misreport it by five hours.
  */

@@ -40,6 +40,7 @@ import { gradebookPayload } from "./gradebook.ts";
 import { roundHalfEven } from "./grading.ts";
 import { IssueList } from "./issues.ts";
 import { lmsScale } from "./lms-scale.ts";
+import { activeProfile } from "./profile.ts";
 import { gradingSchemeIssues } from "./validate.ts";
 
 const COMPONENT_ID = /^[A-Z][A-Z0-9-]{0,31}$/;
@@ -89,95 +90,26 @@ export interface Preset {
   components: PresetComponent[];
 }
 
-const block = (
-  component_id: string,
-  title: string,
-  weight: number,
-  extra: { parent?: string; points?: number; takes?: Takes } = {},
-): PresetComponent => ({
-  component_id,
-  title,
-  weight,
-  parent: extra.parent ?? null,
-  points: extra.points ?? null,
-  ...(extra.takes ? { takes: extra.takes } : {}),
-});
+/**
+ * The structures on offer, from the profile (`grading.presets`): the system
+ * layer ships the neutral ones, an institution pack adds its own (Narxoz's
+ * ВСК and admission-rating shapes live in `profiles/narxoz.yaml`).
+ */
+export const presets = (): Preset[] => activeProfile().grading.presets as unknown as Preset[];
 
-const WORK = ["assignment", "presentation", "participation", "other"];
+/** Compiled once per list of matchers, which is the profile's and rarely changes. */
+const matcherCache = new WeakMap<string[], RegExp>();
 
-export const PRESETS: Preset[] = [
-  {
-    id: "vsk",
-    title: "ВСК 1 · ВСК 2 · Final",
-    family: "period",
-    summary:
-      "By period, as Narxoz divides it: each half of the term is a ВСК worth 30% and out of 100 in the journal, the final is 40%. Work due before the middle of the term goes to ВСК 1.",
-    points: null,
-    components: [
-      block("VSK1", "ВСК 1", 0.3, { points: 100, takes: { half: 1, same: ["RK1"] } }),
-      block("VSK2", "ВСК 2", 0.3, { points: 100, takes: { half: 2, same: ["RK2"] } }),
-      block("FINAL", "Final / Экзамен", 0.4, { takes: { final: true, same: ["EXAM"] } }),
-    ],
-  },
-  {
-    id: "vsk-blocks",
-    title: "ВСК with blocks inside",
-    family: "hybrid",
-    summary:
-      "Period and kind at once: each ВСК holds a midterm, a homework block and a quiz block of its own (10 / 16 / 4 of its 30), so a category can be reweighted without moving work between halves.",
-    points: null,
-    components: [
-      block("VSK1", "ВСК 1", 0.3, { points: 100, takes: { same: ["RK1"] } }),
-      block("VSK1-MID", "Midterm 1", 0.1, { parent: "VSK1", takes: { half: 1, types: ["exam"] } }),
-      block("VSK1-HW", "Homework (ВСК 1)", 0.16, { parent: "VSK1", takes: { half: 1, types: WORK.concat("project") } }),
-      block("VSK1-QZ", "Quizzes (ВСК 1)", 0.04, { parent: "VSK1", takes: { half: 1, types: ["quiz", "oral_defense"] } }),
-      block("VSK2", "ВСК 2", 0.3, { points: 100, takes: { same: ["RK2"] } }),
-      block("VSK2-MID", "Midterm 2", 0.1, { parent: "VSK2", takes: { half: 2, types: ["exam"] } }),
-      block("VSK2-HW", "Homework (ВСК 2)", 0.16, { parent: "VSK2", takes: { half: 2, types: WORK.concat("project") } }),
-      block("VSK2-QZ", "Quizzes (ВСК 2)", 0.04, { parent: "VSK2", takes: { half: 2, types: ["quiz", "oral_defense"] } }),
-      block("FINAL", "Final / Экзамен", 0.4, { takes: { final: true, same: ["EXAM"] } }),
-    ],
-  },
-  {
-    id: "admission",
-    title: "Admission rating 60 · Exam 40",
-    family: "admission",
-    summary:
-      "Kazakhstan's standard: РК 1 and РК 2 (рубежный контроль) make the admission rating — 60% between them, each out of 100 — and the exam is 40%. The rating is the gate, so it is a block of its own above the two.",
-    points: null,
-    components: [
-      block("ADMISSION", "Рейтинг допуска", 0.6),
-      block("RK1", "РК 1", 0.3, { parent: "ADMISSION", points: 100, takes: { half: 1, same: ["VSK1"] } }),
-      block("RK2", "РК 2", 0.3, { parent: "ADMISSION", points: 100, takes: { half: 2, same: ["VSK2"] } }),
-      block("EXAM", "Экзамен", 0.4, { points: 100, takes: { final: true, same: ["FINAL"] } }),
-    ],
-  },
-  {
-    id: "categories",
-    title: "Homework · Quizzes · Midterms · Final",
-    family: "category",
-    summary:
-      "By kind of work, the usual split outside a ВСК system: each block holds every assessment of its kind across the term. Canvas assignment groups usually look like this.",
-    points: 100,
-    components: [
-      block("HW", "Homework", 0.3, { takes: { types: WORK.concat("project") } }),
-      block("QUIZ", "Quizzes", 0.1, { takes: { types: ["quiz", "oral_defense"] } }),
-      block("MIDTERMS", "Midterms", 0.2, { takes: { types: ["exam"] } }),
-      block("FINAL", "Final", 0.4, { takes: { final: true } }),
-    ],
-  },
-  {
-    id: "flat",
-    title: "No blocks",
-    family: "flat",
-    summary: "Every assessment counts on its own, by its weight. The grade is the sum; nothing is grouped and no block has its own scale.",
-    points: null,
-    components: [],
-  },
-];
-
-const isFinal = (assessment: any): boolean =>
-  /\bfinal\b|итог|экзамен|финал/i.test(`${assessment.assessment_id} ${assessment.title ?? ""}`);
+/** Whether an assessment is the final, by the profile's `grading.final_matchers`. */
+const isFinal = (assessment: any): boolean => {
+  const sources = activeProfile().grading.final_matchers;
+  let matcher = matcherCache.get(sources);
+  if (!matcher) {
+    matcher = new RegExp(sources.map((source) => `(?:${source})`).join("|") || "$^", "i");
+    matcherCache.set(sources, matcher);
+  }
+  return matcher.test(`${assessment.assessment_id} ${assessment.title ?? ""}`);
+};
 
 /**
  * Where the first half of the term ends: at the first midterm, when the run
@@ -185,7 +117,7 @@ const isFinal = (assessment: any): boolean =>
  * and at the calendar's middle otherwise.
  */
 const boundaryOf = (run: any, assessments: readonly any[]): number => {
-  const midterm = assessments
+  const midterm = activeProfile().grading.period_boundary !== "first_midterm" ? undefined : assessments
     .filter((entry) => entry.type === "exam" && !isFinal(entry) && entry.due_at)
     .map((entry) => Date.parse(String(entry.due_at)))
     .filter(Number.isFinite)
@@ -288,7 +220,7 @@ export const policyDocument = (bundle: CourseBundle, runId: string) => {
       (a, c) => String(a.due_at ?? "9999").localeCompare(String(c.due_at ?? "9999")) || a.assessment_id.localeCompare(c.assessment_id),
     ),
     canvas_groups: Object.keys(groups),
-    presets: PRESETS.map(({ components, ...rest }) => ({
+    presets: presets().map(({ components, ...rest }) => ({
       ...rest,
       components: components.map(({ takes: _rule, ...component }) => component),
     })),
@@ -319,7 +251,7 @@ const issuesOf = (run: any, assessments: any[]) => {
  * impact names it rather than a guess hiding it.
  */
 export const fromPreset = (bundle: CourseBundle, runId: string, presetId: string): Proposal => {
-  const preset = PRESETS.find((entry) => entry.id === presetId);
+  const preset = presets().find((entry) => entry.id === presetId);
   if (!preset) throw new Error(`no preset '${presetId}'`);
   const run = runById(bundle).get(runId) as any;
   const current = currentProposal(bundle, runId);

@@ -9,7 +9,7 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { fromPreset, currentProposal, policyBase, policyDocument, policyImpact, PRESETS, readProposal, withProposal } from "../src/grading-policy.ts";
+import { fromPreset, currentProposal, policyBase, policyDocument, policyImpact, presets, readProposal, withProposal } from "../src/grading-policy.ts";
 import { runById } from "../src/bundle.ts";
 import { Workspace } from "../src/workspace.ts";
 
@@ -31,7 +31,7 @@ test("the policy as it stands changes nothing, and its base is stable", () => {
 });
 
 test("every preset lays over the course without a structural error", () => {
-  for (const preset of PRESETS) {
+  for (const preset of presets()) {
     const impact = policyImpact(plain, RUN, fromPreset(plain, RUN, preset.id));
     assert.equal(impact.errors.length, 0, `${preset.id}: ${impact.errors.map((e) => e.message).join("; ")}`);
   }

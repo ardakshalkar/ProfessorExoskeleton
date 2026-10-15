@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { evaluationId } from "../src/grade-board.ts";
-import { DEFAULT_MARKS, type SheetConfig, planSync, rowContextFor, sheetLayout, sheetRows } from "../src/grade-sheet.ts";
+import { defaultMarks, type SheetConfig, planSync, rowContextFor, sheetLayout, sheetRows } from "../src/grade-sheet.ts";
 import { HISTORY_KEPT, Ledger } from "../src/lms/ledger.ts";
 import { Sync } from "../src/model/sync.ts";
 import { RosterStore } from "../src/roster.ts";
@@ -136,7 +136,7 @@ const config: SheetConfig = {
   name_column: "Name",
   flag_column: null,
   columns: { "1Task": "ASSESSMENT-HW1" },
-  marks: DEFAULT_MARKS,
+  marks: defaultMarks(),
   students: {},
 };
 
