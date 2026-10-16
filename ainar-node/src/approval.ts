@@ -23,24 +23,7 @@
  */
 
 import type { CourseBundle } from "./bundle.ts";
-import {
-  Assessment,
-  AssessmentItem,
-  Evaluation,
-  ItemModel,
-  ItemResponse,
-  Submission,
-} from "./model/assessment.ts";
-import { Document } from "./model/content.ts";
-import { LearningActivity, Resource } from "./model/delivery.ts";
-import { ActionItem, CourseEvent } from "./model/harness.ts";
-import {
-  Intervention,
-  LearningEvidence,
-  StudentCapabilityState,
-  StudentConceptState,
-  StudentSignal,
-} from "./model/learning.ts";
+import { AGENT_COLLECTIONS, COLLECTION_ID_FIELDS } from "./collections.ts";
 
 /**
  * What an agent may write into a course, keyed by collection.
@@ -50,47 +33,15 @@ import {
  * course teaches and in which week is the professor's own authoring. An
  * invented learning outcome is the mistake that costs most to find late,
  * because student evidence attaches to it.
+ *
+ * Declared per collection (`agent: true`) in collections.ts.
  */
-export const AGENT_WRITABLE = {
-  activities: LearningActivity,
-  documents: Document,
-  resources: Resource,
-  assessments: Assessment,
-  items: AssessmentItem,
-  item_models: ItemModel,
-  submissions: Submission,
-  item_responses: ItemResponse,
-  evaluations: Evaluation,
-  evidence: LearningEvidence,
-  concept_states: StudentConceptState,
-  capability_states: StudentCapabilityState,
-  signals: StudentSignal,
-  interventions: Intervention,
-  events: CourseEvent,
-  action_items: ActionItem,
-} as const;
+export const AGENT_WRITABLE = AGENT_COLLECTIONS;
 
 export type WritableCollection = keyof typeof AGENT_WRITABLE;
 
-/** The identifier field of each collection that has one. */
-export const ID_FIELDS: Record<string, string> = {
-  concepts: "concept_id",
-  modules: "module_id",
-  activities: "activity_id",
-  documents: "document_id",
-  resources: "resource_id",
-  assessments: "assessment_id",
-  items: "item_id",
-  item_models: "item_model_id",
-  submissions: "submission_id",
-  item_responses: "response_id",
-  evaluations: "evaluation_id",
-  evidence: "evidence_id",
-  signals: "signal_id",
-  interventions: "intervention_id",
-  events: "event_id",
-  action_items: "action_id",
-};
+/** The identifier field of each collection that has one (collections.ts). */
+export const ID_FIELDS: Record<string, string> = COLLECTION_ID_FIELDS as Record<string, string>;
 
 /**
  * Collections whose records can be drafts. Submissions are not: a pulled

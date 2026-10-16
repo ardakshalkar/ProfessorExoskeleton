@@ -36,39 +36,7 @@
 import { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-import {
-  Capability,
-  Concept,
-  ConceptEdge,
-  Course,
-  LearningOutcome,
-  Module,
-} from "./model/academic.ts";
-import {
-  Assessment,
-  AssessmentItem,
-  Evaluation,
-  ItemModel,
-  ItemResponse,
-  Rubric,
-  Submission,
-} from "./model/assessment.ts";
-import { Document } from "./model/content.ts";
-import {
-  CourseVersion,
-  Enrollment,
-  LearningActivity,
-  Resource,
-  User,
-} from "./model/delivery.ts";
-import { ActionItem, CourseEvent } from "./model/harness.ts";
-import {
-  Intervention,
-  LearningEvidence,
-  StudentCapabilityState,
-  StudentConceptState,
-  StudentSignal,
-} from "./model/learning.ts";
+import { COLLECTION_SCHEMAS, COURSE_MODEL } from "./collections.ts";
 
 /**
  * Every entity, under the name a draft file and a record directory use.
@@ -77,34 +45,7 @@ import {
  * a caller has in their hand: they are looking at `assessments:` in a YAML file
  * and want to know what goes under it.
  */
-export const SCHEMA_MODELS: Record<string, z.ZodTypeAny> = {
-  course: Course,
-  outcomes: LearningOutcome,
-  concepts: Concept,
-  concept_edges: ConceptEdge,
-  capabilities: Capability,
-  modules: Module,
-  versions: CourseVersion,
-  enrollments: Enrollment,
-  activities: LearningActivity,
-  documents: Document,
-  resources: Resource,
-  assessments: Assessment,
-  rubrics: Rubric,
-  items: AssessmentItem,
-  item_models: ItemModel,
-  submissions: Submission,
-  item_responses: ItemResponse,
-  evaluations: Evaluation,
-  evidence: LearningEvidence,
-  concept_states: StudentConceptState,
-  capability_states: StudentCapabilityState,
-  signals: StudentSignal,
-  interventions: Intervention,
-  events: CourseEvent,
-  action_items: ActionItem,
-  users: User,
-};
+export const SCHEMA_MODELS: Record<string, z.ZodTypeAny> = { course: COURSE_MODEL, ...COLLECTION_SCHEMAS };
 
 export const SCHEMA_NAMES: string[] = Object.keys(SCHEMA_MODELS).sort();
 

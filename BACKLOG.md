@@ -1610,11 +1610,24 @@ is worth building.
       model never allows, the other lacked `oral_defense` — and are now
       `ASSESSMENT_KINDS` in `src/assessment-kinds.ts`, keyed by the model's
       `AssessmentType`. Tests: `test/final-range.test.ts`.
-- [ ] **MOD-3b** One road for writes from the pane. Some spawn `ainar`, others
+- [x] **MOD-3b** One road for writes from the pane. Some spawn `ainar`, others
       call core functions in-process (`grading-writes.js`, `plan-writes.js`).
       Pick one per kind of write and say why; the record-edit path is likely
       the right one for small field edits, the CLI for anything that pushes.
       `S`–`M` · depends: —
+      *Done 2026-10-16.* The rule is the header of
+      `plugins/dsh-professor-pane/server/run-record.js`: a field of a record
+      goes through `record-edit.ts` in process; anything that reaches past
+      this machine or runs long spawns the CLI; a file that is not a record is
+      written by the module that owns it. The four run-record writers that
+      opened `version.yaml` with their own YAML code (`lms-writes.js` ×3,
+      `grading-writes.js`) now go through `editRunRecord` — byte-identical
+      output on copies of the real and the sample record, and the grading
+      smoke test's final record identical but for timestamps. Two findings,
+      both open: re-emitting the document re-wraps long lines, so one Canvas
+      setting rewrites ~40 lines of the real `version.yaml` (it did before
+      too; `record-edit.ts` wants a narrower nested edit); and clearing a key
+      under an absent `extensions` threw — `clearIn` now guards it.
 - [ ] **MOD-4** A command registry for the CLI. `bin/ainar.ts` is ~4,900 lines:
       a hand-written `HELP` string and a 46-case `switch` with whole subsystems
       inline (`defence` ~690 lines, `scans`, `roster`, `publish`,
@@ -1643,6 +1656,18 @@ is worth building.
       `RUNNABLE_SYNCS` in `validate.ts:1689` copies `sync/command.ts`, and
       `sync/registry.ts` hard-codes Canvas and Sheets — and fold into MOD-2's
       registry. `M` · depends: —
+      *Registry done 2026-10-16:* `ainar-node/src/collections.ts` declares
+      each collection once — model, files, id field, entity name, whether an
+      agent may write it — and `bundle.ts`, `loader.ts`, `schema.ts`,
+      `approval.ts` and `validate.ts` derive their tables from it under the
+      names they always had. The two id tables had drifted; the duplicate
+      check now covers `rubrics`, `item_models` and `item_responses` too
+      (neither course has duplicates). Golden, the 98 mutations and
+      `validate` on both courses unchanged; `test/collections.test.ts` holds
+      the registry to the models and the vendor files. **Still open:** the
+      vendor JSON regeneration (`ENTITY_NAMES` is the half `ainar schema`
+      needs; the envelope and `preference_profile` are not done), and
+      `sqlgen.ts`/`schema.sql`, which stay hand-written by design.
 
 ---
 
@@ -1669,9 +1694,9 @@ calendar event is). Each gates work that is much larger than the decision.
 **Cheap things that can be picked up between anything:** GRD-3, INS-5, LNG-1,
 LNG-2, INT-1, INT-5, PRI-3, REC-3.
 
-**Before a second professor:** MOD-3a is done (2026-10-15); MOD-3b is small
-and can follow whenever the pane's write files are next open. Then MOD-5 ahead of
-the STORAGE §10 loader work, and MOD-1 now that LNG-1 and LNG-2 have run
+**Before a second professor:** MOD-3a is done (2026-10-15); MOD-3b and the
+MOD-5 registry are done (2026-10-16), so the STORAGE §10 loader work is now a
+one-place edit per collection. Then MOD-1 now that LNG-1 and LNG-2 have run
 (LNG-6, the UTC date bug, is small and can go first). MOD-2 and
 MOD-4 are large and wait for the request that needs them (a second LMS; a
 command that cannot be found in `bin/ainar.ts`).

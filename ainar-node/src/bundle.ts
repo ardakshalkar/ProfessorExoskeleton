@@ -7,80 +7,14 @@
  */
 
 import { z } from "zod";
-import { Capability, Concept, ConceptEdge, Course, LearningOutcome, Module } from "./model/academic.ts";
-import { Assessment, AssessmentItem, Evaluation, ItemModel, ItemResponse, Rubric, Submission } from "./model/assessment.ts";
-import { Document } from "./model/content.ts";
-import { CourseVersion, Enrollment, LearningActivity, Resource, User } from "./model/delivery.ts";
-import { ActionItem, CourseEvent } from "./model/harness.ts";
-import {
-  Intervention,
-  LearningEvidence,
-  StudentCapabilityState,
-  StudentConceptState,
-  StudentSignal,
-} from "./model/learning.ts";
+import { COLLECTION_NAMES, COLLECTION_SCHEMAS, COURSE_MODEL, type CollectionName } from "./collections.ts";
 
-/** Every list on the bundle, with the schema that validates its entries. */
-export const COLLECTION_SCHEMAS = {
-  outcomes: LearningOutcome,
-  concepts: Concept,
-  concept_edges: ConceptEdge,
-  capabilities: Capability,
-  modules: Module,
-  users: User,
-  versions: CourseVersion,
-  enrollments: Enrollment,
-  activities: LearningActivity,
-  documents: Document,
-  resources: Resource,
-  assessments: Assessment,
-  rubrics: Rubric,
-  items: AssessmentItem,
-  item_models: ItemModel,
-  submissions: Submission,
-  item_responses: ItemResponse,
-  evaluations: Evaluation,
-  evidence: LearningEvidence,
-  concept_states: StudentConceptState,
-  capability_states: StudentCapabilityState,
-  signals: StudentSignal,
-  interventions: Intervention,
-  events: CourseEvent,
-  action_items: ActionItem,
-} as const;
+// The collections are declared once, in collections.ts; these names are where
+// the rest of the package has always found them.
+export { COLLECTION_NAMES, COLLECTION_SCHEMAS, type CollectionName };
 
-export type CollectionName = keyof typeof COLLECTION_SCHEMAS;
-
-export const COLLECTION_NAMES = Object.keys(COLLECTION_SCHEMAS) as CollectionName[];
-
-export interface CourseBundle {
-  course: z.infer<typeof Course>;
-  outcomes: unknown[];
-  concepts: unknown[];
-  concept_edges: unknown[];
-  capabilities: unknown[];
-  modules: unknown[];
-  users: unknown[];
-  versions: unknown[];
-  enrollments: unknown[];
-  activities: unknown[];
-  documents: unknown[];
-  resources: unknown[];
-  assessments: unknown[];
-  rubrics: unknown[];
-  items: unknown[];
-  item_models: unknown[];
-  submissions: unknown[];
-  item_responses: unknown[];
-  evaluations: unknown[];
-  evidence: unknown[];
-  concept_states: unknown[];
-  capability_states: unknown[];
-  signals: unknown[];
-  interventions: unknown[];
-  events: unknown[];
-  action_items: unknown[];
-}
+/** All canonical records of one course: the course, and one list per collection. */
+export type CourseBundle = { course: z.infer<typeof COURSE_MODEL> } & { [K in CollectionName]: unknown[] };
 
 /**
  * Drop nulls, recursively — pydantic's `model_dump(exclude_none=True)`.

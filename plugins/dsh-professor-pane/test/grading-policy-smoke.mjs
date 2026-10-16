@@ -68,7 +68,8 @@ check(
   JSON.stringify(final.policy.assignments) === JSON.stringify(doc.policy.assignments) && final.policy.components.length === doc.policy.components.length,
 );
 
-const version = readFileSync(root + "/courses/CSS-4007/version.yaml", "utf8");
+// The course of the run: `CSS-4008-2026-FALL` is `CSS-4008`.
+const version = readFileSync(root + "/courses/" + RUN.replace(/-[0-9]{4}-[A-Z]+$/, "") + "/version.yaml", "utf8");
 console.log("\n--- version.yaml grading_scheme ---\n" + version.slice(version.indexOf("grading_scheme:"), version.indexOf("grading_scheme:") + 1400));
 
 // The assistant's road: a proposal recorded, shown with the policy, discarded;

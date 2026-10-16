@@ -3,23 +3,16 @@
  * assessment record — the LMS facts the professor records from the pane.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { relative, sep } from "node:path";
-
 import { assessmentsOf, groupsOf, requireGroups, runById } from "@ainar/core/src/bundle.ts";
 import { writeAssessmentLinks } from "@ainar/core/src/lms/link.ts";
-// `parseDocument` rather than the plain parse: these writes edit a file a
-// professor also writes by hand, and the plain parse would hand back a JS
-// object with every comment in `version.yaml` already discarded.
-import { parseDocument as parseYamlDocument } from "yaml";
 
 import {
   CANVAS_COURSES_KEY,
   CANVAS_SECTIONS_KEY,
   LMS_EXTENSION,
   lmsString,
-  versionRecordPath,
 } from "./integrations.js";
+import { clearIn, editRunRecord } from "./run-record.js";
 import { loadedRun } from "./workspace.js";
 
 /**
@@ -170,52 +163,20 @@ export const writeCanvasSelection = (workspace, root, runId, selections) => {
     cleaned.push(row);
   }
 
-  const path = versionRecordPath(root, run.course_id, run.term);
-  if (!existsSync(path)) return { error: `Nowhere to write: ${path} does not exist.` };
-
-  let original;
-  let document;
+  // An empty selection REMOVES the key rather than writing an empty list, by
+  // the grammar `writePreferences` states: absent and "set to nothing" are
+  // different facts about a record, and unmapping every section should leave
+  // the file saying nothing at all about Canvas sections. The now-empty
+  // parents go with it, so a run that was never wired to Canvas reads exactly
+  // as it did before this tab was ever opened.
+  const target = ["extensions", LMS_EXTENSION, CANVAS_SECTIONS_KEY];
+  let path;
   try {
-    original = readFileSync(path, "utf8");
-    document = parseYamlDocument(original);
+    path = editRunRecord(root, run, (node) => (cleaned.length ? node.setIn(target, cleaned) : clearIn(node, target)));
   } catch (error) {
-    return { error: `${path} will not parse: ${String(error?.message ?? error)}` };
+    return { error: String(error?.message ?? error) };
   }
-  if (document.errors?.length) {
-    return { error: `${path} will not parse: ${document.errors[0].message}` };
-  }
-
-  if (cleaned.length === 0) {
-    // An empty selection REMOVES the key rather than writing an empty list, by
-    // the grammar `writePreferences` states: absent and "set to nothing" are
-    // different facts about a record, and unmapping every section should leave
-    // the file saying nothing at all about Canvas sections. The now-empty
-    // parents go with it, so a run that was never wired to Canvas reads exactly
-    // as it did before this tab was ever opened.
-    document.deleteIn(["extensions", LMS_EXTENSION, CANVAS_SECTIONS_KEY]);
-    const emptied = (node) => node && Array.isArray(node.items) && node.items.length === 0;
-    if (emptied(document.getIn(["extensions", LMS_EXTENSION]))) {
-      document.deleteIn(["extensions", LMS_EXTENSION]);
-    }
-    if (emptied(document.get("extensions"))) document.delete("extensions");
-  } else {
-    document.setIn(["extensions", LMS_EXTENSION, CANVAS_SECTIONS_KEY], cleaned);
-  }
-
-  // The emitter always produces LF. A `version.yaml` that arrived with CRLF —
-  // one edited on Windows in something that is not an editor — would otherwise
-  // come back with every line changed, and a one-selection change would show up
-  // in `git diff` as a rewrite of the whole record. The endings the professor
-  // had are the endings they keep.
-  const written = /\r\n/.test(original)
-    ? String(document).replace(/\r?\n/g, "\r\n")
-    : String(document);
-  writeFileSync(path, written, "utf8");
-  return {
-    written: true,
-    path: relative(root, path).split(sep).join("/"),
-    count: cleaned.length,
-  };
+  return { written: true, path, count: cleaned.length };
 };
 
 /**
@@ -331,38 +292,15 @@ export const writeRunLmsValue = (workspace, root, runId, key, value) => {
     return { error: `${runId} carries no course_id and term, so its record cannot be located.` };
   }
 
-  const path = versionRecordPath(root, run.course_id, run.term);
-  if (!existsSync(path)) return { error: `Nowhere to write: ${path} does not exist.` };
-
-  let original;
-  let document;
-  try {
-    original = readFileSync(path, "utf8");
-    document = parseYamlDocument(original);
-  } catch (error) {
-    return { error: `${path} will not parse: ${String(error?.message ?? error)}` };
-  }
-  if (document.errors?.length) {
-    return { error: `${path} will not parse: ${document.errors[0].message}` };
-  }
-
   const cleaned = String(value ?? "").trim();
-  if (!cleaned) {
-    document.deleteIn(["extensions", LMS_EXTENSION, key]);
-    const emptied = (node) => node && Array.isArray(node.items) && node.items.length === 0;
-    if (emptied(document.getIn(["extensions", LMS_EXTENSION]))) {
-      document.deleteIn(["extensions", LMS_EXTENSION]);
-    }
-    if (emptied(document.get("extensions"))) document.delete("extensions");
-  } else {
-    document.setIn(["extensions", LMS_EXTENSION, key], cleaned);
+  const target = ["extensions", LMS_EXTENSION, key];
+  let path;
+  try {
+    path = editRunRecord(root, run, (node) => (cleaned ? node.setIn(target, cleaned) : clearIn(node, target)));
+  } catch (error) {
+    return { error: String(error?.message ?? error) };
   }
-
-  const written = /\r\n/.test(original)
-    ? String(document).replace(/\r?\n/g, "\r\n")
-    : String(document);
-  writeFileSync(path, written, "utf8");
-  return { written: true, path: relative(root, path).split(sep).join("/"), key, cleared: !cleaned };
+  return { written: true, path, key, cleared: !cleaned };
 };
 
 /**
@@ -430,39 +368,13 @@ export const writeCanvasCourses = (workspace, root, runId, mapping) => {
     };
   }
 
-  const path = versionRecordPath(root, run.course_id, run.term);
-  if (!existsSync(path)) return { error: `Nowhere to write: ${path} does not exist.` };
-
-  let original;
-  let document;
+  const target = ["extensions", LMS_EXTENSION, CANVAS_COURSES_KEY];
+  const any = Object.keys(cleaned).length > 0;
+  let path;
   try {
-    original = readFileSync(path, "utf8");
-    document = parseYamlDocument(original);
+    path = editRunRecord(root, run, (node) => (any ? node.setIn(target, cleaned) : clearIn(node, target)));
   } catch (error) {
-    return { error: `${path} will not parse: ${String(error?.message ?? error)}` };
+    return { error: String(error?.message ?? error) };
   }
-  if (document.errors?.length) {
-    return { error: `${path} will not parse: ${document.errors[0].message}` };
-  }
-
-  if (!Object.keys(cleaned).length) {
-    document.deleteIn(["extensions", LMS_EXTENSION, CANVAS_COURSES_KEY]);
-    const emptied = (node) => node && Array.isArray(node.items) && node.items.length === 0;
-    if (emptied(document.getIn(["extensions", LMS_EXTENSION]))) {
-      document.deleteIn(["extensions", LMS_EXTENSION]);
-    }
-    if (emptied(document.get("extensions"))) document.delete("extensions");
-  } else {
-    document.setIn(["extensions", LMS_EXTENSION, CANVAS_COURSES_KEY], cleaned);
-  }
-
-  const written = /\r\n/.test(original)
-    ? String(document).replace(/\r?\n/g, "\r\n")
-    : String(document);
-  writeFileSync(path, written, "utf8");
-  return {
-    written: true,
-    path: relative(root, path).split(sep).join("/"),
-    count: Object.keys(cleaned).length,
-  };
+  return { written: true, path, count: Object.keys(cleaned).length };
 };

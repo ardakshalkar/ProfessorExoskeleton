@@ -26,6 +26,7 @@
  * covered by `test/validate.test.ts` instead.
  */
 
+import { COLLECTION_ID_FIELDS } from "./collections.ts";
 import {
   allRubrics,
   assessmentById,
@@ -231,27 +232,8 @@ const duplicates = (values: string[]): string[] => {
 const index = (records: any[], field: string): Map<string, any> =>
   new Map(records.map((record) => [record[field] as string, record]));
 
-const ID_FIELDS: [collection: string, field: string][] = [
-  ["outcomes", "outcome_id"],
-  ["concepts", "concept_id"],
-  ["capabilities", "capability_id"],
-  ["modules", "module_id"],
-  ["versions", "course_version_id"],
-  ["activities", "activity_id"],
-  ["assessments", "assessment_id"],
-  ["items", "item_id"],
-  ["documents", "document_id"],
-  ["resources", "resource_id"],
-  ["submissions", "submission_id"],
-  ["evaluations", "evaluation_id"],
-  ["evidence", "evidence_id"],
-  ["signals", "signal_id"],
-  ["interventions", "intervention_id"],
-  ["events", "event_id"],
-  ["action_items", "action_id"],
-  ["enrollments", "enrollment_id"],
-  ["users", "user_id"],
-];
+// Every collection with an id of its own (collections.ts), checked for duplicates.
+const ID_FIELDS: [collection: string, field: string][] = Object.entries(COLLECTION_ID_FIELDS) as [string, string][];
 
 const checkDuplicates = (b: CourseBundle, issues: IssueList): void => {
   for (const [collection, field] of ID_FIELDS) {

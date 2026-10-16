@@ -119,7 +119,11 @@ export const editRecords = (options: {
   idField: string;
   /** The key a file's list of these records sits under, e.g. `documents`. */
   collection: string;
-  edits: Map<string, (node: any) => void>;
+  /**
+   * One function per identifier, handed the record's node — and the document it
+   * sits in, for `document.createNode` when a value needs a node of its own.
+   */
+  edits: Map<string, (node: any, document: any) => void>;
 }): EditResult => {
   const { root, courseId, patterns, idField, collection, edits } = options;
   if (!edits.size) return { written: [], count: 0 };
@@ -178,7 +182,7 @@ export const editRecords = (options: {
             "Change it there by hand.",
         );
       }
-      edits.get(id)!(node);
+      edits.get(id)!(node, document);
       count += 1;
     }
 

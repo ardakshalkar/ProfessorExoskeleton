@@ -25,8 +25,7 @@
  * which the Gradebook's "Last changes" reads back and can restore from.
  */
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { assessmentsOf, runById } from "@ainar/core/src/bundle.ts";
@@ -45,9 +44,8 @@ import {
 import { gradeChanges, realChanges } from "@ainar/core/src/grade-changes.ts";
 import { dropProposals, proposalsOf } from "@ainar/core/src/grading-proposals.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
-import { parseDocument as parseYamlDocument } from "yaml";
 
-import { versionRecordPath } from "./integrations.js";
+import { editRunRecord } from "./run-record.js";
 import { marksActivity } from "./syncs.js";
 import { loadedRun, rosterPeople } from "./workspace.js";
 
@@ -116,28 +114,11 @@ export const gradingImpact = (workspace, runId, body) => {
   return { proposal, impact };
 };
 
-/** Open the run record as a YAML document, with the path and the line endings it came with. */
-const openRecord = (root, run) => {
-  if (!run.course_id || !run.term) throw new Error(`${run.course_version_id} carries no course_id and term, so its record cannot be located.`);
-  const path = versionRecordPath(root, run.course_id, run.term);
-  if (!existsSync(path)) throw new Error(`Nowhere to write: ${path} does not exist.`);
-  const original = readFileSync(path, "utf8");
-  const document = parseYamlDocument(original);
-  if (document.errors?.length) throw new Error(`${path} will not parse: ${document.errors[0].message}`);
-  return { path, original, document };
-};
-
-const saveRecord = (root, { path, original, document }) => {
-  const text = /\r\n/.test(original) ? String(document).replace(/\r?\n/g, "\r\n") : String(document);
-  writeFileSync(path, text, "utf8");
-  return relative(root, path).split(sep).join("/");
-};
-
 /** Append one entry to `grading_scheme.extensions.history`, creating the path when it is absent. */
-const pushHistory = (document, entry) => {
-  const list = document.getIn(["grading_scheme", "extensions", "history"]);
+const pushHistory = (node, document, entry) => {
+  const list = node.getIn(["grading_scheme", "extensions", "history"]);
   if (list && Array.isArray(list.items)) list.items.push(document.createNode(entry));
-  else document.setIn(["grading_scheme", "extensions", "history"], document.createNode([entry]));
+  else node.setIn(["grading_scheme", "extensions", "history"], document.createNode([entry]));
 };
 
 export const writeGradingPolicy = (workspace, root, runId, body) => {
@@ -161,12 +142,7 @@ export const writeGradingPolicy = (workspace, root, runId, body) => {
     return { error: "This moves students' totals, marks Canvas already has, or the blocks Canvas groups hang on. Read the impact and confirm.", impact, needs_ack: true };
   }
 
-  let record;
-  try {
-    record = openRecord(root, run);
-  } catch (error) {
-    return { error: String(error?.message ?? error) };
-  }
+  if (!run.course_id || !run.term) return { error: `${runId} carries no course_id and term, so its record cannot be located.` };
   const entry = historyEntry(bundle, runId, {
     at: new Date().toISOString(),
     action: "change",
@@ -174,13 +150,15 @@ export const writeGradingPolicy = (workspace, root, runId, body) => {
     by: typeof body?.by === "string" ? body.by : null,
   });
   if (typeof body?.note === "string" && body.note.trim()) entry.note = body.note.trim().slice(0, 500);
-  const { document } = record;
-  document.setIn(["grading_scheme", "components"], document.createNode(proposal.components.map(stripped)));
-  if (proposal.points == null) document.deleteIn(["grading_scheme", "points"]);
-  else document.setIn(["grading_scheme", "points"], proposal.points);
-  pushHistory(document, entry);
-  // Every pending proposal was made against the policy this replaces.
-  document.deleteIn(["grading_scheme", "extensions", "proposals"]);
+  // The run record's half, applied when it is written, after the assessments.
+  const policy = (node, document) => {
+    node.setIn(["grading_scheme", "components"], document.createNode(proposal.components.map(stripped)));
+    if (proposal.points == null) node.deleteIn(["grading_scheme", "points"]);
+    else node.setIn(["grading_scheme", "points"], proposal.points);
+    pushHistory(node, document, entry);
+    // Every pending proposal was made against the policy this replaces.
+    node.deleteIn(["grading_scheme", "extensions", "proposals"]);
+  };
 
   // The assessments: block and weight, one scalar each; a cleared one is a deleted key.
   const before = currentProposal(bundle, runId);
@@ -217,7 +195,7 @@ export const writeGradingPolicy = (workspace, root, runId, body) => {
         edits: new Map([...clears].map(([id, keys]) => [id, (node) => keys.forEach((key) => node.has(key) && node.delete(key))])),
       });
     }
-    const path = saveRecord(root, record);
+    const path = editRunRecord(root, run, policy);
     return { written: true, path, assessments: set.count + clears.size, summary: impact.summary };
   } catch (error) {
     return { error: String(error?.message ?? error) };
@@ -234,12 +212,6 @@ export const writeGradingLock = (workspace, root, runId, body) => {
   if (!locking && String(body?.confirm ?? "").trim().toUpperCase() !== "UNLOCK") {
     return { error: "Type UNLOCK to unlock the grading policy." };
   }
-  let record;
-  try {
-    record = openRecord(root, run);
-  } catch (error) {
-    return { error: String(error?.message ?? error) };
-  }
   const reason = typeof body?.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
   const entry = historyEntry(bundle, runId, {
     at: new Date().toISOString(),
@@ -247,11 +219,16 @@ export const writeGradingLock = (workspace, root, runId, body) => {
     summary: [locking ? "Policy locked." : "Policy unlocked."],
   });
   if (reason) entry.note = reason;
-  const { document } = record;
-  if (locking) document.setIn(["grading_scheme", "locked"], true);
-  else document.deleteIn(["grading_scheme", "locked"]);
-  pushHistory(document, entry);
-  return { written: true, path: saveRecord(root, record), locked: locking };
+  try {
+    const path = editRunRecord(root, run, (node, document) => {
+      if (locking) node.setIn(["grading_scheme", "locked"], true);
+      else node.deleteIn(["grading_scheme", "locked"]);
+      pushHistory(node, document, entry);
+    });
+    return { written: true, path, locked: locking };
+  } catch (error) {
+    return { error: String(error?.message ?? error) };
+  }
 };
 
 /**

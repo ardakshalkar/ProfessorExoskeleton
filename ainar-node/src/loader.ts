@@ -19,49 +19,16 @@ import { join, posix, relative, sep } from "node:path";
 import { parseAllDocuments } from "yaml";
 import { z } from "zod";
 import { COLLECTION_SCHEMAS, type CollectionName, type CourseBundle } from "./bundle.ts";
+import { COLLECTION_FILES } from "./collections.ts";
 import { IssueList } from "./issues.ts";
 import { Capability, Concept, Course } from "./model/academic.ts";
 import { User } from "./model/delivery.ts";
 
-/**
- * The files inside `assessments/<ASSESSMENT_ID>/`. Everything else in that
- * folder — the papers, `keys/`, `starter/`, `src/figures/` — is material, not
- * record, and no pattern here reaches it.
- */
-export const ASSESSMENT_FILE = "assessments/*/assessment.yaml";
-export const ASSESSMENT_ITEMS = "assessments/*/items.yaml";
-export const ASSESSMENT_ITEM_MODELS = "assessments/*/src/item-models.yaml";
-
+// What each collection is read from is declared in collections.ts; these are
+// the names the writers and the CLI have always imported from here.
+export { ASSESSMENT_FILE, ASSESSMENT_ITEM_MODELS, ASSESSMENT_ITEMS } from "./collections.ts";
 /** One list on the bundle and the files it is read from. Exported for the writers. */
-export const COLLECTIONS: Record<CollectionName, string[]> = {
-  outcomes: ["outcomes.yaml", "outcomes/*.yaml"],
-  concepts: ["concepts.yaml", "concepts/*.yaml"],
-  concept_edges: ["concept-edges.yaml"],
-  capabilities: ["capabilities.yaml"],
-  modules: ["modules.yaml", "modules/*.yaml"],
-  users: ["people/users.yaml", "people/*.yaml"],
-  versions: ["version.yaml"],
-  enrollments: ["enrollments.yaml"],
-  activities: ["activities.yaml", "activities/*.yaml"],
-  documents: ["documents.yaml", "documents/*.yaml", "samples/documents*.yaml"],
-  resources: ["resources.yaml", "resources/*.yaml"],
-  // An assessment's own folder (STORAGE.md §5) is read beside the flat files
-  // courses written before it, which stay valid until they are moved.
-  assessments: ["assessments.yaml", "assessments/*.yaml", ASSESSMENT_FILE],
-  rubrics: ["rubrics.yaml", "rubrics/*.yaml"],
-  items: ["items.yaml", "items/*.yaml", "assessments/items/*.yaml", ASSESSMENT_ITEMS],
-  item_models: ["item-models.yaml", "item-models/*.yaml", ASSESSMENT_ITEM_MODELS],
-  submissions: ["samples/submissions*.yaml", "records/submissions*.yaml"],
-  item_responses: ["samples/item-responses*.yaml", "records/item-responses*.yaml"],
-  evaluations: ["samples/evaluations*.yaml", "records/evaluations*.yaml"],
-  evidence: ["samples/evidence*.yaml", "records/evidence*.yaml"],
-  concept_states: ["samples/concept-states*.yaml", "records/concept-states*.yaml"],
-  capability_states: ["samples/capability-states*.yaml", "records/capability-states*.yaml"],
-  signals: ["samples/signals*.yaml", "records/signals*.yaml"],
-  interventions: ["samples/interventions*.yaml", "records/interventions*.yaml"],
-  events: ["samples/events*.yaml", "records/events*.yaml"],
-  action_items: ["samples/action-items*.yaml", "records/action-items*.yaml"],
-};
+export const COLLECTIONS: Record<CollectionName, string[]> = COLLECTION_FILES;
 
 const SHARED_CONCEPTS = "shared/concepts.yaml";
 const SHARED_CAPABILITIES = "shared/capabilities.yaml";
