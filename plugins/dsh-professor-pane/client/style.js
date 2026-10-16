@@ -506,11 +506,28 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-modalpanelabel{flex:none;font-size:11px;font-weight:600;padding:4px 10px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 @media (max-width:720px){.pp-modalbody{flex-direction:column}}
-/* Course mode: the term plan as the page, over the harness.
+/* Course mode: the place is the page, from the navigator to the window's edge.
    One layer under the material overlay (4000), because a deck opened FROM
-   the term plan must land on top of it, and narrower margins than a deck,
-   because three columns of sixteen weeks want the width. */
-.pp-veil.pp-coursemode{z-index:3900;padding:14px clamp(10px,2vw,28px) 16px}
+   the term plan must land on top of it. No margin, no dimmed backdrop, no
+   card: it is not a dialog over the chat but what the centre shows, and a
+   sixteen-week grid or a gradebook wants every pixel. */
+.pp-veil.pp-coursemode{z-index:3900;padding:0;background:var(--dsw-alias-bg-l1,#fff)}
+.pp-coursemode > .pp-modal{border:0;border-radius:0;box-shadow:none}
+/* With the chat beside it: a rule between the two, the chat to the right. */
+.pp-coursemode.pp-beside{border-right:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+/* Too narrow for both: the place steps aside, mounted, and a pill brings it back. */
+.pp-coursemode.pp-away{visibility:hidden;pointer-events:none}
+/* At the top, under the chat's header: the bottom belongs to the composer. */
+.pp-backpill{position:fixed;z-index:3900;right:12px;top:84px;
+  min-height:32px;padding:0 16px;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+/* The shell's own conversation column moved into a strip at the right (see
+   useChatBeside in client/materials.js): the sidebar's track, the track the
+   place covers, then the chat. !important because AppFrame writes its widths
+   inline; the attribute comes off as soon as the chat is put away. */
+[data-pp-split]{grid-template-columns:var(--pp-side,280px) minmax(0,1fr) var(--pp-chat,440px)!important}
+[data-pp-split] > [data-pp-col=centre]{grid-column:3!important;grid-row:1!important;min-width:0}
+[data-pp-split] > [data-pp-col=details]{grid-column:2!important;grid-row:1!important;visibility:hidden}
+[data-pp-split] > [data-pp-col=handle]{display:none!important}
 .pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
 /* A course-wide view (Students, Gradebook, Tasks) over the weeks, which
    stay mounted beneath so they come back where they were left. */

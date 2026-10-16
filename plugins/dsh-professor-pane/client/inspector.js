@@ -7,11 +7,13 @@
  * own sub-views — and with the course navigator in the left sidebar and
  * course mode in the centre, every place was reachable three ways and drawn
  * in two. The places now live in course mode, opened from the navigator; the
- * column says what the professor needs beside the thing they are looking at:
+ * column says what the professor needs beside a chat:
  *
- * * **Focus** — the week in view: the one Teaching was stepped to while
- *   course mode is open, else this week. Its meetings, what falls due, and a
- *   press that puts the week's name into the composer.
+ * The week is not here. The navigator's *This week* already says it on the
+ * left, and since 2026-10-16 an open place covers this column (the chat
+ * comes in beside the place instead), so "the week Teaching is on" has no
+ * column to be drawn in. What is left is what the left side does not say:
+ *
  * * **Waiting** — the counts the navigator's places carry, plus how many
  *   records still say `approval: draft`, each a press into its place.
  * * **Recent changes** — the records that moved last, newest first, whoever
@@ -22,7 +24,7 @@
  */
 
 import { h, React } from "./react.js";
-import { ago, capital, navDate } from "./navigator.js";
+import { ago } from "./navigator.js";
 import { BASE, scoped } from "./tabs.js";
 
 /** A read whose last answer stays on screen while the next one loads. */
@@ -84,59 +86,14 @@ function Line(props) {
 }
 
 export function Inspector(props) {
-  const weekParam = props.week ? "&week=" + props.week : "";
   const nav = useKept(
-    scoped(BASE + "/api/navigator?run=" + encodeURIComponent(props.runId) + weekParam + "&r=" + props.revision, props.sessionId),
+    scoped(BASE + "/api/navigator?run=" + encodeURIComponent(props.runId) + "&r=" + props.revision, props.sessionId),
   );
   const recent = useKept(scoped(BASE + "/api/recent?r=" + props.revision, props.sessionId));
   const mention = (text) => {
     if (props.mention) props.mention(text);
   };
   const now = Date.now();
-
-  const week = nav && !nav.error ? nav.week : null;
-  const runId = props.runId;
-  const focus = week
-    ? h(
-        Section,
-        {
-          label: "Week " + week.week + (week.modules.length ? " · " + week.modules.join(", ") : ""),
-          action: h(
-            "button",
-            {
-              type: "button",
-              className: "pp-insp-act",
-              title: "Put this week's name into the message box",
-              onClick: () => mention("week " + week.week + " of " + runId),
-            },
-            "Ask",
-          ),
-        },
-        week.starts_on ? h("div", { className: "pp-insp-quiet" }, (navDate(week.starts_on) || "") + " – " + (navDate(week.ends_on) || "")) : null,
-        week.meetings.map((meeting, index) =>
-          h(Line, {
-            key: "m" + index,
-            text: capital(meeting.type) + " · " + meeting.title,
-            badge: meeting.deck ? null : "no deck",
-            meta: navDate(meeting.on) || "no date",
-            hint: (meeting.location ? meeting.location + " — " : "") + "open Teaching on this week",
-            onClick: () => props.openPlace({ mode: "teaching" }),
-          }),
-        ),
-        week.due.map((work, index) =>
-          h(Line, {
-            key: "d" + index,
-            text: work.title + " due",
-            meta: navDate(work.due_on) || "no date",
-            hint: "Put " + work.assessment_id + " into the message box",
-            onClick: () => mention(work.assessment_id),
-          }),
-        ),
-        !week.meetings.length && !week.due.length ? h("div", { className: "pp-insp-quiet" }, "Nothing scheduled this week") : null,
-      )
-    : nav && !nav.error && nav.run
-      ? h(Section, { label: "This week" }, h("div", { className: "pp-insp-quiet" }, "The term is not under way"))
-      : null;
 
   const pending = nav && nav.grading ? nav.grading.pending : 0;
   const signals = nav && nav.grading ? nav.grading.signals : 0;
@@ -158,7 +115,6 @@ export function Inspector(props) {
   return h(
     "div",
     { className: "pp-insp" },
-    focus,
     h(
       Section,
       { label: "Waiting" },

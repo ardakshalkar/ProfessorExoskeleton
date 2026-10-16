@@ -750,11 +750,28 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-modalpanelabel{flex:none;font-size:11px;font-weight:600;padding:4px 10px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 @media (max-width:720px){.pp-modalbody{flex-direction:column}}
-/* Course mode: the term plan as the page, over the harness.
+/* Course mode: the place is the page, from the navigator to the window's edge.
    One layer under the material overlay (4000), because a deck opened FROM
-   the term plan must land on top of it, and narrower margins than a deck,
-   because three columns of sixteen weeks want the width. */
-.pp-veil.pp-coursemode{z-index:3900;padding:14px clamp(10px,2vw,28px) 16px}
+   the term plan must land on top of it. No margin, no dimmed backdrop, no
+   card: it is not a dialog over the chat but what the centre shows, and a
+   sixteen-week grid or a gradebook wants every pixel. */
+.pp-veil.pp-coursemode{z-index:3900;padding:0;background:var(--dsw-alias-bg-l1,#fff)}
+.pp-coursemode > .pp-modal{border:0;border-radius:0;box-shadow:none}
+/* With the chat beside it: a rule between the two, the chat to the right. */
+.pp-coursemode.pp-beside{border-right:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+/* Too narrow for both: the place steps aside, mounted, and a pill brings it back. */
+.pp-coursemode.pp-away{visibility:hidden;pointer-events:none}
+/* At the top, under the chat's header: the bottom belongs to the composer. */
+.pp-backpill{position:fixed;z-index:3900;right:12px;top:84px;
+  min-height:32px;padding:0 16px;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+/* The shell's own conversation column moved into a strip at the right (see
+   useChatBeside in client/materials.js): the sidebar's track, the track the
+   place covers, then the chat. !important because AppFrame writes its widths
+   inline; the attribute comes off as soon as the chat is put away. */
+[data-pp-split]{grid-template-columns:var(--pp-side,280px) minmax(0,1fr) var(--pp-chat,440px)!important}
+[data-pp-split] > [data-pp-col=centre]{grid-column:3!important;grid-row:1!important;min-width:0}
+[data-pp-split] > [data-pp-col=details]{grid-column:2!important;grid-row:1!important;visibility:hidden}
+[data-pp-split] > [data-pp-col=handle]{display:none!important}
 .pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
 /* A course-wide view (Students, Gradebook, Tasks) over the weeks, which
    stay mounted beneath so they come back where they were left. */
@@ -6225,33 +6242,14 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       // rather than by the shell's class names, which are hashed. With the stock
       // browser in the seat there is no navigator, and the veil covers it all.
       const [left, setLeft] = React.useState(0);
-      // And the right edge stops at the pane's column, so the inspector stays in
-      // view beside the place: found the same way, from `.pp-root` outwards —
-      // the outermost ancestor flush with the window's right edge and narrower
-      // than half of it. With the column closed there is none, and it is 0.
-      const [right, setRight] = React.useState(0);
-      React.useLayoutEffect(() => {
-        const pane = document.querySelector(".pp-root");
-        if (!pane) return undefined;
-        let column = null;
-        for (let node = pane.parentElement; node && node !== document.body; node = node.parentElement) {
-          const rect = node.getBoundingClientRect();
-          if (Math.abs(rect.right - window.innerWidth) <= 0.5 && rect.width > 0 && rect.width < window.innerWidth / 2) column = node;
-        }
-        if (column === null) return undefined;
-        const measure = () => {
-          const rect = column.getBoundingClientRect();
-          setRight(rect.width > 0 ? Math.max(0, Math.round(window.innerWidth - rect.left)) : 0);
-        };
-        measure();
-        const observer = new ResizeObserver(measure);
-        observer.observe(column);
-        window.addEventListener("resize", measure);
-        return () => {
-          observer.disconnect();
-          window.removeEventListener("resize", measure);
-        };
-      }, []);
+      // The right edge is the window's: a place is the page, and the inspector,
+      // which says what is waiting beside a chat, has nothing to add beside the
+      // place that draws it. With the chat asked for (`props.chat`), the shell's
+      // own conversation column is moved into a strip at the right — see
+      // `useChatBeside` — and the place stops at it; on a window too narrow for
+      // both, the place steps aside and the chat has the screen.
+      const beside = useChatBeside(Boolean(props.chat), left);
+      const veilRef = React.useRef(null);
       React.useLayoutEffect(() => {
         const nav = document.querySelector(".pp-nav, .pp-nav-rail");
         if (!nav) return undefined;
@@ -6280,13 +6278,17 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       React.useEffect(() => {
         const onKey = (event) => {
           if (event.key !== "Escape") return;
+          // A key pressed in the chat beside the place is the chat's: Escape
+          // there stops a turn or clears a menu, and must not shut the place.
+          const target = event.target;
+          if (props.chat && veilRef.current && target instanceof Node && target !== document.body && !veilRef.current.contains(target)) return;
           // A deck opened from the term plan sits on top and owns Escape: it
           // closes first, and this stays where the professor was reading.
           if (courseModeEscape({ covered: props.covered }) === "close") close();
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
-      }, [close, props.covered]);
+      }, [close, props.covered, props.chat]);
       // Canvas, in one line: the row the Integrations tab's Status view draws,
       // from the same payload. Nothing is computed here but the words.
       const wiring = useJson(
@@ -6455,31 +6457,36 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       const navigator = left > 0;
       const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
 
+      const placeName = viewEntry ? viewEntry.label : navigator ? "Weeks" : props.title;
+      const setChat = props.setChat || (() => {});
       return ReactDOM.createPortal(
         h(
+          React.Fragment,
+          null,
+          h(
           "div",
           {
-            className: "pp-veil pp-coursemode",
-            style: left || right ? { left: left + "px", right: right + "px" } : undefined,
-            onMouseDown: (event) => {
-              if (event.target === event.currentTarget) close();
-            },
+            ref: veilRef,
+            className:
+              "pp-veil pp-coursemode" +
+              (beside.mode === "side" ? " pp-beside" : "") +
+              (beside.mode === "swap" ? " pp-away" : ""),
+            style: { left: left + "px", right: (beside.mode === "side" ? beside.width : 0) + "px" },
+            "aria-hidden": beside.mode === "swap" ? "true" : undefined,
           },
           h(
             "div",
             {
               className: "pp-modal",
-              role: "dialog",
-              "aria-modal": "true",
+              role: "region",
               "aria-label": "Course mode — " + props.title,
-              onMouseDown: (event) => event.stopPropagation(),
             },
             h(
               "div",
               { className: "pp-modalhead pp-coursehead" },
               // The place, not the course: the course is named in the navigator
               // beside it and in the column, and here it only crowded the row.
-              h("div", { className: "pp-modaltitle", title: props.title }, viewEntry ? viewEntry.label : navigator ? "Weeks" : props.title),
+              h("div", { className: "pp-modaltitle", title: props.title }, placeName),
               // The readings of the weeks. Under a place they are the way back to
               // the weeks, so they stay, unpressed.
               COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
@@ -6549,6 +6556,19 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                 { type: "button", className: "pp-publishbtn", title: "Scanned papers, an exam paper and its key, or recorded defences", onClick: props.onUpload },
                 "Upload",
               ),
+              // The conversation beside the place: a press on a hole starts a
+              // turn there, and this is how to look at it again or put it away.
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-segbtn",
+                  "aria-pressed": Boolean(props.chat),
+                  title: props.chat ? "Put the chat away; the place takes the width" : "The chat beside this place",
+                  onClick: () => setChat(!props.chat),
+                },
+                "Chat",
+              ),
               h(
                 "button",
                 {
@@ -6612,9 +6632,104 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                 : null,
             ),
           ),
+          ),
+          // The place stepped aside for the chat on a narrow window: the way back.
+          beside.mode === "swap"
+            ? h(
+                "button",
+                { type: "button", className: "pp-primary pp-backpill", onClick: () => setChat(false) },
+                "‹ " + placeName,
+              )
+            : null,
         ),
         document.body,
       );
+    }
+
+    /** The chat strip's width at a window width: a third of it, within reason. */
+    const chatWidth = (viewport) => Math.max(380, Math.min(520, Math.round(viewport * 0.32)));
+
+    /** The narrowest a place may be with the chat beside it; below, they swap. */
+    const PLACE_MIN = 560;
+
+    /**
+     * The shell's conversation column, moved beside an open place.
+     *
+     * The chat is not drawn twice: it stays the shell's own column, with its
+     * composer, its turns and its scroll. AppFrame lays the columns out as one
+     * grid — sidebar, centre, details — with the widths in an inline
+     * `grid-template-columns`. While the chat is asked for, the grid gets
+     * `data-pp-split`, and the stylesheet re-tracks it: the sidebar at its own
+     * width, then a track the place covers (the details column goes there,
+     * hidden), then the chat at `chatWidth`. The columns are found by structure
+     * — the grid above `.pp-root`, the child holding the pane, the child holding
+     * the navigator — since the shell's class names are hashed. The sidebar's
+     * track is read off AppFrame's own inline value and followed as it changes,
+     * so collapsing or dragging the sidebar still works.
+     *
+     * Returns `{ mode, width }`: "none", "side" (the strip is `width` wide at the
+     * window's right) or "swap" (too narrow for both; the place steps aside).
+     */
+    function useChatBeside(wanted, left) {
+      const [viewport, setViewport] = React.useState(() => window.innerWidth);
+      React.useEffect(() => {
+        const onResize = () => setViewport(window.innerWidth);
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+      }, []);
+      const width = chatWidth(viewport);
+      const mode = !wanted ? "none" : viewport - left - width >= PLACE_MIN ? "side" : "swap";
+      React.useLayoutEffect(() => {
+        if (mode !== "side") return undefined;
+        const pane = document.querySelector(".pp-root");
+        let frame = null;
+        for (let node = pane ? pane.parentElement : null; node && node !== document.body; node = node.parentElement) {
+          if (getComputedStyle(node).display === "grid" && node.children.length >= 3) {
+            frame = node;
+            break;
+          }
+        }
+        if (frame === null) return undefined;
+        const columns = Array.from(frame.children).slice(0, 3);
+        const details = columns.find((column) => column.contains(pane));
+        const nav = document.querySelector(".pp-nav, .pp-nav-rail");
+        const sidebar = columns.find((column) => column !== details && nav && column.contains(nav)) || columns[0];
+        const centre = columns.find((column) => column !== details && column !== sidebar);
+        if (!details || !centre) return undefined;
+        const follow = () => {
+          const track = String(frame.style.gridTemplateColumns || "").trim().split(/\s+/)[0] || "";
+          const side = /^\d+(\.\d+)?px$/.test(track) ? track : Math.round(sidebar.getBoundingClientRect().width) + "px";
+          if (frame.style.getPropertyValue("--pp-side") !== side) frame.style.setProperty("--pp-side", side);
+        };
+        follow();
+        frame.style.setProperty("--pp-chat", width + "px");
+        centre.setAttribute("data-pp-col", "centre");
+        details.setAttribute("data-pp-col", "details");
+        // The details column's drag handle: a narrow child past the columns, to
+        // the right of the sidebar's own. Left where AppFrame put it, it would
+        // sit in the chat strip and resize a column nobody can see.
+        const sideRight = sidebar.getBoundingClientRect().right;
+        const handles = Array.from(frame.children)
+          .slice(3)
+          .filter((child) => {
+            const rect = child.getBoundingClientRect();
+            return rect.width > 0 && rect.width <= 16 && rect.left > sideRight + 16;
+          });
+        for (const handle of handles) handle.setAttribute("data-pp-col", "handle");
+        frame.setAttribute("data-pp-split", "");
+        const observer = new MutationObserver(follow);
+        observer.observe(frame, { attributes: true, attributeFilter: ["style"] });
+        return () => {
+          observer.disconnect();
+          frame.removeAttribute("data-pp-split");
+          centre.removeAttribute("data-pp-col");
+          details.removeAttribute("data-pp-col");
+          for (const handle of handles) handle.removeAttribute("data-pp-col");
+          frame.style.removeProperty("--pp-side");
+          frame.style.removeProperty("--pp-chat");
+        };
+      }, [mode, width]);
+      return { mode, width };
     }
 
     function MaterialModal(props) {
@@ -14687,6 +14802,19 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       window.dispatchEvent(new CustomEvent(PLACE_EVENT, { detail: pendingPlace }));
     }
 
+    /**
+     * Keep a place for the pane of the chat about to open, without announcing it.
+     *
+     * The pane is session-scoped: opening another chat gives it a new session,
+     * and the place open beside the old chat would be gone. Announced, the pane
+     * still on the old chat would take the request and clear it; kept quiet, the
+     * pane takes it as its session changes (`takePendingPlace`).
+     */
+    function carryPlace(request) {
+      placeCount += 1;
+      pendingPlace = { ...request, n: placeCount, at: Date.now() };
+    }
+
     /** The request no pane has answered yet, if it is still fresh; taking it clears it. */
     function takePendingPlace() {
       const found = pendingPlace;
@@ -15073,6 +15201,19 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
         if (!holding && workspace) props.startSession(workspace.workspaceId);
         requestPlace({ ...request, run: run ? run.run_id : null });
       };
+      // Another chat, with a place open: the place stays, the new chat beside it.
+      const carry = () => {
+        if (shown !== null) carryPlace({ mode: shown.mode, view: shown.view, chat: true, run: run ? run.run_id : null });
+      };
+      const openChat = (sessionId) => {
+        if (sessionId !== current) carry();
+        props.open(sessionId);
+      };
+      const newChat = () => {
+        if (!workspace) return;
+        carry();
+        props.startSession(workspace.workspaceId);
+      };
       const pending = data && data.grading ? data.grading.pending : 0;
       const gaps = data && !data.error ? data.gaps : 0;
       const badgeOf = (id) =>
@@ -15114,7 +15255,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
               className: "pp-nav-icon",
               title: "New chat in this course",
               "aria-label": "New chat in this course",
-              onClick: () => workspace && props.startSession(workspace.workspaceId),
+              onClick: newChat,
             },
             h(Icon, { d: ICONS.plus, size: 18 }),
           ),
@@ -15165,8 +15306,8 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
             ? h(Chats, {
                 sessions: sessions,
                 current: current,
-                onOpen: props.open,
-                onNew: () => props.startSession(workspace.workspaceId),
+                onOpen: openChat,
+                onNew: newChat,
               })
             : null,
         ),
@@ -15272,59 +15413,14 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
     }
 
     function Inspector(props) {
-      const weekParam = props.week ? "&week=" + props.week : "";
       const nav = useKept(
-        scoped(BASE + "/api/navigator?run=" + encodeURIComponent(props.runId) + weekParam + "&r=" + props.revision, props.sessionId),
+        scoped(BASE + "/api/navigator?run=" + encodeURIComponent(props.runId) + "&r=" + props.revision, props.sessionId),
       );
       const recent = useKept(scoped(BASE + "/api/recent?r=" + props.revision, props.sessionId));
       const mention = (text) => {
         if (props.mention) props.mention(text);
       };
       const now = Date.now();
-
-      const week = nav && !nav.error ? nav.week : null;
-      const runId = props.runId;
-      const focus = week
-        ? h(
-            Section,
-            {
-              label: "Week " + week.week + (week.modules.length ? " · " + week.modules.join(", ") : ""),
-              action: h(
-                "button",
-                {
-                  type: "button",
-                  className: "pp-insp-act",
-                  title: "Put this week's name into the message box",
-                  onClick: () => mention("week " + week.week + " of " + runId),
-                },
-                "Ask",
-              ),
-            },
-            week.starts_on ? h("div", { className: "pp-insp-quiet" }, (navDate(week.starts_on) || "") + " – " + (navDate(week.ends_on) || "")) : null,
-            week.meetings.map((meeting, index) =>
-              h(Line, {
-                key: "m" + index,
-                text: capital(meeting.type) + " · " + meeting.title,
-                badge: meeting.deck ? null : "no deck",
-                meta: navDate(meeting.on) || "no date",
-                hint: (meeting.location ? meeting.location + " — " : "") + "open Teaching on this week",
-                onClick: () => props.openPlace({ mode: "teaching" }),
-              }),
-            ),
-            week.due.map((work, index) =>
-              h(Line, {
-                key: "d" + index,
-                text: work.title + " due",
-                meta: navDate(work.due_on) || "no date",
-                hint: "Put " + work.assessment_id + " into the message box",
-                onClick: () => mention(work.assessment_id),
-              }),
-            ),
-            !week.meetings.length && !week.due.length ? h("div", { className: "pp-insp-quiet" }, "Nothing scheduled this week") : null,
-          )
-        : nav && !nav.error && nav.run
-          ? h(Section, { label: "This week" }, h("div", { className: "pp-insp-quiet" }, "The term is not under way"))
-          : null;
 
       const pending = nav && nav.grading ? nav.grading.pending : 0;
       const signals = nav && nav.grading ? nav.grading.signals : 0;
@@ -15346,7 +15442,6 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       return h(
         "div",
         { className: "pp-insp" },
-        focus,
         h(
           Section,
           { label: "Waiting" },
@@ -15505,6 +15600,10 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       // would otherwise see the value from when it was registered.
       const courseModeRef = React.useRef(false);
       courseModeRef.current = courseMode;
+      // The chat beside an open place, or not. A press that starts a turn or
+      // writes into the composer opens it, so the professor sees the answer
+      // without leaving the place; the Chat button in course mode puts it away.
+      const [chatBeside, setChatBeside] = React.useState(false);
       // What the left sidebar last asked course mode to show — `{ mode }`,
       // `{ view }` — numbered, so the same place pressed twice still lands.
       const [placeRequest, setPlaceRequest] = React.useState(null);
@@ -15523,19 +15622,6 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
         setIntegrationsFocus((value) => ({ service, tick: value.tick + 1 }));
         openPlace({ view: "settings", sub: "integrations" });
       };
-      // What course mode is showing (`{ mode, view }`, reported by it), and the
-      // week Teaching was last stepped to — the inspector's focus.
-      const [shown, setShown] = React.useState(null);
-      const [steppedWeek, setSteppedWeek] = React.useState(null);
-      React.useEffect(() => {
-        const onMessage = (event) => {
-          const data = event.data;
-          if (!data || data.source !== "professor-pane" || data.kind !== "teaching-week") return;
-          if (Number.isInteger(data.week) && data.week > 0 && data.week < 100) setSteppedWeek(data.week);
-        };
-        window.addEventListener("message", onMessage);
-        return () => window.removeEventListener("message", onMessage);
-      }, []);
       // The run on screen, for the same reason: *Start defence* is answered by
       // that handler, and the run is chosen after it was registered.
       const currentRunRef = React.useRef(null);
@@ -15591,6 +15677,9 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
         const answer = (request) => {
           if (!request) return;
           if (typeof request.run === "string" && request.run) setChosen(request.run);
+          // `chat`: the place was open beside a chat the professor switched
+          // away from, and comes back the same way beside the new one.
+          if (request.chat) setChatBeside(true);
           setPlaceRequest(request);
           setCourseMode(true);
         };
@@ -15634,8 +15723,9 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
             if (typeof data.prompt !== "string" || data.prompt.trim() === "") return;
             props.ask(data.prompt);
             // Chat as a button: a press in course mode starts the turn and
-            // gets out of its way, so the professor watches it answer.
-            if (courseModeRef.current) setCourseMode(false);
+            // brings the chat in beside the place, so the professor watches it
+            // answer without losing where they were.
+            if (courseModeRef.current) setChatBeside(true);
             return;
           }
           // *Start defence*: clone the fork here, through the server, then hand
@@ -15997,11 +16087,12 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
           );
       };
 
-      // A press in the column puts words into the composer; under course mode
-      // the composer is covered, so get out of its way, as an `ask` does.
+      // A press puts words into the composer; under course mode the composer is
+      // covered unless the chat is beside the place, so bring it in, as an
+      // `ask` does.
       const mentionAndShow = props.mention && ((text) => {
         const written = props.mention(text);
-        if (written) setCourseMode(false);
+        if (written && courseModeRef.current) setChatBeside(true);
         return written;
       });
 
@@ -16023,14 +16114,10 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                 "Run `python -m ainar validate` for the specifics.",
           );
         }
-        // The week in focus: the one Teaching was stepped to, while course mode
-        // shows Teaching; otherwise this week (the server's default).
-        const teaching = courseMode && shown && shown.view === null && shown.mode === "teaching";
         return h(Inspector, {
           runId: current.runId,
           sessionId: props.sessionId,
           revision: reload,
-          week: teaching ? steppedWeek : null,
           mention: mentionAndShow,
           openPlace: openPlace,
           key: current.runId,
@@ -16200,11 +16287,12 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
               courseId: current.courseId,
               term: current.term,
               integrationsFocus: integrationsFocus,
-              onShown: setShown,
+              chat: chatBeside,
+              setChat: setChatBeside,
               onClose: () => {
                 setCourseMode(false);
                 setPlaceRequest(null);
-                setShown(null);
+                setChatBeside(false);
               },
             })
           : null,
@@ -16268,13 +16356,9 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
               format: material.format,
               papers: material.papers,
               // A draft written under course mode's veil is a draft nobody sees:
-              // the mention lands in the composer, so get out of its way, as an
-              // `ask` from the page does.
-              mention: props.mention && ((text) => {
-                const written = props.mention(text);
-                if (written) setCourseMode(false);
-                return written;
-              }),
+              // the mention lands in the composer, so the chat comes in beside
+              // the place, as for an `ask` from the page.
+              mention: mentionAndShow,
               onClose: () => setMaterial(null),
             }),
       );

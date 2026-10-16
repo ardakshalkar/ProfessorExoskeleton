@@ -126,6 +126,10 @@ export function ProfessorPane(props) {
   // would otherwise see the value from when it was registered.
   const courseModeRef = React.useRef(false);
   courseModeRef.current = courseMode;
+  // The chat beside an open place, or not. A press that starts a turn or
+  // writes into the composer opens it, so the professor sees the answer
+  // without leaving the place; the Chat button in course mode puts it away.
+  const [chatBeside, setChatBeside] = React.useState(false);
   // What the left sidebar last asked course mode to show — `{ mode }`,
   // `{ view }` — numbered, so the same place pressed twice still lands.
   const [placeRequest, setPlaceRequest] = React.useState(null);
@@ -144,19 +148,6 @@ export function ProfessorPane(props) {
     setIntegrationsFocus((value) => ({ service, tick: value.tick + 1 }));
     openPlace({ view: "settings", sub: "integrations" });
   };
-  // What course mode is showing (`{ mode, view }`, reported by it), and the
-  // week Teaching was last stepped to — the inspector's focus.
-  const [shown, setShown] = React.useState(null);
-  const [steppedWeek, setSteppedWeek] = React.useState(null);
-  React.useEffect(() => {
-    const onMessage = (event) => {
-      const data = event.data;
-      if (!data || data.source !== "professor-pane" || data.kind !== "teaching-week") return;
-      if (Number.isInteger(data.week) && data.week > 0 && data.week < 100) setSteppedWeek(data.week);
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
   // The run on screen, for the same reason: *Start defence* is answered by
   // that handler, and the run is chosen after it was registered.
   const currentRunRef = React.useRef(null);
@@ -212,6 +203,9 @@ export function ProfessorPane(props) {
     const answer = (request) => {
       if (!request) return;
       if (typeof request.run === "string" && request.run) setChosen(request.run);
+      // `chat`: the place was open beside a chat the professor switched
+      // away from, and comes back the same way beside the new one.
+      if (request.chat) setChatBeside(true);
       setPlaceRequest(request);
       setCourseMode(true);
     };
@@ -255,8 +249,9 @@ export function ProfessorPane(props) {
         if (typeof data.prompt !== "string" || data.prompt.trim() === "") return;
         props.ask(data.prompt);
         // Chat as a button: a press in course mode starts the turn and
-        // gets out of its way, so the professor watches it answer.
-        if (courseModeRef.current) setCourseMode(false);
+        // brings the chat in beside the place, so the professor watches it
+        // answer without losing where they were.
+        if (courseModeRef.current) setChatBeside(true);
         return;
       }
       // *Start defence*: clone the fork here, through the server, then hand
@@ -618,11 +613,12 @@ export function ProfessorPane(props) {
       );
   };
 
-  // A press in the column puts words into the composer; under course mode
-  // the composer is covered, so get out of its way, as an `ask` does.
+  // A press puts words into the composer; under course mode the composer is
+  // covered unless the chat is beside the place, so bring it in, as an
+  // `ask` does.
   const mentionAndShow = props.mention && ((text) => {
     const written = props.mention(text);
-    if (written) setCourseMode(false);
+    if (written && courseModeRef.current) setChatBeside(true);
     return written;
   });
 
@@ -644,14 +640,10 @@ export function ProfessorPane(props) {
             "Run `python -m ainar validate` for the specifics.",
       );
     }
-    // The week in focus: the one Teaching was stepped to, while course mode
-    // shows Teaching; otherwise this week (the server's default).
-    const teaching = courseMode && shown && shown.view === null && shown.mode === "teaching";
     return h(Inspector, {
       runId: current.runId,
       sessionId: props.sessionId,
       revision: reload,
-      week: teaching ? steppedWeek : null,
       mention: mentionAndShow,
       openPlace: openPlace,
       key: current.runId,
@@ -821,11 +813,12 @@ export function ProfessorPane(props) {
           courseId: current.courseId,
           term: current.term,
           integrationsFocus: integrationsFocus,
-          onShown: setShown,
+          chat: chatBeside,
+          setChat: setChatBeside,
           onClose: () => {
             setCourseMode(false);
             setPlaceRequest(null);
-            setShown(null);
+            setChatBeside(false);
           },
         })
       : null,
@@ -889,13 +882,9 @@ export function ProfessorPane(props) {
           format: material.format,
           papers: material.papers,
           // A draft written under course mode's veil is a draft nobody sees:
-          // the mention lands in the composer, so get out of its way, as an
-          // `ask` from the page does.
-          mention: props.mention && ((text) => {
-            const written = props.mention(text);
-            if (written) setCourseMode(false);
-            return written;
-          }),
+          // the mention lands in the composer, so the chat comes in beside
+          // the place, as for an `ask` from the page.
+          mention: mentionAndShow,
           onClose: () => setMaterial(null),
         }),
   );

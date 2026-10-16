@@ -59,6 +59,19 @@ function requestPlace(request) {
   window.dispatchEvent(new CustomEvent(PLACE_EVENT, { detail: pendingPlace }));
 }
 
+/**
+ * Keep a place for the pane of the chat about to open, without announcing it.
+ *
+ * The pane is session-scoped: opening another chat gives it a new session,
+ * and the place open beside the old chat would be gone. Announced, the pane
+ * still on the old chat would take the request and clear it; kept quiet, the
+ * pane takes it as its session changes (`takePendingPlace`).
+ */
+function carryPlace(request) {
+  placeCount += 1;
+  pendingPlace = { ...request, n: placeCount, at: Date.now() };
+}
+
 /** The request no pane has answered yet, if it is still fresh; taking it clears it. */
 export function takePendingPlace() {
   const found = pendingPlace;
@@ -164,7 +177,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** `2026-10-20` as "Tue 20 Oct", read as a calendar date with no time zone. */
-export const navDate = (iso) => {
+const navDate = (iso) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
   if (!match) return null;
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
@@ -178,7 +191,7 @@ const shortTitle = (title) => {
   return cut.length <= 28 ? cut : text.slice(0, 28) + "…";
 };
 
-export const capital = (word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : "");
+const capital = (word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : "");
 
 /** The workspace remembered between page loads, read and written defensively. */
 const REMEMBERED = "professor-pane:navigator-workspace";
@@ -445,6 +458,19 @@ export function CourseNavigator(props) {
     if (!holding && workspace) props.startSession(workspace.workspaceId);
     requestPlace({ ...request, run: run ? run.run_id : null });
   };
+  // Another chat, with a place open: the place stays, the new chat beside it.
+  const carry = () => {
+    if (shown !== null) carryPlace({ mode: shown.mode, view: shown.view, chat: true, run: run ? run.run_id : null });
+  };
+  const openChat = (sessionId) => {
+    if (sessionId !== current) carry();
+    props.open(sessionId);
+  };
+  const newChat = () => {
+    if (!workspace) return;
+    carry();
+    props.startSession(workspace.workspaceId);
+  };
   const pending = data && data.grading ? data.grading.pending : 0;
   const gaps = data && !data.error ? data.gaps : 0;
   const badgeOf = (id) =>
@@ -486,7 +512,7 @@ export function CourseNavigator(props) {
           className: "pp-nav-icon",
           title: "New chat in this course",
           "aria-label": "New chat in this course",
-          onClick: () => workspace && props.startSession(workspace.workspaceId),
+          onClick: newChat,
         },
         h(Icon, { d: ICONS.plus, size: 18 }),
       ),
@@ -537,8 +563,8 @@ export function CourseNavigator(props) {
         ? h(Chats, {
             sessions: sessions,
             current: current,
-            onOpen: props.open,
-            onNew: () => props.startSession(workspace.workspaceId),
+            onOpen: openChat,
+            onNew: newChat,
           })
         : null,
     ),

@@ -463,33 +463,14 @@ export function CourseMode(props) {
   // rather than by the shell's class names, which are hashed. With the stock
   // browser in the seat there is no navigator, and the veil covers it all.
   const [left, setLeft] = React.useState(0);
-  // And the right edge stops at the pane's column, so the inspector stays in
-  // view beside the place: found the same way, from `.pp-root` outwards —
-  // the outermost ancestor flush with the window's right edge and narrower
-  // than half of it. With the column closed there is none, and it is 0.
-  const [right, setRight] = React.useState(0);
-  React.useLayoutEffect(() => {
-    const pane = document.querySelector(".pp-root");
-    if (!pane) return undefined;
-    let column = null;
-    for (let node = pane.parentElement; node && node !== document.body; node = node.parentElement) {
-      const rect = node.getBoundingClientRect();
-      if (Math.abs(rect.right - window.innerWidth) <= 0.5 && rect.width > 0 && rect.width < window.innerWidth / 2) column = node;
-    }
-    if (column === null) return undefined;
-    const measure = () => {
-      const rect = column.getBoundingClientRect();
-      setRight(rect.width > 0 ? Math.max(0, Math.round(window.innerWidth - rect.left)) : 0);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(column);
-    window.addEventListener("resize", measure);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, []);
+  // The right edge is the window's: a place is the page, and the inspector,
+  // which says what is waiting beside a chat, has nothing to add beside the
+  // place that draws it. With the chat asked for (`props.chat`), the shell's
+  // own conversation column is moved into a strip at the right — see
+  // `useChatBeside` — and the place stops at it; on a window too narrow for
+  // both, the place steps aside and the chat has the screen.
+  const beside = useChatBeside(Boolean(props.chat), left);
+  const veilRef = React.useRef(null);
   React.useLayoutEffect(() => {
     const nav = document.querySelector(".pp-nav, .pp-nav-rail");
     if (!nav) return undefined;
@@ -518,13 +499,17 @@ export function CourseMode(props) {
   React.useEffect(() => {
     const onKey = (event) => {
       if (event.key !== "Escape") return;
+      // A key pressed in the chat beside the place is the chat's: Escape
+      // there stops a turn or clears a menu, and must not shut the place.
+      const target = event.target;
+      if (props.chat && veilRef.current && target instanceof Node && target !== document.body && !veilRef.current.contains(target)) return;
       // A deck opened from the term plan sits on top and owns Escape: it
       // closes first, and this stays where the professor was reading.
       if (courseModeEscape({ covered: props.covered }) === "close") close();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [close, props.covered]);
+  }, [close, props.covered, props.chat]);
   // Canvas, in one line: the row the Integrations tab's Status view draws,
   // from the same payload. Nothing is computed here but the words.
   const wiring = useJson(
@@ -693,31 +678,36 @@ export function CourseMode(props) {
   const navigator = left > 0;
   const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
 
+  const placeName = viewEntry ? viewEntry.label : navigator ? "Weeks" : props.title;
+  const setChat = props.setChat || (() => {});
   return ReactDOM.createPortal(
     h(
+      React.Fragment,
+      null,
+      h(
       "div",
       {
-        className: "pp-veil pp-coursemode",
-        style: left || right ? { left: left + "px", right: right + "px" } : undefined,
-        onMouseDown: (event) => {
-          if (event.target === event.currentTarget) close();
-        },
+        ref: veilRef,
+        className:
+          "pp-veil pp-coursemode" +
+          (beside.mode === "side" ? " pp-beside" : "") +
+          (beside.mode === "swap" ? " pp-away" : ""),
+        style: { left: left + "px", right: (beside.mode === "side" ? beside.width : 0) + "px" },
+        "aria-hidden": beside.mode === "swap" ? "true" : undefined,
       },
       h(
         "div",
         {
           className: "pp-modal",
-          role: "dialog",
-          "aria-modal": "true",
+          role: "region",
           "aria-label": "Course mode — " + props.title,
-          onMouseDown: (event) => event.stopPropagation(),
         },
         h(
           "div",
           { className: "pp-modalhead pp-coursehead" },
           // The place, not the course: the course is named in the navigator
           // beside it and in the column, and here it only crowded the row.
-          h("div", { className: "pp-modaltitle", title: props.title }, viewEntry ? viewEntry.label : navigator ? "Weeks" : props.title),
+          h("div", { className: "pp-modaltitle", title: props.title }, placeName),
           // The readings of the weeks. Under a place they are the way back to
           // the weeks, so they stay, unpressed.
           COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
@@ -787,6 +777,19 @@ export function CourseMode(props) {
             { type: "button", className: "pp-publishbtn", title: "Scanned papers, an exam paper and its key, or recorded defences", onClick: props.onUpload },
             "Upload",
           ),
+          // The conversation beside the place: a press on a hole starts a
+          // turn there, and this is how to look at it again or put it away.
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              "aria-pressed": Boolean(props.chat),
+              title: props.chat ? "Put the chat away; the place takes the width" : "The chat beside this place",
+              onClick: () => setChat(!props.chat),
+            },
+            "Chat",
+          ),
           h(
             "button",
             {
@@ -850,9 +853,104 @@ export function CourseMode(props) {
             : null,
         ),
       ),
+      ),
+      // The place stepped aside for the chat on a narrow window: the way back.
+      beside.mode === "swap"
+        ? h(
+            "button",
+            { type: "button", className: "pp-primary pp-backpill", onClick: () => setChat(false) },
+            "‹ " + placeName,
+          )
+        : null,
     ),
     document.body,
   );
+}
+
+/** The chat strip's width at a window width: a third of it, within reason. */
+const chatWidth = (viewport) => Math.max(380, Math.min(520, Math.round(viewport * 0.32)));
+
+/** The narrowest a place may be with the chat beside it; below, they swap. */
+const PLACE_MIN = 560;
+
+/**
+ * The shell's conversation column, moved beside an open place.
+ *
+ * The chat is not drawn twice: it stays the shell's own column, with its
+ * composer, its turns and its scroll. AppFrame lays the columns out as one
+ * grid — sidebar, centre, details — with the widths in an inline
+ * `grid-template-columns`. While the chat is asked for, the grid gets
+ * `data-pp-split`, and the stylesheet re-tracks it: the sidebar at its own
+ * width, then a track the place covers (the details column goes there,
+ * hidden), then the chat at `chatWidth`. The columns are found by structure
+ * — the grid above `.pp-root`, the child holding the pane, the child holding
+ * the navigator — since the shell's class names are hashed. The sidebar's
+ * track is read off AppFrame's own inline value and followed as it changes,
+ * so collapsing or dragging the sidebar still works.
+ *
+ * Returns `{ mode, width }`: "none", "side" (the strip is `width` wide at the
+ * window's right) or "swap" (too narrow for both; the place steps aside).
+ */
+function useChatBeside(wanted, left) {
+  const [viewport, setViewport] = React.useState(() => window.innerWidth);
+  React.useEffect(() => {
+    const onResize = () => setViewport(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const width = chatWidth(viewport);
+  const mode = !wanted ? "none" : viewport - left - width >= PLACE_MIN ? "side" : "swap";
+  React.useLayoutEffect(() => {
+    if (mode !== "side") return undefined;
+    const pane = document.querySelector(".pp-root");
+    let frame = null;
+    for (let node = pane ? pane.parentElement : null; node && node !== document.body; node = node.parentElement) {
+      if (getComputedStyle(node).display === "grid" && node.children.length >= 3) {
+        frame = node;
+        break;
+      }
+    }
+    if (frame === null) return undefined;
+    const columns = Array.from(frame.children).slice(0, 3);
+    const details = columns.find((column) => column.contains(pane));
+    const nav = document.querySelector(".pp-nav, .pp-nav-rail");
+    const sidebar = columns.find((column) => column !== details && nav && column.contains(nav)) || columns[0];
+    const centre = columns.find((column) => column !== details && column !== sidebar);
+    if (!details || !centre) return undefined;
+    const follow = () => {
+      const track = String(frame.style.gridTemplateColumns || "").trim().split(/\s+/)[0] || "";
+      const side = /^\d+(\.\d+)?px$/.test(track) ? track : Math.round(sidebar.getBoundingClientRect().width) + "px";
+      if (frame.style.getPropertyValue("--pp-side") !== side) frame.style.setProperty("--pp-side", side);
+    };
+    follow();
+    frame.style.setProperty("--pp-chat", width + "px");
+    centre.setAttribute("data-pp-col", "centre");
+    details.setAttribute("data-pp-col", "details");
+    // The details column's drag handle: a narrow child past the columns, to
+    // the right of the sidebar's own. Left where AppFrame put it, it would
+    // sit in the chat strip and resize a column nobody can see.
+    const sideRight = sidebar.getBoundingClientRect().right;
+    const handles = Array.from(frame.children)
+      .slice(3)
+      .filter((child) => {
+        const rect = child.getBoundingClientRect();
+        return rect.width > 0 && rect.width <= 16 && rect.left > sideRight + 16;
+      });
+    for (const handle of handles) handle.setAttribute("data-pp-col", "handle");
+    frame.setAttribute("data-pp-split", "");
+    const observer = new MutationObserver(follow);
+    observer.observe(frame, { attributes: true, attributeFilter: ["style"] });
+    return () => {
+      observer.disconnect();
+      frame.removeAttribute("data-pp-split");
+      centre.removeAttribute("data-pp-col");
+      details.removeAttribute("data-pp-col");
+      for (const handle of handles) handle.removeAttribute("data-pp-col");
+      frame.style.removeProperty("--pp-side");
+      frame.style.removeProperty("--pp-chat");
+    };
+  }, [mode, width]);
+  return { mode, width };
 }
 
 export function MaterialModal(props) {

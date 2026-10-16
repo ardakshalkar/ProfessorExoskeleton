@@ -8,14 +8,24 @@ The professor's course, in three parts of the DeepSeek Harness (since 2026-10-16
   **Concepts**, **Materials**, **Files**), this course's chats, and **Course
   settings** at the foot. *Folders and search* hands the seat back to the
   stock browser. See `client/navigator.js`.
-* **Centre — the work.** The chat, or a place opened over it in course mode,
-  between the two columns.
-* **Right — context.** The column is an inspector, not a second set of tabs:
-  the week in focus (Teaching's stepped week, else this one), what is waiting
-  (marks, drafts by kind, weeks with gaps), and the records changed last, each
-  a press into the composer or into its place. Its header names the run, with
-  **Open course**, **Publish** and **Upload**. See `client/inspector.js` and
-  `server/inspector.js` (`/api/recent`).
+* **Centre — the work.** One thing at a time: the chat, or a place.
+* **Right — whatever the centre is not.** Beside a chat, the inspector: what
+  is waiting (marks, drafts by kind, weeks with gaps) and the records changed
+  last, each a press into the composer or into its place. Its header names the
+  run, with **Open course**, **Publish** and **Upload**. See
+  `client/inspector.js` and `server/inspector.js` (`/api/recent`). The week is
+  the navigator's *This week*, not drawn twice. Beside a place, the chat.
+
+Since 2026-10-16 (late), a place is the page: it runs from the navigator to
+the window's right edge with no margin or card, and covers the inspector,
+which has nothing to say beside the place that draws it. **Chat** in its
+header brings the conversation in as a strip at the right — the shell's own
+column, moved, not a copy (`useChatBeside` in `client/materials.js`) — and
+any press that starts a turn or writes into the composer does the same rather
+than closing the place. Opening another chat from the navigator keeps the
+place open beside it. On a window too narrow for both (under about 560px of
+place), the place steps aside for the chat and a pill at the top brings it
+back.
 
 The places, as course mode draws them:
 
@@ -44,8 +54,8 @@ four of [`COURSE-MODE.md`](COURSE-MODE.md), designed in
 Every hole on it is a press that names what it starts — *Draft deck*, *Plan
 module*, *Check date*, *Set weight*, *Write brief*, *Set dates* — and sends a
 prompt naming the week, the module and the records into the open session. The
-overlay then closes, so the professor lands on the turn they started: the
-conversation is underneath, not replaced, which is the "chat as a button" half.
+chat then comes in beside the place, so the professor watches the turn they
+started without losing where they were, which is the "chat as a button" half.
 Holes are ranked by the payload's `weeks[].urgency` — this week and next
 filled, later outlined, weeks already taught grey — and the strip counts them
 the same way from `totals.gaps_by_urgency`. Runs of two or more unplanned weeks
@@ -71,8 +81,8 @@ otherwise:
 
 It shares the pane's Record / + drafts state, and adds **Preview as student**:
 the record alone with no hole drawn, which is what `ainar page` publishes.
-Escape, the backdrop or × closes it; a deck opened from it lands on top of it
-and closes first.
+Escape or × closes it (Escape typed in the chat beside it is the chat's); a
+deck opened from it lands on top of it and closes first.
 
 Why a page of the pane's own rather than the widget: the widget is one column
 by construction — it is what ChatGPT and Claude Desktop draw beside a reply,
@@ -111,7 +121,9 @@ A place press is a request to the pane (`requestPlace` in
 `client/navigator.js`): the pane answers it if it is mounted, and takes it on
 mount if the press had to start a chat in this course first. With the
 navigator in the sidebar, course mode starts at the sidebar's right edge rather
-than covering it, so a second place moves it and a chat opens beside it.
+than covering it, so a second place moves it. A chat pressed while a place is
+open is carried (`carryPlace`): the place is kept, unannounced, for the pane of
+the new chat, which reopens it with the chat beside it.
 
 ## Opening a deck, or a homework brief
 
