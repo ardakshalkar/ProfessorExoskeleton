@@ -557,6 +557,22 @@ concepts, list what the items and criteria name, subtract.
   at Narxoz, categories elsewhere), set `component:` to the block this falls in
   — by its due date for a scheme divided by period — and say which, and what
   that block's members then add up to against its weight.
+- **Not while the grading policy is locked.** Read `grading_scheme.locked` on
+  the run before writing `component:` or `weight:`. When it is `true`, leave
+  both out of the draft, change nothing under `grading_scheme`, and say, in
+  these words: *the grading policy is locked; unlock it in the Gradebook.* The
+  rest of the assessment can still be drafted. `ainar validate` notes the lock
+  (`grading.locked`) and warns about a change made around it
+  (`grading.locked_changed`).
+- **When it is not locked, keep the history.** Writing `component:` or
+  `weight:` appends one entry to `grading_scheme.extensions.history` on the
+  run (create the list when it is absent), in the shape the pane's writer uses
+  (`historyEntry`, `ainar-node/src/grading-policy.ts`): `at` (now), `action:
+  change`, `by: design-assessment-skill`, `summary` (one line, e.g.
+  `["ASSESSMENT-HW3 filed in VSK2 at 4%."]`), and `before` — the whole policy
+  as it was: `components` and `points` copied from the scheme, and
+  `assignments`, every assessment of the run as `{ ID: { component, weight } }`.
+  Append; never rewrite or drop an earlier entry.
 - **Do not invent context.** No fabricated datasets, citations, company names
   or scenarios presented as real. A constructed scenario is fine when it reads
   as constructed.

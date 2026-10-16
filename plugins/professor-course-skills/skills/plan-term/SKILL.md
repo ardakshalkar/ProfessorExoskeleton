@@ -268,6 +268,38 @@ also decides what it is out of in Canvas: 0.06 inside a 0.3 block out of 100
 is out of 20. An assessment with no weight under `points` cannot be sent at
 all (`grading.unscaled`).
 
+**If the grading policy is locked, file nothing.** Read `grading_scheme.locked`
+on the run first. When it is `true`, write no `component:` and no `weight:` on
+any assessment — new shells included — and change nothing under
+`grading_scheme`. Draft the shells without those two fields and say, in these
+words: *the grading policy is locked; unlock it in the Gradebook.* `ainar
+validate` notes the lock (`grading.locked`) and warns about a change made
+around it (`grading.locked_changed`).
+
+**When it is not locked, keep the history.** Any write of `component:` or
+`weight:` — on a shell or an existing assessment — appends one entry to
+`grading_scheme.extensions.history` (create the list when it is absent), in
+the shape the pane's writer uses (`historyEntry`,
+`ainar-node/src/grading-policy.ts`):
+
+```yaml
+grading_scheme:
+  extensions:
+    history:
+      - at: 2026-09-05T09:00:00Z       # now
+        action: change
+        by: plan-term-skill
+        summary: ["3 assessment(s) change block: ASSESSMENT-MT1 none→VSK1, ASSESSMENT-MT2 none→VSK2, ASSESSMENT-FINAL none→FINAL."]
+        before:                        # the whole policy as it was before this write
+          components: [ ... ]          # the scheme's components, unchanged copies
+          points: null
+          assignments:                 # every assessment of the run as it was, not only those touched
+            ASSESSMENT-HW1: { component: VSK1, weight: 0.04 }
+```
+
+One entry per write, appended; never rewrite or drop an earlier one. The
+Gradebook's "Last changes" reads them back and restores from `before`.
+
 The conditions on that, and none of them is optional:
 
 - **Propose a split only when these three are the whole scheme.** Read the run's

@@ -21,10 +21,34 @@ writes: record
 > - **A whole policy, every time.** Every block and every assessment of the
 >   run, not only the ones that change — the pane loads your file as the
 >   draft, and anything missing would silently keep a value you did not see.
+> - **Change only what was asked.** An assessment keeps its block, and a block
+>   its weight, unless the request moves it. Dropping is weight 0 in the same
+>   block, never a move to "no block".
 > - **No student name, email or institutional number**, in the file, the
 >   note or the reply.
 
 # Propose a change to the grading policy
+
+## Fast path — a request from the pane
+
+The professor is watching a clock in the editor. A message from the pane
+carries everything a plain request needs: the policy on screen as JSON, every
+assessment's title, and the exact command to record a proposal, with the CLI
+and the workspace already filled in. For a request that only names
+assessments, blocks and weights — "make quizzes 4-6 1.33% like 1-3, drop the
+rest", "move HW8 to the final" — do exactly three things:
+
+1. Build the whole policy from the JSON (§3's rules) and write it to a temp
+   file.
+2. Run the command from the message, with FILE, WORDS and WHY filled in.
+3. Answer in one sentence.
+
+Do **not** run `--help`, `help` or `validate`, do not grep or open records,
+and do not verify afterwards — the command checks the proposal and its output
+is the check. Read the course (§2) only when the request depends on something
+the message does not carry: an institutional rule it challenges, what a brief
+says, whether something is graded. If the command refuses, fix what it names
+and run it once more.
 
 **Needs:** `bin/ainar grading`. Without it, describe the change in the
 conversation and say plainly that it could not be recorded for the editor.
@@ -71,8 +95,13 @@ shows that no proposal came back and sends the professor to the chat.
 
 ## 3. Build the policy
 
-- **Drop an assessment from the grade:** `component: null`, `weight: 0`. Do
-  not delete it — its marks stay recorded, it just stops counting.
+- **Every assessment stays in its block** unless the professor asked to move
+  it. "Remove", "drop", "don't count" change the weight, not the block.
+- **Drop an assessment from the grade:** keep its `component`, set
+  `weight: 0`. Do not delete it and do not take it out of its block — its marks
+  stay recorded, it just stops counting, and it is still where the professor
+  filed it if they bring it back. `component: null` only when asked to take it
+  out of the block.
 - **Reweight:** say where the weight comes from. A share taken from one place
   goes somewhere, and the block sums must still hold. Spread in proportion to
   the current weights unless the professor said otherwise.
@@ -92,7 +121,7 @@ never into the course folder.
 ```bash
 bin/ainar grading propose CSS-4007-2026-FALL --file "$TMP/grading-proposal.json" \
   --request "drop HW8 and spread its weight over HW5-7" \
-  --note "HW8 stops counting (weight 0, no block). Its 4% goes to HW5-7 equally, 5.33% each, so ВСК 2 stays 30%. Its marks stay recorded."
+  --note "HW8 stops counting (weight 0, still in ВСК 2). Its 4% goes to HW5-7 equally, 5.33% each, so ВСК 2 stays 30%. Its marks stay recorded."
 ```
 
 - `--request` is the professor's words, shortened if long.

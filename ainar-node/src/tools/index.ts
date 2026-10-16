@@ -271,6 +271,8 @@ export const TOOLS: Tool[] = [
         course_id: courseId,
         errors: issues.errors.map(describe),
         warnings: issues.warnings.map(describe),
+        // Neither fault nor open decision: what to know before editing — a locked grading policy.
+        notes: issues.notes.map(describe),
         // The list is as partial as the validator is, and an empty one would
         // otherwise read as "checked and clean" — a far stronger claim than 18
         // of 94 checks can support.

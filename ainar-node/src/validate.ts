@@ -181,6 +181,8 @@ export const ADDED = [
   "grading.component_sum",
   "grading.cycle",
   "grading.duplicate_component",
+  "grading.locked",
+  "grading.locked_changed",
   "grading.unassigned",
   "grading.unscaled",
   "grading.unknown_component",
@@ -586,6 +588,7 @@ const checkAssessments = (b: CourseBundle, issues: IssueList): void => {
  */
 export const gradingSchemeIssues = (run: any, assessments: any[], issues: IssueList): void => {
   const where = run.course_version_id;
+  lockIssues(run, assessments, issues);
   const components = (run.grading_scheme?.components ?? []) as any[];
   const byId = new Map<string, any>();
   for (const component of components) {
@@ -613,6 +616,9 @@ export const gradingSchemeIssues = (run: any, assessments: any[], issues: IssueL
   // a share of some block's points, and that share is not known.
   if (run.grading_scheme) {
     for (const assessment of assessments) {
+      // Weight 0 is an assessment taken out of the grade on purpose, in its
+      // block or not: there is nothing to send, and that is not a problem.
+      if (assessment.weight === 0) continue;
       const problem = lmsScale(run, assessment, assessments).problem;
       if (problem) issues.warn("grading.unscaled", `${problem}; nothing can be sent to the LMS for it`, assessment.assessment_id);
     }
@@ -662,6 +668,72 @@ export const gradingSchemeIssues = (run: any, assessments: any[], issues: IssueL
       );
     }
   }
+};
+
+/**
+ * A locked policy, and whether it is still the policy that was locked.
+ *
+ * The lock is a note, not a fault: it tells whoever reads the list — the
+ * session about to file an assessment, a professor editing YAML — that blocks,
+ * weights and filing are frozen and the Gradebook is where they are unlocked.
+ *
+ * What was locked can be told when the last line of the scheme's history is
+ * the lock itself and kept the policy as it stood (`locked_as`, written by
+ * `historyEntry`). A difference from it is a change made around the lock — a
+ * hand edit, or a writer that did not check — and is a warning, since marks in
+ * the LMS were scaled by the locked policy. A lock set by hand, or one older
+ * than `locked_as`, cannot be compared, and only the note is given.
+ */
+const lockIssues = (run: any, assessments: any[], issues: IssueList): void => {
+  const scheme = run.grading_scheme;
+  if (scheme?.locked !== true) return;
+  const where = run.course_version_id;
+  const history = Array.isArray(scheme.extensions?.history) ? (scheme.extensions.history as any[]) : [];
+  const last = history[history.length - 1];
+  const since = last?.action === "lock" && last.at ? ` since ${String(last.at).slice(0, 10)}` : "";
+  issues.note(
+    "grading.locked",
+    `the grading policy is locked${since}: blocks, weights and which block each assessment counts in are frozen; unlock it in the Gradebook to change them`,
+    where,
+  );
+  const was = last?.action === "lock" ? last.locked_as : null;
+  if (!was || typeof was !== "object") return;
+
+  const differences: string[] = [];
+  const close = (a: unknown, b: unknown) =>
+    a == null || b == null ? (a ?? null) === (b ?? null) : Math.abs(Number(a) - Number(b)) <= 1e-9;
+  const plain = (list: any[]) => new Map(list.map((c) => [String(c.component_id), c]));
+  const before = plain(Array.isArray(was.components) ? was.components : []);
+  const now = plain((scheme.components ?? []) as any[]);
+  for (const id of before.keys()) if (!now.has(id)) differences.push(`block ${id} removed`);
+  for (const [id, component] of now) {
+    const old = before.get(id);
+    if (!old) differences.push(`block ${id} added`);
+    else if (
+      !close(old.weight, component.weight) ||
+      (old.parent ?? null) !== (component.parent ?? null) ||
+      !close(old.points, component.points)
+    ) {
+      differences.push(`block ${id} changed`);
+    }
+  }
+  if (!close(was.points, scheme.points)) differences.push(`the course's points ${was.points ?? "—"} → ${scheme.points ?? "—"}`);
+  const filed = (was.assignments ?? {}) as Record<string, { component?: string | null; weight?: number | null }>;
+  for (const assessment of assessments) {
+    const old = filed[assessment.assessment_id];
+    if (!old) continue; // added after the lock: nothing recorded to compare against
+    if ((old.component ?? null) !== (assessment.component ?? null)) {
+      differences.push(`${assessment.assessment_id} moved ${old.component ?? "none"} → ${assessment.component ?? "none"}`);
+    }
+    if (!close(old.weight, assessment.weight)) differences.push(`${assessment.assessment_id} reweighted`);
+  }
+  if (!differences.length) return;
+  const shown = differences.length > 6 ? `${differences.slice(0, 6).join("; ")} and ${differences.length - 6} more` : differences.join("; ");
+  issues.warn(
+    "grading.locked_changed",
+    `the grading policy changed while locked: ${shown}. Restore it, or unlock it in the Gradebook and make the change there so the history keeps it`,
+    where,
+  );
 };
 
 /**

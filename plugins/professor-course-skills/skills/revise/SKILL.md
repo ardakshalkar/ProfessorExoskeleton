@@ -101,6 +101,34 @@ sets a missing deadline, and its Integrations tab holds the LMS ids. Do not
 hand-edit `courses/` YAML on their behalf without being asked to; when asked,
 change the one key and nothing around it.
 
+**A weight, a block or the grading scheme is the grading policy.** The
+Gradebook is its control: point there first. Before any edit to an
+assessment's `weight` or `component`, or to anything under the run's
+`grading_scheme`, read `grading_scheme.locked` on the run. When it is `true`,
+do not edit — not even when asked — and say, in these words: *the grading
+policy is locked; unlock it in the Gradebook.* `ainar validate` notes the lock
+(`grading.locked`) and warns about a change made around it
+(`grading.locked_changed`).
+
+When it is not locked and you are asked to make the edit yourself, append one
+entry to `grading_scheme.extensions.history` (create the list when it is
+absent), in the shape the pane's writer uses (`historyEntry`,
+`ainar-node/src/grading-policy.ts`), so the Gradebook can show and undo it:
+
+```yaml
+- at: 2026-10-15T09:00:00Z         # now
+  action: change
+  by: revise-skill
+  summary: ["ASSESSMENT-HW2 weight 4% → 5%."]
+  before:                          # the whole policy as it was before this edit
+    components: [ ... ]            # the scheme's components, copied as they were
+    points: null
+    assignments:                   # every assessment of the run, not only the one touched
+      ASSESSMENT-HW2: { component: VSK1, weight: 0.04 }
+```
+
+Append; never rewrite or drop an earlier entry.
+
 ## 5. Hand over what follows
 
 Copy the `What follows` lines out of `ainar impact` rather than composing your

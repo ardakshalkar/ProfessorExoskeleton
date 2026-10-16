@@ -26,7 +26,8 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { relative, sep } from "node:path";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { assessmentsOf, runById } from "@ainar/core/src/bundle.ts";
 import { COLLECTIONS } from "@ainar/core/src/loader.ts";
@@ -58,7 +59,19 @@ const sentCounts = (bundle, runId) => {
   );
 };
 
-export const gradingPolicy = (workspace, runId) => {
+/** This repository's CLI, the one the session runs: `bin/ainar`, or `bin\ainar.cmd` on Windows. */
+const AINAR_CLI = join(fileURLToPath(new URL("../../../bin/", import.meta.url)), process.platform === "win32" ? "ainar.cmd" : "ainar");
+
+/**
+ * The exact command that records a proposal for this run, with the
+ * workspace root filled in — handed to the session with each request, so it
+ * spends no steps finding the CLI or the workspace. FILE, WORDS and WHY are
+ * the session's to fill.
+ */
+const proposeCommand = (root, runId) =>
+  (process.platform === "win32" ? "& " : "") + `"${AINAR_CLI}" grading propose ${runId} --root "${root}" --file FILE --request "WORDS" --note "WHY"`;
+
+export const gradingPolicy = (workspace, runId, root = null) => {
   const { bundle } = loadedRun(workspace, runId);
   const doc = policyDocument(bundle, runId);
   const sent = sentCounts(bundle, runId);
@@ -66,6 +79,7 @@ export const gradingPolicy = (workspace, runId) => {
   // The assistant's proposals, newest last, each marked stale when the policy
   // moved since it was made (grading-proposals.ts).
   doc.proposals = proposalsOf(bundle, runId).map((entry) => ({ ...entry, stale: entry.base !== doc.base }));
+  if (root) doc.propose_command = proposeCommand(root, runId);
   return doc;
 };
 

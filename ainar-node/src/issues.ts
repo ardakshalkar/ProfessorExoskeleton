@@ -1,6 +1,11 @@
 /** Issues reported while loading or validating authored content. Ported from `ainar/issues.py`. */
 
-export type Level = "error" | "warning";
+/**
+ * A note is neither a fault nor a decision left open: it says something about
+ * the course a reader of the list should know before changing it — that the
+ * grading policy is locked, say. It counts as neither an error nor a warning.
+ */
+export type Level = "error" | "warning" | "note";
 
 export interface Issue {
   level: Level;
@@ -25,6 +30,10 @@ export class IssueList {
     this.items.push({ level: "warning", code, message, location: location ?? null });
   }
 
+  note(code: string, message: string, location?: string | null): void {
+    this.items.push({ level: "note", code, message, location: location ?? null });
+  }
+
   extend(other: IssueList | Issue[]): void {
     this.items.push(...(other instanceof IssueList ? other.items : other));
   }
@@ -35,6 +44,10 @@ export class IssueList {
 
   get warnings(): Issue[] {
     return this.items.filter((item) => item.level === "warning");
+  }
+
+  get notes(): Issue[] {
+    return this.items.filter((item) => item.level === "note");
   }
 
   get length(): number {

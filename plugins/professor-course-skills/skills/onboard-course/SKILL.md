@@ -172,6 +172,36 @@ weights. Do not write any assessment weight now — assessments do not exist yet
 Canvas course, `bin/ainar lms groups RUN` then shows its assignment groups beside
 these components, and `--accept` records the pairing once the professor agrees.
 
+**A run that already has a policy may have locked it.** Read
+`grading_scheme.locked` in the run's `version.yaml` before writing anything
+under `grading_scheme`. When it is `true`, write nothing there — not a block,
+a weight, `points` or a fix to a sum — and say, in these words: *the grading
+policy is locked; unlock it in the Gradebook.* Go on with the rest of the
+onboarding. `ainar validate` notes the lock (`grading.locked`) and warns about
+a change made around it (`grading.locked_changed`).
+
+**When it is not locked, keep the history.** Writing or changing the scheme
+appends one entry to `grading_scheme.extensions.history` (create the list when
+it is absent), in the shape the pane's writer uses (`historyEntry`,
+`ainar-node/src/grading-policy.ts`):
+
+```yaml
+grading_scheme:
+  extensions:
+    history:
+      - at: 2026-09-01T09:00:00Z       # now
+        action: change
+        by: onboard-course-skill
+        summary: ["New blocks: VSK1, VSK2, FINAL."]
+        before:                        # the whole policy as it was before this write
+          components: []               # empty for a run that had no scheme
+          points: null
+          assignments: {}              # every assessment of the run: { ID: { component, weight } }
+```
+
+Append; never rewrite or drop an earlier entry. The Gradebook's "Last changes"
+reads them back and restores from `before`.
+
 **The term's shape.** How many teaching weeks and meetings per week; 15 weeks with
 one lecture and one practice is the local norm. You need this so `/plan-term` does
 not have to ask again — pass it on rather than acting on it.

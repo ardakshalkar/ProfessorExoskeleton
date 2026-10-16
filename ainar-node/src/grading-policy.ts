@@ -478,6 +478,8 @@ export const policyImpact = (bundle: CourseBundle, runId: string, proposal: Prop
         from: old.problem ? null : old.maximum,
         to: now.problem ? null : now.maximum,
         problem: now.problem,
+        /** Taken out of the grade (weight 0): nothing goes to the LMS, by choice. */
+        dropped: assessment.weight === 0,
         sent: sent.get(assessment.assessment_id) ?? 0,
       };
     })
@@ -589,12 +591,14 @@ export const historyEntry = (
   const before = currentProposal(bundle, runId);
   const entry: Record<string, unknown> = { at, action, summary };
   if (by) entry.by = by;
-  if (action === "change") {
-    entry.before = {
-      components: before.components.map(stripped),
-      points: before.points,
-      assignments: before.assignments,
-    };
-  }
+  const state = {
+    components: before.components.map(stripped),
+    points: before.points,
+    assignments: before.assignments,
+  };
+  if (action === "change") entry.before = state;
+  // What was locked, so `ainar validate` can tell a change made around the lock
+  // (`grading.locked_changed`). Not `before`: a lock replaces nothing to restore.
+  if (action === "lock") entry.locked_as = state;
   return entry;
 };
