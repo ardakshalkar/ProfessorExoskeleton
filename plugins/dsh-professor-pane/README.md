@@ -750,6 +750,19 @@ reloading off.
 `server/router.js` says what `c` carries, and the table refuses a path claimed
 twice.
 
+**What redraws, and when** — `client/data.js`. There is no pane-wide reload
+counter: every reader follows a version of the *areas* it reads. The course
+files are fingerprinted per area (the first folder or file under a course:
+`assessments`, `modules`, `records`, `version`, …), one watcher per session polls
+that, and only readers of an area that moved ask again — whoever moved it. A
+write the pane makes calls `wrote(sessionId, tags)`: tags name what it changed
+outside the course files (`integrations`, `syncs`, `scans`, `files`, `grading`,
+`defence`), and the revision is asked at once for what it changed inside them.
+Readers keep their last answer on screen while they ask again; frames are never
+remounted to refresh — course mode swaps the new page in, a shared widget's page
+is replaced only once the new one is in hand, and not at all if it is the same.
+A new reader picks its areas from `AREAS`; a new write names its tags.
+
 ### The routes
 
 | Path | Answers |
@@ -768,7 +781,7 @@ twice.
 | `POST /professor-pane/api/canvas/marks?run=` | an assessment's marks, per subgroup's Canvas course: `lms plan`, or `lms push --confirm` with `confirm: true`; `link: {group, assignmentId}` binds an existing Canvas assignment first. Body is `{assessment, confirm?, link?}` |
 | `POST /professor-pane/api/publish?run=` | plan or perform one publication; body is `{target, assessment, repo, group, message, edit, confirm}`. Without `confirm` it reads and writes nothing |
 | `POST /professor-pane/api/approve` | gone since 2026-09-29: answers 410 and says where approval went |
-| `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/`, for the pane's refresh poll |
+| `GET /professor-pane/api/revision?session=` | a hash over every YAML under `courses/`, and one per area (`assessments`, `modules`, `records`, `version`, …), for the pane's refresh poll; `&fresh=1` skips the one-second cache, for the check right after the pane's own write |
 | `GET /professor-pane/api/scans?run=&assessment=&names=` | the Scans tab: the run's scanned piles, the six steps with how far each has got, every planned paper with its lane and candidates. Written and roster names only with `names=1` |
 | `GET /professor-pane/api/scans/crop?run=&assessment=&file=&pages=` | the top of a paper's first page, from the edge to 2.2 inches (the title, the Name line, and a name written above the title) as PNG, drawn by `pdftoppm` and kept in the private `_inbox/_crops/`. With `whole=N`, page N of the paper whole at 45 dpi — how two papers that resolve to one student are compared |
 | `POST /professor-pane/api/scans/assign?run=&assessment=` | say who papers are; body is one `{pages, file, student \| reject \| skip}`, or `{papers: [...]}` of them from the review. Spawns `ainar scans assign --assignments` |

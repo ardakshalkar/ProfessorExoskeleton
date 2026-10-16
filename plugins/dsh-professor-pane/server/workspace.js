@@ -290,10 +290,23 @@ export const withRecordPaths = (data, root, courseId, term, entries) => {
  * Entries are sorted, so two machines walking the same tree agree, and the
  * revision does not flicker because a directory listing came back in a
  * different order.
+ *
+ * `areas` is the same fingerprint split by where a file sits in its course:
+ * the first folder or file under `courses/<COURSE>/`, extension dropped —
+ * `assessments`, `modules`, `activities`, `records`, `version` — merged across
+ * courses, plus `defence` for the drafted questions below. The pane redraws
+ * only what reads an area that moved (`client/data.js`).
  */
 const walkRevision = (root) => {
   const hash = createHash("sha256");
+  const areaHashes = new Map();
   let files = 0;
+  const areaOf = (full) => {
+    const parts = relative(join(root, "courses"), full).split(/[\\/]/);
+    if (parts[0] === "..") return "defence";
+    const first = parts.length > 2 ? parts[1] : parts[parts.length - 1];
+    return first.replace(/\.ya?ml$/i, "");
+  };
 
   const walk = (directory, depth) => {
     // Deep enough for <collection>/<file>.yaml with room to
@@ -319,9 +332,11 @@ const walkRevision = (root) => {
       } catch {
         continue;
       }
-      hash.update(full);
-      hash.update(String(stats.mtimeMs));
-      hash.update(String(stats.size));
+      const stamp = `${full}\0${stats.mtimeMs}\0${stats.size}\0`;
+      hash.update(stamp);
+      const area = areaOf(full);
+      if (!areaHashes.has(area)) areaHashes.set(area, createHash("sha256"));
+      areaHashes.get(area).update(stamp);
       files += 1;
     }
   };
@@ -340,7 +355,11 @@ const walkRevision = (root) => {
   for (const run of runs.sort((a, b) => (a.name < b.name ? -1 : 1))) {
     walk(join(root, "output", run.name, "defence"), 5);
   }
-  return { revision: hash.digest("hex").slice(0, 16), files };
+  const areas = {};
+  for (const [area, areaHash] of [...areaHashes].sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    areas[area] = areaHash.digest("hex").slice(0, 12);
+  }
+  return { revision: hash.digest("hex").slice(0, 16), files, areas };
 };
 
 /**
@@ -360,10 +379,12 @@ const walkRevision = (root) => {
 const REVISION_TTL_MS = 1000;
 const REVISIONS = new Map();
 
-export const revisionDocument = (root) => {
+// `fresh`: the pane asking right after its own write, when an answer from a
+// moment ago would predate the write it wants to see.
+export const revisionDocument = (root, fresh = false) => {
   const now = Date.now();
   const found = REVISIONS.get(root);
-  if (found && now - found.at < REVISION_TTL_MS) return found.value;
+  if (!fresh && found && now - found.at < REVISION_TTL_MS) return found.value;
   const value = walkRevision(root);
   REVISIONS.set(root, { at: now, value });
   return value;

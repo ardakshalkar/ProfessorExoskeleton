@@ -1532,57 +1532,6 @@ var PLACE_SHOWN_EVENT = "professor-pane:place-shown";
 function scoped(path, sessionId) {
   return path + (path.indexOf("?") === -1 ? "?" : "&") + "session=" + encodeURIComponent(sessionId);
 }
-var REVISION_POLL_MS = 2500;
-function useRevisionWatch(url, onChange) {
-  const seen = React.useRef(null);
-  const changed = React.useRef(onChange);
-  changed.current = onChange;
-  React.useEffect(() => {
-    if (url === null) return void 0;
-    seen.current = null;
-    let live = true;
-    let timer = null;
-    const check = () => {
-      if (!live) return;
-      fetch(url, { headers: { accept: "application/json" } }).then((response) => response.json()).then((value) => {
-        if (!live || !value || typeof value.revision !== "string") return;
-        if (seen.current === null) {
-          seen.current = value.revision;
-          return;
-        }
-        if (seen.current !== value.revision) {
-          seen.current = value.revision;
-          changed.current();
-        }
-      }).catch(() => {
-      });
-    };
-    const start = () => {
-      if (timer !== null) return;
-      timer = setInterval(check, REVISION_POLL_MS);
-    };
-    const stop = () => {
-      if (timer === null) return;
-      clearInterval(timer);
-      timer = null;
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") {
-        check();
-        start();
-      } else {
-        stop();
-      }
-    };
-    onVisibility();
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      live = false;
-      stop();
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [url]);
-}
 var SUBVIEWS = {
   tasks: [
     { id: "tasks", label: "Pending" },
@@ -7079,6 +7028,114 @@ function CourseIntegrations(props) {
   );
 }
 
+// client/data.js
+var versions = /* @__PURE__ */ new Map();
+var listeners = /* @__PURE__ */ new Set();
+var bump = (areas) => {
+  if (!areas.length) return;
+  for (const area of new Set(areas)) versions.set(area, (versions.get(area) ?? 0) + 1);
+  versions.set("*", (versions.get("*") ?? 0) + 1);
+  for (const listener of listeners) listener();
+};
+var versionOf = (areas) => {
+  if (areas.includes("*")) return versions.get("*") ?? 0;
+  let sum = 0;
+  for (const area of areas) sum += versions.get(area) ?? 0;
+  return sum;
+};
+var subscribe = (listener) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+function useVersion(areas) {
+  const key = areas.join(",");
+  const read = React.useCallback(() => versionOf(key.split(",")), [key]);
+  return React.useSyncExternalStore(subscribe, read, read);
+}
+var POLL_MS = 2500;
+var watchers = /* @__PURE__ */ new Map();
+var watcherFor = (sessionId) => {
+  if (watchers.has(sessionId)) return watchers.get(sessionId);
+  const url = scoped(BASE + "/api/revision", sessionId);
+  const watcher = { users: 0, seen: null, timer: null, inflight: null };
+  watcher.check = (fresh = false) => {
+    if (watcher.inflight && !fresh) return watcher.inflight;
+    const asked = fetch(url + (fresh ? "&fresh=1" : ""), { headers: { accept: "application/json" } }).then((response) => response.json()).then((value) => {
+      if (!value || typeof value.revision !== "string") return;
+      const before = watcher.seen;
+      watcher.seen = value;
+      if (before === null || before.revision === value.revision) return;
+      if (!value.areas || !before.areas) return bump(["*"]);
+      const moved = [];
+      for (const area of /* @__PURE__ */ new Set([...Object.keys(before.areas), ...Object.keys(value.areas)])) {
+        if (before.areas[area] !== value.areas[area]) moved.push(area);
+      }
+      bump(moved.length ? moved : ["*"]);
+    }).catch(() => {
+    }).finally(() => {
+      if (watcher.inflight === asked) watcher.inflight = null;
+    });
+    watcher.inflight = asked;
+    return asked;
+  };
+  const start = () => {
+    if (watcher.timer === null) watcher.timer = setInterval(() => watcher.check(), POLL_MS);
+  };
+  const stop = () => {
+    if (watcher.timer !== null) clearInterval(watcher.timer);
+    watcher.timer = null;
+  };
+  watcher.onVisibility = () => {
+    if (document.visibilityState === "visible") {
+      watcher.check();
+      start();
+    } else {
+      stop();
+    }
+  };
+  watcher.mount = () => {
+    watcher.users += 1;
+    if (watcher.users === 1) {
+      watcher.onVisibility();
+      document.addEventListener("visibilitychange", watcher.onVisibility);
+    }
+  };
+  watcher.unmount = () => {
+    watcher.users -= 1;
+    if (watcher.users > 0) return;
+    stop();
+    document.removeEventListener("visibilitychange", watcher.onVisibility);
+    watchers.delete(sessionId);
+  };
+  watchers.set(sessionId, watcher);
+  return watcher;
+};
+function watchSession(sessionId) {
+  const watcher = watcherFor(sessionId);
+  watcher.mount();
+  return () => watcher.unmount();
+}
+function useWorkspaceWatch(sessionId) {
+  React.useEffect(() => sessionId ? watchSession(sessionId) : void 0, [sessionId]);
+}
+function wrote(sessionId, tags = []) {
+  bump(tags);
+  const watcher = sessionId ? watchers.get(sessionId) : null;
+  if (watcher) return watcher.check(true);
+  bump(["*"]);
+  return Promise.resolve();
+}
+var AREAS = {
+  everything: ["*"],
+  integrations: ["integrations", "version", "course", "assessments"],
+  syncs: ["syncs", "records", "assessments", "integrations"],
+  marks: ["records", "assessments", "syncs", "integrations", "grading"],
+  grading: ["grading", "version", "assessments", "records"],
+  files: ["files", "scans", "defence", "records"],
+  scans: ["scans", "files", "records", "assessments"],
+  grade: ["records", "assessments", "items", "grading"]
+};
+
 // client/course-escape.js
 var courseModeEscape = ({ covered }) => covered ? "none" : "close";
 
@@ -7134,7 +7191,7 @@ var gpClose = (a, b) => Math.abs(a - b) <= 1e-3;
 function GradebookPanes(props) {
   const [revision, setRevision] = React.useState(0);
   const [editing, setEditing] = React.useState(null);
-  const bump = () => {
+  const bump2 = () => {
     setRevision((value) => value + 1);
     if (props.onWrite) props.onWrite();
   };
@@ -7157,7 +7214,7 @@ function GradebookPanes(props) {
         sessionId: props.sessionId,
         revision: key,
         onEdit: () => setEditing({ start: null, label: null }),
-        onWrite: bump
+        onWrite: bump2
       })
     ),
     editing ? h(PolicyEditor, {
@@ -7170,7 +7227,7 @@ function GradebookPanes(props) {
       onClose: () => setEditing(null),
       onWritten: () => {
         setEditing(null);
-        bump();
+        bump2();
       }
     }) : null
   );
@@ -7317,8 +7374,8 @@ function usePolicy(runId, sessionId, revision) {
   const [attempt, setAttempt] = React.useState(0);
   React.useEffect(() => {
     let live = true;
-    setState({ phase: "loading" });
-    gpGet("/api/grading/policy", runId, sessionId, "&r=" + encodeURIComponent(revision) + "&a=" + attempt).then((value) => live && setState({ phase: "ready", value }));
+    setState((old) => old.phase === "ready" && old.runId === runId ? old : { phase: "loading" });
+    gpGet("/api/grading/policy", runId, sessionId, "&r=" + encodeURIComponent(revision) + "&a=" + attempt).then((value) => live && setState({ phase: "ready", value, runId }));
     return () => {
       live = false;
     };
@@ -8773,6 +8830,7 @@ function WidgetFrame(props) {
   const [doc, setDoc] = React.useState(null);
   const frameRef = React.useRef(null);
   const loaded = React.useRef(null);
+  const shownHtml = React.useRef(null);
   React.useEffect(() => {
     let live = true;
     const same = loaded.current === url && frameRef.current !== null;
@@ -8791,10 +8849,18 @@ function WidgetFrame(props) {
       if (!live) return;
       if (!same) {
         loaded.current = url;
+        shownHtml.current = value.html;
+        setDoc(value);
+        return;
+      }
+      if (!props.swap) {
+        if (value.html === shownHtml.current) return;
+        shownHtml.current = value.html;
         setDoc(value);
         return;
       }
       swapInto(frameRef.current, value.html).then((swapped) => {
+        shownHtml.current = value.html;
         if (!live) return;
         setDoc(
           (old) => swapped && old && !old.failed ? Object.assign({}, value, { html: old.html }) : value
@@ -8918,6 +8984,12 @@ var resolveRequest = (request) => {
 var CONNECTION_STATE = { ready: "connected", partial: "partly set up", absent: "not set up" };
 function CourseMode(props) {
   const close = props.onClose;
+  const everything = useVersion(AREAS.everything);
+  const integrationsVersion = useVersion(AREAS.integrations);
+  const syncsVersion = useVersion(AREAS.syncs);
+  const marksVersion = useVersion(AREAS.marks);
+  const gradingVersion = useVersion(AREAS.grading);
+  const filesVersion = useVersion(AREAS.files);
   const [student, setStudent] = React.useState(false);
   const request = resolveRequest(props.request || null);
   const known = (id, list) => list.some((entry) => entry.id === id);
@@ -8964,7 +9036,7 @@ function CourseMode(props) {
   }, []);
   React.useEffect(() => {
     setWeek(stepped.current);
-  }, [props.reload, props.drafts]);
+  }, [everything, props.drafts]);
   const chooseMode = (id) => {
     if (id === "teaching") setWeek(stepped.current);
     setMode(id);
@@ -9005,11 +9077,11 @@ function CourseMode(props) {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [close, props.covered, props.chat]);
   const wiring = useJson(
-    scoped(BASE + "/api/integrations?run=" + encodeURIComponent(props.runId || "") + "&r=" + props.reload, props.sessionId)
+    scoped(BASE + "/api/integrations?run=" + encodeURIComponent(props.runId || "") + "&r=" + integrationsVersion, props.sessionId)
   );
   const canvas = wiring.phase === "ready" && wiring.value && !wiring.value.error ? (wiring.value.integrations || []).find((row) => row.id === "canvas") || null : null;
   const syncs = useJson(
-    scoped(BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + props.reload, props.sessionId)
+    scoped(BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + syncsVersion, props.sessionId)
   );
   const shown = React.useRef({ canvas: null, waiting: 0 });
   if (wiring.phase === "ready") shown.current.canvas = canvas;
@@ -9026,7 +9098,7 @@ function CourseMode(props) {
         h(Files, {
           runId: props.runId,
           sessionId: props.sessionId,
-          revision: props.reload,
+          revision: filesVersion,
           onUpload: props.onUpload,
           onOpenScans: props.onOpenScans,
           onRecordings: props.onRecordings,
@@ -9041,8 +9113,8 @@ function CourseMode(props) {
         subOf("settings") === "preferences" ? h(Preferences, { courseId: props.courseId || "", term: props.term || "", sessionId: props.sessionId }) : h(Integrations, {
           runId: props.runId,
           sessionId: props.sessionId,
-          onWrite: props.onWrite,
-          revision: props.reload,
+          onWrite: () => props.wrote(["integrations"]),
+          revision: integrationsVersion,
           names: props.names,
           ask: props.ask,
           focus: props.integrationsFocus,
@@ -9052,7 +9124,8 @@ function CourseMode(props) {
     }
     if (view === "concepts") {
       return h(WidgetFrame, {
-        key: "progress|" + props.dark + "|" + props.drafts + "|" + props.reload,
+        key: "progress|" + props.dark + "|" + props.drafts,
+        revision: everything,
         view: "progress",
         runId: props.runId,
         sessionId: props.sessionId,
@@ -9064,7 +9137,8 @@ function CourseMode(props) {
     if (view === "materials") {
       const sub = subOf("materials");
       return h(WidgetFrame, {
-        key: sub + "|" + props.dark + "|" + props.drafts + "|" + props.reload,
+        key: sub + "|" + props.dark + "|" + props.drafts,
+        revision: everything,
         view: sub,
         runId: props.runId,
         sessionId: props.sessionId,
@@ -9075,7 +9149,8 @@ function CourseMode(props) {
     }
     if (view === "students") {
       return h(WidgetFrame, {
-        key: "students|" + props.names + "|" + props.dark + "|" + props.reload,
+        key: "students|" + props.names + "|" + props.dark,
+        revision: everything,
         view: "students",
         runId: props.runId,
         sessionId: props.sessionId,
@@ -9091,21 +9166,22 @@ function CourseMode(props) {
         h(GradebookStatus, {
           runId: props.runId,
           sessionId: props.sessionId,
-          revision: props.reload,
+          revision: marksVersion,
           names: props.names,
           ask: props.ask,
-          onWrite: props.onWrite
+          onWrite: () => props.wrote(["grading"])
         }),
         h(GradebookPanes, {
           runId: props.runId,
           sessionId: props.sessionId,
-          revision: props.reload,
+          revision: gradingVersion,
           names: props.names,
           ask: props.ask,
-          onWrite: props.onWrite
+          onWrite: () => props.wrote(["grading"])
         }),
         h(WidgetFrame, {
-          key: "gradebook|" + props.dark + "|" + props.drafts + "|" + props.reload,
+          key: "gradebook|" + props.dark + "|" + props.drafts,
+          revision: everything,
           view: "gradebook",
           runId: props.runId,
           sessionId: props.sessionId,
@@ -9119,15 +9195,16 @@ function CourseMode(props) {
       return h(Unpublished, {
         runId: props.runId,
         sessionId: props.sessionId,
-        revision: props.reload,
-        onWrite: props.onWrite,
+        revision: marksVersion,
+        onWrite: () => props.wrote(["integrations", "grading"]),
         openPublish: props.openPublish,
         ask: props.ask,
         names: props.names
       });
     }
     return h(WidgetFrame, {
-      key: taskSub + "|" + props.names + "|" + props.dark + "|" + props.drafts + "|" + props.reload,
+      key: taskSub + "|" + props.names + "|" + props.dark + "|" + props.drafts,
+      revision: everything,
       view: taskSub,
       runId: props.runId,
       sessionId: props.sessionId,
@@ -9275,7 +9352,8 @@ function CourseMode(props) {
             // Not keyed by the write counters: a write swaps newer records into
             // the open page, so a moved bar lands where the professor is looking.
             h(WidgetFrame, {
-              revision: props.reload + "." + (props.planned || 0),
+              revision: everything,
+              swap: true,
               view: "course",
               runId: props.runId,
               sessionId: props.sessionId,
@@ -9634,9 +9712,9 @@ var remember = (workspaceId) => {
   }
 };
 function useNavigatorData(sessionId) {
-  const [revision, setRevision] = React.useState(0);
+  useWorkspaceWatch(sessionId);
+  const revision = useVersion(AREAS.everything);
   const [state, setState] = React.useState({ sessionId: null, value: null });
-  useRevisionWatch(sessionId ? scoped(BASE + "/api/revision", sessionId) : null, () => setRevision((count) => count + 1));
   React.useEffect(() => {
     if (!sessionId) return void 0;
     let live = true;
@@ -12034,8 +12112,12 @@ function ProfessorPane(props) {
   const [integrationsFocus, setIntegrationsFocus] = React.useState({ service: null, tick: 0 });
   const [drafts, setDrafts] = React.useState(true);
   const [names, setNames] = React.useState(true);
-  const [reload, setReload] = React.useState(0);
-  const [planned, setPlanned] = React.useState(0);
+  const everything = useVersion(AREAS.everything);
+  const marksVersion = useVersion(AREAS.marks);
+  const gradeVersion = useVersion(AREAS.grade);
+  const scansVersion = useVersion(AREAS.scans);
+  const deskVersion = useVersion(AREAS.files);
+  const write = (tags) => wrote(props.sessionId, tags);
   const [publishing, setPublishing] = React.useState(null);
   const openPublish = (target, extra) => setPublishing({
     target,
@@ -12101,9 +12183,7 @@ function ProfessorPane(props) {
   }, [props.sessionId]);
   const dark = useDark();
   const runs = useJson(scoped(BASE + "/api/runs", props.sessionId));
-  useRevisionWatch(scoped(BASE + "/api/revision", props.sessionId), () => {
-    setReload((count) => count + 1);
-  });
+  useWorkspaceWatch(props.sessionId);
   React.useEffect(() => {
     const onMessage = (event) => {
       const data = event.data;
@@ -12131,7 +12211,7 @@ function ProfessorPane(props) {
             props.sessionId
           ),
           { method: "POST" }
-        ).then(() => setReload((count) => count + 1)).catch(() => setReload((count) => count + 1));
+        ).then(() => write(["defence"])).catch(() => write(["defence"]));
         return;
       }
       if (data.kind === "defence-audio") {
@@ -12145,13 +12225,13 @@ function ProfessorPane(props) {
           ),
           { method: "POST" }
         ).then((response) => response.json()).then((result) => {
-          setReload((count) => count + 1);
+          write(["defence"]);
           if (!result.ok) {
             window.alert(String(result.error || result.output || "the defence could not be started").trim().split("\n").slice(-2).join(" "));
             return;
           }
           setDesk({ assessment: data.assessment, student: data.student });
-        }).catch(() => setReload((count) => count + 1));
+        }).catch(() => write(["defence"]));
         return;
       }
       if (data.kind === "homework-forks") {
@@ -12167,8 +12247,8 @@ function ProfessorPane(props) {
           if (!result.ok) {
             window.alert(String(result.error || result.output || "the forks could not be looked up").trim().split("\n").slice(-2).join(" "));
           }
-          setReload((count) => count + 1);
-        }).catch(() => setReload((count) => count + 1));
+          write(["files", "defence"]);
+        }).catch(() => write(["files", "defence"]));
         return;
       }
       if (data.kind === "defence-fork") {
@@ -12177,7 +12257,7 @@ function ProfessorPane(props) {
         if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
         if (typeof data.url !== "string" || !/^https:\/\/\S+$/.test(data.url.trim())) {
           window.alert("A fork link starts with https://");
-          setReload((count) => count + 1);
+          write(["defence"]);
           return;
         }
         fetch(
@@ -12191,8 +12271,8 @@ function ProfessorPane(props) {
             const said = String(result.error || result.output || "the link was not saved").trim().split("\n").slice(-2).join(" ");
             window.alert(said);
           }
-          setReload((count) => count + 1);
-        }).catch(() => setReload((count) => count + 1));
+          write(["defence"]);
+        }).catch(() => write(["defence"]));
         return;
       }
       if (data.kind === "defence-check") {
@@ -12207,7 +12287,7 @@ function ProfessorPane(props) {
             props.sessionId
           ),
           { method: "POST" }
-        ).then(() => setReload((count) => count + 1)).catch(() => setReload((count) => count + 1));
+        ).then(() => write(["defence"])).catch(() => write(["defence"]));
         return;
       }
       if (data.kind === "defence") {
@@ -12221,7 +12301,7 @@ function ProfessorPane(props) {
           ),
           { method: "POST" }
         ).then((response) => response.json()).then((result) => {
-          setReload((count) => count + 1);
+          write(["defence"]);
           if (result.ok && result.ask) {
             props.ask(result.ask);
             return;
@@ -12230,7 +12310,7 @@ function ProfessorPane(props) {
           props.ask(
             "/defend-submission " + data.assessment + " " + run + " " + data.student + " — the clone failed: " + said
           );
-        }).catch(() => setReload((count) => count + 1));
+        }).catch(() => write(["defence"]));
         return;
       }
       if (data.kind === "dates") {
@@ -12243,8 +12323,8 @@ function ProfessorPane(props) {
           body: JSON.stringify({ assessment: data.assessment, opens_at: stamp(data.opens_at), due_at: stamp(data.due_at) })
         }).then((response) => response.json()).then((result) => {
           if (result.error) window.alert(String(result.error));
-          setPlanned((count) => count + 1);
-        }).catch(() => setPlanned((count) => count + 1));
+          write([]);
+        }).catch(() => write([]));
         return;
       }
       if (data.kind === "topic") {
@@ -12264,8 +12344,8 @@ function ProfessorPane(props) {
           body: JSON.stringify({ moves })
         }).then((response) => response.json()).then((result) => {
           if (result.error) window.alert(String(result.error));
-          setPlanned((count) => count + 1);
-        }).catch(() => setPlanned((count) => count + 1));
+          write([]);
+        }).catch(() => write([]));
         return;
       }
       if (data.kind === "grade" || data.kind === "scans") {
@@ -12361,7 +12441,7 @@ function ProfessorPane(props) {
           text: result.output || "(the command said nothing)"
         }
       );
-      if (confirm && result.ok) setReload((value) => value + 1);
+      if (confirm && result.ok) write([]);
     }).catch(
       (error) => setPublishing((state) => state && { ...state, phase: "error", text: String(error) })
     );
@@ -12384,7 +12464,7 @@ function ProfessorPane(props) {
     return h(Inspector, {
       runId: current.runId,
       sessionId: props.sessionId,
-      revision: reload + "." + planned,
+      revision: everything,
       mention: mentionAndShow,
       openPlace,
       key: current.runId
@@ -12479,7 +12559,7 @@ function ProfessorPane(props) {
     current ? h(SheetNotice, {
       runId: current.runId,
       sessionId: props.sessionId,
-      revision: reload,
+      revision: marksVersion,
       key: "notice|" + current.runId,
       onOpen: () => openPlace({ view: "gradebook" }),
       onSync: () => {
@@ -12504,8 +12584,6 @@ function ProfessorPane(props) {
       dark,
       drafts,
       setDrafts,
-      reload,
-      planned,
       covered: material !== null || publishing !== null || uploading || batch || desk !== null || grading !== null || scansPile !== null,
       onPublish: () => openPublish("page"),
       onUpload: () => setUploading(true),
@@ -12518,7 +12596,8 @@ function ProfessorPane(props) {
       setNames,
       ask: props.ask,
       openPublish,
-      onWrite: () => setReload((value) => value + 1),
+      // Each view inside names what its own writes changed.
+      wrote: write,
       // For Course settings: Preferences is per course and term, and
       // Integrations scrolls to the card a jump named.
       courseId: current.courseId,
@@ -12538,7 +12617,7 @@ function ProfessorPane(props) {
       assessment: desk.assessment,
       student: desk.student,
       ask: props.ask,
-      reload,
+      reload: deskVersion,
       onClose: () => setDesk(null)
     }) : null,
     grading && current ? h(GradeBoard, {
@@ -12547,9 +12626,9 @@ function ProfessorPane(props) {
       assessmentId: grading.assessment,
       title: grading.label,
       names,
-      revision: reload,
+      revision: gradeVersion,
       ask: props.ask,
-      onWrite: () => setReload((value) => value + 1),
+      onWrite: () => write(["grading"]),
       onClose: () => setGrading(null)
     }) : null,
     scansPile && current ? h(ScansModal, {
@@ -12557,9 +12636,9 @@ function ProfessorPane(props) {
       sessionId: props.sessionId,
       pile: scansPile,
       names,
-      revision: reload,
+      revision: scansVersion,
       ask: props.ask,
-      onWrite: () => setReload((value) => value + 1),
+      onWrite: () => write(["scans", "files"]),
       onClose: () => setScansPile(null)
     }) : null,
     batch && current ? h(BatchModal, {

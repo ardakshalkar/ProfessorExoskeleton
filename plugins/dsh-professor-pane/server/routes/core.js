@@ -24,8 +24,8 @@ export const routes = [
   {
     paths: ["/api/revision"],
     handle(c) {
-      const { res, root } = c;
-      return sendJson(res, 200, revisionDocument(root));
+      const { res, url, root } = c;
+      return sendJson(res, 200, revisionDocument(root, url.searchParams.get("fresh") === "1"));
     },
   },
   // The left sidebar's course block: the run, this week, the counts on its

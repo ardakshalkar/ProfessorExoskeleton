@@ -13,7 +13,8 @@ import { PublishModal } from "./publish.js";
 import { h, React } from "./react.js";
 import { GradeBoard } from "./grade-board.js";
 import { ScansModal } from "./scans.js";
-import { BASE, scoped, useRevisionWatch } from "./tabs.js";
+import { BASE, scoped } from "./tabs.js";
+import { AREAS, useVersion, useWorkspaceWatch, wrote } from "./data.js";
 import { BatchModal, UploadModal } from "./upload.js";
 
 // ----------------------------------------------------------------- pane
@@ -62,14 +63,17 @@ export function ProfessorPane(props) {
   const [names, setNames] = React.useState(true);
 
 
-  // Bumped after a write, and part of the frame's key, so the documents are
-  // re-fetched. Without it the pane would go on drawing the course as it was
-  // before the approval it just performed.
-  const [reload, setReload] = React.useState(0);
-  // Bumped after Planning saves a date or a topic. Only the course frame and
-  // the inspector read it: a move changes the weeks and what waits, and
-  // nothing the sheet notice, Canvas line or other views draw.
-  const [planned, setPlanned] = React.useState(0);
+  // What changed, per area of the course and per tag (client/data.js): each
+  // reader below follows what it reads, so a write redraws only those. The
+  // course mode, the inspector and the navigator read across everything.
+  const everything = useVersion(AREAS.everything);
+  const marksVersion = useVersion(AREAS.marks);
+  const gradeVersion = useVersion(AREAS.grade);
+  const scansVersion = useVersion(AREAS.scans);
+  const deskVersion = useVersion(AREAS.files);
+  // After a write made here: `tags` for what it changed outside the course
+  // files; what it changed inside them the revision says at once.
+  const write = (tags) => wrote(props.sessionId, tags);
 
   // The publication the professor is looking at, or null.
   //
@@ -226,12 +230,10 @@ export function ProfessorPane(props) {
   // a different workspace and therefore a different set of courses.
   const runs = useJson(scoped(BASE + "/api/runs", props.sessionId));
 
-  // Anything that writes to the workspace redraws the pane, whoever wrote
-  // it. `setReload` is the same counter an approval bumps, so a change
-  // arriving from outside and one made here take the identical path.
-  useRevisionWatch(scoped(BASE + "/api/revision", props.sessionId), () => {
-    setReload((count) => count + 1);
-  });
+  // Anything that writes to the course files redraws what reads them, whoever
+  // wrote it — the assistant, an editor, this pane. One watcher per session,
+  // shared with the navigator.
+  useWorkspaceWatch(props.sessionId);
 
   // Two things the widgets send up. They reach the harness as a
   // postMessage from a sandboxed frame, so the origin check is `null` — an
@@ -287,8 +289,8 @@ export function ProfessorPane(props) {
           ),
           { method: "POST" },
         )
-          .then(() => setReload((count) => count + 1))
-          .catch(() => setReload((count) => count + 1));
+          .then(() => write(["defence"]))
+          .catch(() => write(["defence"]));
         return;
       }
       // A fork the student brought in person (`defence fork`). A link the
@@ -311,14 +313,14 @@ export function ProfessorPane(props) {
         )
           .then((response) => response.json())
           .then((result) => {
-            setReload((count) => count + 1);
+            write(["defence"]);
             if (!result.ok) {
               window.alert(String(result.error || result.output || "the defence could not be started").trim().split("\n").slice(-2).join(" "));
               return;
             }
             setDesk({ assessment: data.assessment, student: data.student });
           })
-          .catch(() => setReload((count) => count + 1));
+          .catch(() => write(["defence"]));
         return;
       }
       // *Find forks*: the starter's public forks, looked up on GitHub by the
@@ -339,9 +341,9 @@ export function ProfessorPane(props) {
             if (!result.ok) {
               window.alert(String(result.error || result.output || "the forks could not be looked up").trim().split("\n").slice(-2).join(" "));
             }
-            setReload((count) => count + 1);
+            write(["files", "defence"]);
           })
-          .catch(() => setReload((count) => count + 1));
+          .catch(() => write(["files", "defence"]));
         return;
       }
       if (data.kind === "defence-fork") {
@@ -350,7 +352,7 @@ export function ProfessorPane(props) {
         if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
         if (typeof data.url !== "string" || !/^https:\/\/\S+$/.test(data.url.trim())) {
           window.alert("A fork link starts with https://");
-          setReload((count) => count + 1);
+          write(["defence"]);
           return;
         }
         fetch(
@@ -369,9 +371,9 @@ export function ProfessorPane(props) {
               const said = String(result.error || result.output || "the link was not saved").trim().split("\n").slice(-2).join(" ");
               window.alert(said);
             }
-            setReload((count) => count + 1);
+            write(["defence"]);
           })
-          .catch(() => setReload((count) => count + 1));
+          .catch(() => write(["defence"]));
         return;
       }
       // One rubric criterion checked at the defence (`defence mark --criterion`):
@@ -393,8 +395,8 @@ export function ProfessorPane(props) {
           ),
           { method: "POST" },
         )
-          .then(() => setReload((count) => count + 1))
-          .catch(() => setReload((count) => count + 1));
+          .then(() => write(["defence"]))
+          .catch(() => write(["defence"]));
         return;
       }
       if (data.kind === "defence") {
@@ -412,7 +414,7 @@ export function ProfessorPane(props) {
         )
           .then((response) => response.json())
           .then((result) => {
-            setReload((count) => count + 1);
+            write(["defence"]);
             if (result.ok && result.ask) {
               props.ask(result.ask);
               return;
@@ -423,7 +425,7 @@ export function ProfessorPane(props) {
                 " — the clone failed: " + said,
             );
           })
-          .catch(() => setReload((count) => count + 1));
+          .catch(() => write(["defence"]));
         return;
       }
       // Planning's drag and its form: a piece of graded work's two dates,
@@ -441,9 +443,9 @@ export function ProfessorPane(props) {
           .then((response) => response.json())
           .then((result) => {
             if (result.error) window.alert(String(result.error));
-            setPlanned((count) => count + 1);
+            write([]);
           })
-          .catch(() => setPlanned((count) => count + 1));
+          .catch(() => write([]));
         return;
       }
       // A topic dragged to another week: its module's week and its meetings'
@@ -468,9 +470,9 @@ export function ProfessorPane(props) {
           .then((response) => response.json())
           .then((result) => {
             if (result.error) window.alert(String(result.error));
-            setPlanned((count) => count + 1);
+            write([]);
           })
-          .catch(() => setPlanned((count) => count + 1));
+          .catch(() => write([]));
         return;
       }
       // From an assessment chip in course mode: the Grade view, or the Scans
@@ -610,7 +612,7 @@ export function ProfessorPane(props) {
         );
         // Publishing can write `extensions.github` back onto the record, so
         // the frames are re-fetched for the same reason approval re-fetches.
-        if (confirm && result.ok) setReload((value) => value + 1);
+        if (confirm && result.ok) write([]);
       })
       .catch((error) =>
         setPublishing((state) => state && { ...state, phase: "error", text: String(error) }),
@@ -647,7 +649,7 @@ export function ProfessorPane(props) {
     return h(Inspector, {
       runId: current.runId,
       sessionId: props.sessionId,
-      revision: reload + "." + planned,
+      revision: everything,
       mention: mentionAndShow,
       openPlace: openPlace,
       key: current.runId,
@@ -767,7 +769,7 @@ export function ProfessorPane(props) {
       ? h(SheetNotice, {
           runId: current.runId,
           sessionId: props.sessionId,
-          revision: reload,
+          revision: marksVersion,
           key: "notice|" + current.runId,
           onOpen: () => openPlace({ view: "gradebook" }),
           onSync: () => {
@@ -796,8 +798,6 @@ export function ProfessorPane(props) {
           dark: dark,
           drafts: drafts,
           setDrafts: setDrafts,
-          reload: reload,
-          planned: planned,
           covered:
             material !== null || publishing !== null || uploading || batch ||
             desk !== null || grading !== null || scansPile !== null,
@@ -812,7 +812,8 @@ export function ProfessorPane(props) {
           setNames: setNames,
           ask: props.ask,
           openPublish: openPublish,
-          onWrite: () => setReload((value) => value + 1),
+          // Each view inside names what its own writes changed.
+          wrote: write,
           // For Course settings: Preferences is per course and term, and
           // Integrations scrolls to the card a jump named.
           courseId: current.courseId,
@@ -834,7 +835,7 @@ export function ProfessorPane(props) {
           assessment: desk.assessment,
           student: desk.student,
           ask: props.ask,
-          reload: reload,
+          reload: deskVersion,
           onClose: () => setDesk(null),
         })
       : null,
@@ -845,9 +846,9 @@ export function ProfessorPane(props) {
           assessmentId: grading.assessment,
           title: grading.label,
           names: names,
-          revision: reload,
+          revision: gradeVersion,
           ask: props.ask,
-          onWrite: () => setReload((value) => value + 1),
+          onWrite: () => write(["grading"]),
           onClose: () => setGrading(null),
         })
       : null,
@@ -857,9 +858,9 @@ export function ProfessorPane(props) {
           sessionId: props.sessionId,
           pile: scansPile,
           names: names,
-          revision: reload,
+          revision: scansVersion,
           ask: props.ask,
-          onWrite: () => setReload((value) => value + 1),
+          onWrite: () => write(["scans", "files"]),
           onClose: () => setScansPile(null),
         })
       : null,

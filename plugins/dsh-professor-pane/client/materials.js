@@ -4,6 +4,7 @@
  */
 
 import { decodeIssues, Message, useJson } from "./common.js";
+import { AREAS, useVersion } from "./data.js";
 import { courseModeEscape } from "./course-escape.js";
 import { GradebookPanes } from "./gradebook.js";
 import { GradebookStatus, Unpublished } from "./marks.js";
@@ -114,6 +115,8 @@ function WidgetFrame(props) {
   // into the open document as a swap (see `swapInto`); any other URL is a
   // different page and replaces the frame.
   const loaded = React.useRef(null);
+  // The HTML the frame is showing now, loaded or swapped in.
+  const shownHtml = React.useRef(null);
   React.useEffect(() => {
     let live = true;
     const same = loaded.current === url && frameRef.current !== null;
@@ -134,12 +137,24 @@ function WidgetFrame(props) {
         if (!live) return;
         if (!same) {
           loaded.current = url;
+          shownHtml.current = value.html;
+          setDoc(value);
+          return;
+        }
+        // A page that cannot swap (a shared widget) is replaced, but the old
+        // one stays up until the new one is in hand — no blank in between —
+        // and not at all when nothing on it moved. A page that swaps always
+        // gets the swap: it is also what closes a form left saving.
+        if (!props.swap) {
+          if (value.html === shownHtml.current) return;
+          shownHtml.current = value.html;
           setDoc(value);
           return;
         }
         // The banner is ours and redraws; the frame keeps its document,
         // and with it the scroll, unless it does not answer the swap.
         swapInto(frameRef.current, value.html).then((swapped) => {
+          shownHtml.current = value.html;
           if (!live) return;
           setDoc((old) =>
             swapped && old && !old.failed ? Object.assign({}, value, { html: old.html }) : value,
@@ -442,6 +457,16 @@ const CONNECTION_STATE = { ready: "connected", partial: "partly set up", absent:
 
 export function CourseMode(props) {
   const close = props.onClose;
+  // What each place reads, followed separately (client/data.js): the weeks
+  // and the course-wide documents read across the course; the settings, the
+  // queues and the gradebook's own panels follow their areas. `props.wrote`
+  // is how a view says what its own write changed.
+  const everything = useVersion(AREAS.everything);
+  const integrationsVersion = useVersion(AREAS.integrations);
+  const syncsVersion = useVersion(AREAS.syncs);
+  const marksVersion = useVersion(AREAS.marks);
+  const gradingVersion = useVersion(AREAS.grading);
+  const filesVersion = useVersion(AREAS.files);
   const [student, setStudent] = React.useState(false);
   // `props.request` is a place pressed in the left sidebar: a reading
   // (`mode`) or a course-wide view (`view`). It decides where course mode
@@ -500,7 +525,7 @@ export function CourseMode(props) {
   }, []);
   React.useEffect(() => {
     setWeek(stepped.current);
-  }, [props.reload, props.drafts]);
+  }, [everything, props.drafts]);
   const chooseMode = (id) => {
     if (id === "teaching") setWeek(stepped.current);
     setMode(id);
@@ -565,7 +590,7 @@ export function CourseMode(props) {
   // Canvas, in one line: the row the Integrations tab's Status view draws,
   // from the same payload. Nothing is computed here but the words.
   const wiring = useJson(
-    scoped(BASE + "/api/integrations?run=" + encodeURIComponent(props.runId || "") + "&r=" + props.reload, props.sessionId),
+    scoped(BASE + "/api/integrations?run=" + encodeURIComponent(props.runId || "") + "&r=" + integrationsVersion, props.sessionId),
   );
   const canvas =
     wiring.phase === "ready" && wiring.value && !wiring.value.error
@@ -575,10 +600,10 @@ export function CourseMode(props) {
   // How many sync rows wait for the professor, for the header line. Read
   // without names: a count needs none.
   const syncs = useJson(
-    scoped(BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + props.reload, props.sessionId),
+    scoped(BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + syncsVersion, props.sessionId),
   );
   // The last answer of each read is kept while the next one loads, so a
-  // confirm or a run — which bump `reload` — does not blank the line.
+  // confirm or a run — which move their versions — does not blank the line.
   const shown = React.useRef({ canvas: null, waiting: 0 });
   if (wiring.phase === "ready") shown.current.canvas = canvas;
   if (syncs.phase === "ready") {
@@ -595,7 +620,7 @@ export function CourseMode(props) {
         h(Files, {
           runId: props.runId,
           sessionId: props.sessionId,
-          revision: props.reload,
+          revision: filesVersion,
           onUpload: props.onUpload,
           onOpenScans: props.onOpenScans,
           onRecordings: props.onRecordings,
@@ -612,8 +637,8 @@ export function CourseMode(props) {
           : h(Integrations, {
               runId: props.runId,
               sessionId: props.sessionId,
-              onWrite: props.onWrite,
-              revision: props.reload,
+              onWrite: () => props.wrote(["integrations"]),
+              revision: integrationsVersion,
               names: props.names,
               ask: props.ask,
               focus: props.integrationsFocus,
@@ -623,7 +648,8 @@ export function CourseMode(props) {
     }
     if (view === "concepts") {
       return h(WidgetFrame, {
-        key: "progress|" + props.dark + "|" + props.drafts + "|" + props.reload,
+        key: "progress|" + props.dark + "|" + props.drafts,
+        revision: everything,
         view: "progress",
         runId: props.runId,
         sessionId: props.sessionId,
@@ -635,7 +661,8 @@ export function CourseMode(props) {
     if (view === "materials") {
       const sub = subOf("materials");
       return h(WidgetFrame, {
-        key: sub + "|" + props.dark + "|" + props.drafts + "|" + props.reload,
+        key: sub + "|" + props.dark + "|" + props.drafts,
+        revision: everything,
         view: sub,
         runId: props.runId,
         sessionId: props.sessionId,
@@ -646,7 +673,8 @@ export function CourseMode(props) {
     }
     if (view === "students") {
       return h(WidgetFrame, {
-        key: "students|" + props.names + "|" + props.dark + "|" + props.reload,
+        key: "students|" + props.names + "|" + props.dark,
+        revision: everything,
         view: "students",
         runId: props.runId,
         sessionId: props.sessionId,
@@ -662,21 +690,22 @@ export function CourseMode(props) {
         h(GradebookStatus, {
           runId: props.runId,
           sessionId: props.sessionId,
-          revision: props.reload,
+          revision: marksVersion,
           names: props.names,
           ask: props.ask,
-          onWrite: props.onWrite,
+          onWrite: () => props.wrote(["grading"]),
         }),
         h(GradebookPanes, {
           runId: props.runId,
           sessionId: props.sessionId,
-          revision: props.reload,
+          revision: gradingVersion,
           names: props.names,
           ask: props.ask,
-          onWrite: props.onWrite,
+          onWrite: () => props.wrote(["grading"]),
         }),
         h(WidgetFrame, {
-          key: "gradebook|" + props.dark + "|" + props.drafts + "|" + props.reload,
+          key: "gradebook|" + props.dark + "|" + props.drafts,
+          revision: everything,
           view: "gradebook",
           runId: props.runId,
           sessionId: props.sessionId,
@@ -690,15 +719,16 @@ export function CourseMode(props) {
       return h(Unpublished, {
         runId: props.runId,
         sessionId: props.sessionId,
-        revision: props.reload,
-        onWrite: props.onWrite,
+        revision: marksVersion,
+        onWrite: () => props.wrote(["integrations", "grading"]),
         openPublish: props.openPublish,
         ask: props.ask,
         names: props.names,
       });
     }
     return h(WidgetFrame, {
-      key: taskSub + "|" + props.names + "|" + props.dark + "|" + props.drafts + "|" + props.reload,
+      key: taskSub + "|" + props.names + "|" + props.dark + "|" + props.drafts,
+      revision: everything,
       view: taskSub,
       runId: props.runId,
       sessionId: props.sessionId,
@@ -860,7 +890,8 @@ export function CourseMode(props) {
           // Not keyed by the write counters: a write swaps newer records into
           // the open page, so a moved bar lands where the professor is looking.
           h(WidgetFrame, {
-            revision: props.reload + "." + (props.planned || 0),
+            revision: everything,
+            swap: true,
             view: "course",
             runId: props.runId,
             sessionId: props.sessionId,

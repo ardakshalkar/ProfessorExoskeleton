@@ -318,8 +318,10 @@ function usePolicy(runId, sessionId, revision) {
   const [attempt, setAttempt] = React.useState(0);
   React.useEffect(() => {
     let live = true;
-    setState({ phase: "loading" });
-    gpGet("/api/grading/policy", runId, sessionId, "&r=" + encodeURIComponent(revision) + "&a=" + attempt).then((value) => live && setState({ phase: "ready", value: value }));
+    // A refresh keeps the policy on screen until the new one is in; only a
+    // different run starts from nothing.
+    setState((old) => (old.phase === "ready" && old.runId === runId ? old : { phase: "loading" }));
+    gpGet("/api/grading/policy", runId, sessionId, "&r=" + encodeURIComponent(revision) + "&a=" + attempt).then((value) => live && setState({ phase: "ready", value: value, runId: runId }));
     return () => {
       live = false;
     };

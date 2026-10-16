@@ -32,7 +32,8 @@
  */
 
 import { h, React } from "./react.js";
-import { BASE, PLACE_SHOWN_EVENT, scoped, useRevisionWatch } from "./tabs.js";
+import { BASE, PLACE_SHOWN_EVENT, scoped } from "./tabs.js";
+import { AREAS, useVersion, useWorkspaceWatch } from "./data.js";
 
 // ------------------------------------------------------------- the request
 
@@ -216,9 +217,11 @@ const remember = (workspaceId) => {
  * flicker the whole left edge of the app.
  */
 function useNavigatorData(sessionId) {
-  const [revision, setRevision] = React.useState(0);
+  // The pane's own watcher when the pane is open (client/data.js shares one
+  // per session); its own while the navigator is the only thing showing.
+  useWorkspaceWatch(sessionId);
+  const revision = useVersion(AREAS.everything);
   const [state, setState] = React.useState({ sessionId: null, value: null });
-  useRevisionWatch(sessionId ? scoped(BASE + "/api/revision", sessionId) : null, () => setRevision((count) => count + 1));
   React.useEffect(() => {
     if (!sessionId) return undefined;
     let live = true;
