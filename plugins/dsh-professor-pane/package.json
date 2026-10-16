@@ -19,6 +19,7 @@
   "files": [
     "index.js",
     "server/",
+    "shared/",
     "lib/client.js",
     "vendor/dots-swarm.js",
     "vendor/dots-swarm.LICENSE",

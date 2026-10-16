@@ -37,6 +37,7 @@ import { BASE, sendErrorPage, sendJson } from "./http.js";
 import { resolveWorkspace, VIEWS } from "./workspace.js";
 import { routes as canvas } from "./routes/canvas.js";
 import { routes as core } from "./routes/core.js";
+import { routes as course } from "./routes/course.js";
 import { routes as defence } from "./routes/defence.js";
 import { routes as files } from "./routes/files.js";
 import { routes as grade } from "./routes/grade.js";
@@ -54,6 +55,7 @@ import { routes as views } from "./routes/views.js";
 export const ROUTES = [
   ...publicRoutes,
   ...core,
+  ...course,
   ...defence,
   ...files,
   ...scans,

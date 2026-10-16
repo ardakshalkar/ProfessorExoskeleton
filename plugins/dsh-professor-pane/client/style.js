@@ -13,7 +13,7 @@
  * a second copy.
  */
 const CSS_ID = "dsh-professor-pane/pane.css";
-const CSS = `
+const PANE_CSS = `
 .pp-root{display:flex;flex-direction:column;height:100%;min-width:0;
   background:var(--dsw-alias-bg-l1,transparent);color:var(--dsw-alias-label-primary,inherit)}
 .pp-head{flex:none;padding:10px 12px 0;border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
@@ -1225,6 +1225,6 @@ if (
   const tag = document.createElement("style");
   tag.dataset.plugin = "dsh-professor-pane";
   tag.dataset.pluginCss = CSS_ID;
-  tag.textContent = CSS;
+  tag.textContent = PANE_CSS;
   document.head.appendChild(tag);
 }

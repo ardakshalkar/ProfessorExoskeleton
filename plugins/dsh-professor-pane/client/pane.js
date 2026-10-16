@@ -428,53 +428,7 @@ export function ProfessorPane(props) {
           .catch(() => write(["defence"]));
         return;
       }
-      // Planning's drag and its form: a piece of graded work's two dates,
-      // written into its record by the server. The redraw is the answer; a
-      // refusal is said in its own words, as the other writes here say it.
-      if (data.kind === "dates") {
-        const run = currentRunRef.current;
-        if (!run || !/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
-        const stamp = (value) => (typeof value === "string" ? value : "");
-        fetch(scoped(BASE + "/api/plan/dates?run=" + encodeURIComponent(run), props.sessionId), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ assessment: data.assessment, opens_at: stamp(data.opens_at), due_at: stamp(data.due_at) }),
-        })
-          .then((response) => response.json())
-          .then((result) => {
-            if (result.error) window.alert(String(result.error));
-            write([]);
-          })
-          .catch(() => write([]));
-        return;
-      }
-      // A topic dragged to another week: its module's week and its meetings'
-      // dates, and the other topic's when the two swap. The server checks
-      // every id; this only passes the shape through.
-      if (data.kind === "topic") {
-        const run = currentRunRef.current;
-        if (!run || !Array.isArray(data.moves) || data.moves.length === 0 || data.moves.length > 2) return;
-        const moves = data.moves.map((move) => ({
-          module: String(move && move.module),
-          week: Number(move && move.week),
-          meetings: (Array.isArray(move && move.meetings) ? move.meetings : []).slice(0, 50).map((m) => ({
-            activity: String(m && m.activity),
-            scheduled_at: String(m && m.scheduled_at),
-          })),
-        }));
-        fetch(scoped(BASE + "/api/plan/topic?run=" + encodeURIComponent(run), props.sessionId), {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ moves }),
-        })
-          .then((response) => response.json())
-          .then((result) => {
-            if (result.error) window.alert(String(result.error));
-            write([]);
-          })
-          .catch(() => write([]));
-        return;
-      }
+      // Planning writes its own dates now (client/course/planning.jsx).
       // From an assessment chip in course mode: the Grade view, or the Scans
       // tab as a window on that pile. Each opens over course mode, which stays.
       if (data.kind === "grade" || data.kind === "scans") {

@@ -701,6 +701,11 @@ server/router.js  the route table: matches a path to a route, resolves the
 server/routes/*.js  the routes, one module per area (core, defence, files,
                 scans, grade, preferences, syncs, integrations, canvas, plan,
                 grading, materials, publish, views, public)
+server/course-data.js  what course mode is drawn from, for /api/course and
+                the server page alike
+shared/*.js     course mode's words, icons and stylesheet, loaded by the
+                server page and bundled into the client alike
+client/course/*.jsx  course mode's four readings, in React, in a shadow root
 server/*.js     host: what the routes assemble, one module per concern
                 (workspace, preferences, integrations, lms-writes, connections,
                 page, course-views, checklist, students, defence-desk,
@@ -796,6 +801,7 @@ A new reader picks its areas from `AREAS`; a new write names its tags.
 | `POST /professor-pane/api/grade/points-only?run=&assessment=` | no written rubric: one criterion per question. Spawns `ainar grade points-only` |
 | `GET /professor-pane/view/<outline\|progress\|gradebook\|tasks>?run=&dark=&drafts=` | one widget document with its payload embedded |
 | `GET /professor-pane/view/checklist?run=&dark=` | what is not finished, drawn here — no widget behind it, and no `drafts=` |
+| `GET /professor-pane/api/course?run=&mode=&drafts=&student=&week=` | what course mode is drawn from, as JSON: the outline payload with material links and record paths, and per reading `status`, `evidence` (teaching, evidence) or `locks` (planning). The pane's React view (client/course/) draws it |
 | `GET /professor-pane/view/course?run=&dark=&drafts=&student=&mode=` | course mode, drawn here: `mode=planning` (structure), `mode=teaching` (this week, with class figures), otherwise the three-column term table; `student=1` draws the record alone, no hole, and is ignored for teaching |
 
 `drafts=1` computes the payload over the whole course, drafts included; without

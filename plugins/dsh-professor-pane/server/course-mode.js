@@ -1,6 +1,14 @@
 /**
  * Course mode: the term plan as the page, and the agent as a press on it.
  *
+ * SINCE 2026-10-16 THE PANE DRAWS COURSE MODE ITSELF, in React, from
+ * `/api/course` (client/course/), and no longer frames this page. This page is
+ * the same course mode as one HTML document — kept for a tab opened on
+ * `/view/course` by itself, for `test/planning-page.mjs`, and as the reference
+ * the React view was checked against. Both are fed by `server/course-data.js`
+ * and share their words, icons and stylesheet (`shared/`), so a change to
+ * what course mode says is made once.
+ *
  * The design argued for in `COURSE-MODE.md` and built first as
  * `prototype/proto.html`, served here for real. One grid for the whole term —
  * Lecture, Graded work, Outcomes — so the columns line up from week 1 to week
@@ -39,30 +47,34 @@
  * writes them (`server/plan-writes.js`).
  */
 
+import { LIGHT, DARK, STYLE } from "../shared/course-style.js";
+import {
+  conceptsOf,
+  datesPrompt,
+  GAP,
+  hasBrief,
+  ICONS,
+  laneOf,
+  LANES,
+  MEETING_ICON,
+  pct,
+  promptFor,
+  RESOURCE_ICON,
+  RESOURCE_WORD,
+  REVISIT_BELOW,
+  runOffset,
+  shortDate,
+  tierOf,
+  titleOf,
+  weightPct,
+  WORK_ICON,
+  WORK_WORD,
+} from "../shared/course-words.js";
+
 const esc = (value) =>
   String(value ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
   );
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** `2026-10-05` as `Oct 5`, by hand: `Date` reads a bare ISO date as UTC. */
-const shortDate = (value) => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? ""));
-  return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}` : "";
-};
-
-/** A weight the payload computed, as a percentage; `null` stays `""`. */
-const pct = (value) => (value === null || value === undefined ? "" : `${Math.round(value * 100)}%`);
-
-/**
- * A weight, to two decimals when it has them: a quiz at 0.0133 and one at
- * 0.0057 are 1.33% and 0.57%, and rounding both to "1%" hid a policy that
- * weights them differently. Whole weights stay whole; the total's float dust
- * (0.99999999…) is rounded away.
- */
-const weightPct = (value) =>
-  value === null || value === undefined ? "" : `${Number((value * 100).toFixed(2))}%`;
 
 // ------------------------------------------------------------------- icons
 
@@ -71,242 +83,14 @@ const weightPct = (value) =>
  * no network and needs none. Stroked in `currentColor`, so a chip's tone —
  * red on a hole, green on a deck, blue on a draft — colours its icon too.
  */
-const SPRITE = `<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
-<symbol id="i-lecture" viewBox="0 0 24 24"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></symbol>
-<symbol id="i-lab" viewBox="0 0 24 24"><path d="M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.6a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4l-5.1-10.2a2 2 0 0 1-.2-.9V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></symbol>
-<symbol id="i-seminar" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/></symbol>
-<symbol id="i-slides" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m10 7.5 4.5 2.5-4.5 2.5z"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
-<symbol id="i-reading" viewBox="0 0 24 24"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></symbol>
-<symbol id="i-data" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
-<symbol id="i-notebook" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="m10 10-2 2 2 2"/><path d="m14 10 2 2-2 2"/></symbol>
-<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
-<symbol id="i-brief" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/></symbol>
-<symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></symbol>
-<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
-<symbol id="i-quiz" viewBox="0 0 24 24"><path d="m3 7 2 2 4-4"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
-<symbol id="i-homework" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
-<symbol id="i-project" viewBox="0 0 24 24"><path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/></symbol>
-<symbol id="i-exam" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
-<symbol id="i-outcome" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
-<symbol id="i-concept" viewBox="0 0 24 24"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/></symbol>
-<symbol id="i-module" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
-<symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></symbol>
-<symbol id="i-misdated" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M12 13.5v3"/><path d="M12 19.2h.01"/></symbol>
-<symbol id="i-weight" viewBox="0 0 24 24"><path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></symbol>
-<symbol id="i-ask" viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></symbol>
-</defs></svg>`;
+const SPRITE =
+  `<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>\n` +
+  Object.entries(ICONS).map(([name, inner]) => `<symbol id="i-${name}" viewBox="0 0 24 24">${inner}</symbol>`).join("\n") +
+  "\n</defs></svg>";
 
 const icon = (name) => `<svg class="i" aria-hidden="true"><use href="#i-${esc(name)}"/></svg>`;
 
-const MEETING_ICON = { lecture: "lecture", lab: "lab", seminar: "seminar", discussion: "seminar",
-  review: "seminar", exercise: "homework", project_work: "project", field_work: "project", reading: "reading" };
-const RESOURCE_ICON = { slides: "slides", reading: "reading", textbook_chapter: "reading", dataset: "data",
-  notebook: "notebook", video: "video", link: "link", tool: "notebook" };
-const RESOURCE_WORD = { textbook_chapter: "chapter", dataset: "dataset" };
-const WORK_ICON = { quiz: "quiz", assignment: "homework", project: "project", exam: "exam",
-  presentation: "lecture", oral_defense: "seminar", participation: "seminar" };
-// `assignment` is the model's word; `homework` is the professor's.
-const WORK_WORD = { assignment: "homework", oral_defense: "defence" };
-const GAP = {
-  module: { icon: "module", verb: "Plan module" },
-  deck: { icon: "slides", verb: "Draft deck" },
-  misdated: { icon: "misdated", verb: "Check date" },
-  deadline: { icon: "calendar", verb: "Set dates" },
-  weight: { icon: "weight", verb: "Set weight" },
-  brief: { icon: "brief", verb: "Write brief" },
-};
-
 // ------------------------------------------------------------------- style
-
-const LIGHT = `--ground:#f3f4f0;--surface:#fff;--sunk:#eceee8;--ink:#171b18;--muted:#5f685f;
---line:#dadfd6;--rule:#e8ebe4;--accent:#2f6b3c;--accent-ink:#245231;--accent-line:#bcd8c2;
---accent-tint:#eef5ef;--flag:#a4362f;--flag-line:#f0c4c0;--flag-tint:#fdf1f0;
---draft:#2f5b8a;--draft-line:#bdd0e4;--draft-tint:#eef3f9;--on-fg:#fff;--hw:#a46a1f;`;
-// DSH's theme is an explicit choice on its body, not the OS setting, so the
-// host passes it and the page does not consult `prefers-color-scheme`.
-const DARK = `--ground:#101310;--surface:#191d1a;--sunk:#141815;--ink:#e6eae4;--muted:#99a399;
---line:#2b312c;--rule:#222722;--accent:#7fc98d;--accent-ink:#a6dcaf;--accent-line:#33513a;
---accent-tint:#18231a;--flag:#e08c85;--flag-line:#6b3a37;--flag-tint:#2a1c1b;
---draft:#8fb6de;--draft-line:#37506b;--draft-tint:#171f27;--on-fg:#0d100d;--hw:#d9a35b;`;
-
-const STYLE = `
-*{box-sizing:border-box}
-body{margin:0;background:var(--ground);color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,"Segoe UI",sans-serif}
-.mono{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace}
-.i{width:1.15em;height:1.15em;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.2em}
-.strip{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:10px 20px;background:var(--ground);border-bottom:1px solid var(--rule)}
-.strip .note{font-size:12px;color:var(--muted);margin-right:auto}
-.tally{display:flex;gap:6px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
-.tally span{font-size:12px;border-radius:999px;padding:2px 9px;border:1px dashed var(--flag-line);color:var(--flag)}
-.tally .soon{border-style:solid;background:var(--flag-tint);font-weight:600}
-.tally .past,.tally .zero{border:1px solid var(--line);color:var(--muted)}
-.banner{margin:14px 20px 0;padding:9px 13px;border-radius:9px;font-size:13px;background:var(--accent-tint);border:1px solid var(--accent-line);color:var(--muted)}
-.banner b{color:var(--accent-ink);font-weight:600}
-.lead{margin:14px 20px 0;padding:12px 14px;border:1px dashed var(--flag-line);border-radius:12px;background:var(--surface);display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
-.lead>b{font-size:14px;font-weight:600;margin-right:4px;display:inline-flex;gap:6px;align-items:center}
-.grid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1.25fr) minmax(0,.75fr);margin:14px 20px 28px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:clip}
-.th{position:sticky;top:var(--strip-h,45px);z-index:10;background:var(--sunk);color:var(--muted);padding:8px 12px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--line)}
-.wkhead{grid-column:1/-1;display:flex;align-items:baseline;gap:6px 10px;flex-wrap:wrap;padding:14px 12px 4px;border-top:1px solid var(--line)}
-.wkhead>b{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
-.wkhead h3{margin:0;font-size:14px;font-weight:600}
-.wkhead h3.none{color:var(--muted);font-weight:450}
-.wkhead,.band{scroll-margin-top:calc(var(--strip-h,45px) + 38px)}
-.wkhead.now,.band.now{background:var(--accent-tint)}.wkhead.now>b{color:var(--accent)}
-.wkhead.past>b,.wkhead.past h3{color:var(--muted)}
-.wkhead .askw{margin-left:auto}
-.concepts{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px;padding:2px 12px 10px;align-items:center;color:var(--muted)}
-.cell{padding:9px 12px 15px;display:flex;flex-direction:column;gap:5px;align-items:flex-start;border-left:1px solid var(--rule);font-size:13px;min-width:0}
-.cell[data-col="Lecture"]{border-left:0}
-.cell>*{max-width:100%}
-.meeting{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding-left:9px;border-left:2px solid var(--rule)}
-.dash{color:var(--muted);opacity:.5}
-.pill{font-size:12px;border-radius:999px;padding:1px 8px;font-weight:500}
-.pill.now{background:var(--accent);color:var(--on-fg)}
-.pill.draft{background:var(--draft-tint);color:var(--draft);border:1px solid var(--draft-line)}
-.chip{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:13px;color:var(--ink);border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:3px 9px;max-width:100%;text-align:left;text-decoration:none;cursor:default}
-a.chip,button.chip{cursor:pointer}
-a.chip:hover,button.chip:hover{border-color:var(--accent-line)}
-.chip .k{color:var(--muted);font-size:12px}
-.chip .i{opacity:.85}
-.chip.meet{background:var(--sunk);border-color:transparent}
-.chip.deck{border-color:var(--accent-line);background:var(--accent-tint);color:var(--accent-ink);font-weight:500}
-.chip.fmt{border-color:var(--accent-line);color:var(--accent-ink);font-size:12px;font-weight:600;padding:2px 7px}
-.chip.concept{border-color:transparent;background:var(--sunk);color:var(--muted);font-size:12px}
-.chip .tag{color:var(--muted);font-size:12px;border-right:1px solid var(--line);padding-right:6px;display:inline-flex;gap:4px;align-items:center}
-.chip .wt{font-weight:600;font-variant-numeric:tabular-nums}
-.chip.draft{border-color:var(--draft-line);background:var(--draft-tint);color:var(--draft)}
-.chip.gap{border-style:dashed;border-color:var(--flag-line);color:var(--flag);background:none;font-weight:500}
-.chip.gap:hover{background:var(--flag-tint);border-style:solid}
-.chip.gap.soon{background:var(--flag-tint);border-style:solid;font-weight:600}
-.chip.gap.past{color:var(--muted);border-color:var(--line);font-weight:450}
-.chip.gap.past:hover{background:var(--sunk)}
-.chip.lo{background:none;font-weight:500}
-.chip.lo .k{font-weight:400}
-.chip.lo.hit{background:var(--accent-tint);border-color:var(--accent-line);color:var(--accent-ink)}
-.chip.ask{border-color:transparent;background:none;color:var(--accent-ink);font-size:12px;padding:2px 6px}
-.chip.ask:hover{background:var(--accent-tint)}
-.band{grid-column:1/-1;display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;padding:14px 12px;border-top:1px solid var(--line);background:var(--sunk)}
-.band b{font-size:16px;font-weight:600;display:inline-flex;gap:6px;align-items:center}
-.band .none{color:var(--muted)}
-.foot{margin:0 20px 28px;font-size:12px;color:var(--muted);max-width:90ch}
-.mode{margin:14px 20px 24px;display:flex;flex-direction:column;gap:14px}
-.mode .foot{margin:0}
-.calm{margin:0;color:var(--muted);font-size:13px}
-button.link{border:0;background:none;padding:0;font:inherit;font-size:13px;color:var(--accent-ink);cursor:pointer;text-align:left;text-decoration:underline;text-decoration-color:var(--accent-line);text-underline-offset:2px}
-.status{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding-left:9px;margin:-1px 0 3px;font-size:12px}
-.status .stat{color:var(--muted);font-variant-numeric:tabular-nums}
-.status .stat.yours{color:var(--draft);font-weight:500}
-.status .badge{border-radius:999px;padding:0 7px;border:1px dashed var(--flag-line);color:var(--flag)}
-.chip.act{font-size:12px;padding:1px 7px;border-color:var(--accent-line);color:var(--accent-ink)}
-.chip.act:hover{background:var(--accent-tint)}
-.facts li .status{flex-basis:100%}
-.facts li.flagged>span,.facts li.flagged>small{color:var(--flag)}
-.mode.evidence .grid{margin:0}
-.mode.evidence .facts li>small{flex-basis:100%;padding-left:1.4em}
-.mode.evidence .facts li>a.chip+small,.mode.evidence .facts li>span.chip+small{padding-left:0}
-small.none{color:var(--muted)}
-.chip.ask.strong{border:1px solid var(--accent-line);background:var(--surface);font-weight:500}
-.gap[data-ask]::after{content:"\\2726";margin-left:2px;font-size:.85em;opacity:.75}
-.primary{display:inline-flex;align-items:center;gap:6px;align-self:flex-start;font:inherit;font-size:13px;font-weight:500;padding:6px 12px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--on-fg);cursor:pointer}
-.weights{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.wcard{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 13px;display:flex;flex-direction:column;gap:2px}
-.wcard small{color:var(--muted);font-size:12px}
-.wcard b{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
-.wcard.ok{background:var(--accent-tint);border-color:var(--accent-line)}.wcard.ok b,.wcard.ok small{color:var(--accent-ink)}
-.wcard.bad{background:var(--flag-tint);border-color:var(--flag-line)}.wcard.bad b,.wcard.bad small{color:var(--flag)}
-.faults{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
-.faults li{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;background:var(--surface);border:1px dashed var(--flag-line);color:var(--flag)}
-.faults li.warn{border-color:var(--line);color:var(--ink)}
-.faults li span{flex:1}
-table.plan{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:clip;font-size:13px}
-table.plan th{text-align:left;background:var(--sunk);color:var(--muted);font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;padding:8px 12px;border-bottom:1px solid var(--line)}
-table.plan td{padding:6px 12px;border-top:1px solid var(--rule);vertical-align:middle}
-table.plan tr.now td{background:var(--accent-tint)}
-table.plan .wkn{width:72px;white-space:nowrap}.wkn b{font-size:16px;margin-right:6px;font-variant-numeric:tabular-nums}.wkn small{color:var(--muted);font-size:12px}
-.topic span{font-weight:500}.topic small{margin-left:8px;color:var(--muted);font-size:12px}
-.notopic{color:var(--flag);font-style:italic;font-weight:400!important}.draftword{color:var(--draft)}
-table.plan td.lane{width:16%;min-width:140px;padding:0 6px}
-.lanehead{border-bottom:3px solid var(--lane)!important}
-.lseg{display:flex;flex-direction:column;justify-content:center;gap:1px;min-height:30px;border-left:3px solid var(--lane);padding:3px 8px;font-size:12px;color:var(--ink);text-decoration:none;background:color-mix(in srgb,var(--lane) 12%,var(--surface))}
-.lseg.first{border-top-right-radius:6px}.lseg.last{border-bottom-right-radius:6px}
-.lseg.draft{border-left-style:dashed}
-.segt{font-weight:600;color:inherit;text-decoration:none}a.segt:hover{text-decoration:underline}
-.segd{font-variant-numeric:tabular-nums}
-button.segd{all:unset;font-variant-numeric:tabular-nums;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
-button.segd:focus-visible{outline:2px solid var(--accent)}
-.lseg[draggable="true"]{position:relative;cursor:grab}
-.lseg.lifted{opacity:.35}
-.grip{position:absolute;left:-3px;right:0;height:7px;cursor:ns-resize;z-index:1}
-.grip.top{top:-1px}.grip.bottom{bottom:-1px}
-.grip::after{content:"";position:absolute;left:30%;right:30%;top:2px;height:3px;border-radius:2px;background:var(--lane);opacity:0;transition:opacity .12s}
-.lseg:hover .grip::after{opacity:.55}.grip:hover::after{opacity:1!important}
-table.plan tr.drop td,table.plan tr.target td{background:var(--accent-tint);box-shadow:inset 0 1px 0 var(--accent-line),inset 0 -1px 0 var(--accent-line)}
-table.plan tr.drop .wkn b,table.plan tr.target .wkn b{color:var(--accent)}
-table.plan tr[data-taught] .wkn b{color:var(--muted)}
-.lseg.locked{cursor:default}.lseg.locked .segd::after{content:" \\00b7 locked";color:var(--muted)}
-.plantoast{position:fixed;z-index:50;left:50%;bottom:18px;transform:translateX(-50%);max-width:calc(100vw - 24px);padding:8px 12px;border-radius:9px;background:var(--ink);color:var(--surface);font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.2)}
-.plantoast[hidden]{display:none}
-.pf-sum{margin:0;font-size:13px;font-variant-numeric:tabular-nums}
-.pf-more{all:unset;cursor:pointer;font-size:12px;color:var(--accent);text-decoration:underline dotted;text-underline-offset:2px;align-self:flex-start}
-.planform.brief .pf-fields,.planform.brief .tf-meetings,.planform.brief .tf-other,.planform.brief .pf-note{display:none}
-.planform:not(.brief) .pf-sum,.planform:not(.brief) .pf-more{display:none}
-.pf-fields{display:flex;flex-direction:column;gap:8px}
-.tray{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:10px 12px;border:1px dashed var(--flag-line);border-radius:12px;background:var(--surface)}
-.tray>b{font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:center;margin-right:4px;color:var(--flag)}
-.tray>small{color:var(--muted);font-size:12px}
-.traychip{cursor:grab}
-.planform{position:fixed;z-index:40;width:290px;max-width:calc(100vw - 24px);display:flex;flex-direction:column;gap:8px;padding:13px 15px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
-.planform[hidden]{display:none}
-.planform .pf-title{font-size:14px}
-.planform small{color:var(--muted);font-size:12px}
-.planform label{display:grid;grid-template-columns:48px 1fr;align-items:center;gap:2px 8px;font-size:13px}
-.planform label small{grid-column:2}
-.planform label small.off{color:var(--flag)}
-.planform input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--sunk);color:var(--ink);color-scheme:inherit}
-.planform .pf-error{margin:0;color:var(--flag);font-size:12px}
-.pf-actions{display:flex;gap:8px;align-items:center}
-.pf-actions .chip{cursor:pointer}
-.planform .primary[disabled]{opacity:.5;cursor:default}
-.tchip{font-weight:500;cursor:grab;border-radius:5px;padding:1px 4px;margin-left:-4px}
-.tchip:hover{background:var(--sunk);box-shadow:inset 0 0 0 1px var(--line)}
-.tchip.lifted{opacity:.35}
-.topicform{width:330px}
-.tf-meetings,.tf-other{display:flex;flex-direction:column;gap:6px}
-.topicform label{grid-template-columns:64px 1fr}
-.topicform label>span{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.topicform .tf-swap{display:flex;gap:8px;align-items:flex-start;font-size:13px;padding-top:6px;border-top:1px solid var(--rule)}
-.topicform .tf-swap[hidden],.planform .tf-other[hidden]{display:none}
-.topicform .tf-swap>span{color:var(--ink);font-size:13px;white-space:normal}
-.topicform .tf-swap input{margin-top:3px}
-.tf-other{padding-left:10px;border-left:2px solid var(--rule)}
-.q{--lane:var(--draft)}.hw{--lane:var(--hw)}.pj{--lane:var(--accent)}.ex,.ot{--lane:var(--muted)}
-.trio-wrap{display:flex;flex-direction:column;gap:12px}.trio-wrap[hidden]{display:none}
-.stepper{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.stepper .chip{cursor:pointer}.stepper b{font-size:14px}
-.private{margin-left:auto;font-size:12px;color:var(--muted)}
-.trio{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) minmax(0,1fr);gap:12px;align-items:start}
-.side,.focus{border-radius:12px;padding:13px 15px;display:flex;flex-direction:column;gap:8px}
-.side{background:var(--sunk)}.side.empty p{margin:0;color:var(--muted)}
-.side>small,.focus>small{color:var(--muted);font-size:12px}
-.side>b{font-size:14px}
-.focus{background:var(--surface);border:2px solid var(--accent-line)}
-.focus h2{margin:0;font-size:20px;font-weight:600}
-.focus .concepts{padding:0;grid-column:auto}
-.facts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px}
-.facts li{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.facts li small{color:var(--muted);font-size:12px}
-.facts.big{font-size:14px}
-.need{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--flag-tint);color:var(--flag);font-size:13px}
-.need span{flex:1}.need.warn{background:var(--sunk);color:var(--ink)}
-.revisit{border-left:3px solid var(--hw);padding:6px 10px;background:var(--sunk);font-size:13px}
-.revisit b{display:block;margin-bottom:2px}.revisit p{margin:2px 0 0}
-@media (max-width:900px){.trio{grid-template-columns:1fr}.trio .focus{order:-1}}
-:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-@media (max-width:900px){
-  .grid{grid-template-columns:1fr}.th{display:none}
-  .cell{border-left:0;padding:4px 12px;flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:6px}
-  .cell::before{content:attr(data-col);color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;flex:0 0 96px}
-}`;
 
 /**
  * Presses, out to the harness: the two messages every pane document sends,
@@ -558,59 +342,7 @@ g.save.addEventListener('click',function(){if(!plan||g.save.disabled)return;
 
 // ------------------------------------------------------------------ prompts
 
-/**
- * What a hole's press asks, naming the records.
- *
- * The context packet in words: the week, the module, the meetings or the
- * assessment — every identifier the model would otherwise spend a search on.
- * Ids only, never a name: this text goes to a model.
- */
-const promptFor = (kind, week, run, ref) => {
-  const module = (week.modules ?? [])[0];
-  const about = `week ${week.week} of ${run.id}` + (module ? ` (${module.module_id}, "${module.title}")` : "");
-  const gap = (week.gaps ?? []).find((g) => g.kind === kind) ?? { ids: [] };
-  switch (kind) {
-    case "deck":
-      return `Draft the slides for ${about} with /make-materials. It meets in ${gap.ids.join(", ") || "its meetings"}` +
-        " and has no deck. Register it as a resource marked approval: draft.";
-    case "module":
-      return `Week ${week.week} of ${run.id} has no module. Propose what it should teach, given the weeks either` +
-        " side, as a draft module for me to read. Change nothing else.";
-    case "misdated":
-      return `${ref} is drawn under ${about}, but its date falls outside that week. Which is wrong: its date,` +
-        " its module's week, or the run's start date? Tell me what you find and change nothing until I say.";
-    case "weight":
-      return `What should ${gap.ids.join(", ")} in ${about} be worth? The weight is mine to set; propose one and wait.`;
-    case "brief":
-      return `${ref} in ${about} has no brief students can read. Draft one from its rubric and outcomes with` +
-        " /design-assessment, as a draft for me to read.";
-    default:
-      return `For ${about}, what is still missing?`;
-  }
-};
-
-/** The undated-work prompt, the widget's own wording: two dates nobody has written down. */
-const datesPrompt = (a, run) =>
-  "Ask me this now, in your first message, before running any command: what are the open and due dates for " +
-  `${a.assessment_id} ("${a.title}")? Skip the usual opening validate and inbox sweep, and do not read any ` +
-  "file first: these two dates exist only in my head, so nothing on disk can answer this. Once I have " +
-  `answered, set opens_at and due_at on the ${a.assessment_id} entry in ` +
-  (a.source_file ?? `courses/${run.course_id}/versions/${run.term}/assessments/ (grep for the id)`) +
-  ", and then just confirm what you wrote.";
-
 // -------------------------------------------------------------------- parts
-
-/**
- * When a hole bites: this week and next, later, or a week already taught.
- * The payload's own `urgency`; the fallback is the same rule, for a payload
- * built before the field existed.
- */
-const tierOf = (week, current) => {
-  if (week.urgency) return week.urgency;
-  if (week.when === "past") return "past";
-  if (current !== null && week.week <= current + 1) return "soon";
-  return "later";
-};
 
 const gapChip = (kind, tier, prompt, title, label) =>
   `<button type="button" class="chip gap ${tier}" data-ask="${esc(prompt)}" title="${esc(title)}">` +
@@ -710,10 +442,6 @@ const statusLine = (a, status) => {
   return parts.length ? `<span class="status">${parts.join("")}</span>` : "";
 };
 
-const hasBrief = (a) => Boolean(a.url || a.brief_url || String(a.description ?? "").trim());
-
-const titleOf = (w) => (w.modules ?? []).map((m) => m.title).join(" · ");
-const conceptsOf = (w) => (w.modules ?? []).flatMap((m) => m.concepts ?? []);
 const askButton = (prompt, label, cls = "chip ask") =>
   `<button type="button" class="${cls}" data-ask="${esc(prompt)}">${icon("ask")}${esc(label)}</button>`;
 
@@ -727,9 +455,6 @@ const askButton = (prompt, label, cls = "chip ask") =>
  * teaching questions. Built from the outline payload alone, so it carries
  * nothing derived from student work.
  */
-const LANES = [["quiz", "Quizzes", "q"], ["assignment", "Homework", "hw"], ["project", "Project", "pj"], ["exam", "Exams", "ex"]];
-const laneOf = (type) => LANES.find((l) => l[0] === type) ?? ["other", "Other", "ot"];
-
 const planningBody = (data, { student, locks }) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];
@@ -965,32 +690,6 @@ const planningBody = (data, { student, locks }) => {
     } Rooms, times and decks are in Teaching.</p>${form}</div>`;
 };
 
-/**
- * The offset a new date is written with, for work that has none yet: the
- * run's own time zone on the day the run starts, else the offset the run's
- * other dates already carry, else UTC. A record's timestamp always carries
- * one; the form never makes a naive time.
- */
-const runOffset = (data) => {
-  const run = data.run ?? {};
-  try {
-    if (run.timezone && run.start_date) {
-      const name = new Intl.DateTimeFormat("en-US", { timeZone: run.timezone, timeZoneName: "longOffset" })
-        .formatToParts(new Date(`${run.start_date}T12:00:00Z`))
-        .find((p) => p.type === "timeZoneName")?.value ?? "";
-      const m = /GMT([+-]\d{2}:\d{2})?/.exec(name);
-      if (m) return m[1] ?? "+00:00";
-    }
-  } catch {
-    // An unknown zone name falls through to the records' own offset.
-  }
-  for (const a of data.assessments ?? []) {
-    const m = /([+-]\d{2}:\d{2}|Z)$/.exec(String(a.due_at ?? a.opens_at ?? ""));
-    if (m) return m[1] === "Z" ? "+00:00" : m[1];
-  }
-  return "+00:00";
-};
-
 // ---------------------------------------------------------------- teaching
 
 /**
@@ -1005,8 +704,6 @@ const runOffset = (data) => {
  * which is why it is a mode of its own, behind the pane, and never part of a
  * document a student may be shown.
  */
-const REVISIT_BELOW = 0.6;
-
 const teachingBody = (data, evidence, status, focus = null) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];

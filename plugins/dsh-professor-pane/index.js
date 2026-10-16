@@ -174,7 +174,10 @@ const routerSource = (logger) => {
   const watchSources = () => {
     if (!RELOAD) return () => {};
     hookGenerations();
-    const roots = [fileURLToPath(new URL("./server/", import.meta.url))];
+    const roots = [
+      fileURLToPath(new URL("./server/", import.meta.url)),
+      fileURLToPath(new URL("./shared/", import.meta.url)),
+    ];
     try {
       roots.push(dirname(fileURLToPath(import.meta.resolve("@ainar/core/src/profile.ts"))));
     } catch {

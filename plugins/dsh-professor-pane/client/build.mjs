@@ -87,7 +87,8 @@ export const options = (dev = false) => ({
  */
 const unreached = (metafile) => {
   const reached = new Set(Object.keys(metafile.inputs));
-  return readdirSync(PLUGIN + "client")
+  return readdirSync(PLUGIN + "client", { recursive: true })
+    .map((file) => String(file).replace(/\\/g, "/"))
     .filter((file) => /\.(jsx?|tsx?)$/.test(file))
     .map((file) => "client/" + file)
     .filter((file) => !reached.has(file));

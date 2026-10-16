@@ -5,6 +5,7 @@
 
 import { decodeIssues, Message, useJson } from "./common.js";
 import { AREAS, useVersion } from "./data.js";
+import { CourseView } from "./course/view.jsx";
 import { courseModeEscape } from "./course-escape.js";
 import { GradebookPanes } from "./gradebook.js";
 import { GradebookStatus, Unpublished } from "./marks.js";
@@ -56,37 +57,6 @@ import { BASE, DRAFT_MODES, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS 
  * The failure text on the route is HTML for this reason too: it arrives
  * here as a document and goes into the frame like any other.
  */
-/**
- * Newer records into the document already open, without reloading it.
- *
- * The frame has no origin and no network, so it cannot fetch its own page;
- * the pane fetches it and posts the HTML in. A document that knows how
- * (course mode's `SCRIPT`) replaces its content in place and answers
- * `swapped`, keeping its scroll, its scripts and its forms. One that does
- * not answer within the second is given the HTML as a new `srcdoc` instead,
- * which is the old full redraw.
- */
-const swapInto = (frame, html) =>
-  new Promise((resolve) => {
-    const target = frame && frame.contentWindow;
-    if (!target) {
-      resolve(false);
-      return;
-    }
-    const done = (swapped) => {
-      window.removeEventListener("message", onMessage);
-      clearTimeout(timer);
-      resolve(swapped);
-    };
-    const onMessage = (event) => {
-      const data = event.data;
-      if (event.source === target && data && data.source === "professor-pane" && data.kind === "swapped") done(true);
-    };
-    const timer = setTimeout(() => done(false), 1000);
-    window.addEventListener("message", onMessage);
-    target.postMessage({ source: "professor-pane", kind: "swap", html: html }, "*");
-  });
-
 function WidgetFrame(props) {
   const url = scoped(
     BASE +
@@ -109,17 +79,15 @@ function WidgetFrame(props) {
     props.sessionId,
   );
   const [doc, setDoc] = React.useState(null);
-  const frameRef = React.useRef(null);
   // The URL the frame's document was loaded from. A fetch for the same URL
-  // under a new `revision` is the same page with newer records, and goes
-  // into the open document as a swap (see `swapInto`); any other URL is a
-  // different page and replaces the frame.
+  // under a new `revision` is the same page with newer records; any other URL
+  // is a different page, and the frame says it is reading until it arrives.
   const loaded = React.useRef(null);
-  // The HTML the frame is showing now, loaded or swapped in.
+  // The HTML the frame is showing now.
   const shownHtml = React.useRef(null);
   React.useEffect(() => {
     let live = true;
-    const same = loaded.current === url && frameRef.current !== null;
+    const same = loaded.current === url;
     if (!same) setDoc(null);
     fetch(url)
       .then((response) =>
@@ -141,25 +109,11 @@ function WidgetFrame(props) {
           setDoc(value);
           return;
         }
-        // A page that cannot swap (a shared widget) is replaced, but the old
-        // one stays up until the new one is in hand — no blank in between —
-        // and not at all when nothing on it moved. A page that swaps always
-        // gets the swap: it is also what closes a form left saving.
-        if (!props.swap) {
-          if (value.html === shownHtml.current) return;
-          shownHtml.current = value.html;
-          setDoc(value);
-          return;
-        }
-        // The banner is ours and redraws; the frame keeps its document,
-        // and with it the scroll, unless it does not answer the swap.
-        swapInto(frameRef.current, value.html).then((swapped) => {
-          shownHtml.current = value.html;
-          if (!live) return;
-          setDoc((old) =>
-            swapped && old && !old.failed ? Object.assign({}, value, { html: old.html }) : value,
-          );
-        });
+        // The same page, newer: replaced once the new one is in hand — no
+        // blank in between — and not at all when nothing on it moved.
+        if (value.html === shownHtml.current) return;
+        shownHtml.current = value.html;
+        setDoc(value);
       })
       .catch((error) => {
         if (live) setDoc({ failed: String(error.message || error) });
@@ -190,7 +144,6 @@ function WidgetFrame(props) {
         )
       : null,
     h("iframe", {
-      ref: frameRef,
       className: "pp-frame",
       srcDoc: doc.html,
       sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox",
@@ -514,15 +467,6 @@ export function CourseMode(props) {
   // coming back to it, or when the record or the drafts toggle changes.
   const stepped = React.useRef(null);
   const [week, setWeek] = React.useState(null);
-  React.useEffect(() => {
-    const onMessage = (event) => {
-      const data = event.data;
-      if (!data || data.source !== "professor-pane" || data.kind !== "teaching-week") return;
-      if (Number.isInteger(data.week) && data.week > 0 && data.week < 100) stepped.current = data.week;
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
   React.useEffect(() => {
     setWeek(stepped.current);
   }, [everything, props.drafts]);
@@ -887,12 +831,10 @@ export function CourseMode(props) {
         h(
           "div",
           { className: "pp-coursebody" },
-          // Not keyed by the write counters: a write swaps newer records into
-          // the open page, so a moved bar lands where the professor is looking.
-          h(WidgetFrame, {
-            revision: everything,
-            swap: true,
-            view: "course",
+          // The weeks, drawn here by React from the course data
+          // (client/course/): a refresh re-renders in place, and a Planning
+          // drop moves its bar before the write is made.
+          h(CourseView, {
             runId: props.runId,
             sessionId: props.sessionId,
             dark: props.dark,
@@ -900,7 +842,9 @@ export function CourseMode(props) {
             student: preview,
             mode: mode,
             week: mode === "teaching" ? week : null,
-            title: "Course mode",
+            onStep: (n) => {
+              stepped.current = n;
+            },
           }),
           // The weeks stay mounted under a course-wide view, so coming back
           // to them keeps the place and the scroll.
