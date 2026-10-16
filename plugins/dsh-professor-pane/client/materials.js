@@ -55,6 +55,37 @@ import { BASE, DRAFT_MODES, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS 
  * The failure text on the route is HTML for this reason too: it arrives
  * here as a document and goes into the frame like any other.
  */
+/**
+ * Newer records into the document already open, without reloading it.
+ *
+ * The frame has no origin and no network, so it cannot fetch its own page;
+ * the pane fetches it and posts the HTML in. A document that knows how
+ * (course mode's `SCRIPT`) replaces its content in place and answers
+ * `swapped`, keeping its scroll, its scripts and its forms. One that does
+ * not answer within the second is given the HTML as a new `srcdoc` instead,
+ * which is the old full redraw.
+ */
+const swapInto = (frame, html) =>
+  new Promise((resolve) => {
+    const target = frame && frame.contentWindow;
+    if (!target) {
+      resolve(false);
+      return;
+    }
+    const done = (swapped) => {
+      window.removeEventListener("message", onMessage);
+      clearTimeout(timer);
+      resolve(swapped);
+    };
+    const onMessage = (event) => {
+      const data = event.data;
+      if (event.source === target && data && data.source === "professor-pane" && data.kind === "swapped") done(true);
+    };
+    const timer = setTimeout(() => done(false), 1000);
+    window.addEventListener("message", onMessage);
+    target.postMessage({ source: "professor-pane", kind: "swap", html: html }, "*");
+  });
+
 function WidgetFrame(props) {
   const url = scoped(
     BASE +
@@ -77,9 +108,16 @@ function WidgetFrame(props) {
     props.sessionId,
   );
   const [doc, setDoc] = React.useState(null);
+  const frameRef = React.useRef(null);
+  // The URL the frame's document was loaded from. A fetch for the same URL
+  // under a new `revision` is the same page with newer records, and goes
+  // into the open document as a swap (see `swapInto`); any other URL is a
+  // different page and replaces the frame.
+  const loaded = React.useRef(null);
   React.useEffect(() => {
     let live = true;
-    setDoc(null);
+    const same = loaded.current === url && frameRef.current !== null;
+    if (!same) setDoc(null);
     fetch(url)
       .then((response) =>
         response.text().then((text) => ({
@@ -93,7 +131,20 @@ function WidgetFrame(props) {
         })),
       )
       .then((value) => {
-        if (live) setDoc(value);
+        if (!live) return;
+        if (!same) {
+          loaded.current = url;
+          setDoc(value);
+          return;
+        }
+        // The banner is ours and redraws; the frame keeps its document,
+        // and with it the scroll, unless it does not answer the swap.
+        swapInto(frameRef.current, value.html).then((swapped) => {
+          if (!live) return;
+          setDoc((old) =>
+            swapped && old && !old.failed ? Object.assign({}, value, { html: old.html }) : value,
+          );
+        });
       })
       .catch((error) => {
         if (live) setDoc({ failed: String(error.message || error) });
@@ -101,7 +152,7 @@ function WidgetFrame(props) {
     return () => {
       live = false;
     };
-  }, [url]);
+  }, [url, props.revision]);
 
   if (doc === null) return h(Message, null, "Reading the course model…");
   if (doc.failed) return h(Message, { error: true }, doc.failed);
@@ -124,6 +175,7 @@ function WidgetFrame(props) {
         )
       : null,
     h("iframe", {
+      ref: frameRef,
       className: "pp-frame",
       srcDoc: doc.html,
       sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox",
@@ -805,8 +857,10 @@ export function CourseMode(props) {
         h(
           "div",
           { className: "pp-coursebody" },
+          // Not keyed by the write counters: a write swaps newer records into
+          // the open page, so a moved bar lands where the professor is looking.
           h(WidgetFrame, {
-            key: props.reload,
+            revision: props.reload + "." + (props.planned || 0),
             view: "course",
             runId: props.runId,
             sessionId: props.sessionId,

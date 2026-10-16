@@ -240,8 +240,17 @@ button.segd:focus-visible{outline:2px solid var(--accent)}
 .grip.top{top:-1px}.grip.bottom{bottom:-1px}
 .grip::after{content:"";position:absolute;left:30%;right:30%;top:2px;height:3px;border-radius:2px;background:var(--lane);opacity:0;transition:opacity .12s}
 .lseg:hover .grip::after{opacity:.55}.grip:hover::after{opacity:1!important}
-table.plan tr.drop td{background:var(--accent-tint);box-shadow:inset 0 1px 0 var(--accent-line),inset 0 -1px 0 var(--accent-line)}
-table.plan tr.drop .wkn b{color:var(--accent)}
+table.plan tr.drop td,table.plan tr.target td{background:var(--accent-tint);box-shadow:inset 0 1px 0 var(--accent-line),inset 0 -1px 0 var(--accent-line)}
+table.plan tr.drop .wkn b,table.plan tr.target .wkn b{color:var(--accent)}
+table.plan tr[data-taught] .wkn b{color:var(--muted)}
+.lseg.locked{cursor:default}.lseg.locked .segd::after{content:" \\00b7 locked";color:var(--muted)}
+.plantoast{position:fixed;z-index:50;left:50%;bottom:18px;transform:translateX(-50%);max-width:calc(100vw - 24px);padding:8px 12px;border-radius:9px;background:var(--ink);color:var(--surface);font-size:12.5px;box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.plantoast[hidden]{display:none}
+.pf-sum{margin:0;font-size:13px;font-variant-numeric:tabular-nums}
+.pf-more{all:unset;cursor:pointer;font-size:12px;color:var(--accent);text-decoration:underline dotted;text-underline-offset:2px;align-self:flex-start}
+.planform.brief .pf-fields,.planform.brief .tf-meetings,.planform.brief .tf-other,.planform.brief .pf-note{display:none}
+.planform:not(.brief) .pf-sum,.planform:not(.brief) .pf-more{display:none}
+.pf-fields{display:flex;flex-direction:column;gap:8px}
 .tray{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:10px 12px;border:1px dashed var(--flag-line);border-radius:12px;background:var(--surface)}
 .tray>b{font-size:13px;font-weight:600;display:inline-flex;gap:6px;align-items:center;margin-right:4px;color:var(--flag)}
 .tray>small{color:var(--muted);font-size:12px}
@@ -266,7 +275,7 @@ table.plan tr.drop .wkn b{color:var(--accent)}
 .topicform label{grid-template-columns:64px 1fr}
 .topicform label>span{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .topicform .tf-swap{display:flex;gap:8px;align-items:flex-start;font-size:13px;padding-top:6px;border-top:1px solid var(--rule)}
-.topicform .tf-swap[hidden],.tf-other[hidden]{display:none}
+.topicform .tf-swap[hidden],.planform .tf-other[hidden]{display:none}
 .topicform .tf-swap>span{color:var(--ink);font-size:13px;white-space:normal}
 .topicform .tf-swap input{margin-top:3px}
 .tf-other{padding-left:10px;border-left:2px solid var(--rule)}
@@ -320,9 +329,9 @@ table.plan tr.drop .wkn b{color:var(--accent)}
  * leaving Teaching and coming back returns to that week, not this one.
  */
 const SCRIPT = `<script>(function(){
-var strip=document.querySelector('.strip');
+var strip=document.querySelector('.strip'),ro=window.ResizeObserver?new ResizeObserver(function(){measure();}):null;
 function measure(){if(strip)document.documentElement.style.setProperty('--strip-h',strip.offsetHeight+'px');}
-measure();if(window.ResizeObserver&&strip)new ResizeObserver(measure).observe(strip);
+measure();if(ro&&strip)ro.observe(strip);
 var now=document.querySelector('.wkhead.now,.band.now'),moved=false;
 function toNow(){if(now&&!moved&&innerHeight>0)now.scrollIntoView({block:'start'});}
 ['wheel','keydown','mousedown','touchstart'].forEach(function(k){addEventListener(k,function(){moved=true;},{once:true,passive:true});});
@@ -336,6 +345,22 @@ document.addEventListener('click',function(e){
   if(parent!==window)parent.postMessage({source:'professor-pane',kind:'teaching-week',week:Number(n)},'*');
 });
 if(parent===window)return;
+addEventListener('message',function(e){var d=e.data;
+  if(e.source!==parent||!d||d.source!=='professor-pane'||d.kind!=='swap'||typeof d.html!=='string')return;
+  var next=new DOMParser().parseFromString(d.html,'text/html'),x=scrollX,y=scrollY,body=document.body;
+  // The running scripts stay, and so do Planning's two forms, which those
+  // scripts hold: each new copy is replaced by the live one.
+  function kept(n){return n.nodeType===1&&n.tagName==='SCRIPT'&&!n.type;}
+  var forms=[].slice.call(document.querySelectorAll('.planform'));forms.forEach(function(x){x.remove();});
+  [].slice.call(body.childNodes).forEach(function(n){if(!kept(n))body.removeChild(n);});
+  var first=body.firstChild;
+  [].slice.call(next.body.childNodes).forEach(function(n){if(!kept(n))body.insertBefore(document.adoptNode(n),first);});
+  [].slice.call(document.querySelectorAll('.planform')).forEach(function(x,i){if(forms[i])x.replaceWith(forms[i]);});
+  var s=next.querySelector('head style'),o=document.querySelector('head style');if(s&&o&&s.textContent!==o.textContent)o.textContent=s.textContent;
+  moved=true;if(ro&&strip)ro.unobserve(strip);strip=document.querySelector('.strip');measure();if(ro&&strip)ro.observe(strip);
+  scrollTo(x,y);
+  document.dispatchEvent(new Event('pp-swapped'));
+  parent.postMessage({source:'professor-pane',kind:'swapped'},'*');});
 document.addEventListener('click',function(e){
   var b=e.target.closest&&e.target.closest('[data-ask]');
   if(b){e.preventDefault();parent.postMessage({source:'professor-pane',kind:'ask',prompt:b.getAttribute('data-ask')},'*');return;}
@@ -358,10 +383,16 @@ document.addEventListener('click',function(e){
  *
  * A drop moves by whole weeks — seven days per week crossed — so a quiz due
  * Friday at 23:59 is still due Friday at 23:59, three weeks later. That is
- * the default the form opens with, never a write: the professor reads the
- * two dates, changes the day if the week is not the whole story, and saves.
- * Saving is one `dates` message up to the pane, which writes the record and
- * redraws this page from it. The page keeps each date's own offset, so it
+ * asked, never written: the form opens brief, the week it lands on lit and
+ * the two dates in words, and the professor saves or cancels; "Change
+ * dates" opens the inputs when the week is not the whole story. Saving is
+ * one `dates` message up to the pane, which writes the record and swaps the
+ * newer page into this one in place (`swap` in `SCRIPT`), scroll and all.
+ *
+ * The guardrails are drawn here and enforced again by the writes
+ * (`planLocks`): work with results has no handle and no date button, a week
+ * already taught takes no drop, and work that opened in one moves only by
+ * its due end. The page keeps each date's own offset, so it
  * does no time-zone arithmetic: what the input shows is the record's wall
  * time, and what goes back is that wall time with the same offset.
  *
@@ -379,9 +410,22 @@ document.addEventListener('click',function(e){
 const PLAN_SCRIPT = `<script>(function(){
 var form=document.querySelector('.planform'),island=document.getElementById('plan-items');
 if(!form||!island||parent===window)return;
-var items=JSON.parse(island.textContent),table=document.querySelector('table.plan'),OFF=table.getAttribute('data-offset')||'+00:00';
-var rows=[].slice.call(document.querySelectorAll('tr[data-week]')).map(function(r){return{n:+r.getAttribute('data-week'),from:r.getAttribute('data-from'),to:r.getAttribute('data-to')};});
-var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var items,table,OFF,rows,topics,taughtBefore;
+function read(){island=document.getElementById('plan-items');items=island?JSON.parse(island.textContent):{};
+  table=document.querySelector('table.plan');OFF=(table&&table.getAttribute('data-offset'))||'+00:00';
+  rows=[].slice.call(document.querySelectorAll('tr[data-week]')).map(function(r){return{n:+r.getAttribute('data-week'),from:r.getAttribute('data-from'),to:r.getAttribute('data-to'),taught:r.hasAttribute('data-taught')};});
+  topics=JSON.parse((document.getElementById('plan-topics')||{}).textContent||'{}');
+  taughtBefore=null;for(var i=0;i<rows.length;i++){if(rows[i].taught)taughtBefore='9999';else{if(taughtBefore)taughtBefore=rows[i].from;break;}}}
+read();
+document.addEventListener('pp-swapped',function(){read();close();tclose();});
+function wasTaught(v){return!!(taughtBefore&&v&&v.slice(0,10)<taughtBefore);}
+var toast=null,toastT=0;
+function say(text){if(!toast||!toast.isConnected){toast=document.createElement('div');toast.className='plantoast';toast.setAttribute('role','status');document.body.appendChild(toast);}
+  toast.textContent=text;toast.hidden=false;clearTimeout(toastT);toastT=setTimeout(function(){toast.hidden=true;},2800);}
+var mark=null;
+function target(r){if(mark)mark.classList.remove('target');mark=r;if(r)r.classList.add('target');}
+var MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],DAY=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function when(v){return v?DAY[new Date(v.slice(0,10)+'T12:00:00Z').getUTCDay()]+' '+nice(v.slice(0,10))+', '+v.slice(11,16):'';}
 function rowOf(n){for(var i=0;i<rows.length;i++)if(rows[i].n===n)return rows[i];return null;}
 function weekOf(d){for(var i=0;i<rows.length;i++)if(d>=rows[i].from&&d<=rows[i].to)return rows[i].n;return null;}
 function nice(d){var p=d.split('-');return MON[+p[1]-1]+' '+(+p[2]);}
@@ -390,21 +434,32 @@ function local(s){return s?String(s).slice(0,16):'';}
 function offOf(s){var m=/(Z|[+-][0-9][0-9]:[0-9][0-9])$/.exec(s||'');return m?(m[1]==='Z'?'+00:00':m[1]):OFF;}
 function shift(v,n){return v?addDays(v.slice(0,10),n)+v.slice(10):v;}
 var f={title:form.querySelector('.pf-title'),week:form.querySelector('.pf-week'),opens:form.querySelector('.pf-opens'),due:form.querySelector('.pf-due'),
-  opensWk:form.querySelector('.pf-opens-wk'),dueWk:form.querySelector('.pf-due-wk'),error:form.querySelector('.pf-error'),save:form.querySelector('.pf-save')};
+  opensWk:form.querySelector('.pf-opens-wk'),dueWk:form.querySelector('.pf-due-wk'),error:form.querySelector('.pf-error'),save:form.querySelector('.pf-save'),sum:form.querySelector('.pf-sum')};
 function hint(input,out){var v=input.value;if(!v){out.textContent=input===f.opens?'no opening date':'';out.classList.remove('off');return;}
   var w=weekOf(v.slice(0,10));out.textContent=w?'week '+w+' \\u00b7 '+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(v.slice(0,10)+'T12:00:00Z').getUTCDay()]:'outside the term';out.classList.toggle('off',!w);}
+var orig={opens:'',due:''};
+// A date that changes may not leave or enter a week already taught.
+function frozen(was,now){return was!==now&&(wasTaught(was)||wasTaught(now));}
 function check(){hint(f.opens,f.opensWk);hint(f.due,f.dueWk);
-  var bad=!f.due.value?'It needs a due date.':f.opens.value&&f.opens.value>f.due.value?'It would open after it is due.':'';
-  f.error.textContent=bad;f.error.hidden=!bad;f.save.disabled=!!bad;}
+  var bad=!f.due.value?'It needs a due date.':f.opens.value&&f.opens.value>f.due.value?'It would open after it is due.':
+    frozen(orig.opens,f.opens.value)?'Its opening would move into or out of a week already taught.':
+    frozen(orig.due,f.due.value)?'Its due date would move into or out of a week already taught.':'';
+  f.error.textContent=bad;f.error.hidden=!bad;f.save.disabled=!!bad;
+  f.sum.textContent=(f.opens.value?'Opens '+when(f.opens.value)+' \\u00b7 ':'')+'due '+when(f.due.value);}
 f.opens.addEventListener('input',check);f.due.addEventListener('input',check);
-function open(id,opens,due,week,x,y){var it=items[id];if(!it)return;
-  form.setAttribute('data-id',id);f.title.textContent=it.title||id;
-  var r=week?rowOf(week):null;f.week.textContent=r?'Week '+r.n+' \\u00b7 '+nice(r.from)+' \\u2013 '+nice(r.to):'';
-  f.opens.value=opens||'';f.due.value=due||'';f.save.textContent='Save dates';check();
+// Brief after a drop: where it lands, Save or Cancel. Full from the due
+// line's button, or from "Change dates".
+function open(id,opens,due,week,x,y,from){var it=items[id];if(!it)return;
+  form.setAttribute('data-id',id);f.title.textContent=it.title||id;orig={opens:local(it.opens_at),due:local(it.due_at)};
+  var r=week?rowOf(week):null,brief=from!==undefined;
+  f.week.textContent=!r?'':(brief&&from?'Week '+from+' \\u2192 week '+r.n:'Week '+r.n)+' \\u00b7 '+nice(r.from)+' \\u2013 '+nice(r.to);
+  form.classList.toggle('brief',brief);
+  f.opens.value=opens||'';f.due.value=due||'';f.save.textContent=brief?'Save':'Save dates';check();
   form.hidden=false;var w=form.offsetWidth,h=form.offsetHeight;
   form.style.left=Math.max(12,Math.min(x+14,innerWidth-w-12))+'px';form.style.top=Math.max(12,Math.min(y+14,innerHeight-h-12))+'px';
-  (due?f.due:f.opens).focus();}
-function close(){form.hidden=true;form.removeAttribute('data-id');}
+  if(brief)f.save.focus();else(due?f.due:f.opens).focus();}
+form.querySelector('.pf-more').addEventListener('click',function(){form.classList.remove('brief');f.save.textContent='Save dates';f.due.focus();});
+function close(){form.hidden=true;form.removeAttribute('data-id');target(null);}
 form.querySelector('.pf-cancel').addEventListener('click',close);
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!form.hidden){e.stopPropagation();close();}});
 f.save.addEventListener('click',function(){var id=form.getAttribute('data-id'),it=items[id];if(!it||f.save.disabled)return;
@@ -427,24 +482,34 @@ document.addEventListener('dragstart',function(e){
     e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',m);}catch(x){}
     setTimeout(function(){if(drag)lift(m,true);},0);return;}
   var el=e.target.closest&&e.target.closest('[data-a][draggable="true"]');if(!el||!items[el.getAttribute('data-a')])return;
-  var id=el.getAttribute('data-a');close();tclose();
-  drag={id:id,edge:grip&&el.contains(grip)?grip.getAttribute('data-edge'):'both',from:+el.getAttribute('data-wk')||null};
+  var id=el.getAttribute('data-a'),edge=grip&&el.contains(grip)?grip.getAttribute('data-edge'):'both';
+  // Opened in a week already taught: the bar stays, its due end moves.
+  if(items[id].hold==='opens'&&edge!=='due'){e.preventDefault();say('It opened in a week already taught \\u2014 drag its due end instead.');return;}
+  close();tclose();
+  drag={id:id,edge:edge,from:+el.getAttribute('data-wk')||null};
   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',id);}catch(x){}
   setTimeout(function(){if(drag)lift(id,true);},0);});
-document.addEventListener('dragover',function(e){if(!drag)return;var r=e.target.closest&&e.target.closest('tr[data-week]');if(!r)return;
+// A week already taught takes no drop: no preventDefault, so the cursor
+// says so, and the row is not lit.
+function rowAt(e){var r=e.target.closest&&e.target.closest('tr[data-week]');return r&&!r.hasAttribute('data-taught')?r:null;}
+var refused=false;
+document.addEventListener('dragover',function(e){if(!drag)return;var r=rowAt(e);
+  refused=!r&&!!(e.target.closest&&e.target.closest('tr[data-taught]'));
+  if(!r){if(over){over.classList.remove('drop');over=null;}return;}
   e.preventDefault();e.dataTransfer.dropEffect='move';if(over!==r){if(over)over.classList.remove('drop');over=r;r.classList.add('drop');}});
 document.addEventListener('dragleave',function(e){if(over&&!(e.relatedTarget&&over.contains(e.relatedTarget))){over.classList.remove('drop');over=null;}});
-document.addEventListener('drop',function(e){if(!drag)return;var r=e.target.closest&&e.target.closest('tr[data-week]');if(!r)return;
+document.addEventListener('drop',function(e){if(!drag)return;var r=rowAt(e);if(!r)return;
   e.preventDefault();var d=drag,to=+r.getAttribute('data-week'),it=items[d.id],row=rowOf(to);end();
-  if(d.topic){if(to!==d.from)topen(d.id,to,e.clientX,e.clientY);return;}
+  if(d.topic){if(to!==d.from){target(r);topen(d.id,to,e.clientX,e.clientY);}return;}
   var opens=local(it.opens_at),due=local(it.due_at);
   if(!it.due_at){opens='';due=row.to+'T23:59';}
-  else if(d.from!==null){var n=(to-d.from)*7;if(d.edge!=='due')opens=shift(opens,n);if(d.edge!=='opens')due=shift(due,n);}
-  open(d.id,opens,due,to,e.clientX,e.clientY);});
-document.addEventListener('dragend',end);
-var tf=document.querySelector('.topicform'),topics=JSON.parse((document.getElementById('plan-topics')||{}).textContent||'{}');
+  else if(d.from!==null){if(to===d.from)return;var n=(to-d.from)*7;if(d.edge!=='due')opens=shift(opens,n);if(d.edge!=='opens')due=shift(due,n);}
+  target(r);open(d.id,opens,due,to,e.clientX,e.clientY,d.from);});
+// Let go over a taught week: nothing dropped, and the page says why.
+document.addEventListener('dragend',function(){if(drag&&refused)say('That week is already taught; nothing moves into it.');refused=false;end();});
+var tf=document.querySelector('.topicform');
 var g={title:tf.querySelector('.tf-title'),week:tf.querySelector('.tf-week'),list:tf.querySelector('.tf-meetings'),swap:tf.querySelector('.tf-swap'),
-  swapOn:tf.querySelector('.tf-swap-on'),other:tf.querySelector('.tf-other'),error:tf.querySelector('.tf-error'),save:tf.querySelector('.tf-save')};
+  swapOn:tf.querySelector('.tf-swap-on'),other:tf.querySelector('.tf-other'),error:tf.querySelector('.tf-error'),save:tf.querySelector('.tf-save'),sum:tf.querySelector('.tf-sum')};
 var plan=null;
 function cap(s){s=String(s||'meeting').replace(/_/g,' ');return s.charAt(0).toUpperCase()+s.slice(1);}
 function rows_(box,mid,from,to){box.innerHTML='';var t=topics[mid];
@@ -468,11 +533,15 @@ function topen(mid,to,x,y){var t=topics[mid];if(!t)return;var r=rowOf(to);
     rows_(g.other,there[0],to,t.week);g.other.hidden=false;}
   else{g.swap.hidden=true;g.swapOn.checked=false;g.other.hidden=true;g.other.innerHTML='';
     if(there.length>1){g.swap.hidden=false;g.swapOn.disabled=true;g.swap.querySelector('span').textContent='Week '+to+' already has '+there.length+' topics; this one joins them.';}}
-  g.swapOn.disabled=there.length!==1;g.save.disabled=false;g.save.textContent='Move topic';tcheck();
+  g.swapOn.disabled=there.length!==1;g.save.disabled=false;g.save.textContent='Save';
+  var k=t.meetings.length;g.sum.textContent=k?'Its '+(k===1?'meeting moves':k+' meetings move')+' with it, same days and times.':'It has no meetings to move.';
+  tf.querySelector('.tf-more').style.display=k?'':'none';
+  tf.classList.add('brief');tcheck();
   tf.hidden=false;var w=tf.offsetWidth,h=tf.offsetHeight;
   tf.style.left=Math.max(12,Math.min(x+14,innerWidth-w-12))+'px';tf.style.top=Math.max(12,Math.min(y+14,innerHeight-h-12))+'px';
-  var first=tf.querySelector('input[data-act]');if(first)first.focus();else g.save.focus();}
-function tclose(){tf.hidden=true;plan=null;}
+  g.save.focus();}
+tf.querySelector('.tf-more').addEventListener('click',function(){tf.classList.remove('brief');var first=tf.querySelector('input[data-act]');if(first)first.focus();});
+function tclose(){tf.hidden=true;plan=null;target(null);}
 g.swapOn.addEventListener('change',function(){g.other.hidden=!g.swapOn.checked;tcheck();});
 tf.querySelector('.tf-cancel').addEventListener('click',tclose);
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!tf.hidden){e.stopPropagation();tclose();}});
@@ -661,13 +730,17 @@ const askButton = (prompt, label, cls = "chip ask") =>
 const LANES = [["quiz", "Quizzes", "q"], ["assignment", "Homework", "hw"], ["project", "Project", "pj"], ["exam", "Exams", "ex"]];
 const laneOf = (type) => LANES.find((l) => l[0] === type) ?? ["other", "Other", "ot"];
 
-const planningBody = (data, { student }) => {
+const planningBody = (data, { student, locks }) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];
   const weekOf = (date) => (date ? weeks.find((w) => date >= w.starts_on && date <= w.ends_on)?.week ?? null : null);
   // Dates move by hand here, except in the student preview, which shows the
   // record and nothing that changes it.
   const editable = !student;
+  // The guardrails (`planLocks` in plan-writes.js, which enforces them again):
+  // work with results keeps its dates, and a week already taught is history.
+  const withResults = new Set(locks?.results ?? []);
+  const taught = (n) => n !== null && weeks.find((w) => w.week === n)?.when === "past";
   const offset = runOffset(data);
 
   // Weights by kind of work, against the model's own total and verdict.
@@ -764,6 +837,13 @@ const planningBody = (data, { student }) => {
               const last = w.week === s.end;
               const href = s.a.viewable && s.a.url ? s.a.url : s.a.brief_url;
               const id = esc(s.a.assessment_id);
+              // Locked: results recorded, or due in a week already taught.
+              // Opened in one but due later: only its due end moves.
+              const locked = withResults.has(s.a.assessment_id) || taught(s.end);
+              const why = withResults.has(s.a.assessment_id)
+                ? "has results — its dates stay"
+                : "due in a week already taught";
+              const movable = editable && !locked;
               // The title opens the brief; the due line opens the date form.
               // Neither is draggable itself, so a drag always moves the bar.
               const title = !first
@@ -775,32 +855,34 @@ const planningBody = (data, { student }) => {
               const dueWords = `due ${esc(shortDate(s.a.due_on))} · ${esc(weightPct(s.a.weight) || "no weight")}`;
               const due = !last
                 ? ""
-                : editable
+                : movable
                   ? `<button type="button" class="segd" data-edit="${id}" title="Change the dates">${dueWords}</button>`
                   : `<span class="segd">${dueWords}</span>`;
               // Grips on the ends: the top one moves only the opening, the
               // bottom one only the due date. Work with no opening date, or
               // one outside the term, has no top grip: the bar's top is then
-              // its due week, and there is no opening there to move.
-              const grips = editable
-                ? (first && s.a.opens_on && weekOf(s.a.opens_on) === s.start ?`<span class="grip top" data-edge="opens" title="Drag to move when it opens"></span>` : "") +
+              // its due week, and there is no opening there to move. Nor
+              // does one that opened in a week already taught.
+              const grips = movable
+                ? (first && s.a.opens_on && weekOf(s.a.opens_on) === s.start && !taught(s.start) ? `<span class="grip top" data-edge="opens" title="Drag to move when it opens"></span>` : "") +
                   (last ? `<span class="grip bottom" data-edge="due" title="Drag to move when it is due"></span>` : "")
                 : "";
-              const cls = `lseg ${s.lane[2]}${first ? " first" : ""}${last ? " last" : ""}${s.a.draft ? " draft" : ""}`;
+              const cls = `lseg ${s.lane[2]}${first ? " first" : ""}${last ? " last" : ""}${s.a.draft ? " draft" : ""}${editable && locked ? " locked" : ""}`;
               const tip = `${s.a.title}${s.a.opens_on ? " · opens " + shortDate(s.a.opens_on) : ""} · due ${shortDate(s.a.due_on)}` +
-                (editable ? " — drag to another week" : "");
-              return `<div class="${cls}" data-a="${id}" data-wk="${w.week}"${editable ? ' draggable="true"' : ""} title="${esc(tip)}">` +
+                (!editable ? "" : locked ? ` — ${why}` : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
+              return `<div class="${cls}" data-a="${id}" data-wk="${w.week}"${movable ? ' draggable="true"' : ""} title="${esc(tip)}">` +
                 `${grips}${title}${due}</div>`;
             })
             .join("")}</td>`;
         })
         .join("");
-      return `<tr class="${w.when === "current" ? "now" : ""}" data-week="${w.week}" data-from="${esc(w.starts_on)}" data-to="${esc(w.ends_on)}">` +
+      return `<tr class="${w.when === "current" ? "now" : ""}" data-week="${w.week}" data-from="${esc(w.starts_on)}" data-to="${esc(w.ends_on)}"` +
+        `${taught(w.week) ? ' data-taught="1" title="Already taught: nothing moves into or out of this week"' : ""}>` +
         `<td class="wkn"><b>${w.week}</b><small>${esc(shortDate(w.starts_on))}</small></td>` +
         `<td class="topic">${
           !title
             ? '<span class="notopic">No topic yet</span>'
-            : editable
+            : editable && !taught(w.week)
               // One handle per module, since a week may hold two and each
               // moves on its own.
               ? (w.modules ?? [])
@@ -818,7 +900,13 @@ const planningBody = (data, { student }) => {
   // segment, because a bar is drawn once per week it runs through.
   const items = {};
   for (const a of [...(data.assessments ?? []), ...undated]) {
-    items[a.assessment_id] = { title: a.title, opens_at: a.opens_at ?? null, due_at: a.due_at ?? null };
+    items[a.assessment_id] = {
+      title: a.title,
+      opens_at: a.opens_at ?? null,
+      due_at: a.due_at ?? null,
+      // Opened in a week already taught: the opening stays, the due end moves.
+      ...(taught(weekOf(a.opens_on)) ? { hold: "opens" } : {}),
+    };
   }
   // And to move a topic: the week it is on and the meetings that teach it,
   // which are the ones the outline drew under that week for that module.
@@ -841,17 +929,24 @@ const planningBody = (data, { student }) => {
         .join("")}<small>Drag one onto a week, then settle the day.</small></div>`
     : "";
   const form = editable
+    // Each form has two faces. After a drop it is brief — where it lands and
+    // Save or Cancel (`.brief`); "Change dates" opens the inputs, which is
+    // also how the due line's button opens it.
     ? `<div class="planform" hidden role="dialog" aria-label="Dates"><b class="pf-title"></b><small class="pf-week"></small>` +
-      `<label><span>Opens</span><input type="datetime-local" class="pf-opens"><small class="pf-opens-wk"></small></label>` +
-      `<label><span>Due</span><input type="datetime-local" class="pf-due" required><small class="pf-due-wk"></small></label>` +
-      `<p class="pf-error" hidden></p><div class="pf-actions"><button type="button" class="primary pf-save">Save dates</button>` +
+      `<p class="pf-sum"></p>` +
+      `<div class="pf-fields"><label><span>Opens</span><input type="datetime-local" class="pf-opens"><small class="pf-opens-wk"></small></label>` +
+      `<label><span>Due</span><input type="datetime-local" class="pf-due" required><small class="pf-due-wk"></small></label></div>` +
+      `<p class="pf-error" hidden></p><div class="pf-actions"><button type="button" class="primary pf-save">Save</button>` +
       `<button type="button" class="chip pf-cancel">Cancel</button></div>` +
+      `<button type="button" class="pf-more">Change dates</button>` +
       `<small class="pf-note">Writes opens_at and due_at into its record. Canvas keeps its own copy until the definition is sent again.</small></div>` +
       `<div class="planform topicform" hidden role="dialog" aria-label="Move topic"><b class="tf-title"></b><small class="tf-week"></small>` +
+      `<p class="pf-sum tf-sum"></p>` +
       `<div class="tf-meetings"></div><label class="tf-swap" hidden><input type="checkbox" class="tf-swap-on"><span></span></label>` +
       `<div class="tf-other" hidden></div><p class="pf-error tf-error" hidden></p>` +
-      `<div class="pf-actions"><button type="button" class="primary tf-save">Move topic</button>` +
+      `<div class="pf-actions"><button type="button" class="primary tf-save">Save</button>` +
       `<button type="button" class="chip tf-cancel">Cancel</button></div>` +
+      `<button type="button" class="pf-more tf-more">Change meeting times</button>` +
       `<small class="pf-note">Writes the module's week and its meetings' dates. Slides and graded work keep theirs.</small></div>` +
       `<script type="application/json" id="plan-items">${JSON.stringify(items).replace(/</g, "\\u003c")}</script>` +
       `<script type="application/json" id="plan-topics">${JSON.stringify(topics).replace(/</g, "\\u003c")}</script>`
@@ -1163,7 +1258,7 @@ const evidenceBody = (data, evidence, status) => {
  */
 export const courseModeDocument = (
   data,
-  { dark = false, student = false, mode = "term", evidence = null, status = null, focus = null } = {},
+  { dark = false, student = false, mode = "term", evidence = null, status = null, focus = null, locks = null } = {},
 ) => {
   const run = data.run ?? {};
   const weeks = data.weeks ?? [];
@@ -1359,7 +1454,7 @@ export const courseModeDocument = (
   let main;
   if (mode === "planning") {
     // The one reading that writes, and only dates: so its foot says so.
-    main = strip("does the term hold together") + studentBanner + planningBody(data, { student }) +
+    main = strip("does the term hold together") + studentBanner + planningBody(data, { student, locks }) +
       (student
         ? structureFoot
         : `<p class="foot">Structure only — nothing here is derived from student work. Moving a bar changes its ` +

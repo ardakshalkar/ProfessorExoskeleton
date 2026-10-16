@@ -147,7 +147,7 @@ import {
   writeRunLmsValue,
 } from "./server/lms-writes.js";
 import { withMaterialLinks } from "./server/materials.js";
-import { writeAssessmentDates, writeTopicMoves } from "./server/plan-writes.js";
+import { planLocks, writeAssessmentDates, writeTopicMoves } from "./server/plan-writes.js";
 import {
   gradebookChanges,
   gradingImpact,
@@ -2108,6 +2108,18 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
           status = null;
         }
       }
+      // Planning's guardrail on work with results: which work, never whose —
+      // the page says only that it is locked. The taught weeks the page reads
+      // off the outline's own `when`. `plan-writes.js` enforces both on every
+      // write.
+      let locks = null;
+      if (mode === "planning") {
+        try {
+          locks = { results: [...planLocks(loadedRun(workspace, runId).bundle, runId).results] };
+        } catch {
+          locks = null;
+        }
+      }
       res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
       return send(
         res,
@@ -2119,6 +2131,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
           mode,
           evidence,
           status,
+          locks,
           // The week Teaching was last stepped to, kept by course mode.
           focus: /^\d{1,2}$/.test(url.searchParams.get("week") ?? "") ? Number(url.searchParams.get("week")) : null,
         }),

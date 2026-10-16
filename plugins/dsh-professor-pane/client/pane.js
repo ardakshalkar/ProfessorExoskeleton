@@ -66,6 +66,10 @@ export function ProfessorPane(props) {
   // re-fetched. Without it the pane would go on drawing the course as it was
   // before the approval it just performed.
   const [reload, setReload] = React.useState(0);
+  // Bumped after Planning saves a date or a topic. Only the course frame and
+  // the inspector read it: a move changes the weeks and what waits, and
+  // nothing the sheet notice, Canvas line or other views draw.
+  const [planned, setPlanned] = React.useState(0);
 
   // The publication the professor is looking at, or null.
   //
@@ -437,9 +441,9 @@ export function ProfessorPane(props) {
           .then((response) => response.json())
           .then((result) => {
             if (result.error) window.alert(String(result.error));
-            setReload((count) => count + 1);
+            setPlanned((count) => count + 1);
           })
-          .catch(() => setReload((count) => count + 1));
+          .catch(() => setPlanned((count) => count + 1));
         return;
       }
       // A topic dragged to another week: its module's week and its meetings'
@@ -464,9 +468,9 @@ export function ProfessorPane(props) {
           .then((response) => response.json())
           .then((result) => {
             if (result.error) window.alert(String(result.error));
-            setReload((count) => count + 1);
+            setPlanned((count) => count + 1);
           })
-          .catch(() => setReload((count) => count + 1));
+          .catch(() => setPlanned((count) => count + 1));
         return;
       }
       // From an assessment chip in course mode: the Grade view, or the Scans
@@ -643,7 +647,7 @@ export function ProfessorPane(props) {
     return h(Inspector, {
       runId: current.runId,
       sessionId: props.sessionId,
-      revision: reload,
+      revision: reload + "." + planned,
       mention: mentionAndShow,
       openPlace: openPlace,
       key: current.runId,
@@ -793,6 +797,7 @@ export function ProfessorPane(props) {
           drafts: drafts,
           setDrafts: setDrafts,
           reload: reload,
+          planned: planned,
           covered:
             material !== null || publishing !== null || uploading || batch ||
             desk !== null || grading !== null || scansPile !== null,

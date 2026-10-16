@@ -37,6 +37,41 @@ const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:\d{2})$/;
 /** `2026-10-05T23:59+05:00` as `2026-10-05T23:59:00+05:00`, the shape the records use. */
 const normalised = (value) => value.replace(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(Z|[+-])/, "$1:00$2");
 
+/**
+ * What Planning may not move, and why: the guardrails the page draws and
+ * these writes enforce again, so a page left open since yesterday cannot
+ * get past them.
+ *
+ * Work with results — any submission recorded against it — keeps its dates:
+ * students worked to them, and the grades were made against them. And a
+ * week already taught is history: no date in it moves, and nothing moves
+ * into it. A week is taught once the week of today has begun after it, on
+ * the outline's own count of seven days from the start date.
+ *
+ * `taughtBefore` is that boundary as a calendar date: a date earlier than it
+ * lies in a week already taught. Null before the term has begun.
+ */
+export const planLocks = (bundle, runId, today = new Date().toISOString().slice(0, 10)) => {
+  const run = runById(bundle).get(runId);
+  const results = new Set(
+    (bundle.submissions ?? []).map((submission) => submission.assessment_id).filter(Boolean),
+  );
+  let taughtBefore = null;
+  let currentWeek = 0;
+  if (run?.start_date && today >= run.start_date) {
+    const days = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${run.start_date}T00:00:00Z`)) / 86_400_000);
+    currentWeek = Math.floor(days / 7) + 1;
+    taughtBefore = new Date(Date.parse(`${run.start_date}T00:00:00Z`) + (currentWeek - 1) * 7 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+  }
+  return { results, taughtBefore, currentWeek };
+};
+
+// The calendar date a stamp names, in its own offset.
+const dayOf = (stamp) => (stamp ? String(stamp).slice(0, 10) : null);
+const taught = (locks, stamp) => Boolean(locks.taughtBefore && stamp && dayOf(stamp) < locks.taughtBefore);
+
 export const writeAssessmentDates = (workspace, root, runId, body) => {
   const assessmentId = String(body?.assessment ?? "").trim();
   if (!/^[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) return { error: "Not an assessment id." };
@@ -68,6 +103,23 @@ export const writeAssessmentDates = (workspace, root, runId, body) => {
   if (!due) return { error: `${assessmentId} needs a due date.` };
   if (opens && Date.parse(opens) > Date.parse(due)) {
     return { error: "It would open after it is due. Nothing was written." };
+  }
+  const locks = planLocks(bundle, runId);
+  if (locks.results.has(assessmentId)) {
+    return { error: `${assessmentId} already has results; its dates stay as they are. Nothing was written.` };
+  }
+  // Only a date that changes is held to the taught weeks: work that opened
+  // last week may still have its due date moved.
+  const same = (a, b) => (a ? Date.parse(a) : null) === (b ? Date.parse(b) : null);
+  for (const [key, next] of [["opens_at", opens], ["due_at", due]]) {
+    const was = record[key] ?? null;
+    if (same(was, next)) continue;
+    if (taught(locks, was)) {
+      return { error: `Its ${key === "due_at" ? "due date" : "opening"} is in a week already taught. Nothing was written.` };
+    }
+    if (taught(locks, next)) {
+      return { error: `That would put its ${key === "due_at" ? "due date" : "opening"} in a week already taught. Nothing was written.` };
+    }
   }
 
   const where = {
@@ -122,6 +174,7 @@ export const writeTopicMoves = (workspace, root, runId, body) => {
   const modules = new Map(modulesOf(bundle, run.course_id).map((m) => [m.module_id, m]));
   const activities = new Map(activitiesOf(bundle, runId).map((a) => [a.activity_id, a]));
 
+  const locks = planLocks(bundle, runId);
   const weeks = new Map();
   const stamps = new Map();
   for (const move of moves) {
@@ -132,6 +185,13 @@ export const writeTopicMoves = (workspace, root, runId, body) => {
     if (!Number.isInteger(week) || week < 1 || week > totalWeeks) {
       return { error: `Week ${move.week} is not a week of ${runId}, which has ${totalWeeks}.` };
     }
+    const from = Number(modules.get(moduleId).week);
+    if (from !== week && Number.isInteger(from) && from < locks.currentWeek) {
+      return { error: `${moduleId} is in week ${from}, already taught. Nothing was written.` };
+    }
+    if (from !== week && week < locks.currentWeek) {
+      return { error: `Week ${week} is already taught; nothing moves into it. Nothing was written.` };
+    }
     weeks.set(moduleId, week);
     for (const entry of Array.isArray(move.meetings) ? move.meetings : []) {
       const activityId = String(entry?.activity ?? "").trim();
@@ -141,6 +201,9 @@ export const writeTopicMoves = (workspace, root, runId, body) => {
       const text = String(entry.scheduled_at ?? "").trim();
       if (!STAMP.test(text) || Number.isNaN(Date.parse(text))) {
         return { error: `'${text}' is not a date with a time and an offset.` };
+      }
+      if (Date.parse(text) !== Date.parse(activity.scheduled_at ?? "") && (taught(locks, activity.scheduled_at) || taught(locks, text))) {
+        return { error: `${activityId} would move into or out of a week already taught. Nothing was written.` };
       }
       stamps.set(activityId, { scheduled_at: normalised(text) });
     }

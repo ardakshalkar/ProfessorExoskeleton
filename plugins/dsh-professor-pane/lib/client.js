@@ -5834,6 +5834,37 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
      * The failure text on the route is HTML for this reason too: it arrives
      * here as a document and goes into the frame like any other.
      */
+    /**
+     * Newer records into the document already open, without reloading it.
+     *
+     * The frame has no origin and no network, so it cannot fetch its own page;
+     * the pane fetches it and posts the HTML in. A document that knows how
+     * (course mode's `SCRIPT`) replaces its content in place and answers
+     * `swapped`, keeping its scroll, its scripts and its forms. One that does
+     * not answer within the second is given the HTML as a new `srcdoc` instead,
+     * which is the old full redraw.
+     */
+    const swapInto = (frame, html) =>
+      new Promise((resolve) => {
+        const target = frame && frame.contentWindow;
+        if (!target) {
+          resolve(false);
+          return;
+        }
+        const done = (swapped) => {
+          window.removeEventListener("message", onMessage);
+          clearTimeout(timer);
+          resolve(swapped);
+        };
+        const onMessage = (event) => {
+          const data = event.data;
+          if (event.source === target && data && data.source === "professor-pane" && data.kind === "swapped") done(true);
+        };
+        const timer = setTimeout(() => done(false), 1000);
+        window.addEventListener("message", onMessage);
+        target.postMessage({ source: "professor-pane", kind: "swap", html: html }, "*");
+      });
+
     function WidgetFrame(props) {
       const url = scoped(
         BASE +
@@ -5856,9 +5887,16 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
         props.sessionId,
       );
       const [doc, setDoc] = React.useState(null);
+      const frameRef = React.useRef(null);
+      // The URL the frame's document was loaded from. A fetch for the same URL
+      // under a new `revision` is the same page with newer records, and goes
+      // into the open document as a swap (see `swapInto`); any other URL is a
+      // different page and replaces the frame.
+      const loaded = React.useRef(null);
       React.useEffect(() => {
         let live = true;
-        setDoc(null);
+        const same = loaded.current === url && frameRef.current !== null;
+        if (!same) setDoc(null);
         fetch(url)
           .then((response) =>
             response.text().then((text) => ({
@@ -5872,7 +5910,20 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
             })),
           )
           .then((value) => {
-            if (live) setDoc(value);
+            if (!live) return;
+            if (!same) {
+              loaded.current = url;
+              setDoc(value);
+              return;
+            }
+            // The banner is ours and redraws; the frame keeps its document,
+            // and with it the scroll, unless it does not answer the swap.
+            swapInto(frameRef.current, value.html).then((swapped) => {
+              if (!live) return;
+              setDoc((old) =>
+                swapped && old && !old.failed ? Object.assign({}, value, { html: old.html }) : value,
+              );
+            });
           })
           .catch((error) => {
             if (live) setDoc({ failed: String(error.message || error) });
@@ -5880,7 +5931,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
         return () => {
           live = false;
         };
-      }, [url]);
+      }, [url, props.revision]);
 
       if (doc === null) return h(Message, null, "Reading the course model…");
       if (doc.failed) return h(Message, { error: true }, doc.failed);
@@ -5903,6 +5954,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
             )
           : null,
         h("iframe", {
+          ref: frameRef,
           className: "pp-frame",
           srcDoc: doc.html,
           sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox",
@@ -6584,8 +6636,10 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
             h(
               "div",
               { className: "pp-coursebody" },
+              // Not keyed by the write counters: a write swaps newer records into
+              // the open page, so a moved bar lands where the professor is looking.
               h(WidgetFrame, {
-                key: props.reload,
+                revision: props.reload + "." + (props.planned || 0),
                 view: "course",
                 runId: props.runId,
                 sessionId: props.sessionId,
@@ -15540,6 +15594,10 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       // re-fetched. Without it the pane would go on drawing the course as it was
       // before the approval it just performed.
       const [reload, setReload] = React.useState(0);
+      // Bumped after Planning saves a date or a topic. Only the course frame and
+      // the inspector read it: a move changes the weeks and what waits, and
+      // nothing the sheet notice, Canvas line or other views draw.
+      const [planned, setPlanned] = React.useState(0);
 
       // The publication the professor is looking at, or null.
       //
@@ -15911,9 +15969,9 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
               .then((response) => response.json())
               .then((result) => {
                 if (result.error) window.alert(String(result.error));
-                setReload((count) => count + 1);
+                setPlanned((count) => count + 1);
               })
-              .catch(() => setReload((count) => count + 1));
+              .catch(() => setPlanned((count) => count + 1));
             return;
           }
           // A topic dragged to another week: its module's week and its meetings'
@@ -15938,9 +15996,9 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
               .then((response) => response.json())
               .then((result) => {
                 if (result.error) window.alert(String(result.error));
-                setReload((count) => count + 1);
+                setPlanned((count) => count + 1);
               })
-              .catch(() => setReload((count) => count + 1));
+              .catch(() => setPlanned((count) => count + 1));
             return;
           }
           // From an assessment chip in course mode: the Grade view, or the Scans
@@ -16117,7 +16175,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
         return h(Inspector, {
           runId: current.runId,
           sessionId: props.sessionId,
-          revision: reload,
+          revision: reload + "." + planned,
           mention: mentionAndShow,
           openPlace: openPlace,
           key: current.runId,
@@ -16267,6 +16325,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
               drafts: drafts,
               setDrafts: setDrafts,
               reload: reload,
+              planned: planned,
               covered:
                 material !== null || publishing !== null || uploading || batch ||
                 desk !== null || grading !== null || scansPile !== null,
