@@ -1625,6 +1625,10 @@ is worth building.
       inline) — a route table of handlers in `server/`. Only three tests spawn
       the CLI today; the registry is where a smoke test per command becomes
       cheap. `L` · depends: —
+      *The pane half is done (2026-10-16):* `server/router.js` is the table,
+      the routes are `server/routes/<area>.js`, and `index.js` is the plugin
+      plus a dev reload, so a server edit needs no harness restart. The CLI
+      half is open.
 - [ ] **MOD-5** One collection registry. A new record type is edited into
       `model/*.ts`, `bundle.ts` `COLLECTION_SCHEMAS`, `loader.ts` `COLLECTIONS`,
       `schema.ts` `SCHEMA_MODELS`, `validate.ts` `ID_FIELDS`, `sqlgen.ts`,

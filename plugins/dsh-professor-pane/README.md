@@ -694,7 +694,13 @@ inside it has an opaque origin and cannot call back to the routes a Save needs.
 ## The two halves
 
 ```
-index.js        host: one prefix route, /professor-pane — the route table
+index.js        host: the plugin — one prefix route, /professor-pane, and the
+                dev reload of everything under server/
+server/router.js  the route table: matches a path to a route, resolves the
+                session's workspace, turns a throw into the answer
+server/routes/*.js  the routes, one module per area (core, defence, files,
+                scans, grade, preferences, syncs, integrations, canvas, plan,
+                grading, materials, publish, views, public)
 server/*.js     host: what the routes assemble, one module per concern
                 (workspace, preferences, integrations, lms-writes, connections,
                 page, course-views, checklist, students, defence-desk,
@@ -727,6 +733,22 @@ the registration, and the result is committed:
   page, no reload. Run `npm run build` before committing: the committed build
   has no map, and `test/client-build.test.mjs` fails when the built file is out
   of step with the sources.
+
+**Edit `server/`, and the next request runs it** — no harness restart. dsh
+imports `index.js` once, and it keeps it that way: the route table is imported
+with a generation number on its URL, a resolve hook hands that number to
+everything it imports (ours, and `@ainar/core`'s TypeScript), and a watch on
+`server/` and `ainar-node/src/` bumps the number on a save. The terminal running
+the harness says `professor-pane: server reloaded (generation N)`; a save that
+does not load (a syntax error mid-edit) is reported there and the last good
+server keeps answering. Module-level caches start empty after a reload.
+`index.js` itself still needs a restart, and `PROFESSOR_PANE_RELOAD=0` turns
+reloading off.
+
+**A new route** is an entry in the `routes` array of the area's module in
+`server/routes/` — `{ paths | prefixes | views, handle(c) }` — and nothing else;
+`server/router.js` says what `c` carries, and the table refuses a path claimed
+twice.
 
 ### The routes
 
