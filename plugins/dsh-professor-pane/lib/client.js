@@ -7282,7 +7282,14 @@ table.plan tr[data-taught] .wkn b{color:var(--muted)}
 .planform label{display:grid;grid-template-columns:48px 1fr;align-items:center;gap:2px 8px;font-size:13px}
 .planform label small{grid-column:2}
 .planform label small.off{color:var(--flag)}
-.planform input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--sunk);color:var(--ink);color-scheme:inherit}
+.planform input,.planform select{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--sunk);color:var(--ink);color-scheme:inherit}
+.planform .pf-row{display:grid;grid-template-columns:48px 1fr;align-items:start;gap:8px;font-size:13px}
+.planform .pf-row>span{padding-top:5px}
+.pf-week-pick{display:flex;flex-wrap:wrap;gap:6px}
+.pf-week-pick select:first-child{flex:1 1 100%}
+.pf-week-pick select+select{flex:1 1 auto}
+.pf-week-pick input[type=time]{flex:0 0 auto}
+.pf-mode{all:unset;cursor:pointer;font-size:12px;color:var(--accent);text-decoration:underline dotted;text-underline-offset:2px;align-self:flex-start}
 .planform .pf-error{margin:0;color:var(--flag);font-size:12px}
 .pf-actions{display:flex;gap:8px;align-items:center}
 .pf-actions .chip{cursor:pointer}
@@ -7874,19 +7881,37 @@ var placed = (x, y, width, height) => ({
   left: Math.max(12, Math.min(x + 14, window.innerWidth - width - 12)) + "px",
   top: Math.max(12, Math.min(y + 14, window.innerHeight - height - 12)) + "px"
 });
+var daysBetween = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
+function WeekWhen(props) {
+  const { value, rows, weekOf, isOpens, className, onChange } = props;
+  const day = value ? value.slice(0, 10) : "";
+  const row = day ? rows.find((r) => r.n === weekOf(day)) : null;
+  const time = value ? value.slice(11, 16) : isOpens ? "09:00" : "23:59";
+  const days = (r) => Array.from({ length: daysBetween(r.from, r.to) + 1 }, (_, i) => addDays(r.from, i));
+  const toWeek = (n) => {
+    const r = rows.find((x) => x.n === n);
+    if (!r) return onChange("");
+    const len = daysBetween(r.from, r.to);
+    const at = row ? Math.min(daysBetween(row.from, day), len) : isOpens ? 0 : len;
+    onChange(addDays(r.from, at) + "T" + time);
+  };
+  return /* @__PURE__ */ h("span", { className: "pf-week-pick " + className }, /* @__PURE__ */ h("select", { value: row ? row.n : "", onChange: (e) => toWeek(Number(e.target.value)), "aria-label": "Week" }, /* @__PURE__ */ h("option", { value: "" }, isOpens ? "No opening" : "Week…"), rows.map((r) => /* @__PURE__ */ h("option", { key: r.n, value: r.n }, "Week " + r.n + " · " + nice(r.from)))), row ? /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("select", { value: day, onChange: (e) => onChange(e.target.value + "T" + time), "aria-label": "Day" }, days(row).map((d) => /* @__PURE__ */ h("option", { key: d, value: d }, dayName(d) + " " + nice(d)))), /* @__PURE__ */ h("input", { type: "time", value: time, onChange: (e) => e.target.value && onChange(day + "T" + e.target.value), "aria-label": "Time" })) : null);
+}
 function DatesForm(props) {
-  const { pending, item, rowOf, weekOf, taughtBefore, onChange, onSave, onCancel } = props;
+  const { pending, item, rows, rowOf, weekOf, taughtBefore, onChange, onSave, onCancel } = props;
   const [brief, setBrief] = React.useState(pending.brief);
+  const outside = [pending.opens, pending.due].some((v) => v && !weekOf(v.slice(0, 10)));
+  const [byDate, setByDate] = React.useState(outside);
   const ref = React.useRef(null);
   useOutside(ref, () => !pending.saving && onCancel());
   const [size2, setSize] = React.useState({ w: 290, h: 200 });
   React.useLayoutEffect(() => {
     if (ref.current) setSize({ w: ref.current.offsetWidth, h: ref.current.offsetHeight });
-  }, [brief]);
+  }, [brief, byDate, Boolean(pending.opens), Boolean(pending.due)]);
   React.useEffect(() => {
-    const first = ref.current && ref.current.querySelector(brief ? ".pf-save" : ".pf-due");
+    const first = ref.current && ref.current.querySelector(brief ? ".pf-save" : byDate ? ".pf-due" : ".pf-due select");
     if (first) first.focus();
-  }, [brief]);
+  }, [brief, byDate]);
   const wasTaught = (v) => Boolean(taughtBefore && v && v.slice(0, 10) < taughtBefore);
   const frozen = (was, now) => was !== now && (wasTaught(was) || wasTaught(now));
   const orig = { opens: local(item.opens_at), due: local(item.due_at) };
@@ -7917,7 +7942,7 @@ function DatesForm(props) {
     /* @__PURE__ */ h("b", { className: "pf-title" }, item.title || pending.id),
     /* @__PURE__ */ h("small", { className: "pf-week" }, r ? (brief && pending.from ? "Week " + pending.from + " → week " + r.n : "Week " + r.n) + " · " + nice(r.from) + " – " + nice(r.to) : ""),
     /* @__PURE__ */ h("p", { className: "pf-sum" }, (pending.opens ? "Opens " + when2(pending.opens) + " · " : "") + "due " + when2(pending.due)),
-    /* @__PURE__ */ h("div", { className: "pf-fields" }, /* @__PURE__ */ h("label", null, /* @__PURE__ */ h("span", null, "Opens"), /* @__PURE__ */ h("input", { type: "datetime-local", className: "pf-opens", value: pending.opens, onChange: (e) => onChange({ opens: e.target.value }) }), /* @__PURE__ */ h("small", { className: "pf-opens-wk" + (opensHint.off ? " off" : "") }, opensHint.text)), /* @__PURE__ */ h("label", null, /* @__PURE__ */ h("span", null, "Due"), /* @__PURE__ */ h("input", { type: "datetime-local", className: "pf-due", required: true, value: pending.due, onChange: (e) => onChange({ due: e.target.value }) }), /* @__PURE__ */ h("small", { className: "pf-due-wk" + (dueHint.off ? " off" : "") }, dueHint.text))),
+    /* @__PURE__ */ h("div", { className: "pf-fields" }, byDate ? /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("label", null, /* @__PURE__ */ h("span", null, "Opens"), /* @__PURE__ */ h("input", { type: "datetime-local", className: "pf-opens", value: pending.opens, onChange: (e) => onChange({ opens: e.target.value }) }), /* @__PURE__ */ h("small", { className: "pf-opens-wk" + (opensHint.off ? " off" : "") }, opensHint.text)), /* @__PURE__ */ h("label", null, /* @__PURE__ */ h("span", null, "Due"), /* @__PURE__ */ h("input", { type: "datetime-local", className: "pf-due", required: true, value: pending.due, onChange: (e) => onChange({ due: e.target.value }) }), /* @__PURE__ */ h("small", { className: "pf-due-wk" + (dueHint.off ? " off" : "") }, dueHint.text))) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "pf-row" }, /* @__PURE__ */ h("span", null, "Opens"), /* @__PURE__ */ h(WeekWhen, { value: pending.opens, rows, weekOf, isOpens: true, className: "pf-opens", onChange: (v) => onChange({ opens: v }) })), /* @__PURE__ */ h("div", { className: "pf-row" }, /* @__PURE__ */ h("span", null, "Due"), /* @__PURE__ */ h(WeekWhen, { value: pending.due, rows, weekOf, className: "pf-due", onChange: (v) => onChange({ due: v }) }))), /* @__PURE__ */ h("button", { type: "button", className: "pf-mode", onClick: () => setByDate(!byDate) }, byDate ? "Pick by week instead" : "Pick a calendar date instead")),
     bad ? /* @__PURE__ */ h("p", { className: "pf-error" }, bad) : null,
     /* @__PURE__ */ h("div", { className: "pf-actions" }, /* @__PURE__ */ h("button", { type: "button", className: "primary pf-save", disabled: Boolean(bad) || pending.saving, onClick: onSave }, pending.saving ? "Saving…" : brief ? "Save" : "Save dates"), /* @__PURE__ */ h("button", { type: "button", className: "chip pf-cancel", onClick: onCancel }, "Cancel")),
     /* @__PURE__ */ h("button", { type: "button", className: "pf-more", onClick: () => setBrief(false) }, "Change dates"),
@@ -8398,6 +8423,7 @@ function Planning(props) {
       key: pending.id,
       pending,
       item: recordOf(pending.id),
+      rows,
       rowOf,
       weekOf,
       taughtBefore,

@@ -124,19 +124,70 @@ const placed = (x, y, width, height) => ({
   top: Math.max(12, Math.min(y + 14, window.innerHeight - height - 12)) + "px",
 });
 
+const daysBetween = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
+
+/**
+ * One date as a professor plans it: a week of the term, a day in it and a
+ * time. The value is the same wall time the date input would give, so the
+ * form and the record never know which way it was set. A new week keeps the
+ * weekday it had; a first one falls on the week's first day for an opening
+ * and its last for a due date, at the hour such dates usually carry.
+ */
+function WeekWhen(props) {
+  const { value, rows, weekOf, isOpens, className, onChange } = props;
+  const day = value ? value.slice(0, 10) : "";
+  const row = day ? rows.find((r) => r.n === weekOf(day)) : null;
+  const time = value ? value.slice(11, 16) : isOpens ? "09:00" : "23:59";
+  const days = (r) => Array.from({ length: daysBetween(r.from, r.to) + 1 }, (_, i) => addDays(r.from, i));
+  const toWeek = (n) => {
+    const r = rows.find((x) => x.n === n);
+    if (!r) return onChange("");
+    const len = daysBetween(r.from, r.to);
+    const at = row ? Math.min(daysBetween(row.from, day), len) : isOpens ? 0 : len;
+    onChange(addDays(r.from, at) + "T" + time);
+  };
+  return (
+    <span className={"pf-week-pick " + className}>
+      <select value={row ? row.n : ""} onChange={(e) => toWeek(Number(e.target.value))} aria-label="Week">
+        <option value="">{isOpens ? "No opening" : "Week…"}</option>
+        {rows.map((r) => (
+          <option key={r.n} value={r.n}>
+            {"Week " + r.n + " · " + nice(r.from)}
+          </option>
+        ))}
+      </select>
+      {row ? (
+        <Fragment>
+          <select value={day} onChange={(e) => onChange(e.target.value + "T" + time)} aria-label="Day">
+            {days(row).map((d) => (
+              <option key={d} value={d}>
+                {dayName(d) + " " + nice(d)}
+              </option>
+            ))}
+          </select>
+          <input type="time" value={time} onChange={(e) => e.target.value && onChange(day + "T" + e.target.value)} aria-label="Time" />
+        </Fragment>
+      ) : null}
+    </span>
+  );
+}
+
 function DatesForm(props) {
-  const { pending, item, rowOf, weekOf, taughtBefore, onChange, onSave, onCancel } = props;
+  const { pending, item, rows, rowOf, weekOf, taughtBefore, onChange, onSave, onCancel } = props;
   const [brief, setBrief] = React.useState(pending.brief);
+  // By week unless a date already lies outside the term, where no week holds it.
+  const outside = [pending.opens, pending.due].some((v) => v && !weekOf(v.slice(0, 10)));
+  const [byDate, setByDate] = React.useState(outside);
   const ref = React.useRef(null);
   useOutside(ref, () => !pending.saving && onCancel());
   const [size, setSize] = React.useState({ w: 290, h: 200 });
   React.useLayoutEffect(() => {
     if (ref.current) setSize({ w: ref.current.offsetWidth, h: ref.current.offsetHeight });
-  }, [brief]);
+  }, [brief, byDate, Boolean(pending.opens), Boolean(pending.due)]);
   React.useEffect(() => {
-    const first = ref.current && ref.current.querySelector(brief ? ".pf-save" : ".pf-due");
+    const first = ref.current && ref.current.querySelector(brief ? ".pf-save" : byDate ? ".pf-due" : ".pf-due select");
     if (first) first.focus();
-  }, [brief]);
+  }, [brief, byDate]);
   const wasTaught = (v) => Boolean(taughtBefore && v && v.slice(0, 10) < taughtBefore);
   const frozen = (was, now) => was !== now && (wasTaught(was) || wasTaught(now));
   const orig = { opens: local(item.opens_at), due: local(item.due_at) };
@@ -177,16 +228,34 @@ function DatesForm(props) {
       </small>
       <p className="pf-sum">{(pending.opens ? "Opens " + when(pending.opens) + " · " : "") + "due " + when(pending.due)}</p>
       <div className="pf-fields">
-        <label>
-          <span>Opens</span>
-          <input type="datetime-local" className="pf-opens" value={pending.opens} onChange={(e) => onChange({ opens: e.target.value })} />
-          <small className={"pf-opens-wk" + (opensHint.off ? " off" : "")}>{opensHint.text}</small>
-        </label>
-        <label>
-          <span>Due</span>
-          <input type="datetime-local" className="pf-due" required value={pending.due} onChange={(e) => onChange({ due: e.target.value })} />
-          <small className={"pf-due-wk" + (dueHint.off ? " off" : "")}>{dueHint.text}</small>
-        </label>
+        {byDate ? (
+          <Fragment>
+            <label>
+              <span>Opens</span>
+              <input type="datetime-local" className="pf-opens" value={pending.opens} onChange={(e) => onChange({ opens: e.target.value })} />
+              <small className={"pf-opens-wk" + (opensHint.off ? " off" : "")}>{opensHint.text}</small>
+            </label>
+            <label>
+              <span>Due</span>
+              <input type="datetime-local" className="pf-due" required value={pending.due} onChange={(e) => onChange({ due: e.target.value })} />
+              <small className={"pf-due-wk" + (dueHint.off ? " off" : "")}>{dueHint.text}</small>
+            </label>
+          </Fragment>
+        ) : (
+          <Fragment>
+            <div className="pf-row">
+              <span>Opens</span>
+              <WeekWhen value={pending.opens} rows={rows} weekOf={weekOf} isOpens className="pf-opens" onChange={(v) => onChange({ opens: v })} />
+            </div>
+            <div className="pf-row">
+              <span>Due</span>
+              <WeekWhen value={pending.due} rows={rows} weekOf={weekOf} className="pf-due" onChange={(v) => onChange({ due: v })} />
+            </div>
+          </Fragment>
+        )}
+        <button type="button" className="pf-mode" onClick={() => setByDate(!byDate)}>
+          {byDate ? "Pick by week instead" : "Pick a calendar date instead"}
+        </button>
       </div>
       {bad ? <p className="pf-error">{bad}</p> : null}
       <div className="pf-actions">
@@ -869,6 +938,7 @@ export function Planning(props) {
           key={pending.id}
           pending={pending}
           item={recordOf(pending.id)}
+          rows={rows}
           rowOf={rowOf}
           weekOf={weekOf}
           taughtBefore={taughtBefore}

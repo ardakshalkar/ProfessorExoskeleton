@@ -150,7 +150,14 @@ table.plan tr[data-taught] .wkn b{color:var(--muted)}
 .planform label{display:grid;grid-template-columns:48px 1fr;align-items:center;gap:2px 8px;font-size:13px}
 .planform label small{grid-column:2}
 .planform label small.off{color:var(--flag)}
-.planform input{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--sunk);color:var(--ink);color-scheme:inherit}
+.planform input,.planform select{font:inherit;font-size:13px;padding:4px 6px;border:1px solid var(--line);border-radius:7px;background:var(--sunk);color:var(--ink);color-scheme:inherit}
+.planform .pf-row{display:grid;grid-template-columns:48px 1fr;align-items:start;gap:8px;font-size:13px}
+.planform .pf-row>span{padding-top:5px}
+.pf-week-pick{display:flex;flex-wrap:wrap;gap:6px}
+.pf-week-pick select:first-child{flex:1 1 100%}
+.pf-week-pick select+select{flex:1 1 auto}
+.pf-week-pick input[type=time]{flex:0 0 auto}
+.pf-mode{all:unset;cursor:pointer;font-size:12px;color:var(--accent);text-decoration:underline dotted;text-underline-offset:2px;align-self:flex-start}
 .planform .pf-error{margin:0;color:var(--flag);font-size:12px}
 .pf-actions{display:flex;gap:8px;align-items:center}
 .pf-actions .chip{cursor:pointer}
