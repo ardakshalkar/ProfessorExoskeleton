@@ -9,8 +9,9 @@ import { GradebookPanes } from "./gradebook.js";
 import { GradebookStatus, Unpublished } from "./marks.js";
 import { Files } from "./files.js";
 import { Integrations } from "./integrations.js";
+import { Preferences } from "./preferences.js";
 import { h, React, ReactDOM } from "./react.js";
-import { BASE, DRAFT_MODES, IDENTITY_MODES, scoped, SUBVIEWS } from "./tabs.js";
+import { BASE, DRAFT_MODES, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS } from "./tabs.js";
 
 /**
  * A widget document in an iframe, delivered as `srcdoc` rather than `src`.
@@ -54,7 +55,7 @@ import { BASE, DRAFT_MODES, IDENTITY_MODES, scoped, SUBVIEWS } from "./tabs.js";
  * The failure text on the route is HTML for this reason too: it arrives
  * here as a document and goes into the frame like any other.
  */
-export function WidgetFrame(props) {
+function WidgetFrame(props) {
   const url = scoped(
     BASE +
       "/view/" +
@@ -339,14 +340,50 @@ const defaultCourseMode = (start, end) => {
 const COURSE_VIEWS = [
   { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
+  // The class by concept: what used to be the right column's Progress tab.
+  { id: "concepts", label: "Concepts", hint: "The class, by concept — what has been shown and what has not" },
   { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
+  // What the course has got, by kind rather than by week: the right
+  // column's old Course outline sub-views, the student's outline last.
+  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, and the outline a student reads" },
   // The private material itself — scanned papers, recorded answers — which
   // lives outside the course folder, so has no other place to be seen whole.
   { id: "files", label: "Files", hint: "Scans and audio: where they are stored, how much there is, each pile" },
   // Last: not the course but its roads out — Canvas, the sheet, the
-  // repositories — and the rows a sync was not sure of, by name.
-  { id: "integrations", label: "Integrations", hint: "Canvas, the grade sheet and GitHub: where each stands, and what is waiting for you" },
+  // repositories — and what the skills assume. Opened twice a term.
+  { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume" },
 ];
+
+/**
+ * The views drawn as more than one document, and which: the first is the
+ * default. Each is a real view of the run, not a filter over one payload.
+ */
+const VIEW_SUBS = {
+  tasks: SUBVIEWS.tasks,
+  materials: [
+    { id: "assessments", label: "Assessments" },
+    { id: "slides", label: "Slides" },
+    { id: "exams", label: "Exams" },
+    { id: "grading", label: "Grading policy" },
+    { id: "outline", label: "Student's outline" },
+  ],
+  settings: [
+    { id: "integrations", label: "Integrations" },
+    { id: "preferences", label: "Preferences" },
+  ],
+};
+
+/** Older names a request may still use: the Integrations view became Course settings. */
+const VIEW_ALIASES = {
+  integrations: { view: "settings", sub: "integrations" },
+  preferences: { view: "settings", sub: "preferences" },
+};
+
+/** A request with its view resolved through `VIEW_ALIASES`. */
+const resolveRequest = (request) => {
+  if (!request || !VIEW_ALIASES[request.view]) return request;
+  return { ...request, ...VIEW_ALIASES[request.view], sub: request.sub || VIEW_ALIASES[request.view].sub };
+};
 
 /** The Status view's words for a connection, as the Integrations tab says them. */
 const CONNECTION_STATE = { ready: "connected", partial: "partly set up", absent: "not set up" };
@@ -357,7 +394,7 @@ export function CourseMode(props) {
   // `props.request` is a place pressed in the left sidebar: a reading
   // (`mode`) or a course-wide view (`view`). It decides where course mode
   // opens, and moves it when a second place is pressed while it is open.
-  const request = props.request || null;
+  const request = resolveRequest(props.request || null);
   const known = (id, list) => list.some((entry) => entry.id === id);
   const [mode, setMode] = React.useState(() =>
     request && known(request.mode, COURSE_MODES) ? request.mode : defaultCourseMode(props.start, props.end),
@@ -365,16 +402,36 @@ export function CourseMode(props) {
   // A course-wide view, when one is chosen, in place of the reading; the
   // reading is kept so the weeks come back as they were left.
   const [view, setView] = React.useState(() => (request && known(request.view, COURSE_VIEWS) ? request.view : null));
+  // Which document each many-document view shows, by view; the first listed
+  // until chosen, and kept when the professor leaves the view and comes back.
+  const [subs, setSubs] = React.useState(() =>
+    request && VIEW_SUBS[request.view] && known(request.sub, VIEW_SUBS[request.view]) ? { [request.view]: request.sub } : {},
+  );
+  const subOf = (id) => (VIEW_SUBS[id] ? subs[id] || VIEW_SUBS[id][0].id : null);
+  const setSub = (id, sub) => setSubs((value) => Object.assign({}, value, { [id]: sub }));
   React.useEffect(() => {
     if (!request) return;
     if (known(request.view, COURSE_VIEWS)) {
       setView(request.view);
+      if (VIEW_SUBS[request.view] && known(request.sub, VIEW_SUBS[request.view])) setSub(request.view, request.sub);
     } else if (known(request.mode, COURSE_MODES)) {
       setMode(request.mode);
       setView(null);
     }
   }, [request ? request.n : null]);
-  const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);  // The week Teaching was last stepped to. The page steps without a round
+  const taskSub = subOf("tasks");
+  // What is on screen, said to the pane (the inspector's focus) and to the
+  // navigator (which marks the place as current); null once closed.
+  const onShown = props.onShown;
+  React.useEffect(() => {
+    const place = { mode: mode, view: view };
+    if (onShown) onShown(place);
+    window.dispatchEvent(new CustomEvent(PLACE_SHOWN_EVENT, { detail: place }));
+  }, [mode, view]);
+  React.useEffect(
+    () => () => window.dispatchEvent(new CustomEvent(PLACE_SHOWN_EVENT, { detail: null })),
+    [],
+  );  // The week Teaching was last stepped to. The page steps without a round
   // trip and reports each step; it is held in a ref so a step redraws
   // nothing, and copied into `week` only when Teaching is drawn again — on
   // coming back to it, or when the record or the drafts toggle changes.
@@ -406,6 +463,33 @@ export function CourseMode(props) {
   // rather than by the shell's class names, which are hashed. With the stock
   // browser in the seat there is no navigator, and the veil covers it all.
   const [left, setLeft] = React.useState(0);
+  // And the right edge stops at the pane's column, so the inspector stays in
+  // view beside the place: found the same way, from `.pp-root` outwards —
+  // the outermost ancestor flush with the window's right edge and narrower
+  // than half of it. With the column closed there is none, and it is 0.
+  const [right, setRight] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const pane = document.querySelector(".pp-root");
+    if (!pane) return undefined;
+    let column = null;
+    for (let node = pane.parentElement; node && node !== document.body; node = node.parentElement) {
+      const rect = node.getBoundingClientRect();
+      if (Math.abs(rect.right - window.innerWidth) <= 0.5 && rect.width > 0 && rect.width < window.innerWidth / 2) column = node;
+    }
+    if (column === null) return undefined;
+    const measure = () => {
+      const rect = column.getBoundingClientRect();
+      setRight(rect.width > 0 ? Math.max(0, Math.round(window.innerWidth - rect.left)) : 0);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
   React.useLayoutEffect(() => {
     const nav = document.querySelector(".pp-nav, .pp-nav-rail");
     if (!nav) return undefined;
@@ -482,20 +566,46 @@ export function CourseMode(props) {
         }),
       );
     }
-    if (view === "integrations") {
+    if (view === "settings") {
       return h(
         "div",
         { className: "pp-cviewpad" },
-        h(Integrations, {
-          runId: props.runId,
-          sessionId: props.sessionId,
-          onWrite: props.onWrite,
-          revision: props.reload,
-          names: props.names,
-          ask: props.ask,
-          key: props.runId,
-        }),
+        subOf("settings") === "preferences"
+          ? h(Preferences, { courseId: props.courseId || "", term: props.term || "", sessionId: props.sessionId })
+          : h(Integrations, {
+              runId: props.runId,
+              sessionId: props.sessionId,
+              onWrite: props.onWrite,
+              revision: props.reload,
+              names: props.names,
+              ask: props.ask,
+              focus: props.integrationsFocus,
+              key: props.runId,
+            }),
       );
+    }
+    if (view === "concepts") {
+      return h(WidgetFrame, {
+        key: "progress|" + props.dark + "|" + props.drafts + "|" + props.reload,
+        view: "progress",
+        runId: props.runId,
+        sessionId: props.sessionId,
+        dark: props.dark,
+        drafts: props.drafts,
+        title: "Concepts",
+      });
+    }
+    if (view === "materials") {
+      const sub = subOf("materials");
+      return h(WidgetFrame, {
+        key: sub + "|" + props.dark + "|" + props.drafts + "|" + props.reload,
+        view: sub,
+        runId: props.runId,
+        sessionId: props.sessionId,
+        dark: props.dark,
+        drafts: props.drafts,
+        title: (VIEW_SUBS.materials.find((entry) => entry.id === sub) || { label: "Materials" }).label,
+      });
     }
     if (view === "students") {
       return h(WidgetFrame, {
@@ -576,14 +686,19 @@ export function CourseMode(props) {
       entry.label,
     );
   // The views that name people follow the pane's Names / Pseudonyms choice.
-  const named = view === "students" || view === "integrations" || (view === "tasks" && taskSub !== "unpublished");
+  const named = view === "students" || (view === "settings" && subOf("settings") === "integrations") || (view === "tasks" && taskSub !== "unpublished");
+  // With the navigator in the sidebar the places are chosen there, and this
+  // header keeps only the readings of the weeks. Without it — the stock
+  // browser in the seat, nothing measured — the row is the only way in.
+  const navigator = left > 0;
+  const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
 
   return ReactDOM.createPortal(
     h(
       "div",
       {
         className: "pp-veil pp-coursemode",
-        style: left ? { left: left + "px" } : undefined,
+        style: left || right ? { left: left + "px", right: right + "px" } : undefined,
         onMouseDown: (event) => {
           if (event.target === event.currentTarget) close();
         },
@@ -600,10 +715,14 @@ export function CourseMode(props) {
         h(
           "div",
           { className: "pp-modalhead pp-coursehead" },
-          h("div", { className: "pp-modaltitle" }, props.title + " · course mode"),
+          // The place, not the course: the course is named in the navigator
+          // beside it and in the column, and here it only crowded the row.
+          h("div", { className: "pp-modaltitle", title: props.title }, viewEntry ? viewEntry.label : navigator ? "Weeks" : props.title),
+          // The readings of the weeks. Under a place they are the way back to
+          // the weeks, so they stay, unpressed.
           COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
-          h("span", { className: "pp-segsep", "aria-hidden": "true" }),
-          COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
+          navigator ? null : h("span", { className: "pp-segsep", "aria-hidden": "true" }),
+          navigator ? null : COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
           h("span", { className: "pp-segspacer" }),
           DRAFT_MODES.map((entry) =>
             h(
@@ -645,7 +764,10 @@ export function CourseMode(props) {
                   className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
                   title: preview ? "Private — not shown while previewing as a student" : "Open Integrations",
                   disabled: preview,
-                  onClick: () => setView("integrations"),
+                  onClick: () => {
+                    setSub("settings", "integrations");
+                    setView("settings");
+                  },
                 },
                 [
                   canvasLine ? "Canvas: " + (CONNECTION_STATE[canvasLine.state] || canvasLine.state) : null,
@@ -664,20 +786,6 @@ export function CourseMode(props) {
             "button",
             { type: "button", className: "pp-publishbtn", title: "Scanned papers, an exam paper and its key, or recorded defences", onClick: props.onUpload },
             "Upload",
-          ),
-          h(
-            "select",
-            {
-              className: "pp-runs pp-jump",
-              value: "",
-              "aria-label": "Open a tab in the pane",
-              title: "Close course mode and open this tab in the pane",
-              onChange: (event) => {
-                if (event.target.value) props.onJump(event.target.value);
-              },
-            },
-            h("option", { value: "" }, "Open in pane…"),
-            props.tabs.map((entry) => h("option", { value: entry.id, key: entry.id, title: entry.hint }, entry.label)),
           ),
           h(
             "button",
@@ -711,12 +819,12 @@ export function CourseMode(props) {
           view
             ? h(
                 "section",
-                { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || { label: "Integrations" }).label },
-                view === "tasks" || named
+                { className: "pp-cview", "aria-label": viewEntry ? viewEntry.label : "Course" },
+                VIEW_SUBS[view] || named
                   ? h(
                       "div",
                       { className: "pp-cviewbar" },
-                      view === "tasks" ? SUBVIEWS.tasks.map((entry) => segment(entry, taskSub === entry.id, () => setTaskSub(entry.id), false)) : null,
+                      VIEW_SUBS[view] ? VIEW_SUBS[view].map((entry) => segment(entry, subOf(view) === entry.id, () => setSub(view, entry.id), false)) : null,
                       h("span", { className: "pp-segspacer" }),
                       // The pane's own choice, the same state, so the two never differ.
                       named

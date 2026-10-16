@@ -128,9 +128,9 @@ function App() {
     return h(window.__client.CourseMode, {
       title: RUN, runId: RUN, sessionId: "", start: "2026-09-01", end: "2026-12-20",
       reload: revision, drafts, setDrafts, names, setNames, dark: false, covered: false,
-      onClose: () => {}, onJump: () => {}, onPublish: () => {}, onUpload: () => {},
+      onClose: () => {}, onPublish: () => {}, onUpload: () => {},
       onWrite, openPublish: () => {}, ask: (text) => window.__asked.push(text),
-      tabs: [{ id: "integrations", label: "Integrations", hint: "" }],
+      courseId: "", term: "", integrationsFocus: focus,
     });
   }
   return h(React.Fragment, null,

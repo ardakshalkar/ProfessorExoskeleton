@@ -65,6 +65,13 @@ window.__ModuleLoader__.load({
     const BASE = "/professor-pane";
 
     /**
+     * The window event course mode announces what it shows on — `{ mode, view }`,
+     * or null when it closes — so the navigator can mark that place as current.
+     * Here rather than in navigator.js because course mode is built before it.
+     */
+    const PLACE_SHOWN_EVENT = "professor-pane:place-shown";
+
+    /**
      * `?session=` on every request.
      *
      * It is what makes the pane follow the workspace picked in the sidebar. The
@@ -167,66 +174,18 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * The button bar, in order.
+     * The documents behind a course-mode view that has more than one.
      *
-     * `id` is this file's vocabulary; `view` is the path segment `index.js`
-     * knows. "Course outline" is labelled as the student's view because that is
-     * what the widget is — the term plan as a student reads it — and the
-     * professor asking for it asked for it by that name.
-     */
-    const TABS = [
-      { id: "outline", label: "Course outline", hint: "Student's view", view: "outline" },
-      { id: "students", label: "Students", hint: "The class list, by subgroup", view: "students" },
-      { id: "progress", label: "Progress", hint: "The class, by concept", view: "progress" },
-      { id: "tasks", label: "Tasks", hint: "What is waiting for you", view: "tasks" },
-      // `view: null` for Integrations' reason: it calls back, to say who a paper is.
-      { id: "scans", label: "Scans", hint: "Paper exams: who each paper is, and where the pile stands", view: null },
-      { id: "preferences", label: "Preferences", hint: "What the skills assume", view: null },
-      // Last, deliberately. It is the tab a professor opens twice a term —
-      // when a course is wired up, and when a push does not arrive — rather
-      // than the one they live in, and the five before it are all about the
-      // course itself. `view: null` for Preferences' reason: it carries a form.
-      {
-        id: "integrations",
-        label: "Integrations",
-        hint: "What this course is wired to",
-        view: null,
-      },
-    ];
-
-    /**
-     * The documents behind a tab, where a tab has more than one.
+     * Until 2026-10-16 this table, and the TABS beside it, were the right
+     * column's button bar. The column is an inspector now (client/inspector.js)
+     * and its places live in course mode; Tasks is the one table course mode
+     * reads from here, since the Unpublished view keys off its last entry.
      *
-     * Each entry is a real view of the run, not a filter over one payload: the
-     * segmented row swaps which document the frame loads. A tab absent from this
-     * table draws the single view named in `TABS`.
-     *
-     * The FIRST entry is the default, so it should be the one a professor opens
-     * the tab expecting. `outline` leads with the weeks because that is what
-     * "course outline" means to them; `tasks` leads with Pending because a thing
-     * awaiting judgement outranks a thing merely drafted.
+     * Pending, then Ready, then Checklist: the order is how close a thing is to
+     * being finished. Pending is work awaiting the professor's judgement, Ready
+     * is work awaiting their approval, and Checklist is what nobody has started.
      */
     const SUBVIEWS = {
-      // Week by week is first, and therefore the default: the term as it runs
-      // is what the tab is for. The four beside it answer "what have I got",
-      // which used to be answerable only by scrolling sixteen weeks.
-      outline: [
-        { id: "outline", label: "Week by week" },
-        { id: "grading", label: "Grading policy" },
-        { id: "assessments", label: "Assessments" },
-        { id: "slides", label: "Slides" },
-        { id: "exams", label: "Exams" },
-      ],
-      progress: [
-        { id: "progress", label: "Concepts" },
-        { id: "gradebook", label: "Gradebook" },
-      ],
-      // Pending, then Ready, then Checklist: the order is how close a thing is
-      // to being finished. Pending is work awaiting the professor's judgement,
-      // Ready is work awaiting their approval, and Checklist is what nobody has
-      // started. Pending stays the default because a thing awaiting judgement
-      // outranks a thing merely drafted, and both outrank a thing not yet
-      // written.
       tasks: [
         { id: "tasks", label: "Pending" },
         { id: "ready", label: "Ready" },
@@ -235,47 +194,7 @@ window.__ModuleLoader__.load({
         // marks Canvas does not have, materials changed since publishing.
         { id: "unpublished", label: "Unpublished" },
       ],
-      // No row for Integrations since 2026-10-13: it is one card per service on
-      // This course, with Accounts behind a button in its own header.
     };
-
-    /** The default sub-view for a tab: the first one listed. */
-    const defaultSub = (tabId) => (SUBVIEWS[tabId] ? SUBVIEWS[tabId][0].id : null);
-
-    /**
-     * Tabs that draw no Record / + drafts pair.
-     *
-     * Not the same as "no sub-views": a tab absent from `SUBVIEWS` still gets
-     * the pair, because most single-document views have a drafted half worth
-     * seeing. These two do not — Preferences is not a view of a run, and the
-     * class list has no drafted half: enrollments are not agent-writable and
-     * carry no approval.
-     *
-     * Students is in this set and still draws a row: the identity pair below
-     * is its own control and has nothing to do with drafts.
-     *
-     * Integrations is in it for Preferences' reason and one sharper one. Its
-     * subject is what the run is wired to — a Canvas host, a token, a section
-     * id — and none of that is drafted: `versions` is not agent-writable, so
-     * there is no proposed half of an LMS linkage anywhere for a `+ drafts`
-     * press to reveal.
-     */
-    const NO_DRAFT_PAIR = new Set(["preferences", "students", "integrations", "scans"]);
-
-    /** Tabs with no segmented row of any kind. */
-    const NO_SEGMENTED_ROW = new Set(["preferences"]);
-
-    /**
-     * Tabs whose document can name a student, and therefore draw the pair.
-     *
-     * The class list, and the inbox — where the missing-submission rows and the
-     * open signals are about particular people. Nowhere else: the outline, the
-     * gradebook and the concept grid are about the class, and a parameter that
-     * reached them would be a parameter with nothing to do.
-     */
-    // Integrations for its Syncs view: "Ostanin Artym → Ostanin Artem" is a
-    // decision a professor can make; "→ STUDENT-B7K2QA" is not.
-    const NAMED_TABS = new Set(["students", "tasks", "scans", "integrations"]);
 
     /**
      * Pseudonyms or real names, on the tabs that name people.
@@ -853,7 +772,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-coursebody .pp-frame{background:transparent}
 .pp-coursehead{flex-wrap:wrap}
 /* The run picker's look, at a header's size: one control among the buttons. */
-.pp-coursehead .pp-jump{width:auto;margin:0;flex:none}
+.pp-coursehead .pp-modaltitle{flex:none;max-width:240px;margin-right:6px}
 .pp-coursehead label{display:inline-flex;gap:5px;align-items:center;font-size:11px;
   color:var(--dsw-alias-label-secondary,#555);cursor:pointer}
 /* The publish dialog's body. Unlike the material modal there is no frame to
@@ -1506,6 +1425,24 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
 .pp-nav-mono{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;
   background:var(--dsw-alias-fill-secondary,#f2f2f4);margin-bottom:6px;cursor:pointer;border:0;color:inherit}
 .pp-nav-pip{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:#d68c1e}
+.pp-nav-rail .pp-nav-icon[aria-current=true]{background:var(--dsw-alias-fill-secondary,#f2f2f4);color:var(--dsw-alias-label-primary,#111)}
+
+/* The right column as an inspector: focus, waiting, recent changes. */
+.pp-insp{flex:1;min-height:0;overflow-y:auto;padding:4px 8px 24px;font-size:13px;color:var(--dsw-alias-label-primary,#111)}
+.pp-insp-section{padding:6px 0 4px}
+.pp-insp-section+.pp-insp-section{border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6);margin-top:6px}
+.pp-insp-label{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#888);margin:6px 4px 4px}
+.pp-insp-label span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-insp-line{display:flex;align-items:baseline;gap:6px;flex:1;min-width:0;width:100%;box-sizing:border-box;text-align:left;font:inherit;font-size:12.5px;color:inherit;
+  background:0 0;border:0;border-radius:7px;padding:5px 6px;cursor:pointer}
+.pp-insp-line:hover{background:var(--dsw-alias-fill-secondary,#f2f2f4)}
+.pp-insp-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-insp-meta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#888)}
+.pp-insp-quiet{color:var(--dsw-alias-label-tertiary,#888);font-size:12px;padding:3px 6px}
+.pp-insp-change{display:flex;align-items:center;gap:2px;min-width:0}
+.pp-insp-act{flex:none;font:inherit;font-size:11px;padding:2px 8px;border-radius:6px;cursor:pointer;color:var(--dsw-alias-label-secondary,#444);
+  background:0 0;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-insp-act:hover{border-color:var(--dsw-alias-border-l3,#c9c9ce)}
 `;
 
     if (
@@ -6165,14 +6102,50 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
     const COURSE_VIEWS = [
       { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
       { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
+      // The class by concept: what used to be the right column's Progress tab.
+      { id: "concepts", label: "Concepts", hint: "The class, by concept — what has been shown and what has not" },
       { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
+      // What the course has got, by kind rather than by week: the right
+      // column's old Course outline sub-views, the student's outline last.
+      { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, and the outline a student reads" },
       // The private material itself — scanned papers, recorded answers — which
       // lives outside the course folder, so has no other place to be seen whole.
       { id: "files", label: "Files", hint: "Scans and audio: where they are stored, how much there is, each pile" },
       // Last: not the course but its roads out — Canvas, the sheet, the
-      // repositories — and the rows a sync was not sure of, by name.
-      { id: "integrations", label: "Integrations", hint: "Canvas, the grade sheet and GitHub: where each stands, and what is waiting for you" },
+      // repositories — and what the skills assume. Opened twice a term.
+      { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume" },
     ];
+
+    /**
+     * The views drawn as more than one document, and which: the first is the
+     * default. Each is a real view of the run, not a filter over one payload.
+     */
+    const VIEW_SUBS = {
+      tasks: SUBVIEWS.tasks,
+      materials: [
+        { id: "assessments", label: "Assessments" },
+        { id: "slides", label: "Slides" },
+        { id: "exams", label: "Exams" },
+        { id: "grading", label: "Grading policy" },
+        { id: "outline", label: "Student's outline" },
+      ],
+      settings: [
+        { id: "integrations", label: "Integrations" },
+        { id: "preferences", label: "Preferences" },
+      ],
+    };
+
+    /** Older names a request may still use: the Integrations view became Course settings. */
+    const VIEW_ALIASES = {
+      integrations: { view: "settings", sub: "integrations" },
+      preferences: { view: "settings", sub: "preferences" },
+    };
+
+    /** A request with its view resolved through `VIEW_ALIASES`. */
+    const resolveRequest = (request) => {
+      if (!request || !VIEW_ALIASES[request.view]) return request;
+      return { ...request, ...VIEW_ALIASES[request.view], sub: request.sub || VIEW_ALIASES[request.view].sub };
+    };
 
     /** The Status view's words for a connection, as the Integrations tab says them. */
     const CONNECTION_STATE = { ready: "connected", partial: "partly set up", absent: "not set up" };
@@ -6183,7 +6156,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       // `props.request` is a place pressed in the left sidebar: a reading
       // (`mode`) or a course-wide view (`view`). It decides where course mode
       // opens, and moves it when a second place is pressed while it is open.
-      const request = props.request || null;
+      const request = resolveRequest(props.request || null);
       const known = (id, list) => list.some((entry) => entry.id === id);
       const [mode, setMode] = React.useState(() =>
         request && known(request.mode, COURSE_MODES) ? request.mode : defaultCourseMode(props.start, props.end),
@@ -6191,16 +6164,36 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       // A course-wide view, when one is chosen, in place of the reading; the
       // reading is kept so the weeks come back as they were left.
       const [view, setView] = React.useState(() => (request && known(request.view, COURSE_VIEWS) ? request.view : null));
+      // Which document each many-document view shows, by view; the first listed
+      // until chosen, and kept when the professor leaves the view and comes back.
+      const [subs, setSubs] = React.useState(() =>
+        request && VIEW_SUBS[request.view] && known(request.sub, VIEW_SUBS[request.view]) ? { [request.view]: request.sub } : {},
+      );
+      const subOf = (id) => (VIEW_SUBS[id] ? subs[id] || VIEW_SUBS[id][0].id : null);
+      const setSub = (id, sub) => setSubs((value) => Object.assign({}, value, { [id]: sub }));
       React.useEffect(() => {
         if (!request) return;
         if (known(request.view, COURSE_VIEWS)) {
           setView(request.view);
+          if (VIEW_SUBS[request.view] && known(request.sub, VIEW_SUBS[request.view])) setSub(request.view, request.sub);
         } else if (known(request.mode, COURSE_MODES)) {
           setMode(request.mode);
           setView(null);
         }
       }, [request ? request.n : null]);
-      const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);  // The week Teaching was last stepped to. The page steps without a round
+      const taskSub = subOf("tasks");
+      // What is on screen, said to the pane (the inspector's focus) and to the
+      // navigator (which marks the place as current); null once closed.
+      const onShown = props.onShown;
+      React.useEffect(() => {
+        const place = { mode: mode, view: view };
+        if (onShown) onShown(place);
+        window.dispatchEvent(new CustomEvent(PLACE_SHOWN_EVENT, { detail: place }));
+      }, [mode, view]);
+      React.useEffect(
+        () => () => window.dispatchEvent(new CustomEvent(PLACE_SHOWN_EVENT, { detail: null })),
+        [],
+      );  // The week Teaching was last stepped to. The page steps without a round
       // trip and reports each step; it is held in a ref so a step redraws
       // nothing, and copied into `week` only when Teaching is drawn again — on
       // coming back to it, or when the record or the drafts toggle changes.
@@ -6232,6 +6225,33 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       // rather than by the shell's class names, which are hashed. With the stock
       // browser in the seat there is no navigator, and the veil covers it all.
       const [left, setLeft] = React.useState(0);
+      // And the right edge stops at the pane's column, so the inspector stays in
+      // view beside the place: found the same way, from `.pp-root` outwards —
+      // the outermost ancestor flush with the window's right edge and narrower
+      // than half of it. With the column closed there is none, and it is 0.
+      const [right, setRight] = React.useState(0);
+      React.useLayoutEffect(() => {
+        const pane = document.querySelector(".pp-root");
+        if (!pane) return undefined;
+        let column = null;
+        for (let node = pane.parentElement; node && node !== document.body; node = node.parentElement) {
+          const rect = node.getBoundingClientRect();
+          if (Math.abs(rect.right - window.innerWidth) <= 0.5 && rect.width > 0 && rect.width < window.innerWidth / 2) column = node;
+        }
+        if (column === null) return undefined;
+        const measure = () => {
+          const rect = column.getBoundingClientRect();
+          setRight(rect.width > 0 ? Math.max(0, Math.round(window.innerWidth - rect.left)) : 0);
+        };
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(column);
+        window.addEventListener("resize", measure);
+        return () => {
+          observer.disconnect();
+          window.removeEventListener("resize", measure);
+        };
+      }, []);
       React.useLayoutEffect(() => {
         const nav = document.querySelector(".pp-nav, .pp-nav-rail");
         if (!nav) return undefined;
@@ -6308,20 +6328,46 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
             }),
           );
         }
-        if (view === "integrations") {
+        if (view === "settings") {
           return h(
             "div",
             { className: "pp-cviewpad" },
-            h(Integrations, {
-              runId: props.runId,
-              sessionId: props.sessionId,
-              onWrite: props.onWrite,
-              revision: props.reload,
-              names: props.names,
-              ask: props.ask,
-              key: props.runId,
-            }),
+            subOf("settings") === "preferences"
+              ? h(Preferences, { courseId: props.courseId || "", term: props.term || "", sessionId: props.sessionId })
+              : h(Integrations, {
+                  runId: props.runId,
+                  sessionId: props.sessionId,
+                  onWrite: props.onWrite,
+                  revision: props.reload,
+                  names: props.names,
+                  ask: props.ask,
+                  focus: props.integrationsFocus,
+                  key: props.runId,
+                }),
           );
+        }
+        if (view === "concepts") {
+          return h(WidgetFrame, {
+            key: "progress|" + props.dark + "|" + props.drafts + "|" + props.reload,
+            view: "progress",
+            runId: props.runId,
+            sessionId: props.sessionId,
+            dark: props.dark,
+            drafts: props.drafts,
+            title: "Concepts",
+          });
+        }
+        if (view === "materials") {
+          const sub = subOf("materials");
+          return h(WidgetFrame, {
+            key: sub + "|" + props.dark + "|" + props.drafts + "|" + props.reload,
+            view: sub,
+            runId: props.runId,
+            sessionId: props.sessionId,
+            dark: props.dark,
+            drafts: props.drafts,
+            title: (VIEW_SUBS.materials.find((entry) => entry.id === sub) || { label: "Materials" }).label,
+          });
         }
         if (view === "students") {
           return h(WidgetFrame, {
@@ -6402,14 +6448,19 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
           entry.label,
         );
       // The views that name people follow the pane's Names / Pseudonyms choice.
-      const named = view === "students" || view === "integrations" || (view === "tasks" && taskSub !== "unpublished");
+      const named = view === "students" || (view === "settings" && subOf("settings") === "integrations") || (view === "tasks" && taskSub !== "unpublished");
+      // With the navigator in the sidebar the places are chosen there, and this
+      // header keeps only the readings of the weeks. Without it — the stock
+      // browser in the seat, nothing measured — the row is the only way in.
+      const navigator = left > 0;
+      const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
 
       return ReactDOM.createPortal(
         h(
           "div",
           {
             className: "pp-veil pp-coursemode",
-            style: left ? { left: left + "px" } : undefined,
+            style: left || right ? { left: left + "px", right: right + "px" } : undefined,
             onMouseDown: (event) => {
               if (event.target === event.currentTarget) close();
             },
@@ -6426,10 +6477,14 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
             h(
               "div",
               { className: "pp-modalhead pp-coursehead" },
-              h("div", { className: "pp-modaltitle" }, props.title + " · course mode"),
+              // The place, not the course: the course is named in the navigator
+              // beside it and in the column, and here it only crowded the row.
+              h("div", { className: "pp-modaltitle", title: props.title }, viewEntry ? viewEntry.label : navigator ? "Weeks" : props.title),
+              // The readings of the weeks. Under a place they are the way back to
+              // the weeks, so they stay, unpressed.
               COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
-              h("span", { className: "pp-segsep", "aria-hidden": "true" }),
-              COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
+              navigator ? null : h("span", { className: "pp-segsep", "aria-hidden": "true" }),
+              navigator ? null : COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
               h("span", { className: "pp-segspacer" }),
               DRAFT_MODES.map((entry) =>
                 h(
@@ -6471,7 +6526,10 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                       className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
                       title: preview ? "Private — not shown while previewing as a student" : "Open Integrations",
                       disabled: preview,
-                      onClick: () => setView("integrations"),
+                      onClick: () => {
+                        setSub("settings", "integrations");
+                        setView("settings");
+                      },
                     },
                     [
                       canvasLine ? "Canvas: " + (CONNECTION_STATE[canvasLine.state] || canvasLine.state) : null,
@@ -6490,20 +6548,6 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                 "button",
                 { type: "button", className: "pp-publishbtn", title: "Scanned papers, an exam paper and its key, or recorded defences", onClick: props.onUpload },
                 "Upload",
-              ),
-              h(
-                "select",
-                {
-                  className: "pp-runs pp-jump",
-                  value: "",
-                  "aria-label": "Open a tab in the pane",
-                  title: "Close course mode and open this tab in the pane",
-                  onChange: (event) => {
-                    if (event.target.value) props.onJump(event.target.value);
-                  },
-                },
-                h("option", { value: "" }, "Open in pane…"),
-                props.tabs.map((entry) => h("option", { value: entry.id, key: entry.id, title: entry.hint }, entry.label)),
               ),
               h(
                 "button",
@@ -6537,12 +6581,12 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
               view
                 ? h(
                     "section",
-                    { className: "pp-cview", "aria-label": (COURSE_VIEWS.find((entry) => entry.id === view) || { label: "Integrations" }).label },
-                    view === "tasks" || named
+                    { className: "pp-cview", "aria-label": viewEntry ? viewEntry.label : "Course" },
+                    VIEW_SUBS[view] || named
                       ? h(
                           "div",
                           { className: "pp-cviewbar" },
-                          view === "tasks" ? SUBVIEWS.tasks.map((entry) => segment(entry, taskSub === entry.id, () => setTaskSub(entry.id), false)) : null,
+                          VIEW_SUBS[view] ? VIEW_SUBS[view].map((entry) => segment(entry, subOf(view) === entry.id, () => setSub(view, entry.id), false)) : null,
                           h("span", { className: "pp-segspacer" }),
                           // The pane's own choice, the same state, so the two never differ.
                           named
@@ -14677,6 +14721,9 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       tasks: ["M9 6h11", "M9 12h11", "M9 18h11", "M4 6l1 1 2-2", "M4 12l1 1 2-2", "M4 18l1 1 2-2"],
       students: ["M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M3 20a6 6 0 0 1 12 0", "M16 4.5a3.5 3.5 0 0 1 0 6.5", "M18 14.5a6 6 0 0 1 3 5.5"],
       gradebook: ["M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z", "M4 10h16", "M4 15h16", "M10 4v16"],
+      concepts: ["M12 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M5 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M19 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M10.5 8.5l-4 7", "M13.5 8.5l4 7"],
+      materials: ["M7 3.5h7l4 4v12a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 19.5v-14.5A1.5 1.5 0 0 1 7 3.5z", "M14 3.5v4h4", "M9 13h6", "M9 17h6"],
+      settings: ["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"],
       files: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"],
       plug: ["M9 7V3", "M15 7V3", "M7 7h10v4a5 5 0 0 1-10 0z", "M12 16v5"],
       folders: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z", "M10.5 14.5a2 2 0 1 0 0-.01", "M12 15.5l2 2"],
@@ -14696,8 +14743,30 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out", request: { view: "tasks" } },
       { id: "students", label: "Students", hint: "The class list, by subgroup", request: { view: "students" } },
       { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment", request: { view: "gradebook" } },
+      { id: "concepts", label: "Concepts", hint: "The class, by concept", request: { view: "concepts" } },
+      { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, the student's outline", request: { view: "materials" } },
       { id: "files", label: "Files", hint: "Scans and recordings: where they are, each pile", request: { view: "files" } },
     ];
+
+    /** The foot's place: opened twice a term, so kept out of the list above. */
+    const SETTINGS = { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume", request: { view: "settings" } };
+
+    /**
+     * Which place course mode is showing, from its announcement; null while it is
+     * closed. Weeks is current under any reading of the weeks (`view` null).
+     */
+    function useShownPlace() {
+      const [shown, setShown] = React.useState(null);
+      React.useEffect(() => {
+        const onShown = (event) => setShown(event.detail || null);
+        window.addEventListener(PLACE_SHOWN_EVENT, onShown);
+        return () => window.removeEventListener(PLACE_SHOWN_EVENT, onShown);
+      }, []);
+      return shown;
+    }
+
+    const isShown = (shown, entry) =>
+      shown !== null && (entry.request.view ? shown.view === entry.request.view : shown.view === null);
 
     // ---------------------------------------------------------------- reading
 
@@ -14983,6 +15052,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
           : workspace.sessionIds.find((id) => list.byId[id] !== undefined) || null
         : null;
       const data = useNavigatorData(sessionId);
+      const shown = useShownPlace();
       const run = data && !data.error ? data.run : null;
 
       const sessions = React.useMemo(() => {
@@ -15030,6 +15100,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                 className: "pp-nav-icon",
                 title: entry.label,
                 "aria-label": entry.label,
+                "aria-current": isShown(shown, entry) ? "true" : undefined,
                 onClick: () => place(entry.request),
               },
               h(Icon, { d: ICONS[entry.id], size: 18 }),
@@ -15083,6 +15154,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                   icon: entry.id,
                   label: entry.label,
                   hint: entry.hint,
+                  current: isShown(shown, entry),
                   badge: badge.badge,
                   badgeHint: badge.hint,
                   onClick: () => place(entry.request),
@@ -15103,10 +15175,11 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
           { className: "pp-nav-foot" },
           run
             ? h(Row, {
-                icon: "plug",
-                label: "Integrations",
-                hint: "Canvas, the grade sheet and GitHub: where each stands",
-                onClick: () => place({ view: "integrations" }),
+                icon: SETTINGS.id,
+                label: SETTINGS.label,
+                hint: SETTINGS.hint,
+                current: isShown(shown, SETTINGS),
+                onClick: () => place(SETTINGS.request),
               })
             : null,
           h(Row, {
@@ -15138,6 +15211,188 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       );
     }
 
+    // ── client/inspector.js
+
+    /** A read whose last answer stays on screen while the next one loads. */
+    function useKept(url) {
+      const [value, setValue] = React.useState(null);
+      React.useEffect(() => {
+        if (url === null) return undefined;
+        let live = true;
+        fetch(url, { headers: { accept: "application/json" } })
+          .then((response) => response.json())
+          .then((answer) => {
+            if (live) setValue(answer);
+          })
+          .catch((error) => {
+            if (live) setValue({ error: String(error.message || error) });
+          });
+        return () => {
+          live = false;
+        };
+      }, [url]);
+      return value;
+    }
+
+    /** How long ago an ISO stamp was, in the navigator's own wording. */
+    const since = (iso, now) => ago(Date.parse(iso), now);
+
+    /**
+     * Where a changed record is read in full, by its folder. Absent: no place
+     * draws that kind on its own, and the line only offers the composer.
+     */
+    const PLACE_OF = {
+      assessments: { view: "materials", sub: "assessments" },
+      modules: { mode: "planning" },
+      activities: { mode: "planning" },
+      evaluations: { view: "gradebook" },
+      submissions: { view: "gradebook" },
+      concepts: { view: "concepts" },
+      documents: { view: "materials", sub: "slides" },
+      resources: { view: "materials", sub: "slides" },
+    };
+
+    function Section(props) {
+      return h(
+        "section",
+        { className: "pp-insp-section" },
+        h("div", { className: "pp-insp-label" }, h("span", null, props.label), props.action || null),
+        props.children,
+      );
+    }
+
+    function Line(props) {
+      return h(
+        "button",
+        { type: "button", className: "pp-insp-line", title: props.hint, onClick: props.onClick },
+        h("span", { className: "pp-insp-text" }, props.text),
+        props.badge ? h("span", { className: "pp-nav-badge" }, props.badge) : null,
+        props.meta ? h("span", { className: "pp-insp-meta" }, props.meta) : null,
+      );
+    }
+
+    function Inspector(props) {
+      const weekParam = props.week ? "&week=" + props.week : "";
+      const nav = useKept(
+        scoped(BASE + "/api/navigator?run=" + encodeURIComponent(props.runId) + weekParam + "&r=" + props.revision, props.sessionId),
+      );
+      const recent = useKept(scoped(BASE + "/api/recent?r=" + props.revision, props.sessionId));
+      const mention = (text) => {
+        if (props.mention) props.mention(text);
+      };
+      const now = Date.now();
+
+      const week = nav && !nav.error ? nav.week : null;
+      const runId = props.runId;
+      const focus = week
+        ? h(
+            Section,
+            {
+              label: "Week " + week.week + (week.modules.length ? " · " + week.modules.join(", ") : ""),
+              action: h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-insp-act",
+                  title: "Put this week's name into the message box",
+                  onClick: () => mention("week " + week.week + " of " + runId),
+                },
+                "Ask",
+              ),
+            },
+            week.starts_on ? h("div", { className: "pp-insp-quiet" }, (navDate(week.starts_on) || "") + " – " + (navDate(week.ends_on) || "")) : null,
+            week.meetings.map((meeting, index) =>
+              h(Line, {
+                key: "m" + index,
+                text: capital(meeting.type) + " · " + meeting.title,
+                badge: meeting.deck ? null : "no deck",
+                meta: navDate(meeting.on) || "no date",
+                hint: (meeting.location ? meeting.location + " — " : "") + "open Teaching on this week",
+                onClick: () => props.openPlace({ mode: "teaching" }),
+              }),
+            ),
+            week.due.map((work, index) =>
+              h(Line, {
+                key: "d" + index,
+                text: work.title + " due",
+                meta: navDate(work.due_on) || "no date",
+                hint: "Put " + work.assessment_id + " into the message box",
+                onClick: () => mention(work.assessment_id),
+              }),
+            ),
+            !week.meetings.length && !week.due.length ? h("div", { className: "pp-insp-quiet" }, "Nothing scheduled this week") : null,
+          )
+        : nav && !nav.error && nav.run
+          ? h(Section, { label: "This week" }, h("div", { className: "pp-insp-quiet" }, "The term is not under way"))
+          : null;
+
+      const pending = nav && nav.grading ? nav.grading.pending : 0;
+      const signals = nav && nav.grading ? nav.grading.signals : 0;
+      const gaps = nav && !nav.error ? nav.gaps || 0 : 0;
+      const draftKinds = recent && !recent.error ? recent.drafts_by || [] : [];
+      const waiting = [
+        pending ? { text: pending + (pending === 1 ? " mark waits" : " marks wait") + " for your decision", place: { view: "tasks" } } : null,
+        // Drafts by kind, the three largest: what is a draft matters more than how many.
+        ...draftKinds.slice(0, 3).map((kind) => ({
+          text: kind.count + " " + kind.collection.replace(/[-_]/g, " ") + " still " + (kind.count === 1 ? "a draft" : "drafts"),
+          place: { view: "tasks", sub: "ready" },
+        })),
+        gaps ? { text: gaps + (gaps === 1 ? " week has" : " weeks have") + " something missing", place: { mode: "planning" } } : null,
+        signals ? { text: signals + (signals === 1 ? " open signal" : " open signals"), place: { view: "tasks" } } : null,
+      ].filter(Boolean);
+
+      const changes = recent && !recent.error ? recent.recent : [];
+
+      return h(
+        "div",
+        { className: "pp-insp" },
+        focus,
+        h(
+          Section,
+          { label: "Waiting" },
+          waiting.length
+            ? waiting.map((entry, index) =>
+                h(Line, { key: index, text: entry.text, onClick: () => props.openPlace(entry.place), hint: "Open it in the centre" }),
+              )
+            : h("div", { className: "pp-insp-quiet" }, nav ? "Nothing is waiting for you" : "Reading the course…"),
+        ),
+        h(
+          Section,
+          { label: "Recent changes" },
+          changes.length
+            ? changes.map((change) => {
+                const place = PLACE_OF[change.collection];
+                return h(
+                  "div",
+                  { className: "pp-insp-change", key: change.path },
+                  h(Line, {
+                    text: change.records
+                      ? change.collection + " · " + change.records + " records"
+                      : change.title || change.id || change.path.split("/").pop(),
+                    badge: change.draft ? "draft" : null,
+                    meta: since(change.changed_at, now),
+                    hint: change.path + " — put it into the message box",
+                    onClick: () => mention(change.path),
+                  }),
+                  place
+                    ? h(
+                        "button",
+                        {
+                          type: "button",
+                          className: "pp-insp-act",
+                          title: "Open where it is drawn",
+                          onClick: () => props.openPlace(place),
+                        },
+                        "Open",
+                      )
+                    : null,
+                );
+              })
+            : h("div", { className: "pp-insp-quiet" }, recent ? "No records yet" : "Reading the course…"),
+        ),
+      );
+    }
+
     // ── client/pane.js
 
     // ----------------------------------------------------------------- pane
@@ -15151,22 +15406,10 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
      * widget's question.
      */
     function ProfessorPane(props) {
-      const [tab, setTab] = React.useState("outline");
-      // Which sub-view each tab is showing, keyed by tab. A map rather than one
-      // piece of state per tab so that adding a tab to SUBVIEWS needs no new
-      // state — and so that leaving a tab and coming back to it remembers where
-      // the professor was, which one shared value could not do.
-      const [subViews, setSubViews] = React.useState({});
-      // Which card Integrations → This course should bring into view, from a jump
-      // elsewhere (the sheet notice, Students' "Sync from sheet"). The tick makes
-      // the same jump work twice.
+      // Which card Integrations should bring into view, from a jump elsewhere
+      // (the sheet notice, Students' "Sync from sheet"). The tick makes the same
+      // jump work twice.
       const [integrationsFocus, setIntegrationsFocus] = React.useState({ service: null, tick: 0 });
-      const focusCard = (service) => {
-        setTab("integrations");
-        setSubViews((value) => Object.assign({}, value, { integrations: "course" }));
-        setIntegrationsFocus((value) => ({ service, tick: value.tick + 1 }));
-      };
-      const subView = (tabId) => subViews[tabId] ?? defaultSub(tabId);
       // ON by default, which reverses the original decision here and is worth
       // recording rather than quietly flipping.
       //
@@ -15265,6 +15508,34 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
       // What the left sidebar last asked course mode to show — `{ mode }`,
       // `{ view }` — numbered, so the same place pressed twice still lands.
       const [placeRequest, setPlaceRequest] = React.useState(null);
+      const placeCount = React.useRef(0);
+      /**
+       * Open a place in course mode, from this column: `{ mode }`, or `{ view,
+       * sub }`. The column has no places of its own since the tabs went (see
+       * client/inspector.js), so every jump that used to switch a tab lands here.
+       */
+      const openPlace = (request) => {
+        placeCount.current += 1;
+        setPlaceRequest({ ...request, n: "pane-" + placeCount.current });
+        setCourseMode(true);
+      };
+      const focusCard = (service) => {
+        setIntegrationsFocus((value) => ({ service, tick: value.tick + 1 }));
+        openPlace({ view: "settings", sub: "integrations" });
+      };
+      // What course mode is showing (`{ mode, view }`, reported by it), and the
+      // week Teaching was last stepped to — the inspector's focus.
+      const [shown, setShown] = React.useState(null);
+      const [steppedWeek, setSteppedWeek] = React.useState(null);
+      React.useEffect(() => {
+        const onMessage = (event) => {
+          const data = event.data;
+          if (!data || data.source !== "professor-pane" || data.kind !== "teaching-week") return;
+          if (Number.isInteger(data.week) && data.week > 0 && data.week < 100) setSteppedWeek(data.week);
+        };
+        window.addEventListener("message", onMessage);
+        return () => window.removeEventListener("message", onMessage);
+      }, []);
       // The run on screen, for the same reason: *Start defence* is answered by
       // that handler, and the run is chosen after it was registered.
       const currentRunRef = React.useRef(null);
@@ -15320,12 +15591,6 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
         const answer = (request) => {
           if (!request) return;
           if (typeof request.run === "string" && request.run) setChosen(request.run);
-          if (typeof request.tab === "string") {
-            setTab(request.tab);
-            setCourseMode(false);
-            if (props.openDetails) props.openDetails();
-            return;
-          }
           setPlaceRequest(request);
           setCourseMode(true);
         };
@@ -15601,7 +15866,6 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
           // is read directly or brought in as a downloaded file.
           if (data.kind === "syncs") {
             focusCard("sheets");
-            if (courseModeRef.current) setCourseMode(false);
             return;
           }
           if (data.kind === "publish") {
@@ -15733,21 +15997,17 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
           );
       };
 
+      // A press in the column puts words into the composer; under course mode
+      // the composer is covered, so get out of its way, as an `ask` does.
+      const mentionAndShow = props.mention && ((text) => {
+        const written = props.mention(text);
+        if (written) setCourseMode(false);
+        return written;
+      });
+
       const body = () => {
         if (runs.phase === "loading") return h(Message, null, "Reading the workspace…");
         if (runs.value.error) return h(Message, { error: true }, runs.value.error);
-        if (tab === "preferences") {
-          return h(Preferences, {
-            courseId: current ? current.courseId : "",
-            term: current ? current.term : "",
-            sessionId: props.sessionId,
-          });
-        }
-        // Integrations is NOT checked here beside Preferences, and the
-        // difference is the point: Preferences is not a view of a run and draws
-        // without one, while everything on Integrations hangs off the run
-        // record. With no offering to read there is nothing for it to draw, so
-        // it falls through to the sentence below, which is the accurate one.
         if (current === null) {
           // Not an empty state. A course whose `runs` came back empty is a
           // course the loader read and found no offering in, and the pane says
@@ -15763,112 +16023,18 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                 "Run `python -m ainar validate` for the specifics.",
           );
         }
-        if (tab === "scans") {
-          return h(ScansTab, {
-            runId: current.runId,
-            sessionId: props.sessionId,
-            names: names,
-            ask: props.ask,
-            // A placement writes a submission into the course, which other tabs draw.
-            onWrite: () => setReload((value) => value + 1),
-            revision: reload,
-            key: current.runId,
-          });
-        }
-        if (tab === "integrations") {
-          return h(Integrations, {
-            runId: current.runId,
-            subView: subView(tab),
-            sessionId: props.sessionId,
-            // A Save writes the run record, which every other tab is drawing.
-            // The same counter an approval bumps, so a change made here and one
-            // arriving from outside take the identical path.
-            onWrite: () => setReload((value) => value + 1),
-            // Passed as a prop rather than put in the `key`, which is the
-            // opposite of what every widget view does here and is deliberate.
-            // A bumped key REMOUNTS, and this component holds something a
-            // remount would throw away: the sections fetched from Canvas. The
-            // professor presses Fetch, ticks two sections, presses Save — and a
-            // remount at that moment would empty the list they had just used
-            // and make them spend another request to get it back. The component
-            // puts this in its own fetch URL instead, so the record is re-read
-            // and the catalogue survives.
-            revision: reload,
-            names: names,
-            ask: props.ask,
-            focus: integrationsFocus,
-            key: current.runId,
-          });
-        }
-        if (tab === "tasks" && subView(tab) === "unpublished") {
-          return h(Unpublished, {
-            runId: current.runId,
-            sessionId: props.sessionId,
-            revision: reload,
-            onWrite: () => setReload((value) => value + 1),
-            openPublish: openPublish,
-            ask: props.ask,
-            names: names,
-            key: current.runId,
-          });
-        }
-        const view = SUBVIEWS[tab] ? subView(tab) : TABS.find((t) => t.id === tab).view;
-        const frame = h(WidgetFrame, {
-          view: view,
+        // The week in focus: the one Teaching was stepped to, while course mode
+        // shows Teaching; otherwise this week (the server's default).
+        const teaching = courseMode && shown && shown.view === null && shown.mode === "teaching";
+        return h(Inspector, {
           runId: current.runId,
-          dark: dark,
-          drafts: drafts,
-          // Only the class list resolves identities, so only it is ever asked
-          // to. A `names` state left on while the professor moves to the
-          // gradebook must not quietly name people there too.
-          names: NAMED_TABS.has(tab) && names,
           sessionId: props.sessionId,
-          title: TABS.find((t) => t.id === tab).label,
-          // Run, view, theme, draft mode and identity mode in the key:
-          // switching any of them replaces the frame rather than leaving a
-          // document holding a payload for a question the professor is no
-          // longer asking. Identity belongs here for a sharper reason than the
-          // others — a frame kept across the switch back to Pseudonyms would go
-          // on displaying the names it already had.
-          key:
-            view +
-            "|" +
-            current.runId +
-            "|" +
-            (tab === "students" && names ? "n" : "p") +
-            "|" +
-            (dark ? "d" : "l") +
-            "|" +
-            (drafts ? "m" : "r") +
-            "|" +
-            reload,
+          revision: reload,
+          week: teaching ? steppedWeek : null,
+          mention: mentionAndShow,
+          openPlace: openPlace,
+          key: current.runId,
         });
-        if (tab === "progress" && view === "gradebook") {
-          return h(
-            React.Fragment,
-            null,
-            h(GradebookStatus, {
-              runId: current.runId,
-              sessionId: props.sessionId,
-              revision: reload,
-              key: "status|" + current.runId,
-              names: names,
-              ask: props.ask,
-              onWrite: () => setReload((value) => value + 1),
-            }),
-            h(GradebookPanes, {
-              runId: current.runId,
-              sessionId: props.sessionId,
-              revision: reload,
-              names: names,
-              ask: props.ask,
-              key: "panes|" + current.runId,
-              onWrite: () => setReload((value) => value + 1),
-            }),
-            frame,
-          );
-        }
-        return frame;
       };
 
       return h(
@@ -15881,8 +16047,9 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
             "div",
             { className: "pp-titlerow" },
             h("div", { className: "pp-title" }, current ? current.title : "Course"),
-            // The term plan as the page, over the harness. Beside Publish
-            // because, like it, it is about the run rather than about the tab.
+            // The course's places, over the conversation: the way in when the
+            // course navigator is not in the sidebar. Beside Publish because,
+            // like it, it is about the run rather than about this column.
             current
               ? h(
                   "button",
@@ -15894,7 +16061,7 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                       "to have the assistant fill it; Esc returns to the chat.",
                     onClick: () => setCourseMode(true),
                   },
-                  "Course mode",
+                  "Open course",
                 )
               : null,
             // Publishing is not a tab and not a sub-view, and putting it here
@@ -15976,108 +16143,16 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
                 ),
               )
             : null,
-          h(
-            "div",
-            { className: "pp-tabs", role: "tablist" },
-            TABS.map((entry) =>
-              h(
-                "button",
-                {
-                  type: "button",
-                  role: "tab",
-                  className: "pp-tab",
-                  "aria-selected": tab === entry.id,
-                  // The label is the accessible name and the hint is only the
-                  // hover text. A bare `title` would become the name instead,
-                  // which reads as "Resolved, read-only" in a screen reader
-                  // where the button says "Preferences".
-                  "aria-label": entry.label,
-                  title: entry.hint,
-                  onClick: () => setTab(entry.id),
-                  key: entry.id,
-                },
-                entry.label,
-              ),
-            ),
-          ),
         ),
-        // The segmented row: which document, which halves of the course it is
-        // computed over, and — on the class list only — whether people are
-        // named. Preferences has none of it; it is not a view of a run.
-        //
-        // Students gets no Record / + drafts pair, because enrollments are not
-        // agent-writable: there is no drafted class list and never will be, and a pair that changed nothing would be a control implying
-        // an answer it does not have. It gets the identity pair instead.
-        NO_SEGMENTED_ROW.has(tab)
-          ? null
-          : h(
-              "div",
-              { className: "pp-seg" },
-              SUBVIEWS[tab]
-                ? SUBVIEWS[tab].map((entry) =>
-                    h(
-                      "button",
-                      {
-                        type: "button",
-                        className: "pp-segbtn",
-                        "aria-pressed": subView(tab) === entry.id,
-                        onClick: () =>
-                          setSubViews((current) =>
-                            Object.assign({}, current, { [tab]: entry.id }),
-                          ),
-                        key: entry.id,
-                      },
-                      entry.label,
-                    ),
-                  )
-                : null,
-              h("span", { className: "pp-segspacer" }),
-              NO_DRAFT_PAIR.has(tab)
-                ? null
-                : DRAFT_MODES.map((entry) =>
-                    h(
-                      "button",
-                      {
-                        type: "button",
-                        className: "pp-segbtn",
-                        "aria-pressed": drafts === entry.drafts,
-                        title: entry.hint,
-                        onClick: () => setDrafts(entry.drafts),
-                        key: entry.label,
-                      },
-                      entry.label,
-                    ),
-                  ),
-              NAMED_TABS.has(tab)
-                ? IDENTITY_MODES.map((entry) =>
-                    h(
-                      "button",
-                      {
-                        type: "button",
-                        className:
-                          "pp-segbtn" + (entry.names && names ? " pp-segbtn-warn" : ""),
-                        "aria-pressed": names === entry.names,
-                        title: entry.hint,
-                        onClick: () => setNames(entry.names),
-                        key: entry.label,
-                      },
-                      entry.label,
-                    ),
-                  )
-                : null,
-            ),
         // Marks a grade-sheet sync brought in since this browser last looked,
-        // whoever ran it. Over every tab, since a sync is news wherever one is.
+        // whoever ran it. Above the inspector, since a sync is news wherever one is.
         current
           ? h(SheetNotice, {
               runId: current.runId,
               sessionId: props.sessionId,
               revision: reload,
               key: "notice|" + current.runId,
-              onOpen: () => {
-                setTab("progress");
-                setSubViews((value) => Object.assign({}, value, { progress: "gradebook" }));
-              },
+              onOpen: () => openPlace({ view: "gradebook" }),
               onSync: () => {
                 focusCard("sheets");
               },
@@ -16120,15 +16195,16 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
               ask: props.ask,
               openPublish: openPublish,
               onWrite: () => setReload((value) => value + 1),
-              tabs: TABS,
-              onJump: (id) => {
-                setTab(id);
-                setCourseMode(false);
-                if (props.openDetails) props.openDetails();
-              },
+              // For Course settings: Preferences is per course and term, and
+              // Integrations scrolls to the card a jump named.
+              courseId: current.courseId,
+              term: current.term,
+              integrationsFocus: integrationsFocus,
+              onShown: setShown,
               onClose: () => {
                 setCourseMode(false);
                 setPlaceRequest(null);
+                setShown(null);
               },
             })
           : null,

@@ -528,7 +528,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-coursebody .pp-frame{background:transparent}
 .pp-coursehead{flex-wrap:wrap}
 /* The run picker's look, at a header's size: one control among the buttons. */
-.pp-coursehead .pp-jump{width:auto;margin:0;flex:none}
+.pp-coursehead .pp-modaltitle{flex:none;max-width:240px;margin-right:6px}
 .pp-coursehead label{display:inline-flex;gap:5px;align-items:center;font-size:11px;
   color:var(--dsw-alias-label-secondary,#555);cursor:pointer}
 /* The publish dialog's body. Unlike the material modal there is no frame to
@@ -1181,6 +1181,24 @@ body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
 .pp-nav-mono{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;
   background:var(--dsw-alias-fill-secondary,#f2f2f4);margin-bottom:6px;cursor:pointer;border:0;color:inherit}
 .pp-nav-pip{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:#d68c1e}
+.pp-nav-rail .pp-nav-icon[aria-current=true]{background:var(--dsw-alias-fill-secondary,#f2f2f4);color:var(--dsw-alias-label-primary,#111)}
+
+/* The right column as an inspector: focus, waiting, recent changes. */
+.pp-insp{flex:1;min-height:0;overflow-y:auto;padding:4px 8px 24px;font-size:13px;color:var(--dsw-alias-label-primary,#111)}
+.pp-insp-section{padding:6px 0 4px}
+.pp-insp-section+.pp-insp-section{border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6);margin-top:6px}
+.pp-insp-label{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#888);margin:6px 4px 4px}
+.pp-insp-label span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-insp-line{display:flex;align-items:baseline;gap:6px;flex:1;min-width:0;width:100%;box-sizing:border-box;text-align:left;font:inherit;font-size:12.5px;color:inherit;
+  background:0 0;border:0;border-radius:7px;padding:5px 6px;cursor:pointer}
+.pp-insp-line:hover{background:var(--dsw-alias-fill-secondary,#f2f2f4)}
+.pp-insp-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-insp-meta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#888)}
+.pp-insp-quiet{color:var(--dsw-alias-label-tertiary,#888);font-size:12px;padding:3px 6px}
+.pp-insp-change{display:flex;align-items:center;gap:2px;min-width:0}
+.pp-insp-act{flex:none;font:inherit;font-size:11px;padding:2px 8px;border-radius:6px;cursor:pointer;color:var(--dsw-alias-label-secondary,#444);
+  background:0 0;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-insp-act:hover{border-color:var(--dsw-alias-border-l3,#c9c9ce)}
 `;
 
 if (

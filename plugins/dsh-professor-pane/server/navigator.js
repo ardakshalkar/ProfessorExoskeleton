@@ -69,8 +69,10 @@ const workLine = (entry) => ({
  * @param workspace - the course workspace the session stands in.
  * @param root - its folder, which `runsDocument` reports back.
  * @param askedRun - `?run=`, when the sidebar already knows which.
+ * @param askedWeek - `?week=`, for the right column's focus on a week the
+ *   professor stepped to in Teaching; absent, the current one.
  */
-export const navigatorDocument = (workspace, root, askedRun) => {
+export const navigatorDocument = (workspace, root, askedRun, askedWeek = null) => {
   const runs = runsDocument(workspace, root);
   const courses = runs.courses.map((course) => ({
     course_id: course.course_id,
@@ -88,7 +90,11 @@ export const navigatorDocument = (workspace, root, askedRun) => {
   const runId = picked.run.run_id;
   const outline = viewPayload(workspace, "course_outline", runId, undefined, false).payload;
   const weeks = Array.isArray(outline.weeks) ? outline.weeks : [];
-  const current = weeks.find((week) => week.when === "current") || null;
+  const asked = Number(askedWeek);
+  const current =
+    (Number.isInteger(asked) && asked > 0 ? weeks.find((week) => week.week === asked) : null) ||
+    weeks.find((week) => week.when === "current") ||
+    null;
   // The first week from this one on that has anything falling due in it —
   // "nothing due this week" is only useful beside when the next thing is.
   const next = weeks.find((week) => week.when !== "past" && week.due.length > 0) || null;

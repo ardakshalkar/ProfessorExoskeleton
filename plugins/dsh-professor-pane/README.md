@@ -1,27 +1,39 @@
 # dsh-professor-pane
 
-The right column of the DeepSeek Harness, as the professor's visualization pane.
+The professor's course, in three parts of the DeepSeek Harness (since 2026-10-16):
 
-Six buttons across the top of it — **Course outline**, **Students**,
-**Progress**, **Tasks**, **Preferences**, **Integrations** — and under most of
-them a segmented row of sub-views. The header names the run and its term dates,
-and offers a picker when the workspace holds more than one offering.
+* **Left — where.** The course navigator takes the sidebar's workspace
+  region: the course and its week, this week's meetings and deadlines, the
+  course's places (**Weeks**, **Tasks**, **Students**, **Gradebook**,
+  **Concepts**, **Materials**, **Files**), this course's chats, and **Course
+  settings** at the foot. *Folders and search* hands the seat back to the
+  stock browser. See `client/navigator.js`.
+* **Centre — the work.** The chat, or a place opened over it in course mode,
+  between the two columns.
+* **Right — context.** The column is an inspector, not a second set of tabs:
+  the week in focus (Teaching's stepped week, else this one), what is waiting
+  (marks, drafts by kind, weeks with gaps), and the records changed last, each
+  a press into the composer or into its place. Its header names the run, with
+  **Open course**, **Publish** and **Upload**. See `client/inspector.js` and
+  `server/inspector.js` (`/api/recent`).
 
-| Button | What it draws | Where it comes from |
+The places, as course mode draws them:
+
+| Place | What it draws | Where it comes from |
 | --- | --- | --- |
-| Course outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines. Every piece of graded work carries a link to the brief students read, or says it has none — and every week says what it is still waiting for | `course_outline` |
-| Course outline · Grading policy | With a `grading_scheme` on the run, how the grade is built: one bar of the whole grade, a segment per block (ВСК1 / ВСК2 / Final at Narxoz) split by kind of work; then a card per block — its weight against what its members add up to, the kinds of work with count and per-item share, each assessment with its date and a tick once marks are in, the dates the block spans, and whether each Canvas course has the block's assignment group mapped; then anything counting in no block. The written policy and the run's facts follow. Without a scheme, the flat list of weights and their total | the run's `grading_scheme`, its assessments, `gradebook` for which have marks (`server/grading-view.js`) |
+| Materials · Student's outline | The term plan a student reads: outcomes, the assessment table with declared weights, then week by week with each week's module, meetings and deadlines. Every piece of graded work carries a link to the brief students read, or says it has none — and every week says what it is still waiting for | `course_outline` |
+| Materials · Grading policy | With a `grading_scheme` on the run, how the grade is built: one bar of the whole grade, a segment per block (ВСК1 / ВСК2 / Final at Narxoz) split by kind of work; then a card per block — its weight against what its members add up to, the kinds of work with count and per-item share, each assessment with its date and a tick once marks are in, the dates the block spans, and whether each Canvas course has the block's assignment group mapped; then anything counting in no block. The written policy and the run's facts follow. Without a scheme, the flat list of weights and their total | the run's `grading_scheme`, its assessments, `gradebook` for which have marks (`server/grading-view.js`) |
 | Students | The class list by subgroup, named or pseudonymous, with each student's marks so far, and under each row what they actually handed in. A submission with a link gets **repository** and **Start defence**: the pane clones the fork pinned to the hand-in, then sends `/defend-submission` so the session's model drafts the questions, which are drawn there as drafts. **Open defence desk** opens them over the harness, where each answer is recorded, kept and transcribed through the `transcription` connection, and **Follow-up question** asks the session for one more | the enrollments, `gradebook` for the marks, the run's submissions and item responses, and for a defence `pin.yaml` in the submissions folder and `output/<RUN>/defence/` |
-| Progress · Concepts | Concepts in teaching order against students by pseudonym, with the mean proportion of marks earned on evidence tagged with each | `class_progress` |
-| Progress · Gradebook | One score per student per assessment, from approved decisions only, with the rows that must not be exported and the reason for each. Above it, one line per assessment something was handed in for: how many are graded, and how many of those marks Canvas has | `gradebook`; the line is `/api/unpublished` |
+| Concepts | Concepts in teaching order against students by pseudonym, with the mean proportion of marks earned on evidence tagged with each | `class_progress` |
+| Gradebook | One score per student per assessment, from approved decisions only, with the rows that must not be exported and the reason for each. Above it, one line per assessment something was handed in for: how many are graded, and how many of those marks Canvas has | `gradebook`; the line is `/api/unpublished` |
 | Tasks | Work with no date and a button that sets one, grades awaiting approval, outstanding submissions, open signals, interventions | `action_inbox` |
 | Tasks · Unpublished | What the course holds that has not gone out: marks not in Canvas (and whether a Canvas assignment exists for them), materials changed since they were published, and drafts a publication leaves out — each with the press that sends it | `/api/unpublished` (`server/unpublished.js`) |
-| Preferences | The DataLayer preference layers, each with its own file path and its own values | the preference files |
-| Integrations | What this run is wired to outside the workspace, and what it is not: the gradebook target, the Canvas course and host, the spreadsheet, which credentials are present, and which Canvas section feeds which subgroup | the run record, `lms.toml`, `connections.json`, the environment |
+| Course settings · Preferences | The DataLayer preference layers, each with its own file path and its own values | the preference files |
+| Course settings · Integrations | What this run is wired to outside the workspace, and what it is not: the gradebook target, the Canvas course and host, the spreadsheet, which credentials are present, and which Canvas section feeds which subgroup | the run record, `lms.toml`, `connections.json`, the environment |
 
 ## Course mode
 
-**Course mode**, beside Publish in the header, opens the whole term over the
+**Open course** in the header, or any place in the navigator, opens the term over the
 harness: one grid, week 1 to week N, in three columns — **Lecture** (each
 meeting with its own materials, the deck first), **Graded work** (one column,
 the type on the chip and the weight in bold) and **Outcomes** (what the week's

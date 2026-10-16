@@ -157,6 +157,7 @@ import {
   writeGradingLock,
   writeGradingPolicy,
 } from "./server/grading-writes.js";
+import { recentDocument } from "./server/inspector.js";
 import { navigatorDocument } from "./server/navigator.js";
 import { widgetDocument } from "./server/page.js";
 import { preferencesDocument, writePreferences } from "./server/preferences.js";
@@ -284,7 +285,12 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     // The left sidebar's course block: the run, this week, the counts on its
     // places. See server/navigator.js for which half each figure is read over.
     if (path === "/api/navigator") {
-      return sendJson(res, 200, navigatorDocument(workspace, root, runId));
+      return sendJson(res, 200, navigatorDocument(workspace, root, runId, url.searchParams.get("week")));
+    }
+
+    // The right column's recent changes and draft count; see server/inspector.js.
+    if (path === "/api/recent") {
+      return sendJson(res, 200, recentDocument(root));
     }
 
     /**

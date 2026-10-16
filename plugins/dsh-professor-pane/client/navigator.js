@@ -32,7 +32,7 @@
  */
 
 import { h, React } from "./react.js";
-import { BASE, scoped, useRevisionWatch } from "./tabs.js";
+import { BASE, PLACE_SHOWN_EVENT, scoped, useRevisionWatch } from "./tabs.js";
 
 // ------------------------------------------------------------- the request
 
@@ -93,6 +93,9 @@ const ICONS = {
   tasks: ["M9 6h11", "M9 12h11", "M9 18h11", "M4 6l1 1 2-2", "M4 12l1 1 2-2", "M4 18l1 1 2-2"],
   students: ["M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M3 20a6 6 0 0 1 12 0", "M16 4.5a3.5 3.5 0 0 1 0 6.5", "M18 14.5a6 6 0 0 1 3 5.5"],
   gradebook: ["M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z", "M4 10h16", "M4 15h16", "M10 4v16"],
+  concepts: ["M12 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M5 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M19 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6z", "M10.5 8.5l-4 7", "M13.5 8.5l4 7"],
+  materials: ["M7 3.5h7l4 4v12a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 19.5v-14.5A1.5 1.5 0 0 1 7 3.5z", "M14 3.5v4h4", "M9 13h6", "M9 17h6"],
+  settings: ["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"],
   files: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"],
   plug: ["M9 7V3", "M15 7V3", "M7 7h10v4a5 5 0 0 1-10 0z", "M12 16v5"],
   folders: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z", "M10.5 14.5a2 2 0 1 0 0-.01", "M12 15.5l2 2"],
@@ -112,8 +115,30 @@ const PLACES = [
   { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out", request: { view: "tasks" } },
   { id: "students", label: "Students", hint: "The class list, by subgroup", request: { view: "students" } },
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment", request: { view: "gradebook" } },
+  { id: "concepts", label: "Concepts", hint: "The class, by concept", request: { view: "concepts" } },
+  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, the student's outline", request: { view: "materials" } },
   { id: "files", label: "Files", hint: "Scans and recordings: where they are, each pile", request: { view: "files" } },
 ];
+
+/** The foot's place: opened twice a term, so kept out of the list above. */
+const SETTINGS = { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume", request: { view: "settings" } };
+
+/**
+ * Which place course mode is showing, from its announcement; null while it is
+ * closed. Weeks is current under any reading of the weeks (`view` null).
+ */
+function useShownPlace() {
+  const [shown, setShown] = React.useState(null);
+  React.useEffect(() => {
+    const onShown = (event) => setShown(event.detail || null);
+    window.addEventListener(PLACE_SHOWN_EVENT, onShown);
+    return () => window.removeEventListener(PLACE_SHOWN_EVENT, onShown);
+  }, []);
+  return shown;
+}
+
+const isShown = (shown, entry) =>
+  shown !== null && (entry.request.view ? shown.view === entry.request.view : shown.view === null);
 
 // ---------------------------------------------------------------- reading
 
@@ -125,7 +150,7 @@ const visibleSession = (session, current, archived) =>
   (!session.blank || session.id === current);
 
 /** "now", "5m", "3h", "2d", "3w" — the stock list's buckets, in English. */
-const ago = (updatedAt, now) => {
+export const ago = (updatedAt, now) => {
   const minutes = Math.floor((now - updatedAt) / 60000);
   if (!Number.isFinite(minutes) || minutes < 1) return "now";
   if (minutes < 60) return minutes + "m";
@@ -139,7 +164,7 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 /** `2026-10-20` as "Tue 20 Oct", read as a calendar date with no time zone. */
-const navDate = (iso) => {
+export const navDate = (iso) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
   if (!match) return null;
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
@@ -153,7 +178,7 @@ const shortTitle = (title) => {
   return cut.length <= 28 ? cut : text.slice(0, 28) + "…";
 };
 
-const capital = (word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : "");
+export const capital = (word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : "");
 
 /** The workspace remembered between page loads, read and written defensively. */
 const REMEMBERED = "professor-pane:navigator-workspace";
@@ -399,6 +424,7 @@ export function CourseNavigator(props) {
       : workspace.sessionIds.find((id) => list.byId[id] !== undefined) || null
     : null;
   const data = useNavigatorData(sessionId);
+  const shown = useShownPlace();
   const run = data && !data.error ? data.run : null;
 
   const sessions = React.useMemo(() => {
@@ -446,6 +472,7 @@ export function CourseNavigator(props) {
             className: "pp-nav-icon",
             title: entry.label,
             "aria-label": entry.label,
+            "aria-current": isShown(shown, entry) ? "true" : undefined,
             onClick: () => place(entry.request),
           },
           h(Icon, { d: ICONS[entry.id], size: 18 }),
@@ -499,6 +526,7 @@ export function CourseNavigator(props) {
               icon: entry.id,
               label: entry.label,
               hint: entry.hint,
+              current: isShown(shown, entry),
               badge: badge.badge,
               badgeHint: badge.hint,
               onClick: () => place(entry.request),
@@ -519,10 +547,11 @@ export function CourseNavigator(props) {
       { className: "pp-nav-foot" },
       run
         ? h(Row, {
-            icon: "plug",
-            label: "Integrations",
-            hint: "Canvas, the grade sheet and GitHub: where each stands",
-            onClick: () => place({ view: "integrations" }),
+            icon: SETTINGS.id,
+            label: SETTINGS.label,
+            hint: SETTINGS.hint,
+            current: isShown(shown, SETTINGS),
+            onClick: () => place(SETTINGS.request),
           })
         : null,
       h(Row, {

@@ -1,13 +1,19 @@
 /**
  * Where the pane's requests go and what it can show: the route prefix, the
- * revision poll that redraws on an outside write, and the tab and sub-view
- * tables.
+ * revision poll that redraws on an outside write, and the shared tables.
  */
 
 import { React } from "./react.js";
 
 /** Kept in step with `BASE` in server/http.js by hand; there are two of them. */
 export const BASE = "/professor-pane";
+
+/**
+ * The window event course mode announces what it shows on — `{ mode, view }`,
+ * or null when it closes — so the navigator can mark that place as current.
+ * Here rather than in navigator.js because course mode is built before it.
+ */
+export const PLACE_SHOWN_EVENT = "professor-pane:place-shown";
 
 /**
  * `?session=` on every request.
@@ -112,66 +118,18 @@ export function useRevisionWatch(url, onChange) {
 }
 
 /**
- * The button bar, in order.
+ * The documents behind a course-mode view that has more than one.
  *
- * `id` is this file's vocabulary; `view` is the path segment `index.js`
- * knows. "Course outline" is labelled as the student's view because that is
- * what the widget is — the term plan as a student reads it — and the
- * professor asking for it asked for it by that name.
- */
-export const TABS = [
-  { id: "outline", label: "Course outline", hint: "Student's view", view: "outline" },
-  { id: "students", label: "Students", hint: "The class list, by subgroup", view: "students" },
-  { id: "progress", label: "Progress", hint: "The class, by concept", view: "progress" },
-  { id: "tasks", label: "Tasks", hint: "What is waiting for you", view: "tasks" },
-  // `view: null` for Integrations' reason: it calls back, to say who a paper is.
-  { id: "scans", label: "Scans", hint: "Paper exams: who each paper is, and where the pile stands", view: null },
-  { id: "preferences", label: "Preferences", hint: "What the skills assume", view: null },
-  // Last, deliberately. It is the tab a professor opens twice a term —
-  // when a course is wired up, and when a push does not arrive — rather
-  // than the one they live in, and the five before it are all about the
-  // course itself. `view: null` for Preferences' reason: it carries a form.
-  {
-    id: "integrations",
-    label: "Integrations",
-    hint: "What this course is wired to",
-    view: null,
-  },
-];
-
-/**
- * The documents behind a tab, where a tab has more than one.
+ * Until 2026-10-16 this table, and the TABS beside it, were the right
+ * column's button bar. The column is an inspector now (client/inspector.js)
+ * and its places live in course mode; Tasks is the one table course mode
+ * reads from here, since the Unpublished view keys off its last entry.
  *
- * Each entry is a real view of the run, not a filter over one payload: the
- * segmented row swaps which document the frame loads. A tab absent from this
- * table draws the single view named in `TABS`.
- *
- * The FIRST entry is the default, so it should be the one a professor opens
- * the tab expecting. `outline` leads with the weeks because that is what
- * "course outline" means to them; `tasks` leads with Pending because a thing
- * awaiting judgement outranks a thing merely drafted.
+ * Pending, then Ready, then Checklist: the order is how close a thing is to
+ * being finished. Pending is work awaiting the professor's judgement, Ready
+ * is work awaiting their approval, and Checklist is what nobody has started.
  */
 export const SUBVIEWS = {
-  // Week by week is first, and therefore the default: the term as it runs
-  // is what the tab is for. The four beside it answer "what have I got",
-  // which used to be answerable only by scrolling sixteen weeks.
-  outline: [
-    { id: "outline", label: "Week by week" },
-    { id: "grading", label: "Grading policy" },
-    { id: "assessments", label: "Assessments" },
-    { id: "slides", label: "Slides" },
-    { id: "exams", label: "Exams" },
-  ],
-  progress: [
-    { id: "progress", label: "Concepts" },
-    { id: "gradebook", label: "Gradebook" },
-  ],
-  // Pending, then Ready, then Checklist: the order is how close a thing is
-  // to being finished. Pending is work awaiting the professor's judgement,
-  // Ready is work awaiting their approval, and Checklist is what nobody has
-  // started. Pending stays the default because a thing awaiting judgement
-  // outranks a thing merely drafted, and both outrank a thing not yet
-  // written.
   tasks: [
     { id: "tasks", label: "Pending" },
     { id: "ready", label: "Ready" },
@@ -180,47 +138,7 @@ export const SUBVIEWS = {
     // marks Canvas does not have, materials changed since publishing.
     { id: "unpublished", label: "Unpublished" },
   ],
-  // No row for Integrations since 2026-10-13: it is one card per service on
-  // This course, with Accounts behind a button in its own header.
 };
-
-/** The default sub-view for a tab: the first one listed. */
-export const defaultSub = (tabId) => (SUBVIEWS[tabId] ? SUBVIEWS[tabId][0].id : null);
-
-/**
- * Tabs that draw no Record / + drafts pair.
- *
- * Not the same as "no sub-views": a tab absent from `SUBVIEWS` still gets
- * the pair, because most single-document views have a drafted half worth
- * seeing. These two do not — Preferences is not a view of a run, and the
- * class list has no drafted half: enrollments are not agent-writable and
- * carry no approval.
- *
- * Students is in this set and still draws a row: the identity pair below
- * is its own control and has nothing to do with drafts.
- *
- * Integrations is in it for Preferences' reason and one sharper one. Its
- * subject is what the run is wired to — a Canvas host, a token, a section
- * id — and none of that is drafted: `versions` is not agent-writable, so
- * there is no proposed half of an LMS linkage anywhere for a `+ drafts`
- * press to reveal.
- */
-export const NO_DRAFT_PAIR = new Set(["preferences", "students", "integrations", "scans"]);
-
-/** Tabs with no segmented row of any kind. */
-export const NO_SEGMENTED_ROW = new Set(["preferences"]);
-
-/**
- * Tabs whose document can name a student, and therefore draw the pair.
- *
- * The class list, and the inbox — where the missing-submission rows and the
- * open signals are about particular people. Nowhere else: the outline, the
- * gradebook and the concept grid are about the class, and a parameter that
- * reached them would be a parameter with nothing to do.
- */
-// Integrations for its Syncs view: "Ostanin Artym → Ostanin Artem" is a
-// decision a professor can make; "→ STUDENT-B7K2QA" is not.
-export const NAMED_TABS = new Set(["students", "tasks", "scans", "integrations"]);
 
 /**
  * Pseudonyms or real names, on the tabs that name people.

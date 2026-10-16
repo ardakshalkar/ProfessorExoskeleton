@@ -1,33 +1,19 @@
 /**
- * The pane itself — the button bar and whichever tab is open — and the header
+ * The pane itself — the run's header and the inspector under it — and the header
  * button that opens it.
  */
 
 import { Message, useDark, useJson } from "./common.js";
 import { DefenceDesk } from "./defence-desk.js";
-import { Integrations } from "./integrations.js";
-import { GradebookPanes } from "./gradebook.js";
-import { GradebookStatus, SheetNotice, Unpublished } from "./marks.js";
-import { CourseMode, MaterialModal, materialUrl, WidgetFrame } from "./materials.js";
+import { Inspector } from "./inspector.js";
+import { SheetNotice } from "./marks.js";
+import { CourseMode, MaterialModal, materialUrl } from "./materials.js";
 import { PLACE_EVENT, takePendingPlace } from "./navigator.js";
-import { Preferences } from "./preferences.js";
 import { PublishModal } from "./publish.js";
 import { h, React } from "./react.js";
 import { GradeBoard } from "./grade-board.js";
-import { ScansModal, ScansTab } from "./scans.js";
-import {
-  BASE,
-  defaultSub,
-  DRAFT_MODES,
-  IDENTITY_MODES,
-  NAMED_TABS,
-  NO_DRAFT_PAIR,
-  NO_SEGMENTED_ROW,
-  scoped,
-  SUBVIEWS,
-  TABS,
-  useRevisionWatch,
-} from "./tabs.js";
+import { ScansModal } from "./scans.js";
+import { BASE, scoped, useRevisionWatch } from "./tabs.js";
 import { BatchModal, UploadModal } from "./upload.js";
 
 // ----------------------------------------------------------------- pane
@@ -41,22 +27,10 @@ import { BatchModal, UploadModal } from "./upload.js";
  * widget's question.
  */
 export function ProfessorPane(props) {
-  const [tab, setTab] = React.useState("outline");
-  // Which sub-view each tab is showing, keyed by tab. A map rather than one
-  // piece of state per tab so that adding a tab to SUBVIEWS needs no new
-  // state — and so that leaving a tab and coming back to it remembers where
-  // the professor was, which one shared value could not do.
-  const [subViews, setSubViews] = React.useState({});
-  // Which card Integrations → This course should bring into view, from a jump
-  // elsewhere (the sheet notice, Students' "Sync from sheet"). The tick makes
-  // the same jump work twice.
+  // Which card Integrations should bring into view, from a jump elsewhere
+  // (the sheet notice, Students' "Sync from sheet"). The tick makes the same
+  // jump work twice.
   const [integrationsFocus, setIntegrationsFocus] = React.useState({ service: null, tick: 0 });
-  const focusCard = (service) => {
-    setTab("integrations");
-    setSubViews((value) => Object.assign({}, value, { integrations: "course" }));
-    setIntegrationsFocus((value) => ({ service, tick: value.tick + 1 }));
-  };
-  const subView = (tabId) => subViews[tabId] ?? defaultSub(tabId);
   // ON by default, which reverses the original decision here and is worth
   // recording rather than quietly flipping.
   //
@@ -155,6 +129,34 @@ export function ProfessorPane(props) {
   // What the left sidebar last asked course mode to show — `{ mode }`,
   // `{ view }` — numbered, so the same place pressed twice still lands.
   const [placeRequest, setPlaceRequest] = React.useState(null);
+  const placeCount = React.useRef(0);
+  /**
+   * Open a place in course mode, from this column: `{ mode }`, or `{ view,
+   * sub }`. The column has no places of its own since the tabs went (see
+   * client/inspector.js), so every jump that used to switch a tab lands here.
+   */
+  const openPlace = (request) => {
+    placeCount.current += 1;
+    setPlaceRequest({ ...request, n: "pane-" + placeCount.current });
+    setCourseMode(true);
+  };
+  const focusCard = (service) => {
+    setIntegrationsFocus((value) => ({ service, tick: value.tick + 1 }));
+    openPlace({ view: "settings", sub: "integrations" });
+  };
+  // What course mode is showing (`{ mode, view }`, reported by it), and the
+  // week Teaching was last stepped to — the inspector's focus.
+  const [shown, setShown] = React.useState(null);
+  const [steppedWeek, setSteppedWeek] = React.useState(null);
+  React.useEffect(() => {
+    const onMessage = (event) => {
+      const data = event.data;
+      if (!data || data.source !== "professor-pane" || data.kind !== "teaching-week") return;
+      if (Number.isInteger(data.week) && data.week > 0 && data.week < 100) setSteppedWeek(data.week);
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
   // The run on screen, for the same reason: *Start defence* is answered by
   // that handler, and the run is chosen after it was registered.
   const currentRunRef = React.useRef(null);
@@ -210,12 +212,6 @@ export function ProfessorPane(props) {
     const answer = (request) => {
       if (!request) return;
       if (typeof request.run === "string" && request.run) setChosen(request.run);
-      if (typeof request.tab === "string") {
-        setTab(request.tab);
-        setCourseMode(false);
-        if (props.openDetails) props.openDetails();
-        return;
-      }
       setPlaceRequest(request);
       setCourseMode(true);
     };
@@ -491,7 +487,6 @@ export function ProfessorPane(props) {
       // is read directly or brought in as a downloaded file.
       if (data.kind === "syncs") {
         focusCard("sheets");
-        if (courseModeRef.current) setCourseMode(false);
         return;
       }
       if (data.kind === "publish") {
@@ -623,21 +618,17 @@ export function ProfessorPane(props) {
       );
   };
 
+  // A press in the column puts words into the composer; under course mode
+  // the composer is covered, so get out of its way, as an `ask` does.
+  const mentionAndShow = props.mention && ((text) => {
+    const written = props.mention(text);
+    if (written) setCourseMode(false);
+    return written;
+  });
+
   const body = () => {
     if (runs.phase === "loading") return h(Message, null, "Reading the workspace…");
     if (runs.value.error) return h(Message, { error: true }, runs.value.error);
-    if (tab === "preferences") {
-      return h(Preferences, {
-        courseId: current ? current.courseId : "",
-        term: current ? current.term : "",
-        sessionId: props.sessionId,
-      });
-    }
-    // Integrations is NOT checked here beside Preferences, and the
-    // difference is the point: Preferences is not a view of a run and draws
-    // without one, while everything on Integrations hangs off the run
-    // record. With no offering to read there is nothing for it to draw, so
-    // it falls through to the sentence below, which is the accurate one.
     if (current === null) {
       // Not an empty state. A course whose `runs` came back empty is a
       // course the loader read and found no offering in, and the pane says
@@ -653,112 +644,18 @@ export function ProfessorPane(props) {
             "Run `python -m ainar validate` for the specifics.",
       );
     }
-    if (tab === "scans") {
-      return h(ScansTab, {
-        runId: current.runId,
-        sessionId: props.sessionId,
-        names: names,
-        ask: props.ask,
-        // A placement writes a submission into the course, which other tabs draw.
-        onWrite: () => setReload((value) => value + 1),
-        revision: reload,
-        key: current.runId,
-      });
-    }
-    if (tab === "integrations") {
-      return h(Integrations, {
-        runId: current.runId,
-        subView: subView(tab),
-        sessionId: props.sessionId,
-        // A Save writes the run record, which every other tab is drawing.
-        // The same counter an approval bumps, so a change made here and one
-        // arriving from outside take the identical path.
-        onWrite: () => setReload((value) => value + 1),
-        // Passed as a prop rather than put in the `key`, which is the
-        // opposite of what every widget view does here and is deliberate.
-        // A bumped key REMOUNTS, and this component holds something a
-        // remount would throw away: the sections fetched from Canvas. The
-        // professor presses Fetch, ticks two sections, presses Save — and a
-        // remount at that moment would empty the list they had just used
-        // and make them spend another request to get it back. The component
-        // puts this in its own fetch URL instead, so the record is re-read
-        // and the catalogue survives.
-        revision: reload,
-        names: names,
-        ask: props.ask,
-        focus: integrationsFocus,
-        key: current.runId,
-      });
-    }
-    if (tab === "tasks" && subView(tab) === "unpublished") {
-      return h(Unpublished, {
-        runId: current.runId,
-        sessionId: props.sessionId,
-        revision: reload,
-        onWrite: () => setReload((value) => value + 1),
-        openPublish: openPublish,
-        ask: props.ask,
-        names: names,
-        key: current.runId,
-      });
-    }
-    const view = SUBVIEWS[tab] ? subView(tab) : TABS.find((t) => t.id === tab).view;
-    const frame = h(WidgetFrame, {
-      view: view,
+    // The week in focus: the one Teaching was stepped to, while course mode
+    // shows Teaching; otherwise this week (the server's default).
+    const teaching = courseMode && shown && shown.view === null && shown.mode === "teaching";
+    return h(Inspector, {
       runId: current.runId,
-      dark: dark,
-      drafts: drafts,
-      // Only the class list resolves identities, so only it is ever asked
-      // to. A `names` state left on while the professor moves to the
-      // gradebook must not quietly name people there too.
-      names: NAMED_TABS.has(tab) && names,
       sessionId: props.sessionId,
-      title: TABS.find((t) => t.id === tab).label,
-      // Run, view, theme, draft mode and identity mode in the key:
-      // switching any of them replaces the frame rather than leaving a
-      // document holding a payload for a question the professor is no
-      // longer asking. Identity belongs here for a sharper reason than the
-      // others — a frame kept across the switch back to Pseudonyms would go
-      // on displaying the names it already had.
-      key:
-        view +
-        "|" +
-        current.runId +
-        "|" +
-        (tab === "students" && names ? "n" : "p") +
-        "|" +
-        (dark ? "d" : "l") +
-        "|" +
-        (drafts ? "m" : "r") +
-        "|" +
-        reload,
+      revision: reload,
+      week: teaching ? steppedWeek : null,
+      mention: mentionAndShow,
+      openPlace: openPlace,
+      key: current.runId,
     });
-    if (tab === "progress" && view === "gradebook") {
-      return h(
-        React.Fragment,
-        null,
-        h(GradebookStatus, {
-          runId: current.runId,
-          sessionId: props.sessionId,
-          revision: reload,
-          key: "status|" + current.runId,
-          names: names,
-          ask: props.ask,
-          onWrite: () => setReload((value) => value + 1),
-        }),
-        h(GradebookPanes, {
-          runId: current.runId,
-          sessionId: props.sessionId,
-          revision: reload,
-          names: names,
-          ask: props.ask,
-          key: "panes|" + current.runId,
-          onWrite: () => setReload((value) => value + 1),
-        }),
-        frame,
-      );
-    }
-    return frame;
   };
 
   return h(
@@ -771,8 +668,9 @@ export function ProfessorPane(props) {
         "div",
         { className: "pp-titlerow" },
         h("div", { className: "pp-title" }, current ? current.title : "Course"),
-        // The term plan as the page, over the harness. Beside Publish
-        // because, like it, it is about the run rather than about the tab.
+        // The course's places, over the conversation: the way in when the
+        // course navigator is not in the sidebar. Beside Publish because,
+        // like it, it is about the run rather than about this column.
         current
           ? h(
               "button",
@@ -784,7 +682,7 @@ export function ProfessorPane(props) {
                   "to have the assistant fill it; Esc returns to the chat.",
                 onClick: () => setCourseMode(true),
               },
-              "Course mode",
+              "Open course",
             )
           : null,
         // Publishing is not a tab and not a sub-view, and putting it here
@@ -866,108 +764,16 @@ export function ProfessorPane(props) {
             ),
           )
         : null,
-      h(
-        "div",
-        { className: "pp-tabs", role: "tablist" },
-        TABS.map((entry) =>
-          h(
-            "button",
-            {
-              type: "button",
-              role: "tab",
-              className: "pp-tab",
-              "aria-selected": tab === entry.id,
-              // The label is the accessible name and the hint is only the
-              // hover text. A bare `title` would become the name instead,
-              // which reads as "Resolved, read-only" in a screen reader
-              // where the button says "Preferences".
-              "aria-label": entry.label,
-              title: entry.hint,
-              onClick: () => setTab(entry.id),
-              key: entry.id,
-            },
-            entry.label,
-          ),
-        ),
-      ),
     ),
-    // The segmented row: which document, which halves of the course it is
-    // computed over, and — on the class list only — whether people are
-    // named. Preferences has none of it; it is not a view of a run.
-    //
-    // Students gets no Record / + drafts pair, because enrollments are not
-    // agent-writable: there is no drafted class list and never will be, and a pair that changed nothing would be a control implying
-    // an answer it does not have. It gets the identity pair instead.
-    NO_SEGMENTED_ROW.has(tab)
-      ? null
-      : h(
-          "div",
-          { className: "pp-seg" },
-          SUBVIEWS[tab]
-            ? SUBVIEWS[tab].map((entry) =>
-                h(
-                  "button",
-                  {
-                    type: "button",
-                    className: "pp-segbtn",
-                    "aria-pressed": subView(tab) === entry.id,
-                    onClick: () =>
-                      setSubViews((current) =>
-                        Object.assign({}, current, { [tab]: entry.id }),
-                      ),
-                    key: entry.id,
-                  },
-                  entry.label,
-                ),
-              )
-            : null,
-          h("span", { className: "pp-segspacer" }),
-          NO_DRAFT_PAIR.has(tab)
-            ? null
-            : DRAFT_MODES.map((entry) =>
-                h(
-                  "button",
-                  {
-                    type: "button",
-                    className: "pp-segbtn",
-                    "aria-pressed": drafts === entry.drafts,
-                    title: entry.hint,
-                    onClick: () => setDrafts(entry.drafts),
-                    key: entry.label,
-                  },
-                  entry.label,
-                ),
-              ),
-          NAMED_TABS.has(tab)
-            ? IDENTITY_MODES.map((entry) =>
-                h(
-                  "button",
-                  {
-                    type: "button",
-                    className:
-                      "pp-segbtn" + (entry.names && names ? " pp-segbtn-warn" : ""),
-                    "aria-pressed": names === entry.names,
-                    title: entry.hint,
-                    onClick: () => setNames(entry.names),
-                    key: entry.label,
-                  },
-                  entry.label,
-                ),
-              )
-            : null,
-        ),
     // Marks a grade-sheet sync brought in since this browser last looked,
-    // whoever ran it. Over every tab, since a sync is news wherever one is.
+    // whoever ran it. Above the inspector, since a sync is news wherever one is.
     current
       ? h(SheetNotice, {
           runId: current.runId,
           sessionId: props.sessionId,
           revision: reload,
           key: "notice|" + current.runId,
-          onOpen: () => {
-            setTab("progress");
-            setSubViews((value) => Object.assign({}, value, { progress: "gradebook" }));
-          },
+          onOpen: () => openPlace({ view: "gradebook" }),
           onSync: () => {
             focusCard("sheets");
           },
@@ -1010,15 +816,16 @@ export function ProfessorPane(props) {
           ask: props.ask,
           openPublish: openPublish,
           onWrite: () => setReload((value) => value + 1),
-          tabs: TABS,
-          onJump: (id) => {
-            setTab(id);
-            setCourseMode(false);
-            if (props.openDetails) props.openDetails();
-          },
+          // For Course settings: Preferences is per course and term, and
+          // Integrations scrolls to the card a jump named.
+          courseId: current.courseId,
+          term: current.term,
+          integrationsFocus: integrationsFocus,
+          onShown: setShown,
           onClose: () => {
             setCourseMode(false);
             setPlaceRequest(null);
+            setShown(null);
           },
         })
       : null,

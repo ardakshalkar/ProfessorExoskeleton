@@ -21,6 +21,15 @@
             "port": 3080
         },
         {
+            "name": "harness-v1-alt",
+            "runtimeExecutable": "cmd",
+            "runtimeArgs": [
+                "/c",
+                "set AINAR_WORKSPACE=C:\\Users\\Ardak Shalkar\\OneDrive\\Documents\\AI Course 2026 v1&& bin\\sample.cmd --no-open --port 3081"
+            ],
+            "port": 3081
+        },
+        {
             "name": "desk-test",
             "runtimeExecutable": "node",
             "runtimeArgs": [

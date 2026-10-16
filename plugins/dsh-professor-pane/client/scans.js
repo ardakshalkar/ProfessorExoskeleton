@@ -17,7 +17,7 @@ import { BASE, scoped } from "./tabs.js";
  * professor can do; the others are a sentence and a press that asks the
  * assistant, since reading, proposing a rubric and grading are its work.
  */
-export function ScansTab(props) {
+function ScansTab(props) {
   const [pile, setPile] = React.useState(props.pile || "");
   const [tick, setTick] = React.useState(0);
   const [state, setState] = React.useState({ phase: "loading", value: null });
