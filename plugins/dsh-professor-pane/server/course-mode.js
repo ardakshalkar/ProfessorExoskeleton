@@ -54,6 +54,7 @@ import {
   GAP,
   hasBrief,
   ICONS,
+  kindOf,
   laneOf,
   LANES,
   MEETING_ICON,
@@ -471,7 +472,7 @@ const planningBody = (data, { student, locks }) => {
   // Weights by kind of work, against the model's own total and verdict.
   const groups = [];
   for (const a of data.assessments ?? []) {
-    const [, name] = laneOf(a.type);
+    const [name] = kindOf(a.type);
     let g = groups.find((x) => x.name === name);
     if (!g) groups.push((g = { name, weight: 0, count: 0, unweighted: 0 }));
     g.count += 1;
@@ -592,7 +593,7 @@ const planningBody = (data, { student, locks }) => {
                 ? (first && s.a.opens_on && weekOf(s.a.opens_on) === s.start && !taught(s.start) ? `<span class="grip top" data-edge="opens" title="Drag to move when it opens"></span>` : "") +
                   (last ? `<span class="grip bottom" data-edge="due" title="Drag to move when it is due"></span>` : "")
                 : "";
-              const cls = `lseg ${s.lane[2]}${first ? " first" : ""}${last ? " last" : ""}${s.a.draft ? " draft" : ""}${editable && locked ? " locked" : ""}`;
+              const cls = `lseg ${kindOf(s.a.type)[1]}${first ? " first" : ""}${last ? " last" : ""}${s.a.draft ? " draft" : ""}${editable && locked ? " locked" : ""}`;
               const tip = `${s.a.title}${s.a.opens_on ? " · opens " + shortDate(s.a.opens_on) : ""} · due ${shortDate(s.a.due_on)}` +
                 (!editable ? "" : locked ? ` — ${why}` : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
               return `<div class="${cls}" data-a="${id}" data-wk="${w.week}"${movable ? ' draggable="true"' : ""} title="${esc(tip)}">` +

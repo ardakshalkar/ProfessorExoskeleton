@@ -29,6 +29,7 @@ import { h, Fragment, React } from "../react.js";
 import { BASE, scoped } from "../tabs.js";
 import { wrote } from "../data.js";
 import {
+  kindOf,
   laneOf,
   LANES,
   runOffset,
@@ -375,7 +376,7 @@ export function Planning(props) {
   // Weights by kind of work, against the model's own total and verdict.
   const groups = [];
   for (const a of data.assessments || []) {
-    const name = laneOf(a.type)[1];
+    const name = kindOf(a.type)[0];
     let g = groups.find((x) => x.name === name);
     if (!g) groups.push((g = { name, weight: 0, count: 0, unweighted: 0 }));
     g.count += 1;
@@ -804,7 +805,7 @@ export function Planning(props) {
                           a.title + (a.opens_on ? " · opens " + shortDate(a.opens_on) : "") + " · due " + shortDate(a.due_on) +
                           (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
                         const segCls =
-                          "lseg " + s.lane[2] + (first ? " first" : "") + (last ? " last" : "") + (a.draft ? " draft" : "") + (editable && locked ? " locked" : "") +
+                          "lseg " + kindOf(a.type)[1] + (first ? " first" : "") + (last ? " last" : "") + (a.draft ? " draft" : "") + (editable && locked ? " locked" : "") +
                           (lifted === a.assessment_id ? " lifted" : "");
                         return (
                           <div

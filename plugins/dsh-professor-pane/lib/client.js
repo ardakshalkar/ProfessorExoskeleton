@@ -7429,8 +7429,10 @@ var tierOf = (week, current) => {
 var hasBrief = (a) => Boolean(a.url || a.brief_url || String(a.description ?? "").trim());
 var titleOf = (w) => (w.modules ?? []).map((m) => m.title).join(" · ");
 var conceptsOf = (w) => (w.modules ?? []).flatMap((m) => m.concepts ?? []);
-var LANES = [["quiz", "Quizzes", "q"], ["assignment", "Homework", "hw"], ["project", "Project", "pj"], ["exam", "Exams", "ex"]];
-var laneOf = (type) => LANES.find((l) => l[0] === type) ?? ["other", "Other", "ot"];
+var KINDS = { quiz: ["Quizzes", "q"], assignment: ["Homework", "hw"], project: ["Project", "pj"], exam: ["Exams", "ex"] };
+var kindOf = (type) => KINDS[type] ?? ["Other", "ot"];
+var LANES = [["test", "Exams & Quizzes", "q", ["quiz", "exam"]], ["assignment", "Homework", "hw", ["assignment"]], ["project", "Project", "pj", ["project"]]];
+var laneOf = (type) => LANES.find((l) => l[3].includes(type)) ?? ["other", "Other", "ot", []];
 var runOffset = (data) => {
   const run = data.run ?? {};
   try {
@@ -8045,7 +8047,7 @@ function Planning(props) {
   }
   const groups = [];
   for (const a of data.assessments || []) {
-    const name = laneOf(a.type)[1];
+    const name = kindOf(a.type)[0];
     let g = groups.find((x) => x.name === name);
     if (!g) groups.push(g = { name, weight: 0, count: 0, unweighted: 0 });
     g.count += 1;
@@ -8359,7 +8361,7 @@ function Planning(props) {
         const movable = editable && !locked;
         const dueWords = "due " + shortDate2(a.due_on) + " · " + (weightPct(a.weight) || "no weight");
         const tip = a.title + (a.opens_on ? " · opens " + shortDate2(a.opens_on) : "") + " · due " + shortDate2(a.due_on) + (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
-        const segCls = "lseg " + s.lane[2] + (first ? " first" : "") + (last ? " last" : "") + (a.draft ? " draft" : "") + (editable && locked ? " locked" : "") + (lifted === a.assessment_id ? " lifted" : "");
+        const segCls = "lseg " + kindOf(a.type)[1] + (first ? " first" : "") + (last ? " last" : "") + (a.draft ? " draft" : "") + (editable && locked ? " locked" : "") + (lifted === a.assessment_id ? " lifted" : "");
         return /* @__PURE__ */ h(
           "div",
           {

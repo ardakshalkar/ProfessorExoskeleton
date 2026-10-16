@@ -128,8 +128,17 @@ export const hasBrief = (a) => Boolean(a.url || a.brief_url || String(a.descript
 export const titleOf = (w) => (w.modules ?? []).map((m) => m.title).join(" · ");
 export const conceptsOf = (w) => (w.modules ?? []).flatMap((m) => m.concepts ?? []);
 
-export const LANES = [["quiz", "Quizzes", "q"], ["assignment", "Homework", "hw"], ["project", "Project", "pj"], ["exam", "Exams", "ex"]];
-export const laneOf = (type) => LANES.find((l) => l[0] === type) ?? ["other", "Other", "ot"];
+/** Each kind of graded work: its word in the weight cards and its bar's colour. */
+const KINDS = { quiz: ["Quizzes", "q"], assignment: ["Homework", "hw"], project: ["Project", "pj"], exam: ["Exams", "ex"] };
+export const kindOf = (type) => KINDS[type] ?? ["Other", "ot"];
+
+/**
+ * Planning's columns, and the kinds each holds. Exams and quizzes share one:
+ * both are sat on a day, so a midterm reads among the quizzes it sits between.
+ * A bar keeps its kind's colour; the column is only where it goes.
+ */
+export const LANES = [["test", "Exams & Quizzes", "q", ["quiz", "exam"]], ["assignment", "Homework", "hw", ["assignment"]], ["project", "Project", "pj", ["project"]]];
+export const laneOf = (type) => LANES.find((l) => l[3].includes(type)) ?? ["other", "Other", "ot", []];
 
 /**
  * The offset a new date is written with, for work that has none yet: the

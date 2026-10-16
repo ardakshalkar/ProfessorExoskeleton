@@ -57,6 +57,15 @@
             "port": 3095
         },
         {
+            "name": "planning-v1",
+            "runtimeExecutable": "cmd",
+            "runtimeArgs": [
+                "/c",
+                "set AINAR_WORKSPACE=C:\\Users\\Ardak Shalkar\\OneDrive\\Documents\\AI Course 2026 v1&& set PORT=3096&& node --experimental-strip-types plugins/dsh-professor-pane/test/planning-page.mjs CSS-4007-2026-FALL"
+            ],
+            "port": 3096
+        },
+        {
             "name": "integrations-test",
             "runtimeExecutable": "cmd",
             "runtimeArgs": [
