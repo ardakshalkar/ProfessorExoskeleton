@@ -564,6 +564,9 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 [data-pp-split] > [data-pp-col=details]{grid-column:2!important;grid-row:1!important;visibility:hidden}
 [data-pp-split] > [data-pp-col=handle]{display:none!important}
 .pp-coursebody{flex:1;min-height:0;display:flex;flex-direction:column;position:relative}
+/* The weeks' own stacking: their sticky strip and heads (z-index 20 and
+   under) stay inside the scroller instead of drawing over a course-wide view. */
+.pp-courseview{isolation:isolate}
 /* A course-wide view (Students, Gradebook, Tasks) over the weeks, which
    stay mounted beneath so they come back where they were left. */
 .pp-cview{position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;background:var(--dsw-alias-bg-l1,#fff)}
