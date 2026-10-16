@@ -147,7 +147,7 @@ import {
   writeRunLmsValue,
 } from "./server/lms-writes.js";
 import { withMaterialLinks } from "./server/materials.js";
-import { writeAssessmentDates } from "./server/plan-writes.js";
+import { writeAssessmentDates, writeTopicMoves } from "./server/plan-writes.js";
 import {
   gradebookChanges,
   gradingImpact,
@@ -157,6 +157,7 @@ import {
   writeGradingLock,
   writeGradingPolicy,
 } from "./server/grading-writes.js";
+import { navigatorDocument } from "./server/navigator.js";
 import { widgetDocument } from "./server/page.js";
 import { preferencesDocument, writePreferences } from "./server/preferences.js";
 import { paperCrop, scansDocument } from "./server/scans.js";
@@ -278,6 +279,12 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
 
     if (path === "/api/revision") {
       return sendJson(res, 200, revisionDocument(root));
+    }
+
+    // The left sidebar's course block: the run, this week, the counts on its
+    // places. See server/navigator.js for which half each figure is read over.
+    if (path === "/api/navigator") {
+      return sendJson(res, 200, navigatorDocument(workspace, root, runId));
     }
 
     /**
@@ -1528,6 +1535,27 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     }
 
     /**
+     * A topic moved to another week, from Planning's drag and its form: the
+     * module's `week` and its meetings' dates, and the other topic's too when
+     * the two swap. `writeTopicMoves` checks and writes.
+     */
+    if (path === "/api/plan/topic") {
+      if (req.method !== "POST") return sendJson(res, 405, { error: "moving a topic is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then((text) => {
+          let body;
+          try {
+            body = JSON.parse(text || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The topic body is not JSON." });
+          }
+          return sendJson(res, 200, writeTopicMoves(workspace, root, runId, body));
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    }
+
+    /**
      * The grading policy from the Gradebook. A read; an impact, which writes
      * nothing; the change itself; and the lock. `grading-writes.js` says why
      * the pane may write it and what guards the write.
@@ -1535,7 +1563,7 @@ const handler = (registry, credentials = { service: null }, harness = { llm: nul
     if (path === "/api/grading/policy") {
       if (!runId) return sendJson(res, 200, { error: "No run chosen." });
       try {
-        return sendJson(res, 200, gradingPolicy(workspace, runId));
+        return sendJson(res, 200, gradingPolicy(workspace, runId, root));
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }

@@ -660,7 +660,11 @@ function PolicyEditor(props) {
           h(FilingEditor, { draft: draft, update: update, assessments: doc.assessments }),
         ),
       ),
-      h(
+      // Nothing to compare yet — the current policy, untouched — so no column
+      // for it: it appears with the first edit, preset or loaded proposal.
+      gpDiff(doc.policy, draft).empty
+        ? null
+        : h(
         "div",
         { className: "pp-modalpane pp-gbimpactpane" },
         h("div", { className: "pp-modalpanelabel" }, "What it changes", impact.phase === "checking" ? h("span", { className: "pp-checkspin", style: { marginLeft: "6px", display: "inline-block" } }) : null),
@@ -1048,7 +1052,15 @@ function ImpactReport(props) {
                   { key: row.assessment_id, className: row.sent ? "pp-gbhot" : "" },
                   h("td", null, row.title),
                   h("td", null, row.from === null ? "—" : gpRound(row.from, 2)),
-                  h("td", null, row.to === null ? h("span", { className: "pp-behind", title: row.problem || "" }, "cannot scale") : gpRound(row.to, 2)),
+                  h(
+                    "td",
+                    null,
+                    row.dropped
+                      ? h("span", { className: "pp-as" }, "not counted")
+                      : row.to === null
+                        ? h("span", { className: "pp-behind", title: row.problem || "" }, "cannot scale")
+                        : gpRound(row.to, 2),
+                  ),
                   h("td", null, row.sent ? h("span", { className: "pp-chip pp-chip-live" }, row.sent + " to resend") : "—"),
                 ),
               ),
@@ -1286,20 +1298,44 @@ const ASSISTANT_WAIT_MS = 8 * 60 * 1000;
  * words, and the policy as it stands in the editor — unsaved edits included —
  * so "make it 25% instead" means 25% of what is on screen. Ids and weights only.
  */
-const assistantPrompt = (runId, request, draft) =>
-  "/grading-proposal " +
-  runId +
-  " — " +
-  request.trim() +
-  "\n\nThe policy as it stands in the Gradebook editor (unsaved edits included) — propose against this, as a whole policy:\n```json\n" +
-  JSON.stringify({ components: draft.components, points: draft.points, assignments: draft.assignments }) +
-  "\n```";
+const assistantPrompt = (runId, request, draft, doc) => {
+  // Titles, so "quiz 4" maps to an id without opening a record.
+  const titles = {};
+  for (const a of (doc && doc.assessments) || []) titles[a.assessment_id] = a.title + (a.due_at ? " (due " + String(a.due_at).slice(0, 10) + ")" : "");
+  return (
+    "/grading-proposal " +
+    runId +
+    " — " +
+    request.trim() +
+    "\n\nFast path — everything you need is below. Unless the request names something that is not here, do not run help or validate and do not open records: " +
+    "write the whole policy to a temp file and record it" +
+    (doc && doc.propose_command
+      ? " with exactly:\n" + doc.propose_command
+      : " with bin/ainar grading propose " + runId + " --file FILE --request WORDS --note WHY") +
+    "\nIts output is the check; do not verify again. Then answer in one sentence." +
+    "\nChange only what was asked: every assessment keeps its block unless the request moves it; dropping one is weight 0 in the same block." +
+    "\n\nAssessment titles: " +
+    JSON.stringify(titles) +
+    "\n\nThe policy as it stands in the Gradebook editor (unsaved edits included) — propose against this, as a whole policy:\n```json\n" +
+    JSON.stringify({ components: draft.components, points: draft.points, assignments: draft.assignments }) +
+    "\n```"
+  );
+};
 
 function AssistantPanel(props) {
   const [text, setText] = React.useState("");
   const [waiting, setWaiting] = React.useState(null); // { since, known: Set, request }
   const [sent, setSent] = React.useState([]); // this editor's requests, newest last
   const known = (props.proposals || []).map((p) => p.id);
+  // A clock while waiting: a long silence reads as broken, a counting one as work.
+  const [, tick] = React.useState(0);
+  React.useEffect(() => {
+    if (!waiting) return undefined;
+    const timer = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(timer);
+  }, [waiting]);
+  const elapsed = waiting ? Math.floor((Date.now() - waiting.since) / 1000) : 0;
+  const clock = Math.floor(elapsed / 60) + ":" + String(elapsed % 60).padStart(2, "0");
 
   // While a request is out, ask every three seconds whether a proposal arrived.
   React.useEffect(() => {
@@ -1326,7 +1362,7 @@ function AssistantPanel(props) {
   const send = () => {
     const request = text.trim();
     if (!request || !props.ask) return;
-    props.ask(assistantPrompt(props.runId, request, props.draft));
+    props.ask(assistantPrompt(props.runId, request, props.draft, props.doc));
     setSent((list) => list.concat([{ at: new Date().toISOString(), request: request }]));
     setWaiting({ since: Date.now(), known: new Set(known), request: request });
     setText("");
@@ -1358,7 +1394,7 @@ function AssistantPanel(props) {
             "div",
             { className: "pp-gbwaiting", role: "status" },
             h("span", { className: "pp-checkspin" }),
-            h("span", null, h("b", null, "Asked: "), "“" + waiting.request + "” — the assistant is reading the course. Its proposal appears here and opens in the editor."),
+            h("span", null, h("b", null, "Asked: "), "“" + waiting.request + "” — the assistant is working on it (" + clock + "). Its proposal appears here and opens in the editor; the conversation shows each step."),
             h("button", { type: "button", className: "pp-linkbtn", onClick: () => setWaiting(null) }, "stop waiting"),
           )
         : null,

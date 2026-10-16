@@ -11,7 +11,7 @@ import http from "node:http";
 
 import { courseModeDocument } from "../server/course-mode.js";
 import { readBody } from "../server/http.js";
-import { writeAssessmentDates } from "../server/plan-writes.js";
+import { writeAssessmentDates, writeTopicMoves } from "../server/plan-writes.js";
 import { resolveWorkspace, viewPayload } from "../server/workspace.js";
 
 const PORT = Number(process.env.PORT ?? 3095);
@@ -23,8 +23,8 @@ const PARENT = `<!doctype html><meta charset="utf-8"><title>Planning</title>
 <script>
 var frame=document.querySelector('iframe');
 function load(){fetch('/doc'+location.search).then(function(r){return r.text();}).then(function(t){frame.srcdoc=t;});}
-addEventListener('message',function(e){var d=e.data;if(!d||d.source!=='professor-pane'||d.kind!=='dates')return;
-  fetch('/dates',{method:'POST',body:JSON.stringify(d)}).then(function(r){return r.json();})
+addEventListener('message',function(e){var d=e.data;if(!d||d.source!=='professor-pane'||(d.kind!=='dates'&&d.kind!=='topic'))return;
+  fetch('/'+(d.kind==='topic'?'topic':'dates'),{method:'POST',body:JSON.stringify(d)}).then(function(r){return r.json();})
     .then(function(r){window.lastWrite=r;if(r.error)alert(r.error);load();});});
 load();
 </script>`;
@@ -46,6 +46,11 @@ http
       const body = JSON.parse((await readBody(req)) || "{}");
       res.writeHead(200, { "content-type": "application/json" });
       return res.end(JSON.stringify(writeAssessmentDates(workspace, root, RUN, body)));
+    }
+    if (url.pathname === "/topic" && req.method === "POST") {
+      const body = JSON.parse((await readBody(req)) || "{}");
+      res.writeHead(200, { "content-type": "application/json" });
+      return res.end(JSON.stringify(writeTopicMoves(workspace, root, RUN, body)));
     }
     res.writeHead(404);
     res.end();

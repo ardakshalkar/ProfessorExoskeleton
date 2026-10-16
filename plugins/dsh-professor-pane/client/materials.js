@@ -354,10 +354,26 @@ const CONNECTION_STATE = { ready: "connected", partial: "partly set up", absent:
 export function CourseMode(props) {
   const close = props.onClose;
   const [student, setStudent] = React.useState(false);
-  const [mode, setMode] = React.useState(() => defaultCourseMode(props.start, props.end));
+  // `props.request` is a place pressed in the left sidebar: a reading
+  // (`mode`) or a course-wide view (`view`). It decides where course mode
+  // opens, and moves it when a second place is pressed while it is open.
+  const request = props.request || null;
+  const known = (id, list) => list.some((entry) => entry.id === id);
+  const [mode, setMode] = React.useState(() =>
+    request && known(request.mode, COURSE_MODES) ? request.mode : defaultCourseMode(props.start, props.end),
+  );
   // A course-wide view, when one is chosen, in place of the reading; the
   // reading is kept so the weeks come back as they were left.
-  const [view, setView] = React.useState(null);
+  const [view, setView] = React.useState(() => (request && known(request.view, COURSE_VIEWS) ? request.view : null));
+  React.useEffect(() => {
+    if (!request) return;
+    if (known(request.view, COURSE_VIEWS)) {
+      setView(request.view);
+    } else if (known(request.mode, COURSE_MODES)) {
+      setMode(request.mode);
+      setView(null);
+    }
+  }, [request ? request.n : null]);
   const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);  // The week Teaching was last stepped to. The page steps without a round
   // trip and reports each step; it is held in a ref so a step redraws
   // nothing, and copied into `week` only when Teaching is drawn again — on
@@ -381,6 +397,36 @@ export function CourseMode(props) {
     setMode(id);
     setView(null);
   };
+  // With the course navigator in the sidebar, course mode is the centre and
+  // the sidebar stays usable beside it: pressing another place moves it, and
+  // a chat opens over it. So the veil starts at the sidebar's right edge,
+  // followed as the sidebar collapses to its rail or is dragged wider. The
+  // column is found from the navigator outwards — the outermost ancestor
+  // still flush with the window's left edge and narrower than half of it —
+  // rather than by the shell's class names, which are hashed. With the stock
+  // browser in the seat there is no navigator, and the veil covers it all.
+  const [left, setLeft] = React.useState(0);
+  React.useLayoutEffect(() => {
+    const nav = document.querySelector(".pp-nav, .pp-nav-rail");
+    if (!nav) return undefined;
+    let column = null;
+    for (let node = nav.parentElement; node && node !== document.body; node = node.parentElement) {
+      const rect = node.getBoundingClientRect();
+      // Not a zero-width box: the shell wraps seats in `display: contents`
+      // elements, which measure 0 wide at 0 and would put the edge there.
+      if (rect.left <= 0.5 && rect.width > 0 && rect.width < window.innerWidth / 2) column = node;
+    }
+    if (column === null) return undefined;
+    const measure = () => setLeft(Math.round(column.getBoundingClientRect().right));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(column);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
   // Teaching, Evidence and the course-wide views carry class figures or
   // names, so there is no student version of any of them to preview.
   const private_ = view !== null || mode === "teaching" || mode === "evidence";
@@ -537,6 +583,7 @@ export function CourseMode(props) {
       "div",
       {
         className: "pp-veil pp-coursemode",
+        style: left ? { left: left + "px" } : undefined,
         onMouseDown: (event) => {
           if (event.target === event.currentTarget) close();
         },

@@ -69,6 +69,38 @@ so this takes the material overlay's idiom. `server/course-mode.js` draws it on
 the host, from the same payload with the same material links, into the same
 sandboxed frame, sending the same two messages (`ask`, `view`).
 
+## The course navigator
+
+The left sidebar's region between New Session and Settings is the course, not
+the folder tree. From the top:
+
+| Part | Shows | Opens |
+| --- | --- | --- |
+| Course block | the run the open chat stands in: title, code, term, *week N of M* | a menu of the other registered folders; picking one starts a chat there |
+| This week | the current week's module, its meetings (*no date*, *no deck* when missing) and what falls due; with nothing due, when the next thing is | course mode on **Teaching** |
+| Course | Weeks (with the count of weeks that have a gap), Tasks (with the count of suggested marks waiting), Students, Gradebook, Files | course mode on **Planning**, or that course-wide view |
+| Chats | this course's chats only, newest first, six until *All N chats* | the chat; **+** starts a new one here |
+| Foot | Integrations · Folders and search | course mode's Integrations · the stock browser |
+
+Every figure is from `/api/navigator` (`server/navigator.js`), which picks
+fields out of the outline over the record and the inbox over the whole course;
+it adds nothing up.
+
+It takes the `sidebar.workspaces` seat at priority -1, shadowing
+`ui-workspace`'s WorkspaceBrowser the way the pane shadows `details`. The
+browser stays registered: **Folders and search** withdraws the navigator so it
+renders again — search, rename, archive, reorder, add a folder — and puts a
+**Course view** button in the sidebar's footer to come back. The choice is kept
+in the browser's local storage. The browser is not drawn inside the navigator
+because it is composed from its own private store, locale and directory-flow
+hole, none of which reach another registrant.
+
+A place press is a request to the pane (`requestPlace` in
+`client/navigator.js`): the pane answers it if it is mounted, and takes it on
+mount if the press had to start a chat in this course first. With the
+navigator in the sidebar, course mode starts at the sidebar's right edge rather
+than covering it, so a second place moves it and a chat opens beside it.
+
 ## Opening a deck, or a homework brief
 
 A slide deck, a handout, an exam paper or the brief for a piece of homework

@@ -55,6 +55,15 @@ const shortDate = (value) => {
 /** A weight the payload computed, as a percentage; `null` stays `""`. */
 const pct = (value) => (value === null || value === undefined ? "" : `${Math.round(value * 100)}%`);
 
+/**
+ * A weight, to two decimals when it has them: a quiz at 0.0133 and one at
+ * 0.0057 are 1.33% and 0.57%, and rounding both to "1%" hid a policy that
+ * weights them differently. Whole weights stay whole; the total's float dust
+ * (0.99999999…) is rounded away.
+ */
+const weightPct = (value) =>
+  value === null || value === undefined ? "" : `${Number((value * 100).toFixed(2))}%`;
+
 // ------------------------------------------------------------------- icons
 
 /**
@@ -249,6 +258,18 @@ table.plan tr.drop .wkn b{color:var(--accent)}
 .pf-actions{display:flex;gap:8px;align-items:center}
 .pf-actions .chip{cursor:pointer}
 .planform .primary[disabled]{opacity:.5;cursor:default}
+.tchip{font-weight:500;cursor:grab;border-radius:5px;padding:1px 4px;margin-left:-4px}
+.tchip:hover{background:var(--sunk);box-shadow:inset 0 0 0 1px var(--line)}
+.tchip.lifted{opacity:.35}
+.topicform{width:330px}
+.tf-meetings,.tf-other{display:flex;flex-direction:column;gap:6px}
+.topicform label{grid-template-columns:64px 1fr}
+.topicform label>span{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topicform .tf-swap{display:flex;gap:8px;align-items:flex-start;font-size:13px;padding-top:6px;border-top:1px solid var(--rule)}
+.topicform .tf-swap[hidden],.tf-other[hidden]{display:none}
+.topicform .tf-swap>span{color:var(--ink);font-size:13px;white-space:normal}
+.topicform .tf-swap input{margin-top:3px}
+.tf-other{padding-left:10px;border-left:2px solid var(--rule)}
 .q{--lane:var(--draft)}.hw{--lane:var(--hw)}.pj{--lane:var(--accent)}.ex,.ot{--lane:var(--muted)}
 .trio-wrap{display:flex;flex-direction:column;gap:12px}.trio-wrap[hidden]{display:none}
 .stepper{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -344,6 +365,13 @@ document.addEventListener('click',function(e){
  * does no time-zone arithmetic: what the input shows is the record's wall
  * time, and what goes back is that wall time with the same offset.
  *
+ * A topic moves the same way, with its meetings: a module's `week` is one
+ * number but each of its meetings carries its own date, so the form lists
+ * every meeting shifted by the same whole weeks, and warns about one left
+ * outside the topic's week (it would show as misdated). When the week it
+ * lands on holds exactly one topic, the two swap by default, the other's
+ * meetings shifted back; saving sends one `topic` message with both moves.
+ *
  * Work with no dates comes from the tray and opens the form with the due
  * date at the end of the week it was dropped on. Nothing listens in a tab
  * opened by itself, so there the page draws the bars and takes no drags.
@@ -390,11 +418,16 @@ document.addEventListener('click',function(e){var b=e.target.closest&&e.target.c
   open(id,local(it.opens_at),local(it.due_at),it.due_at?weekOf(it.due_at.slice(0,10)):null,r.left,r.bottom);});
 var grip=null,drag=null,over=null;
 document.addEventListener('mousedown',function(e){grip=e.target.closest&&e.target.closest('[data-edge]');},true);
-function lift(id,on){document.querySelectorAll('[data-a="'+id+'"]').forEach(function(s){s.classList.toggle('lifted',on);});}
+function lift(id,on){document.querySelectorAll('[data-a="'+id+'"],[data-m="'+id+'"]').forEach(function(s){s.classList.toggle('lifted',on);});}
 function end(){if(over)over.classList.remove('drop');over=null;if(drag)lift(drag.id,false);drag=null;}
 document.addEventListener('dragstart',function(e){
+  var t=e.target.closest&&e.target.closest('[data-m][draggable="true"]');
+  if(t&&topics[t.getAttribute('data-m')]){var m=t.getAttribute('data-m');close();tclose();
+    drag={topic:true,id:m,from:+t.getAttribute('data-wk')};
+    e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',m);}catch(x){}
+    setTimeout(function(){if(drag)lift(m,true);},0);return;}
   var el=e.target.closest&&e.target.closest('[data-a][draggable="true"]');if(!el||!items[el.getAttribute('data-a')])return;
-  var id=el.getAttribute('data-a');close();
+  var id=el.getAttribute('data-a');close();tclose();
   drag={id:id,edge:grip&&el.contains(grip)?grip.getAttribute('data-edge'):'both',from:+el.getAttribute('data-wk')||null};
   e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',id);}catch(x){}
   setTimeout(function(){if(drag)lift(id,true);},0);});
@@ -403,11 +436,55 @@ document.addEventListener('dragover',function(e){if(!drag)return;var r=e.target.
 document.addEventListener('dragleave',function(e){if(over&&!(e.relatedTarget&&over.contains(e.relatedTarget))){over.classList.remove('drop');over=null;}});
 document.addEventListener('drop',function(e){if(!drag)return;var r=e.target.closest&&e.target.closest('tr[data-week]');if(!r)return;
   e.preventDefault();var d=drag,to=+r.getAttribute('data-week'),it=items[d.id],row=rowOf(to);end();
+  if(d.topic){if(to!==d.from)topen(d.id,to,e.clientX,e.clientY);return;}
   var opens=local(it.opens_at),due=local(it.due_at);
   if(!it.due_at){opens='';due=row.to+'T23:59';}
   else if(d.from!==null){var n=(to-d.from)*7;if(d.edge!=='due')opens=shift(opens,n);if(d.edge!=='opens')due=shift(due,n);}
   open(d.id,opens,due,to,e.clientX,e.clientY);});
 document.addEventListener('dragend',end);
+var tf=document.querySelector('.topicform'),topics=JSON.parse((document.getElementById('plan-topics')||{}).textContent||'{}');
+var g={title:tf.querySelector('.tf-title'),week:tf.querySelector('.tf-week'),list:tf.querySelector('.tf-meetings'),swap:tf.querySelector('.tf-swap'),
+  swapOn:tf.querySelector('.tf-swap-on'),other:tf.querySelector('.tf-other'),error:tf.querySelector('.tf-error'),save:tf.querySelector('.tf-save')};
+var plan=null;
+function cap(s){s=String(s||'meeting').replace(/_/g,' ');return s.charAt(0).toUpperCase()+s.slice(1);}
+function rows_(box,mid,from,to){box.innerHTML='';var t=topics[mid];
+  t.meetings.forEach(function(x){var l=document.createElement('label'),s=document.createElement('span'),i=document.createElement('input'),h=document.createElement('small');
+    s.textContent=cap(x.type)+(x.group?' \\u00b7 '+x.group:'');s.title=x.activity;i.type='datetime-local';i.setAttribute('data-act',x.activity);i.setAttribute('data-want',to);
+    i.value=x.scheduled_at?shift(local(x.scheduled_at),(to-from)*7):'';i.addEventListener('input',tcheck);l.appendChild(s);l.appendChild(i);l.appendChild(h);box.appendChild(l);});
+  if(!t.meetings.length){var p=document.createElement('small');p.textContent='No meetings to move.';box.appendChild(p);}}
+function tcheck(){var bad='';tf.querySelectorAll('input[data-act]').forEach(function(i){var h=i.nextSibling;
+    if(i.closest('.tf-other[hidden]'))return;if(!i.value){h.textContent='no date';h.classList.remove('off');return;}
+    var w=weekOf(i.value.slice(0,10)),want=+i.getAttribute('data-want');
+    h.textContent=w?'week '+w+' \\u00b7 '+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(i.value.slice(0,10)+'T12:00:00Z').getUTCDay()]+(w!==want?' \\u2014 not this topic\\u2019s week':''):'outside the term';
+    h.classList.toggle('off',w!==want);if(w!==want)bad='A meeting would fall outside its topic\\u2019s week, and show as misdated.';});
+  g.error.textContent=bad;g.error.hidden=!bad;}
+function topen(mid,to,x,y){var t=topics[mid];if(!t)return;var r=rowOf(to);
+  plan={id:mid,from:t.week,to:to,other:null};
+  g.title.textContent=t.title;g.week.textContent='Week '+t.week+' \\u2192 week '+to+' \\u00b7 '+nice(r.from)+' \\u2013 '+nice(r.to);
+  rows_(g.list,mid,t.week,to);
+  var there=Object.keys(topics).filter(function(k){return k!==mid&&topics[k].week===to;});
+  if(there.length===1){plan.other=there[0];g.swap.hidden=false;g.swapOn.checked=true;
+    g.swap.querySelector('span').textContent='Swap with \\u201c'+topics[there[0]].title+'\\u201d \\u2014 it moves to week '+t.week+' with its meetings';
+    rows_(g.other,there[0],to,t.week);g.other.hidden=false;}
+  else{g.swap.hidden=true;g.swapOn.checked=false;g.other.hidden=true;g.other.innerHTML='';
+    if(there.length>1){g.swap.hidden=false;g.swapOn.disabled=true;g.swap.querySelector('span').textContent='Week '+to+' already has '+there.length+' topics; this one joins them.';}}
+  g.swapOn.disabled=there.length!==1;g.save.disabled=false;g.save.textContent='Move topic';tcheck();
+  tf.hidden=false;var w=tf.offsetWidth,h=tf.offsetHeight;
+  tf.style.left=Math.max(12,Math.min(x+14,innerWidth-w-12))+'px';tf.style.top=Math.max(12,Math.min(y+14,innerHeight-h-12))+'px';
+  var first=tf.querySelector('input[data-act]');if(first)first.focus();else g.save.focus();}
+function tclose(){tf.hidden=true;plan=null;}
+g.swapOn.addEventListener('change',function(){g.other.hidden=!g.swapOn.checked;tcheck();});
+tf.querySelector('.tf-cancel').addEventListener('click',tclose);
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!tf.hidden){e.stopPropagation();tclose();}});
+document.addEventListener('mousedown',function(e){if(!tf.hidden&&!tf.contains(e.target))tclose();},true);
+function stamps(box,mid){var out=[];box.querySelectorAll('input[data-act]').forEach(function(i){if(!i.value)return;
+  var x=topics[mid].meetings.filter(function(m){return m.activity===i.getAttribute('data-act');})[0];
+  out.push({activity:x.activity,scheduled_at:i.value+':00'+offOf(x.scheduled_at)});});return out;}
+g.save.addEventListener('click',function(){if(!plan||g.save.disabled)return;
+  var moves=[{module:plan.id,week:plan.to,meetings:stamps(g.list,plan.id)}];
+  if(plan.other&&g.swapOn.checked)moves.push({module:plan.other,week:plan.from,meetings:stamps(g.other,plan.other)});
+  parent.postMessage({source:'professor-pane',kind:'topic',moves:moves},'*');
+  g.save.disabled=true;g.save.textContent='Moving\\u2026';});
 })();<\/script>`;
 
 // ------------------------------------------------------------------ prompts
@@ -503,7 +580,7 @@ const workChip = (a, when) => {
   const cls = `chip${a.draft ? " draft" : ""}`;
   const body =
     `<span class="k mono">${esc(when)}</span><span class="tag">${icon(WORK_ICON[a.type] ?? "file")}${esc(kind)}</span>` +
-    `${esc(a.title)}${a.draft ? ' <span class="k">draft</span>' : ""}<span class="wt">${esc(pct(a.weight))}</span>`;
+    `${esc(a.title)}${a.draft ? ' <span class="k">draft</span>' : ""}<span class="wt">${esc(weightPct(a.weight))}</span>`;
   // The brief document when there is one the harness can paint, else the
   // record's own text as the page the pane serves it as.
   // An exam with versions opens all of them in one overlay — tabs, or side by
@@ -606,10 +683,10 @@ const planningBody = (data, { student }) => {
   const grading = data.grading ?? {};
   const cards =
     groups
-      .map((g) => `<div class="wcard"><small>${esc(g.name)}</small><b>${esc(pct(g.weight) || "—")}</b>` +
+      .map((g) => `<div class="wcard"><small>${esc(g.name)}</small><b>${esc(weightPct(g.weight) || "—")}</b>` +
         `<small>${g.count} ${g.count === 1 ? "item" : "items"}${g.unweighted ? ` · ${g.unweighted} with no weight` : ""}</small></div>`)
       .join("") +
-    `<div class="wcard ${grading.complete ? "ok" : "bad"}"><small>Total</small><b>${esc(pct(grading.total_weight) || "—")}</b>` +
+    `<div class="wcard ${grading.complete ? "ok" : "bad"}"><small>Total</small><b>${esc(weightPct(grading.total_weight) || "—")}</b>` +
     `<small>${grading.complete ? "weights add up" : "does not add up"}</small></div>`;
 
   // A span per piece of graded work, the week it opens to the week it is due.
@@ -695,7 +772,7 @@ const planningBody = (data, { student }) => {
                   ? `<a class="segt" draggable="false" href="${esc(href)}" target="_blank" rel="noopener" data-view="${esc(s.a.title)}" ` +
                     `data-format="${esc(s.a.viewable && s.a.url ? s.a.format : "html")}">${esc(s.a.title)}</a>`
                   : `<span class="segt">${esc(s.a.title)}</span>`;
-              const dueWords = `due ${esc(shortDate(s.a.due_on))} · ${esc(pct(s.a.weight) || "no weight")}`;
+              const dueWords = `due ${esc(shortDate(s.a.due_on))} · ${esc(weightPct(s.a.weight) || "no weight")}`;
               const due = !last
                 ? ""
                 : editable
@@ -721,9 +798,17 @@ const planningBody = (data, { student }) => {
       return `<tr class="${w.when === "current" ? "now" : ""}" data-week="${w.week}" data-from="${esc(w.starts_on)}" data-to="${esc(w.ends_on)}">` +
         `<td class="wkn"><b>${w.week}</b><small>${esc(shortDate(w.starts_on))}</small></td>` +
         `<td class="topic">${
-          title
-            ? `<span class="${draft ? "draftword" : ""}">${esc(title)}</span>${n ? `<small>${n} ${n === 1 ? "concept" : "concepts"}</small>` : ""}${draft ? "<small>draft</small>" : ""}`
-            : '<span class="notopic">No topic yet</span>'
+          !title
+            ? '<span class="notopic">No topic yet</span>'
+            : editable
+              // One handle per module, since a week may hold two and each
+              // moves on its own.
+              ? (w.modules ?? [])
+                  .map((m) => `<span class="tchip${m.draft ? " draftword" : ""}" draggable="true" data-m="${esc(m.module_id)}" ` +
+                    `data-wk="${w.week}" title="Drag to another week — its meetings move with it">${esc(m.title)}</span>`)
+                  .join('<span class="dash"> · </span>') +
+                (n ? `<small>${n} ${n === 1 ? "concept" : "concepts"}</small>` : "") + (draft ? "<small>draft</small>" : "")
+              : `<span class="${draft ? "draftword" : ""}">${esc(title)}</span>${n ? `<small>${n} ${n === 1 ? "concept" : "concepts"}</small>` : ""}${draft ? "<small>draft</small>" : ""}`
         }</td>${lanesHtml}</tr>`;
     })
     .join("");
@@ -734,6 +819,20 @@ const planningBody = (data, { student }) => {
   const items = {};
   for (const a of [...(data.assessments ?? []), ...undated]) {
     items[a.assessment_id] = { title: a.title, opens_at: a.opens_at ?? null, due_at: a.due_at ?? null };
+  }
+  // And to move a topic: the week it is on and the meetings that teach it,
+  // which are the ones the outline drew under that week for that module.
+  const topics = {};
+  for (const w of weeks) {
+    for (const m of w.modules ?? []) {
+      topics[m.module_id] = {
+        title: m.title,
+        week: w.week,
+        meetings: (w.meetings ?? [])
+          .filter((x) => x.module_id === m.module_id)
+          .map((x) => ({ activity: x.activity_id, type: x.type, group: x.group ?? null, scheduled_at: x.scheduled_at ?? null })),
+      };
+    }
   }
   const tray = editable && undated.length
     ? `<div class="tray"><b>${icon("calendar")}Not on the calendar</b>${undated
@@ -748,7 +847,14 @@ const planningBody = (data, { student }) => {
       `<p class="pf-error" hidden></p><div class="pf-actions"><button type="button" class="primary pf-save">Save dates</button>` +
       `<button type="button" class="chip pf-cancel">Cancel</button></div>` +
       `<small class="pf-note">Writes opens_at and due_at into its record. Canvas keeps its own copy until the definition is sent again.</small></div>` +
-      `<script type="application/json" id="plan-items">${JSON.stringify(items).replace(/</g, "\\u003c")}</script>`
+      `<div class="planform topicform" hidden role="dialog" aria-label="Move topic"><b class="tf-title"></b><small class="tf-week"></small>` +
+      `<div class="tf-meetings"></div><label class="tf-swap" hidden><input type="checkbox" class="tf-swap-on"><span></span></label>` +
+      `<div class="tf-other" hidden></div><p class="pf-error tf-error" hidden></p>` +
+      `<div class="pf-actions"><button type="button" class="primary tf-save">Move topic</button>` +
+      `<button type="button" class="chip tf-cancel">Cancel</button></div>` +
+      `<small class="pf-note">Writes the module's week and its meetings' dates. Slides and graded work keep theirs.</small></div>` +
+      `<script type="application/json" id="plan-items">${JSON.stringify(items).replace(/</g, "\\u003c")}</script>` +
+      `<script type="application/json" id="plan-topics">${JSON.stringify(topics).replace(/</g, "\\u003c")}</script>`
     : "";
 
   return `<div class="mode"><div class="weights">${cards}</div>${faultList}${tray}` +
@@ -758,7 +864,8 @@ const planningBody = (data, { student }) => {
     `<p class="foot">Each bar runs from the week a piece of work opens to the week it is due.${
       editable
         ? " Drag a bar to another week to move both dates — the weekday and the time come with it. Drag its top edge to move" +
-          " only the opening, its bottom edge to move only the due date, and press the due line to set the day by hand."
+          " only the opening, its bottom edge to move only the due date, and press the due line to set the day by hand." +
+          " Drag a topic to another week and its meetings move with it, or trade places with the topic already there."
         : ""
     } Rooms, times and decks are in Teaching.</p>${form}</div>`;
 };

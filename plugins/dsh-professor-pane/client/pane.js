@@ -9,6 +9,7 @@ import { Integrations } from "./integrations.js";
 import { GradebookPanes } from "./gradebook.js";
 import { GradebookStatus, SheetNotice, Unpublished } from "./marks.js";
 import { CourseMode, MaterialModal, materialUrl, WidgetFrame } from "./materials.js";
+import { PLACE_EVENT, takePendingPlace } from "./navigator.js";
 import { Preferences } from "./preferences.js";
 import { PublishModal } from "./publish.js";
 import { h, React } from "./react.js";
@@ -151,6 +152,9 @@ export function ProfessorPane(props) {
   // would otherwise see the value from when it was registered.
   const courseModeRef = React.useRef(false);
   courseModeRef.current = courseMode;
+  // What the left sidebar last asked course mode to show — `{ mode }`,
+  // `{ view }` — numbered, so the same place pressed twice still lands.
+  const [placeRequest, setPlaceRequest] = React.useState(null);
   // The run on screen, for the same reason: *Start defence* is answered by
   // that handler, and the run is chosen after it was registered.
   const currentRunRef = React.useRef(null);
@@ -196,6 +200,33 @@ export function ProfessorPane(props) {
     setChosen(null);
   }, [props.sessionId]);
   const [chosen, setChosen] = React.useState(null);
+
+  // A place pressed in the course navigator (client/navigator.js). A request
+  // made before this pane mounted — a press that started a chat in another
+  // course — is taken on mount; later ones arrive as the event. Declared
+  // after the effect that clears `chosen` on a session switch, so on the
+  // mount of a new session the run the press named is the one that stays.
+  React.useEffect(() => {
+    const answer = (request) => {
+      if (!request) return;
+      if (typeof request.run === "string" && request.run) setChosen(request.run);
+      if (typeof request.tab === "string") {
+        setTab(request.tab);
+        setCourseMode(false);
+        if (props.openDetails) props.openDetails();
+        return;
+      }
+      setPlaceRequest(request);
+      setCourseMode(true);
+    };
+    answer(takePendingPlace());
+    const onPlace = (event) => {
+      takePendingPlace();
+      answer(event.detail);
+    };
+    window.addEventListener(PLACE_EVENT, onPlace);
+    return () => window.removeEventListener(PLACE_EVENT, onPlace);
+  }, [props.sessionId]);
   const dark = useDark();
   // Re-fetched when the session changes, because a different session may be
   // a different workspace and therefore a different set of courses.
@@ -411,6 +442,33 @@ export function ProfessorPane(props) {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ assessment: data.assessment, opens_at: stamp(data.opens_at), due_at: stamp(data.due_at) }),
+        })
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error) window.alert(String(result.error));
+            setReload((count) => count + 1);
+          })
+          .catch(() => setReload((count) => count + 1));
+        return;
+      }
+      // A topic dragged to another week: its module's week and its meetings'
+      // dates, and the other topic's when the two swap. The server checks
+      // every id; this only passes the shape through.
+      if (data.kind === "topic") {
+        const run = currentRunRef.current;
+        if (!run || !Array.isArray(data.moves) || data.moves.length === 0 || data.moves.length > 2) return;
+        const moves = data.moves.map((move) => ({
+          module: String(move && move.module),
+          week: Number(move && move.week),
+          meetings: (Array.isArray(move && move.meetings) ? move.meetings : []).slice(0, 50).map((m) => ({
+            activity: String(m && m.activity),
+            scheduled_at: String(m && m.scheduled_at),
+          })),
+        }));
+        fetch(scoped(BASE + "/api/plan/topic?run=" + encodeURIComponent(run), props.sessionId), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ moves }),
         })
           .then((response) => response.json())
           .then((result) => {
@@ -931,6 +989,7 @@ export function ProfessorPane(props) {
           runId: current.runId,
           start: current.start,
           end: current.end,
+          request: placeRequest,
           sessionId: props.sessionId,
           dark: dark,
           drafts: drafts,
@@ -957,7 +1016,10 @@ export function ProfessorPane(props) {
             setCourseMode(false);
             if (props.openDetails) props.openDetails();
           },
-          onClose: () => setCourseMode(false),
+          onClose: () => {
+            setCourseMode(false);
+            setPlaceRequest(null);
+          },
         })
       : null,
     desk && current
@@ -1038,7 +1100,7 @@ export function ProfessorPane(props) {
  * `layout` for the open/close verbs, `slots` for the two seats, `sessions`
  * to resolve the session a widget's question should be asked in.
  */
-export const inject = ["slots", "layout", "sessions", "conversation"];
+export const inject = ["slots", "layout", "sessions", "conversation", "workspaces"];
 
 /**
  * The opener.

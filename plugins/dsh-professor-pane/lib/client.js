@@ -1467,6 +1467,45 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-gbcompose{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-gbask{width:100%;box-sizing:border-box;resize:vertical;min-height:54px}
 @media (max-width:1100px){.pp-gbassist{flex:1 1 auto;max-width:none}}
+
+/* The course navigator: the left sidebar's workspace region. */
+.pp-nav{display:flex;flex-direction:column;min-height:0;height:100%;font-size:13px;color:var(--dsw-alias-label-primary,#111)}
+.pp-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding:0 4px 8px 0}
+.pp-nav-course{position:relative;display:flex;flex-direction:column;gap:3px;width:100%;box-sizing:border-box;text-align:left;font:inherit;color:inherit;
+  padding:8px 10px;border-radius:10px;cursor:pointer;background:var(--dsw-alias-bg-l1,#fff);border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-nav-course:hover{border-color:var(--dsw-alias-border-l3,#c9c9ce)}
+.pp-nav-coursetitle{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13.5px}
+.pp-nav-coursetitle span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-nav-coursesub{font-size:11.5px;color:var(--dsw-alias-label-secondary,#444)}
+.pp-nav-bar{height:3px;border-radius:2px;background:var(--dsw-alias-fill-secondary,#f2f2f4);margin-top:4px;overflow:hidden}
+.pp-nav-bar i{display:block;height:3px;background:#2f6fd6;border-radius:2px}
+.pp-nav-menu{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:5;display:flex;flex-direction:column;padding:4px;border-radius:10px;
+  background:var(--dsw-alias-bg-l1,#fff);border:1px solid var(--dsw-alias-border-l3,#c9c9ce);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.pp-nav-label{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#888);margin:14px 6px 4px}
+.pp-nav-label span{flex:1}
+.pp-nav-row{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;text-align:left;font:inherit;color:inherit;
+  background:0 0;border:0;border-radius:8px;padding:6px 8px;cursor:pointer;min-width:0}
+.pp-nav-row:hover{background:var(--dsw-alias-fill-secondary,#f2f2f4)}
+.pp-nav-row[aria-current=true]{background:var(--dsw-alias-fill-secondary,#f2f2f4);font-weight:600}
+.pp-nav-row svg{flex:none;color:var(--dsw-alias-label-secondary,#444)}
+.pp-nav-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-nav-meta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#888)}
+.pp-nav-badge{flex:none;font-size:11px;padding:1px 7px;border-radius:8px;background:rgba(214,140,30,.16);color:#9a5b00}
+body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
+.pp-nav-week{display:flex;flex-direction:column;gap:1px;padding:2px 0}
+.pp-nav-line{display:flex;align-items:baseline;gap:6px;padding:3px 8px;font-size:12px;min-width:0}
+.pp-nav-line .pp-nav-text{color:var(--dsw-alias-label-primary,#111)}
+.pp-nav-quiet{color:var(--dsw-alias-label-tertiary,#888);font-size:12px;padding:3px 8px}
+.pp-nav-icon{flex:none;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:0;background:0 0;
+  color:var(--dsw-alias-label-secondary,#444);cursor:pointer;padding:0}
+.pp-nav-icon:hover{background:var(--dsw-alias-fill-secondary,#f2f2f4)}
+.pp-nav-dot{flex:none;width:6px;height:6px;border-radius:50%;background:#2f6fd6}
+.pp-nav-foot{flex:none;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6);padding-top:6px;margin-top:4px}
+.pp-nav-rail{display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:4px}
+.pp-nav-rail .pp-nav-icon{width:36px;height:36px;border-radius:8px;position:relative}
+.pp-nav-mono{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;
+  background:var(--dsw-alias-fill-secondary,#f2f2f4);margin-bottom:6px;cursor:pointer;border:0;color:inherit}
+.pp-nav-pip{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:#d68c1e}
 `;
 
     if (
@@ -6141,10 +6180,26 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
     function CourseMode(props) {
       const close = props.onClose;
       const [student, setStudent] = React.useState(false);
-      const [mode, setMode] = React.useState(() => defaultCourseMode(props.start, props.end));
+      // `props.request` is a place pressed in the left sidebar: a reading
+      // (`mode`) or a course-wide view (`view`). It decides where course mode
+      // opens, and moves it when a second place is pressed while it is open.
+      const request = props.request || null;
+      const known = (id, list) => list.some((entry) => entry.id === id);
+      const [mode, setMode] = React.useState(() =>
+        request && known(request.mode, COURSE_MODES) ? request.mode : defaultCourseMode(props.start, props.end),
+      );
       // A course-wide view, when one is chosen, in place of the reading; the
       // reading is kept so the weeks come back as they were left.
-      const [view, setView] = React.useState(null);
+      const [view, setView] = React.useState(() => (request && known(request.view, COURSE_VIEWS) ? request.view : null));
+      React.useEffect(() => {
+        if (!request) return;
+        if (known(request.view, COURSE_VIEWS)) {
+          setView(request.view);
+        } else if (known(request.mode, COURSE_MODES)) {
+          setMode(request.mode);
+          setView(null);
+        }
+      }, [request ? request.n : null]);
       const [taskSub, setTaskSub] = React.useState(SUBVIEWS.tasks[0].id);  // The week Teaching was last stepped to. The page steps without a round
       // trip and reports each step; it is held in a ref so a step redraws
       // nothing, and copied into `week` only when Teaching is drawn again — on
@@ -6168,6 +6223,36 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
         setMode(id);
         setView(null);
       };
+      // With the course navigator in the sidebar, course mode is the centre and
+      // the sidebar stays usable beside it: pressing another place moves it, and
+      // a chat opens over it. So the veil starts at the sidebar's right edge,
+      // followed as the sidebar collapses to its rail or is dragged wider. The
+      // column is found from the navigator outwards — the outermost ancestor
+      // still flush with the window's left edge and narrower than half of it —
+      // rather than by the shell's class names, which are hashed. With the stock
+      // browser in the seat there is no navigator, and the veil covers it all.
+      const [left, setLeft] = React.useState(0);
+      React.useLayoutEffect(() => {
+        const nav = document.querySelector(".pp-nav, .pp-nav-rail");
+        if (!nav) return undefined;
+        let column = null;
+        for (let node = nav.parentElement; node && node !== document.body; node = node.parentElement) {
+          const rect = node.getBoundingClientRect();
+          // Not a zero-width box: the shell wraps seats in `display: contents`
+          // elements, which measure 0 wide at 0 and would put the edge there.
+          if (rect.left <= 0.5 && rect.width > 0 && rect.width < window.innerWidth / 2) column = node;
+        }
+        if (column === null) return undefined;
+        const measure = () => setLeft(Math.round(column.getBoundingClientRect().right));
+        measure();
+        const observer = new ResizeObserver(measure);
+        observer.observe(column);
+        window.addEventListener("resize", measure);
+        return () => {
+          observer.disconnect();
+          window.removeEventListener("resize", measure);
+        };
+      }, []);
       // Teaching, Evidence and the course-wide views carry class figures or
       // names, so there is no student version of any of them to preview.
       const private_ = view !== null || mode === "teaching" || mode === "evidence";
@@ -6324,6 +6409,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
           "div",
           {
             className: "pp-veil pp-coursemode",
+            style: left ? { left: left + "px" } : undefined,
             onMouseDown: (event) => {
               if (event.target === event.currentTarget) close();
             },
@@ -8948,7 +9034,11 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
               h(FilingEditor, { draft: draft, update: update, assessments: doc.assessments }),
             ),
           ),
-          h(
+          // Nothing to compare yet — the current policy, untouched — so no column
+          // for it: it appears with the first edit, preset or loaded proposal.
+          gpDiff(doc.policy, draft).empty
+            ? null
+            : h(
             "div",
             { className: "pp-modalpane pp-gbimpactpane" },
             h("div", { className: "pp-modalpanelabel" }, "What it changes", impact.phase === "checking" ? h("span", { className: "pp-checkspin", style: { marginLeft: "6px", display: "inline-block" } }) : null),
@@ -9336,7 +9426,15 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                       { key: row.assessment_id, className: row.sent ? "pp-gbhot" : "" },
                       h("td", null, row.title),
                       h("td", null, row.from === null ? "—" : gpRound(row.from, 2)),
-                      h("td", null, row.to === null ? h("span", { className: "pp-behind", title: row.problem || "" }, "cannot scale") : gpRound(row.to, 2)),
+                      h(
+                        "td",
+                        null,
+                        row.dropped
+                          ? h("span", { className: "pp-as" }, "not counted")
+                          : row.to === null
+                            ? h("span", { className: "pp-behind", title: row.problem || "" }, "cannot scale")
+                            : gpRound(row.to, 2),
+                      ),
                       h("td", null, row.sent ? h("span", { className: "pp-chip pp-chip-live" }, row.sent + " to resend") : "—"),
                     ),
                   ),
@@ -9574,20 +9672,44 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
      * words, and the policy as it stands in the editor — unsaved edits included —
      * so "make it 25% instead" means 25% of what is on screen. Ids and weights only.
      */
-    const assistantPrompt = (runId, request, draft) =>
-      "/grading-proposal " +
-      runId +
-      " — " +
-      request.trim() +
-      "\n\nThe policy as it stands in the Gradebook editor (unsaved edits included) — propose against this, as a whole policy:\n```json\n" +
-      JSON.stringify({ components: draft.components, points: draft.points, assignments: draft.assignments }) +
-      "\n```";
+    const assistantPrompt = (runId, request, draft, doc) => {
+      // Titles, so "quiz 4" maps to an id without opening a record.
+      const titles = {};
+      for (const a of (doc && doc.assessments) || []) titles[a.assessment_id] = a.title + (a.due_at ? " (due " + String(a.due_at).slice(0, 10) + ")" : "");
+      return (
+        "/grading-proposal " +
+        runId +
+        " — " +
+        request.trim() +
+        "\n\nFast path — everything you need is below. Unless the request names something that is not here, do not run help or validate and do not open records: " +
+        "write the whole policy to a temp file and record it" +
+        (doc && doc.propose_command
+          ? " with exactly:\n" + doc.propose_command
+          : " with bin/ainar grading propose " + runId + " --file FILE --request WORDS --note WHY") +
+        "\nIts output is the check; do not verify again. Then answer in one sentence." +
+        "\nChange only what was asked: every assessment keeps its block unless the request moves it; dropping one is weight 0 in the same block." +
+        "\n\nAssessment titles: " +
+        JSON.stringify(titles) +
+        "\n\nThe policy as it stands in the Gradebook editor (unsaved edits included) — propose against this, as a whole policy:\n```json\n" +
+        JSON.stringify({ components: draft.components, points: draft.points, assignments: draft.assignments }) +
+        "\n```"
+      );
+    };
 
     function AssistantPanel(props) {
       const [text, setText] = React.useState("");
       const [waiting, setWaiting] = React.useState(null); // { since, known: Set, request }
       const [sent, setSent] = React.useState([]); // this editor's requests, newest last
       const known = (props.proposals || []).map((p) => p.id);
+      // A clock while waiting: a long silence reads as broken, a counting one as work.
+      const [, tick] = React.useState(0);
+      React.useEffect(() => {
+        if (!waiting) return undefined;
+        const timer = setInterval(() => tick((n) => n + 1), 1000);
+        return () => clearInterval(timer);
+      }, [waiting]);
+      const elapsed = waiting ? Math.floor((Date.now() - waiting.since) / 1000) : 0;
+      const clock = Math.floor(elapsed / 60) + ":" + String(elapsed % 60).padStart(2, "0");
 
       // While a request is out, ask every three seconds whether a proposal arrived.
       React.useEffect(() => {
@@ -9614,7 +9736,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       const send = () => {
         const request = text.trim();
         if (!request || !props.ask) return;
-        props.ask(assistantPrompt(props.runId, request, props.draft));
+        props.ask(assistantPrompt(props.runId, request, props.draft, props.doc));
         setSent((list) => list.concat([{ at: new Date().toISOString(), request: request }]));
         setWaiting({ since: Date.now(), known: new Set(known), request: request });
         setText("");
@@ -9646,7 +9768,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                 "div",
                 { className: "pp-gbwaiting", role: "status" },
                 h("span", { className: "pp-checkspin" }),
-                h("span", null, h("b", null, "Asked: "), "“" + waiting.request + "” — the assistant is reading the course. Its proposal appears here and opens in the editor."),
+                h("span", null, h("b", null, "Asked: "), "“" + waiting.request + "” — the assistant is working on it (" + clock + "). Its proposal appears here and opens in the editor; the conversation shows each step."),
                 h("button", { type: "button", className: "pp-linkbtn", onClick: () => setWaiting(null) }, "stop waiting"),
               )
             : null,
@@ -14494,6 +14616,528 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       );
     }
 
+    // ── client/navigator.js
+
+    // ------------------------------------------------------------- the request
+
+    /** The window event a place press is announced on; `ProfessorPane` listens. */
+    const PLACE_EVENT = "professor-pane:place";
+
+    /** How long a press waits for a pane that has not mounted yet. */
+    const PENDING_MS = 4000;
+
+    let pendingPlace = null;
+    let placeCount = 0;
+
+    /**
+     * Ask the pane to open a place: `{ mode }` for a reading of the weeks,
+     * `{ view }` for a course-wide view, `{ tab }` for a tab in the right column.
+     *
+     * Kept as well as announced. The pane is session-scoped and the details
+     * column can be closed, so the press may land while no pane is listening; the
+     * pane takes a fresh pending request when it mounts.
+     */
+    function requestPlace(request) {
+      placeCount += 1;
+      pendingPlace = { ...request, n: placeCount, at: Date.now() };
+      window.dispatchEvent(new CustomEvent(PLACE_EVENT, { detail: pendingPlace }));
+    }
+
+    /** The request no pane has answered yet, if it is still fresh; taking it clears it. */
+    function takePendingPlace() {
+      const found = pendingPlace;
+      pendingPlace = null;
+      return found !== null && Date.now() - found.at < PENDING_MS ? found : null;
+    }
+
+    // ------------------------------------------------------------------ icons
+
+    /** A 16px stroke icon in the sidebar's ink; `d` is one or more path strings. */
+    function Icon(props) {
+      const size = props.size || 16;
+      return h(
+        "svg",
+        {
+          width: size,
+          height: size,
+          viewBox: "0 0 24 24",
+          fill: "none",
+          stroke: "currentColor",
+          strokeWidth: 1.75,
+          strokeLinecap: "round",
+          strokeLinejoin: "round",
+          "aria-hidden": "true",
+        },
+        [].concat(props.d).map((d, index) => h("path", { d: d, key: index })),
+      );
+    }
+
+    const ICONS = {
+      weeks: ["M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z", "M4 10h16", "M8 3v4", "M16 3v4"],
+      tasks: ["M9 6h11", "M9 12h11", "M9 18h11", "M4 6l1 1 2-2", "M4 12l1 1 2-2", "M4 18l1 1 2-2"],
+      students: ["M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M3 20a6 6 0 0 1 12 0", "M16 4.5a3.5 3.5 0 0 1 0 6.5", "M18 14.5a6 6 0 0 1 3 5.5"],
+      gradebook: ["M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z", "M4 10h16", "M4 15h16", "M10 4v16"],
+      files: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"],
+      plug: ["M9 7V3", "M15 7V3", "M7 7h10v4a5 5 0 0 1-10 0z", "M12 16v5"],
+      folders: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z", "M10.5 14.5a2 2 0 1 0 0-.01", "M12 15.5l2 2"],
+      plus: ["M12 5v14", "M5 12h14"],
+      chevron: ["M8 10l4 4 4-4"],
+      course: ["M12 4l9 4-9 4-9-4z", "M7 10v5c0 1.5 2.5 3 5 3s5-1.5 5-3v-5"],
+    };
+
+    /**
+     * The course's places, in the order a professor reaches for them.
+     *
+     * Weeks opens on Planning because that is where the gaps it counts are drawn;
+     * Teaching is what *This week* opens. The rest are course mode's own views.
+     */
+    const PLACES = [
+      { id: "weeks", label: "Weeks", hint: "The term, week by week — what is planned and what is missing", request: { mode: "planning" } },
+      { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out", request: { view: "tasks" } },
+      { id: "students", label: "Students", hint: "The class list, by subgroup", request: { view: "students" } },
+      { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment", request: { view: "gradebook" } },
+      { id: "files", label: "Files", hint: "Scans and recordings: where they are, each pile", request: { view: "files" } },
+    ];
+
+    // ---------------------------------------------------------------- reading
+
+    /** The chats a person would see: no subagents, no archived, no stale blanks. */
+    const visibleSession = (session, current, archived) =>
+      session !== undefined &&
+      session.origin !== "subagent" &&
+      !archived.has(session.id) &&
+      (!session.blank || session.id === current);
+
+    /** "now", "5m", "3h", "2d", "3w" — the stock list's buckets, in English. */
+    const ago = (updatedAt, now) => {
+      const minutes = Math.floor((now - updatedAt) / 60000);
+      if (!Number.isFinite(minutes) || minutes < 1) return "now";
+      if (minutes < 60) return minutes + "m";
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return hours + "h";
+      const days = Math.floor(hours / 24);
+      return days < 14 ? days + "d" : Math.floor(days / 7) + "w";
+    };
+
+    const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+    /** `2026-10-20` as "Tue 20 Oct", read as a calendar date with no time zone. */
+    const navDate = (iso) => {
+      const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+      if (!match) return null;
+      const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+      return DAYS[date.getDay()] + " " + date.getDate() + " " + MONTHS[date.getMonth()];
+    };
+
+    /** The short words before an assessment title: "HW4 - Three routes…" → "HW4". */
+    const shortTitle = (title) => {
+      const text = String(title || "");
+      const cut = text.split(/\s[-–—:]\s/)[0];
+      return cut.length <= 28 ? cut : text.slice(0, 28) + "…";
+    };
+
+    const capital = (word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : "");
+
+    /** The workspace remembered between page loads, read and written defensively. */
+    const REMEMBERED = "professor-pane:navigator-workspace";
+    const remembered = () => {
+      try {
+        return window.localStorage.getItem(REMEMBERED);
+      } catch {
+        return null;
+      }
+    };
+    const remember = (workspaceId) => {
+      try {
+        window.localStorage.setItem(REMEMBERED, workspaceId);
+      } catch {
+        // A private window: the navigator still works, it just forgets.
+      }
+    };
+
+    /**
+     * The navigator's payload, with the last answer kept while the next loads —
+     * the sidebar is on every screen, and blanking it on each revision would
+     * flicker the whole left edge of the app.
+     */
+    function useNavigatorData(sessionId) {
+      const [revision, setRevision] = React.useState(0);
+      const [state, setState] = React.useState({ sessionId: null, value: null });
+      useRevisionWatch(sessionId ? scoped(BASE + "/api/revision", sessionId) : null, () => setRevision((count) => count + 1));
+      React.useEffect(() => {
+        if (!sessionId) return undefined;
+        let live = true;
+        fetch(scoped(BASE + "/api/navigator", sessionId) + "&r=" + revision, { headers: { accept: "application/json" } })
+          .then((response) => response.json())
+          .then((value) => {
+            if (live) setState({ sessionId: sessionId, value: value });
+          })
+          .catch((error) => {
+            if (live) setState({ sessionId: sessionId, value: { error: String(error.message || error) } });
+          });
+        return () => {
+          live = false;
+        };
+      }, [sessionId, revision]);
+      return state.value;
+    }
+
+    // ------------------------------------------------------------------ parts
+
+    function Row(props) {
+      return h(
+        "button",
+        {
+          type: "button",
+          className: "pp-nav-row",
+          title: props.hint,
+          "aria-current": props.current ? "true" : undefined,
+          onClick: props.onClick,
+        },
+        props.icon ? h(Icon, { d: ICONS[props.icon] }) : null,
+        props.dot ? h("span", { className: "pp-nav-dot", title: "Working" }) : null,
+        h("span", { className: "pp-nav-text" }, props.label),
+        props.badge ? h("span", { className: "pp-nav-badge", title: props.badgeHint }, props.badge) : null,
+        props.meta ? h("span", { className: "pp-nav-meta" }, props.meta) : null,
+      );
+    }
+
+    /** The course block, and the menu of the other workspaces under it. */
+    function CourseBlock(props) {
+      const [open, setOpen] = React.useState(false);
+      const run = props.run;
+      const weekText = run && run.current_week ? "week " + run.current_week + " of " + run.weeks : null;
+      const sub = run ? [run.course_id, run.term, weekText].filter(Boolean).join(" · ") : props.subtitle;
+      return h(
+        "div",
+        { style: { position: "relative" } },
+        h(
+          "button",
+          {
+            type: "button",
+            className: "pp-nav-course",
+            "aria-haspopup": "menu",
+            "aria-expanded": open,
+            title: "Switch course",
+            onClick: () => setOpen((value) => !value),
+          },
+          h(
+            "span",
+            { className: "pp-nav-coursetitle" },
+            h("span", null, run ? run.title : props.fallbackTitle),
+            h(Icon, { d: ICONS.chevron, size: 14 }),
+          ),
+          sub ? h("span", { className: "pp-nav-coursesub" }, sub) : null,
+          run && run.current_week && run.weeks
+            ? h(
+                "span",
+                { className: "pp-nav-bar", "aria-hidden": "true" },
+                h("i", { style: { width: Math.min(100, Math.round((run.current_week / run.weeks) * 100)) + "%" } }),
+              )
+            : null,
+        ),
+        open
+          ? h(
+              "div",
+              { className: "pp-nav-menu", role: "menu", onMouseLeave: () => setOpen(false) },
+              props.workspaces.map((workspace) =>
+                h(Row, {
+                  key: workspace.workspaceId,
+                  icon: "course",
+                  label: workspace.title || workspace.path,
+                  current: workspace.workspaceId === props.workspaceId,
+                  hint: workspace.path,
+                  onClick: () => {
+                    setOpen(false);
+                    props.onPick(workspace.workspaceId);
+                  },
+                }),
+              ),
+            )
+          : null,
+      );
+    }
+
+    /** This week: its meetings and what falls due, or when the next thing does. */
+    function ThisWeek(props) {
+      const week = props.week;
+      const open = () => requestPlace({ mode: "teaching", run: props.runId });
+      if (!week) return null;
+      const lines = [];
+      for (const meeting of week.meetings) {
+        lines.push(
+          h(
+            "button",
+            { type: "button", className: "pp-nav-row pp-nav-line", key: "m" + lines.length, onClick: open, title: meeting.title },
+            h("span", { className: "pp-nav-text" }, capital(meeting.type) + " · " + meeting.title),
+            meeting.deck ? null : h("span", { className: "pp-nav-badge" }, "no deck"),
+            h("span", { className: "pp-nav-meta" }, navDate(meeting.on) || "no date"),
+          ),
+        );
+      }
+      for (const work of week.due) {
+        lines.push(
+          h(
+            "button",
+            { type: "button", className: "pp-nav-row pp-nav-line", key: "d" + lines.length, onClick: open, title: work.title },
+            h("span", { className: "pp-nav-text" }, shortTitle(work.title) + " due"),
+            h("span", { className: "pp-nav-meta" }, navDate(work.due_on) || "no date"),
+          ),
+        );
+      }
+      if (!week.due.length && props.nextDue) {
+        lines.push(h("div", { className: "pp-nav-quiet", key: "next" }, "Nothing due · next in week " + props.nextDue.week));
+        for (const work of props.nextDue.due.slice(0, 3)) {
+          lines.push(
+            h(
+              "button",
+              { type: "button", className: "pp-nav-row pp-nav-line", key: "n" + lines.length, onClick: open, title: work.title },
+              h("span", { className: "pp-nav-text" }, shortTitle(work.title)),
+              h("span", { className: "pp-nav-meta" }, navDate(work.due_on) || "no date"),
+            ),
+          );
+        }
+      }
+      return h(
+        React.Fragment,
+        null,
+        h(
+          "div",
+          { className: "pp-nav-label" },
+          h("span", null, "This week" + (week.modules.length ? " · " + week.modules[0] : "")),
+        ),
+        h("div", { className: "pp-nav-week" }, lines.length ? lines : h("div", { className: "pp-nav-quiet" }, "Nothing scheduled")),
+      );
+    }
+
+    /** The chats in this course, newest first, six until asked for all. */
+    function Chats(props) {
+      const [all, setAll] = React.useState(false);
+      const now = Date.now();
+      const shown = all ? props.sessions : props.sessions.slice(0, 6);
+      return h(
+        React.Fragment,
+        null,
+        h(
+          "div",
+          { className: "pp-nav-label" },
+          h("span", null, "Chats"),
+          h(
+            "button",
+            { type: "button", className: "pp-nav-icon", title: "New chat in this course", "aria-label": "New chat in this course", onClick: props.onNew },
+            h(Icon, { d: ICONS.plus, size: 14 }),
+          ),
+        ),
+        shown.map((session) =>
+          h(Row, {
+            key: session.id,
+            label: session.blank ? "New chat" : session.displayTitle,
+            hint: session.blank ? "New chat" : session.displayTitle,
+            current: session.id === props.current,
+            dot: session.running,
+            meta: session.blank ? null : ago(session.updatedAt, now),
+            onClick: () => props.onOpen(session.id),
+          }),
+        ),
+        props.sessions.length > shown.length
+          ? h(Row, { label: "All " + props.sessions.length + " chats", onClick: () => setAll(true) })
+          : null,
+        !props.sessions.length ? h("div", { className: "pp-nav-quiet" }, "No chats in this course yet") : null,
+      );
+    }
+
+    // -------------------------------------------------------------- the region
+
+    /**
+     * The region: wide in the open sidebar, a rail of icons when it is collapsed.
+     *
+     * `useSessions` and `useWorkspaces` are the framework's own selector hooks,
+     * the same ones the stock browser reads; the actions arrive through this
+     * registration's `inject`.
+     */
+    function CourseNavigator(props) {
+      const list = props.useSessions((state) => state);
+      const workspaces = props.useWorkspaces((state) => state.items) || [];
+      const archivedIds = props.useWorkspaces((state) => state.archivedSessionIds);
+      const archived = React.useMemo(() => new Set(archivedIds || []), [archivedIds]);
+      const current = list.current;
+
+      // The course is the one the open chat stands in; with no chat open, the one
+      // last looked at; failing that, the first folder registered.
+      const holding = current === undefined ? undefined : workspaces.find((workspace) => workspace.sessionIds.includes(current));
+      const workspace =
+        holding ||
+        workspaces.find((entry) => entry.workspaceId === remembered()) ||
+        workspaces[0] ||
+        null;
+      React.useEffect(() => {
+        if (workspace) remember(workspace.workspaceId);
+      }, [workspace ? workspace.workspaceId : null]);
+
+      // Any session of the workspace will do for the server: it only turns the id
+      // into the folder. The open one when it is here, so a chat switch refetches.
+      const sessionId = workspace
+        ? holding
+          ? current
+          : workspace.sessionIds.find((id) => list.byId[id] !== undefined) || null
+        : null;
+      const data = useNavigatorData(sessionId);
+      const run = data && !data.error ? data.run : null;
+
+      const sessions = React.useMemo(() => {
+        if (!workspace) return [];
+        return workspace.sessionIds
+          .map((id) => list.byId[id])
+          .filter((session) => visibleSession(session, current, archived))
+          .sort((a, b) => (b.updatedAt !== a.updatedAt ? b.updatedAt - a.updatedAt : a.id < b.id ? -1 : 1));
+      }, [workspace, list, current, archived]);
+
+      const pick = (workspaceId) => {
+        remember(workspaceId);
+        props.startSession(workspaceId);
+      };
+      const place = (request) => {
+        // A place opens over the conversation of THIS course: with no chat of it
+        // open, there is no pane on it to open course mode in, so start one.
+        if (!holding && workspace) props.startSession(workspace.workspaceId);
+        requestPlace({ ...request, run: run ? run.run_id : null });
+      };
+      const pending = data && data.grading ? data.grading.pending : 0;
+      const gaps = data && !data.error ? data.gaps : 0;
+      const badgeOf = (id) =>
+        id === "weeks" && gaps
+          ? { badge: gaps + (gaps === 1 ? " gap" : " gaps"), hint: gaps + " weeks have something missing" }
+          : id === "tasks" && pending
+            ? { badge: String(pending), hint: pending + " suggested marks wait for your decision" }
+            : { badge: null, hint: null };
+
+      if (!props.wide) {
+        return h(
+          "div",
+          { className: "pp-nav-rail" },
+          h(
+            "button",
+            { type: "button", className: "pp-nav-mono", title: run ? run.title : "Courses", onClick: props.expandSidebar },
+            run ? run.course_id.replace(/[^A-Z]/g, "").slice(0, 3) || "C" : "C",
+          ),
+          PLACES.map((entry) =>
+            h(
+              "button",
+              {
+                type: "button",
+                key: entry.id,
+                className: "pp-nav-icon",
+                title: entry.label,
+                "aria-label": entry.label,
+                onClick: () => place(entry.request),
+              },
+              h(Icon, { d: ICONS[entry.id], size: 18 }),
+              badgeOf(entry.id).badge ? h("span", { className: "pp-nav-pip", "aria-hidden": "true" }) : null,
+            ),
+          ),
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-nav-icon",
+              title: "New chat in this course",
+              "aria-label": "New chat in this course",
+              onClick: () => workspace && props.startSession(workspace.workspaceId),
+            },
+            h(Icon, { d: ICONS.plus, size: 18 }),
+          ),
+        );
+      }
+
+      const notCourse = data && data.error ? data.error : null;
+      return h(
+        "div",
+        { className: "pp-nav" },
+        h(
+          "div",
+          { className: "pp-nav-scroll" },
+          workspaces.length
+            ? h(CourseBlock, {
+                run: run,
+                workspaces: workspaces,
+                workspaceId: workspace ? workspace.workspaceId : null,
+                fallbackTitle: workspace ? workspace.title || workspace.path : "Courses",
+                subtitle: notCourse
+                  ? "Not a course folder"
+                  : data
+                    ? data.run
+                      ? null
+                      : "No course run in this folder yet"
+                    : "Reading the course…",
+                onPick: pick,
+              })
+            : h("div", { className: "pp-nav-quiet" }, "Add a course folder with Folders and search, below."),
+          run ? h(ThisWeek, { week: data.week, nextDue: data.next_due, runId: run.run_id }) : null,
+          run ? h("div", { className: "pp-nav-label" }, h("span", null, "Course")) : null,
+          run
+            ? PLACES.map((entry) => {
+                const badge = badgeOf(entry.id);
+                return h(Row, {
+                  key: entry.id,
+                  icon: entry.id,
+                  label: entry.label,
+                  hint: entry.hint,
+                  badge: badge.badge,
+                  badgeHint: badge.hint,
+                  onClick: () => place(entry.request),
+                });
+              })
+            : null,
+          workspace
+            ? h(Chats, {
+                sessions: sessions,
+                current: current,
+                onOpen: props.open,
+                onNew: () => props.startSession(workspace.workspaceId),
+              })
+            : null,
+        ),
+        h(
+          "div",
+          { className: "pp-nav-foot" },
+          run
+            ? h(Row, {
+                icon: "plug",
+                label: "Integrations",
+                hint: "Canvas, the grade sheet and GitHub: where each stands",
+                onClick: () => place({ view: "integrations" }),
+              })
+            : null,
+          h(Row, {
+            icon: "folders",
+            label: "Folders and search",
+            hint: "The harness's own list: every folder, search, rename, archive",
+            onClick: props.showStock,
+          }),
+        ),
+      );
+    }
+
+    /**
+     * The way back, in the sidebar's footer while the stock browser has the seat.
+     * Rendered only then: `main.js` registers it when it hands the seat back.
+     */
+    function NavigatorReturn(props) {
+      return h(
+        "button",
+        {
+          type: "button",
+          className: props.wide ? "pp-nav-row" : "pp-nav-icon",
+          title: "Back to the course navigator",
+          "aria-label": "Course view",
+          onClick: props.showNavigator,
+        },
+        h(Icon, { d: ICONS.course, size: props.wide ? 16 : 18 }),
+        props.wide ? h("span", { className: "pp-nav-text" }, "Course view") : null,
+      );
+    }
+
     // ── client/pane.js
 
     // ----------------------------------------------------------------- pane
@@ -14618,6 +15262,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
       // would otherwise see the value from when it was registered.
       const courseModeRef = React.useRef(false);
       courseModeRef.current = courseMode;
+      // What the left sidebar last asked course mode to show — `{ mode }`,
+      // `{ view }` — numbered, so the same place pressed twice still lands.
+      const [placeRequest, setPlaceRequest] = React.useState(null);
       // The run on screen, for the same reason: *Start defence* is answered by
       // that handler, and the run is chosen after it was registered.
       const currentRunRef = React.useRef(null);
@@ -14663,6 +15310,33 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
         setChosen(null);
       }, [props.sessionId]);
       const [chosen, setChosen] = React.useState(null);
+
+      // A place pressed in the course navigator (client/navigator.js). A request
+      // made before this pane mounted — a press that started a chat in another
+      // course — is taken on mount; later ones arrive as the event. Declared
+      // after the effect that clears `chosen` on a session switch, so on the
+      // mount of a new session the run the press named is the one that stays.
+      React.useEffect(() => {
+        const answer = (request) => {
+          if (!request) return;
+          if (typeof request.run === "string" && request.run) setChosen(request.run);
+          if (typeof request.tab === "string") {
+            setTab(request.tab);
+            setCourseMode(false);
+            if (props.openDetails) props.openDetails();
+            return;
+          }
+          setPlaceRequest(request);
+          setCourseMode(true);
+        };
+        answer(takePendingPlace());
+        const onPlace = (event) => {
+          takePendingPlace();
+          answer(event.detail);
+        };
+        window.addEventListener(PLACE_EVENT, onPlace);
+        return () => window.removeEventListener(PLACE_EVENT, onPlace);
+      }, [props.sessionId]);
       const dark = useDark();
       // Re-fetched when the session changes, because a different session may be
       // a different workspace and therefore a different set of courses.
@@ -14878,6 +15552,33 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({ assessment: data.assessment, opens_at: stamp(data.opens_at), due_at: stamp(data.due_at) }),
+            })
+              .then((response) => response.json())
+              .then((result) => {
+                if (result.error) window.alert(String(result.error));
+                setReload((count) => count + 1);
+              })
+              .catch(() => setReload((count) => count + 1));
+            return;
+          }
+          // A topic dragged to another week: its module's week and its meetings'
+          // dates, and the other topic's when the two swap. The server checks
+          // every id; this only passes the shape through.
+          if (data.kind === "topic") {
+            const run = currentRunRef.current;
+            if (!run || !Array.isArray(data.moves) || data.moves.length === 0 || data.moves.length > 2) return;
+            const moves = data.moves.map((move) => ({
+              module: String(move && move.module),
+              week: Number(move && move.week),
+              meetings: (Array.isArray(move && move.meetings) ? move.meetings : []).slice(0, 50).map((m) => ({
+                activity: String(m && m.activity),
+                scheduled_at: String(m && m.scheduled_at),
+              })),
+            }));
+            fetch(scoped(BASE + "/api/plan/topic?run=" + encodeURIComponent(run), props.sessionId), {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ moves }),
             })
               .then((response) => response.json())
               .then((result) => {
@@ -15398,6 +16099,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
               runId: current.runId,
               start: current.start,
               end: current.end,
+              request: placeRequest,
               sessionId: props.sessionId,
               dark: dark,
               drafts: drafts,
@@ -15424,7 +16126,10 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
                 setCourseMode(false);
                 if (props.openDetails) props.openDetails();
               },
-              onClose: () => setCourseMode(false),
+              onClose: () => {
+                setCourseMode(false);
+                setPlaceRequest(null);
+              },
             })
           : null,
         desk && current
@@ -15505,7 +16210,7 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
      * `layout` for the open/close verbs, `slots` for the two seats, `sessions`
      * to resolve the session a widget's question should be asked in.
      */
-    const inject = ["slots", "layout", "sessions", "conversation"];
+    const inject = ["slots", "layout", "sessions", "conversation", "workspaces"];
 
     /**
      * The opener.
@@ -15616,6 +16321,63 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
           ProfessorPane,
         ),
       );
+
+      /**
+       * The left sidebar's region: the course navigator, or the stock browser.
+       *
+       * One seat or the other, never both. With the navigator on, it shadows
+       * `ui-workspace`'s WorkspaceBrowser in `sidebar.workspaces` (-1 under the
+       * default 0, the rule `details` follows above). *Folders and search* in it
+       * withdraws that registration, so the browser — still registered, never
+       * touched — renders again, and a *Course view* button goes into the
+       * sidebar's footer to bring the navigator back. See client/navigator.js.
+       */
+      const STOCK_KEY = "professor-pane:navigator-off";
+      let stock = false;
+      try {
+        stock = window.localStorage.getItem(STOCK_KEY) === "1";
+      } catch {
+        stock = false;
+      }
+      let seat = null;
+      const seatSidebar = () => {
+        if (seat !== null) seat();
+        seat = stock
+          ? ctx.slots.inject("sidebar.footer.action", () =>
+              ctx.slots.register(
+                {
+                  name: "sidebar.footer.action",
+                  id: "professor-navigator-return",
+                  inject: () => ({ showNavigator: () => setStock(false) }),
+                },
+                NavigatorReturn,
+              ),
+            )
+          : ctx.slots.inject("sidebar.workspaces", () =>
+              ctx.slots.register(
+                {
+                  name: "sidebar.workspaces",
+                  priority: -1,
+                  inject: () => ({
+                    startSession: (workspaceId) => ctx.workspaces.startSession(workspaceId),
+                    open: (sessionId) => ctx.sessions.open(sessionId),
+                    showStock: () => setStock(true),
+                  }),
+                },
+                CourseNavigator,
+              ),
+            );
+      };
+      const setStock = (value) => {
+        stock = value;
+        try {
+          window.localStorage.setItem(STOCK_KEY, value ? "1" : "0");
+        } catch {
+          // A private window: the switch holds until the page reloads.
+        }
+        seatSidebar();
+      };
+      seatSidebar();
 
       ctx.slots.inject("conversation.session.header.actions", () =>
         ctx.slots.register(

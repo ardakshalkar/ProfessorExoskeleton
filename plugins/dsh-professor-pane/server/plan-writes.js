@@ -23,7 +23,7 @@
  * document API can do, so that one case goes through `editRecords`.
  */
 
-import { assessmentsOf, runById } from "@ainar/core/src/bundle.ts";
+import { activitiesOf, assessmentsOf, modulesOf, runById } from "@ainar/core/src/bundle.ts";
 import { COLLECTIONS } from "@ainar/core/src/loader.ts";
 import { editRecords, setRecordFields } from "@ainar/core/src/record-edit.ts";
 
@@ -88,6 +88,82 @@ export const writeAssessmentDates = (workspace, root, runId, body) => {
       });
     }
     return { written: result.count > 0, assessment: assessmentId, opens_at: opens, due_at: due };
+  } catch (error) {
+    return { error: String(error?.message ?? error) };
+  }
+};
+
+/**
+ * A topic moved to another week: the module's `week`, and the dates of the
+ * meetings that teach it.
+ *
+ * A module carries one number and its meetings carry their own timestamps,
+ * so moving the number alone would leave every meeting dated in the week it
+ * left — the outline would draw them under the new week and flag each one as
+ * misdated. The form sends both halves together, and so does a swap: the body
+ * is `{moves: [{module, week, meetings: [{activity, scheduled_at}]}]}`, one
+ * entry per topic, at most two.
+ *
+ * Every entry is checked before anything is written: the module is this
+ * course's, the week is one of this run's, each meeting is this run's and
+ * teaches that module. Meetings are the professor's schedule rather than a
+ * draft's claim, for the same reason the work's dates are (`writeAssessmentDates`).
+ */
+export const writeTopicMoves = (workspace, root, runId, body) => {
+  const moves = Array.isArray(body?.moves) ? body.moves : null;
+  if (!moves || moves.length === 0 || moves.length > 2) return { error: "Nothing to move, or more than a swap." };
+
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId);
+  if (!run) return { error: `no course run '${runId}' in this workspace` };
+  // The outline's own count: a week per seven days, the last one short.
+  const span = Math.round((Date.parse(`${run.end_date}T00:00:00Z`) - Date.parse(`${run.start_date}T00:00:00Z`)) / 86_400_000);
+  const totalWeeks = Math.floor(span / 7) + 1;
+  const modules = new Map(modulesOf(bundle, run.course_id).map((m) => [m.module_id, m]));
+  const activities = new Map(activitiesOf(bundle, runId).map((a) => [a.activity_id, a]));
+
+  const weeks = new Map();
+  const stamps = new Map();
+  for (const move of moves) {
+    const moduleId = String(move?.module ?? "").trim();
+    if (!modules.has(moduleId)) return { error: `${moduleId || "That"} is not a module of ${run.course_id}.` };
+    if (weeks.has(moduleId)) return { error: `${moduleId} is moved twice.` };
+    const week = Number(move.week);
+    if (!Number.isInteger(week) || week < 1 || week > totalWeeks) {
+      return { error: `Week ${move.week} is not a week of ${runId}, which has ${totalWeeks}.` };
+    }
+    weeks.set(moduleId, week);
+    for (const entry of Array.isArray(move.meetings) ? move.meetings : []) {
+      const activityId = String(entry?.activity ?? "").trim();
+      const activity = activities.get(activityId);
+      if (!activity) return { error: `${activityId || "That"} is not a meeting of ${runId}.` };
+      if (activity.module_id !== moduleId) return { error: `${activityId} does not teach ${moduleId}.` };
+      const text = String(entry.scheduled_at ?? "").trim();
+      if (!STAMP.test(text) || Number.isNaN(Date.parse(text))) {
+        return { error: `'${text}' is not a date with a time and an offset.` };
+      }
+      stamps.set(activityId, { scheduled_at: normalised(text) });
+    }
+  }
+
+  try {
+    const moved = setRecordFields({
+      root,
+      courseId: run.course_id,
+      patterns: COLLECTIONS.modules,
+      idField: "module_id",
+      collection: "modules",
+      edits: new Map([...weeks].map(([id, week]) => [id, { week }])),
+    });
+    const met = setRecordFields({
+      root,
+      courseId: run.course_id,
+      patterns: COLLECTIONS.activities,
+      idField: "activity_id",
+      collection: "activities",
+      edits: stamps,
+    });
+    return { written: true, modules: moved.count, meetings: met.count };
   } catch (error) {
     return { error: String(error?.message ?? error) };
   }

@@ -1142,6 +1142,45 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-gbcompose{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-gbask{width:100%;box-sizing:border-box;resize:vertical;min-height:54px}
 @media (max-width:1100px){.pp-gbassist{flex:1 1 auto;max-width:none}}
+
+/* The course navigator: the left sidebar's workspace region. */
+.pp-nav{display:flex;flex-direction:column;min-height:0;height:100%;font-size:13px;color:var(--dsw-alias-label-primary,#111)}
+.pp-nav-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding:0 4px 8px 0}
+.pp-nav-course{position:relative;display:flex;flex-direction:column;gap:3px;width:100%;box-sizing:border-box;text-align:left;font:inherit;color:inherit;
+  padding:8px 10px;border-radius:10px;cursor:pointer;background:var(--dsw-alias-bg-l1,#fff);border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-nav-course:hover{border-color:var(--dsw-alias-border-l3,#c9c9ce)}
+.pp-nav-coursetitle{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13.5px}
+.pp-nav-coursetitle span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-nav-coursesub{font-size:11.5px;color:var(--dsw-alias-label-secondary,#444)}
+.pp-nav-bar{height:3px;border-radius:2px;background:var(--dsw-alias-fill-secondary,#f2f2f4);margin-top:4px;overflow:hidden}
+.pp-nav-bar i{display:block;height:3px;background:#2f6fd6;border-radius:2px}
+.pp-nav-menu{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:5;display:flex;flex-direction:column;padding:4px;border-radius:10px;
+  background:var(--dsw-alias-bg-l1,#fff);border:1px solid var(--dsw-alias-border-l3,#c9c9ce);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.pp-nav-label{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#888);margin:14px 6px 4px}
+.pp-nav-label span{flex:1}
+.pp-nav-row{display:flex;align-items:center;gap:8px;width:100%;box-sizing:border-box;text-align:left;font:inherit;color:inherit;
+  background:0 0;border:0;border-radius:8px;padding:6px 8px;cursor:pointer;min-width:0}
+.pp-nav-row:hover{background:var(--dsw-alias-fill-secondary,#f2f2f4)}
+.pp-nav-row[aria-current=true]{background:var(--dsw-alias-fill-secondary,#f2f2f4);font-weight:600}
+.pp-nav-row svg{flex:none;color:var(--dsw-alias-label-secondary,#444)}
+.pp-nav-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-nav-meta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#888)}
+.pp-nav-badge{flex:none;font-size:11px;padding:1px 7px;border-radius:8px;background:rgba(214,140,30,.16);color:#9a5b00}
+body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
+.pp-nav-week{display:flex;flex-direction:column;gap:1px;padding:2px 0}
+.pp-nav-line{display:flex;align-items:baseline;gap:6px;padding:3px 8px;font-size:12px;min-width:0}
+.pp-nav-line .pp-nav-text{color:var(--dsw-alias-label-primary,#111)}
+.pp-nav-quiet{color:var(--dsw-alias-label-tertiary,#888);font-size:12px;padding:3px 8px}
+.pp-nav-icon{flex:none;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;border:0;background:0 0;
+  color:var(--dsw-alias-label-secondary,#444);cursor:pointer;padding:0}
+.pp-nav-icon:hover{background:var(--dsw-alias-fill-secondary,#f2f2f4)}
+.pp-nav-dot{flex:none;width:6px;height:6px;border-radius:50%;background:#2f6fd6}
+.pp-nav-foot{flex:none;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6);padding-top:6px;margin-top:4px}
+.pp-nav-rail{display:flex;flex-direction:column;align-items:center;gap:4px;padding-top:4px}
+.pp-nav-rail .pp-nav-icon{width:36px;height:36px;border-radius:8px;position:relative}
+.pp-nav-mono{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:11px;
+  background:var(--dsw-alias-fill-secondary,#f2f2f4);margin-bottom:6px;cursor:pointer;border:0;color:inherit}
+.pp-nav-pip{position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:#d68c1e}
 `;
 
 if (

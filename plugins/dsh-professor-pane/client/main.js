@@ -47,6 +47,7 @@ import { DefenceDesk } from "./defence-desk.js";
 import { Integrations } from "./integrations.js";
 import { CourseMode } from "./materials.js";
 import { RecentMarks, SheetNotice } from "./marks.js";
+import { CourseNavigator, NavigatorReturn } from "./navigator.js";
 import { turnStep } from "./defence-turn.js";
 import { inject, OpenPaneAction, ProfessorPane } from "./pane.js";
 
@@ -137,6 +138,63 @@ function apply(ctx) {
       ProfessorPane,
     ),
   );
+
+  /**
+   * The left sidebar's region: the course navigator, or the stock browser.
+   *
+   * One seat or the other, never both. With the navigator on, it shadows
+   * `ui-workspace`'s WorkspaceBrowser in `sidebar.workspaces` (-1 under the
+   * default 0, the rule `details` follows above). *Folders and search* in it
+   * withdraws that registration, so the browser — still registered, never
+   * touched — renders again, and a *Course view* button goes into the
+   * sidebar's footer to bring the navigator back. See client/navigator.js.
+   */
+  const STOCK_KEY = "professor-pane:navigator-off";
+  let stock = false;
+  try {
+    stock = window.localStorage.getItem(STOCK_KEY) === "1";
+  } catch {
+    stock = false;
+  }
+  let seat = null;
+  const seatSidebar = () => {
+    if (seat !== null) seat();
+    seat = stock
+      ? ctx.slots.inject("sidebar.footer.action", () =>
+          ctx.slots.register(
+            {
+              name: "sidebar.footer.action",
+              id: "professor-navigator-return",
+              inject: () => ({ showNavigator: () => setStock(false) }),
+            },
+            NavigatorReturn,
+          ),
+        )
+      : ctx.slots.inject("sidebar.workspaces", () =>
+          ctx.slots.register(
+            {
+              name: "sidebar.workspaces",
+              priority: -1,
+              inject: () => ({
+                startSession: (workspaceId) => ctx.workspaces.startSession(workspaceId),
+                open: (sessionId) => ctx.sessions.open(sessionId),
+                showStock: () => setStock(true),
+              }),
+            },
+            CourseNavigator,
+          ),
+        );
+  };
+  const setStock = (value) => {
+    stock = value;
+    try {
+      window.localStorage.setItem(STOCK_KEY, value ? "1" : "0");
+    } catch {
+      // A private window: the switch holds until the page reloads.
+    }
+    seatSidebar();
+  };
+  seatSidebar();
 
   ctx.slots.inject("conversation.session.header.actions", () =>
     ctx.slots.register(

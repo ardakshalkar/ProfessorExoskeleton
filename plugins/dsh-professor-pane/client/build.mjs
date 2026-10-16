@@ -76,6 +76,7 @@ export const ORDER = [
   "defence-stage.js",
   "defence-desk.js",
   "upload.js",
+  "navigator.js",
   "pane.js",
   "main.js",
 ];
