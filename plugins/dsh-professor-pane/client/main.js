@@ -1,12 +1,12 @@
 /**
  * The browser half: the right column of the harness, as the professor's pane.
  *
- * Hand-written in the module loader's registration form rather than bundled.
- * Every client half in `node_modules/@deepseek-ai` is this same shape —
+ * The entry of the bundle `build.mjs` makes with esbuild, wrapped in the
+ * module loader's registration form. Every client half in
+ * `node_modules/@deepseek-ai` is this same shape —
  * `window.__ModuleLoader__.load({ id, factory })`, a factory that takes a
  * synchronous `require` and returns `module.exports` — so the format is the
- * loader's contract and not a private artefact of anybody's tsdown config.
- * `package.json` says why there is no build step.
+ * loader's contract, and what this module exports is what the loader gets.
  *
  * WHICH SEAT THIS IS, AND WHAT IT DISPLACES
  * -----------------------------------------
@@ -43,6 +43,8 @@
  * was given and does no arithmetic at all.
  */
 
+// The pane's stylesheet: no exports, it puts one <style> in the head as it loads.
+import "./style.js";
 import { DefenceDesk } from "./defence-desk.js";
 import { Integrations } from "./integrations.js";
 import { CourseMode } from "./materials.js";
@@ -209,18 +211,14 @@ function apply(ctx) {
   );
 }
 
-exports.apply = apply;
-exports.inject = inject;
+export { apply, inject };
 // For the tests only: the end-of-answer detector is the one piece of the
 // desk that is logic rather than wiring, and the desk itself is mounted
 // alone by `test/desk-page.mjs`, against a mock API and a synthetic voice.
-exports.turnStep = turnStep;
-exports.DefenceDesk = DefenceDesk;
+export { turnStep, DefenceDesk };
 // The same, for `test/integrations-page.mjs`: Integrations (and course mode
 // over it, with `?course=1`) against the real run, every write answered from
 // memory, and made-up names in the review list.
-exports.CourseMode = CourseMode;
-exports.Integrations = Integrations;
+export { CourseMode, Integrations };
 // And the grade sheet's notice and "Last added", against made-up marks.
-exports.SheetNotice = SheetNotice;
-exports.RecentMarks = RecentMarks;
+export { SheetNotice, RecentMarks };

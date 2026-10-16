@@ -15,6 +15,7 @@
     "test": "node --test test/tools.test.mjs test/pane-client.test.mjs test/pane-markdown.test.mjs test/pane-publish.test.mjs test/pane-course-mode.test.mjs test/pane-upload.test.mjs test/pane-unpublished.test.mjs test/pane-grading-view.test.mjs"
   },
   "dependencies": {
+    "@ainar/core": "file:./ainar-node",
     "@deepseek-ai/cordis-plugin-group": "^1.0.1",
     "@deepseek-ai/dsh": "0.1.1-rc.2",
     "@deepseek-ai/dsh-anonymous-user-id": "^0.1.1-rc.2",
@@ -36,7 +37,6 @@
     "@deepseek-ai/dsh-timeout": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-tools": "^0.1.1-rc.2",
     "@deepseek-ai/dsh-workflow": "^0.1.1-rc.2",
-    "@ainar/core": "file:./ainar-node",
     "@deepseek-ai/schemastery": "^3.18.1",
     "dsh-ainar-course-model": "file:./plugins/dsh-ainar-course-model",
     "dsh-professor-brand": "file:./plugins/dsh-professor-brand",
@@ -55,6 +55,7 @@
     "yaml": "A direct dependency although the tree already hoists one. dsh-professor-pane imports `yaml` to read the preference layers, and Node resolves that from THIS project's node_modules. A transitive hoist would satisfy it today and could vanish on any reinstall, which is exactly the failure that is silent until the preferences tab is opened."
   },
   "devDependencies": {
+    "esbuild": "0.25.10",
     "typescript": "^5.9.3"
   }
 }

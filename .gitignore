@@ -84,3 +84,7 @@ deploy/users.conf
 # would change whenever the course does, for a page anybody can regenerate in
 # under a second. The two sources beside it are tracked.
 plugins/dsh-professor-pane/prototype/course-mode-prototype.html
+
+# The pane's source map, written only by `npm run watch` (client/build.mjs
+# --watch) for the browser's devtools. The committed build has none.
+plugins/dsh-professor-pane/lib/client.js.map
