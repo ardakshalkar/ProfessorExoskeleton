@@ -10,6 +10,7 @@
 import { h, Fragment } from "../react.js";
 import { datesPrompt, hasBrief, MEETING_ICON, promptFor, shortDate, tierOf } from "../../shared/course-words.js";
 import { AskButton, Dash, GapChip, Icon, MaterialChips, press, StatusLine, twoDigits, WorkChip } from "./parts.jsx";
+import { EditButton, ModuleTitles } from "./edit.jsx";
 
 /** A week nobody has planned and nothing meets in: a candidate for a band. */
 const isEmpty = (w) => !(w.modules || []).length && !(w.meetings || []).length;
@@ -107,6 +108,7 @@ function WeekRow(props) {
           <Icon name={MEETING_ICON[m.type] || "lecture"} />
           {[m.type, m.location].filter(Boolean).join(" · ")}
         </span>
+        <EditButton kind="activity" id={m.activity_id} title="Change this meeting: its title, room, description" />
         {misdated.has(m.activity_id) ? (
           <GapChip kind="misdated" tier={tier} prompt={promptFor("misdated", w, run, m.activity_id)} title={has("misdated").note} />
         ) : null}
@@ -127,6 +129,7 @@ function WeekRow(props) {
       graded.push(
         <Fragment key={verb + a.assessment_id}>
           <WorkChip work={a} when={verb + " " + shortDate(a[field])} />
+          <EditButton kind="assessment" id={a.assessment_id} title="Change its title or description" />
           {student || !last ? null : <StatusLine work={a} status={status} />}
         </Fragment>,
       );
@@ -162,7 +165,7 @@ function WeekRow(props) {
         <span className="k mono">
           {shortDate(w.starts_on)} – {shortDate(w.ends_on)}
         </span>
-        {title ? <h3>{title}</h3> : <h3 className="none">Unplanned</h3>}
+        {title ? <h3><ModuleTitles modules={w.modules} /></h3> : <h3 className="none">Unplanned</h3>}
         {w.when === "current" ? <span className="pill now">this week</span> : null}
         {(w.modules || []).some((m) => m.draft) ? <span className="pill draft">draft</span> : null}
         {gaps

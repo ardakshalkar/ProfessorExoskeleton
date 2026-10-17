@@ -214,6 +214,9 @@ export function ProfessorPane(props) {
       // `chat`: the place was open beside a chat the professor switched
       // away from, and comes back the same way beside the new one.
       if (request.chat) setChatBeside(true);
+      // `compose`: a new chat started with a place open. The place stays the
+      // page and its own composer takes the first message (CourseComposer).
+      if (request.compose) setChatBeside(false);
       setPlaceRequest(request);
       setCourseMode(true);
     };
@@ -775,6 +778,7 @@ export function ProfessorPane(props) {
           integrationsFocus: integrationsFocus,
           chat: chatBeside,
           setChat: setChatBeside,
+          compose: Boolean(placeRequest && placeRequest.compose),
           onClose: () => {
             setCourseMode(false);
             setPlaceRequest(null);

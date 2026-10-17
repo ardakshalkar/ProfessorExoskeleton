@@ -461,17 +461,21 @@ export function CourseNavigator(props) {
     if (!holding && workspace) props.startSession(workspace.workspaceId);
     requestPlace({ ...request, run: run ? run.run_id : null });
   };
-  // Another chat, with a place open: the place stays, the new chat beside it.
-  const carry = () => {
-    if (shown !== null) carryPlace({ mode: shown.mode, view: shown.view, chat: true, run: run ? run.run_id : null });
+  // Another chat, with a place open: the place stays. An existing chat comes
+  // in beside it, since it has turns to read; a new one has nothing to show
+  // yet, so the place keeps the width and its composer takes the first
+  // message (`compose`) — the chat comes in beside once there is a turn.
+  const carry = (fresh) => {
+    if (shown === null) return;
+    carryPlace({ mode: shown.mode, view: shown.view, chat: !fresh, compose: Boolean(fresh), run: run ? run.run_id : null });
   };
   const openChat = (sessionId) => {
-    if (sessionId !== current) carry();
+    if (sessionId !== current) carry(false);
     props.open(sessionId);
   };
   const newChat = () => {
     if (!workspace) return;
-    carry();
+    carry(true);
     props.startSession(workspace.workspaceId);
   };
   const pending = data && data.grading ? data.grading.pending : 0;

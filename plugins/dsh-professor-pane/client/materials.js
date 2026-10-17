@@ -524,6 +524,11 @@ export function CourseMode(props) {
       // there stops a turn or clears a menu, and must not shut the place.
       const target = event.target;
       if (props.chat && veilRef.current && target instanceof Node && target !== document.body && !veilRef.current.contains(target)) return;
+      // An editor or a form open on the page (a title, the item dialog, the
+      // dates) owns Escape: it puts its value back and the place stays. This
+      // listener runs first, at the window, so the editor's own handler
+      // cannot stop it; the mark on the editor is how it is told.
+      if (event.composedPath().some((node) => node instanceof Element && (node.hasAttribute("data-own-escape") || node.classList.contains("planform")))) return;
       // A deck opened from the term plan sits on top and owns Escape: it
       // closes first, and this stays where the professor was reading.
       if (courseModeEscape({ covered: props.covered }) === "close") close();
@@ -881,6 +886,21 @@ export function CourseMode(props) {
               )
             : null,
         ),
+        // The chat's text field on the page itself, while the chat is not
+        // beside it: a question asked here starts the turn and brings the
+        // chat in beside the place, which stays where it was.
+        props.chat || !props.ask
+          ? null
+          : h(CourseComposer, {
+              key: props.sessionId,
+              focus: Boolean(props.compose),
+              place: placeName + (view === null ? " · " + (COURSE_MODES.find((entry) => entry.id === mode) || { label: mode }).label : ""),
+              runId: props.runId,
+              onSend: (text) => {
+                props.ask(text);
+                setChat(true);
+              },
+            }),
       ),
       ),
       // The place stepped aside for the chat on a narrow window: the way back.
@@ -893,6 +913,71 @@ export function CourseMode(props) {
         : null,
     ),
     document.body,
+  );
+}
+
+/**
+ * The chat's text field, docked at the foot of an open place.
+ *
+ * A new chat started from the navigator with a place open lands here rather
+ * than on the chat's empty page, so the professor keeps looking at what they
+ * were looking at while they type (`focus`). What is sent names where it was
+ * asked from — the place and the run — so the session does not have to be
+ * told which course and which view "this" meant. Enter sends, Shift+Enter is
+ * a new line.
+ */
+function CourseComposer(props) {
+  const [text, setText] = React.useState("");
+  const box = React.useRef(null);
+  React.useEffect(() => {
+    if (props.focus && box.current) box.current.focus();
+  }, [props.focus]);
+  // The field grows with what is typed, to a third of the window.
+  React.useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight / 3)) + "px";
+  }, [text]);
+  const send = () => {
+    const said = text.trim();
+    if (!said) return;
+    props.onSend(said + "\n\n(Asked from course mode — " + props.place + (props.runId ? ", run " + props.runId : "") + ".)");
+    setText("");
+  };
+  return h(
+    "form",
+    {
+      className: "pp-composer",
+      "data-own-escape": text ? "" : undefined,
+      onSubmit: (event) => {
+        event.preventDefault();
+        send();
+      },
+    },
+    h("textarea", {
+      ref: box,
+      rows: 1,
+      value: text,
+      placeholder: "Ask Claude about " + props.place + " — or tell it what to change",
+      "aria-label": "Message the session",
+      onChange: (event) => setText(event.target.value),
+      onKeyDown: (event) => {
+        if (event.key === "Escape" && text) {
+          setText("");
+          return;
+        }
+        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+          event.preventDefault();
+          send();
+        }
+      },
+    }),
+    h(
+      "button",
+      { type: "submit", className: "pp-composersend", disabled: !text.trim(), title: "Send (Enter)", "aria-label": "Send" },
+      "↑",
+    ),
   );
 }
 

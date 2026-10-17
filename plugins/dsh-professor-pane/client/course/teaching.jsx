@@ -13,6 +13,7 @@
 import { h, Fragment, React } from "../react.js";
 import { conceptsOf, MEETING_ICON, pct, promptFor, REVISIT_BELOW, shortDate, titleOf } from "../../shared/course-words.js";
 import { AskButton, Icon, MaterialChips, StatusLine, WorkChip } from "./parts.jsx";
+import { EditButton, ModuleTitles } from "./edit.jsx";
 
 function WorkLine(props) {
   const { a, verb, date, withHanded, week, handed, status } = props;
@@ -21,6 +22,7 @@ function WorkLine(props) {
   return (
     <li>
       <WorkChip work={a} when={verb + " " + shortDate(date)} />
+      <EditButton kind="assessment" id={a.assessment_id} title="Change its title or description" />
       {withHanded && got && got.enrolled ? (
         <small>
           {got.received} of {got.enrolled} handed in
@@ -60,7 +62,7 @@ function Side(props) {
       <small>
         {label} · week {w.week}
       </small>
-      <b>{titleOf(w) || "No topic yet"}</b>
+      <b>{titleOf(w) ? <ModuleTitles modules={w.modules} /> : "No topic yet"}</b>
       <ul className="facts">
         {(w.meetings || []).map((m) => (
           <li key={m.activity_id}>
@@ -131,7 +133,7 @@ function Focus(props) {
       <small>
         {w.week === current ? "This week" : "Week " + w.week} · {shortDate(w.starts_on)} – {shortDate(w.ends_on)}
       </small>
-      <h2>{titleOf(w) || "No topic yet"}</h2>
+      <h2>{titleOf(w) ? <ModuleTitles modules={w.modules} /> : "No topic yet"}</h2>
       {conceptsOf(w).length ? (
         <div className="concepts">
           <Icon name="concept" />
@@ -152,6 +154,7 @@ function Focus(props) {
                 <span>
                   {shortDate(m.on) || "no date"} · {[m.type, m.location].filter(Boolean).join(" · ")}
                 </span>
+                <EditButton kind="activity" id={m.activity_id} title="Change this meeting: its title, room, description" />
                 {resources.map((r, i) => (
                   <MaterialChips key={(r.resource_id || r.title) + i} resource={r} />
                 ))}

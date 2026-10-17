@@ -304,3 +304,17 @@ happens.
      at the time.
 6. **Deadline editable in place.** Last, deliberately: it is the only step that
    writes, and it should land when everything around it is settled.
+   **Built** with Planning's drag (2026-10-15, `plan-writes.js`). **Widened**
+   (2026-10-17) to titles and the like: `server/record-fields.js` holds one
+   table of which items the page may change and which fields — a topic's title
+   and description, a homework's or quiz's title and description, a meeting's
+   title, room and description — behind `GET`/`POST /api/record`. The page
+   edits a title in place (the pencil beside it) or the whole item in a dialog
+   that draws whatever fields the table offers (`client/course/edit.jsx`);
+   both save the same way, and neither touches `approval`. What the table
+   leaves out — weights, outcomes, rubrics — the dialog's last line asks the
+   session about, with the item's id in the prompt.
+   **Chat on the page** (2026-10-17): an open place carries the chat's text
+   field at its foot, and a new chat started from the navigator lands there
+   rather than on the chat's empty page; the first message brings the chat in
+   beside the place.

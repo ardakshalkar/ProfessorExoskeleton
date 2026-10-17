@@ -38,6 +38,7 @@ import {
   WORK_ICON,
 } from "../../shared/course-words.js";
 import { AskButton, Icon, ViewLink } from "./parts.jsx";
+import { EditableTitle } from "./edit.jsx";
 
 // ------------------------------------------------------------------ dates
 
@@ -840,7 +841,7 @@ export function Planning(props) {
                             title="Drag to another week — its meetings move with it"
                             onDragStart={(e) => startTopic(e, x.module.module_id, w.week)}
                           >
-                            {x.module.title}
+                            <EditableTitle kind="module" id={x.module.module_id} title={x.module.title} />
                           </span>
                         </Fragment>
                       ))}
@@ -849,7 +850,14 @@ export function Planning(props) {
                     </Fragment>
                   ) : (
                     <Fragment>
-                      <span className={draft ? "draftword" : ""}>{title}</span>
+                      <span className={draft ? "draftword" : ""}>
+                        {here.map((x, i) => (
+                          <Fragment key={x.module.module_id}>
+                            {i ? " · " : null}
+                            <EditableTitle kind="module" id={x.module.module_id} title={x.module.title} />
+                          </Fragment>
+                        ))}
+                      </span>
                       {n ? <small>{n + " " + (n === 1 ? "concept" : "concepts")}</small> : null}
                       {draft ? <small>draft</small> : null}
                     </Fragment>
@@ -890,12 +898,16 @@ export function Planning(props) {
                             {movable && last ? (
                               <span className="grip bottom" data-edge="due" title="Drag to move when it is due" onMouseDown={(e) => (grip.current = e.currentTarget)} />
                             ) : null}
-                            {!first ? null : href ? (
-                              <ViewLink className="segt" draggable="false" href={href} view={a.title} format={a.viewable && a.url ? a.format : "html"}>
-                                {a.title}
-                              </ViewLink>
-                            ) : (
-                              <span className="segt">{a.title}</span>
+                            {!first ? null : (
+                              <EditableTitle kind="assessment" id={a.assessment_id} title={a.title} className="segt">
+                                {href ? (
+                                  <ViewLink draggable="false" href={href} view={a.title} format={a.viewable && a.url ? a.format : "html"}>
+                                    {a.title}
+                                  </ViewLink>
+                                ) : (
+                                  a.title
+                                )}
+                              </EditableTitle>
                             )}
                             {!last ? null : movable ? (
                               <button

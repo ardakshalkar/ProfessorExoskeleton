@@ -119,6 +119,7 @@ table.plan td.lane{width:16%;min-width:140px;padding:0 6px}
 .lseg.first{border-top-right-radius:6px}.lseg.last{border-bottom-right-radius:6px}
 .lseg.draft{border-left-style:dashed}
 .segt{font-weight:600;color:inherit;text-decoration:none}a.segt:hover{text-decoration:underline}
+.segt a{color:inherit;text-decoration:none}.segt a:hover{text-decoration:underline}
 .segd{font-variant-numeric:tabular-nums}
 button.segd{all:unset;font-variant-numeric:tabular-nums;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
 button.segd:focus-visible{outline:2px solid var(--accent)}
@@ -197,6 +198,30 @@ table.plan tr[data-taught] .wkn b{color:var(--muted)}
 .revisit b{display:block;margin-bottom:2px}.revisit p{margin:2px 0 0}
 @media (max-width:900px){.trio{grid-template-columns:1fr}.trio .focus{order:-1}}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.retitled{display:inline}
+.repen{all:unset;display:inline-flex;vertical-align:-2px;margin-left:4px;padding:2px;border-radius:5px;color:var(--muted);cursor:pointer;opacity:0;transition:opacity .12s}
+.repen .i{width:13px;height:13px}
+.retitled:hover>.repen,.repen:focus-visible,tr:hover .retitled>.repen,.lseg:hover .retitled>.repen{opacity:.7}
+.repen:hover{opacity:1!important;background:var(--sunk);color:var(--ink)}
+.repen.solo{opacity:.55;margin-left:0}.meeting:hover .repen.solo,.workrow:hover .repen.solo{opacity:.85}
+.retitle{display:inline-flex;flex-wrap:wrap;align-items:center;gap:5px;vertical-align:middle;max-width:100%}
+.retitle input{font:inherit;font-size:13px;min-width:14ch;width:min(32ch,100%);padding:3px 7px;border:1px solid var(--accent-line);border-radius:7px;background:var(--surface);color:var(--ink);color-scheme:inherit}
+.retitle .chip{padding:2px 8px;font-size:12px}
+.retitle .chip.primary,.rdialog .chip.primary{background:var(--accent);border-color:var(--accent);color:var(--on-fg)}
+.chip[disabled]{opacity:.5;cursor:default}
+.reerror{color:var(--flag);font-size:12px;margin:0;flex-basis:100%}
+.rdveil{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:9vh 16px 16px;background:rgba(0,0,0,.22)}
+.rdialog{width:min(520px,100%);max-height:80vh;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:16px 18px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.25)}
+.rdhead{display:flex;align-items:center;gap:8px}
+.rdhead .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.rdid{font-size:12px;color:var(--muted)}
+.rdclose{all:unset;margin-left:auto;cursor:pointer;font-size:20px;line-height:1;color:var(--muted);padding:0 4px}
+.rdfield{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.rdfield small{color:var(--muted);font-size:12px}
+.rdfield input,.rdfield textarea{font:inherit;font-size:13.5px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);color:var(--ink);color-scheme:inherit;resize:vertical}
+.rdnote{margin:0;font-size:12px;color:var(--muted)}
+.rdask{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--line);color:var(--accent)}
+.rdask input{flex:1;min-width:0;font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
 @media (max-width:900px){
   .grid{grid-template-columns:1fr}.th{display:none}
   .cell{border-left:0;padding:4px 12px;flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:6px}

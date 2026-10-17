@@ -26,6 +26,7 @@ import { BASE, scoped } from "../tabs.js";
 import { AREAS, useVersion } from "../data.js";
 import { DARK, LIGHT, STYLE } from "../../shared/course-style.js";
 import { Sprite } from "./parts.jsx";
+import { EditScope } from "./edit.jsx";
 import { Evidence } from "./evidence.jsx";
 import { Planning } from "./planning.jsx";
 import { Teaching } from "./teaching.jsx";
@@ -193,7 +194,10 @@ export function CourseView(props) {
           <style>{sheet(dark)}</style>
           <div className="cm">
             <Sprite />
-            {body()}
+            {/* Titles and items are changed here (edit.jsx), never under the student's preview. */}
+            <EditScope runId={runId} sessionId={sessionId} enabled={Boolean(answer && !answer.error && !answer.student)}>
+              {body()}
+            </EditScope>
           </div>
         </ShadowContent>
       </div>

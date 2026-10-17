@@ -547,6 +547,12 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-wiring-absent,.pp-wiring-partial{color:#a4362f}
 .pp-coursebody .pp-frame{background:transparent}
 .pp-coursehead{flex-wrap:wrap}
+/* The chat's text field at the foot of an open place (CourseComposer in materials.js). */
+.pp-composer{flex:none;display:flex;align-items:flex-end;gap:8px;margin:8px 16px 12px;padding:8px 8px 8px 14px;border:1px solid var(--dsw-alias-border-l2,#dadce0);border-radius:16px;background:var(--dsw-alias-bg-l1,#fff);box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.pp-composer:focus-within{border-color:#2f8a4e}
+.pp-composer textarea{flex:1;min-width:0;border:0;outline:0;resize:none;background:transparent;color:inherit;font:inherit;font-size:13.5px;line-height:1.45;padding:5px 0;max-height:33vh}
+.pp-composersend{flex:none;width:30px;height:30px;border-radius:50%;border:0;background:#2f8a4e;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+.pp-composersend:disabled{opacity:.35;cursor:default}
 /* The run picker's look, at a header's size: one control among the buttons. */
 .pp-coursehead .pp-modaltitle{flex:none;max-width:240px;margin-right:6px}
 .pp-coursehead label{display:inline-flex;gap:5px;align-items:center;font-size:11px;

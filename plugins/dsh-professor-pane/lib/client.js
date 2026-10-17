@@ -582,6 +582,12 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-wiring-absent,.pp-wiring-partial{color:#a4362f}
 .pp-coursebody .pp-frame{background:transparent}
 .pp-coursehead{flex-wrap:wrap}
+/* The chat's text field at the foot of an open place (CourseComposer in materials.js). */
+.pp-composer{flex:none;display:flex;align-items:flex-end;gap:8px;margin:8px 16px 12px;padding:8px 8px 8px 14px;border:1px solid var(--dsw-alias-border-l2,#dadce0);border-radius:16px;background:var(--dsw-alias-bg-l1,#fff);box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.pp-composer:focus-within{border-color:#2f8a4e}
+.pp-composer textarea{flex:1;min-width:0;border:0;outline:0;resize:none;background:transparent;color:inherit;font:inherit;font-size:13.5px;line-height:1.45;padding:5px 0;max-height:33vh}
+.pp-composersend{flex:none;width:30px;height:30px;border-radius:50%;border:0;background:#2f8a4e;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
+.pp-composersend:disabled{opacity:.35;cursor:default}
 /* The run picker's look, at a header's size: one control among the buttons. */
 .pp-coursehead .pp-modaltitle{flex:none;max-width:240px;margin-right:6px}
 .pp-coursehead label{display:inline-flex;gap:5px;align-items:center;font-size:11px;
@@ -7251,6 +7257,7 @@ table.plan td.lane{width:16%;min-width:140px;padding:0 6px}
 .lseg.first{border-top-right-radius:6px}.lseg.last{border-bottom-right-radius:6px}
 .lseg.draft{border-left-style:dashed}
 .segt{font-weight:600;color:inherit;text-decoration:none}a.segt:hover{text-decoration:underline}
+.segt a{color:inherit;text-decoration:none}.segt a:hover{text-decoration:underline}
 .segd{font-variant-numeric:tabular-nums}
 button.segd{all:unset;font-variant-numeric:tabular-nums;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
 button.segd:focus-visible{outline:2px solid var(--accent)}
@@ -7329,6 +7336,30 @@ table.plan tr[data-taught] .wkn b{color:var(--muted)}
 .revisit b{display:block;margin-bottom:2px}.revisit p{margin:2px 0 0}
 @media (max-width:900px){.trio{grid-template-columns:1fr}.trio .focus{order:-1}}
 :focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.retitled{display:inline}
+.repen{all:unset;display:inline-flex;vertical-align:-2px;margin-left:4px;padding:2px;border-radius:5px;color:var(--muted);cursor:pointer;opacity:0;transition:opacity .12s}
+.repen .i{width:13px;height:13px}
+.retitled:hover>.repen,.repen:focus-visible,tr:hover .retitled>.repen,.lseg:hover .retitled>.repen{opacity:.7}
+.repen:hover{opacity:1!important;background:var(--sunk);color:var(--ink)}
+.repen.solo{opacity:.55;margin-left:0}.meeting:hover .repen.solo,.workrow:hover .repen.solo{opacity:.85}
+.retitle{display:inline-flex;flex-wrap:wrap;align-items:center;gap:5px;vertical-align:middle;max-width:100%}
+.retitle input{font:inherit;font-size:13px;min-width:14ch;width:min(32ch,100%);padding:3px 7px;border:1px solid var(--accent-line);border-radius:7px;background:var(--surface);color:var(--ink);color-scheme:inherit}
+.retitle .chip{padding:2px 8px;font-size:12px}
+.retitle .chip.primary,.rdialog .chip.primary{background:var(--accent);border-color:var(--accent);color:var(--on-fg)}
+.chip[disabled]{opacity:.5;cursor:default}
+.reerror{color:var(--flag);font-size:12px;margin:0;flex-basis:100%}
+.rdveil{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:9vh 16px 16px;background:rgba(0,0,0,.22)}
+.rdialog{width:min(520px,100%);max-height:80vh;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:16px 18px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.25)}
+.rdhead{display:flex;align-items:center;gap:8px}
+.rdhead .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+.rdid{font-size:12px;color:var(--muted)}
+.rdclose{all:unset;margin-left:auto;cursor:pointer;font-size:20px;line-height:1;color:var(--muted);padding:0 4px}
+.rdfield{display:flex;flex-direction:column;gap:4px;font-size:13px}
+.rdfield small{color:var(--muted);font-size:12px}
+.rdfield input,.rdfield textarea{font:inherit;font-size:13.5px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--sunk);color:var(--ink);color-scheme:inherit;resize:vertical}
+.rdnote{margin:0;font-size:12px;color:var(--muted)}
+.rdask{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--line);color:var(--accent)}
+.rdask input{flex:1;min-width:0;font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
 @media (max-width:900px){
   .grid{grid-template-columns:1fr}.th{display:none}
   .cell{border-left:0;padding:4px 12px;flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:6px}
@@ -7365,7 +7396,8 @@ var ICONS = {
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
   misdated: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M12 13.5v3"/><path d="M12 19.2h.01"/>',
   weight: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
-  ask: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>'
+  ask: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'
 };
 var MEETING_ICON = {
   lecture: "lecture",
@@ -7600,6 +7632,245 @@ function StatusLine(props) {
 var Dash = () => /* @__PURE__ */ h("span", { className: "dash" }, "—");
 var twoDigits = (n) => n < 10 ? "0" + n : String(n);
 
+// client/course/edit.jsx
+var EditContext = React.createContext(null);
+var recordUrl = (edit, query) => scoped(BASE + "/api/record?run=" + encodeURIComponent(edit.runId) + (query || ""), edit.sessionId);
+function saveRecord(edit, kind, id, fields) {
+  return fetch(recordUrl(edit), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ kind, id, fields })
+  }).then((response) => response.json()).catch((error) => ({ error: String(error.message || error) })).then((result) => {
+    if (result.written) wrote(edit.sessionId, []);
+    return result;
+  });
+}
+var own = (event) => event.stopPropagation();
+function EditableTitle(props) {
+  const edit = React.useContext(EditContext);
+  const { kind, id, title } = props;
+  const [editing, setEditing] = React.useState(false);
+  const [value, setValue] = React.useState(title || "");
+  const [saved, setSaved] = React.useState(null);
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const input = React.useRef(null);
+  React.useEffect(() => {
+    if (saved !== null && saved === title) setSaved(null);
+  }, [title]);
+  React.useEffect(() => {
+    if (editing && input.current) {
+      input.current.focus();
+      input.current.select();
+    }
+  }, [editing]);
+  const shown = saved !== null ? saved : title;
+  const label = props.children && saved === null ? props.children : shown;
+  if (!edit || !edit.enabled || !id) return /* @__PURE__ */ h("span", { className: props.className }, label);
+  const start = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setValue(shown || "");
+    setError("");
+    setEditing(true);
+  };
+  const cancel = () => {
+    setEditing(false);
+    setError("");
+  };
+  const commit = () => {
+    const next = value.trim();
+    if (!next) return setError("A title cannot be empty.");
+    if (next === (shown || "")) return cancel();
+    setBusy(true);
+    saveRecord(edit, kind, id, { title: next }).then((result) => {
+      setBusy(false);
+      if (result.error) return setError(String(result.error));
+      setSaved(next);
+      setEditing(false);
+    });
+  };
+  if (editing) {
+    return /* @__PURE__ */ h("span", { className: "retitle", "data-own-escape": "", onMouseDown: own, onDragStart: (e) => e.preventDefault(), onClick: own }, /* @__PURE__ */ h(
+      "input",
+      {
+        ref: input,
+        value,
+        disabled: busy,
+        draggable: "false",
+        "aria-label": "Title",
+        onChange: (e) => setValue(e.target.value),
+        onKeyDown: (e) => {
+          e.stopPropagation();
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") cancel();
+        }
+      }
+    ), /* @__PURE__ */ h("button", { type: "button", className: "chip primary", disabled: busy, onClick: commit }, busy ? "Saving…" : "Save"), /* @__PURE__ */ h("button", { type: "button", className: "chip", disabled: busy, onClick: cancel }, "Cancel"), /* @__PURE__ */ h(
+      "button",
+      {
+        type: "button",
+        className: "chip",
+        disabled: busy,
+        title: "Every field this item has that the page may change",
+        onClick: () => {
+          cancel();
+          edit.open(kind, id);
+        }
+      },
+      "All fields…"
+    ), error ? /* @__PURE__ */ h("small", { className: "reerror" }, error) : null);
+  }
+  return /* @__PURE__ */ h("span", { className: "retitled " + (props.className || "") }, label, /* @__PURE__ */ h(
+    "button",
+    {
+      type: "button",
+      className: "repen",
+      draggable: "false",
+      title: "Rename — or Shift-click for every field",
+      "aria-label": "Rename " + (shown || id),
+      onMouseDown: own,
+      onClick: (event) => {
+        if (event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          edit.open(kind, id);
+        } else start(event);
+      }
+    },
+    /* @__PURE__ */ h(Icon, { name: "edit" })
+  ));
+}
+function EditButton(props) {
+  const edit = React.useContext(EditContext);
+  if (!edit || !edit.enabled || !props.id) return null;
+  return /* @__PURE__ */ h(
+    "button",
+    {
+      type: "button",
+      className: "repen solo",
+      title: props.title || "Change it",
+      "aria-label": "Edit " + props.id,
+      onMouseDown: own,
+      onClick: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        edit.open(props.kind, props.id);
+      }
+    },
+    /* @__PURE__ */ h(Icon, { name: "edit" })
+  );
+}
+function ModuleTitles(props) {
+  return (props.modules || []).map((m, i) => /* @__PURE__ */ h(Fragment2, { key: m.module_id || i }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: m.module_id, title: m.title })));
+}
+function RecordDialog(props) {
+  const edit = React.useContext(EditContext);
+  const { kind, id, onClose } = props;
+  const [record, setRecord] = React.useState(null);
+  const [values, setValues] = React.useState({});
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [ask, setAsk] = React.useState("");
+  const box = React.useRef(null);
+  React.useEffect(() => {
+    let live = true;
+    fetch(recordUrl(edit, "&kind=" + encodeURIComponent(kind) + "&id=" + encodeURIComponent(id)), { headers: { accept: "application/json" } }).then((response) => response.json()).then((value) => {
+      if (!live) return;
+      if (value.error) return setError(String(value.error));
+      setRecord(value);
+      setValues(Object.fromEntries(value.fields.map((f) => [f.name, String(f.value ?? "")])));
+    }).catch((e) => live && setError(String(e.message || e)));
+    return () => {
+      live = false;
+    };
+  }, [kind, id]);
+  React.useEffect(() => {
+    const first = box.current && box.current.querySelector("input,textarea");
+    if (first) first.focus();
+  }, [record]);
+  const changed = record ? Object.fromEntries(record.fields.filter((f) => (values[f.name] ?? "") !== String(f.value ?? "")).map((f) => [f.name, values[f.name] ?? ""])) : {};
+  const missing = record ? record.fields.find((f) => f.required && !String(values[f.name] || "").trim()) : null;
+  const save = () => {
+    if (!Object.keys(changed).length) return onClose();
+    setBusy(true);
+    saveRecord(edit, kind, id, changed).then((result) => {
+      setBusy(false);
+      if (result.error) return setError(String(result.error));
+      onClose();
+    });
+  };
+  const title = record ? (record.fields.find((f) => f.name === "title") || {}).value : "";
+  const sendAsk = () => {
+    const text = ask.trim();
+    if (!text) return;
+    press.ask("About " + id + (title ? " (“" + title + "”)" : "") + " in " + edit.runId + ": " + text);
+    onClose();
+  };
+  return /* @__PURE__ */ h("div", { className: "rdveil", "data-own-escape": "", onMouseDown: (e) => e.target === e.currentTarget && !busy && onClose() }, /* @__PURE__ */ h(
+    "div",
+    {
+      ref: box,
+      className: "rdialog",
+      role: "dialog",
+      "aria-label": "Edit " + id,
+      onKeyDown: (e) => {
+        e.stopPropagation();
+        if (e.key === "Escape" && !busy) onClose();
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !missing) save();
+      }
+    },
+    /* @__PURE__ */ h("div", { className: "rdhead" }, /* @__PURE__ */ h("span", { className: "k" }, record ? record.word : "Item"), /* @__PURE__ */ h("span", { className: "mono rdid" }, id), record && record.draft ? /* @__PURE__ */ h("span", { className: "k" }, "draft") : null, /* @__PURE__ */ h("button", { type: "button", className: "rdclose", "aria-label": "Close", onClick: onClose }, "×")),
+    !record && !error ? /* @__PURE__ */ h("p", { className: "calm" }, "Reading the record…") : null,
+    record ? record.fields.map((f) => /* @__PURE__ */ h("label", { key: f.name, className: "rdfield" }, /* @__PURE__ */ h("span", null, f.label, f.required ? "" : /* @__PURE__ */ h("small", null, " · may be empty")), f.shape === "text" ? /* @__PURE__ */ h(
+      "textarea",
+      {
+        rows: 5,
+        maxLength: f.max,
+        value: values[f.name] ?? "",
+        onChange: (e) => setValues(Object.assign({}, values, { [f.name]: e.target.value }))
+      }
+    ) : /* @__PURE__ */ h(
+      "input",
+      {
+        maxLength: f.max,
+        value: values[f.name] ?? "",
+        onChange: (e) => setValues(Object.assign({}, values, { [f.name]: e.target.value }))
+      }
+    ))) : null,
+    record && record.draft ? /* @__PURE__ */ h("p", { className: "rdnote" }, "Changing a draft does not accept it: it stays ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), ".") : null,
+    error ? /* @__PURE__ */ h("p", { className: "reerror" }, error) : null,
+    /* @__PURE__ */ h("div", { className: "pf-actions" }, /* @__PURE__ */ h("button", { type: "button", className: "chip primary", disabled: !record || busy || Boolean(missing), onClick: save }, busy ? "Saving…" : Object.keys(changed).length ? "Save" : "Done"), /* @__PURE__ */ h("button", { type: "button", className: "chip", disabled: busy, onClick: onClose }, "Cancel"), missing ? /* @__PURE__ */ h("small", { className: "reerror" }, missing.label, " cannot be empty.") : null),
+    /* @__PURE__ */ h("div", { className: "rdask" }, /* @__PURE__ */ h(Icon, { name: "ask" }), /* @__PURE__ */ h(
+      "input",
+      {
+        placeholder: "Anything else about it — the weight, the rubric, the outcomes — ask Claude",
+        value: ask,
+        onChange: (e) => setAsk(e.target.value),
+        onKeyDown: (e) => {
+          if (e.key === "Enter") {
+            e.stopPropagation();
+            sendAsk();
+          }
+        }
+      }
+    ), /* @__PURE__ */ h("button", { type: "button", className: "chip ask", disabled: !ask.trim(), onClick: sendAsk }, "Ask"))
+  ));
+}
+function EditScope(props) {
+  const [open, setOpen] = React.useState(null);
+  const value = React.useMemo(
+    () => ({
+      runId: props.runId,
+      sessionId: props.sessionId,
+      enabled: props.enabled,
+      open: (kind, id) => setOpen({ kind, id })
+    }),
+    [props.runId, props.sessionId, props.enabled]
+  );
+  return /* @__PURE__ */ h(EditContext.Provider, { value }, props.children, open && props.enabled ? /* @__PURE__ */ h(RecordDialog, { key: open.kind + "|" + open.id, kind: open.kind, id: open.id, onClose: () => setOpen(null) }) : null);
+}
+
 // client/course/term.jsx
 var isEmpty = (w) => !(w.modules || []).length && !(w.meetings || []).length;
 var rowsOf = (weeks, empty = isEmpty) => {
@@ -7668,7 +7939,7 @@ function WeekRow(props) {
   const concepts = (w.modules || []).flatMap((m) => (m.concepts || []).map((c) => c.title || c.id));
   const lecture = (w.meetings || []).map((m) => {
     const resources = [...m.resources || []].sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
-    return /* @__PURE__ */ h("div", { className: "meeting", key: m.activity_id }, /* @__PURE__ */ h("span", { className: "chip meet" + (m.draft ? " draft" : ""), title: m.title || "" }, /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(m.on) || "no date"), /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), [m.type, m.location].filter(Boolean).join(" · ")), misdated.has(m.activity_id) ? /* @__PURE__ */ h(GapChip, { kind: "misdated", tier, prompt: promptFor("misdated", w, run, m.activity_id), title: has("misdated").note }) : null, resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
+    return /* @__PURE__ */ h("div", { className: "meeting", key: m.activity_id }, /* @__PURE__ */ h("span", { className: "chip meet" + (m.draft ? " draft" : ""), title: m.title || "" }, /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(m.on) || "no date"), /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), misdated.has(m.activity_id) ? /* @__PURE__ */ h(GapChip, { kind: "misdated", tier, prompt: promptFor("misdated", w, run, m.activity_id), title: has("misdated").note }) : null, resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
   });
   const deckGap = has("deck");
   const seen = /* @__PURE__ */ new Set();
@@ -7677,7 +7948,7 @@ function WeekRow(props) {
     for (const a of list || []) {
       const last = verb === "due" || !(w.due || []).some((d) => d.assessment_id === a.assessment_id);
       graded.push(
-        /* @__PURE__ */ h(Fragment2, { key: verb + a.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: a, when: verb + " " + shortDate2(a[field]) }), student || !last ? null : /* @__PURE__ */ h(StatusLine, { work: a, status }))
+        /* @__PURE__ */ h(Fragment2, { key: verb + a.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: a, when: verb + " " + shortDate2(a[field]) }), /* @__PURE__ */ h(EditButton, { kind: "assessment", id: a.assessment_id, title: "Change its title or description" }), student || !last ? null : /* @__PURE__ */ h(StatusLine, { work: a, status }))
       );
       if (showGaps && !hasBrief(a) && !seen.has(a.assessment_id)) {
         seen.add(a.assessment_id);
@@ -7702,7 +7973,7 @@ function WeekRow(props) {
   const assessed = new Set((w.due || []).flatMap((a) => a.outcomes || []));
   const outcomeIds = [.../* @__PURE__ */ new Set([...taught.keys(), ...assessed])].sort();
   const titles = new Map((data.outcomes || []).map((o) => [o.outcome_id, o.title]));
-  return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "wkhead " + (w.when === "current" ? "now" : w.when === "past" ? "past" : ""), id: "week-" + w.week }, /* @__PURE__ */ h("b", null, twoDigits(w.week)), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), title ? /* @__PURE__ */ h("h3", null, title) : /* @__PURE__ */ h("h3", { className: "none" }, "Unplanned"), w.when === "current" ? /* @__PURE__ */ h("span", { className: "pill now" }, "this week") : null, (w.modules || []).some((m) => m.draft) ? /* @__PURE__ */ h("span", { className: "pill draft" }, "draft") : null, gaps.filter((g) => g.kind === "module" || g.kind === "weight").map((g) => /* @__PURE__ */ h(GapChip, { key: g.kind, kind: g.kind, tier, prompt: promptFor(g.kind, w, run), title: g.note })), module2 ? /* @__PURE__ */ h(
+  return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "wkhead " + (w.when === "current" ? "now" : w.when === "past" ? "past" : ""), id: "week-" + w.week }, /* @__PURE__ */ h("b", null, twoDigits(w.week)), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), title ? /* @__PURE__ */ h("h3", null, /* @__PURE__ */ h(ModuleTitles, { modules: w.modules })) : /* @__PURE__ */ h("h3", { className: "none" }, "Unplanned"), w.when === "current" ? /* @__PURE__ */ h("span", { className: "pill now" }, "this week") : null, (w.modules || []).some((m) => m.draft) ? /* @__PURE__ */ h("span", { className: "pill draft" }, "draft") : null, gaps.filter((g) => g.kind === "module" || g.kind === "weight").map((g) => /* @__PURE__ */ h(GapChip, { key: g.kind, kind: g.kind, tier, prompt: promptFor(g.kind, w, run), title: g.note })), module2 ? /* @__PURE__ */ h(
     AskButton,
     {
       className: "chip ask askw",
@@ -8373,8 +8644,8 @@ function Planning(props) {
           title: "Drag to another week — its meetings move with it",
           onDragStart: (e) => startTopic(e, x.module.module_id, w.week)
         },
-        x.module.title
-      ))), n ? /* @__PURE__ */ h("small", null, n + " " + (n === 1 ? "concept" : "concepts")) : null, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, title), n ? /* @__PURE__ */ h("small", null, n + " " + (n === 1 ? "concept" : "concepts")) : null, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
+        /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title })
+      ))), n ? /* @__PURE__ */ h("small", null, n + " " + (n === 1 ? "concept" : "concepts")) : null, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title })))), n ? /* @__PURE__ */ h("small", null, n + " " + (n === 1 ? "concept" : "concepts")) : null, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
       lanes.map((l) => /* @__PURE__ */ h("td", { className: "lane", key: l[0] }, spans.filter((s) => s.lane[1] === l[1] && s.start !== null && w.week >= s.start && w.week <= s.end).map((s) => {
         const first = w.week === s.start;
         const last = w.week === s.end;
@@ -8398,7 +8669,7 @@ function Planning(props) {
           },
           movable && first && a.opens_on && weekOf(a.opens_on) === s.start && !taught(s.start) ? /* @__PURE__ */ h("span", { className: "grip top", "data-edge": "opens", title: "Drag to move when it opens", onMouseDown: (e) => grip.current = e.currentTarget }) : null,
           movable && last ? /* @__PURE__ */ h("span", { className: "grip bottom", "data-edge": "due", title: "Drag to move when it is due", onMouseDown: (e) => grip.current = e.currentTarget }) : null,
-          !first ? null : href ? /* @__PURE__ */ h(ViewLink, { className: "segt", draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : /* @__PURE__ */ h("span", { className: "segt" }, a.title),
+          !first ? null : /* @__PURE__ */ h(EditableTitle, { kind: "assessment", id: a.assessment_id, title: a.title, className: "segt" }, href ? /* @__PURE__ */ h(ViewLink, { draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : a.title),
           !last ? null : movable ? /* @__PURE__ */ h(
             "button",
             {
@@ -8451,7 +8722,7 @@ function WorkLine(props) {
   const { a, verb, date, withHanded, week, handed, status } = props;
   const got = handed[a.assessment_id];
   const showStatus = withHanded || !(week && week.due || []).some((d) => d.assessment_id === a.assessment_id);
-  return /* @__PURE__ */ h("li", null, /* @__PURE__ */ h(WorkChip, { work: a, when: verb + " " + shortDate2(date) }), withHanded && got && got.enrolled ? /* @__PURE__ */ h("small", null, got.received, " of ", got.enrolled, " handed in") : null, showStatus ? /* @__PURE__ */ h(StatusLine, { work: a, status }) : null);
+  return /* @__PURE__ */ h("li", null, /* @__PURE__ */ h(WorkChip, { work: a, when: verb + " " + shortDate2(date) }), /* @__PURE__ */ h(EditButton, { kind: "assessment", id: a.assessment_id, title: "Change its title or description" }), withHanded && got && got.enrolled ? /* @__PURE__ */ h("small", null, got.received, " of ", got.enrolled, " handed in") : null, showStatus ? /* @__PURE__ */ h(StatusLine, { work: a, status }) : null);
 }
 function DeckNeed(props) {
   const { w, run } = props;
@@ -8465,7 +8736,7 @@ function Side(props) {
     return /* @__PURE__ */ h("div", { className: "side empty" }, /* @__PURE__ */ h("small", null, label), /* @__PURE__ */ h("p", null, "Outside the run."));
   }
   const taught = current !== null && w.week < current;
-  return /* @__PURE__ */ h("div", { className: "side" }, /* @__PURE__ */ h("small", null, label, " · week ", w.week), /* @__PURE__ */ h("b", null, titleOf(w) || "No topic yet"), /* @__PURE__ */ h("ul", { className: "facts" }, (w.meetings || []).map((m) => /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate2(m.on) || "no date", " · ", m.type), /* @__PURE__ */ h("small", null, m.location || ""))), (w.opens || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "o" + a.assessment_id, a, verb: "opens", date: a.opens_on, withHanded: false, week: w, handed, status })), (w.due || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "d" + a.assessment_id, a, verb: "due", date: a.due_on, withHanded: true, handed, status })), taught ? conceptsOf(w).map((c) => {
+  return /* @__PURE__ */ h("div", { className: "side" }, /* @__PURE__ */ h("small", null, label, " · week ", w.week), /* @__PURE__ */ h("b", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), /* @__PURE__ */ h("ul", { className: "facts" }, (w.meetings || []).map((m) => /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate2(m.on) || "no date", " · ", m.type), /* @__PURE__ */ h("small", null, m.location || ""))), (w.opens || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "o" + a.assessment_id, a, verb: "opens", date: a.opens_on, withHanded: false, week: w, handed, status })), (w.due || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "d" + a.assessment_id, a, verb: "due", date: a.due_on, withHanded: true, handed, status })), taught ? conceptsOf(w).map((c) => {
     const x = concepts[c.id];
     return /* @__PURE__ */ h("li", { key: c.id }, /* @__PURE__ */ h(Icon, { name: "concept" }), /* @__PURE__ */ h("span", null, c.title || c.id), /* @__PURE__ */ h("small", null, x && x.class_mean !== null && x.class_mean !== void 0 ? "class " + pct(x.class_mean) + " · " + (x.coverage || "") : "not assessed yet"));
   }) : null), /* @__PURE__ */ h(DeckNeed, { w, run }), /* @__PURE__ */ h("button", { type: "button", className: "link", onClick: () => onGo(w.week) }, "Make this the focus ›"));
@@ -8483,9 +8754,9 @@ function Focus(props) {
   );
   const module2 = (w.modules || [])[0];
   const prepare = "For week " + w.week + " of " + run.id + (module2 ? " (" + module2.module_id + ")" : "") + ", what should I teach and what should I revisit first?" + (revisit.length ? " The class is weakest on " + revisit.map((r) => r.c.title || r.c.id).join(" and ") + "." : "");
-  return /* @__PURE__ */ h("div", { className: "focus" }, /* @__PURE__ */ h("small", null, w.week === current ? "This week" : "Week " + w.week, " · ", shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), /* @__PURE__ */ h("h2", null, titleOf(w) || "No topic yet"), conceptsOf(w).length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), conceptsOf(w).map((c) => /* @__PURE__ */ h("span", { className: "chip concept", key: c.id }, c.title || c.id))) : null, meetings.length ? /* @__PURE__ */ h("ul", { className: "facts big" }, meetings.map((m) => {
+  return /* @__PURE__ */ h("div", { className: "focus" }, /* @__PURE__ */ h("small", null, w.week === current ? "This week" : "Week " + w.week, " · ", shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), /* @__PURE__ */ h("h2", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), conceptsOf(w).length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), conceptsOf(w).map((c) => /* @__PURE__ */ h("span", { className: "chip concept", key: c.id }, c.title || c.id))) : null, meetings.length ? /* @__PURE__ */ h("ul", { className: "facts big" }, meetings.map((m) => {
     const resources = [...m.resources || []].sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
-    return /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate2(m.on) || "no date", " · ", [m.type, m.location].filter(Boolean).join(" · ")), resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
+    return /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate2(m.on) || "no date", " · ", [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
   })) : /* @__PURE__ */ h("p", { className: "calm" }, "No meeting this week."), misdated ? misdated.ids.map((id) => {
     const m = meetings.find((x) => x.activity_id === id) || {};
     const word = m.type ? m.type.charAt(0).toUpperCase() + m.type.slice(1) : "A meeting";
@@ -8605,7 +8876,7 @@ function CourseView(props) {
     }
     return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Term, { data, student: answer.student, status: answer.status }));
   };
-  return /* @__PURE__ */ h(Fragment2, null, answer && !answer.error && answer.drafts ? /* @__PURE__ */ h("div", { className: "pp-banner" }, /* @__PURE__ */ h("b", null, "Record + drafts. "), "Everything below includes records marked ", /* @__PURE__ */ h("code", null, "approval: draft"), ", which nobody has accepted yet. Accepting one is changing that word to", " ", /* @__PURE__ */ h("code", null, "approved"), " in its record, and that is yours to do.") : null, /* @__PURE__ */ h("div", { ref: hostRef, className: "pp-courseview", style: { flex: 1, minHeight: 0, overflow: "auto" } }, /* @__PURE__ */ h(ShadowContent, { host }, /* @__PURE__ */ h("style", null, sheet(dark)), /* @__PURE__ */ h("div", { className: "cm" }, /* @__PURE__ */ h(Sprite, null), body()))));
+  return /* @__PURE__ */ h(Fragment2, null, answer && !answer.error && answer.drafts ? /* @__PURE__ */ h("div", { className: "pp-banner" }, /* @__PURE__ */ h("b", null, "Record + drafts. "), "Everything below includes records marked ", /* @__PURE__ */ h("code", null, "approval: draft"), ", which nobody has accepted yet. Accepting one is changing that word to", " ", /* @__PURE__ */ h("code", null, "approved"), " in its record, and that is yours to do.") : null, /* @__PURE__ */ h("div", { ref: hostRef, className: "pp-courseview", style: { flex: 1, minHeight: 0, overflow: "auto" } }, /* @__PURE__ */ h(ShadowContent, { host }, /* @__PURE__ */ h("style", null, sheet(dark)), /* @__PURE__ */ h("div", { className: "cm" }, /* @__PURE__ */ h(Sprite, null), /* @__PURE__ */ h(EditScope, { runId, sessionId, enabled: Boolean(answer && !answer.error && !answer.student) }, body())))));
 }
 function ShadowContent(props) {
   const host = props.host;
@@ -10508,6 +10779,7 @@ function CourseMode(props) {
       if (event.key !== "Escape") return;
       const target = event.target;
       if (props.chat && veilRef.current && target instanceof Node && target !== document.body && !veilRef.current.contains(target)) return;
+      if (event.composedPath().some((node) => node instanceof Element && (node.hasAttribute("data-own-escape") || node.classList.contains("planform")))) return;
       if (courseModeEscape({ covered: props.covered }) === "close") close();
     };
     window.addEventListener("keydown", onKey, true);
@@ -10829,7 +11101,20 @@ function CourseMode(props) {
               ) : null,
               h("div", { className: "pp-cviewbody" }, viewBody())
             ) : null
-          )
+          ),
+          // The chat's text field on the page itself, while the chat is not
+          // beside it: a question asked here starts the turn and brings the
+          // chat in beside the place, which stays where it was.
+          props.chat || !props.ask ? null : h(CourseComposer, {
+            key: props.sessionId,
+            focus: Boolean(props.compose),
+            place: placeName + (view === null ? " · " + (COURSE_MODES.find((entry) => entry.id === mode) || { label: mode }).label : ""),
+            runId: props.runId,
+            onSend: (text) => {
+              props.ask(text);
+              setChat(true);
+            }
+          })
         )
       ),
       // The place stepped aside for the chat on a narrow window: the way back.
@@ -10840,6 +11125,59 @@ function CourseMode(props) {
       ) : null
     ),
     document.body
+  );
+}
+function CourseComposer(props) {
+  const [text, setText] = React.useState("");
+  const box = React.useRef(null);
+  React.useEffect(() => {
+    if (props.focus && box.current) box.current.focus();
+  }, [props.focus]);
+  React.useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, Math.round(window.innerHeight / 3)) + "px";
+  }, [text]);
+  const send2 = () => {
+    const said = text.trim();
+    if (!said) return;
+    props.onSend(said + "\n\n(Asked from course mode — " + props.place + (props.runId ? ", run " + props.runId : "") + ".)");
+    setText("");
+  };
+  return h(
+    "form",
+    {
+      className: "pp-composer",
+      "data-own-escape": text ? "" : void 0,
+      onSubmit: (event) => {
+        event.preventDefault();
+        send2();
+      }
+    },
+    h("textarea", {
+      ref: box,
+      rows: 1,
+      value: text,
+      placeholder: "Ask Claude about " + props.place + " — or tell it what to change",
+      "aria-label": "Message the session",
+      onChange: (event) => setText(event.target.value),
+      onKeyDown: (event) => {
+        if (event.key === "Escape" && text) {
+          setText("");
+          return;
+        }
+        if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+          event.preventDefault();
+          send2();
+        }
+      }
+    }),
+    h(
+      "button",
+      { type: "submit", className: "pp-composersend", disabled: !text.trim(), title: "Send (Enter)", "aria-label": "Send" },
+      "↑"
+    )
   );
 }
 var chatWidth = (viewport) => Math.max(380, Math.min(520, Math.round(viewport * 0.32)));
@@ -11342,16 +11680,17 @@ function CourseNavigator(props) {
     if (!holding && workspace) props.startSession(workspace.workspaceId);
     requestPlace({ ...request, run: run ? run.run_id : null });
   };
-  const carry = () => {
-    if (shown !== null) carryPlace({ mode: shown.mode, view: shown.view, chat: true, run: run ? run.run_id : null });
+  const carry = (fresh) => {
+    if (shown === null) return;
+    carryPlace({ mode: shown.mode, view: shown.view, chat: !fresh, compose: Boolean(fresh), run: run ? run.run_id : null });
   };
   const openChat = (sessionId2) => {
-    if (sessionId2 !== current) carry();
+    if (sessionId2 !== current) carry(false);
     props.open(sessionId2);
   };
   const newChat = () => {
     if (!workspace) return;
-    carry();
+    carry(true);
     props.startSession(workspace.workspaceId);
   };
   const pending = data && data.grading ? data.grading.pending : 0;
@@ -13607,6 +13946,7 @@ function ProfessorPane(props) {
       if (!request) return;
       if (typeof request.run === "string" && request.run) setChosen(request.run);
       if (request.chat) setChatBeside(true);
+      if (request.compose) setChatBeside(false);
       setPlaceRequest(request);
       setCourseMode(true);
     };
@@ -14007,6 +14347,7 @@ function ProfessorPane(props) {
       integrationsFocus,
       chat: chatBeside,
       setChat: setChatBeside,
+      compose: Boolean(placeRequest && placeRequest.compose),
       onClose: () => {
         setCourseMode(false);
         setPlaceRequest(null);
