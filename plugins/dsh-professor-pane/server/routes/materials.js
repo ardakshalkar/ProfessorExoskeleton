@@ -19,6 +19,11 @@ export const routes = [
         // Affirmative only, like `names=1` on the inbox: a URL replayed without
         // it serves the file itself, which is what every caller got before.
         url.searchParams.get("as") === "pdf",
+        // A picture the document names by a path relative to itself — a deck's
+        // `figures/fig-01.svg`. Carried with the session so the image request
+        // resolves the same workspace the page did.
+        url.searchParams.get("asset") ?? "",
+        url.searchParams.get("session") ?? "",
       );
     },
   },

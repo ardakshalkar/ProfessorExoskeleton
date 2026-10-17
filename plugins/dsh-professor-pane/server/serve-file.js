@@ -4,9 +4,9 @@
  */
 
 import { readFileSync } from "node:fs";
-import { basename, resolve, sep } from "node:path";
+import { basename, dirname, resolve, sep } from "node:path";
 
-import { send, sendErrorPage, sendJson } from "./http.js";
+import { BASE, send, sendErrorPage, sendJson } from "./http.js";
 // The pane's own text layer: HTML escaping, and the markdown renderer `/file`
 // serves a brief and a deck through — see `test/pane-markdown.test.mjs`.
 import { escapeText, MARKDOWN_STYLE, renderMarkdown } from "./markdown.js";
@@ -43,6 +43,7 @@ const MIME_BY_EXTENSION = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   gif: "image/gif",
+  webp: "image/webp",
 };
 
 /**
@@ -332,7 +333,64 @@ export const sendOutline = (res, workspace, root, documentId, dark) => {
   return send(res, 200, "text/html; charset=utf-8", markdownPage(title, source.join("\n"), dark === true));
 };
 
-export const sendMaterial = (res, workspace, root, documentId, dark, asPdf) => {
+/**
+ * The pictures a rendered document may pull in beside itself.
+ *
+ * Images only: this is the one place `/file` reads a path a request supplies,
+ * and the path is relative to a document the record already names. Anything
+ * that is not a picture — a key file, the YAML next to it — is refused here
+ * however it is spelled.
+ */
+const ASSET_EXTENSIONS = new Set(["svg", "png", "jpg", "jpeg", "gif", "webp"]);
+
+/**
+ * Point a rendered document's relative images at `/file?…&asset=`.
+ *
+ * A Marp deck names its figures `figures/fig-01.svg`, relative to the markdown
+ * file. Rendered here, the page's address is `/professor-pane/file?doc=…`, so
+ * the browser asked for `/professor-pane/figures/fig-01.svg` and every figure
+ * came back broken. Absolute URLs, root paths and fragments are left as they
+ * were written.
+ */
+const withAssetLinks = (html, documentId, sessionId) =>
+  html.replace(/<img([^>]*?) src="([^"]*)"/g, (whole, before, src) => {
+    const path = src.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    if (path === "" || /^[a-z][a-z0-9+.-]*:/i.test(path) || /^[/#]/.test(path)) return whole;
+    const address =
+      `${BASE}/file?doc=` +
+      encodeURIComponent(documentId) +
+      "&asset=" +
+      encodeURIComponent(path) +
+      (sessionId ? "&session=" + encodeURIComponent(sessionId) : "");
+    return `<img${before} src="${address.replace(/&/g, "&amp;")}"`;
+  });
+
+/** One picture beside a recorded document, or a 404 in words. */
+const sendAsset = (res, root, documentFile, asset) => {
+  const extension = (asset.split(/[?#]/)[0].split(".").pop() ?? "").toLowerCase();
+  if (!ASSET_EXTENSIONS.has(extension)) {
+    return send(res, 404, "text/plain; charset=utf-8", `${asset} is not a picture this route serves`);
+  }
+  const full = resolve(dirname(documentFile), asset.split(/[?#]/)[0]);
+  if (!full.startsWith(resolve(root) + sep)) {
+    return send(res, 404, "text/plain; charset=utf-8", `${asset} resolves outside the workspace`);
+  }
+  let body;
+  try {
+    body = readFileSync(full);
+  } catch {
+    return send(res, 404, "text/plain; charset=utf-8", `${asset} is not on disk`);
+  }
+  res.setHeader("Content-Type", MIME_BY_EXTENSION[extension]);
+  // An SVG opened on its own is a document that could carry script; as a
+  // figure in a deck it never needs any.
+  res.setHeader("Content-Security-Policy", "script-src 'none'");
+  res.setHeader("Content-Length", String(body.length));
+  res.writeHead(200);
+  res.end(body);
+};
+
+export const sendMaterial = (res, workspace, root, documentId, dark, asPdf, asset = "", sessionId = "") => {
   if (!documentId) return sendJson(res, 200, { error: "no document named" });
 
   let found = null;
@@ -361,6 +419,8 @@ export const sendMaterial = (res, workspace, root, documentId, dark, asPdf) => {
   if (!full.startsWith(inside)) {
     return sendJson(res, 200, { error: `${documentId} resolves outside the workspace` });
   }
+
+  if (asset) return sendAsset(res, root, full, asset);
 
   let body;
   try {
@@ -403,7 +463,11 @@ export const sendMaterial = (res, workspace, root, documentId, dark, asPdf) => {
   }
   if (MARKDOWN_EXTENSIONS.has(extension)) {
     body = Buffer.from(
-      markdownPage(String(found.title ?? name), body.toString("utf8"), dark === true),
+      withAssetLinks(
+        markdownPage(String(found.title ?? name), body.toString("utf8"), dark === true),
+        documentId,
+        sessionId,
+      ),
       "utf8",
     );
     name = name.replace(/\.[^.]+$/, "") + ".html";
