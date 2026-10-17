@@ -560,6 +560,7 @@ function ConceptMap(props) {
                 {c.title || c.id}
                 <Mention
                   mention={props.mention}
+                  fresh={props.fresh}
                   label={"“" + (c.title || c.id) + "”"}
                   text={props.words(c.id + " “" + (c.title || c.id) + "” (a concept of " + mine.map((x) => x.module.module_id + " “" + x.module.title + "”").join(", ") + ", week " + week + ")")}
                   onDone={(written) => {
@@ -591,28 +592,90 @@ function ConceptMap(props) {
 }
 
 /**
- * The stars beside an item: its name goes into the chat's message box, the
- * chat comes in beside the place, and nothing is sent — the question is the
- * professor's to type (`mention`, client/main.js).
+ * The stars beside an item, and the two chats its name can go to: this one —
+ * into its message box, the chat brought in beside the place (`mention`,
+ * client/main.js) — or a new one, which opens with the place carried into it
+ * and the name in the place's own composer (`fresh`, client/pane.js). Nothing
+ * is sent either way: the question is the professor's to type.
  */
 function Mention(props) {
-  if (!props.mention) return null;
+  const [menu, setMenu] = React.useState(null);
+  if (!props.mention && !props.fresh) return null;
+  const toThis = () => {
+    setMenu(null);
+    const written = props.mention(props.text);
+    if (props.onDone) props.onDone(written);
+  };
+  const toNew = () => {
+    setMenu(null);
+    props.fresh(props.text);
+    if (props.onDone) props.onDone(true);
+  };
   return (
-    <button
-      type="button"
-      className="star"
-      draggable="false"
-      title={"Ask about " + props.label + " in the chat"}
-      aria-label={"Ask about " + props.label + " in the chat"}
+    <Fragment>
+      <button
+        type="button"
+        className={"star" + (menu ? " open" : "")}
+        draggable="false"
+        title={"Ask about " + props.label + " in a chat"}
+        aria-label={"Ask about " + props.label + " in a chat"}
+        aria-haspopup={props.mention && props.fresh ? "menu" : undefined}
+        aria-expanded={menu ? "true" : undefined}
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!props.fresh) return toThis();
+          if (!props.mention) return toNew();
+          const box = e.currentTarget.getBoundingClientRect();
+          setMenu(menu ? null : { x: box.left, y: box.bottom });
+        }}
+      >
+        <Icon name="ask" />
+      </button>
+      {menu ? <StarMenu at={menu} label={props.label} onThis={toThis} onNew={toNew} onClose={() => setMenu(null)} /> : null}
+    </Fragment>
+  );
+}
+
+function StarMenu(props) {
+  const ref = React.useRef(null);
+  useOutside(ref, props.onClose);
+  React.useEffect(() => {
+    const first = ref.current && ref.current.querySelector("button");
+    if (first) first.focus();
+  }, []);
+  const move = (e) => {
+    const items = [...ref.current.querySelectorAll("button")];
+    const i = items.indexOf(e.target);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      props.onClose();
+    }
+  };
+  return (
+    <div
+      ref={ref}
+      className="starmenu"
+      data-own-escape=""
+      role="menu"
+      aria-label={"Ask about " + props.label}
+      style={placed(props.at.x - 14, props.at.y - 10, 220, 92)}
+      onKeyDown={move}
       onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => {
-        e.stopPropagation();
-        const written = props.mention(props.text);
-        if (props.onDone) props.onDone(written);
-      }}
+      onClick={(e) => e.stopPropagation()}
     >
-      <Icon name="ask" />
-    </button>
+      <button type="button" role="menuitem" onClick={props.onThis}>
+        <b>This chat</b>
+        <small>add it to the message box of the chat you are in</small>
+      </button>
+      <button type="button" role="menuitem" onClick={props.onNew}>
+        <b>New chat</b>
+        <small>start a chat about it, with this page open</small>
+      </button>
+    </div>
   );
 }
 
@@ -621,6 +684,7 @@ function Mention(props) {
 export function Planning(props) {
   const { data, student, locks, graph, runId, sessionId } = props;
   const mention = props.mention || null;
+  const fresh = props.fresh || null;
   const run = data.run || {};
   const weeks = data.weeks || [];
   const editable = !student;
@@ -1065,7 +1129,7 @@ export function Planning(props) {
             >
               <Icon name={WORK_ICON[a.type] || "file"} />
               {a.title}
-              <Mention mention={mention} label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
+              <Mention mention={mention} fresh={fresh}label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
             </span>
           ))}
           <small>Drag one onto a week, then settle the day.</small>
@@ -1149,7 +1213,7 @@ export function Planning(props) {
                           >
                             <EditableTitle kind="module" id={x.module.module_id} title={x.module.title} />
                           </span>
-                          <Mention mention={mention} label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
+                          <Mention mention={mention} fresh={fresh}label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
                         </Fragment>
                       ))}
                       {conceptsButton}
@@ -1162,7 +1226,7 @@ export function Planning(props) {
                           <Fragment key={x.module.module_id}>
                             {i ? " · " : null}
                             <EditableTitle kind="module" id={x.module.module_id} title={x.module.title} />
-                            <Mention mention={mention} label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
+                            <Mention mention={mention} fresh={fresh}label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
                           </Fragment>
                         ))}
                       </span>
@@ -1215,7 +1279,7 @@ export function Planning(props) {
                                 )}
                               </EditableTitle>
                             )}
-                            {first ? <Mention mention={mention} label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} /> : null}
+                            {first ? <Mention mention={mention} fresh={fresh}label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} /> : null}
                             {!last ? null : movable ? (
                               <button
                                 type="button"
@@ -1267,7 +1331,7 @@ export function Planning(props) {
                               a.title
                             )}
                           </EditableTitle>
-                          <Mention mention={mention} label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
+                          <Mention mention={mention} fresh={fresh}label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
                           <span className="pl-span">
                             {s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end}
                             {a.opens_on ? " · opens " + shortDate(a.opens_on) : ""}
@@ -1334,7 +1398,7 @@ export function Planning(props) {
           onCancel={cancel}
         />
       ) : null}
-      {map ? <ConceptMap key={map.mids.join("|") + map.week} at={map} modules={drawn.modules} graph={graph || {}} mention={mention} words={said} onMentioned={mentioned} onClose={() => setMap(null)} /> : null}
+      {map ? <ConceptMap key={map.mids.join("|") + map.week} at={map} modules={drawn.modules} graph={graph || {}} mention={mention} fresh={fresh} words={said} onMentioned={mentioned} onClose={() => setMap(null)} /> : null}
       <Toast text={toast} />
     </div>
   );

@@ -135,6 +135,8 @@ function apply(ctx) {
           openDetails: () => ctx.layout.openDetails(),
           ask: ask(sessionId),
           mention: mention(sessionId),
+          // A new chat in the open chat's own workspace, opened.
+          startChat: () => ctx.workspaces.startSession(),
         }),
       },
       ProfessorPane,

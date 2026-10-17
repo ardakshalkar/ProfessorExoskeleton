@@ -171,6 +171,11 @@ button.star{all:unset;box-sizing:border-box;display:inline-flex;align-items:cent
 button.star .i{width:14px;height:14px}
 button.star:hover,button.star:focus-visible{opacity:1;background:var(--accent-tint)}button.star:focus-visible{outline:2px solid var(--accent)}
 table.plan tr:hover button.star,.cmap-c:hover button.star,.traychip:hover button.star{opacity:.8}
+button.star.open{opacity:1;background:var(--accent-tint)}
+.starmenu{position:fixed;z-index:60;width:220px;display:flex;flex-direction:column;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;white-space:normal;cursor:default}
+.starmenu button{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:1px;padding:6px 9px;border-radius:7px;cursor:pointer;color:var(--ink)}
+.starmenu button:hover,.starmenu button:focus-visible{background:var(--accent-tint)}
+.starmenu b{font-weight:600}.starmenu small{color:var(--muted);font-size:11.5px;line-height:1.3;margin:0!important}
 .lseg{position:relative}.lseg>button.star{position:absolute;top:2px;right:2px}
 .lseg.first{padding-right:24px}
 table.plan td.mats{min-width:120px;max-width:260px}

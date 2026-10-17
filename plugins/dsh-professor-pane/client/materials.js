@@ -848,6 +848,7 @@ export function CourseMode(props) {
             mode: mode,
             week: mode === "teaching" ? week : null,
             mention: props.mention,
+            fresh: props.startChat ? (text) => props.startChat({ mode: mode, draft: text }) : null,
             onStep: (n) => {
               stepped.current = n;
             },
@@ -895,6 +896,7 @@ export function CourseMode(props) {
           : h(CourseComposer, {
               key: props.sessionId,
               focus: Boolean(props.compose),
+              draft: props.draft,
               place: placeName + (view === null ? " · " + (COURSE_MODES.find((entry) => entry.id === mode) || { label: mode }).label : ""),
               runId: props.runId,
               onSend: (text) => {
@@ -950,6 +952,15 @@ function CourseComposer(props) {
   React.useEffect(() => {
     if (props.focus && box.current) box.current.focus();
   }, [props.focus]);
+  // Words a press brought with a new chat (`draft`), added after whatever is
+  // typed, with the caret after them: the question is the professor's.
+  const draftN = props.draft ? props.draft.n : null;
+  React.useEffect(() => {
+    if (!props.draft) return;
+    const add = props.draft.text;
+    setText((was) => (was.trim() ? was.replace(/\s+$/, "") + " " + add : add) + " ");
+    if (box.current) box.current.focus();
+  }, [draftN]);
   // The field grows with what is typed, to a third of the window.
   React.useLayoutEffect(() => {
     const el = box.current;

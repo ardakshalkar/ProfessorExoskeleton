@@ -7314,6 +7314,11 @@ button.star{all:unset;box-sizing:border-box;display:inline-flex;align-items:cent
 button.star .i{width:14px;height:14px}
 button.star:hover,button.star:focus-visible{opacity:1;background:var(--accent-tint)}button.star:focus-visible{outline:2px solid var(--accent)}
 table.plan tr:hover button.star,.cmap-c:hover button.star,.traychip:hover button.star{opacity:.8}
+button.star.open{opacity:1;background:var(--accent-tint)}
+.starmenu{position:fixed;z-index:60;width:220px;display:flex;flex-direction:column;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;white-space:normal;cursor:default}
+.starmenu button{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:1px;padding:6px 9px;border-radius:7px;cursor:pointer;color:var(--ink)}
+.starmenu button:hover,.starmenu button:focus-visible{background:var(--accent-tint)}
+.starmenu b{font-weight:600}.starmenu small{color:var(--muted);font-size:11.5px;line-height:1.3;margin:0!important}
 .lseg{position:relative}.lseg>button.star{position:absolute;top:2px;right:2px}
 .lseg.first{padding-right:24px}
 table.plan td.mats{min-width:120px;max-width:260px}
@@ -8504,6 +8509,7 @@ function ConceptMap(props) {
       Mention,
       {
         mention: props.mention,
+        fresh: props.fresh,
         label: "“" + (c.title || c.id) + "”",
         text: props.words(c.id + " “" + (c.title || c.id) + "” (a concept of " + mine.map((x) => x.module.module_id + " “" + x.module.title + "”").join(", ") + ", week " + week + ")"),
         onDone: (written) => {
@@ -8517,28 +8523,79 @@ function ConceptMap(props) {
   );
 }
 function Mention(props) {
-  if (!props.mention) return null;
-  return /* @__PURE__ */ h(
+  const [menu, setMenu] = React.useState(null);
+  if (!props.mention && !props.fresh) return null;
+  const toThis = () => {
+    setMenu(null);
+    const written = props.mention(props.text);
+    if (props.onDone) props.onDone(written);
+  };
+  const toNew = () => {
+    setMenu(null);
+    props.fresh(props.text);
+    if (props.onDone) props.onDone(true);
+  };
+  return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h(
     "button",
     {
       type: "button",
-      className: "star",
+      className: "star" + (menu ? " open" : ""),
       draggable: "false",
-      title: "Ask about " + props.label + " in the chat",
-      "aria-label": "Ask about " + props.label + " in the chat",
+      title: "Ask about " + props.label + " in a chat",
+      "aria-label": "Ask about " + props.label + " in a chat",
+      "aria-haspopup": props.mention && props.fresh ? "menu" : void 0,
+      "aria-expanded": menu ? "true" : void 0,
       onMouseDown: (e) => e.stopPropagation(),
       onClick: (e) => {
         e.stopPropagation();
-        const written = props.mention(props.text);
-        if (props.onDone) props.onDone(written);
+        if (!props.fresh) return toThis();
+        if (!props.mention) return toNew();
+        const box = e.currentTarget.getBoundingClientRect();
+        setMenu(menu ? null : { x: box.left, y: box.bottom });
       }
     },
     /* @__PURE__ */ h(Icon, { name: "ask" })
+  ), menu ? /* @__PURE__ */ h(StarMenu, { at: menu, label: props.label, onThis: toThis, onNew: toNew, onClose: () => setMenu(null) }) : null);
+}
+function StarMenu(props) {
+  const ref = React.useRef(null);
+  useOutside(ref, props.onClose);
+  React.useEffect(() => {
+    const first = ref.current && ref.current.querySelector("button");
+    if (first) first.focus();
+  }, []);
+  const move = (e) => {
+    const items = [...ref.current.querySelectorAll("button")];
+    const i = items.indexOf(e.target);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+    } else if (e.key === "Escape") {
+      e.stopPropagation();
+      props.onClose();
+    }
+  };
+  return /* @__PURE__ */ h(
+    "div",
+    {
+      ref,
+      className: "starmenu",
+      "data-own-escape": "",
+      role: "menu",
+      "aria-label": "Ask about " + props.label,
+      style: placed(props.at.x - 14, props.at.y - 10, 220, 92),
+      onKeyDown: move,
+      onMouseDown: (e) => e.stopPropagation(),
+      onClick: (e) => e.stopPropagation()
+    },
+    /* @__PURE__ */ h("button", { type: "button", role: "menuitem", onClick: props.onThis }, /* @__PURE__ */ h("b", null, "This chat"), /* @__PURE__ */ h("small", null, "add it to the message box of the chat you are in")),
+    /* @__PURE__ */ h("button", { type: "button", role: "menuitem", onClick: props.onNew }, /* @__PURE__ */ h("b", null, "New chat"), /* @__PURE__ */ h("small", null, "start a chat about it, with this page open"))
   );
 }
 function Planning(props) {
   const { data, student, locks, graph, runId, sessionId } = props;
   const mention = props.mention || null;
+  const fresh = props.fresh || null;
   const run = data.run || {};
   const weeks = data.weeks || [];
   const editable = !student;
@@ -8895,7 +8952,7 @@ function Planning(props) {
     },
     /* @__PURE__ */ h(Icon, { name: WORK_ICON[a.type] || "file" }),
     a.title,
-    /* @__PURE__ */ h(Mention, { mention, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned })
+    /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned })
   )), /* @__PURE__ */ h("small", null, "Drag one onto a week, then settle the day.")) : null, /* @__PURE__ */ h("table", { className: "plan" }, /* @__PURE__ */ h("thead", null, /* @__PURE__ */ h("tr", null, /* @__PURE__ */ h("th", null, "Week"), /* @__PURE__ */ h("th", null, "Topic"), /* @__PURE__ */ h("th", null, "Materials"), lanes.map((l) => /* @__PURE__ */ h("th", { key: l[0], className: "lanehead " + l[2] }, l[1])))), /* @__PURE__ */ h("tbody", null, weeks.map((w) => {
     const r = rowOf(w.week);
     const here = drawn.modules.filter((x) => x.week === w.week);
@@ -8945,7 +9002,7 @@ function Planning(props) {
           onDragStart: (e) => startTopic(e, x.module.module_id, w.week)
         },
         /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title })
-      ), /* @__PURE__ */ h(Mention, { mention, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned }))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title }), /* @__PURE__ */ h(Mention, { mention, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned })))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
+      ), /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned }))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title }), /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned })))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
       /* @__PURE__ */ h("td", { className: "mats" }, materials.length ? materials.map((x, i) => /* @__PURE__ */ h(MaterialChips, { key: (x.resource_id || x.title) + i, resource: x })) : /* @__PURE__ */ h("span", { className: "none" }, title ? "none yet" : "")),
       lanes.map((l) => /* @__PURE__ */ h("td", { className: "lane", key: l[0] }, spans.filter((s) => s.lane[1] === l[1] && s.start !== null && w.week >= s.start && w.week <= s.end).map((s) => {
         const first = w.week === s.start;
@@ -8965,7 +9022,7 @@ function Planning(props) {
           movable && first && a.opens_on && weekOf(a.opens_on) === s.start && !taught(s.start) ? /* @__PURE__ */ h("span", { className: "grip top", "data-edge": "opens", title: "Drag to move when it opens", onMouseDown: (e) => grip.current = e.currentTarget }) : null,
           movable && last ? /* @__PURE__ */ h("span", { className: "grip bottom", "data-edge": "due", title: "Drag to move when it is due", onMouseDown: (e) => grip.current = e.currentTarget }) : null,
           !first ? null : /* @__PURE__ */ h(EditableTitle, { kind: "assessment", id: a.assessment_id, title: a.title, className: "segt" }, href ? /* @__PURE__ */ h(ViewLink, { draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : a.title),
-          first ? /* @__PURE__ */ h(Mention, { mention, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }) : null,
+          first ? /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }) : null,
           !last ? null : movable ? /* @__PURE__ */ h(
             "button",
             {
@@ -8999,7 +9056,7 @@ function Planning(props) {
         /* @__PURE__ */ h(Icon, { name: WORK_ICON[a.type] || "project" }),
         /* @__PURE__ */ h("span", { className: "pl-kind" }, "Project"),
         /* @__PURE__ */ h(EditableTitle, { kind: "assessment", id: a.assessment_id, title: a.title, className: "segt" }, href ? /* @__PURE__ */ h(ViewLink, { draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : a.title),
-        /* @__PURE__ */ h(Mention, { mention, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }),
+        /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }),
         /* @__PURE__ */ h("span", { className: "pl-span" }, s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end, a.opens_on ? " · opens " + shortDate2(a.opens_on) : ""),
         movable ? /* @__PURE__ */ h(
           "button",
@@ -9043,7 +9100,7 @@ function Planning(props) {
       onSave: saveTopic,
       onCancel: cancel
     }
-  ) : null, map ? /* @__PURE__ */ h(ConceptMap, { key: map.mids.join("|") + map.week, at: map, modules: drawn.modules, graph: graph || {}, mention, words: said, onMentioned: mentioned, onClose: () => setMap(null) }) : null, /* @__PURE__ */ h(Toast, { text: toast }));
+  ) : null, map ? /* @__PURE__ */ h(ConceptMap, { key: map.mids.join("|") + map.week, at: map, modules: drawn.modules, graph: graph || {}, mention, fresh, words: said, onMentioned: mentioned, onClose: () => setMap(null) }) : null, /* @__PURE__ */ h(Toast, { text: toast }));
 }
 
 // client/course/teaching.jsx
@@ -9184,7 +9241,7 @@ function CourseView(props) {
     const strip = /* @__PURE__ */ h("div", { className: "strip" }, /* @__PURE__ */ h("span", { className: "note" }, run.term || "", " · ", current ? "week " + current + " of " + weeks.length : weeks.length + " weeks", " · ", NOTES[shown]), shown === "term" && !answer.student ? /* @__PURE__ */ h(Tally, { data, current }) : null);
     const banner = answer.student && (shown === "term" || shown === "planning") ? /* @__PURE__ */ h("div", { className: "banner" }, /* @__PURE__ */ h("b", null, "Preview as student."), " The record alone — no hole, no note about what has not been written yet.") : null;
     if (shown === "planning") {
-      return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Planning, { data, student: answer.student, locks: answer.locks, graph: answer.graph, mention: answer.student ? null : props.mention, runId, sessionId }), answer.student ? /* @__PURE__ */ h(StructureFoot, null) : /* @__PURE__ */ h("p", { className: "foot" }, "Structure only — nothing here is derived from student work. Moving a bar changes its ", /* @__PURE__ */ h("span", { className: "mono" }, "opens_at"), " and", " ", /* @__PURE__ */ h("span", { className: "mono" }, "due_at"), " and nothing else; accepting a draft is still changing ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), " in its record."));
+      return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Planning, { data, student: answer.student, locks: answer.locks, graph: answer.graph, mention: answer.student ? null : props.mention, fresh: answer.student ? null : props.fresh, runId, sessionId }), answer.student ? /* @__PURE__ */ h(StructureFoot, null) : /* @__PURE__ */ h("p", { className: "foot" }, "Structure only — nothing here is derived from student work. Moving a bar changes its ", /* @__PURE__ */ h("span", { className: "mono" }, "opens_at"), " and", " ", /* @__PURE__ */ h("span", { className: "mono" }, "due_at"), " and nothing else; accepting a draft is still changing ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), " in its record."));
     }
     if (shown === "teaching") {
       return /* @__PURE__ */ h(Fragment2, null, strip, /* @__PURE__ */ h(
@@ -11399,6 +11456,7 @@ function CourseMode(props) {
               mode,
               week: mode === "teaching" ? week : null,
               mention: props.mention,
+              fresh: props.startChat ? (text) => props.startChat({ mode, draft: text }) : null,
               onStep: (n) => {
                 stepped.current = n;
               }
@@ -11438,6 +11496,7 @@ function CourseMode(props) {
           props.chat || !props.ask ? null : h(CourseComposer, {
             key: props.sessionId,
             focus: Boolean(props.compose),
+            draft: props.draft,
             place: placeName + (view === null ? " · " + (COURSE_MODES.find((entry) => entry.id === mode) || { label: mode }).label : ""),
             runId: props.runId,
             onSend: (text) => {
@@ -11478,6 +11537,13 @@ function CourseComposer(props) {
   React.useEffect(() => {
     if (props.focus && box.current) box.current.focus();
   }, [props.focus]);
+  const draftN = props.draft ? props.draft.n : null;
+  React.useEffect(() => {
+    if (!props.draft) return;
+    const add = props.draft.text;
+    setText((was) => (was.trim() ? was.replace(/\s+$/, "") + " " + add : add) + " ");
+    if (box.current) box.current.focus();
+  }, [draftN]);
   React.useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -11734,6 +11800,11 @@ function requestPlace(request) {
 function carryPlace(request) {
   placeCount += 1;
   pendingPlace = { ...request, n: placeCount, at: Date.now() };
+  return pendingPlace;
+}
+function deliverCarried(carried) {
+  if (pendingPlace === null || pendingPlace.n !== carried.n) return;
+  window.dispatchEvent(new CustomEvent(PLACE_EVENT, { detail: pendingPlace }));
 }
 function takePendingPlace() {
   const found = pendingPlace;
@@ -14538,6 +14609,11 @@ function ProfessorPane(props) {
     if (written && courseModeRef.current) setChatBeside(true);
     return written;
   });
+  const startChatWith = props.startChat && current && ((request) => {
+    const carried = carryPlace({ ...request, compose: true, run: current.runId });
+    props.startChat();
+    setTimeout(() => deliverCarried(carried), 1500);
+  });
   const body = () => {
     if (runs.phase === "loading") return h(Message, null, "Reading the workspace…");
     if (runs.value.error) return h(Message, { error: true }, runs.value.error);
@@ -14685,6 +14761,7 @@ function ProfessorPane(props) {
       // A press beside an item on the weeks names it in the chat's
       // composer and brings the chat in beside the place.
       mention: mentionAndShow,
+      startChat: startChatWith,
       openPublish,
       // Each view inside names what its own writes changed.
       wrote: write,
@@ -14696,6 +14773,7 @@ function ProfessorPane(props) {
       chat: chatBeside,
       setChat: setChatBeside,
       compose: Boolean(placeRequest && placeRequest.compose),
+      draft: placeRequest && placeRequest.draft ? { text: placeRequest.draft, n: placeRequest.n } : null,
       onClose: () => {
         setCourseMode(false);
         setPlaceRequest(null);
@@ -14812,7 +14890,9 @@ function apply(ctx) {
           closeDetails: () => ctx.layout.closeDetails(),
           openDetails: () => ctx.layout.openDetails(),
           ask: ask(sessionId),
-          mention: mention(sessionId)
+          mention: mention(sessionId),
+          // A new chat in the open chat's own workspace, opened.
+          startChat: () => ctx.workspaces.startSession()
         })
       },
       ProfessorPane

@@ -8,7 +8,7 @@ import { DefenceDesk } from "./defence-desk.js";
 import { Inspector } from "./inspector.js";
 import { SheetNotice } from "./marks.js";
 import { CourseMode, MaterialModal, materialUrl } from "./materials.js";
-import { PLACE_EVENT, takePendingPlace } from "./navigator.js";
+import { carryPlace, deliverCarried, PLACE_EVENT, takePendingPlace } from "./navigator.js";
 import { PublishModal } from "./publish.js";
 import { h, React } from "./react.js";
 import { GradeBoard } from "./grade-board.js";
@@ -585,6 +585,15 @@ export function ProfessorPane(props) {
     return written;
   });
 
+  // The other choice: a new chat, with the place carried into it and the words
+  // in the place's own composer (`draft`), ready for the first message — the
+  // navigator's New chat, with something already said.
+  const startChatWith = props.startChat && current && ((request) => {
+    const carried = carryPlace({ ...request, compose: true, run: current.runId });
+    props.startChat();
+    setTimeout(() => deliverCarried(carried), 1500);
+  });
+
   const body = () => {
     if (runs.phase === "loading") return h(Message, null, "Reading the workspace…");
     if (runs.value.error) return h(Message, { error: true }, runs.value.error);
@@ -771,6 +780,7 @@ export function ProfessorPane(props) {
           // A press beside an item on the weeks names it in the chat's
           // composer and brings the chat in beside the place.
           mention: mentionAndShow,
+          startChat: startChatWith,
           openPublish: openPublish,
           // Each view inside names what its own writes changed.
           wrote: write,
@@ -782,6 +792,7 @@ export function ProfessorPane(props) {
           chat: chatBeside,
           setChat: setChatBeside,
           compose: Boolean(placeRequest && placeRequest.compose),
+          draft: placeRequest && placeRequest.draft ? { text: placeRequest.draft, n: placeRequest.n } : null,
           onClose: () => {
             setCourseMode(false);
             setPlaceRequest(null);

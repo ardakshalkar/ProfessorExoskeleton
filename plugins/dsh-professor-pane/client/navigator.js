@@ -68,9 +68,20 @@ function requestPlace(request) {
  * still on the old chat would take the request and clear it; kept quiet, the
  * pane takes it as its session changes (`takePendingPlace`).
  */
-function carryPlace(request) {
+export function carryPlace(request) {
   placeCount += 1;
   pendingPlace = { ...request, n: placeCount, at: Date.now() };
+  return pendingPlace;
+}
+
+/**
+ * Hand a carried place to whichever pane is listening, if no new pane took it:
+ * a "new" chat the framework answered with the blank one already open keeps
+ * the same pane, which never remounts to take it.
+ */
+export function deliverCarried(carried) {
+  if (pendingPlace === null || pendingPlace.n !== carried.n) return;
+  window.dispatchEvent(new CustomEvent(PLACE_EVENT, { detail: pendingPlace }));
 }
 
 /** The request no pane has answered yet, if it is still fresh; taking it clears it. */
