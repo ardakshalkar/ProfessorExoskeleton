@@ -167,6 +167,12 @@ table.plan tr[data-taught] .wkn b{color:var(--muted)}
 .tchip:hover{background:var(--sunk);box-shadow:inset 0 0 0 1px var(--line)}
 .tchip.lifted{opacity:.35}
 .topicform{width:330px}
+button.star{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:2px;border-radius:5px;color:var(--accent);opacity:.35;cursor:pointer;vertical-align:middle;transition:opacity .12s}
+button.star .i{width:14px;height:14px}
+button.star:hover,button.star:focus-visible{opacity:1;background:var(--accent-tint)}button.star:focus-visible{outline:2px solid var(--accent)}
+table.plan tr:hover button.star,.cmap-c:hover button.star,.traychip:hover button.star{opacity:.8}
+.lseg{position:relative}.lseg>button.star{position:absolute;top:2px;right:2px}
+.lseg.first{padding-right:24px}
 table.plan td.mats{min-width:120px;max-width:260px}
 td.mats{line-height:1.9}td.mats .chip{font-size:12px;padding:1px 7px;margin:1px 4px 1px 0}td.mats .none{color:var(--muted);font-size:12px}
 .cbtn{all:unset;cursor:pointer;margin-left:8px;color:var(--accent);font-size:12px;text-decoration:underline dotted;text-underline-offset:2px}

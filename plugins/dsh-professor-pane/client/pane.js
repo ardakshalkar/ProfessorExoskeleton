@@ -768,6 +768,9 @@ export function ProfessorPane(props) {
           names: names,
           setNames: setNames,
           ask: props.ask,
+          // A press beside an item on the weeks names it in the chat's
+          // composer and brings the chat in beside the place.
+          mention: mentionAndShow,
           openPublish: openPublish,
           // Each view inside names what its own writes changed.
           wrote: write,

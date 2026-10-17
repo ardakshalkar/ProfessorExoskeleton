@@ -36,6 +36,7 @@ import {
   shortDate,
   weightPct,
   WORK_ICON,
+  WORK_WORD,
 } from "../../shared/course-words.js";
 import { AskButton, Icon, MaterialChips, ViewLink } from "./parts.jsx";
 import { EditableTitle } from "./edit.jsx";
@@ -557,6 +558,15 @@ function ConceptMap(props) {
             concepts.map((c) => (
               <span key={c.id} tabIndex={0} className={"chip concept cmap-c" + (litNode("c:" + c.id) ? "" : " dim")} title={c.id} {...node("c:" + c.id)}>
                 {c.title || c.id}
+                <Mention
+                  mention={props.mention}
+                  label={"“" + (c.title || c.id) + "”"}
+                  text={props.words(c.id + " “" + (c.title || c.id) + "” (a concept of " + mine.map((x) => x.module.module_id + " “" + x.module.title + "”").join(", ") + ", week " + week + ")")}
+                  onDone={(written) => {
+                    props.onMentioned(written);
+                    if (written) onClose();
+                  }}
+                />
               </span>
             ))
           ) : (
@@ -580,10 +590,37 @@ function ConceptMap(props) {
   );
 }
 
+/**
+ * The stars beside an item: its name goes into the chat's message box, the
+ * chat comes in beside the place, and nothing is sent — the question is the
+ * professor's to type (`mention`, client/main.js).
+ */
+function Mention(props) {
+  if (!props.mention) return null;
+  return (
+    <button
+      type="button"
+      className="star"
+      draggable="false"
+      title={"Ask about " + props.label + " in the chat"}
+      aria-label={"Ask about " + props.label + " in the chat"}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => {
+        e.stopPropagation();
+        const written = props.mention(props.text);
+        if (props.onDone) props.onDone(written);
+      }}
+    >
+      <Icon name="ask" />
+    </button>
+  );
+}
+
 // ---------------------------------------------------------------- reading
 
 export function Planning(props) {
   const { data, student, locks, graph, runId, sessionId } = props;
+  const mention = props.mention || null;
   const run = data.run || {};
   const weeks = data.weeks || [];
   const editable = !student;
@@ -937,6 +974,16 @@ export function Planning(props) {
     end();
   };
 
+  // What a press of the stars puts in the message box: the record's id, its
+  // title, and where it sits, so the session knows which one was meant.
+  const said = (text) => text + (run.id ? " in " + run.id : "");
+  const topicWords = (m, n) => said(m.module_id + " “" + m.title + "” (week " + n + ")");
+  const workWords = (a) =>
+    said(a.assessment_id + " “" + a.title + "” (" + (WORK_WORD[a.type] || a.type || "work") + (a.due_on ? ", due " + shortDate(a.due_on) : "") + ")");
+  const mentioned = (written) => {
+    if (!written) say("The chat’s message box cannot be reached from here.");
+  };
+
   /** What a bar or a project line says, and whether it may move. */
   const barOf = (s) => {
     const a = s.a;
@@ -1018,6 +1065,7 @@ export function Planning(props) {
             >
               <Icon name={WORK_ICON[a.type] || "file"} />
               {a.title}
+              <Mention mention={mention} label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
             </span>
           ))}
           <small>Drag one onto a week, then settle the day.</small>
@@ -1101,6 +1149,7 @@ export function Planning(props) {
                           >
                             <EditableTitle kind="module" id={x.module.module_id} title={x.module.title} />
                           </span>
+                          <Mention mention={mention} label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
                         </Fragment>
                       ))}
                       {conceptsButton}
@@ -1113,6 +1162,7 @@ export function Planning(props) {
                           <Fragment key={x.module.module_id}>
                             {i ? " · " : null}
                             <EditableTitle kind="module" id={x.module.module_id} title={x.module.title} />
+                            <Mention mention={mention} label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
                           </Fragment>
                         ))}
                       </span>
@@ -1165,6 +1215,7 @@ export function Planning(props) {
                                 )}
                               </EditableTitle>
                             )}
+                            {first ? <Mention mention={mention} label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} /> : null}
                             {!last ? null : movable ? (
                               <button
                                 type="button"
@@ -1216,6 +1267,7 @@ export function Planning(props) {
                               a.title
                             )}
                           </EditableTitle>
+                          <Mention mention={mention} label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
                           <span className="pl-span">
                             {s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end}
                             {a.opens_on ? " · opens " + shortDate(a.opens_on) : ""}
@@ -1282,7 +1334,7 @@ export function Planning(props) {
           onCancel={cancel}
         />
       ) : null}
-      {map ? <ConceptMap key={map.mids.join("|") + map.week} at={map} modules={drawn.modules} graph={graph || {}} onClose={() => setMap(null)} /> : null}
+      {map ? <ConceptMap key={map.mids.join("|") + map.week} at={map} modules={drawn.modules} graph={graph || {}} mention={mention} words={said} onMentioned={mentioned} onClose={() => setMap(null)} /> : null}
       <Toast text={toast} />
     </div>
   );

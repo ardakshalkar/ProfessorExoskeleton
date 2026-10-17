@@ -7310,6 +7310,12 @@ table.plan tr[data-taught] .wkn b{color:var(--muted)}
 .tchip:hover{background:var(--sunk);box-shadow:inset 0 0 0 1px var(--line)}
 .tchip.lifted{opacity:.35}
 .topicform{width:330px}
+button.star{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;margin-left:2px;border-radius:5px;color:var(--accent);opacity:.35;cursor:pointer;vertical-align:middle;transition:opacity .12s}
+button.star .i{width:14px;height:14px}
+button.star:hover,button.star:focus-visible{opacity:1;background:var(--accent-tint)}button.star:focus-visible{outline:2px solid var(--accent)}
+table.plan tr:hover button.star,.cmap-c:hover button.star,.traychip:hover button.star{opacity:.8}
+.lseg{position:relative}.lseg>button.star{position:absolute;top:2px;right:2px}
+.lseg.first{padding-right:24px}
 table.plan td.mats{min-width:120px;max-width:260px}
 td.mats{line-height:1.9}td.mats .chip{font-size:12px;padding:1px 7px;margin:1px 4px 1px 0}td.mats .none{color:var(--muted);font-size:12px}
 .cbtn{all:unset;cursor:pointer;margin-left:8px;color:var(--accent);font-size:12px;text-decoration:underline dotted;text-underline-offset:2px}
@@ -8494,13 +8500,45 @@ function ConceptMap(props) {
       }
     },
     /* @__PURE__ */ h("div", { className: "cmap-head" }, /* @__PURE__ */ h("b", { className: "pf-title" }, title), /* @__PURE__ */ h("small", null, "Week ", week, " · ", concepts.length, " ", concepts.length === 1 ? "concept" : "concepts", " · ", topics.size, " ", topics.size === 1 ? "topic" : "topics", " tied to them"), /* @__PURE__ */ h("button", { type: "button", className: "chip cmap-close", onClick: onClose, "aria-label": "Close" }, "×")),
-    /* @__PURE__ */ h("div", { className: "cmap-body", ref: body }, /* @__PURE__ */ h("svg", { className: "cmap-lines", "aria-hidden": "true" }, drawnLines.map((e, i) => /* @__PURE__ */ h("path", { key: i, d: e.d, className: "tie " + e.kind + (lit(e) ? hover ? " lit" : "" : " dim") }, /* @__PURE__ */ h("title", null, titleOf2(e.c) + " " + TIE[e.kind] + " " + topics.get(e.t).x.module.title)))), /* @__PURE__ */ h("div", { className: "cmap-col side" }, /* @__PURE__ */ h("small", { className: "cmap-cap" }, "Builds on"), left.length ? left.map(topicBox) : /* @__PURE__ */ h("small", { className: "none" }, "nothing earlier")), /* @__PURE__ */ h("div", { className: "cmap-col mid" }, /* @__PURE__ */ h("small", { className: "cmap-cap" }, "Concepts"), concepts.length ? concepts.map((c) => /* @__PURE__ */ h("span", { key: c.id, tabIndex: 0, className: "chip concept cmap-c" + (litNode("c:" + c.id) ? "" : " dim"), title: c.id, ...node("c:" + c.id) }, c.title || c.id)) : /* @__PURE__ */ h("small", { className: "none" }, "This topic names no concepts.")), /* @__PURE__ */ h("div", { className: "cmap-col side" }, /* @__PURE__ */ h("small", { className: "cmap-cap" }, "Leads to"), right.length ? right.map(topicBox) : /* @__PURE__ */ h("small", { className: "none" }, "nothing later"))),
+    /* @__PURE__ */ h("div", { className: "cmap-body", ref: body }, /* @__PURE__ */ h("svg", { className: "cmap-lines", "aria-hidden": "true" }, drawnLines.map((e, i) => /* @__PURE__ */ h("path", { key: i, d: e.d, className: "tie " + e.kind + (lit(e) ? hover ? " lit" : "" : " dim") }, /* @__PURE__ */ h("title", null, titleOf2(e.c) + " " + TIE[e.kind] + " " + topics.get(e.t).x.module.title)))), /* @__PURE__ */ h("div", { className: "cmap-col side" }, /* @__PURE__ */ h("small", { className: "cmap-cap" }, "Builds on"), left.length ? left.map(topicBox) : /* @__PURE__ */ h("small", { className: "none" }, "nothing earlier")), /* @__PURE__ */ h("div", { className: "cmap-col mid" }, /* @__PURE__ */ h("small", { className: "cmap-cap" }, "Concepts"), concepts.length ? concepts.map((c) => /* @__PURE__ */ h("span", { key: c.id, tabIndex: 0, className: "chip concept cmap-c" + (litNode("c:" + c.id) ? "" : " dim"), title: c.id, ...node("c:" + c.id) }, c.title || c.id, /* @__PURE__ */ h(
+      Mention,
+      {
+        mention: props.mention,
+        label: "“" + (c.title || c.id) + "”",
+        text: props.words(c.id + " “" + (c.title || c.id) + "” (a concept of " + mine.map((x) => x.module.module_id + " “" + x.module.title + "”").join(", ") + ", week " + week + ")"),
+        onDone: (written) => {
+          props.onMentioned(written);
+          if (written) onClose();
+        }
+      }
+    ))) : /* @__PURE__ */ h("small", { className: "none" }, "This topic names no concepts.")), /* @__PURE__ */ h("div", { className: "cmap-col side" }, /* @__PURE__ */ h("small", { className: "cmap-cap" }, "Leads to"), right.length ? right.map(topicBox) : /* @__PURE__ */ h("small", { className: "none" }, "nothing later"))),
     loose.length ? /* @__PURE__ */ h("p", { className: "pf-error" }, loose.join(". ") + ".") : null,
     /* @__PURE__ */ h("div", { className: "cmap-key" }, /* @__PURE__ */ h("span", { className: "needs" }, "needs"), /* @__PURE__ */ h("span", { className: "late" }, "needed before it is taught"), /* @__PURE__ */ h("span", { className: "feeds" }, "needed by"), /* @__PURE__ */ h("span", { className: "related" }, "related"), /* @__PURE__ */ h("span", { className: "again" }, "taught again"))
   );
 }
+function Mention(props) {
+  if (!props.mention) return null;
+  return /* @__PURE__ */ h(
+    "button",
+    {
+      type: "button",
+      className: "star",
+      draggable: "false",
+      title: "Ask about " + props.label + " in the chat",
+      "aria-label": "Ask about " + props.label + " in the chat",
+      onMouseDown: (e) => e.stopPropagation(),
+      onClick: (e) => {
+        e.stopPropagation();
+        const written = props.mention(props.text);
+        if (props.onDone) props.onDone(written);
+      }
+    },
+    /* @__PURE__ */ h(Icon, { name: "ask" })
+  );
+}
 function Planning(props) {
   const { data, student, locks, graph, runId, sessionId } = props;
+  const mention = props.mention || null;
   const run = data.run || {};
   const weeks = data.weeks || [];
   const editable = !student;
@@ -8815,6 +8853,12 @@ function Planning(props) {
     refused.current = false;
     end();
   };
+  const said = (text) => text + (run.id ? " in " + run.id : "");
+  const topicWords = (m, n) => said(m.module_id + " “" + m.title + "” (week " + n + ")");
+  const workWords = (a) => said(a.assessment_id + " “" + a.title + "” (" + (WORK_WORD[a.type] || a.type || "work") + (a.due_on ? ", due " + shortDate2(a.due_on) : "") + ")");
+  const mentioned = (written) => {
+    if (!written) say("The chat’s message box cannot be reached from here.");
+  };
   const barOf = (s) => {
     const a = s.a;
     const href = a.viewable && a.url ? a.url : a.brief_url;
@@ -8850,7 +8894,8 @@ function Planning(props) {
       onDragStart: (e) => startBar(e, a, null)
     },
     /* @__PURE__ */ h(Icon, { name: WORK_ICON[a.type] || "file" }),
-    a.title
+    a.title,
+    /* @__PURE__ */ h(Mention, { mention, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned })
   )), /* @__PURE__ */ h("small", null, "Drag one onto a week, then settle the day.")) : null, /* @__PURE__ */ h("table", { className: "plan" }, /* @__PURE__ */ h("thead", null, /* @__PURE__ */ h("tr", null, /* @__PURE__ */ h("th", null, "Week"), /* @__PURE__ */ h("th", null, "Topic"), /* @__PURE__ */ h("th", null, "Materials"), lanes.map((l) => /* @__PURE__ */ h("th", { key: l[0], className: "lanehead " + l[2] }, l[1])))), /* @__PURE__ */ h("tbody", null, weeks.map((w) => {
     const r = rowOf(w.week);
     const here = drawn.modules.filter((x) => x.week === w.week);
@@ -8900,7 +8945,7 @@ function Planning(props) {
           onDragStart: (e) => startTopic(e, x.module.module_id, w.week)
         },
         /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title })
-      ))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title })))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
+      ), /* @__PURE__ */ h(Mention, { mention, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned }))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title }), /* @__PURE__ */ h(Mention, { mention, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned })))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
       /* @__PURE__ */ h("td", { className: "mats" }, materials.length ? materials.map((x, i) => /* @__PURE__ */ h(MaterialChips, { key: (x.resource_id || x.title) + i, resource: x })) : /* @__PURE__ */ h("span", { className: "none" }, title ? "none yet" : "")),
       lanes.map((l) => /* @__PURE__ */ h("td", { className: "lane", key: l[0] }, spans.filter((s) => s.lane[1] === l[1] && s.start !== null && w.week >= s.start && w.week <= s.end).map((s) => {
         const first = w.week === s.start;
@@ -8920,6 +8965,7 @@ function Planning(props) {
           movable && first && a.opens_on && weekOf(a.opens_on) === s.start && !taught(s.start) ? /* @__PURE__ */ h("span", { className: "grip top", "data-edge": "opens", title: "Drag to move when it opens", onMouseDown: (e) => grip.current = e.currentTarget }) : null,
           movable && last ? /* @__PURE__ */ h("span", { className: "grip bottom", "data-edge": "due", title: "Drag to move when it is due", onMouseDown: (e) => grip.current = e.currentTarget }) : null,
           !first ? null : /* @__PURE__ */ h(EditableTitle, { kind: "assessment", id: a.assessment_id, title: a.title, className: "segt" }, href ? /* @__PURE__ */ h(ViewLink, { draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : a.title),
+          first ? /* @__PURE__ */ h(Mention, { mention, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }) : null,
           !last ? null : movable ? /* @__PURE__ */ h(
             "button",
             {
@@ -8953,6 +8999,7 @@ function Planning(props) {
         /* @__PURE__ */ h(Icon, { name: WORK_ICON[a.type] || "project" }),
         /* @__PURE__ */ h("span", { className: "pl-kind" }, "Project"),
         /* @__PURE__ */ h(EditableTitle, { kind: "assessment", id: a.assessment_id, title: a.title, className: "segt" }, href ? /* @__PURE__ */ h(ViewLink, { draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : a.title),
+        /* @__PURE__ */ h(Mention, { mention, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }),
         /* @__PURE__ */ h("span", { className: "pl-span" }, s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end, a.opens_on ? " · opens " + shortDate2(a.opens_on) : ""),
         movable ? /* @__PURE__ */ h(
           "button",
@@ -8996,7 +9043,7 @@ function Planning(props) {
       onSave: saveTopic,
       onCancel: cancel
     }
-  ) : null, map ? /* @__PURE__ */ h(ConceptMap, { key: map.mids.join("|") + map.week, at: map, modules: drawn.modules, graph: graph || {}, onClose: () => setMap(null) }) : null, /* @__PURE__ */ h(Toast, { text: toast }));
+  ) : null, map ? /* @__PURE__ */ h(ConceptMap, { key: map.mids.join("|") + map.week, at: map, modules: drawn.modules, graph: graph || {}, mention, words: said, onMentioned: mentioned, onClose: () => setMap(null) }) : null, /* @__PURE__ */ h(Toast, { text: toast }));
 }
 
 // client/course/teaching.jsx
@@ -9137,7 +9184,7 @@ function CourseView(props) {
     const strip = /* @__PURE__ */ h("div", { className: "strip" }, /* @__PURE__ */ h("span", { className: "note" }, run.term || "", " · ", current ? "week " + current + " of " + weeks.length : weeks.length + " weeks", " · ", NOTES[shown]), shown === "term" && !answer.student ? /* @__PURE__ */ h(Tally, { data, current }) : null);
     const banner = answer.student && (shown === "term" || shown === "planning") ? /* @__PURE__ */ h("div", { className: "banner" }, /* @__PURE__ */ h("b", null, "Preview as student."), " The record alone — no hole, no note about what has not been written yet.") : null;
     if (shown === "planning") {
-      return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Planning, { data, student: answer.student, locks: answer.locks, graph: answer.graph, runId, sessionId }), answer.student ? /* @__PURE__ */ h(StructureFoot, null) : /* @__PURE__ */ h("p", { className: "foot" }, "Structure only — nothing here is derived from student work. Moving a bar changes its ", /* @__PURE__ */ h("span", { className: "mono" }, "opens_at"), " and", " ", /* @__PURE__ */ h("span", { className: "mono" }, "due_at"), " and nothing else; accepting a draft is still changing ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), " in its record."));
+      return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Planning, { data, student: answer.student, locks: answer.locks, graph: answer.graph, mention: answer.student ? null : props.mention, runId, sessionId }), answer.student ? /* @__PURE__ */ h(StructureFoot, null) : /* @__PURE__ */ h("p", { className: "foot" }, "Structure only — nothing here is derived from student work. Moving a bar changes its ", /* @__PURE__ */ h("span", { className: "mono" }, "opens_at"), " and", " ", /* @__PURE__ */ h("span", { className: "mono" }, "due_at"), " and nothing else; accepting a draft is still changing ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), " in its record."));
     }
     if (shown === "teaching") {
       return /* @__PURE__ */ h(Fragment2, null, strip, /* @__PURE__ */ h(
@@ -11351,6 +11398,7 @@ function CourseMode(props) {
               student: preview,
               mode,
               week: mode === "teaching" ? week : null,
+              mention: props.mention,
               onStep: (n) => {
                 stepped.current = n;
               }
@@ -14634,6 +14682,9 @@ function ProfessorPane(props) {
       names,
       setNames,
       ask: props.ask,
+      // A press beside an item on the weeks names it in the chat's
+      // composer and brings the chat in beside the place.
+      mention: mentionAndShow,
       openPublish,
       // Each view inside names what its own writes changed.
       wrote: write,

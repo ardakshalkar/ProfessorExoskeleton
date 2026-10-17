@@ -847,6 +847,7 @@ export function CourseMode(props) {
             student: preview,
             mode: mode,
             week: mode === "teaching" ? week : null,
+            mention: props.mention,
             onStep: (n) => {
               stepped.current = n;
             },
