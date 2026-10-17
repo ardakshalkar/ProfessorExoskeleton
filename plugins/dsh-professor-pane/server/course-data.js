@@ -24,7 +24,7 @@ export const COURSE_MODES = ["term", "planning", "teaching", "evidence"];
 
 /**
  * @param c - the route's context: `req`, `url`, `runId`, `workspace`, `root`.
- * @returns `{ data, mode, student, dark, withDrafts, evidence, status, locks, focus }`.
+ * @returns `{ data, mode, student, dark, withDrafts, evidence, status, locks, graph, focus }`.
  */
 export const courseModeData = ({ req, url, runId, workspace, root }) => {
   const withDrafts = url.searchParams.get("drafts") === "1";
@@ -139,14 +139,27 @@ export const courseModeData = ({ req, url, runId, workspace, root }) => {
   // off the outline's own `when`. `plan-writes.js` enforces both on every
   // write.
   let locks = null;
+  // Planning's concept map: each concept's prerequisites and related concepts,
+  // by id, so a topic's concepts can be drawn against the topics they lean on
+  // and the ones that lean on them. The outline names a module's concepts but
+  // not their edges, and its payload is held to the Python engine's fixtures.
+  let graph = null;
   if (mode === "planning") {
     try {
-      locks = { results: [...planLocks(loadedRun(workspace, runId).bundle, runId).results] };
+      const bundle = loadedRun(workspace, runId).bundle;
+      locks = { results: [...planLocks(bundle, runId).results] };
+      graph = {};
+      for (const c of bundle.concepts ?? []) {
+        if (withDrafts || c.approval !== "draft") {
+          graph[c.concept_id] = { title: c.title ?? null, prerequisites: c.prerequisites ?? [], related: c.related ?? [] };
+        }
+      }
     } catch {
       locks = null;
+      graph = null;
     }
   }
   // The week Teaching was last stepped to, kept by course mode.
   const focus = /^\d{1,2}$/.test(url.searchParams.get("week") ?? "") ? Number(url.searchParams.get("week")) : null;
-  return { data, mode, student, dark, withDrafts, evidence, status, locks, focus };
+  return { data, mode, student, dark, withDrafts, evidence, status, locks, graph, focus };
 };

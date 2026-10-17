@@ -135,7 +135,7 @@ export function CourseView(props) {
         <Fragment>
           {strip}
           {banner}
-          <Planning data={data} student={answer.student} locks={answer.locks} runId={runId} sessionId={sessionId} />
+          <Planning data={data} student={answer.student} locks={answer.locks} graph={answer.graph} runId={runId} sessionId={sessionId} />
           {answer.student ? (
             <StructureFoot />
           ) : (

@@ -7310,6 +7310,37 @@ table.plan tr[data-taught] .wkn b{color:var(--muted)}
 .tchip:hover{background:var(--sunk);box-shadow:inset 0 0 0 1px var(--line)}
 .tchip.lifted{opacity:.35}
 .topicform{width:330px}
+table.plan td.mats{min-width:120px;max-width:260px}
+td.mats{line-height:1.9}td.mats .chip{font-size:12px;padding:1px 7px;margin:1px 4px 1px 0}td.mats .none{color:var(--muted);font-size:12px}
+.cbtn{all:unset;cursor:pointer;margin-left:8px;color:var(--accent);font-size:12px;text-decoration:underline dotted;text-underline-offset:2px}
+.cbtn:hover{text-decoration-style:solid}.cbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+table.plan tr.projrow td{padding:3px 12px 5px;border-top:0}
+.pline{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;border-left:3px solid var(--lane);border-radius:0 6px 6px 0;padding:5px 10px;font-size:12px;background:color-mix(in srgb,var(--lane) 12%,var(--surface))}
+.pline .pl-kind{color:var(--muted);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.pline .pl-span{color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+.pline.draft{border-left-style:dashed}.pline[draggable="true"]{cursor:grab}.pline.lifted{opacity:.35}
+.pline.locked .segd::after{content:" \\00b7 locked";color:var(--muted)}
+.cmap{width:760px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto}
+.cmap-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;padding-right:34px;position:relative}
+.cmap-close{position:absolute;right:0;top:-3px;cursor:pointer;padding:0 8px;font-size:16px;line-height:24px}
+.cmap-body{position:relative;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr) minmax(0,1fr);gap:10px 48px;align-items:start;padding:4px 0}
+.cmap-lines{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.cmap-col{display:flex;flex-direction:column;gap:6px;position:relative;z-index:1;min-width:0}
+.cmap-col.mid{align-items:stretch}
+.cmap-cap{font-size:11px!important;letter-spacing:.06em;text-transform:uppercase}
+.cmap .chip.concept{justify-content:center;color:var(--ink);background:var(--sunk);border-color:var(--line);white-space:normal;transition:opacity .12s}
+.cmap-topic{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:1px;padding:5px 9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer;font-size:12.5px;transition:opacity .12s}
+.cmap-topic:hover,.cmap-topic:focus-visible{border-color:var(--accent-line);background:var(--accent-tint)}
+.cmap-topic b{font-weight:550}.cmap-topic .via{font-size:11px!important;line-height:1.3}
+.cmap .dim{opacity:.3}
+.tie{fill:none;stroke-width:1.5;opacity:.75;transition:opacity .12s}
+.tie.needs{stroke:var(--accent)}.tie.late{stroke:var(--flag);stroke-width:2}.tie.feeds{stroke:var(--hw)}
+.tie.related{stroke:var(--muted);stroke-dasharray:5 4}.tie.again{stroke:var(--muted);stroke-dasharray:1.5 3}
+.tie.lit{opacity:1;stroke-width:2.5}.tie.dim{opacity:.1}
+.cmap-key{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11.5px;color:var(--muted);border-top:1px solid var(--rule);padding-top:7px}
+.cmap-key span::before{content:"";display:inline-block;width:18px;height:0;border-top:2px solid var(--accent);vertical-align:middle;margin-right:5px}
+.cmap-key .late::before{border-top-color:var(--flag)}.cmap-key .feeds::before{border-top-color:var(--hw)}
+.cmap-key .related::before{border-top:2px dashed var(--muted)}.cmap-key .again::before{border-top:2px dotted var(--muted)}
 .tf-meetings,.tf-other{display:flex;flex-direction:column;gap:6px}
 .topicform label{grid-template-columns:64px 1fr}
 .topicform label>span{color:var(--muted);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -8322,8 +8353,154 @@ function TopicForm(props) {
     /* @__PURE__ */ h("small", { className: "pf-note" }, "Writes the module's week and its meetings' dates. Slides and graded work keep theirs.")
   );
 }
+var TIE = {
+  needs: "needs",
+  late: "needs, but taught later",
+  feeds: "is needed by",
+  related: "related to",
+  again: "also taught in"
+};
+function ConceptMap(props) {
+  const { at, modules, graph, onClose } = props;
+  const [focus, setFocus] = React.useState(at.mids);
+  const [hover, setHover] = React.useState(null);
+  const ref = React.useRef(null);
+  const body = React.useRef(null);
+  const nodes = React.useRef({});
+  const [lines, setLines] = React.useState([]);
+  const [size2, setSize] = React.useState({ w: 720, h: 420 });
+  useOutside(ref, onClose);
+  const homes = /* @__PURE__ */ new Map();
+  for (const x of modules) {
+    for (const c of x.module.concepts || []) {
+      if (!homes.has(c.id)) homes.set(c.id, []);
+      homes.get(c.id).push(x);
+    }
+  }
+  const mine = modules.filter((x) => focus.includes(x.module.module_id));
+  const week = mine.length ? mine[0].week : at.week;
+  const title = mine.map((x) => x.module.title).join(" · ");
+  const seen = /* @__PURE__ */ new Set();
+  const concepts = mine.flatMap((x) => x.module.concepts || []).filter((c) => !seen.has(c.id) && seen.add(c.id));
+  const titleOf2 = (id) => graph[id] && graph[id].title || id;
+  const inHere = (x) => focus.includes(x.module.module_id);
+  const ties = [];
+  const topics = /* @__PURE__ */ new Map();
+  const loose = [];
+  const tie = (cid, other, kind) => {
+    for (const x of homes.get(other) || []) {
+      if (inHere(x)) continue;
+      const k = kind === "needs" && x.week > week ? "late" : kind;
+      const mid = x.module.module_id;
+      if (!topics.has(mid)) topics.set(mid, { x, via: /* @__PURE__ */ new Set(), left: false });
+      const t = topics.get(mid);
+      t.via.add(titleOf2(other));
+      if (k === "needs" || x.week < week && k !== "late") t.left = true;
+      if (!ties.some((e) => e.c === cid && e.t === mid && e.kind === k)) ties.push({ c: cid, t: mid, kind: k });
+    }
+  };
+  for (const c of concepts) {
+    const g = graph[c.id] || { prerequisites: [], related: [] };
+    for (const p of g.prerequisites) {
+      if (!(homes.get(p) || []).length && !concepts.some((x) => x.id === p)) loose.push(titleOf2(c.id) + " needs " + titleOf2(p) + ", which no topic teaches");
+      tie(c.id, p, "needs");
+    }
+    for (const [id, other] of Object.entries(graph)) if (other.prerequisites.includes(c.id)) tie(c.id, id, "feeds");
+    for (const r of g.related) tie(c.id, r, "related");
+    for (const [id, other] of Object.entries(graph)) if (other.related.includes(c.id)) tie(c.id, id, "related");
+    tie(c.id, c.id, "again");
+  }
+  const byWeek = (a, b) => a.x.week - b.x.week;
+  const left = [...topics.values()].filter((t) => t.left).sort(byWeek);
+  const right = [...topics.values()].filter((t) => !t.left).sort(byWeek);
+  const key = focus.join("|");
+  React.useLayoutEffect(() => {
+    const measure = () => {
+      if (!body.current) return;
+      const o = body.current.getBoundingClientRect();
+      const box = (id) => {
+        const el = nodes.current[id];
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { l: r.left - o.left, r: r.right - o.left, y: r.top - o.top + r.height / 2 };
+      };
+      setLines(
+        ties.map((e) => {
+          const c = box("c:" + e.c);
+          const t = box("t:" + e.t);
+          if (!c || !t) return null;
+          const toLeft = topics.get(e.t).left;
+          const x1 = toLeft ? c.l : c.r;
+          const x2 = toLeft ? t.r : t.l;
+          const mid = (x1 + x2) / 2;
+          return Object.assign({}, e, { d: "M" + x1 + "," + c.y + " C" + mid + "," + c.y + " " + mid + "," + t.y + " " + x2 + "," + t.y });
+        }).filter(Boolean)
+      );
+      if (ref.current) setSize({ w: ref.current.offsetWidth, h: ref.current.offsetHeight });
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined" || !body.current) return void 0;
+    const observer = new ResizeObserver(measure);
+    observer.observe(body.current);
+    return () => observer.disconnect();
+  }, [key]);
+  React.useEffect(() => {
+    const close = ref.current && ref.current.querySelector(".cmap-close");
+    if (close) close.focus();
+  }, []);
+  const drawnLines = lines.filter((e) => topics.has(e.t) && concepts.some((c) => c.id === e.c));
+  const lit = (e) => !hover || hover === "c:" + e.c || hover === "t:" + e.t;
+  const litNode = (id) => !hover || hover === id || drawnLines.some((e) => lit(e) && ("c:" + e.c === id || "t:" + e.t === id));
+  const node = (id) => ({
+    ref: (el) => nodes.current[id] = el,
+    onMouseEnter: () => setHover(id),
+    onMouseLeave: () => setHover(null),
+    onFocus: () => setHover(id),
+    onBlur: () => setHover(null)
+  });
+  const topicBox = (t) => {
+    const id = "t:" + t.x.module.module_id;
+    return /* @__PURE__ */ h(
+      "button",
+      {
+        type: "button",
+        key: id,
+        className: "cmap-topic" + (litNode(id) ? "" : " dim"),
+        title: "Show the concepts of “" + t.x.module.title + "”",
+        onClick: () => {
+          setHover(null);
+          setFocus(modules.filter((y) => y.week === t.x.week && y.module.module_id === t.x.module.module_id).map((y) => y.module.module_id));
+        },
+        ...node(id)
+      },
+      /* @__PURE__ */ h("small", null, "Week ", t.x.week),
+      /* @__PURE__ */ h("b", null, t.x.module.title),
+      /* @__PURE__ */ h("small", { className: "via" }, [...t.via].join(" · "))
+    );
+  };
+  return /* @__PURE__ */ h(
+    "div",
+    {
+      ref,
+      className: "planform cmap",
+      role: "dialog",
+      "aria-label": "Concepts of " + title,
+      style: placed(at.x, at.y, size2.w, size2.h),
+      onKeyDown: (e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }
+    },
+    /* @__PURE__ */ h("div", { className: "cmap-head" }, /* @__PURE__ */ h("b", { className: "pf-title" }, title), /* @__PURE__ */ h("small", null, "Week ", week, " · ", concepts.length, " ", concepts.length === 1 ? "concept" : "concepts", " · ", topics.size, " ", topics.size === 1 ? "topic" : "topics", " tied to them"), /* @__PURE__ */ h("button", { type: "button", className: "chip cmap-close", onClick: onClose, "aria-label": "Close" }, "×")),
+    /* @__PURE__ */ h("div", { className: "cmap-body", ref: body }, /* @__PURE__ */ h("svg", { className: "cmap-lines", "aria-hidden": "true" }, drawnLines.map((e, i) => /* @__PURE__ */ h("path", { key: i, d: e.d, className: "tie " + e.kind + (lit(e) ? hover ? " lit" : "" : " dim") }, /* @__PURE__ */ h("title", null, titleOf2(e.c) + " " + TIE[e.kind] + " " + topics.get(e.t).x.module.title)))), /* @__PURE__ */ h("div", { className: "cmap-col side" }, /* @__PURE__ */ h("small", { className: "cmap-cap" }, "Builds on"), left.length ? left.map(topicBox) : /* @__PURE__ */ h("small", { className: "none" }, "nothing earlier")), /* @__PURE__ */ h("div", { className: "cmap-col mid" }, /* @__PURE__ */ h("small", { className: "cmap-cap" }, "Concepts"), concepts.length ? concepts.map((c) => /* @__PURE__ */ h("span", { key: c.id, tabIndex: 0, className: "chip concept cmap-c" + (litNode("c:" + c.id) ? "" : " dim"), title: c.id, ...node("c:" + c.id) }, c.title || c.id)) : /* @__PURE__ */ h("small", { className: "none" }, "This topic names no concepts.")), /* @__PURE__ */ h("div", { className: "cmap-col side" }, /* @__PURE__ */ h("small", { className: "cmap-cap" }, "Leads to"), right.length ? right.map(topicBox) : /* @__PURE__ */ h("small", { className: "none" }, "nothing later"))),
+    loose.length ? /* @__PURE__ */ h("p", { className: "pf-error" }, loose.join(". ") + ".") : null,
+    /* @__PURE__ */ h("div", { className: "cmap-key" }, /* @__PURE__ */ h("span", { className: "needs" }, "needs"), /* @__PURE__ */ h("span", { className: "late" }, "needed before it is taught"), /* @__PURE__ */ h("span", { className: "feeds" }, "needed by"), /* @__PURE__ */ h("span", { className: "related" }, "related"), /* @__PURE__ */ h("span", { className: "again" }, "taught again"))
+  );
+}
 function Planning(props) {
-  const { data, student, locks, runId, sessionId } = props;
+  const { data, student, locks, graph, runId, sessionId } = props;
   const run = data.run || {};
   const weeks = data.weeks || [];
   const editable = !student;
@@ -8400,7 +8577,10 @@ function Planning(props) {
     const end2 = weekOf(a.due_on);
     return { a, lane: laneOf(a.type), start: weekOf(a.opens_on) ?? end2, end: end2 };
   });
-  const lanes = LANES.concat([["other", "Other", "ot"]]).filter((l) => spans.some((s) => s.lane[1] === l[1]));
+  const projects = spans.filter((s) => s.lane[0] === "project" && s.start !== null);
+  const lanes = LANES.concat([["other", "Other", "ot"]]).filter((l) => l[0] !== "project" && spans.some((s) => s.lane[1] === l[1]));
+  const columns = 3 + lanes.length;
+  const [map, setMap] = React.useState(null);
   const undated = drawn.assessments.filter((a) => !a.due_on);
   const faults = [];
   if (!student) {
@@ -8566,8 +8746,8 @@ function Planning(props) {
     setLifted(null);
     drag.current = null;
   };
-  const startBar = (e, a, fromWeek) => {
-    const edge = grip.current && e.currentTarget.contains(grip.current) ? grip.current.getAttribute("data-edge") : "both";
+  const startBar = (e, a, fromWeek, only) => {
+    const edge = only || (grip.current && e.currentTarget.contains(grip.current) ? grip.current.getAttribute("data-edge") : "both");
     const item = recordOf(a.assessment_id);
     if (item && taught(weekOf(item.opens_on)) && edge !== "due") {
       e.preventDefault();
@@ -8635,6 +8815,17 @@ function Planning(props) {
     refused.current = false;
     end();
   };
+  const barOf = (s) => {
+    const a = s.a;
+    const href = a.viewable && a.url ? a.url : a.brief_url;
+    const record = recordOf(a.assessment_id) || a;
+    const locked = withResults.has(a.assessment_id) || taught(weekOf(record.due_on));
+    const why = withResults.has(a.assessment_id) ? "has results — its dates stay" : "due in a week already taught";
+    const movable = editable && !locked;
+    const dueWords = "due " + shortDate2(a.due_on) + " · " + (weightPct(a.weight) || "no weight");
+    const tip = a.title + (a.opens_on ? " · opens " + shortDate2(a.opens_on) : "") + " · due " + shortDate2(a.due_on) + (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
+    return { href, locked, movable, dueWords, tip };
+  };
   const target = pending ? pending.to : null;
   return /* @__PURE__ */ h("div", { className: "mode", onDragEnd }, /* @__PURE__ */ h("div", { className: "weights" }, groups.map((g) => /* @__PURE__ */ h("div", { className: "wcard", key: g.name }, /* @__PURE__ */ h("small", null, g.name), /* @__PURE__ */ h("b", null, weightPct(g.weight) || "—"), /* @__PURE__ */ h("small", null, g.count, " ", g.count === 1 ? "item" : "items", g.unweighted ? " · " + g.unweighted + " with no weight" : ""))), /* @__PURE__ */ h("div", { className: "wcard " + (grading.complete ? "ok" : "bad") }, /* @__PURE__ */ h("small", null, "Total"), /* @__PURE__ */ h("b", null, weightPct(grading.total_weight) || "—"), /* @__PURE__ */ h("small", null, grading.complete ? "weights add up" : "does not add up"))), student ? null : faults.length ? /* @__PURE__ */ h("ul", { className: "faults" }, faults.map((f, i) => /* @__PURE__ */ h("li", { className: f.tone, key: i }, /* @__PURE__ */ h(Icon, { name: f.icon }), /* @__PURE__ */ h("span", null, f.text), f.dated ? /* @__PURE__ */ h(
     "button",
@@ -8660,14 +8851,33 @@ function Planning(props) {
     },
     /* @__PURE__ */ h(Icon, { name: WORK_ICON[a.type] || "file" }),
     a.title
-  )), /* @__PURE__ */ h("small", null, "Drag one onto a week, then settle the day.")) : null, /* @__PURE__ */ h("table", { className: "plan" }, /* @__PURE__ */ h("thead", null, /* @__PURE__ */ h("tr", null, /* @__PURE__ */ h("th", null, "Week"), /* @__PURE__ */ h("th", null, "Topic"), lanes.map((l) => /* @__PURE__ */ h("th", { key: l[0], className: "lanehead " + l[2] }, l[1])))), /* @__PURE__ */ h("tbody", null, weeks.map((w) => {
+  )), /* @__PURE__ */ h("small", null, "Drag one onto a week, then settle the day.")) : null, /* @__PURE__ */ h("table", { className: "plan" }, /* @__PURE__ */ h("thead", null, /* @__PURE__ */ h("tr", null, /* @__PURE__ */ h("th", null, "Week"), /* @__PURE__ */ h("th", null, "Topic"), /* @__PURE__ */ h("th", null, "Materials"), lanes.map((l) => /* @__PURE__ */ h("th", { key: l[0], className: "lanehead " + l[2] }, l[1])))), /* @__PURE__ */ h("tbody", null, weeks.map((w) => {
     const r = rowOf(w.week);
     const here = drawn.modules.filter((x) => x.week === w.week);
     const title = here.map((x) => x.module.title).join(" · ");
     const n = here.flatMap((x) => x.module.concepts || []).length;
     const draft = here.some((x) => x.module.draft);
     const cls = [w.when === "current" ? "now" : "", over === w.week ? "drop" : "", target === w.week ? "target" : ""].filter(Boolean).join(" ");
-    return /* @__PURE__ */ h(
+    const meetings = [...here.flatMap((x) => x.meetings), ...(w.meetings || []).filter((m) => !m.module_id)];
+    const known = /* @__PURE__ */ new Set();
+    const materials = meetings.flatMap((m) => m.resources || []).filter((x) => {
+      const id = x.resource_id || x.title;
+      return !known.has(id) && known.add(id);
+    }).sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
+    const conceptsButton = n ? /* @__PURE__ */ h(
+      "button",
+      {
+        type: "button",
+        className: "cbtn",
+        title: "Show these concepts and the topics they are tied to",
+        onClick: (e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          setMap({ mids: here.map((x) => x.module.module_id), week: w.week, x: box.left, y: box.bottom });
+        }
+      },
+      n + " " + (n === 1 ? "concept" : "concepts")
+    ) : null;
+    return /* @__PURE__ */ h(Fragment2, { key: w.week }, /* @__PURE__ */ h(
       "tr",
       {
         key: w.week,
@@ -8690,18 +8900,13 @@ function Planning(props) {
           onDragStart: (e) => startTopic(e, x.module.module_id, w.week)
         },
         /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title })
-      ))), n ? /* @__PURE__ */ h("small", null, n + " " + (n === 1 ? "concept" : "concepts")) : null, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title })))), n ? /* @__PURE__ */ h("small", null, n + " " + (n === 1 ? "concept" : "concepts")) : null, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
+      ))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title })))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
+      /* @__PURE__ */ h("td", { className: "mats" }, materials.length ? materials.map((x, i) => /* @__PURE__ */ h(MaterialChips, { key: (x.resource_id || x.title) + i, resource: x })) : /* @__PURE__ */ h("span", { className: "none" }, title ? "none yet" : "")),
       lanes.map((l) => /* @__PURE__ */ h("td", { className: "lane", key: l[0] }, spans.filter((s) => s.lane[1] === l[1] && s.start !== null && w.week >= s.start && w.week <= s.end).map((s) => {
         const first = w.week === s.start;
         const last = w.week === s.end;
         const a = s.a;
-        const href = a.viewable && a.url ? a.url : a.brief_url;
-        const record = recordOf(a.assessment_id) || a;
-        const locked = withResults.has(a.assessment_id) || taught(weekOf(record.due_on));
-        const why = withResults.has(a.assessment_id) ? "has results — its dates stay" : "due in a week already taught";
-        const movable = editable && !locked;
-        const dueWords = "due " + shortDate2(a.due_on) + " · " + (weightPct(a.weight) || "no weight");
-        const tip = a.title + (a.opens_on ? " · opens " + shortDate2(a.opens_on) : "") + " · due " + shortDate2(a.due_on) + (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
+        const { href, locked, movable, dueWords, tip } = barOf(s);
         const segCls = "lseg " + kindOf(a.type)[1] + (first ? " first" : "") + (last ? " last" : "") + (a.draft ? " draft" : "") + (editable && locked ? " locked" : "") + (lifted === a.assessment_id ? " lifted" : "");
         return /* @__PURE__ */ h(
           "div",
@@ -8732,8 +8937,40 @@ function Planning(props) {
           ) : /* @__PURE__ */ h("span", { className: "segd" }, dueWords)
         );
       })))
-    );
-  }))), /* @__PURE__ */ h("p", { className: "foot" }, "Each bar runs from the week a piece of work opens to the week it is due.", editable ? " Drag a bar to another week to move both dates — the weekday and the time come with it. Drag its top edge to move only the opening, its bottom edge to move only the due date, and press the due line to set the day by hand. Drag a topic to another week and its meetings move with it, or trade places with the topic already there." : "", " ", "Rooms, times and decks are in Teaching."), pending && pending.kind === "dates" ? /* @__PURE__ */ h(
+    ), projects.filter((s) => s.start === w.week).map((s) => {
+      const a = s.a;
+      const { href, locked, movable, dueWords, tip } = barOf(s);
+      const dueOnly = taught(s.start);
+      return /* @__PURE__ */ h("tr", { className: "projrow", key: "pj" + a.assessment_id }, /* @__PURE__ */ h("td", { colSpan: columns }, /* @__PURE__ */ h(
+        "div",
+        {
+          className: "pline pj" + (a.draft ? " draft" : "") + (editable && locked ? " locked" : "") + (lifted === a.assessment_id ? " lifted" : ""),
+          draggable: movable ? "true" : void 0,
+          title: tip,
+          onMouseDown: () => grip.current = null,
+          onDragStart: movable ? (e) => startBar(e, a, dueOnly ? s.end : s.start, dueOnly ? "due" : null) : void 0
+        },
+        /* @__PURE__ */ h(Icon, { name: WORK_ICON[a.type] || "project" }),
+        /* @__PURE__ */ h("span", { className: "pl-kind" }, "Project"),
+        /* @__PURE__ */ h(EditableTitle, { kind: "assessment", id: a.assessment_id, title: a.title, className: "segt" }, href ? /* @__PURE__ */ h(ViewLink, { draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : a.title),
+        /* @__PURE__ */ h("span", { className: "pl-span" }, s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end, a.opens_on ? " · opens " + shortDate2(a.opens_on) : ""),
+        movable ? /* @__PURE__ */ h(
+          "button",
+          {
+            type: "button",
+            className: "segd",
+            title: "Change the dates",
+            onClick: (e) => {
+              const box = e.currentTarget.getBoundingClientRect();
+              const item = recordOf(a.assessment_id);
+              openDates(a.assessment_id, local(item.opens_at), local(item.due_at), weekOf(item.due_on), null, box.left, box.bottom, false);
+            }
+          },
+          dueWords
+        ) : /* @__PURE__ */ h("span", { className: "segd" }, dueWords)
+      )));
+    }));
+  }))), /* @__PURE__ */ h("p", { className: "foot" }, "Each bar runs from the week a piece of work opens to the week it is due; a project is a line under the week it opens in. Press a topic’s concepts to see the topics they build on and lead to.", editable ? " Drag a bar to another week to move both dates — the weekday and the time come with it. Drag its top edge to move only the opening, its bottom edge to move only the due date, and press the due line to set the day by hand. Drag a topic to another week and its meetings move with it, or trade places with the topic already there." : "", " ", "Rooms, times and decks are in Teaching."), pending && pending.kind === "dates" ? /* @__PURE__ */ h(
     DatesForm,
     {
       key: pending.id,
@@ -8759,7 +8996,7 @@ function Planning(props) {
       onSave: saveTopic,
       onCancel: cancel
     }
-  ) : null, /* @__PURE__ */ h(Toast, { text: toast }));
+  ) : null, map ? /* @__PURE__ */ h(ConceptMap, { key: map.mids.join("|") + map.week, at: map, modules: drawn.modules, graph: graph || {}, onClose: () => setMap(null) }) : null, /* @__PURE__ */ h(Toast, { text: toast }));
 }
 
 // client/course/teaching.jsx
@@ -8900,7 +9137,7 @@ function CourseView(props) {
     const strip = /* @__PURE__ */ h("div", { className: "strip" }, /* @__PURE__ */ h("span", { className: "note" }, run.term || "", " · ", current ? "week " + current + " of " + weeks.length : weeks.length + " weeks", " · ", NOTES[shown]), shown === "term" && !answer.student ? /* @__PURE__ */ h(Tally, { data, current }) : null);
     const banner = answer.student && (shown === "term" || shown === "planning") ? /* @__PURE__ */ h("div", { className: "banner" }, /* @__PURE__ */ h("b", null, "Preview as student."), " The record alone — no hole, no note about what has not been written yet.") : null;
     if (shown === "planning") {
-      return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Planning, { data, student: answer.student, locks: answer.locks, runId, sessionId }), answer.student ? /* @__PURE__ */ h(StructureFoot, null) : /* @__PURE__ */ h("p", { className: "foot" }, "Structure only — nothing here is derived from student work. Moving a bar changes its ", /* @__PURE__ */ h("span", { className: "mono" }, "opens_at"), " and", " ", /* @__PURE__ */ h("span", { className: "mono" }, "due_at"), " and nothing else; accepting a draft is still changing ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), " in its record."));
+      return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Planning, { data, student: answer.student, locks: answer.locks, graph: answer.graph, runId, sessionId }), answer.student ? /* @__PURE__ */ h(StructureFoot, null) : /* @__PURE__ */ h("p", { className: "foot" }, "Structure only — nothing here is derived from student work. Moving a bar changes its ", /* @__PURE__ */ h("span", { className: "mono" }, "opens_at"), " and", " ", /* @__PURE__ */ h("span", { className: "mono" }, "due_at"), " and nothing else; accepting a draft is still changing ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), " in its record."));
     }
     if (shown === "teaching") {
       return /* @__PURE__ */ h(Fragment2, null, strip, /* @__PURE__ */ h(

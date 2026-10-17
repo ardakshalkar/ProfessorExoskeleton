@@ -37,7 +37,7 @@ import {
   weightPct,
   WORK_ICON,
 } from "../../shared/course-words.js";
-import { AskButton, Icon, ViewLink } from "./parts.jsx";
+import { AskButton, Icon, MaterialChips, ViewLink } from "./parts.jsx";
 import { EditableTitle } from "./edit.jsx";
 
 // ------------------------------------------------------------------ dates
@@ -369,10 +369,221 @@ function TopicForm(props) {
   );
 }
 
+/**
+ * A topic's concepts against the other topics they are tied to: the ones that
+ * teach what they need on the left, the ones that build on them on the right,
+ * a line for each tie. A need taught later than this topic is drawn in red,
+ * on the right, because that is where it falls. Pressing a topic puts it in
+ * the middle.
+ *
+ * Every tie is the record's own — a concept's `prerequisites` and `related`
+ * (`graph`, server/course-data.js), placed by the modules that teach them.
+ */
+const TIE = {
+  needs: "needs",
+  late: "needs, but taught later",
+  feeds: "is needed by",
+  related: "related to",
+  again: "also taught in",
+};
+
+function ConceptMap(props) {
+  const { at, modules, graph, onClose } = props;
+  const [focus, setFocus] = React.useState(at.mids);
+  const [hover, setHover] = React.useState(null);
+  const ref = React.useRef(null);
+  const body = React.useRef(null);
+  const nodes = React.useRef({});
+  const [lines, setLines] = React.useState([]);
+  const [size, setSize] = React.useState({ w: 720, h: 420 });
+  useOutside(ref, onClose);
+
+  // Where each concept is taught: the modules, with the week each is drawn in.
+  const homes = new Map();
+  for (const x of modules) {
+    for (const c of x.module.concepts || []) {
+      if (!homes.has(c.id)) homes.set(c.id, []);
+      homes.get(c.id).push(x);
+    }
+  }
+  const mine = modules.filter((x) => focus.includes(x.module.module_id));
+  const week = mine.length ? mine[0].week : at.week;
+  const title = mine.map((x) => x.module.title).join(" · ");
+  const seen = new Set();
+  const concepts = mine.flatMap((x) => x.module.concepts || []).filter((c) => !seen.has(c.id) && seen.add(c.id));
+  const titleOf = (id) => (graph[id] && graph[id].title) || id;
+  const inHere = (x) => focus.includes(x.module.module_id);
+
+  // The ties, one per concept here and topic elsewhere and kind.
+  const ties = [];
+  const topics = new Map();
+  const loose = [];
+  const tie = (cid, other, kind) => {
+    for (const x of homes.get(other) || []) {
+      if (inHere(x)) continue;
+      const k = kind === "needs" && x.week > week ? "late" : kind;
+      const mid = x.module.module_id;
+      if (!topics.has(mid)) topics.set(mid, { x, via: new Set(), left: false });
+      const t = topics.get(mid);
+      t.via.add(titleOf(other));
+      if (k === "needs" || (x.week < week && k !== "late")) t.left = true;
+      if (!ties.some((e) => e.c === cid && e.t === mid && e.kind === k)) ties.push({ c: cid, t: mid, kind: k });
+    }
+  };
+  for (const c of concepts) {
+    const g = graph[c.id] || { prerequisites: [], related: [] };
+    for (const p of g.prerequisites) {
+      if (!(homes.get(p) || []).length && !concepts.some((x) => x.id === p)) loose.push(titleOf(c.id) + " needs " + titleOf(p) + ", which no topic teaches");
+      tie(c.id, p, "needs");
+    }
+    for (const [id, other] of Object.entries(graph)) if (other.prerequisites.includes(c.id)) tie(c.id, id, "feeds");
+    for (const r of g.related) tie(c.id, r, "related");
+    for (const [id, other] of Object.entries(graph)) if (other.related.includes(c.id)) tie(c.id, id, "related");
+    tie(c.id, c.id, "again");
+  }
+  const byWeek = (a, b) => a.x.week - b.x.week;
+  const left = [...topics.values()].filter((t) => t.left).sort(byWeek);
+  const right = [...topics.values()].filter((t) => !t.left).sort(byWeek);
+
+  // The lines, measured once the boxes are laid out.
+  const key = focus.join("|");
+  React.useLayoutEffect(() => {
+    const measure = () => {
+      if (!body.current) return;
+      const o = body.current.getBoundingClientRect();
+      const box = (id) => {
+        const el = nodes.current[id];
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return { l: r.left - o.left, r: r.right - o.left, y: r.top - o.top + r.height / 2 };
+      };
+      setLines(
+        ties
+          .map((e) => {
+            const c = box("c:" + e.c);
+            const t = box("t:" + e.t);
+            if (!c || !t) return null;
+            const toLeft = topics.get(e.t).left;
+            const x1 = toLeft ? c.l : c.r;
+            const x2 = toLeft ? t.r : t.l;
+            const mid = (x1 + x2) / 2;
+            return Object.assign({}, e, { d: "M" + x1 + "," + c.y + " C" + mid + "," + c.y + " " + mid + "," + t.y + " " + x2 + "," + t.y });
+          })
+          .filter(Boolean),
+      );
+      if (ref.current) setSize({ w: ref.current.offsetWidth, h: ref.current.offsetHeight });
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined" || !body.current) return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(body.current);
+    return () => observer.disconnect();
+  }, [key]);
+  React.useEffect(() => {
+    const close = ref.current && ref.current.querySelector(".cmap-close");
+    if (close) close.focus();
+  }, []);
+
+  // Lines measured for the topic shown before this one are gone by the paint;
+  // until then only the ones that still have both ends are drawn.
+  const drawnLines = lines.filter((e) => topics.has(e.t) && concepts.some((c) => c.id === e.c));
+  const lit = (e) => !hover || hover === "c:" + e.c || hover === "t:" + e.t;
+  const litNode = (id) => !hover || hover === id || drawnLines.some((e) => lit(e) && ("c:" + e.c === id || "t:" + e.t === id));
+  const node = (id) => ({
+    ref: (el) => (nodes.current[id] = el),
+    onMouseEnter: () => setHover(id),
+    onMouseLeave: () => setHover(null),
+    onFocus: () => setHover(id),
+    onBlur: () => setHover(null),
+  });
+  const topicBox = (t) => {
+    const id = "t:" + t.x.module.module_id;
+    return (
+      <button
+        type="button"
+        key={id}
+        className={"cmap-topic" + (litNode(id) ? "" : " dim")}
+        title={"Show the concepts of “" + t.x.module.title + "”"}
+        onClick={() => {
+          setHover(null);
+          setFocus(modules.filter((y) => y.week === t.x.week && y.module.module_id === t.x.module.module_id).map((y) => y.module.module_id));
+        }}
+        {...node(id)}
+      >
+        <small>Week {t.x.week}</small>
+        <b>{t.x.module.title}</b>
+        <small className="via">{[...t.via].join(" · ")}</small>
+      </button>
+    );
+  };
+  return (
+    <div
+      ref={ref}
+      className="planform cmap"
+      role="dialog"
+      aria-label={"Concepts of " + title}
+      style={placed(at.x, at.y, size.w, size.h)}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.stopPropagation();
+          onClose();
+        }
+      }}
+    >
+      <div className="cmap-head">
+        <b className="pf-title">{title}</b>
+        <small>
+          Week {week} · {concepts.length} {concepts.length === 1 ? "concept" : "concepts"} · {topics.size} {topics.size === 1 ? "topic" : "topics"} tied to them
+        </small>
+        <button type="button" className="chip cmap-close" onClick={onClose} aria-label="Close">
+          ×
+        </button>
+      </div>
+      <div className="cmap-body" ref={body}>
+        <svg className="cmap-lines" aria-hidden="true">
+          {drawnLines.map((e, i) => (
+            <path key={i} d={e.d} className={"tie " + e.kind + (lit(e) ? (hover ? " lit" : "") : " dim")}>
+              <title>{titleOf(e.c) + " " + TIE[e.kind] + " " + topics.get(e.t).x.module.title}</title>
+            </path>
+          ))}
+        </svg>
+        <div className="cmap-col side">
+          <small className="cmap-cap">Builds on</small>
+          {left.length ? left.map(topicBox) : <small className="none">nothing earlier</small>}
+        </div>
+        <div className="cmap-col mid">
+          <small className="cmap-cap">Concepts</small>
+          {concepts.length ? (
+            concepts.map((c) => (
+              <span key={c.id} tabIndex={0} className={"chip concept cmap-c" + (litNode("c:" + c.id) ? "" : " dim")} title={c.id} {...node("c:" + c.id)}>
+                {c.title || c.id}
+              </span>
+            ))
+          ) : (
+            <small className="none">This topic names no concepts.</small>
+          )}
+        </div>
+        <div className="cmap-col side">
+          <small className="cmap-cap">Leads to</small>
+          {right.length ? right.map(topicBox) : <small className="none">nothing later</small>}
+        </div>
+      </div>
+      {loose.length ? <p className="pf-error">{loose.join(". ") + "."}</p> : null}
+      <div className="cmap-key">
+        <span className="needs">needs</span>
+        <span className="late">needed before it is taught</span>
+        <span className="feeds">needed by</span>
+        <span className="related">related</span>
+        <span className="again">taught again</span>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- reading
 
 export function Planning(props) {
-  const { data, student, locks, runId, sessionId } = props;
+  const { data, student, locks, graph, runId, sessionId } = props;
   const run = data.run || {};
   const weeks = data.weeks || [];
   const editable = !student;
@@ -462,7 +673,12 @@ export function Planning(props) {
       const end = weekOf(a.due_on);
       return { a, lane: laneOf(a.type), start: weekOf(a.opens_on) ?? end, end };
     });
-  const lanes = LANES.concat([["other", "Other", "ot"]]).filter((l) => spans.some((s) => s.lane[1] === l[1]));
+  // A project is a line of its own across the table, under the week it opens
+  // in, rather than a lane that is empty for most of the term.
+  const projects = spans.filter((s) => s.lane[0] === "project" && s.start !== null);
+  const lanes = LANES.concat([["other", "Other", "ot"]]).filter((l) => l[0] !== "project" && spans.some((s) => s.lane[1] === l[1]));
+  const columns = 3 + lanes.length;
+  const [map, setMap] = React.useState(null);
 
   // Work with no due date waits in a tray above the table.
   const undated = drawn.assessments.filter((a) => !a.due_on);
@@ -649,8 +865,8 @@ export function Planning(props) {
     setLifted(null);
     drag.current = null;
   };
-  const startBar = (e, a, fromWeek) => {
-    const edge = grip.current && e.currentTarget.contains(grip.current) ? grip.current.getAttribute("data-edge") : "both";
+  const startBar = (e, a, fromWeek, only) => {
+    const edge = only || (grip.current && e.currentTarget.contains(grip.current) ? grip.current.getAttribute("data-edge") : "both");
     const item = recordOf(a.assessment_id);
     if (item && taught(weekOf(item.opens_on)) && edge !== "due") {
       e.preventDefault();
@@ -719,6 +935,22 @@ export function Planning(props) {
     if (drag.current && refused.current) say("That week is already taught; nothing moves into it.");
     refused.current = false;
     end();
+  };
+
+  /** What a bar or a project line says, and whether it may move. */
+  const barOf = (s) => {
+    const a = s.a;
+    const href = a.viewable && a.url ? a.url : a.brief_url;
+    // Locked: results recorded, or due in a week already taught.
+    const record = recordOf(a.assessment_id) || a;
+    const locked = withResults.has(a.assessment_id) || taught(weekOf(record.due_on));
+    const why = withResults.has(a.assessment_id) ? "has results — its dates stay" : "due in a week already taught";
+    const movable = editable && !locked;
+    const dueWords = "due " + shortDate(a.due_on) + " · " + (weightPct(a.weight) || "no weight");
+    const tip =
+      a.title + (a.opens_on ? " · opens " + shortDate(a.opens_on) : "") + " · due " + shortDate(a.due_on) +
+      (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
+    return { href, locked, movable, dueWords, tip };
   };
 
   // ---- draw
@@ -796,6 +1028,7 @@ export function Planning(props) {
           <tr>
             <th>Week</th>
             <th>Topic</th>
+            <th>Materials</th>
             {lanes.map((l) => (
               <th key={l[0]} className={"lanehead " + l[2]}>
                 {l[1]}
@@ -811,7 +1044,32 @@ export function Planning(props) {
             const n = here.flatMap((x) => x.module.concepts || []).length;
             const draft = here.some((x) => x.module.draft);
             const cls = [w.when === "current" ? "now" : "", over === w.week ? "drop" : "", target === w.week ? "target" : ""].filter(Boolean).join(" ");
+            // The materials its topics' meetings carry, wherever the topic is
+            // drawn, and those of the week's meetings that belong to no topic.
+            const meetings = [...here.flatMap((x) => x.meetings), ...(w.meetings || []).filter((m) => !m.module_id)];
+            const known = new Set();
+            const materials = meetings
+              .flatMap((m) => m.resources || [])
+              .filter((x) => {
+                const id = x.resource_id || x.title;
+                return !known.has(id) && known.add(id);
+              })
+              .sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
+            const conceptsButton = n ? (
+              <button
+                type="button"
+                className="cbtn"
+                title="Show these concepts and the topics they are tied to"
+                onClick={(e) => {
+                  const box = e.currentTarget.getBoundingClientRect();
+                  setMap({ mids: here.map((x) => x.module.module_id), week: w.week, x: box.left, y: box.bottom });
+                }}
+              >
+                {n + " " + (n === 1 ? "concept" : "concepts")}
+              </button>
+            ) : null;
             return (
+              <Fragment key={w.week}>
               <tr
                 key={w.week}
                 className={cls}
@@ -845,7 +1103,7 @@ export function Planning(props) {
                           </span>
                         </Fragment>
                       ))}
-                      {n ? <small>{n + " " + (n === 1 ? "concept" : "concepts")}</small> : null}
+                      {conceptsButton}
                       {draft ? <small>draft</small> : null}
                     </Fragment>
                   ) : (
@@ -858,9 +1116,16 @@ export function Planning(props) {
                           </Fragment>
                         ))}
                       </span>
-                      {n ? <small>{n + " " + (n === 1 ? "concept" : "concepts")}</small> : null}
+                      {conceptsButton}
                       {draft ? <small>draft</small> : null}
                     </Fragment>
+                  )}
+                </td>
+                <td className="mats">
+                  {materials.length ? (
+                    materials.map((x, i) => <MaterialChips key={(x.resource_id || x.title) + i} resource={x} />)
+                  ) : (
+                    <span className="none">{title ? "none yet" : ""}</span>
                   )}
                 </td>
                 {lanes.map((l) => (
@@ -871,16 +1136,7 @@ export function Planning(props) {
                         const first = w.week === s.start;
                         const last = w.week === s.end;
                         const a = s.a;
-                        const href = a.viewable && a.url ? a.url : a.brief_url;
-                        // Locked: results recorded, or due in a week already taught.
-                        const record = recordOf(a.assessment_id) || a;
-                        const locked = withResults.has(a.assessment_id) || taught(weekOf(record.due_on));
-                        const why = withResults.has(a.assessment_id) ? "has results — its dates stay" : "due in a week already taught";
-                        const movable = editable && !locked;
-                        const dueWords = "due " + shortDate(a.due_on) + " · " + (weightPct(a.weight) || "no weight");
-                        const tip =
-                          a.title + (a.opens_on ? " · opens " + shortDate(a.opens_on) : "") + " · due " + shortDate(a.due_on) +
-                          (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
+                        const { href, locked, movable, dueWords, tip } = barOf(s);
                         const segCls =
                           "lseg " + kindOf(a.type)[1] + (first ? " first" : "") + (last ? " last" : "") + (a.draft ? " draft" : "") + (editable && locked ? " locked" : "") +
                           (lifted === a.assessment_id ? " lifted" : "");
@@ -932,12 +1188,67 @@ export function Planning(props) {
                   </td>
                 ))}
               </tr>
+              {projects
+                .filter((s) => s.start === w.week)
+                .map((s) => {
+                  const a = s.a;
+                  const { href, locked, movable, dueWords, tip } = barOf(s);
+                  // Opened in a week already taught: only its due end moves.
+                  const dueOnly = taught(s.start);
+                  return (
+                    <tr className="projrow" key={"pj" + a.assessment_id}>
+                      <td colSpan={columns}>
+                        <div
+                          className={"pline pj" + (a.draft ? " draft" : "") + (editable && locked ? " locked" : "") + (lifted === a.assessment_id ? " lifted" : "")}
+                          draggable={movable ? "true" : undefined}
+                          title={tip}
+                          onMouseDown={() => (grip.current = null)}
+                          onDragStart={movable ? (e) => startBar(e, a, dueOnly ? s.end : s.start, dueOnly ? "due" : null) : undefined}
+                        >
+                          <Icon name={WORK_ICON[a.type] || "project"} />
+                          <span className="pl-kind">Project</span>
+                          <EditableTitle kind="assessment" id={a.assessment_id} title={a.title} className="segt">
+                            {href ? (
+                              <ViewLink draggable="false" href={href} view={a.title} format={a.viewable && a.url ? a.format : "html"}>
+                                {a.title}
+                              </ViewLink>
+                            ) : (
+                              a.title
+                            )}
+                          </EditableTitle>
+                          <span className="pl-span">
+                            {s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end}
+                            {a.opens_on ? " · opens " + shortDate(a.opens_on) : ""}
+                          </span>
+                          {movable ? (
+                            <button
+                              type="button"
+                              className="segd"
+                              title="Change the dates"
+                              onClick={(e) => {
+                                const box = e.currentTarget.getBoundingClientRect();
+                                const item = recordOf(a.assessment_id);
+                                openDates(a.assessment_id, local(item.opens_at), local(item.due_at), weekOf(item.due_on), null, box.left, box.bottom, false);
+                              }}
+                            >
+                              {dueWords}
+                            </button>
+                          ) : (
+                            <span className="segd">{dueWords}</span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </Fragment>
             );
           })}
         </tbody>
       </table>
       <p className="foot">
-        Each bar runs from the week a piece of work opens to the week it is due.
+        Each bar runs from the week a piece of work opens to the week it is due; a project is a line under the week it opens in.
+        Press a topic’s concepts to see the topics they build on and lead to.
         {editable
           ? " Drag a bar to another week to move both dates — the weekday and the time come with it. Drag its top edge to move" +
             " only the opening, its bottom edge to move only the due date, and press the due line to set the day by hand." +
@@ -971,6 +1282,7 @@ export function Planning(props) {
           onCancel={cancel}
         />
       ) : null}
+      {map ? <ConceptMap key={map.mids.join("|") + map.week} at={map} modules={drawn.modules} graph={graph || {}} onClose={() => setMap(null)} /> : null}
       <Toast text={toast} />
     </div>
   );

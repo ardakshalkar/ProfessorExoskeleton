@@ -15,9 +15,9 @@ export const routes = [
     handle(c) {
       const { res, runId } = c;
       if (!runId) return sendJson(res, 200, { error: "No run chosen." });
-      const { data, mode, student, withDrafts, evidence, status, locks, focus } = courseModeData(c);
+      const { data, mode, student, withDrafts, evidence, status, locks, graph, focus } = courseModeData(c);
       res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
-      return sendJson(res, 200, { data, mode, student, drafts: withDrafts, evidence, status, locks, focus });
+      return sendJson(res, 200, { data, mode, student, drafts: withDrafts, evidence, status, locks, graph, focus });
     },
   },
 ];
