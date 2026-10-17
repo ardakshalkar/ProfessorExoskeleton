@@ -184,6 +184,18 @@ making one, and you never infer it. An older skill that says to run
 `ainar approve` is out of date: the command is gone and only prints a message
 saying so.
 
+**Ask on a card.** When you have written drafts, end the turn with
+`ask_user_question` — the drafts named in the question, the recommended option
+first with "(Recommended)", typically *Accept*, *Change it* and *Leave as
+draft*. A press on *Accept* is the professor's decision in that turn, the same
+as telling you in words: change `approval: draft` to accepted on exactly the
+records the question named, in the form accepted records in that file already
+use, with the professor's user id and the time. Nothing else that turn becomes
+accepted. Grades are outside this (`grade decide`, the Grade view), and so is
+anything that leaves the machine — a card can ask about those, never carry them
+out. *Leave as draft*, Skip or closing the card leaves the drafts where they
+are.
+
 What is also not yours, and was never yours, is anything that **leaves the
 machine** — `lms push`, Canvas, Moodle, Telegram, Supabase — unless the
 professor has explicitly told you to send that thing. `ainar publish … --confirm`

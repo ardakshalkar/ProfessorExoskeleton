@@ -7652,7 +7652,7 @@ function checkPrompt(runId, result) {
     ...changes,
     "",
     "First decide what kind of change this is — a rename (same subject, new words), a refocus (same area, a different angle or scope) or a different topic — and say which in one line, with why.",
-    "Then go through what points at it, below, and say for each group whether it still fits. Ask me about the groups that need changing, one at a time; propose each change as a draft (approval: draft) and wait for me. Change nothing else without asking.",
+    "Then go through what points at it, below, and say for each group whether it still fits. Ask me about the groups that need changing, one at a time; propose each change as a draft (approval: draft) and ask me on a question card whether to accept it. Change nothing else without asking.",
     "Places that print the title (the course page, Canvas) are behind until it is published again — name them; do not publish.",
     "",
     "What points at it (ainar impact " + result.id + "):",

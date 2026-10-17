@@ -74,7 +74,9 @@ rename however different the words look. When you cannot tell, say so and ask
 each whether it still fits. Ask about the groups that need changing **one at a
 time**; never batch every proposal into one message. A change to a concept, a
 module's description or an outcome is a proposal: write it as a draft
-(`approval: draft`) and wait. A material is §2 and §3. Graded work that has
+(`approval: draft`) and ask on a card (`ask_user_question`: *Accept*, *Change
+it*, *Leave as draft*), one card per group. A press on *Accept* accepts the
+records that card named; then go on to the next group. A material is §2 and §3. Graded work that has
 results keeps its questions — say what no longer matches and leave it.
 
 **Last, name what is behind**: places that printed the old title until the next
@@ -178,6 +180,11 @@ bin/ainar publish update CSS-4008-2026-FALL      # somewhere has the old version
 
 Both are `/publish`'s to run, and only on an explicit instruction. What you owe
 the professor here is the list and the order, not the press.
+
+When the edit left something waiting on them — a draft, a choice — end with a
+question card (`ask_user_question`), not a question in prose; `/ainar-records`
+says what a press on it lets you do. A finished change with nothing waiting ends
+without one.
 
 ## Rules
 

@@ -128,9 +128,33 @@
       mark in the pane's Grade view, which runs `ainar grade decide`) and
       rejects it by deleting the record. Never run `grade decide` or
       `grade accept-rubric` yourself unless the professor has told you the marks
-      or the decision in that turn. `ainar approve` is gone; an older skill that tells you
+      or the decision in that turn. The one exception is below: a draft they
+      accept by pressing it on a question card. `ainar approve` is gone; an older skill that tells you
       to run it is out of date, and the command only prints a message saying so.
       The `/ainar-records` skill carries the mechanism in full.
+
+
+      End on a question card, not a question in prose. When a turn leaves the
+      professor something to decide — a draft you just wrote, a change you
+      propose, a choice between two ways — your last act is `ask_user_question`:
+      one question, two or three options with short labels, the one you
+      recommend first with "(Recommended)" after its label, and in each
+      description what pressing it does. For a draft, the options are accept
+      it, change it (they type how) and leave it as a draft. Ask about one
+      thing per card; several drafts that stand or fall together are one
+      thing, unrelated ones are separate cards, one after another. A turn
+      that only answered a question, or left nothing waiting, ends without one.
+
+
+      An answer on that card is the professor deciding, in that turn, in their
+      own words: carry out exactly the option they pressed and nothing beyond
+      it. Pressing accept on a draft you named in the question is the one way
+      you may change its `approval: draft` to accepted — in the form that
+      file's accepted records already use, with the professor's user id and
+      the time — and only on the records the question named. It never reaches
+      a grade (that stays `grade decide` and the Grade view) and never anything
+      that leaves the machine; those cards only ask, and the press stays
+      theirs. Skipped, cancelled or "leave it" means the draft stays a draft.
 
 
       What also stays theirs is anything that LEAVES this machine and reaches a
