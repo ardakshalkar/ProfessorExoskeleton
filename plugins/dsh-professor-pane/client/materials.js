@@ -903,6 +903,23 @@ export function CourseMode(props) {
             }),
       ),
       ),
+      // The chat beside the place, put away from the chat's own side: a tab
+      // on the rule between the two, halfway down, where it covers neither
+      // header (the chat's title and Session log, the place's own ×).
+      beside.mode === "side"
+        ? h(
+            "button",
+            {
+              type: "button",
+              className: "pp-chatclose",
+              style: { right: beside.width - 13 + "px" },
+              "aria-label": "Put the chat away",
+              title: "Put the chat away; the place takes the width",
+              onClick: () => setChat(false),
+            },
+            "›",
+          )
+        : null,
       // The place stepped aside for the chat on a narrow window: the way back.
       beside.mode === "swap"
         ? h(

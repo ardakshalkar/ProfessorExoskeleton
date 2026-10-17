@@ -520,6 +520,11 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 /* At the top, under the chat's header: the bottom belongs to the composer. */
 .pp-backpill{position:fixed;z-index:3900;right:12px;top:84px;
   min-height:32px;padding:0 16px;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+/* The chat strip's put-away tab, centred on the rule at its left edge (right is set inline). */
+.pp-chatclose{position:fixed;z-index:3900;top:50%;margin-top:-13px;width:26px;height:26px;padding:0 0 2px;border-radius:50%;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);color:inherit;
+  font-size:16px;line-height:1;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.pp-chatclose:hover{background:var(--dsw-alias-bg-l2,#f3f3f5)}
 /* The shell's own conversation column moved into a strip at the right (see
    useChatBeside in client/materials.js): the sidebar's track, the track the
    place covers, then the chat. !important because AppFrame writes its widths
