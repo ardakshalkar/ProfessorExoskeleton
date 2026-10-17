@@ -848,7 +848,8 @@ export function CourseMode(props) {
             mode: mode,
             week: mode === "teaching" ? week : null,
             mention: props.mention,
-            fresh: props.startChat ? (text) => props.startChat({ mode: mode, draft: text }) : null,
+            chatTitle: props.chatTitle,
+            fresh: props.startChat ?(text) => props.startChat({ mode: mode, draft: text }) : null,
             onStep: (n) => {
               stepped.current = n;
             },

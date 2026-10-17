@@ -781,6 +781,7 @@ export function ProfessorPane(props) {
           // composer and brings the chat in beside the place.
           mention: mentionAndShow,
           startChat: startChatWith,
+          chatTitle: props.chatTitle,
           openPublish: openPublish,
           // Each view inside names what its own writes changed.
           wrote: write,

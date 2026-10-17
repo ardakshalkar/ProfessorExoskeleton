@@ -561,6 +561,7 @@ function ConceptMap(props) {
                 <Mention
                   mention={props.mention}
                   fresh={props.fresh}
+                  chat={props.chatTitle}
                   label={"“" + (c.title || c.id) + "”"}
                   text={props.words(c.id + " “" + (c.title || c.id) + "” (a concept of " + mine.map((x) => x.module.module_id + " “" + x.module.title + "”").join(", ") + ", week " + week + ")")}
                   onDone={(written) => {
@@ -632,7 +633,7 @@ function Mention(props) {
       >
         <Icon name="ask" />
       </button>
-      {menu ? <StarMenu at={menu} label={props.label} onThis={toThis} onNew={toNew} onClose={() => setMenu(null)} /> : null}
+      {menu ? <StarMenu at={menu} label={props.label} chat={props.chat ? props.chat() : null} onThis={toThis} onNew={toNew} onClose={() => setMenu(null)} /> : null}
     </Fragment>
   );
 }
@@ -655,6 +656,7 @@ function StarMenu(props) {
       props.onClose();
     }
   };
+  const chat = props.chat;
   return (
     <div
       ref={ref}
@@ -667,9 +669,16 @@ function StarMenu(props) {
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      <button type="button" role="menuitem" onClick={props.onThis}>
+      <button type="button" role="menuitem" onClick={props.onThis} title={chat && chat.title ? chat.title : undefined}>
         <b>This chat</b>
-        <small>add it to the message box of the chat you are in</small>
+        {chat && chat.title ? (
+          <span className="sm-topic">“{chat.title}”</span>
+        ) : chat && chat.blank ? (
+          <span className="sm-topic none">empty — nothing asked yet</span>
+        ) : chat ? (
+          <span className="sm-topic none">no topic yet</span>
+        ) : null}
+        <small>add it to this chat’s message box</small>
       </button>
       <button type="button" role="menuitem" onClick={props.onNew}>
         <b>New chat</b>
@@ -685,6 +694,7 @@ export function Planning(props) {
   const { data, student, locks, graph, runId, sessionId } = props;
   const mention = props.mention || null;
   const fresh = props.fresh || null;
+  const chatTitle = props.chatTitle || null;
   const run = data.run || {};
   const weeks = data.weeks || [];
   const editable = !student;
@@ -1129,7 +1139,7 @@ export function Planning(props) {
             >
               <Icon name={WORK_ICON[a.type] || "file"} />
               {a.title}
-              <Mention mention={mention} fresh={fresh}label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
+              <Mention mention={mention} fresh={fresh} chat={chatTitle} label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
             </span>
           ))}
           <small>Drag one onto a week, then settle the day.</small>
@@ -1213,7 +1223,7 @@ export function Planning(props) {
                           >
                             <EditableTitle kind="module" id={x.module.module_id} title={x.module.title} />
                           </span>
-                          <Mention mention={mention} fresh={fresh}label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
+                          <Mention mention={mention} fresh={fresh} chat={chatTitle} label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
                         </Fragment>
                       ))}
                       {conceptsButton}
@@ -1226,7 +1236,7 @@ export function Planning(props) {
                           <Fragment key={x.module.module_id}>
                             {i ? " · " : null}
                             <EditableTitle kind="module" id={x.module.module_id} title={x.module.title} />
-                            <Mention mention={mention} fresh={fresh}label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
+                            <Mention mention={mention} fresh={fresh} chat={chatTitle} label={"“" + x.module.title + "”"} text={topicWords(x.module, w.week)} onDone={mentioned} />
                           </Fragment>
                         ))}
                       </span>
@@ -1279,7 +1289,7 @@ export function Planning(props) {
                                 )}
                               </EditableTitle>
                             )}
-                            {first ? <Mention mention={mention} fresh={fresh}label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} /> : null}
+                            {first ? <Mention mention={mention} fresh={fresh} chat={chatTitle} label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} /> : null}
                             {!last ? null : movable ? (
                               <button
                                 type="button"
@@ -1331,7 +1341,7 @@ export function Planning(props) {
                               a.title
                             )}
                           </EditableTitle>
-                          <Mention mention={mention} fresh={fresh}label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
+                          <Mention mention={mention} fresh={fresh} chat={chatTitle} label={"“" + a.title + "”"} text={workWords(a)} onDone={mentioned} />
                           <span className="pl-span">
                             {s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end}
                             {a.opens_on ? " · opens " + shortDate(a.opens_on) : ""}
@@ -1398,7 +1408,7 @@ export function Planning(props) {
           onCancel={cancel}
         />
       ) : null}
-      {map ? <ConceptMap key={map.mids.join("|") + map.week} at={map} modules={drawn.modules} graph={graph || {}} mention={mention} fresh={fresh} words={said} onMentioned={mentioned} onClose={() => setMap(null)} /> : null}
+      {map ? <ConceptMap key={map.mids.join("|") + map.week} at={map} modules={drawn.modules} graph={graph || {}} mention={mention} fresh={fresh} chatTitle={chatTitle} words={said} onMentioned={mentioned} onClose={() => setMap(null)} /> : null}
       <Toast text={toast} />
     </div>
   );

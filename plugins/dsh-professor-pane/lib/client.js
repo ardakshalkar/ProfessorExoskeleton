@@ -7318,6 +7318,8 @@ button.star.open{opacity:1;background:var(--accent-tint)}
 .starmenu{position:fixed;z-index:60;width:220px;display:flex;flex-direction:column;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;white-space:normal;cursor:default}
 .starmenu button{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:1px;padding:6px 9px;border-radius:7px;cursor:pointer;color:var(--ink)}
 .starmenu button:hover,.starmenu button:focus-visible{background:var(--accent-tint)}
+.starmenu .sm-topic{font-size:12.5px;color:var(--accent-ink);font-weight:500;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.starmenu .sm-topic.none{color:var(--muted);font-style:italic;font-weight:400}
 .starmenu b{font-weight:600}.starmenu small{color:var(--muted);font-size:11.5px;line-height:1.3;margin:0!important}
 .lseg{position:relative}.lseg>button.star{position:absolute;top:2px;right:2px}
 .lseg.first{padding-right:24px}
@@ -8510,6 +8512,7 @@ function ConceptMap(props) {
       {
         mention: props.mention,
         fresh: props.fresh,
+        chat: props.chatTitle,
         label: "“" + (c.title || c.id) + "”",
         text: props.words(c.id + " “" + (c.title || c.id) + "” (a concept of " + mine.map((x) => x.module.module_id + " “" + x.module.title + "”").join(", ") + ", week " + week + ")"),
         onDone: (written) => {
@@ -8555,7 +8558,7 @@ function Mention(props) {
       }
     },
     /* @__PURE__ */ h(Icon, { name: "ask" })
-  ), menu ? /* @__PURE__ */ h(StarMenu, { at: menu, label: props.label, onThis: toThis, onNew: toNew, onClose: () => setMenu(null) }) : null);
+  ), menu ? /* @__PURE__ */ h(StarMenu, { at: menu, label: props.label, chat: props.chat ? props.chat() : null, onThis: toThis, onNew: toNew, onClose: () => setMenu(null) }) : null);
 }
 function StarMenu(props) {
   const ref = React.useRef(null);
@@ -8575,6 +8578,7 @@ function StarMenu(props) {
       props.onClose();
     }
   };
+  const chat = props.chat;
   return /* @__PURE__ */ h(
     "div",
     {
@@ -8588,7 +8592,7 @@ function StarMenu(props) {
       onMouseDown: (e) => e.stopPropagation(),
       onClick: (e) => e.stopPropagation()
     },
-    /* @__PURE__ */ h("button", { type: "button", role: "menuitem", onClick: props.onThis }, /* @__PURE__ */ h("b", null, "This chat"), /* @__PURE__ */ h("small", null, "add it to the message box of the chat you are in")),
+    /* @__PURE__ */ h("button", { type: "button", role: "menuitem", onClick: props.onThis, title: chat && chat.title ? chat.title : void 0 }, /* @__PURE__ */ h("b", null, "This chat"), chat && chat.title ? /* @__PURE__ */ h("span", { className: "sm-topic" }, "“", chat.title, "”") : chat && chat.blank ? /* @__PURE__ */ h("span", { className: "sm-topic none" }, "empty — nothing asked yet") : chat ? /* @__PURE__ */ h("span", { className: "sm-topic none" }, "no topic yet") : null, /* @__PURE__ */ h("small", null, "add it to this chat’s message box")),
     /* @__PURE__ */ h("button", { type: "button", role: "menuitem", onClick: props.onNew }, /* @__PURE__ */ h("b", null, "New chat"), /* @__PURE__ */ h("small", null, "start a chat about it, with this page open"))
   );
 }
@@ -8596,6 +8600,7 @@ function Planning(props) {
   const { data, student, locks, graph, runId, sessionId } = props;
   const mention = props.mention || null;
   const fresh = props.fresh || null;
+  const chatTitle = props.chatTitle || null;
   const run = data.run || {};
   const weeks = data.weeks || [];
   const editable = !student;
@@ -8952,7 +8957,7 @@ function Planning(props) {
     },
     /* @__PURE__ */ h(Icon, { name: WORK_ICON[a.type] || "file" }),
     a.title,
-    /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned })
+    /* @__PURE__ */ h(Mention, { mention, fresh, chat: chatTitle, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned })
   )), /* @__PURE__ */ h("small", null, "Drag one onto a week, then settle the day.")) : null, /* @__PURE__ */ h("table", { className: "plan" }, /* @__PURE__ */ h("thead", null, /* @__PURE__ */ h("tr", null, /* @__PURE__ */ h("th", null, "Week"), /* @__PURE__ */ h("th", null, "Topic"), /* @__PURE__ */ h("th", null, "Materials"), lanes.map((l) => /* @__PURE__ */ h("th", { key: l[0], className: "lanehead " + l[2] }, l[1])))), /* @__PURE__ */ h("tbody", null, weeks.map((w) => {
     const r = rowOf(w.week);
     const here = drawn.modules.filter((x) => x.week === w.week);
@@ -9002,7 +9007,7 @@ function Planning(props) {
           onDragStart: (e) => startTopic(e, x.module.module_id, w.week)
         },
         /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title })
-      ), /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned }))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title }), /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned })))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
+      ), /* @__PURE__ */ h(Mention, { mention, fresh, chat: chatTitle, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned }))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("span", { className: draft ? "draftword" : "" }, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? " · " : null, /* @__PURE__ */ h(EditableTitle, { kind: "module", id: x.module.module_id, title: x.module.title }), /* @__PURE__ */ h(Mention, { mention, fresh, chat: chatTitle, label: "“" + x.module.title + "”", text: topicWords(x.module, w.week), onDone: mentioned })))), conceptsButton, draft ? /* @__PURE__ */ h("small", null, "draft") : null)),
       /* @__PURE__ */ h("td", { className: "mats" }, materials.length ? materials.map((x, i) => /* @__PURE__ */ h(MaterialChips, { key: (x.resource_id || x.title) + i, resource: x })) : /* @__PURE__ */ h("span", { className: "none" }, title ? "none yet" : "")),
       lanes.map((l) => /* @__PURE__ */ h("td", { className: "lane", key: l[0] }, spans.filter((s) => s.lane[1] === l[1] && s.start !== null && w.week >= s.start && w.week <= s.end).map((s) => {
         const first = w.week === s.start;
@@ -9022,7 +9027,7 @@ function Planning(props) {
           movable && first && a.opens_on && weekOf(a.opens_on) === s.start && !taught(s.start) ? /* @__PURE__ */ h("span", { className: "grip top", "data-edge": "opens", title: "Drag to move when it opens", onMouseDown: (e) => grip.current = e.currentTarget }) : null,
           movable && last ? /* @__PURE__ */ h("span", { className: "grip bottom", "data-edge": "due", title: "Drag to move when it is due", onMouseDown: (e) => grip.current = e.currentTarget }) : null,
           !first ? null : /* @__PURE__ */ h(EditableTitle, { kind: "assessment", id: a.assessment_id, title: a.title, className: "segt" }, href ? /* @__PURE__ */ h(ViewLink, { draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : a.title),
-          first ? /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }) : null,
+          first ? /* @__PURE__ */ h(Mention, { mention, fresh, chat: chatTitle, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }) : null,
           !last ? null : movable ? /* @__PURE__ */ h(
             "button",
             {
@@ -9056,7 +9061,7 @@ function Planning(props) {
         /* @__PURE__ */ h(Icon, { name: WORK_ICON[a.type] || "project" }),
         /* @__PURE__ */ h("span", { className: "pl-kind" }, "Project"),
         /* @__PURE__ */ h(EditableTitle, { kind: "assessment", id: a.assessment_id, title: a.title, className: "segt" }, href ? /* @__PURE__ */ h(ViewLink, { draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : a.title),
-        /* @__PURE__ */ h(Mention, { mention, fresh, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }),
+        /* @__PURE__ */ h(Mention, { mention, fresh, chat: chatTitle, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }),
         /* @__PURE__ */ h("span", { className: "pl-span" }, s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end, a.opens_on ? " · opens " + shortDate2(a.opens_on) : ""),
         movable ? /* @__PURE__ */ h(
           "button",
@@ -9100,7 +9105,7 @@ function Planning(props) {
       onSave: saveTopic,
       onCancel: cancel
     }
-  ) : null, map ? /* @__PURE__ */ h(ConceptMap, { key: map.mids.join("|") + map.week, at: map, modules: drawn.modules, graph: graph || {}, mention, fresh, words: said, onMentioned: mentioned, onClose: () => setMap(null) }) : null, /* @__PURE__ */ h(Toast, { text: toast }));
+  ) : null, map ? /* @__PURE__ */ h(ConceptMap, { key: map.mids.join("|") + map.week, at: map, modules: drawn.modules, graph: graph || {}, mention, fresh, chatTitle, words: said, onMentioned: mentioned, onClose: () => setMap(null) }) : null, /* @__PURE__ */ h(Toast, { text: toast }));
 }
 
 // client/course/teaching.jsx
@@ -9241,7 +9246,7 @@ function CourseView(props) {
     const strip = /* @__PURE__ */ h("div", { className: "strip" }, /* @__PURE__ */ h("span", { className: "note" }, run.term || "", " · ", current ? "week " + current + " of " + weeks.length : weeks.length + " weeks", " · ", NOTES[shown]), shown === "term" && !answer.student ? /* @__PURE__ */ h(Tally, { data, current }) : null);
     const banner = answer.student && (shown === "term" || shown === "planning") ? /* @__PURE__ */ h("div", { className: "banner" }, /* @__PURE__ */ h("b", null, "Preview as student."), " The record alone — no hole, no note about what has not been written yet.") : null;
     if (shown === "planning") {
-      return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Planning, { data, student: answer.student, locks: answer.locks, graph: answer.graph, mention: answer.student ? null : props.mention, fresh: answer.student ? null : props.fresh, runId, sessionId }), answer.student ? /* @__PURE__ */ h(StructureFoot, null) : /* @__PURE__ */ h("p", { className: "foot" }, "Structure only — nothing here is derived from student work. Moving a bar changes its ", /* @__PURE__ */ h("span", { className: "mono" }, "opens_at"), " and", " ", /* @__PURE__ */ h("span", { className: "mono" }, "due_at"), " and nothing else; accepting a draft is still changing ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), " in its record."));
+      return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Planning, { data, student: answer.student, locks: answer.locks, graph: answer.graph, mention: answer.student ? null : props.mention, fresh: answer.student ? null : props.fresh, chatTitle: props.chatTitle, runId, sessionId }), answer.student ? /* @__PURE__ */ h(StructureFoot, null) : /* @__PURE__ */ h("p", { className: "foot" }, "Structure only — nothing here is derived from student work. Moving a bar changes its ", /* @__PURE__ */ h("span", { className: "mono" }, "opens_at"), " and", " ", /* @__PURE__ */ h("span", { className: "mono" }, "due_at"), " and nothing else; accepting a draft is still changing ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), " in its record."));
     }
     if (shown === "teaching") {
       return /* @__PURE__ */ h(Fragment2, null, strip, /* @__PURE__ */ h(
@@ -11456,6 +11461,7 @@ function CourseMode(props) {
               mode,
               week: mode === "teaching" ? week : null,
               mention: props.mention,
+              chatTitle: props.chatTitle,
               fresh: props.startChat ? (text) => props.startChat({ mode, draft: text }) : null,
               onStep: (n) => {
                 stepped.current = n;
@@ -14762,6 +14768,7 @@ function ProfessorPane(props) {
       // composer and brings the chat in beside the place.
       mention: mentionAndShow,
       startChat: startChatWith,
+      chatTitle: props.chatTitle,
       openPublish,
       // Each view inside names what its own writes changed.
       wrote: write,
@@ -14892,7 +14899,18 @@ function apply(ctx) {
           ask: ask(sessionId),
           mention: mention(sessionId),
           // A new chat in the open chat's own workspace, opened.
-          startChat: () => ctx.workspaces.startSession()
+          startChat: () => ctx.workspaces.startSession(),
+          // What the open chat is about, read when asked: its durable title,
+          // or that nothing has been asked in it yet.
+          chatTitle: () => {
+            let row;
+            try {
+              row = ctx.sessions.list.getSnapshot().byId[sessionId];
+            } catch {
+              row = void 0;
+            }
+            return row === void 0 ? null : { title: row.title || null, blank: Boolean(row.blank) };
+          }
         })
       },
       ProfessorPane

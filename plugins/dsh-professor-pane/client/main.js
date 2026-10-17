@@ -137,6 +137,17 @@ function apply(ctx) {
           mention: mention(sessionId),
           // A new chat in the open chat's own workspace, opened.
           startChat: () => ctx.workspaces.startSession(),
+          // What the open chat is about, read when asked: its durable title,
+          // or that nothing has been asked in it yet.
+          chatTitle: () => {
+            let row;
+            try {
+              row = ctx.sessions.list.getSnapshot().byId[sessionId];
+            } catch {
+              row = undefined;
+            }
+            return row === undefined ? null : { title: row.title || null, blank: Boolean(row.blank) };
+          },
         }),
       },
       ProfessorPane,
