@@ -92,6 +92,14 @@ const PANE_CSS = `
 /* The fill: how much of the work is done, behind the label. */
 .pp-btn-progress::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--pp-progress,0%);
   background:rgba(255,255,255,.28);transition:width .4s ease;pointer-events:none}
+/* The Chat button: how the chat put away is doing. Working is aria-busy
+   (above); stopped on a question is amber, finished out of sight is green. */
+.pp-chatbtn[aria-busy=true][aria-pressed=false]{color:#2f6fd6;border-color:#2f6fd6;font-weight:600}
+.pp-chatbtn.pp-chat-wait::before,.pp-chatbtn.pp-chat-done::before{
+  content:"";flex:none;width:8px;height:8px;border-radius:50%;background:currentColor}
+.pp-chatbtn.pp-chat-wait,.pp-chatbtn.pp-chat-wait[aria-pressed=false]{color:#a5561f;border-color:#a5561f;font-weight:600}
+.pp-chatbtn.pp-chat-wait::before{animation:pp-step-pulse 1.1s ease-in-out infinite}
+.pp-chatbtn.pp-chat-done,.pp-chatbtn.pp-chat-done[aria-pressed=false]{color:#2f7a3e;border-color:#2f7a3e;font-weight:600}
 @keyframes pp-btn-stripes{to{background-position:23px 0}}
 @keyframes pp-btn-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){[aria-busy=true]{animation:none!important}

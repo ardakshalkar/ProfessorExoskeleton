@@ -711,6 +711,7 @@ export function CourseMode(props) {
 
   const placeName = viewEntry ? viewEntry.label : navigator ? "Weeks" : props.title;
   const setChat = props.setChat || (() => {});
+  const chatState = useChatState(props.chatState, Boolean(props.chat), props.sessionId);
   return ReactDOM.createPortal(
     h(
       React.Fragment,
@@ -810,16 +811,23 @@ export function CourseMode(props) {
           ),
           // The conversation beside the place: a press on a hole starts a
           // turn there, and this is how to look at it again or put it away.
+          // Put away, it still says how the chat is doing: working, waiting
+          // on the professor, or finished since it was put away.
           h(
             "button",
             {
               type: "button",
-              className: "pp-segbtn",
+              className: "pp-segbtn pp-chatbtn" + (chatState === "waiting" ? " pp-chat-wait" : chatState === "done" ? " pp-chat-done" : ""),
               "aria-pressed": Boolean(props.chat),
-              title: props.chat ? "Put the chat away; the place takes the width" : "The chat beside this place",
+              "aria-busy": chatState === "running" ? "true" : undefined,
+              title: CHAT_STATE_TIP[chatState]
+                ? CHAT_STATE_TIP[chatState] + " — " + (props.chat ? "put the chat away" : "press to see it")
+                : props.chat
+                  ? "Put the chat away; the place takes the width"
+                  : "The chat beside this place",
               onClick: () => setChat(!props.chat),
             },
-            "Chat",
+            CHAT_STATE_WORD[chatState] ? "Chat · " + CHAT_STATE_WORD[chatState] : "Chat",
           ),
           h(
             "button",
@@ -935,6 +943,46 @@ export function CourseMode(props) {
     ),
     document.body,
   );
+}
+
+const CHAT_STATE_WORD = { running: "working", waiting: "needs you", done: "done" };
+const CHAT_STATE_TIP = {
+  running: "The assistant is working",
+  waiting: "The chat is waiting for your answer",
+  done: "The assistant finished while the chat was put away",
+};
+
+/**
+ * How the open chat is doing, for the Chat button: "running", "waiting"
+ * (an approval or a question it is stopped on), "done" (it finished while
+ * the chat was put away, until the chat is looked at again) or "idle".
+ *
+ * `source` is `{ get, subscribe }` over the harness's session list
+ * (client/main.js); without it the button is the plain toggle it was.
+ */
+function useChatState(source, shown, sessionId) {
+  const latest = React.useRef(source);
+  latest.current = source;
+  const [live, setLive] = React.useState(() => (source ? source.get() : "idle"));
+  const [done, setDone] = React.useState(false);
+  React.useEffect(() => {
+    if (!latest.current) return undefined;
+    const read = () => setLive(latest.current ? latest.current.get() : "idle");
+    read();
+    return latest.current.subscribe(read);
+  }, [sessionId, Boolean(source)]);
+  // A turn that ends out of sight is news; one watched to its end is not.
+  const was = React.useRef(live);
+  React.useEffect(() => {
+    if (was.current === "running" && live === "idle" && !shown) setDone(true);
+    if (live !== "idle") setDone(false);
+    was.current = live;
+  }, [live]);
+  React.useEffect(() => {
+    if (shown) setDone(false);
+  }, [shown]);
+  React.useEffect(() => setDone(false), [sessionId]);
+  return live === "idle" && done ? "done" : live;
 }
 
 /**

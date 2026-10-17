@@ -139,6 +139,23 @@ function apply(ctx) {
           startChat: () => ctx.workspaces.startSession(),
           // What the open chat is about, read when asked: its durable title,
           // or that nothing has been asked in it yet.
+          // Whether the open chat is working, waiting on the professor, or
+          // idle, as one word, and a way to hear when that changes — for the
+          // Chat button while the chat is put away.
+          chatState: {
+            get: () => {
+              let row;
+              try {
+                row = ctx.sessions.list.getSnapshot().byId[sessionId];
+              } catch {
+                row = undefined;
+              }
+              if (row === undefined) return "idle";
+              if (row.pendingInteraction) return "waiting";
+              return row.running ? "running" : "idle";
+            },
+            subscribe: (fn) => ctx.sessions.list.subscribe(fn),
+          },
           chatTitle: () => {
             let row;
             try {

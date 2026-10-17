@@ -127,6 +127,14 @@ var PANE_CSS = `
 /* The fill: how much of the work is done, behind the label. */
 .pp-btn-progress::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--pp-progress,0%);
   background:rgba(255,255,255,.28);transition:width .4s ease;pointer-events:none}
+/* The Chat button: how the chat put away is doing. Working is aria-busy
+   (above); stopped on a question is amber, finished out of sight is green. */
+.pp-chatbtn[aria-busy=true][aria-pressed=false]{color:#2f6fd6;border-color:#2f6fd6;font-weight:600}
+.pp-chatbtn.pp-chat-wait::before,.pp-chatbtn.pp-chat-done::before{
+  content:"";flex:none;width:8px;height:8px;border-radius:50%;background:currentColor}
+.pp-chatbtn.pp-chat-wait,.pp-chatbtn.pp-chat-wait[aria-pressed=false]{color:#a5561f;border-color:#a5561f;font-weight:600}
+.pp-chatbtn.pp-chat-wait::before{animation:pp-step-pulse 1.1s ease-in-out infinite}
+.pp-chatbtn.pp-chat-done,.pp-chatbtn.pp-chat-done[aria-pressed=false]{color:#2f7a3e;border-color:#2f7a3e;font-weight:600}
 @keyframes pp-btn-stripes{to{background-position:23px 0}}
 @keyframes pp-btn-spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){[aria-busy=true]{animation:none!important}
@@ -11333,6 +11341,7 @@ function CourseMode(props) {
   const placeName = viewEntry ? viewEntry.label : navigator2 ? "Weeks" : props.title;
   const setChat = props.setChat || (() => {
   });
+  const chatState = useChatState(props.chatState, Boolean(props.chat), props.sessionId);
   return ReactDOM.createPortal(
     h(
       React.Fragment,
@@ -11423,16 +11432,19 @@ function CourseMode(props) {
             ),
             // The conversation beside the place: a press on a hole starts a
             // turn there, and this is how to look at it again or put it away.
+            // Put away, it still says how the chat is doing: working, waiting
+            // on the professor, or finished since it was put away.
             h(
               "button",
               {
                 type: "button",
-                className: "pp-segbtn",
+                className: "pp-segbtn pp-chatbtn" + (chatState === "waiting" ? " pp-chat-wait" : chatState === "done" ? " pp-chat-done" : ""),
                 "aria-pressed": Boolean(props.chat),
-                title: props.chat ? "Put the chat away; the place takes the width" : "The chat beside this place",
+                "aria-busy": chatState === "running" ? "true" : void 0,
+                title: CHAT_STATE_TIP[chatState] ? CHAT_STATE_TIP[chatState] + " — " + (props.chat ? "put the chat away" : "press to see it") : props.chat ? "Put the chat away; the place takes the width" : "The chat beside this place",
                 onClick: () => setChat(!props.chat)
               },
-              "Chat"
+              CHAT_STATE_WORD[chatState] ? "Chat · " + CHAT_STATE_WORD[chatState] : "Chat"
             ),
             h(
               "button",
@@ -11536,6 +11548,35 @@ function CourseMode(props) {
     ),
     document.body
   );
+}
+var CHAT_STATE_WORD = { running: "working", waiting: "needs you", done: "done" };
+var CHAT_STATE_TIP = {
+  running: "The assistant is working",
+  waiting: "The chat is waiting for your answer",
+  done: "The assistant finished while the chat was put away"
+};
+function useChatState(source, shown, sessionId) {
+  const latest = React.useRef(source);
+  latest.current = source;
+  const [live, setLive] = React.useState(() => source ? source.get() : "idle");
+  const [done, setDone] = React.useState(false);
+  React.useEffect(() => {
+    if (!latest.current) return void 0;
+    const read = () => setLive(latest.current ? latest.current.get() : "idle");
+    read();
+    return latest.current.subscribe(read);
+  }, [sessionId, Boolean(source)]);
+  const was = React.useRef(live);
+  React.useEffect(() => {
+    if (was.current === "running" && live === "idle" && !shown) setDone(true);
+    if (live !== "idle") setDone(false);
+    was.current = live;
+  }, [live]);
+  React.useEffect(() => {
+    if (shown) setDone(false);
+  }, [shown]);
+  React.useEffect(() => setDone(false), [sessionId]);
+  return live === "idle" && done ? "done" : live;
 }
 function CourseComposer(props) {
   const [text, setText] = React.useState("");
@@ -14769,6 +14810,7 @@ function ProfessorPane(props) {
       mention: mentionAndShow,
       startChat: startChatWith,
       chatTitle: props.chatTitle,
+      chatState: props.chatState,
       openPublish,
       // Each view inside names what its own writes changed.
       wrote: write,
@@ -14902,6 +14944,23 @@ function apply(ctx) {
           startChat: () => ctx.workspaces.startSession(),
           // What the open chat is about, read when asked: its durable title,
           // or that nothing has been asked in it yet.
+          // Whether the open chat is working, waiting on the professor, or
+          // idle, as one word, and a way to hear when that changes — for the
+          // Chat button while the chat is put away.
+          chatState: {
+            get: () => {
+              let row;
+              try {
+                row = ctx.sessions.list.getSnapshot().byId[sessionId];
+              } catch {
+                row = void 0;
+              }
+              if (row === void 0) return "idle";
+              if (row.pendingInteraction) return "waiting";
+              return row.running ? "running" : "idle";
+            },
+            subscribe: (fn) => ctx.sessions.list.subscribe(fn)
+          },
           chatTitle: () => {
             let row;
             try {

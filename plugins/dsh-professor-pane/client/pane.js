@@ -782,6 +782,7 @@ export function ProfessorPane(props) {
           mention: mentionAndShow,
           startChat: startChatWith,
           chatTitle: props.chatTitle,
+          chatState: props.chatState,
           openPublish: openPublish,
           // Each view inside names what its own writes changed.
           wrote: write,
