@@ -176,7 +176,7 @@ function WeekRow(props) {
         {module ? (
           <AskButton
             className="chip ask askw"
-            title="Ask Claude to prepare this week"
+            title="Ask the assistant to prepare this week"
             prompt={"For week " + w.week + " of " + run.id + " (" + module.module_id + "), what should I teach and what should I revisit first?"}
             label="Prepare"
           />

@@ -28,7 +28,8 @@ writes: record
 
 # Revise something that already exists
 
-**Needs:** `bin/ainar impact`, which answers what the thing is and what hangs
+**Needs:** `bin/ainar impact`, which answers what the thing is — a material, a
+topic (`MODULE-…`) or a piece of graded work (`ASSESSMENT-…`) — and what hangs
 off it. Without the CLI you can still edit the file; what you lose is knowing
 what the edit breaks, so say that plainly rather than guessing.
 
@@ -46,6 +47,41 @@ whole failure mode this skill exists to prevent.
 
 If the request is ambiguous — *"fix week 7"* — ask which. Do not pick the
 largest reading, and do not pick the smallest one silently.
+
+## 1a. A change the professor already made — *Save + check*
+
+The pane's course page saves a title or a description itself and then sends
+this skill the change: the item, the old value, the new value, and the list of
+what points at it (`ainar impact MODULE-07` or `ASSESSMENT-HW-04` prints the
+same list). The change is **already saved and is the professor's decision** —
+do not undo it, re-ask it, or edit that field again. Your work is what it
+leaves behind.
+
+**First, say what kind of change it is**, in one line, with the reason:
+
+| Kind | Looks like | What it leaves behind |
+| --- | --- | --- |
+| **rename** | same subject, new words — *MCP & Integrations → MCP and Tool Use* | only what prints the title: the course page, the Canvas assignment, a deck's title slide |
+| **refocus** | same area, a different angle or scope — *Agents → Agents in Production* | the concepts, the slides, perhaps the brief |
+| **different topic** | another subject — *Agents → Robotics* | concepts, outcomes, materials, and graded work that measures the old subject |
+
+Read the old and new values against the topic's concepts and its graded work,
+not against each other alone: a new title that still names every concept is a
+rename however different the words look. When you cannot tell, say so and ask
+— that question is the whole of this step.
+
+**Then go through the groups in the list**, in the order given, and say for
+each whether it still fits. Ask about the groups that need changing **one at a
+time**; never batch every proposal into one message. A change to a concept, a
+module's description or an outcome is a proposal: write it as a draft
+(`approval: draft`) and wait. A material is §2 and §3. Graded work that has
+results keeps its questions — say what no longer matches and leave it.
+
+**Last, name what is behind**: places that printed the old title until the next
+publication. Name them and the command (`ainar publish update RUN`); do not run
+it — that is `/publish`, on instruction.
+
+A rename with nothing behind it is a one-line answer. Say so and stop.
 
 ## 2. Ask what the thing is before touching it
 

@@ -1029,7 +1029,7 @@ export const courseModeDocument = (
       (module
         ? `<button type="button" class="chip ask askw" data-ask="${esc(
             `For week ${w.week} of ${run.id} (${module.module_id}), what should I teach and what should I revisit first?`,
-          )}" title="Ask Claude to prepare this week">${icon("ask")}Prepare</button>`
+          )}" title="Ask the assistant to prepare this week">${icon("ask")}Prepare</button>`
         : "") +
       "</div>";
 
@@ -1163,7 +1163,7 @@ export const courseModeDocument = (
   } else if (mode === "evidence") {
     main = strip("how each week went") + evidenceBody(data, evidence ?? {}, status);
   } else {
-    main = strip("press a hole to have Claude fill it", tallyHtml) + studentBanner + lead +
+    main = strip("press a hole to have the assistant fill it", tallyHtml) + studentBanner + lead +
       `<div class="grid"><div class="th">Lecture</div><div class="th">Graded work</div><div class="th">Outcomes</div>${body}</div>` +
       structureFoot;
   }

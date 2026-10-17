@@ -36,6 +36,7 @@
 import { activitiesOf, assessmentsOf, modulesOf, runById } from "@ainar/core/src/bundle.ts";
 import { COLLECTIONS } from "@ainar/core/src/loader.ts";
 import { editRecords, setRecordFields } from "@ainar/core/src/record-edit.ts";
+import { describeRecordImpact, recordImpact } from "@ainar/core/src/record-impact.ts";
 
 import { loadedRun } from "./workspace.js";
 
@@ -56,6 +57,8 @@ const TEXT = { shape: "text", required: false, max: 4000 };
 export const EDITABLE = {
   module: {
     word: "Topic",
+    // Save + check: a change here may leave other records behind (record-impact.ts).
+    check: true,
     collection: "modules",
     idField: "module_id",
     of: (bundle, run) => modulesOf(bundle, run.course_id),
@@ -63,6 +66,7 @@ export const EDITABLE = {
   },
   assessment: {
     word: "Graded work",
+    check: true,
     collection: "assessments",
     idField: "assessment_id",
     of: (bundle, run) => assessmentsOf(bundle, run.course_version_id),
@@ -92,7 +96,7 @@ const locate = (workspace, runId, kind, id) => {
   if (!run) return { error: `no course run '${runId}' in this workspace` };
   const record = spec.of(bundle, run).find((entry) => entry[spec.idField] === recordId);
   if (!record) return { error: `${recordId} is not a ${spec.word.toLowerCase()} of ${runId}.` };
-  return { spec, run, record, recordId };
+  return { spec, run, record, recordId, bundle };
 };
 
 /** What the dialog draws: the item, and each field it may change with its value. */
@@ -105,6 +109,7 @@ export const readRecord = (workspace, runId, query) => {
     id: recordId,
     word: spec.word,
     draft: record.approval === "draft",
+    check: Boolean(spec.check),
     fields: Object.entries(spec.fields).map(([name, field]) => ({
       name,
       label: field.label,
@@ -117,9 +122,11 @@ export const readRecord = (workspace, runId, query) => {
 };
 
 /**
- * Set `fields` on one record: `{kind, id, fields: {title: "…"}}`. Only the
- * fields the table names, each checked against its shape; an empty value
- * clears a field that may be empty. Unchanged fields are not written.
+ * Set `fields` on one record: `{kind, id, fields: {title: "…"}, check}`. Only
+ * the fields the table names, each checked against its shape; an empty value
+ * clears a field that may be empty. Unchanged fields are not written. With
+ * `check`, on a kind that offers it, the answer also carries the old values
+ * and what follows from the item, for the session to judge.
  */
 export const writeRecordFields = (workspace, root, runId, body) => {
   const found = locate(workspace, runId, body?.kind, body?.id);
@@ -183,7 +190,16 @@ export const writeRecordFields = (workspace, root, runId, body) => {
         ]),
       });
     }
-    return { written: true, kind: body.kind, id: recordId, fields: { ...set, ...Object.fromEntries(cleared.map((name) => [name, ""])) } };
+    const written = { written: true, kind: body.kind, id: recordId, fields: { ...set, ...Object.fromEntries(cleared.map((name) => [name, ""])) } };
+    // Save + check: what the fields were, and what points at the item, for
+    // the session to weigh. Read from the bundle as it was before the write —
+    // the references are ids, and an id does not change with a title.
+    if (body.check && spec.check) {
+      const before = Object.fromEntries(Object.keys(written.fields).map((name) => [name, record[name] ?? ""]));
+      const followed = recordImpact(found.bundle, runId, body.kind, recordId);
+      return { ...written, before, impact: followed ? describeRecordImpact(followed) : [] };
+    }
+    return written;
   } catch (error) {
     return { error: String(error?.message ?? error) };
   }

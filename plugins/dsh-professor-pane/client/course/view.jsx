@@ -54,7 +54,7 @@ function useCourse(url, version) {
 }
 
 const NOTES = {
-  term: "press a hole to have Claude fill it",
+  term: "press a hole to have the assistant fill it",
   planning: "does the term hold together",
   teaching: "this week, between the last and the next",
   evidence: "how each week went",

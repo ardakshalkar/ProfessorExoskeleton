@@ -7635,13 +7635,33 @@ var twoDigits = (n) => n < 10 ? "0" + n : String(n);
 // client/course/edit.jsx
 var EditContext = React.createContext(null);
 var recordUrl = (edit, query) => scoped(BASE + "/api/record?run=" + encodeURIComponent(edit.runId) + (query || ""), edit.sessionId);
-function saveRecord(edit, kind, id, fields) {
+var CHECKED = /* @__PURE__ */ new Set(["module", "assessment"]);
+var WORD = { module: "topic", assessment: "graded work", activity: "meeting" };
+var quoted = (value) => value ? "“" + String(value).replace(/\s+/g, " ").slice(0, 300) + "”" : "(empty)";
+function checkPrompt(runId, result) {
+  const changes = Object.keys(result.fields || {}).map(
+    (name) => "  " + name + ": " + quoted(result.before && result.before[name]) + " → " + quoted(result.fields[name])
+  );
+  return [
+    "/revise I changed " + (WORD[result.kind] || result.kind) + " " + result.id + " in " + runId + " from the course page. It is already saved:",
+    ...changes,
+    "",
+    "First decide what kind of change this is — a rename (same subject, new words), a refocus (same area, a different angle or scope) or a different topic — and say which in one line, with why.",
+    "Then go through what points at it, below, and say for each group whether it still fits. Ask me about the groups that need changing, one at a time; propose each change as a draft (approval: draft) and wait for me. Change nothing else without asking.",
+    "Places that print the title (the course page, Canvas) are behind until it is published again — name them; do not publish.",
+    "",
+    "What points at it (ainar impact " + result.id + "):",
+    ...result.impact && result.impact.length ? result.impact : ["  nothing else in the course points at it"]
+  ].join("\n");
+}
+function saveRecord(edit, kind, id, fields, check) {
   return fetch(recordUrl(edit), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ kind, id, fields })
+    body: JSON.stringify({ kind, id, fields, check: Boolean(check) })
   }).then((response) => response.json()).catch((error) => ({ error: String(error.message || error) })).then((result) => {
     if (result.written) wrote(edit.sessionId, []);
+    if (check && result.written && result.before) press.ask(checkPrompt(edit.runId, result));
     return result;
   });
 }
@@ -7678,12 +7698,12 @@ function EditableTitle(props) {
     setEditing(false);
     setError("");
   };
-  const commit = () => {
+  const commit = (check) => {
     const next = value.trim();
     if (!next) return setError("A title cannot be empty.");
     if (next === (shown || "")) return cancel();
     setBusy(true);
-    saveRecord(edit, kind, id, { title: next }).then((result) => {
+    saveRecord(edit, kind, id, { title: next }, check).then((result) => {
       setBusy(false);
       if (result.error) return setError(String(result.error));
       setSaved(next);
@@ -7702,11 +7722,21 @@ function EditableTitle(props) {
         onChange: (e) => setValue(e.target.value),
         onKeyDown: (e) => {
           e.stopPropagation();
-          if (e.key === "Enter") commit();
+          if (e.key === "Enter") commit((e.ctrlKey || e.metaKey) && CHECKED.has(kind));
           if (e.key === "Escape") cancel();
         }
       }
-    ), /* @__PURE__ */ h("button", { type: "button", className: "chip primary", disabled: busy, onClick: commit }, busy ? "Saving…" : "Save"), /* @__PURE__ */ h("button", { type: "button", className: "chip", disabled: busy, onClick: cancel }, "Cancel"), /* @__PURE__ */ h(
+    ), /* @__PURE__ */ h("button", { type: "button", className: "chip primary", disabled: busy, title: "Save the new title, and nothing else (Enter)", onClick: () => commit(false) }, busy ? "Saving…" : "Save"), CHECKED.has(kind) ? /* @__PURE__ */ h(
+      "button",
+      {
+        type: "button",
+        className: "chip ask",
+        disabled: busy,
+        title: "Save, then have the assistant say whether the topic changed and ask about what that leaves behind (Ctrl+Enter)",
+        onClick: () => commit(true)
+      },
+      "Save + check ✦"
+    ) : null, /* @__PURE__ */ h("button", { type: "button", className: "chip", disabled: busy, onClick: cancel }, "Cancel"), /* @__PURE__ */ h(
       "button",
       {
         type: "button",
@@ -7791,10 +7821,10 @@ function RecordDialog(props) {
   }, [record]);
   const changed = record ? Object.fromEntries(record.fields.filter((f) => (values[f.name] ?? "") !== String(f.value ?? "")).map((f) => [f.name, values[f.name] ?? ""])) : {};
   const missing = record ? record.fields.find((f) => f.required && !String(values[f.name] || "").trim()) : null;
-  const save = () => {
+  const save = (check) => {
     if (!Object.keys(changed).length) return onClose();
     setBusy(true);
-    saveRecord(edit, kind, id, changed).then((result) => {
+    saveRecord(edit, kind, id, changed, check).then((result) => {
       setBusy(false);
       if (result.error) return setError(String(result.error));
       onClose();
@@ -7817,7 +7847,7 @@ function RecordDialog(props) {
       onKeyDown: (e) => {
         e.stopPropagation();
         if (e.key === "Escape" && !busy) onClose();
-        if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !missing) save();
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !missing) save(false);
       }
     },
     /* @__PURE__ */ h("div", { className: "rdhead" }, /* @__PURE__ */ h("span", { className: "k" }, record ? record.word : "Item"), /* @__PURE__ */ h("span", { className: "mono rdid" }, id), record && record.draft ? /* @__PURE__ */ h("span", { className: "k" }, "draft") : null, /* @__PURE__ */ h("button", { type: "button", className: "rdclose", "aria-label": "Close", onClick: onClose }, "×")),
@@ -7840,11 +7870,21 @@ function RecordDialog(props) {
     ))) : null,
     record && record.draft ? /* @__PURE__ */ h("p", { className: "rdnote" }, "Changing a draft does not accept it: it stays ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), ".") : null,
     error ? /* @__PURE__ */ h("p", { className: "reerror" }, error) : null,
-    /* @__PURE__ */ h("div", { className: "pf-actions" }, /* @__PURE__ */ h("button", { type: "button", className: "chip primary", disabled: !record || busy || Boolean(missing), onClick: save }, busy ? "Saving…" : Object.keys(changed).length ? "Save" : "Done"), /* @__PURE__ */ h("button", { type: "button", className: "chip", disabled: busy, onClick: onClose }, "Cancel"), missing ? /* @__PURE__ */ h("small", { className: "reerror" }, missing.label, " cannot be empty.") : null),
+    /* @__PURE__ */ h("div", { className: "pf-actions" }, /* @__PURE__ */ h("button", { type: "button", className: "chip primary", disabled: !record || busy || Boolean(missing), title: "Save these fields, and nothing else", onClick: () => save(false) }, busy ? "Saving…" : Object.keys(changed).length ? "Save" : "Done"), record && record.check && Object.keys(changed).length ? /* @__PURE__ */ h(
+      "button",
+      {
+        type: "button",
+        className: "chip ask",
+        disabled: busy || Boolean(missing),
+        title: "Save, then have the assistant say whether the topic changed and ask about what that leaves behind",
+        onClick: () => save(true)
+      },
+      "Save + check ✦"
+    ) : null, /* @__PURE__ */ h("button", { type: "button", className: "chip", disabled: busy, onClick: onClose }, "Cancel"), missing ? /* @__PURE__ */ h("small", { className: "reerror" }, missing.label, " cannot be empty.") : null),
     /* @__PURE__ */ h("div", { className: "rdask" }, /* @__PURE__ */ h(Icon, { name: "ask" }), /* @__PURE__ */ h(
       "input",
       {
-        placeholder: "Anything else about it — the weight, the rubric, the outcomes — ask Claude",
+        placeholder: "Anything else about it — the weight, the rubric, the outcomes — ask the assistant",
         value: ask,
         onChange: (e) => setAsk(e.target.value),
         onKeyDown: (e) => {
@@ -7977,7 +8017,7 @@ function WeekRow(props) {
     AskButton,
     {
       className: "chip ask askw",
-      title: "Ask Claude to prepare this week",
+      title: "Ask the assistant to prepare this week",
       prompt: "For week " + w.week + " of " + run.id + " (" + module2.module_id + "), what should I teach and what should I revisit first?",
       label: "Prepare"
     }
@@ -8802,7 +8842,7 @@ function useCourse(url, version) {
   return state;
 }
 var NOTES = {
-  term: "press a hole to have Claude fill it",
+  term: "press a hole to have the assistant fill it",
   planning: "does the term hold together",
   teaching: "this week, between the last and the next",
   evidence: "how each week went"
@@ -11159,7 +11199,7 @@ function CourseComposer(props) {
       ref: box,
       rows: 1,
       value: text,
-      placeholder: "Ask Claude about " + props.place + " — or tell it what to change",
+      placeholder: "Ask the assistant about " + props.place + " — or tell it what to change",
       "aria-label": "Message the session",
       onChange: (event) => setText(event.target.value),
       onKeyDown: (event) => {
@@ -13536,7 +13576,7 @@ function BatchModal(props) {
   const [assessments, setAssessments] = React.useState([]);
   const [assessment, setAssessment] = React.useState("");
   const [consent, setConsent] = React.useState(false);
-  const [quoted, setQuoted] = React.useState(false);
+  const [quoted2, setQuoted] = React.useState(false);
   const [busy, setBusy] = React.useState(null);
   const [output, setOutput] = React.useState("");
   const url = (extra) => scoped(BASE + "/api/defence/batch?run=" + encodeURIComponent(props.runId) + (extra || ""), props.sessionId);
@@ -13636,7 +13676,7 @@ function BatchModal(props) {
             "div",
             { className: "pp-approverow" },
             h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => run("transcribe") }, "3 · Quote the transcription"),
-            quoted ? h(
+            quoted2 ? h(
               "button",
               { type: "button", className: "pp-segbtn pp-drec", disabled: Boolean(busy), onClick: () => run("transcribe", "&confirm=1") },
               "Send them and transcribe"

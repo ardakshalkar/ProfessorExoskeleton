@@ -11,6 +11,15 @@
  * save through `POST /api/record`, and `server/record-fields.js` is the one
  * place that says what may be written.
  *
+ * Two saves. **Save** writes the change and that is all — a typo, a better
+ * word. **Save + check ✦** writes it the same way and then hands the session
+ * the old value, the new one and what points at the item (the server follows
+ * the ids, `record-impact.ts`), through `/revise`: whichever model the session
+ * runs decides whether this was a rename, a refocus or a different topic, and
+ * asks about what that leaves behind. The write never waits for it — the new
+ * title is the professor's decision, and only its consequences are a
+ * judgement.
+ *
  * What the table does not offer — a weight, the outcomes, a rubric — the
  * dialog's last line sends to the session with the item's ids in it, so the
  * professor never has to say which item they meant.
@@ -34,17 +43,54 @@ export const EditContext = React.createContext(null);
 const recordUrl = (edit, query) =>
   scoped(BASE + "/api/record?run=" + encodeURIComponent(edit.runId) + (query || ""), edit.sessionId);
 
-/** Set `fields` on one item; resolves to the server's answer, an error included. */
-export function saveRecord(edit, kind, id, fields) {
+/**
+ * The kinds whose change may leave other records behind, so Save + check is
+ * offered on them — the ones `EDITABLE` in server/record-fields.js marks
+ * `check`. The dialog reads it from the server; the inline editor, which has
+ * no read of its own, from here.
+ */
+const CHECKED = new Set(["module", "assessment"]);
+const WORD = { module: "topic", assessment: "graded work", activity: "meeting" };
+
+const quoted = (value) => (value ? "“" + String(value).replace(/\s+/g, " ").slice(0, 300) + "”" : "(empty)");
+
+/**
+ * What Save + check sends: the change, already made, and what points at the
+ * item, for `/revise` to weigh. The kind of change is the model's to decide;
+ * the list is not, so it is handed over rather than searched for.
+ */
+export function checkPrompt(runId, result) {
+  const changes = Object.keys(result.fields || {}).map(
+    (name) => "  " + name + ": " + quoted(result.before && result.before[name]) + " → " + quoted(result.fields[name]),
+  );
+  return [
+    "/revise I changed " + (WORD[result.kind] || result.kind) + " " + result.id + " in " + runId + " from the course page. It is already saved:",
+    ...changes,
+    "",
+    "First decide what kind of change this is — a rename (same subject, new words), a refocus (same area, a different angle or scope) or a different topic — and say which in one line, with why.",
+    "Then go through what points at it, below, and say for each group whether it still fits. Ask me about the groups that need changing, one at a time; propose each change as a draft (approval: draft) and wait for me. Change nothing else without asking.",
+    "Places that print the title (the course page, Canvas) are behind until it is published again — name them; do not publish.",
+    "",
+    "What points at it (ainar impact " + result.id + "):",
+    ...(result.impact && result.impact.length ? result.impact : ["  nothing else in the course points at it"]),
+  ].join("\n");
+}
+
+/**
+ * Set `fields` on one item; resolves to the server's answer, an error
+ * included. With `check`, a saved change is then handed to the session.
+ */
+export function saveRecord(edit, kind, id, fields, check) {
   return fetch(recordUrl(edit), {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ kind, id, fields }),
+    body: JSON.stringify({ kind, id, fields, check: Boolean(check) }),
   })
     .then((response) => response.json())
     .catch((error) => ({ error: String(error.message || error) }))
     .then((result) => {
       if (result.written) wrote(edit.sessionId, []);
+      if (check && result.written && result.before) press.ask(checkPrompt(edit.runId, result));
       return result;
     });
 }
@@ -91,12 +137,12 @@ export function EditableTitle(props) {
     setEditing(false);
     setError("");
   };
-  const commit = () => {
+  const commit = (check) => {
     const next = value.trim();
     if (!next) return setError("A title cannot be empty.");
     if (next === (shown || "")) return cancel();
     setBusy(true);
-    saveRecord(edit, kind, id, { title: next }).then((result) => {
+    saveRecord(edit, kind, id, { title: next }, check).then((result) => {
       setBusy(false);
       if (result.error) return setError(String(result.error));
       setSaved(next);
@@ -116,13 +162,25 @@ export function EditableTitle(props) {
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
             e.stopPropagation();
-            if (e.key === "Enter") commit();
+            // Enter saves; Ctrl+Enter saves and checks, where checking is offered.
+            if (e.key === "Enter") commit((e.ctrlKey || e.metaKey) && CHECKED.has(kind));
             if (e.key === "Escape") cancel();
           }}
         />
-        <button type="button" className="chip primary" disabled={busy} onClick={commit}>
+        <button type="button" className="chip primary" disabled={busy} title="Save the new title, and nothing else (Enter)" onClick={() => commit(false)}>
           {busy ? "Saving…" : "Save"}
         </button>
+        {CHECKED.has(kind) ? (
+          <button
+            type="button"
+            className="chip ask"
+            disabled={busy}
+            title="Save, then have the assistant say whether the topic changed and ask about what that leaves behind (Ctrl+Enter)"
+            onClick={() => commit(true)}
+          >
+            Save + check ✦
+          </button>
+        ) : null}
         <button type="button" className="chip" disabled={busy} onClick={cancel}>
           Cancel
         </button>
@@ -239,10 +297,10 @@ export function RecordDialog(props) {
     ? Object.fromEntries(record.fields.filter((f) => (values[f.name] ?? "") !== String(f.value ?? "")).map((f) => [f.name, values[f.name] ?? ""]))
     : {};
   const missing = record ? record.fields.find((f) => f.required && !String(values[f.name] || "").trim()) : null;
-  const save = () => {
+  const save = (check) => {
     if (!Object.keys(changed).length) return onClose();
     setBusy(true);
-    saveRecord(edit, kind, id, changed).then((result) => {
+    saveRecord(edit, kind, id, changed, check).then((result) => {
       setBusy(false);
       if (result.error) return setError(String(result.error));
       onClose();
@@ -266,7 +324,7 @@ export function RecordDialog(props) {
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === "Escape" && !busy) onClose();
-          if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !missing) save();
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !missing) save(false);
         }}
       >
         <div className="rdhead">
@@ -307,9 +365,20 @@ export function RecordDialog(props) {
         ) : null}
         {error ? <p className="reerror">{error}</p> : null}
         <div className="pf-actions">
-          <button type="button" className="chip primary" disabled={!record || busy || Boolean(missing)} onClick={save}>
+          <button type="button" className="chip primary" disabled={!record || busy || Boolean(missing)} title="Save these fields, and nothing else" onClick={() => save(false)}>
             {busy ? "Saving…" : Object.keys(changed).length ? "Save" : "Done"}
           </button>
+          {record && record.check && Object.keys(changed).length ? (
+            <button
+              type="button"
+              className="chip ask"
+              disabled={busy || Boolean(missing)}
+              title="Save, then have the assistant say whether the topic changed and ask about what that leaves behind"
+              onClick={() => save(true)}
+            >
+              Save + check ✦
+            </button>
+          ) : null}
           <button type="button" className="chip" disabled={busy} onClick={onClose}>
             Cancel
           </button>
@@ -318,7 +387,7 @@ export function RecordDialog(props) {
         <div className="rdask">
           <Icon name="ask" />
           <input
-            placeholder="Anything else about it — the weight, the rubric, the outcomes — ask Claude"
+            placeholder="Anything else about it — the weight, the rubric, the outcomes — ask the assistant"
             value={ask}
             onChange={(e) => setAsk(e.target.value)}
             onKeyDown={(e) => {

@@ -959,7 +959,7 @@ function CourseComposer(props) {
       ref: box,
       rows: 1,
       value: text,
-      placeholder: "Ask Claude about " + props.place + " — or tell it what to change",
+      placeholder: "Ask the assistant about " + props.place + " — or tell it what to change",
       "aria-label": "Message the session",
       onChange: (event) => setText(event.target.value),
       onKeyDown: (event) => {

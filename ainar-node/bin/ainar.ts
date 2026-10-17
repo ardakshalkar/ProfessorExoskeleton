@@ -249,6 +249,7 @@ import {
 } from "../src/freshness.ts";
 import { Ledger } from "../src/lms/ledger.ts";
 import { describeImpact, impact } from "../src/impact.ts";
+import { describeRecordImpact, recordImpact } from "../src/record-impact.ts";
 import { Workspace } from "../src/workspace.ts";
 
 
@@ -462,7 +463,7 @@ const HELP = `ainar — the AINAR course model CLI
   calibration RUN
   blueprint RUN
   drafts [RUN]             what is marked approval: draft, awaiting you
-  impact DOC-ID [--run RUN]   what a material is, and what changing it drags
+  impact ID [--run RUN]       what a material, topic or assessment is, and what changing it drags
 
   roster import FILE.csv [--run RUN] [--id-column C] [--name-column C]
                          [--email-column C] [--group-column C]
@@ -1676,6 +1677,15 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       const asked = flag("run") ?? flag("course-version");
       const bundle = asked ? forRun(asked) : onlyCourse();
       const runId = asked ?? soleRun(bundle);
+      // A topic or a piece of graded work: the records that point at it
+      // (src/record-impact.ts), the list a rename or a refocus leaves behind.
+      const recordKind = /^MODULE-/.test(documentId) ? "module" : /^ASSESSMENT-/.test(documentId) ? "assessment" : null;
+      if (recordKind) {
+        const followed = recordImpact(bundle, runId, recordKind, documentId);
+        if (!followed) throw new Error(`no ${recordKind} ${documentId} in ${runId}`);
+        for (const line of describeRecordImpact(followed)) out(line);
+        break;
+      }
       const found = impact({
         bundle,
         courseVersionId: runId,
