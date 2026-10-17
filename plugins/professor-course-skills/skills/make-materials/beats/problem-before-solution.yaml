@@ -30,7 +30,11 @@ sequence:
     intent: introduce_concept
     archetype: big_idea
     density: sparse
-    note: name the concept here, and only here
+    note: >-
+      name the concept here, and only here — and define it in the same breath:
+      one plain sentence saying what it is (an acronym spelled out, the kind of
+      thing it is, what it connects or does). A name with no definition is the
+      motivation with nothing at the end of it
 visual_rules:
   image_dominance: high
   avoid_dense_text_initially: true

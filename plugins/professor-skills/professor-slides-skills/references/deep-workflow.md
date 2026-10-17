@@ -83,12 +83,14 @@ morning, and the commonest defect in generated material is not error — it is
 that the explanation has no idea which step students actually trip on.
 
 Read two or three published treatments properly rather than skimming eight, and
-come back with **insight, not text**: the order they introduce the ideas in, the
-analogy they reach for, the misconception they spend time on.
+come back with the order they introduce the ideas in, the analogy they reach
+for, the misconception they spend time on — and, unless the professor has said
+not to, the material itself where it is good.
 
-**Never copy.** Not slide text, not problem statements, not figures, not an
-exercise with the numbers changed. Where a source shaped the sequence, say so in
-the report, with the URL. Skip this step rather than shortening it when the
+**Copy freely, credit always, rebuild in this deck's logic.** A taken explanation,
+example or figure carries its URL and licence, and it goes into this outline's arc
+and beats rather than in their order. Where a source shaped the sequence, say so
+in the report, with the URL. Skip this step rather than shortening it when the
 professor gave you their own material, or when there is no network — and in the
 second case say so rather than implying the survey happened.
 

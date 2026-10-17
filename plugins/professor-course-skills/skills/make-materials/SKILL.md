@@ -80,19 +80,36 @@ Search for teaching material on the module's concepts: published lecture notes,
 course pages, textbook chapters, conference tutorials. Read two or three
 properly rather than skimming eight.
 
-What to come back with is **insight, not text**:
+What to come back with:
 
 - the order they introduce the ideas in, and where that differs from ours
 - the worked example or analogy they reach for, and what it makes concrete
 - the misconception they spend time on — that is the expensive knowledge
 - what they leave out
+- **the material itself, where it is good** — a slide's explanation, a worked
+  example, an exercise, a figure
 
-**Never copy.** Not slide text, not problem statements, not figures, not an
-exercise with the numbers changed. This is the same rule `/find-ideas` runs
-under and for the same reason: material from another institution is evidence
-about the subject, not authority over this course, and its licence is theirs.
-Write the explanation yourself, in this course's identifiers and this course's
-sequence.
+**Copying is allowed unless the professor says otherwise.** A worked example
+that has survived a decade of lectures is worth taking as it is. If the
+professor has said not to, or says so now, take only what is listed above and
+write everything yourself. Either way, two things always hold:
+
+- **Credit every piece you take** — URL, author or course, and licence — in the
+  report. A copied figure is also a `Document` with `image_source` and an
+  attribution line, as in "Images you did not draw" in
+  `references/presentation-graphics.md`, and `ainar deck render` will not render
+  it without one. When the licence is restrictive or you cannot tell what it is,
+  say so in the hand-over, so the professor sees it before approving. Copy it
+  anyway; whether to use it is their call.
+- **Rebuild it in this deck; don't paste their deck in.** What you take is raw
+  material. It goes into this session's arc and beats (step 3) in this course's
+  order, with this course's identifiers and notation, under the same rules as
+  everything else: problem before name, one-sentence definition where a concept
+  is named, the slide's role and density from `references/visual-grammar.md`.
+  Their slide 4 becomes part of a beat here, not slide 4 again.
+  A slide copied verbatim stays verbatim only where the wording is the point —
+  a definition worth keeping exactly, a classic example — and even then it is
+  credited on the slide itself.
 
 Where a source shaped what you wrote, say so — in the report, with the URL. A
 professor asked "where did this example come from" should not have to guess.
@@ -200,6 +217,10 @@ What good material does here:
   do, what today adds.
 - **Names concepts by identifier** where the structure matters, so the
   material and the model stay connected.
+- **Defines every new concept in one plain sentence where it is named** —
+  after the problem that motivates it, never before, but never left out. An
+  acronym in the title or agenda is spelled out there. `references/outline-craft.md`
+  has the failure this prevents.
 - **Handles the known weakness first.** If item responses show a shared
   misconception, correct it explicitly and early, and say which item revealed
   it.
@@ -477,8 +498,13 @@ rather than drawing one from numbers you totalled.
 - **Stay inside the module.** Material that wanders into next week's concepts
   breaks the prerequisite ordering the whole model rests on.
 - **Do not invent sources.** No citations, statistics, dataset descriptions or
-  quotations that are not in the course material you were given. A worked
-  example you construct yourself is fine and should be labelled as such.
+  quotations that are not in the course material you were given or a source you
+  actually read. A worked example you construct yourself is fine and should be
+  labelled as such.
+- **Copy freely, credit always, rebuild in this logic.** Material from another
+  course may be taken unless the professor has said not to. Every piece carries
+  its URL and licence, and it is rearranged into this deck's arc and beats
+  rather than pasted in as their slides.
 - **Do not duplicate an existing resource.** Reference it.
 - **Say what you generated.** `generated_by` is not optional. A professor
   presenting these slides should be able to see they were drafted by an agent.

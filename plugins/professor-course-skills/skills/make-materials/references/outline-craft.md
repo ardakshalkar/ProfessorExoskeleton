@@ -74,6 +74,22 @@ What does not work is *definitions first*. A definition given before the problem
 it solves is a definition with nothing to attach to, and it is the default shape
 of every generated deck.
 
+The opposite failure is quieter: **motivation with no definition at all.** The
+problem is built, the name arrives, and the deck moves straight on to the
+architecture without ever saying in one sentence what the thing *is*. Week 8's
+MCP deck did this — six slides of M × N, the name in the title and the
+outcome, and "Model Context Protocol, an open standard for connecting AI
+applications to tools and data" nowhere. Two rules close it:
+
+- **The slide that names the concept defines it** — one plain sentence: an
+  acronym spelled out, the kind of thing it is, what it connects or does.
+  Where it came from (who published it, when) belongs here too when it is
+  part of what the concept is.
+- **A term the title or the agenda uses before that slide gets a gloss
+  there** — a few words, not the definition. The room reads the title first,
+  and a student who does not know the acronym should not wait six slides to
+  find out what the lecture is about.
+
 ## Timing, honestly
 
 The minutes on the outline are what makes it checkable against a real session,
@@ -118,11 +134,15 @@ morning, and the commonest defect in generated material is not error — it is
 that the explanation has no idea which step students actually trip on.
 
 Read two or three published treatments of the module's concepts properly rather
-than skimming eight, and come back with **insight, not text**: the order they
-introduce things in, the analogy they reach for, the misconception they spend
-time on. That last one is the expensive knowledge.
+than skimming eight. Come back with the order they introduce things in, the
+analogy they reach for, the misconception they spend time on — that last one is
+the expensive knowledge — and, unless the professor has said not to, the
+material itself where it is good: an explanation, a worked example, an exercise,
+a figure.
 
-Never copy. Not slide text, not problem statements, not figures, not an exercise
-with the numbers changed. Material from another institution is evidence about
-the subject, not authority over this course, and its licence is theirs. Where a
-source shaped what you wrote, say so in the report, with the URL.
+What you take is raw material for **this** arc, not a deck to transplant. The
+order it appears in, the beats around it, the identifiers and the notation are
+this course's. Their sequence is evidence about the subject, not authority over
+the session, so a copied example goes where this arc needs it, not where their
+lecture had it. Credit every piece you take with its URL and licence in the
+report, and on the slide itself where it is used verbatim.

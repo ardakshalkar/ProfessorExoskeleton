@@ -132,24 +132,27 @@ easy to conflate.
 that the midterm is worth 25%, that the labs use PyTorch, that concept A is taught
 before concept B — report all of it freely, with the URL.
 
-**Their expression is not yours to take.** Do not copy slide text, problem
-statements, rubric wording, exam questions, figures or code into a report or into
-this repository. Summarise in your own words. If you must quote to make a point,
-one short quotation with attribution, and never more.
+**Their material may be copied unless the professor says otherwise.** Slide
+text, a worked example, a problem, a figure, code: when it is good, bring it back
+as it is, in a section of the report called *Material taken*, each piece under
+its source. If the professor has said not to copy, or says so now, summarise in
+your own words instead.
 
 Three consequences worth stating plainly:
 
 - **Record the licence.** MIT OCW is Creative Commons; a Stanford course page may
   be all rights reserved; a GitHub repo has whatever its `LICENSE` says. Put the
-  licence beside each source in the report, because "can I use this?" is the next
-  question the professor will ask and the answer differs per source.
-- **A problem set you cannot reuse is still worth reading.** Report its
-  *structure* — six problems, two proof-based, one implementation, graded on
-  correctness and justification — and let the professor write their own.
-- **Never present another course's material as draftable.** If the professor asks
-  you to adopt an assignment wholesale, say what the licence permits, say that
-  attribution is theirs to decide, and route the writing through
-  `/design-assessment` so what lands in the repository is theirs.
+  licence beside every source and every piece taken, because "can I use this?" is
+  the next question the professor will ask and the answer differs per source.
+  Where it is restrictive or unknown, say so beside the piece. Still copy it;
+  using it is the professor's call.
+- **What is copied is raw material, not a finished draft.** It goes into the
+  course through `/make-materials` or `/design-assessment`, which rebuild it in
+  this course's arc, beats, identifiers and outcomes, keeping the credit. This
+  skill writes nothing into the course model itself.
+- **A problem set is worth reading for its structure too** — six problems, two
+  proof-based, one implementation, graded on correctness and justification —
+  whether or not anything in it is taken.
 
 ## 5. Write the report
 
@@ -191,6 +194,8 @@ Then, in this order:
    different name.
 6. **Material worth looking at**, with URL and licence, and what specifically is
    good about each. Not a link dump.
+7. **Material taken**, the pieces copied as they are (§4), each under its source
+   and licence, ready for `/make-materials` or `/design-assessment` to rebuild.
 
 Every claim in the report carries the source it came from. A survey the professor
 cannot check is a survey they have to redo.
@@ -232,8 +237,10 @@ patterns. Read it before starting.
 - **Never invent a course, a URL, a syllabus or a licence.** Every course named
   must be one you actually fetched. A fabricated Stanford syllabus is worse than
   no answer, because it is attributed to a real institution and reads as checkable.
-- **Never copy their expression.** Slide text, problem statements, rubric wording,
-  figures, exam questions. Structure and topics are facts; wording is theirs.
+- **Copy unless the professor objects, and credit every piece.** What is taken
+  goes in *Material taken* with its URL and licence. It reaches the course only
+  through `/make-materials` or `/design-assessment`, rebuilt in this course's
+  logic.
 - **Record the licence beside every source**, and say when you could not determine
   it rather than guessing permissively.
 - **Write no draft into the course model.** Not a concept, not a module, not an
