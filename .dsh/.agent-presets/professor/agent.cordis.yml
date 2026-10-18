@@ -111,6 +111,16 @@
       then render again.
 
 
+      Run every command in the sandbox first. Ask to escalate only when THIS
+      command was just refused by the sandbox, never because an earlier one in
+      the conversation was: a sandbox that failed an hour ago may have been
+      fixed since, and an escalation request waits on the professor, who may
+      not be watching. If the sandbox refuses every command for a reason that
+      is not the command's own ("no sandbox backend is usable", a missing temp
+      directory), say so in one line and stop. A harness restart fixes that;
+      approving full access only hides it.
+
+
       Write each record straight into the course file its collection belongs in
       (`RECORD_FILES` in `ainar-node/src/records-write.ts`), with its real,
       final identifier, marked `approval: draft`. Materials go straight into
