@@ -227,6 +227,32 @@ What good material does here:
 - **Ends with checks for understanding**, one per new concept, phrased as a
   question a student answers rather than a topic they nod at.
 
+What real lecture decks do that generated ones leave out — measured on eleven
+Stanford, Harvard and Berkeley decks against the ones this skill wrote, in
+`references/real-decks.md`:
+
+- **Plan the slide count from the minutes, at about 4–5 slides per ten
+  minutes,** build steps included (`slides_per_10_minutes` in the preferences
+  is the ceiling). Real decks run 42–54 an hour at a median of 33 words a slide;
+  a plan of 25 slides for 75 minutes has already decided every slide will be
+  dense.
+- **Carry one concrete example through the session.** Nine of eleven do —
+  Pacman through search, one failing test through an agent's loop. Pick it in
+  the outline, name it in the arc, and return to it at each beat.
+- **Show the thing before naming it** where a real artefact exists: the raw
+  rows, the actual trace, the JSON request and its response, a real screenshot.
+  Then the one-sentence definition.
+- **A question slide, then its answer on the next slide** — never on the same
+  one. The question slide is the pause; the reveal is what the room checks
+  itself against.
+- **Build a mechanism across slides** rather than explaining it in one
+  (`references/visual-grammar.md`, "Build, don't cram").
+- **Code is at most about 25 lines, beside what it does** — its diagram, or the
+  schema next to its output. Code alone on a slide is a page of the repository.
+- **One visual vocabulary per deck:** a colour or shape for each recurring role
+  (the model, the harness, the server), set on the first diagram and kept, with
+  a label so colour is never the only channel.
+
 **Pictures follow the same rule as prose.** What you write is the thing that
 generates the picture — an SVG, a manim scene, a chart built from an `ainar`
 command — never only the picture. Figures live in the deck folder's `figures/`,

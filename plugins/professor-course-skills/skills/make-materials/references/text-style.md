@@ -42,6 +42,16 @@ as “Where Week 1 stopped, and what we open today” and vague framing such as
 For an evidence slide, write the takeaway as a sentence when that is the clearest
 form. It may run to two lines. Keep other titles short enough to scan quickly.
 
+**The label is the default; the assertion is earned.** In eleven real Stanford,
+Harvard and Berkeley decks (`real-decks.md`), ten of ten titled decks use mostly
+topic labels of three to five words, nine of eleven use questions as titles,
+and assertion titles are a minority everywhere but one course — where each sits
+on a diagram that proves it. The decks this skill wrote for CSS-4007 put six or
+more words in 28–84% of their titles. So: a label of five words or fewer unless
+the slide is evidence for a finding, and then the finding, with the evidence
+on the slide. A title that needs a subtitle to explain it is a slide doing two
+jobs.
+
 | Instead of this topic label on an evidence slide | Write the supported finding |
 | --- | --- |
 | Cost Analysis | Kazakh costs 1.75× English for the same news |

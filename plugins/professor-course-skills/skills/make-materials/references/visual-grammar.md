@@ -317,12 +317,37 @@ in both directions.
 | `moderate` | 20–50 | the common case: a concept and its explanation |
 | `dense` | 40–120 | only where the density is intrinsic — a derivation, an algorithm, a source passage — and then with strong visual structure |
 
-**These are generation defaults, not measurements.** The intuition behind them
-comes from published lecture-slide corpora — MLP, LectureBank, LecSlides-370K —
-which report medians in the twenties of words for general educational slides and
-substantially higher for technical ones. Those figures reached this file
-secondhand and have not been verified here; treat them as the reason the bands
-differ rather than as numbers to quote to a class.
+**What real decks measure.** Eleven public lecture decks from Stanford, Harvard
+and Berkeley, counted page by page on 2026-10-19 (`real-decks.md`): the median
+of their median words per slide is **33**, eight of eleven sit at 16–38, and no
+deck's 90th percentile passes 105. The two densest, at 65–73, carry their words
+as labels inside drawn diagrams. Every slide over 150 words is a pasted exhibit
+— raw data, an agent trace, an issue thread — which is `primary_source`, not
+explanation. The decks this skill wrote for CSS-4007 in the same term had
+medians of 40–82. So aim a `moderate` slide at the low end of its band, not the
+top: thirty words, not fifty.
+
+The fix for a slide over its band is usually more slides, not fewer words on
+the same one. Real decks run 42–54 slides an hour; a plan that allows a third of
+that has already decided the slides will be dense.
+
+## Build, don't cram
+
+Four of the eleven real decks show one figure across several slides, adding
+one element each time: CS224N builds one attention diagram over twelve slides,
+CS188 greys out all but the path being followed, CS50 reveals a quotation a word
+at a time. A build costs one drawing and turns a dense mechanism into a sequence
+the room can follow at speaking pace.
+
+Plan it as consecutive slides sharing a `visual_anchor`, each with its own
+`focus` naming the step — the same fields the roadmap already uses. Draw one
+SVG per step (`fig-04a-…`, `fig-04b-…`) from one source, so the steps cannot
+drift apart; the renderer places each as it is and highlights nothing for you,
+so the added element must be visible in the drawing itself. Each step counts
+against `max_slides`, and is cheap: the words on a build step are a label or
+two.
+Reach for a build whenever a `system_diagram`, `process` or `derivation` slide
+would otherwise need more than its band to explain what happens in order.
 
 
 ### What checks it, and what it means when it fires

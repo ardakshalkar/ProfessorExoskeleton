@@ -119,9 +119,11 @@ values:
     density: moderate           # sparse | moderate | dense
     include_learning_objectives: true
     include_checks_for_understanding: true
-    # Roughly one slide per four minutes of a taught session. A ceiling, not a
-    # target.
-    slides_per_10_minutes: 2.5
+    # A ceiling, not a target, with build steps counted as slides. Eleven real
+    # Stanford, Harvard and Berkeley decks run 42-54 an hour (make-materials
+    # references/real-decks.md); the old 2.5 pushed the same content into fewer,
+    # wordier slides.
+    slides_per_10_minutes: 4.5
 
   outline:
     # An outline that is only a list of slides is a list of topics. The arc is
