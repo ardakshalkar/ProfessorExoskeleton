@@ -1,0 +1,7 @@
+# One loader row, so the plugin is mounted whenever a profile lists
+# `dsh-professor-sandbox-first` in `dsh.profile.bundles`. A profile that wants
+# the stock behaviour back (the model may escalate whenever it likes) overrides
+# this row with `disabled: true`.
+- insert:
+    - id: sandbox-first
+      name: dsh-professor-sandbox-first

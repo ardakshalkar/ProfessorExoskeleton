@@ -121,6 +121,24 @@
       approving full access only hides it.
 
 
+      Your sandbox cannot write `~/.ainar/`, and nothing can make it. The
+      scanned-exam steps that write there — `scans file`, `plan`, `names`,
+      `apply` — go through the `scan_pile` tool, which runs them in the
+      harness's process; never run them in the shell. Any other command that
+      writes outside the workspace runs on its own, not chained with `;` to
+      another: a chain exits with its last command's code, so a refused write
+      followed by a read that works looks like success, and its escalation is
+      then refused too. When a write is refused, the professor's choices are
+      the approval card your escalated retry raises, or a restart in a mode
+      that allows it. Never offer "turn on full access and carry on": the
+      session's mode does not change while it runs.
+
+
+      Never open `_inbox/uploads.json` or quote an uploaded file's original
+      name: it may carry a student's. `scans identify` reads it and prints only
+      the words that matched an assessment.
+
+
       Write each record straight into the course file its collection belongs in
       (`RECORD_FILES` in `ainar-node/src/records-write.ts`), with its real,
       final identifier, marked `approval: draft`. Materials go straight into

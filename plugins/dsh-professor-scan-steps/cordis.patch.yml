@@ -1,0 +1,6 @@
+# One loader row, so the `scan_pile` tool is mounted whenever a profile lists
+# `dsh-professor-scan-steps` in `dsh.profile.bundles`. A top-level array: dsh
+# refuses a bare mapping and the whole harness fails to boot.
+- insert:
+    - id: scan-steps
+      name: dsh-professor-scan-steps

@@ -10,7 +10,9 @@
         "dsh-sample",
         "dsh-ainar-course-model",
         "dsh-professor-pane",
-        "dsh-professor-brand"
+        "dsh-professor-brand",
+        "dsh-professor-sandbox-first",
+        "dsh-professor-scan-steps"
       ]
     }
   },

@@ -12,7 +12,7 @@
     "build": "tsc --project plugins/dsh-sample",
     "ainar": "node --experimental-strip-types ainar-node/bin/ainar.ts",
     "check": "tsc --project plugins/dsh-sample --noEmit",
-    "test": "node --test test/tools.test.mjs test/pane-client.test.mjs test/pane-markdown.test.mjs test/pane-publish.test.mjs test/pane-course-mode.test.mjs test/pane-upload.test.mjs test/pane-unpublished.test.mjs test/pane-grading-view.test.mjs"
+    "test": "node --test test/tools.test.mjs test/pane-client.test.mjs test/pane-markdown.test.mjs test/pane-publish.test.mjs test/pane-course-mode.test.mjs test/pane-upload.test.mjs test/pane-unpublished.test.mjs test/pane-grading-view.test.mjs test/sandbox-first.test.mjs test/scan-steps.test.mjs"
   },
   "dependencies": {
     "@ainar/core": "file:./ainar-node",
@@ -41,6 +41,8 @@
     "dsh-ainar-course-model": "file:./plugins/dsh-ainar-course-model",
     "dsh-professor-brand": "file:./plugins/dsh-professor-brand",
     "dsh-professor-pane": "file:./plugins/dsh-professor-pane",
+    "dsh-professor-sandbox-first": "file:./plugins/dsh-professor-sandbox-first",
+    "dsh-professor-scan-steps": "file:./plugins/dsh-professor-scan-steps",
     "dsh-sample": "file:./plugins/dsh-sample",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

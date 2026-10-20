@@ -1,0 +1,25 @@
+{
+  "name": "dsh-professor-sandbox-first",
+  "version": "0.1.0",
+  "private": false,
+  "license": "MIT",
+  "type": "module",
+  "description": "Refuses a sandbox escalation the sandbox never asked for: a command must be refused in the sandbox in this harness process before an approval request reaches the professor.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "comments": {
+    "dependencies": "None. It only listens on the tool registry's `tools/pre-execute` and `tools/result` events, which every composition with tools has."
+  }
+}

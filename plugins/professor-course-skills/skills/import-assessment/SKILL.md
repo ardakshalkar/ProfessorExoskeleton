@@ -75,12 +75,23 @@ Uploads whose assessment nobody has named go to the run's unfiled inbox,
 `~/.ainar/submissions/<RUN>/_inbox/` (or under `AINAR_SUBMISSIONS_DIR`).
 Copy them there if the professor pointed you at them.
 
-**Read the first page or two of each PDF** (Read with `pages: "1-2"`) — only
-what is printed: the course code, the title (`Quiz 3`, `Midterm 1`,
-`Контрольная работа №2`), a date, a version mark (`Variant A`, `Вариант 2`).
-Do not write down anything handwritten, and never the name on the cover.
+**Start with `scans identify`, with no title.** It ranks each file by itself:
+first by the name the professor uploaded it under (kept privately in
+`_inbox/uploads.json`, and never printed — it may carry a student's name),
+else by the title printed on its cover, read off the top of page 1 by the same
+vision model `scans names` uses (about a tenth of a cent a file). You do not
+need to see the pages, and you do not need a model that can read images:
 
-Then rank the run's assessments against what you read:
+```bash
+bin/ainar scans identify CSS-4008-2026-FALL
+```
+
+Each file says what it was ranked by. Only when it says nothing points
+anywhere — no useful name, no title on the cover, or no DeepSeek key — read
+the first page yourself if you can (Read with `pages: "1-2"`): only what is
+printed — the course code, the title (`Quiz 3`, `Midterm 1`,
+`Контрольная работа №2`), a date, a version mark (`Variant A`, `Вариант 2`),
+never anything handwritten or the name on the cover — and rank against it:
 
 ```bash
 bin/ainar scans identify CSS-4008-2026-FALL --title "Quiz 3 Classification" --date 2026-10-20
@@ -90,8 +101,14 @@ bin/ainar scans identify CSS-4008-2026-FALL --title "Quiz 3 Classification" --da
   0.77  ASSESSMENT-QUIZ-03  Quiz 3 — Classification (quiz)  NO QUESTIONS  due 2026-10-21
         shares "quiz", "3", "classification" with the cover; sat on paper
   0.21  ASSESSMENT-QUIZ-02  Quiz 2 — Regression (quiz)  8 question(s)
-        shares "quiz" with the cover; its number (2) is not the cover's (3)
+        shares "quiz" with the cover; its number (2) is not the one on the cover (3)
 ```
+
+**Recommend only what a reason supports.** Mark a candidate *(Recommended)*
+only when its line says it shares words with the cover or the file's name. If
+no candidate does, ask with no recommendation. Never infer the exam from the
+page count, the number of students, or which assessments have no papers yet:
+on 2026-10-20 that arithmetic recommended Quiz 3 for a pile that was Midterm 1.
 
 **Ask; do not decide.** Put the top candidates to the professor as a question
 (AskUserQuestion): the best two or three, each with its question count, and
@@ -103,7 +120,7 @@ Their answer decides the path:
 
 | Answer | Next |
 | --- | --- |
-| an assessment that **has** its questions | `scans file RUN FILE --assessment A`, then hand back to `/grade-scans` |
+| an assessment that **has** its questions | file it — the `scan_pile` tool with `step: "file"` when you have it (your sandbox cannot write `~/.ainar/`), else `scans file RUN FILE --assessment A` — then hand back to `/grade-scans` |
 | an assessment with **no questions** | §2, against that assessment's id |
 | **a new assessment** | §2, with a new id: `ASSESSMENT-<SHORT>` from the title (`QUIZ-03`, `MID-1`) — confirm it with them |
 
@@ -217,7 +234,8 @@ render a paper through headless Chrome, Edge or LibreOffice.
 bin/ainar scans file CSS-4008-2026-FALL scanner-0042.pdf --assessment ASSESSMENT-QUIZ-03
 ```
 
-for every PDF of this exam, and hand over to `/grade-scans` from its step 1:
+for every PDF of this exam — through the `scan_pile` tool (`step: "file"`) when
+you have it — and hand over to `/grade-scans` from its step 1:
 plan, apply, read the answers, `scans record`. The choice items are then
 `score-items`'s. Come back here for the written ones.
 

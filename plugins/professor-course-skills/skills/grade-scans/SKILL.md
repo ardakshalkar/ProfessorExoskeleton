@@ -29,6 +29,14 @@ lives in the private submissions folder — `~/.ainar/submissions/<RUN>/<ASSESSM
 (or `AINAR_SUBMISSIONS_DIR`) — and the course gets only pseudonymous records.
 `STORAGE.md` has the layout; `ainar-node/src/scans.ts` has the rules.
 
+**Where the commands run.** Every step that writes the private folder —
+`scans file`, `plan`, `names`, `apply` — goes through the **`scan_pile` tool**
+when you have it (`step: "plan", run, assessment, pages_per_student: 4`, and
+so on). It runs them in the harness's process; your shell's sandbox cannot
+write `~/.ainar/` and would ask the professor to approve each one. The
+`bin/ainar scans …` lines below are the same steps for a shell with no such
+tool. `status` and `identify` only read, and work anywhere.
+
 The work is two passes, and they are kept apart on purpose: **first read what
 is on the page, then grade it.** A reader who is also grading starts seeing the
 answer they expect.

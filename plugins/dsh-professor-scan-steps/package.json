@@ -1,0 +1,28 @@
+{
+  "name": "dsh-professor-scan-steps",
+  "version": "0.1.0",
+  "private": false,
+  "license": "MIT",
+  "type": "module",
+  "description": "The deterministic scanned-exam steps (scans status, file, plan, names, apply) as one harness tool, run in the harness's process so they can write the private submissions folder the assistant's sandbox cannot.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "dependencies": {
+    "@ainar/core": "file:../../ainar-node"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "comments": {
+    "core": "Declared where it is used; also a dependency of the project, as for dsh-ainar-course-model, because pnpm cannot resolve a file: spec whose absolute path contains a space."
+  }
+}
