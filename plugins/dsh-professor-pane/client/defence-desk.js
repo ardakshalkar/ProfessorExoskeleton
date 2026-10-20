@@ -167,7 +167,10 @@ export function DefenceDesk(props) {
       });
   };
 
+  // `preparing`: the pane is still recording the submission the desk files
+  // under; the session is read once it is there.
   React.useEffect(() => {
+    if (props.preparing) return undefined;
     let live = true;
     fetch(endpoint("/api/defence/session"), { cache: "no-store" })
       .then((response) => response.json())
@@ -176,7 +179,7 @@ export function DefenceDesk(props) {
     return () => {
       live = false;
     };
-  }, [props.reload, tick, props.assessment, props.student]);
+  }, [props.reload, tick, props.assessment, props.student, props.preparing]);
 
   /** Seconds of audio in the take in hand: the clock less any time paused. */
   const audioNow = () => {
@@ -937,7 +940,12 @@ export function DefenceDesk(props) {
           data && !data.error ? h(GradeRow, { desk }) : null,
           said ? h("div", { className: said.error ? "pp-dwarn" : "pp-dim" }, said.text) : null,
           data === null
-            ? h("div", { className: "pp-dim" }, "Loading…")
+            ? h(
+                "div",
+                { className: "pp-dpending", role: "status" },
+                h("span", { className: "pp-stagespin", "aria-hidden": "true" }),
+                props.preparing ? "Setting up the defence for this student…" : "Opening the desk…",
+              )
             : data.error
               ? h("div", { className: "pp-dwarn" }, data.error)
               : !data.questions.length

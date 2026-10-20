@@ -2273,7 +2273,7 @@ function DefenceStage(props) {
   const heardWords = words ? words.pieces.slice(words.from || 0).map((piece) => piece.text).join(" ").split(/\s+/).filter(Boolean) : [];
   const spoken = heardWords.length > 80 ? ["…"].concat(heardWords.slice(-80)) : heardWords;
   const live = stagePhase === "waiting" || stagePhase === "speaking" || stagePhase === "professor";
-  const stale = Boolean(words && !recording && !handsFree);
+  const stale2 = Boolean(words && !recording && !handsFree);
   return h(
     "div",
     { className: "pp-stage" },
@@ -2323,7 +2323,7 @@ function DefenceStage(props) {
        */
       h(
         "div",
-        { className: "pp-stagetr" + (stale ? " pp-stagetrold" : "") + (heardWords.length > 30 ? " pp-stagetrlong" : ""), "aria-live": "polite" },
+        { className: "pp-stagetr" + (stale2 ? " pp-stagetrold" : "") + (heardWords.length > 30 ? " pp-stagetrlong" : ""), "aria-live": "polite" },
         words && (spoken.length || words.partial) ? h(
           "div",
           null,
@@ -2479,12 +2479,13 @@ function DefenceDesk(props) {
     });
   };
   React.useEffect(() => {
+    if (props.preparing) return void 0;
     let live = true;
     fetch(endpoint("/api/defence/session"), { cache: "no-store" }).then((response) => response.json()).then((value) => live && setData(value)).catch((error) => live && setData({ error: String(error) }));
     return () => {
       live = false;
     };
-  }, [props.reload, tick, props.assessment, props.student]);
+  }, [props.reload, tick, props.assessment, props.student, props.preparing]);
   const audioNow = () => {
     const current = whole.current;
     if (current.started === null) return 0;
@@ -3091,7 +3092,12 @@ function DefenceDesk(props) {
           data && !data.error && data.questions.length && consented ? handsFree ? h(HandsPanel, { desk }) : recording ? h(RecordingPanel, { desk }) : h(StartRow, { desk }) : null,
           data && !data.error ? h(GradeRow, { desk }) : null,
           said ? h("div", { className: said.error ? "pp-dwarn" : "pp-dim" }, said.text) : null,
-          data === null ? h("div", { className: "pp-dim" }, "Loading…") : data.error ? h("div", { className: "pp-dwarn" }, data.error) : !data.questions.length ? h("div", { className: "pp-dim" }, "No questions drafted yet — Start defence drafts them.") : h("ol", { className: "pp-dlist" }, data.questions.map((entry) => h(QuestionItem, { key: entry.id, desk, entry })))
+          data === null ? h(
+            "div",
+            { className: "pp-dpending", role: "status" },
+            h("span", { className: "pp-stagespin", "aria-hidden": "true" }),
+            props.preparing ? "Setting up the defence for this student…" : "Opening the desk…"
+          ) : data.error ? h("div", { className: "pp-dwarn" }, data.error) : !data.questions.length ? h("div", { className: "pp-dim" }, "No questions drafted yet — Start defence drafts them.") : h("ol", { className: "pp-dlist" }, data.questions.map((entry) => h(QuestionItem, { key: entry.id, desk, entry })))
         )
       )
     ),
@@ -3345,7 +3351,7 @@ function ProviderSetup(props) {
   const [values, setValues] = React.useState({});
   const [phase, setPhase] = React.useState("idle");
   const [failed, setFailed] = React.useState(null);
-  const set = (key, value) => setValues(Object.assign({}, values, { [key]: value }));
+  const set2 = (key, value) => setValues(Object.assign({}, values, { [key]: value }));
   const required = (spec.fields || []).filter((field) => field !== "token");
   const ready = required.every((field) => String(values[field] || "").trim());
   const submit = () => {
@@ -3398,7 +3404,7 @@ function ProviderSetup(props) {
           placeholder: meta.placeholder,
           value: values[field] || "",
           disabled: phase === "saving",
-          onChange: (event) => set(field, event.target.value)
+          onChange: (event) => set2(field, event.target.value)
         })
       );
     }),
@@ -3962,6 +3968,182 @@ function SubgroupCourses(props) {
     ) : null,
     failed ? h("p", { className: "pp-saveerr" }, failed) : null
   );
+}
+
+// client/data.js
+var versions = /* @__PURE__ */ new Map();
+var listeners = /* @__PURE__ */ new Set();
+var bump = (areas) => {
+  if (!areas.length) return;
+  for (const area of new Set(areas)) versions.set(area, (versions.get(area) ?? 0) + 1);
+  versions.set("*", (versions.get("*") ?? 0) + 1);
+  for (const listener of listeners) listener();
+};
+var versionOf = (areas) => {
+  if (areas.includes("*")) return versions.get("*") ?? 0;
+  let sum = 0;
+  for (const area of areas) sum += versions.get(area) ?? 0;
+  return sum;
+};
+var subscribe = (listener) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+function useVersion(areas) {
+  const key = areas.join(",");
+  const read = React.useCallback(() => versionOf(key.split(",")), [key]);
+  return React.useSyncExternalStore(subscribe, read, read);
+}
+var POLL_MS = 2500;
+var watchers = /* @__PURE__ */ new Map();
+var watcherFor = (sessionId) => {
+  if (watchers.has(sessionId)) return watchers.get(sessionId);
+  const url = scoped(BASE + "/api/revision", sessionId);
+  const watcher = { users: 0, seen: null, timer: null, inflight: null };
+  watcher.check = (fresh = false) => {
+    if (watcher.inflight && !fresh) return watcher.inflight;
+    const asked = fetch(url + (fresh ? "&fresh=1" : ""), { headers: { accept: "application/json" } }).then((response) => response.json()).then((value) => {
+      if (!value || typeof value.revision !== "string") return;
+      const before = watcher.seen;
+      watcher.seen = value;
+      if (before === null || before.revision === value.revision) return;
+      if (!value.areas || !before.areas) return bump(["*"]);
+      const moved = [];
+      for (const area of /* @__PURE__ */ new Set([...Object.keys(before.areas), ...Object.keys(value.areas)])) {
+        if (before.areas[area] !== value.areas[area]) moved.push(area);
+      }
+      bump(moved.length ? moved : ["*"]);
+    }).catch(() => {
+    }).finally(() => {
+      if (watcher.inflight === asked) watcher.inflight = null;
+    });
+    watcher.inflight = asked;
+    return asked;
+  };
+  const start = () => {
+    if (watcher.timer === null) watcher.timer = setInterval(() => watcher.check(), POLL_MS);
+  };
+  const stop = () => {
+    if (watcher.timer !== null) clearInterval(watcher.timer);
+    watcher.timer = null;
+  };
+  watcher.onVisibility = () => {
+    if (document.visibilityState === "visible") {
+      watcher.check();
+      start();
+    } else {
+      stop();
+    }
+  };
+  watcher.mount = () => {
+    watcher.users += 1;
+    if (watcher.users === 1) {
+      watcher.onVisibility();
+      document.addEventListener("visibilitychange", watcher.onVisibility);
+    }
+  };
+  watcher.unmount = () => {
+    watcher.users -= 1;
+    if (watcher.users > 0) return;
+    stop();
+    document.removeEventListener("visibilitychange", watcher.onVisibility);
+    watchers.delete(sessionId);
+  };
+  watchers.set(sessionId, watcher);
+  return watcher;
+};
+function watchSession(sessionId) {
+  const watcher = watcherFor(sessionId);
+  watcher.mount();
+  return () => watcher.unmount();
+}
+function useWorkspaceWatch(sessionId) {
+  React.useEffect(() => sessionId ? watchSession(sessionId) : void 0, [sessionId]);
+}
+function wrote(sessionId, tags = []) {
+  bump(tags);
+  const watcher = sessionId ? watchers.get(sessionId) : null;
+  if (watcher) return watcher.check(true);
+  bump(["*"]);
+  return Promise.resolve();
+}
+var AREAS = {
+  everything: ["*"],
+  integrations: ["integrations", "version", "course", "assessments", "canvas"],
+  syncs: ["syncs", "records", "assessments", "integrations", "canvas"],
+  marks: ["records", "assessments", "syncs", "integrations", "grading", "canvas"],
+  grading: ["grading", "version", "assessments", "records"],
+  files: ["files", "scans", "defence", "records"],
+  scans: ["scans", "files", "records", "assessments"],
+  grade: ["records", "assessments", "items", "grading", "canvas"]
+};
+
+// client/canvas-check.js
+var FRESH_MS = 5 * 60 * 1e3;
+var LOOK_MS = 60 * 1e3;
+var runs = /* @__PURE__ */ new Map();
+var listeners2 = /* @__PURE__ */ new Map();
+var LOADING = { phase: "loading", value: null };
+var entryFor = (runId) => runs.get(runId) || LOADING;
+var set = (runId, next) => {
+  runs.set(runId, Object.assign({}, entryFor(runId), next));
+  for (const listener of listeners2.get(runId) || []) listener();
+};
+var urlFor = (runId, sessionId) => scoped(BASE + "/api/canvas/check?run=" + encodeURIComponent(runId), sessionId);
+var stale = (answer) => !answer || answer.state !== "ready" || !answer.at || Date.now() - Date.parse(answer.at) > FRESH_MS;
+var run = (runId, sessionId) => {
+  const entry = entryFor(runId);
+  if (entry.phase === "running") return;
+  set(runId, { phase: "running" });
+  fetch(urlFor(runId, sessionId), { method: "POST", headers: { accept: "application/json" } }).then((response) => response.json()).then((answer) => {
+    set(runId, { phase: "ready", value: answer });
+    wrote(sessionId, ["canvas"]);
+  }).catch((error) => set(runId, { phase: "ready", value: { error: String(error) } }));
+};
+var refresh = (runId, sessionId) => {
+  const entry = entryFor(runId);
+  if (entry.phase === "running") return;
+  if (entry.phase === "ready" && entry.value && !entry.value.error) {
+    if (stale(entry.value)) run(runId, sessionId);
+    return;
+  }
+  fetch(urlFor(runId, sessionId), { headers: { accept: "application/json" } }).then((response) => response.json()).then((answer) => {
+    if (answer.state === "running") return run(runId, sessionId);
+    set(runId, { phase: "ready", value: answer });
+    if (stale(answer)) run(runId, sessionId);
+  }).catch(() => run(runId, sessionId));
+};
+function useCanvasWatch(runId, sessionId) {
+  React.useEffect(() => {
+    if (!runId) return void 0;
+    const look = () => document.visibilityState === "visible" && refresh(runId, sessionId);
+    look();
+    const timer = setInterval(look, LOOK_MS);
+    document.addEventListener("visibilitychange", look);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", look);
+    };
+  }, [runId, sessionId]);
+}
+function useCanvasCheck(runId, sessionId) {
+  const subscribe2 = React.useCallback(
+    (listener) => {
+      if (!runId) return () => {
+      };
+      if (!listeners2.has(runId)) listeners2.set(runId, /* @__PURE__ */ new Set());
+      listeners2.get(runId).add(listener);
+      return () => listeners2.get(runId).delete(listener);
+    },
+    [runId]
+  );
+  const read = React.useCallback(() => runId ? entryFor(runId) : LOADING, [runId]);
+  const state = React.useSyncExternalStore(subscribe2, read, read);
+  React.useEffect(() => {
+    if (runId) refresh(runId, sessionId);
+  }, [runId, sessionId]);
+  const again = React.useCallback(() => runId && run(runId, sessionId), [runId, sessionId]);
+  return [state, again];
 }
 
 // client/common.js
@@ -4856,11 +5038,11 @@ function CanvasMarks(props) {
   const unlinked = groups.filter((entry) => entry.unlinked);
   const title = props.title || props.assessmentId;
   const askToLink = () => {
-    const run = props.runId;
+    const run2 = props.runId;
     const a = props.assessmentId;
     const where = unlinked.map((entry) => entry.group ? entry.group + " (Canvas course " + entry.courseId + ")" : "the run's Canvas course").join(", ");
     props.ask(
-      "Link " + a + " (" + title + ") to its Canvas assignment in each course that has none yet: " + where + ".\n\n1. Run `bin/ainar lms assignments " + run + " --assessment " + a + "`. It only reads Canvas. Show me, per course, the assignment you think is " + title + " and why — or say that nothing there looks like it.\n2. Ask me to confirm each pairing, one line per course. Link nothing I have not confirmed.\n3. For each one I confirm, run `bin/ainar lms link " + run + " --assessment " + a + " --group <GROUP> --canvas-assignment <ID>`. It changes nothing in Canvas; it records the id in the course.\n4. Where no assignment exists, say so and offer to create it: `bin/ainar lms assignment-plan " + run + " --assessment " + a + " --group <GROUP>` shows what would be created; run `bin/ainar lms assignment-push … --confirm` only when I say yes.\n\nDo not send any marks — I send those from the pane once every course is linked."
+      "Link " + a + " (" + title + ") to its Canvas assignment in each course that has none yet: " + where + ".\n\n1. Run `bin/ainar lms assignments " + run2 + " --assessment " + a + "`. It only reads Canvas. Show me, per course, the assignment you think is " + title + " and why — or say that nothing there looks like it.\n2. Ask me to confirm each pairing, one line per course. Link nothing I have not confirmed.\n3. For each one I confirm, run `bin/ainar lms link " + run2 + " --assessment " + a + " --group <GROUP> --canvas-assignment <ID>`. It changes nothing in Canvas; it records the id in the course.\n4. Where no assignment exists, say so and offer to create it: `bin/ainar lms assignment-plan " + run2 + " --assessment " + a + " --group <GROUP>` shows what would be created; run `bin/ainar lms assignment-push … --confirm` only when I say yes.\n\nDo not send any marks — I send those from the pane once every course is linked."
     );
   };
   const previewed = plan && !plan.confirmed && groups.length > 0 && !unlinked.length && groups.every((entry) => entry.ok);
@@ -5008,35 +5190,6 @@ function useUnpublished(runId, sessionId, revision) {
   }, [runId, sessionId, revision]);
   return state;
 }
-var CANVAS_CHECK_FRESH = 5 * 60 * 1e3;
-function useCanvasCheck(runId, sessionId, onChecked) {
-  const [state, setState] = React.useState({ phase: "loading", value: null });
-  const live = React.useRef(true);
-  const url = scoped(BASE + "/api/canvas/check?run=" + encodeURIComponent(runId || ""), sessionId);
-  const run = React.useCallback(() => {
-    setState((current) => Object.assign({}, current, { phase: "running" }));
-    fetch(url, { method: "POST", headers: { accept: "application/json" } }).then((response) => response.json()).then((answer) => {
-      if (!live.current) return;
-      setState({ phase: "ready", value: answer });
-      if (onChecked) onChecked();
-    }).catch((error) => live.current && setState({ phase: "ready", value: { error: String(error) } }));
-  }, [url]);
-  React.useEffect(() => {
-    live.current = true;
-    if (!runId) return void 0;
-    fetch(url, { headers: { accept: "application/json" } }).then((response) => response.json()).then((answer) => {
-      if (!live.current) return;
-      if (answer.state === "running") return run();
-      const stale = answer.state !== "ready" || !answer.at || Date.now() - Date.parse(answer.at) > CANVAS_CHECK_FRESH;
-      setState({ phase: "ready", value: answer });
-      if (stale) run();
-    }).catch(() => live.current && run());
-    return () => {
-      live.current = false;
-    };
-  }, [url]);
-  return [state, run];
-}
 var editedIn = (check) => {
   const found = /* @__PURE__ */ new Map();
   for (const entry of check && check.value && check.value.value && check.value.value.assessments || []) {
@@ -5085,9 +5238,8 @@ var TitleWithTag = (props) => {
   );
 };
 function GradebookStatus(props) {
-  const [checked, setChecked] = React.useState(0);
-  const state = useUnpublished(props.runId, props.sessionId, props.revision + "." + checked);
-  const [check, recheck] = useCanvasCheck(props.runId, props.sessionId, () => setChecked((value) => value + 1));
+  const state = useUnpublished(props.runId, props.sessionId, props.revision);
+  const [check, recheck] = useCanvasCheck(props.runId, props.sessionId);
   const [open, setOpen] = React.useState(null);
   if (state.phase === "loading" || !state.value || state.value.error) return null;
   const rows = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0).sort(dueOrder);
@@ -6861,7 +7013,7 @@ function Integrations(props) {
     setTick((value) => value + 1);
     if (props.onWrite) props.onWrite();
   };
-  const refresh = () => fetch(url, { headers: { accept: "application/json" } }).then((response) => response.json()).then((body) => {
+  const refresh2 = () => fetch(url, { headers: { accept: "application/json" } }).then((response) => response.json()).then((body) => {
     if (!body.error) setFresh(body);
     setTick((value) => value + 1);
   }).catch(() => null);
@@ -6893,7 +7045,7 @@ function Integrations(props) {
         // A token or a connection is machine configuration, not the record,
         // so nothing else needs to redraw; `onWrite` is not called.
         onSaved: (body) => setFresh(body),
-        onRefresh: refresh
+        onRefresh: refresh2
       })
     );
   }
@@ -6913,7 +7065,7 @@ function Integrations(props) {
       revision: String(props.revision || 0) + "." + tick,
       onSaved,
       onSynced,
-      onRefresh: refresh,
+      onRefresh: refresh2,
       onWrite: props.onWrite
     })
   );
@@ -7094,114 +7246,6 @@ function CourseIntegrations(props) {
     migrating && migrating !== "working" ? h("pre", { className: "pp-approveout" + (migrating.error ? " pp-approveerr" : "") }, migrating.error || migrating.output) : null
   );
 }
-
-// client/data.js
-var versions = /* @__PURE__ */ new Map();
-var listeners = /* @__PURE__ */ new Set();
-var bump = (areas) => {
-  if (!areas.length) return;
-  for (const area of new Set(areas)) versions.set(area, (versions.get(area) ?? 0) + 1);
-  versions.set("*", (versions.get("*") ?? 0) + 1);
-  for (const listener of listeners) listener();
-};
-var versionOf = (areas) => {
-  if (areas.includes("*")) return versions.get("*") ?? 0;
-  let sum = 0;
-  for (const area of areas) sum += versions.get(area) ?? 0;
-  return sum;
-};
-var subscribe = (listener) => {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
-};
-function useVersion(areas) {
-  const key = areas.join(",");
-  const read = React.useCallback(() => versionOf(key.split(",")), [key]);
-  return React.useSyncExternalStore(subscribe, read, read);
-}
-var POLL_MS = 2500;
-var watchers = /* @__PURE__ */ new Map();
-var watcherFor = (sessionId) => {
-  if (watchers.has(sessionId)) return watchers.get(sessionId);
-  const url = scoped(BASE + "/api/revision", sessionId);
-  const watcher = { users: 0, seen: null, timer: null, inflight: null };
-  watcher.check = (fresh = false) => {
-    if (watcher.inflight && !fresh) return watcher.inflight;
-    const asked = fetch(url + (fresh ? "&fresh=1" : ""), { headers: { accept: "application/json" } }).then((response) => response.json()).then((value) => {
-      if (!value || typeof value.revision !== "string") return;
-      const before = watcher.seen;
-      watcher.seen = value;
-      if (before === null || before.revision === value.revision) return;
-      if (!value.areas || !before.areas) return bump(["*"]);
-      const moved = [];
-      for (const area of /* @__PURE__ */ new Set([...Object.keys(before.areas), ...Object.keys(value.areas)])) {
-        if (before.areas[area] !== value.areas[area]) moved.push(area);
-      }
-      bump(moved.length ? moved : ["*"]);
-    }).catch(() => {
-    }).finally(() => {
-      if (watcher.inflight === asked) watcher.inflight = null;
-    });
-    watcher.inflight = asked;
-    return asked;
-  };
-  const start = () => {
-    if (watcher.timer === null) watcher.timer = setInterval(() => watcher.check(), POLL_MS);
-  };
-  const stop = () => {
-    if (watcher.timer !== null) clearInterval(watcher.timer);
-    watcher.timer = null;
-  };
-  watcher.onVisibility = () => {
-    if (document.visibilityState === "visible") {
-      watcher.check();
-      start();
-    } else {
-      stop();
-    }
-  };
-  watcher.mount = () => {
-    watcher.users += 1;
-    if (watcher.users === 1) {
-      watcher.onVisibility();
-      document.addEventListener("visibilitychange", watcher.onVisibility);
-    }
-  };
-  watcher.unmount = () => {
-    watcher.users -= 1;
-    if (watcher.users > 0) return;
-    stop();
-    document.removeEventListener("visibilitychange", watcher.onVisibility);
-    watchers.delete(sessionId);
-  };
-  watchers.set(sessionId, watcher);
-  return watcher;
-};
-function watchSession(sessionId) {
-  const watcher = watcherFor(sessionId);
-  watcher.mount();
-  return () => watcher.unmount();
-}
-function useWorkspaceWatch(sessionId) {
-  React.useEffect(() => sessionId ? watchSession(sessionId) : void 0, [sessionId]);
-}
-function wrote(sessionId, tags = []) {
-  bump(tags);
-  const watcher = sessionId ? watchers.get(sessionId) : null;
-  if (watcher) return watcher.check(true);
-  bump(["*"]);
-  return Promise.resolve();
-}
-var AREAS = {
-  everything: ["*"],
-  integrations: ["integrations", "version", "course", "assessments"],
-  syncs: ["syncs", "records", "assessments", "integrations"],
-  marks: ["records", "assessments", "syncs", "integrations", "grading"],
-  grading: ["grading", "version", "assessments", "records"],
-  files: ["files", "scans", "defence", "records"],
-  scans: ["scans", "files", "records", "assessments"],
-  grade: ["records", "assessments", "items", "grading"]
-};
 
 // shared/course-style.js
 var LIGHT = `--ground:#f3f4f0;--surface:#fff;--sunk:#eceee8;--ink:#171b18;--muted:#5f685f;
@@ -7540,15 +7584,15 @@ var GAP = {
   weight: { icon: "weight", verb: "Set weight" },
   brief: { icon: "brief", verb: "Write brief" }
 };
-var promptFor = (kind, week, run, ref) => {
+var promptFor = (kind, week, run2, ref) => {
   const module2 = (week.modules ?? [])[0];
-  const about = `week ${week.week} of ${run.id}` + (module2 ? ` (${module2.module_id}, "${module2.title}")` : "");
+  const about = `week ${week.week} of ${run2.id}` + (module2 ? ` (${module2.module_id}, "${module2.title}")` : "");
   const gap = (week.gaps ?? []).find((g) => g.kind === kind) ?? { ids: [] };
   switch (kind) {
     case "deck":
       return `Draft the slides for ${about} with /make-materials. It meets in ${gap.ids.join(", ") || "its meetings"} and has no deck. Register it as a resource marked approval: draft.`;
     case "module":
-      return `Week ${week.week} of ${run.id} has no module. Propose what it should teach, given the weeks either side, as a draft module for me to read. Change nothing else.`;
+      return `Week ${week.week} of ${run2.id} has no module. Propose what it should teach, given the weeks either side, as a draft module for me to read. Change nothing else.`;
     case "misdated":
       return `${ref} is drawn under ${about}, but its date falls outside that week. Which is wrong: its date, its module's week, or the run's start date? Tell me what you find and change nothing until I say.`;
     case "weight":
@@ -7559,7 +7603,7 @@ var promptFor = (kind, week, run, ref) => {
       return `For ${about}, what is still missing?`;
   }
 };
-var datesPrompt = (a, run) => `Ask me this now, in your first message, before running any command: what are the open and due dates for ${a.assessment_id} ("${a.title}")? Skip the usual opening validate and inbox sweep, and do not read any file first: these two dates exist only in my head, so nothing on disk can answer this. Once I have answered, set opens_at and due_at on the ${a.assessment_id} entry in ` + (a.source_file ?? `courses/${run.course_id}/versions/${run.term}/assessments/ (grep for the id)`) + ", and then just confirm what you wrote.";
+var datesPrompt = (a, run2) => `Ask me this now, in your first message, before running any command: what are the open and due dates for ${a.assessment_id} ("${a.title}")? Skip the usual opening validate and inbox sweep, and do not read any file first: these two dates exist only in my head, so nothing on disk can answer this. Once I have answered, set opens_at and due_at on the ${a.assessment_id} entry in ` + (a.source_file ?? `courses/${run2.course_id}/versions/${run2.term}/assessments/ (grep for the id)`) + ", and then just confirm what you wrote.";
 var tierOf = (week, current) => {
   if (week.urgency) return week.urgency;
   if (week.when === "past") return "past";
@@ -7574,10 +7618,10 @@ var kindOf = (type) => KINDS[type] ?? ["Other", "ot"];
 var LANES = [["test", "Exams & Quizzes", "q", ["quiz", "exam"]], ["assignment", "Homework", "hw", ["assignment"]], ["project", "Project", "pj", ["project"]]];
 var laneOf = (type) => LANES.find((l) => l[3].includes(type)) ?? ["other", "Other", "ot", []];
 var runOffset = (data) => {
-  const run = data.run ?? {};
+  const run2 = data.run ?? {};
   try {
-    if (run.timezone && run.start_date) {
-      const name = new Intl.DateTimeFormat("en-US", { timeZone: run.timezone, timeZoneName: "longOffset" }).formatToParts(/* @__PURE__ */ new Date(`${run.start_date}T12:00:00Z`)).find((p) => p.type === "timeZoneName")?.value ?? "";
+    if (run2.timezone && run2.start_date) {
+      const name = new Intl.DateTimeFormat("en-US", { timeZone: run2.timezone, timeZoneName: "longOffset" }).formatToParts(/* @__PURE__ */ new Date(`${run2.start_date}T12:00:00Z`)).find((p) => p.type === "timeZoneName")?.value ?? "";
       const m = /GMT([+-]\d{2}:\d{2})?/.exec(name);
       if (m) return m[1] ?? "+00:00";
     }
@@ -8069,7 +8113,7 @@ function Tally(props) {
   return /* @__PURE__ */ h("div", { className: "tally", title }, /* @__PURE__ */ h("span", { className: tally.soon ? "soon" : "zero" }, tally.soon, " this week or next"), /* @__PURE__ */ h("span", { className: tally.later ? "" : "zero" }, tally.later, " later"), /* @__PURE__ */ h("span", { className: "past" }, tally.past, " in weeks taught"));
 }
 function WeekRow(props) {
-  const { w, data, run, current, student, status } = props;
+  const { w, data, run: run2, current, student, status } = props;
   const showGaps = !student;
   const tier = tierOf(w, current);
   const gaps = showGaps ? w.gaps || [] : [];
@@ -8080,7 +8124,7 @@ function WeekRow(props) {
   const concepts = (w.modules || []).flatMap((m) => (m.concepts || []).map((c) => c.title || c.id));
   const lecture = (w.meetings || []).map((m) => {
     const resources = [...m.resources || []].sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
-    return /* @__PURE__ */ h("div", { className: "meeting", key: m.activity_id }, /* @__PURE__ */ h("span", { className: "chip meet" + (m.draft ? " draft" : ""), title: m.title || "" }, /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(m.on) || "no date"), /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), misdated.has(m.activity_id) ? /* @__PURE__ */ h(GapChip, { kind: "misdated", tier, prompt: promptFor("misdated", w, run, m.activity_id), title: has("misdated").note }) : null, resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
+    return /* @__PURE__ */ h("div", { className: "meeting", key: m.activity_id }, /* @__PURE__ */ h("span", { className: "chip meet" + (m.draft ? " draft" : ""), title: m.title || "" }, /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(m.on) || "no date"), /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), misdated.has(m.activity_id) ? /* @__PURE__ */ h(GapChip, { kind: "misdated", tier, prompt: promptFor("misdated", w, run2, m.activity_id), title: has("misdated").note }) : null, resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
   });
   const deckGap = has("deck");
   const seen = /* @__PURE__ */ new Set();
@@ -8100,7 +8144,7 @@ function WeekRow(props) {
               key: "brief" + a.assessment_id,
               kind: "brief",
               tier,
-              prompt: promptFor("brief", w, run, a.assessment_id),
+              prompt: promptFor("brief", w, run2, a.assessment_id),
               title: a.assessment_id + " has no brief and no description."
             }
           )
@@ -8114,21 +8158,21 @@ function WeekRow(props) {
   const assessed = new Set((w.due || []).flatMap((a) => a.outcomes || []));
   const outcomeIds = [.../* @__PURE__ */ new Set([...taught.keys(), ...assessed])].sort();
   const titles = new Map((data.outcomes || []).map((o) => [o.outcome_id, o.title]));
-  return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "wkhead " + (w.when === "current" ? "now" : w.when === "past" ? "past" : ""), id: "week-" + w.week }, /* @__PURE__ */ h("b", null, twoDigits(w.week)), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), title ? /* @__PURE__ */ h("h3", null, /* @__PURE__ */ h(ModuleTitles, { modules: w.modules })) : /* @__PURE__ */ h("h3", { className: "none" }, "Unplanned"), w.when === "current" ? /* @__PURE__ */ h("span", { className: "pill now" }, "this week") : null, (w.modules || []).some((m) => m.draft) ? /* @__PURE__ */ h("span", { className: "pill draft" }, "draft") : null, gaps.filter((g) => g.kind === "module" || g.kind === "weight").map((g) => /* @__PURE__ */ h(GapChip, { key: g.kind, kind: g.kind, tier, prompt: promptFor(g.kind, w, run), title: g.note })), module2 ? /* @__PURE__ */ h(
+  return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "wkhead " + (w.when === "current" ? "now" : w.when === "past" ? "past" : ""), id: "week-" + w.week }, /* @__PURE__ */ h("b", null, twoDigits(w.week)), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), title ? /* @__PURE__ */ h("h3", null, /* @__PURE__ */ h(ModuleTitles, { modules: w.modules })) : /* @__PURE__ */ h("h3", { className: "none" }, "Unplanned"), w.when === "current" ? /* @__PURE__ */ h("span", { className: "pill now" }, "this week") : null, (w.modules || []).some((m) => m.draft) ? /* @__PURE__ */ h("span", { className: "pill draft" }, "draft") : null, gaps.filter((g) => g.kind === "module" || g.kind === "weight").map((g) => /* @__PURE__ */ h(GapChip, { key: g.kind, kind: g.kind, tier, prompt: promptFor(g.kind, w, run2), title: g.note })), module2 ? /* @__PURE__ */ h(
     AskButton,
     {
       className: "chip ask askw",
       title: "Ask the assistant to prepare this week",
-      prompt: "For week " + w.week + " of " + run.id + " (" + module2.module_id + "), what should I teach and what should I revisit first?",
+      prompt: "For week " + w.week + " of " + run2.id + " (" + module2.module_id + "), what should I teach and what should I revisit first?",
       label: "Prepare"
     }
-  ) : null), concepts.length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), concepts.map((c, i) => /* @__PURE__ */ h("span", { className: "chip concept", key: c + i }, c))) : null, /* @__PURE__ */ h("div", { className: "cell", "data-col": "Lecture" }, lecture, deckGap ? /* @__PURE__ */ h(GapChip, { kind: "deck", tier, prompt: promptFor("deck", w, run), title: deckGap.note }) : null, lecture.length ? null : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Graded work" }, graded.length ? graded : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Outcomes" }, outcomeIds.length ? outcomeIds.map((id) => {
+  ) : null), concepts.length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), concepts.map((c, i) => /* @__PURE__ */ h("span", { className: "chip concept", key: c + i }, c))) : null, /* @__PURE__ */ h("div", { className: "cell", "data-col": "Lecture" }, lecture, deckGap ? /* @__PURE__ */ h(GapChip, { kind: "deck", tier, prompt: promptFor("deck", w, run2), title: deckGap.note }) : null, lecture.length ? null : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Graded work" }, graded.length ? graded : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Outcomes" }, outcomeIds.length ? outcomeIds.map((id) => {
     const how = taught.has(id) && assessed.has(id) ? "taught · assessed" : assessed.has(id) ? "assessed" : "taught";
     return /* @__PURE__ */ h("span", { key: id, className: "chip lo" + (assessed.has(id) ? " hit" : ""), title: (taught.get(id) || titles.get(id) || id) + " — " + how }, /* @__PURE__ */ h(Icon, { name: "outcome" }), id, /* @__PURE__ */ h("span", { className: "k" }, how));
   }) : /* @__PURE__ */ h(Dash, null)));
 }
 function BandRow(props) {
-  const { band, run, current, student, status } = props;
+  const { band, run: run2, current, student, status } = props;
   const a = band[0];
   const z = band[band.length - 1];
   const span = "Weeks " + a.week + "–" + z.week;
@@ -8143,7 +8187,7 @@ function BandRow(props) {
       className: "chip gap " + tierOf(a, current),
       "data-ask": "",
       onClick: () => press.ask(
-        span + " of " + run.id + " have no module. Propose what they should teach, given what comes before them and what falls due in them, as draft modules for me to read."
+        span + " of " + run2.id + " have no module. Propose what they should teach, given what comes before them and what falls due in them, as draft modules for me to read."
       )
     },
     /* @__PURE__ */ h(Icon, { name: "module" }),
@@ -8153,7 +8197,7 @@ function BandRow(props) {
 }
 function Term(props) {
   const { data, student, status } = props;
-  const run = data.run || {};
+  const run2 = data.run || {};
   const current = data.current_week ?? null;
   const undated = undatedOf(data);
   return /* @__PURE__ */ h(Fragment2, null, !student && undated.length ? /* @__PURE__ */ h("div", { className: "lead" }, /* @__PURE__ */ h("b", null, /* @__PURE__ */ h(Icon, { name: "misdated" }), " ", undated.length, " ", undated.length === 1 ? "thing is" : "things are", " not on the calendar yet"), undated.map(({ a, w }) => /* @__PURE__ */ h(Fragment2, { key: a.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: a, when: "no date" }), /* @__PURE__ */ h(StatusLine, { work: a, status }), /* @__PURE__ */ h(
@@ -8161,11 +8205,11 @@ function Term(props) {
     {
       kind: "deadline",
       tier: w ? tierOf(w, current) : "soon",
-      prompt: datesPrompt(a, run),
+      prompt: datesPrompt(a, run2),
       title: a.assessment_id + " has no dates" + (w ? "; its module is week " + w.week : "") + "."
     }
   )))) : null, /* @__PURE__ */ h("div", { className: "grid" }, /* @__PURE__ */ h("div", { className: "th" }, "Lecture"), /* @__PURE__ */ h("div", { className: "th" }, "Graded work"), /* @__PURE__ */ h("div", { className: "th" }, "Outcomes"), rowsOf(data.weeks || []).map(
-    (row) => row.band ? /* @__PURE__ */ h(BandRow, { key: "band" + row.band[0].week, band: row.band, run, current, student, status }) : /* @__PURE__ */ h(WeekRow, { key: row.week.week, w: row.week, data, run, current, student, status })
+    (row) => row.band ? /* @__PURE__ */ h(BandRow, { key: "band" + row.band[0].week, band: row.band, run: run2, current, student, status }) : /* @__PURE__ */ h(WeekRow, { key: row.week.week, w: row.week, data, run: run2, current, student, status })
   )), /* @__PURE__ */ h(StructureFoot, null));
 }
 function StructureFoot() {
@@ -8192,7 +8236,7 @@ function Figures(props) {
 }
 function Evidence(props) {
   const { data, evidence, status } = props;
-  const run = data.run || {};
+  const run2 = data.run || {};
   const weeks = data.weeks || [];
   const current = data.current_week ?? null;
   const ev = evidence || {};
@@ -8212,7 +8256,7 @@ function Evidence(props) {
     return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "wkhead " + (w.when === "current" ? "now" : w.when === "past" ? "past" : ""), id: "week-" + w.week }, /* @__PURE__ */ h("b", null, twoDigits(w.week)), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), titleOf(w) ? /* @__PURE__ */ h("h3", null, titleOf(w)) : /* @__PURE__ */ h("h3", { className: "none" }, "Unplanned"), w.when === "current" ? /* @__PURE__ */ h("span", { className: "pill now" }, "this week") : null, /* @__PURE__ */ h("span", { className: "askw" }, weak.length ? /* @__PURE__ */ h(
       AskButton,
       {
-        prompt: "In week " + w.week + " of " + run.id + (module2 ? " (" + module2.module_id + ")" : "") + ", the class is weakest on " + weak.map((c) => c.id).join(", ") + ". Read the approved evidence for those concepts and tell me what went wrong and what to revisit. Change nothing.",
+        prompt: "In week " + w.week + " of " + run2.id + (module2 ? " (" + module2.module_id + ")" : "") + ", the class is weakest on " + weak.map((c) => c.id).join(", ") + ". Read the approved evidence for those concepts and tell me what went wrong and what to revisit. Change nothing.",
         label: "Why did this week go wrong?"
       }
     ) : null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Due that week" }, (w.due || []).length ? /* @__PURE__ */ h("ul", { className: "facts" }, w.due.map((a) => /* @__PURE__ */ h("li", { key: a.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: a, when: "due " + shortDate2(a.due_on) }), /* @__PURE__ */ h(Figures, { a, w, work }), /* @__PURE__ */ h(StatusLine, { work: a, status })))) : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Concepts taught" }, conceptsOf(w).length ? /* @__PURE__ */ h("ul", { className: "facts" }, conceptsOf(w).map((c) => {
@@ -8653,7 +8697,7 @@ function Planning(props) {
   const mention = props.mention || null;
   const fresh = props.fresh || null;
   const chatTitle = props.chatTitle || null;
-  const run = data.run || {};
+  const run2 = data.run || {};
   const weeks = data.weeks || [];
   const editable = !student;
   const OFF = runOffset(data);
@@ -8749,7 +8793,7 @@ function Planning(props) {
         tone: "flag",
         icon: "module",
         text: span + " " + (r.length === 1 ? "has" : "have") + " no topic",
-        prompt: span + " of " + run.id + " " + (r.length === 1 ? "has" : "have") + " no module. Propose what " + (r.length === 1 ? "it" : "they") + " should teach, given what comes before and what falls due, as draft modules for me to read.",
+        prompt: span + " of " + run2.id + " " + (r.length === 1 ? "has" : "have") + " no module. Propose what " + (r.length === 1 ? "it" : "they") + " should teach, given what comes before and what falls due, as draft modules for me to read.",
         verb: r.length === 1 ? "Plan week " + r[0] : "Plan these weeks"
       });
     }
@@ -8761,7 +8805,7 @@ function Planning(props) {
         tone: "warn",
         icon: "quiz",
         text: span + ": nothing graded opens, runs or falls due",
-        prompt: span + " of " + run.id + " have no graded work opening, running or falling due. Should something be assessed there, given what those weeks teach? Propose it as a draft; change nothing else.",
+        prompt: span + " of " + run2.id + " have no graded work opening, running or falling due. Should something be assessed there, given what those weeks teach? Propose it as a draft; change nothing else.",
         verb: "Suggest an assessment"
       });
     }
@@ -8771,7 +8815,7 @@ function Planning(props) {
         tone: "flag",
         icon: "weight",
         text: grading.note || "The weights do not add up to 100%",
-        prompt: "The weights in " + run.id + " do not settle the grading policy: " + (grading.note || "they do not add up") + " Propose a correction and wait.",
+        prompt: "The weights in " + run2.id + " do not settle the grading policy: " + (grading.note || "they do not add up") + " Propose a correction and wait.",
         verb: "Fix the weights"
       });
     }
@@ -8967,7 +9011,7 @@ function Planning(props) {
     refused.current = false;
     end();
   };
-  const said = (text) => text + (run.id ? " in " + run.id : "");
+  const said = (text) => text + (run2.id ? " in " + run2.id : "");
   const topicWords = (m, n) => said(m.module_id + " “" + m.title + "” (week " + n + ")");
   const workWords = (a) => said(a.assessment_id + " “" + a.title + "” (" + (WORK_WORD[a.type] || a.type || "work") + (a.due_on ? ", due " + shortDate2(a.due_on) : "") + ")");
   const mentioned = (written) => {
@@ -9168,13 +9212,13 @@ function WorkLine(props) {
   return /* @__PURE__ */ h("li", null, /* @__PURE__ */ h(WorkChip, { work: a, when: verb + " " + shortDate2(date) }), /* @__PURE__ */ h(EditButton, { kind: "assessment", id: a.assessment_id, title: "Change its title or description" }), withHanded && got && got.enrolled ? /* @__PURE__ */ h("small", null, got.received, " of ", got.enrolled, " handed in") : null, showStatus ? /* @__PURE__ */ h(StatusLine, { work: a, status }) : null);
 }
 function DeckNeed(props) {
-  const { w, run } = props;
+  const { w, run: run2 } = props;
   const meets = w.meetings || [];
   if (!meets.length || meets.some((m) => (m.resources || []).some((r) => r.kind === "slides"))) return null;
-  return /* @__PURE__ */ h("div", { className: "need" }, /* @__PURE__ */ h(Icon, { name: "slides" }), /* @__PURE__ */ h("span", null, "No slides yet"), /* @__PURE__ */ h(AskButton, { prompt: promptFor("deck", w, run), label: "Draft slides", className: "chip ask strong" }));
+  return /* @__PURE__ */ h("div", { className: "need" }, /* @__PURE__ */ h(Icon, { name: "slides" }), /* @__PURE__ */ h("span", null, "No slides yet"), /* @__PURE__ */ h(AskButton, { prompt: promptFor("deck", w, run2), label: "Draft slides", className: "chip ask strong" }));
 }
 function Side(props) {
-  const { w, label, current, concepts, handed, status, run, onGo } = props;
+  const { w, label, current, concepts, handed, status, run: run2, onGo } = props;
   if (!w) {
     return /* @__PURE__ */ h("div", { className: "side empty" }, /* @__PURE__ */ h("small", null, label), /* @__PURE__ */ h("p", null, "Outside the run."));
   }
@@ -9182,10 +9226,10 @@ function Side(props) {
   return /* @__PURE__ */ h("div", { className: "side" }, /* @__PURE__ */ h("small", null, label, " · week ", w.week), /* @__PURE__ */ h("b", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), /* @__PURE__ */ h("ul", { className: "facts" }, (w.meetings || []).map((m) => /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate2(m.on) || "no date", " · ", m.type), /* @__PURE__ */ h("small", null, m.location || ""))), (w.opens || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "o" + a.assessment_id, a, verb: "opens", date: a.opens_on, withHanded: false, week: w, handed, status })), (w.due || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "d" + a.assessment_id, a, verb: "due", date: a.due_on, withHanded: true, handed, status })), taught ? conceptsOf(w).map((c) => {
     const x = concepts[c.id];
     return /* @__PURE__ */ h("li", { key: c.id }, /* @__PURE__ */ h(Icon, { name: "concept" }), /* @__PURE__ */ h("span", null, c.title || c.id), /* @__PURE__ */ h("small", null, x && x.class_mean !== null && x.class_mean !== void 0 ? "class " + pct(x.class_mean) + " · " + (x.coverage || "") : "not assessed yet"));
-  }) : null), /* @__PURE__ */ h(DeckNeed, { w, run }), /* @__PURE__ */ h("button", { type: "button", className: "link", onClick: () => onGo(w.week) }, "Make this the focus ›"));
+  }) : null), /* @__PURE__ */ h(DeckNeed, { w, run: run2 }), /* @__PURE__ */ h("button", { type: "button", className: "link", onClick: () => onGo(w.week) }, "Make this the focus ›"));
 }
 function Focus(props) {
-  const { w, run, current, at, concepts, handed, signals, status } = props;
+  const { w, run: run2, current, at, concepts, handed, signals, status } = props;
   const misdated = (w.gaps || []).find((g) => g.kind === "misdated");
   const meetings = w.meetings || [];
   const work = [
@@ -9196,19 +9240,19 @@ function Focus(props) {
     (p) => conceptsOf(p).map((c) => ({ c, x: concepts[c.id], week: p.week })).filter(({ x }) => x && x.class_mean !== null && x.class_mean !== void 0 && x.class_mean < REVISIT_BELOW)
   );
   const module2 = (w.modules || [])[0];
-  const prepare = "For week " + w.week + " of " + run.id + (module2 ? " (" + module2.module_id + ")" : "") + ", what should I teach and what should I revisit first?" + (revisit.length ? " The class is weakest on " + revisit.map((r) => r.c.title || r.c.id).join(" and ") + "." : "");
+  const prepare = "For week " + w.week + " of " + run2.id + (module2 ? " (" + module2.module_id + ")" : "") + ", what should I teach and what should I revisit first?" + (revisit.length ? " The class is weakest on " + revisit.map((r) => r.c.title || r.c.id).join(" and ") + "." : "");
   return /* @__PURE__ */ h("div", { className: "focus" }, /* @__PURE__ */ h("small", null, w.week === current ? "This week" : "Week " + w.week, " · ", shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), /* @__PURE__ */ h("h2", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), conceptsOf(w).length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), conceptsOf(w).map((c) => /* @__PURE__ */ h("span", { className: "chip concept", key: c.id }, c.title || c.id))) : null, meetings.length ? /* @__PURE__ */ h("ul", { className: "facts big" }, meetings.map((m) => {
     const resources = [...m.resources || []].sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
     return /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate2(m.on) || "no date", " · ", [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
   })) : /* @__PURE__ */ h("p", { className: "calm" }, "No meeting this week."), misdated ? misdated.ids.map((id) => {
     const m = meetings.find((x) => x.activity_id === id) || {};
     const word = m.type ? m.type.charAt(0).toUpperCase() + m.type.slice(1) : "A meeting";
-    return /* @__PURE__ */ h("div", { className: "need warn", title: misdated.note, key: id }, /* @__PURE__ */ h(Icon, { name: "misdated" }), /* @__PURE__ */ h("span", null, word, " dated ", shortDate2(m.on), ",", " ", m.on < w.starts_on ? "before this week starts (" + shortDate2(w.starts_on) + ")" : "after this week ends (" + shortDate2(w.ends_on) + ")"), /* @__PURE__ */ h(AskButton, { prompt: promptFor("misdated", w, run, id), label: "Check date", className: "chip ask strong" }));
-  }) : null, /* @__PURE__ */ h(DeckNeed, { w, run }), work.length ? /* @__PURE__ */ h("ul", { className: "facts" }, work) : /* @__PURE__ */ h("p", { className: "calm" }, "Nothing graded opens or falls due this week."), revisit.length || signals.length ? /* @__PURE__ */ h("div", { className: "revisit" }, /* @__PURE__ */ h("b", null, "Revisit first"), revisit.map((r) => /* @__PURE__ */ h("p", { key: r.c.id + r.week }, r.c.title || r.c.id, " — class ", pct(r.x.class_mean), " on ", r.x.coverage || "", " observed, taught in week ", r.week)), signals.length ? /* @__PURE__ */ h("p", null, signals.length, " open signal", signals.length === 1 ? "" : "s", ": ", signals[0].description || "") : null) : null, /* @__PURE__ */ h(AskButton, { prompt: prepare, label: "Prepare this week", className: "primary" }));
+    return /* @__PURE__ */ h("div", { className: "need warn", title: misdated.note, key: id }, /* @__PURE__ */ h(Icon, { name: "misdated" }), /* @__PURE__ */ h("span", null, word, " dated ", shortDate2(m.on), ",", " ", m.on < w.starts_on ? "before this week starts (" + shortDate2(w.starts_on) + ")" : "after this week ends (" + shortDate2(w.ends_on) + ")"), /* @__PURE__ */ h(AskButton, { prompt: promptFor("misdated", w, run2, id), label: "Check date", className: "chip ask strong" }));
+  }) : null, /* @__PURE__ */ h(DeckNeed, { w, run: run2 }), work.length ? /* @__PURE__ */ h("ul", { className: "facts" }, work) : /* @__PURE__ */ h("p", { className: "calm" }, "Nothing graded opens or falls due this week."), revisit.length || signals.length ? /* @__PURE__ */ h("div", { className: "revisit" }, /* @__PURE__ */ h("b", null, "Revisit first"), revisit.map((r) => /* @__PURE__ */ h("p", { key: r.c.id + r.week }, r.c.title || r.c.id, " — class ", pct(r.x.class_mean), " on ", r.x.coverage || "", " observed, taught in week ", r.week)), signals.length ? /* @__PURE__ */ h("p", null, signals.length, " open signal", signals.length === 1 ? "" : "s", ": ", signals[0].description || "") : null) : null, /* @__PURE__ */ h(AskButton, { prompt: prepare, label: "Prepare this week", className: "primary" }));
 }
 function Teaching(props) {
   const { data, evidence, status } = props;
-  const run = data.run || {};
+  const run2 = data.run || {};
   const weeks = data.weeks || [];
   const current = data.current_week ?? null;
   const at = (n) => weeks.find((w2) => w2.week === n) || null;
@@ -9226,8 +9270,8 @@ function Teaching(props) {
   if (!w) return /* @__PURE__ */ h("div", { className: "mode" });
   const prev = at(w.week - 1);
   const next = at(w.week + 1);
-  const shared = { current, concepts, handed, status, run, onGo: go };
-  return /* @__PURE__ */ h("div", { className: "mode" }, /* @__PURE__ */ h("section", { className: "trio-wrap" }, /* @__PURE__ */ h("div", { className: "stepper" }, prev ? /* @__PURE__ */ h("button", { type: "button", className: "chip", onClick: () => go(prev.week) }, "‹ Week ", prev.week) : null, /* @__PURE__ */ h("b", null, "Week ", w.week, " of ", weeks.length), current !== null && w.week !== current ? /* @__PURE__ */ h("button", { type: "button", className: "chip", onClick: () => go(current) }, "Back to this week") : null, next ? /* @__PURE__ */ h("button", { type: "button", className: "chip", onClick: () => go(next.week) }, "Week ", next.week, " ›") : null, /* @__PURE__ */ h("span", { className: "private" }, "Private — class figures from approved evidence only")), /* @__PURE__ */ h("div", { className: "trio" }, /* @__PURE__ */ h(Side, { w: prev, label: "Before", ...shared }), /* @__PURE__ */ h(Focus, { w, run, current, at, concepts, handed, signals, status }), /* @__PURE__ */ h(Side, { w: next, label: "After", ...shared }))));
+  const shared = { current, concepts, handed, status, run: run2, onGo: go };
+  return /* @__PURE__ */ h("div", { className: "mode" }, /* @__PURE__ */ h("section", { className: "trio-wrap" }, /* @__PURE__ */ h("div", { className: "stepper" }, prev ? /* @__PURE__ */ h("button", { type: "button", className: "chip", onClick: () => go(prev.week) }, "‹ Week ", prev.week) : null, /* @__PURE__ */ h("b", null, "Week ", w.week, " of ", weeks.length), current !== null && w.week !== current ? /* @__PURE__ */ h("button", { type: "button", className: "chip", onClick: () => go(current) }, "Back to this week") : null, next ? /* @__PURE__ */ h("button", { type: "button", className: "chip", onClick: () => go(next.week) }, "Week ", next.week, " ›") : null, /* @__PURE__ */ h("span", { className: "private" }, "Private — class figures from approved evidence only")), /* @__PURE__ */ h("div", { className: "trio" }, /* @__PURE__ */ h(Side, { w: prev, label: "Before", ...shared }), /* @__PURE__ */ h(Focus, { w, run: run2, current, at, concepts, handed, signals, status }), /* @__PURE__ */ h(Side, { w: next, label: "After", ...shared }))));
 }
 
 // client/course/view.jsx
@@ -9291,11 +9335,11 @@ function CourseView(props) {
     if (!answer) return /* @__PURE__ */ h("p", { className: "calm", style: { margin: "14px 20px" } }, "Reading the course model…");
     if (answer.error) return /* @__PURE__ */ h("p", { className: "calm", style: { margin: "14px 20px", color: "var(--flag)" } }, answer.error);
     const data = answer.data || {};
-    const run = data.run || {};
+    const run2 = data.run || {};
     const weeks = data.weeks || [];
     const current = data.current_week ?? null;
     const shown = answer.mode || mode;
-    const strip = /* @__PURE__ */ h("div", { className: "strip" }, /* @__PURE__ */ h("span", { className: "note" }, run.term || "", " · ", current ? "week " + current + " of " + weeks.length : weeks.length + " weeks", " · ", NOTES[shown]), shown === "term" && !answer.student ? /* @__PURE__ */ h(Tally, { data, current }) : null);
+    const strip = /* @__PURE__ */ h("div", { className: "strip" }, /* @__PURE__ */ h("span", { className: "note" }, run2.term || "", " · ", current ? "week " + current + " of " + weeks.length : weeks.length + " weeks", " · ", NOTES[shown]), shown === "term" && !answer.student ? /* @__PURE__ */ h(Tally, { data, current }) : null);
     const banner = answer.student && (shown === "term" || shown === "planning") ? /* @__PURE__ */ h("div", { className: "banner" }, /* @__PURE__ */ h("b", null, "Preview as student."), " The record alone — no hole, no note about what has not been written yet.") : null;
     if (shown === "planning") {
       return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Planning, { data, student: answer.student, locks: answer.locks, graph: answer.graph, mention: answer.student ? null : props.mention, fresh: answer.student ? null : props.fresh, chatTitle: props.chatTitle, runId, sessionId }), answer.student ? /* @__PURE__ */ h(StructureFoot, null) : /* @__PURE__ */ h("p", { className: "foot" }, "Structure only — nothing here is derived from student work. Moving a bar changes its ", /* @__PURE__ */ h("span", { className: "mono" }, "opens_at"), " and", " ", /* @__PURE__ */ h("span", { className: "mono" }, "due_at"), " and nothing else; accepting a draft is still changing ", /* @__PURE__ */ h("span", { className: "mono" }, "approval: draft"), " in its record."));
@@ -9996,7 +10040,7 @@ function WeightInput(props) {
 function BlockEditor(props) {
   const draft = props.draft;
   const ids = draft.components.map((c) => c.component_id);
-  const set = (index, field, value) => props.update((next) => {
+  const set2 = (index, field, value) => props.update((next) => {
     const was = next.components[index].component_id;
     next.components[index][field] = value;
     if (field === "component_id") {
@@ -10050,12 +10094,12 @@ function BlockEditor(props) {
         return h(
           "div",
           { key: index, className: "pp-gbblockrow", style: { paddingLeft: entry.depth * 16 + "px" } },
-          h("input", { className: "pp-gbinput pp-gbid", value: c.component_id, "aria-label": "Block id", onChange: (e) => set(index, "component_id", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "")) }),
-          h("input", { className: "pp-gbinput", value: c.title, "aria-label": "Block title", onChange: (e) => set(index, "title", e.target.value) }),
-          h(WeightInput, { value: c.weight, label: c.component_id + " weight", onChange: (v) => set(index, "weight", v === null ? 0 : v) }),
+          h("input", { className: "pp-gbinput pp-gbid", value: c.component_id, "aria-label": "Block id", onChange: (e) => set2(index, "component_id", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, "")) }),
+          h("input", { className: "pp-gbinput", value: c.title, "aria-label": "Block title", onChange: (e) => set2(index, "title", e.target.value) }),
+          h(WeightInput, { value: c.weight, label: c.component_id + " weight", onChange: (v) => set2(index, "weight", v === null ? 0 : v) }),
           h(
             "select",
-            { className: "pp-gbinput", value: c.parent || "", "aria-label": "Inside", onChange: (e) => set(index, "parent", e.target.value || null) },
+            { className: "pp-gbinput", value: c.parent || "", "aria-label": "Inside", onChange: (e) => set2(index, "parent", e.target.value || null) },
             h("option", { value: "" }, "— top —"),
             ids.filter((id) => id !== c.component_id).map((id) => h("option", { key: id, value: id }, id))
           ),
@@ -10066,7 +10110,7 @@ function BlockEditor(props) {
             inputMode: "decimal",
             "aria-label": "Out of, in the LMS",
             title: "What this block is out of in the LMS journal — ВСК is out of 100. Empty: no scale of its own.",
-            onChange: (e) => set(index, "points", e.target.value.trim() === "" ? null : Number(e.target.value))
+            onChange: (e) => set2(index, "points", e.target.value.trim() === "" ? null : Number(e.target.value))
           }),
           h(
             "span",
@@ -10106,7 +10150,7 @@ function FilingEditor(props) {
   const draft = props.draft;
   const options = gpTree(draft.components).map((entry) => ({ id: entry.component.component_id, label: "  ".repeat(entry.depth) + entry.component.component_id + " · " + entry.component.title }));
   const total = Object.values(draft.assignments).reduce((sum, a) => sum + Number(a.weight || 0), 0);
-  const set = (id, field, value) => props.update((next) => (next.assignments[id][field] = value, next));
+  const set2 = (id, field, value) => props.update((next) => (next.assignments[id][field] = value, next));
   return h(
     "div",
     { className: "pp-gbeditsec" },
@@ -10129,11 +10173,11 @@ function FilingEditor(props) {
           ),
           draft.components.length ? h(
             "select",
-            { className: "pp-gbinput", value: now.component || "", "aria-label": a.title + " block", onChange: (e) => set(a.assessment_id, "component", e.target.value || null) },
+            { className: "pp-gbinput", value: now.component || "", "aria-label": a.title + " block", onChange: (e) => set2(a.assessment_id, "component", e.target.value || null) },
             h("option", { value: "" }, "— none —"),
             options.map((o) => h("option", { key: o.id, value: o.id }, o.label))
           ) : null,
-          h(WeightInput, { value: now.weight, label: a.title + " weight", onChange: (v) => set(a.assessment_id, "weight", v) })
+          h(WeightInput, { value: now.weight, label: a.title + " weight", onChange: (v) => set2(a.assessment_id, "weight", v) })
         );
       })
     )
@@ -12030,9 +12074,9 @@ function Row(props) {
 }
 function CourseBlock(props) {
   const [open, setOpen] = React.useState(false);
-  const run = props.run;
-  const weekText = run && run.current_week ? "week " + run.current_week + " of " + run.weeks : null;
-  const sub = run ? [run.course_id, run.term, weekText].filter(Boolean).join(" · ") : props.subtitle;
+  const run2 = props.run;
+  const weekText = run2 && run2.current_week ? "week " + run2.current_week + " of " + run2.weeks : null;
+  const sub = run2 ? [run2.course_id, run2.term, weekText].filter(Boolean).join(" · ") : props.subtitle;
   return h(
     "div",
     { style: { position: "relative" } },
@@ -12049,14 +12093,14 @@ function CourseBlock(props) {
       h(
         "span",
         { className: "pp-nav-coursetitle" },
-        h("span", null, run ? run.title : props.fallbackTitle),
+        h("span", null, run2 ? run2.title : props.fallbackTitle),
         h(Icon2, { d: ICONS2.chevron, size: 14 })
       ),
       sub ? h("span", { className: "pp-nav-coursesub" }, sub) : null,
-      run && run.current_week && run.weeks ? h(
+      run2 && run2.current_week && run2.weeks ? h(
         "span",
         { className: "pp-nav-bar", "aria-hidden": "true" },
-        h("i", { style: { width: Math.min(100, Math.round(run.current_week / run.weeks * 100)) + "%" } })
+        h("i", { style: { width: Math.min(100, Math.round(run2.current_week / run2.weeks * 100)) + "%" } })
       ) : null
     ),
     open ? h(
@@ -12174,7 +12218,7 @@ function CourseNavigator(props) {
   const sessionId = workspace ? holding ? current : workspace.sessionIds.find((id) => list.byId[id] !== void 0) || null : null;
   const data = useNavigatorData(sessionId);
   const shown = useShownPlace();
-  const run = data && !data.error ? data.run : null;
+  const run2 = data && !data.error ? data.run : null;
   const sessions = React.useMemo(() => {
     if (!workspace) return [];
     return workspace.sessionIds.map((id) => list.byId[id]).filter((session) => visibleSession(session, current, archived)).sort((a, b) => b.updatedAt !== a.updatedAt ? b.updatedAt - a.updatedAt : a.id < b.id ? -1 : 1);
@@ -12185,11 +12229,11 @@ function CourseNavigator(props) {
   };
   const place = (request) => {
     if (!holding && workspace) props.startSession(workspace.workspaceId);
-    requestPlace({ ...request, run: run ? run.run_id : null });
+    requestPlace({ ...request, run: run2 ? run2.run_id : null });
   };
   const carry = (fresh) => {
     if (shown === null) return;
-    carryPlace({ mode: shown.mode, view: shown.view, chat: !fresh, compose: Boolean(fresh), run: run ? run.run_id : null });
+    carryPlace({ mode: shown.mode, view: shown.view, chat: !fresh, compose: Boolean(fresh), run: run2 ? run2.run_id : null });
   };
   const openChat = (sessionId2) => {
     if (sessionId2 !== current) carry(false);
@@ -12209,8 +12253,8 @@ function CourseNavigator(props) {
       { className: "pp-nav-rail" },
       h(
         "button",
-        { type: "button", className: "pp-nav-mono", title: run ? run.title : "Courses", onClick: props.expandSidebar },
-        run ? run.course_id.replace(/[^A-Z]/g, "").slice(0, 3) || "C" : "C"
+        { type: "button", className: "pp-nav-mono", title: run2 ? run2.title : "Courses", onClick: props.expandSidebar },
+        run2 ? run2.course_id.replace(/[^A-Z]/g, "").slice(0, 3) || "C" : "C"
       ),
       PLACES.map(
         (entry) => h(
@@ -12249,16 +12293,16 @@ function CourseNavigator(props) {
       "div",
       { className: "pp-nav-scroll" },
       workspaces.length ? h(CourseBlock, {
-        run,
+        run: run2,
         workspaces,
         workspaceId: workspace ? workspace.workspaceId : null,
         fallbackTitle: workspace ? workspace.title || workspace.path : "Courses",
         subtitle: notCourse ? "Not a course folder" : data ? data.run ? null : "No course run in this folder yet" : "Reading the course…",
         onPick: pick
       }) : h("div", { className: "pp-nav-quiet" }, "Add a course folder with Folders and search, below."),
-      run ? h(ThisWeek, { week: data.week, nextDue: data.next_due, runId: run.run_id }) : null,
-      run ? h("div", { className: "pp-nav-label" }, h("span", null, "Course")) : null,
-      run ? PLACES.map((entry) => {
+      run2 ? h(ThisWeek, { week: data.week, nextDue: data.next_due, runId: run2.run_id }) : null,
+      run2 ? h("div", { className: "pp-nav-label" }, h("span", null, "Course")) : null,
+      run2 ? PLACES.map((entry) => {
         const badge = badgeOf(entry.id);
         return h(Row, {
           key: entry.id,
@@ -12281,7 +12325,7 @@ function CourseNavigator(props) {
     h(
       "div",
       { className: "pp-nav-foot" },
-      run ? h(Row, {
+      run2 ? h(Row, {
         icon: SETTINGS.id,
         label: SETTINGS.label,
         hint: SETTINGS.hint,
@@ -12700,10 +12744,10 @@ function GradeBoard(props) {
     setSaid(null);
     fetch(url(path), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }).then((response) => response.json()).then((result) => {
       setBusy(null);
-      const stale = /no route \/api\/grade/.test(String(result.error || ""));
+      const stale2 = /no route \/api\/grade/.test(String(result.error || ""));
       const failed = Boolean(result.error) || !result.ok;
       setSaid(
-        failed ? { error: true, text: stale ? "The harness was started before grading existed. Restart it, then try again." : result.error || result.output } : { error: false, text: String(result.output || "Done.").split("\n").filter((line) => !/^wrote /.test(line)).join(" ") }
+        failed ? { error: true, text: stale2 ? "The harness was started before grading existed. Restart it, then try again." : result.error || result.output } : { error: false, text: String(result.output || "Done.").split("\n").filter((line) => !/^wrote /.test(line)).join(" ") }
       );
       setTick((value) => value + 1);
       props.onWrite();
@@ -13505,10 +13549,10 @@ function ScansTab(props) {
       body: JSON.stringify(body || {})
     }).then((response) => response.json()).then((result) => {
       setBusy(null);
-      const stale = /no route \/api\/scans/.test(String(result.error || ""));
+      const stale2 = /no route \/api\/scans/.test(String(result.error || ""));
       setSaid({
         error: Boolean(result.error) || !result.ok,
-        text: stale ? "The harness was started before this tab existed. Restart it, then try again." : result.error || result.output || "Done."
+        text: stale2 ? "The harness was started before this tab existed. Restart it, then try again." : result.error || result.output || "Done."
       });
       setTick((value) => value + 1);
       props.onWrite();
@@ -14065,7 +14109,7 @@ function BatchModal(props) {
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, [close, busy]);
-  const run = (step, extra) => {
+  const run2 = (step, extra) => {
     if (!assessment || busy) return;
     const sending = step === "transcribe" && /confirm/.test(extra || "");
     setBusy(step);
@@ -14122,7 +14166,7 @@ function BatchModal(props) {
           h(
             "div",
             { className: "pp-approverow" },
-            h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => run("plan") }, "1 · Plan: who, how long, what it costs")
+            h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => run2("plan") }, "1 · Plan: who, how long, what it costs")
           ),
           h(
             "div",
@@ -14135,17 +14179,17 @@ function BatchModal(props) {
             ),
             h(
               "button",
-              { type: "button", className: "pp-segbtn", disabled: Boolean(busy) || !consent, onClick: () => run("apply", "&consent=1") },
+              { type: "button", className: "pp-segbtn", disabled: Boolean(busy) || !consent, onClick: () => run2("apply", "&consent=1") },
               "2 · File them as their defences"
             )
           ),
           h(
             "div",
             { className: "pp-approverow" },
-            h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => run("transcribe") }, "3 · Quote the transcription"),
+            h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => run2("transcribe") }, "3 · Quote the transcription"),
             quoted2 ? h(
               "button",
-              { type: "button", className: "pp-segbtn pp-drec", disabled: Boolean(busy), onClick: () => run("transcribe", "&confirm=1") },
+              { type: "button", className: "pp-segbtn pp-drec", disabled: Boolean(busy), onClick: () => run2("transcribe", "&confirm=1") },
               "Send them and transcribe"
             ) : null
           ),
@@ -14217,9 +14261,9 @@ function UploadModal(props) {
       ).then((response) => response.json()).then((result) => {
         if (result.error) {
           setPhase("error");
-          const stale = /no route \/api\/upload/.test(String(result.error));
+          const stale2 = /no route \/api\/upload/.test(String(result.error));
           setText(
-            file.name + ": " + (stale ? "the harness was started before uploads existed. Restart it, then upload again." : result.error) + (stored.length ? "\n\n" + stored.length + " file(s) before it were uploaded." : "")
+            file.name + ": " + (stale2 ? "the harness was started before uploads existed. Restart it, then upload again." : result.error) + (stored.length ? "\n\n" + stored.length + " file(s) before it were uploaded." : "")
           );
           return;
         }
@@ -14466,7 +14510,7 @@ function ProfessorPane(props) {
     return () => window.removeEventListener(PLACE_EVENT, onPlace);
   }, [props.sessionId]);
   const dark = useDark();
-  const runs = useJson(scoped(BASE + "/api/runs", props.sessionId));
+  const runs2 = useJson(scoped(BASE + "/api/runs", props.sessionId));
   useWorkspaceWatch(props.sessionId);
   React.useEffect(() => {
     const onMessage = (event) => {
@@ -14486,12 +14530,12 @@ function ProfessorPane(props) {
       }
       if (data.kind === "defended") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
-        const run = currentRunRef.current;
-        if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+        const run2 = currentRunRef.current;
+        if (!run2 || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
         if (!["defended", "not_defended", "clear"].includes(data.outcome)) return;
         fetch(
           scoped(
-            BASE + "/api/defence/mark?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&outcome=" + encodeURIComponent(data.outcome),
+            BASE + "/api/defence/mark?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&outcome=" + encodeURIComponent(data.outcome),
             props.sessionId
           ),
           { method: "POST" }
@@ -14500,30 +14544,37 @@ function ProfessorPane(props) {
       }
       if (data.kind === "defence-audio") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
-        const run = currentRunRef.current;
-        if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+        const run2 = currentRunRef.current;
+        if (!run2 || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+        setDesk({ assessment: data.assessment, student: data.student, preparing: true });
+        const settle = (next) => setDesk((open) => open && open.assessment === data.assessment && open.student === data.student ? next : open);
         fetch(
           scoped(
-            BASE + "/api/defence/fork?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&inperson=1",
+            BASE + "/api/defence/fork?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&inperson=1",
             props.sessionId
           ),
           { method: "POST" }
         ).then((response) => response.json()).then((result) => {
           write(["defence"]);
           if (!result.ok) {
+            settle(null);
             window.alert(String(result.error || result.output || "the defence could not be started").trim().split("\n").slice(-2).join(" "));
             return;
           }
-          setDesk({ assessment: data.assessment, student: data.student });
-        }).catch(() => write(["defence"]));
+          settle({ assessment: data.assessment, student: data.student });
+        }).catch((error) => {
+          settle(null);
+          window.alert("the defence could not be started: " + String(error));
+          write(["defence"]);
+        });
         return;
       }
       if (data.kind === "homework-forks") {
-        const run = currentRunRef.current;
-        if (!run || !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+        const run2 = currentRunRef.current;
+        if (!run2 || !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
         fetch(
           scoped(
-            BASE + "/api/homework/forks?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment),
+            BASE + "/api/homework/forks?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment),
             props.sessionId
           ),
           { method: "POST" }
@@ -14537,8 +14588,8 @@ function ProfessorPane(props) {
       }
       if (data.kind === "defence-fork") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
-        const run = currentRunRef.current;
-        if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+        const run2 = currentRunRef.current;
+        if (!run2 || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
         if (typeof data.url !== "string" || !/^https:\/\/\S+$/.test(data.url.trim())) {
           window.alert("A fork link starts with https://");
           write(["defence"]);
@@ -14546,7 +14597,7 @@ function ProfessorPane(props) {
         }
         fetch(
           scoped(
-            BASE + "/api/defence/fork?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&url=" + encodeURIComponent(data.url.trim()),
+            BASE + "/api/defence/fork?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&url=" + encodeURIComponent(data.url.trim()),
             props.sessionId
           ),
           { method: "POST" }
@@ -14561,13 +14612,13 @@ function ProfessorPane(props) {
       }
       if (data.kind === "defence-check") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
-        const run = currentRunRef.current;
-        if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student)) || !id.test(String(data.criterion))) return;
+        const run2 = currentRunRef.current;
+        if (!run2 || !id.test(String(data.assessment)) || !id.test(String(data.student)) || !id.test(String(data.criterion))) return;
         if (!["confirmed", "partly", "not_confirmed", "clear"].includes(data.outcome)) return;
         const score = typeof data.score === "number" && Number.isFinite(data.score) ? "&score=" + data.score : "";
         fetch(
           scoped(
-            BASE + "/api/defence/mark?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&criterion=" + encodeURIComponent(data.criterion) + "&outcome=" + encodeURIComponent(data.outcome) + score,
+            BASE + "/api/defence/mark?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&criterion=" + encodeURIComponent(data.criterion) + "&outcome=" + encodeURIComponent(data.outcome) + score,
             props.sessionId
           ),
           { method: "POST" }
@@ -14576,11 +14627,11 @@ function ProfessorPane(props) {
       }
       if (data.kind === "defence") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
-        const run = currentRunRef.current;
-        if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+        const run2 = currentRunRef.current;
+        if (!run2 || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
         fetch(
           scoped(
-            BASE + "/api/defence/prepare?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student),
+            BASE + "/api/defence/prepare?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student),
             props.sessionId
           ),
           { method: "POST" }
@@ -14592,7 +14643,7 @@ function ProfessorPane(props) {
           }
           const said = String(result.error || result.output || "no output").trim().split("\n").slice(-3).join(" ");
           props.ask(
-            "/defend-submission " + data.assessment + " " + run + " " + data.student + " — the clone failed: " + said
+            "/defend-submission " + data.assessment + " " + run2 + " " + data.student + " — the clone failed: " + said
           );
         }).catch(() => write(["defence"]));
         return;
@@ -14638,24 +14689,25 @@ function ProfessorPane(props) {
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [props.ask]);
-  const courses = runs.phase === "ready" && !runs.value.error ? runs.value.courses || [] : [];
+  const courses = runs2.phase === "ready" && !runs2.value.error ? runs2.value.courses || [] : [];
   const options = [];
   for (const course of courses) {
-    for (const run of course.runs) {
+    for (const run2 of course.runs) {
       options.push({
-        runId: run.run_id,
+        runId: run2.run_id,
         courseId: course.course_id,
-        term: run.term,
-        label: course.course_id + " · " + run.term,
+        term: run2.term,
+        label: course.course_id + " · " + run2.term,
         title: course.title,
-        start: run.start_date,
-        end: run.end_date,
-        instructors: run.instructors || []
+        start: run2.start_date,
+        end: run2.end_date,
+        instructors: run2.instructors || []
       });
     }
   }
   const current = options.find((option) => option.runId === chosen) || options[0] || null;
   currentRunRef.current = current ? current.runId : null;
+  useCanvasWatch(current ? current.runId : null, props.sessionId);
   React.useEffect(() => {
     setNames(true);
   }, [current ? current.runId : null]);
@@ -14706,8 +14758,8 @@ function ProfessorPane(props) {
     setTimeout(() => deliverCarried(carried), 1500);
   });
   const body = () => {
-    if (runs.phase === "loading") return h(Message, null, "Reading the workspace…");
-    if (runs.value.error) return h(Message, { error: true }, runs.value.error);
+    if (runs2.phase === "loading") return h(Message, null, "Reading the workspace…");
+    if (runs2.value.error) return h(Message, { error: true }, runs2.value.error);
     if (current === null) {
       return h(
         Message,
@@ -14793,7 +14845,7 @@ function ProfessorPane(props) {
       h(
         "p",
         { className: "pp-sub" },
-        current ? current.runId + " · " + (current.start && current.end ? current.start + " to " + current.end : "term dates not recorded") : runs.phase === "loading" ? " " : "no offering"
+        current ? current.runId + " · " + (current.start && current.end ? current.start + " to " + current.end : "term dates not recorded") : runs2.phase === "loading" ? " " : "no offering"
       ),
       options.length > 1 ? h(
         "select",
@@ -14880,6 +14932,7 @@ function ProfessorPane(props) {
       student: desk.student,
       ask: props.ask,
       reload: deskVersion,
+      preparing: Boolean(desk.preparing),
       onClose: () => setDesk(null)
     }) : null,
     grading && current ? h(GradeBoard, {

@@ -3,6 +3,7 @@
  * button that opens it.
  */
 
+import { useCanvasWatch } from "./canvas-check.js";
 import { Message, useDark, useJson } from "./common.js";
 import { DefenceDesk } from "./defence-desk.js";
 import { Inspector } from "./inspector.js";
@@ -301,10 +302,15 @@ export function ProfessorPane(props) {
       // asked has no place to show them.
       // *Audio defence* on a homework with nothing handed in: a submission
       // with no link is recorded first, so the desk has one to file under.
+      // That is a CLI run of a few seconds, so the desk opens at once and
+      // reads its session only once the submission is there.
       if (data.kind === "defence-audio") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run = currentRunRef.current;
         if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
+        setDesk({ assessment: data.assessment, student: data.student, preparing: true });
+        const settle = (next) =>
+          setDesk((open) => (open && open.assessment === data.assessment && open.student === data.student ? next : open));
         fetch(
           scoped(
             BASE + "/api/defence/fork?run=" + encodeURIComponent(run) +
@@ -318,12 +324,17 @@ export function ProfessorPane(props) {
           .then((result) => {
             write(["defence"]);
             if (!result.ok) {
+              settle(null);
               window.alert(String(result.error || result.output || "the defence could not be started").trim().split("\n").slice(-2).join(" "));
               return;
             }
-            setDesk({ assessment: data.assessment, student: data.student });
+            settle({ assessment: data.assessment, student: data.student });
           })
-          .catch(() => write(["defence"]));
+          .catch((error) => {
+            settle(null);
+            window.alert("the defence could not be started: " + String(error));
+            write(["defence"]);
+          });
         return;
       }
       // *Find forks*: the starter's public forks, looked up on GitHub by the
@@ -513,6 +524,10 @@ export function ProfessorPane(props) {
   }
   const current = options.find((option) => option.runId === chosen) || options[0] || null;
   currentRunRef.current = current ? current.runId : null;
+
+  // Keep the run checked against Canvas whichever page is open, not only
+  // when the Gradebook is: a finished check redraws every Canvas count.
+  useCanvasWatch(current ? current.runId : null, props.sessionId);
 
   // Switching run returns to the default rather than carrying the last
   // press across. It matters in one direction now: a professor who pressed
@@ -810,6 +825,7 @@ export function ProfessorPane(props) {
           student: desk.student,
           ask: props.ask,
           reload: deskVersion,
+          preparing: Boolean(desk.preparing),
           onClose: () => setDesk(null),
         })
       : null,
