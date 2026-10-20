@@ -142,6 +142,13 @@ export interface PlanPaper {
   confidence?: string;
   /** Set by `scans names` (src/scan-names.ts): the model that read the cover, when it did. */
   read_by?: string;
+  /**
+   * Set by `scans names` when this range's cover is not its first page: the
+   * same pages with the cover first, for a person to copy into `pages` once
+   * they have looked. Never applied by itself — a cover inside a range can also
+   * be the next student's, where the split drifted.
+   */
+  reorder?: string;
   /** Degrees to turn a page by, keyed by its page number in the file. */
   rotate?: Record<string, number>;
   note?: string;
@@ -190,6 +197,18 @@ export const parsePages = (spec: string | number): number[] => {
     }
   }
   return pages;
+};
+
+/** The other way: [2, 1, 3, 4, 5] → `2,1,3-5`, runs going up written as ranges. */
+export const pagesSpec = (pages: number[]): string => {
+  const parts: string[] = [];
+  for (let start = 0; start < pages.length; ) {
+    let end = start;
+    while (end + 1 < pages.length && pages[end + 1] === pages[end]! + 1) end += 1;
+    parts.push(end > start ? `${pages[start]}-${pages[end]}` : String(pages[start]));
+    start = end + 1;
+  }
+  return parts.join(",");
 };
 
 const range = (from: number, to: number): string => (from === to ? `${from}` : `${from}-${to}`);

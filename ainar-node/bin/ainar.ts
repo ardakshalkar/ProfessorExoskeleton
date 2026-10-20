@@ -2805,6 +2805,12 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           `\n${count("named")} named, ${count("check")} to check, ${count("unparsed") + count("failed")} not read; ` +
             `about $${usd.toFixed(3)} at list price. Replies kept in ${join(place.inbox, "names.json")}.`,
         );
+        const reordered = results.filter((entry) => entry.problems.some((problem) => problem.includes("reorder suggested"))).length;
+        if (reordered)
+          out(
+            `${reordered} paper(s) have their cover inside the range: the plan suggests an order in \`reorder:\`. ` +
+              "Look at those pages, copy it into `pages:` if the sheets were only swapped, and run `scans names` again.",
+          );
         out(
           `Next: \`scans apply ${runId} --assessment ${assessmentId}\` matches each name to the roster. ` +
             "A paper marked to check carries a note in the plan; the Scans tab shows its crop.",

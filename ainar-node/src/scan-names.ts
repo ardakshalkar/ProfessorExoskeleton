@@ -21,7 +21,11 @@
  * and a `note` when the reading needs a person: no name found, a name in
  * another hand,
  * a first page that is not a cover (the split has drifted), a low-confidence
- * read. It never writes `student`: matching stays `scans apply`'s, and a paper
+ * read. When the first page is not a cover it reads the tops of the range's
+ * other pages until one is, and suggests the order with that page first in
+ * `reorder:` (sheets put back 2,1,3,4) — a suggestion only, and none when a
+ * neighbouring range also starts off its cover, which is drift, not a swap.
+ * It never writes `student`: matching stays `scans apply`'s, and a paper
  * someone has already said who it is (name, number or student) is left alone
  * unless `--force` asks for it to be read again. The replies are kept in the
  * private `_inbox/names.json`.
@@ -33,7 +37,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { PDFDocument } from "pdf-lib";
 import { bandLayout, estimateCost, parseReply, type ContentPart, type Reader, type Usage } from "./scan-read.ts";
-import { nameKey, parsePages, readPlan, writePlan, type PlanPaper, type ScanPlace } from "./scans.ts";
+import { nameKey, pagesSpec, parsePages, readPlan, writePlan, type PlanPaper, type ScanPlace } from "./scans.ts";
 
 const run = promisify(execFile);
 
@@ -110,10 +114,19 @@ const said = (paper: PlanPaper): boolean => Boolean(paper.name || paper.also?.le
  * Write one reading into a plan entry. Returns what a person should look at,
  * empty when the reading can go to `scans apply` as it is.
  */
+/** The note beside a `reorder:`; `readNames` takes it back when the neighbours say the split drifted. */
+export const reorderNote = (cover: number): string =>
+  `the cover looks like page ${cover}, not the range's first — if the sheets were only swapped, copy \`reorder:\` into \`pages:\` and run \`scans names\` again; look at page ${cover} first`;
+export const DRIFT_NOTE = "the ranges either side also start off a cover — more likely the split drifted than sheets were swapped, so no order is suggested";
+
+/** The range with its cover moved to the front, the rest in the order they were. */
+export const suggestOrder = (pages: number[], cover: number): string =>
+  pagesSpec([cover, ...pages.filter((page) => page !== cover)]);
+
 export const fillPaper = (
   paper: PlanPaper,
   reading: any,
-  context: { readBy: string; variants: string[] },
+  context: { readBy: string; variants: string[]; cover?: number },
 ): { paper: PlanPaper; problems: string[] } => {
   const problems: string[] = [];
   const name = typeof reading?.name_as_written === "string" ? reading.name_as_written.replace(/\s+/g, " ").trim() : "";
@@ -139,6 +152,7 @@ export const fillPaper = (
   delete next.number;
   delete next.note;
   delete next.also;
+  delete next.reorder;
   if (cover && number) next.number = number;
   if (cover && name) next.name = name;
   if (cover && others.length) next.also = [...new Set<string>(others.map((entry: { text: string }) => entry.text))];
@@ -146,7 +160,13 @@ export const fillPaper = (
   next.read_by = context.readBy;
   // A note `plan` wrote (a short last range) survives; one an earlier reading wrote is replaced.
   const notes: string[] = paper.note && !paper.read_by ? [paper.note] : [];
-  if (!cover) {
+  if (!cover && context.cover) {
+    // The cover is inside the range: sheets put back out of order, or the
+    // next student's paper starting early. Suggested, never applied.
+    next.reorder = suggestOrder(parsePages(paper.pages), context.cover);
+    notes.push(reorderNote(context.cover));
+    problems.push(`not a cover — reorder suggested: ${next.reorder}`);
+  } else if (!cover) {
     notes.push("this range's first page does not look like a cover — the split may have drifted here");
     problems.push("not a cover");
   } else if (!name && !number && !others.length) {
@@ -226,17 +246,33 @@ export const readNames = async (context: NamesContext): Promise<NameRead[]> => {
     const pdf = join(context.place.inbox, file);
     const work = join(context.place.inbox, "_render", `names-${file}-${pages}`.replace(/[^\w.-]/g, "_"));
     try {
-      const first = parsePages(pages)[0]!;
-      const bands = await render(pdf, first, work);
-      const reply = await context.reader(nameRequest(prompt, bands));
-      const reading = parseReply(reply.text);
-      const usd = estimateCost(reply.usage, new Date(reply.at));
-      log[`${file}#${pages}`] = { read_by: readBy, served_by: reply.model, at: reply.at, ms: reply.ms, usage: reply.usage, reading, raw: reading ? undefined : reply.text };
+      const all = parsePages(pages);
+      const look = async (page: number, key: string) => {
+        const reply = await context.reader(nameRequest(prompt, await render(pdf, page, join(work, String(page)))));
+        const reading = parseReply(reply.text);
+        log[key] = { read_by: readBy, served_by: reply.model, at: reply.at, ms: reply.ms, usage: reply.usage, reading, raw: reading ? undefined : reply.text };
+        return { reply, reading, usd: estimateCost(reply.usage, new Date(reply.at)) };
+      };
+      const { reply, reading, usd } = await look(all[0]!, `${file}#${pages}`);
       const base = { file, pages, usage: reply.usage, usd, ms: reply.ms };
       if (!reading) return { ...base, status: "unparsed", problems: ["the reply was not JSON — kept in names.json"] };
+      // The first page is not a cover: look for one among the range's other
+      // pages, in order, so a person gets an order to check instead of a hunt.
+      let cover: number | undefined;
+      if (reading.is_first_page === false) {
+        for (const page of all.slice(1)) {
+          const other = await look(page, `${file}#${pages}@${page}`);
+          base.usd += other.usd;
+          base.ms += other.reply.ms;
+          if (other.reading?.is_first_page === true) {
+            cover = page;
+            break;
+          }
+        }
+      }
       const source = plan.sources.find((entry) => entry.file === file)!;
       const index = source.papers.findIndex((paper) => String(paper.pages) === pages);
-      const filled = fillPaper(source.papers[index]!, reading, { readBy, variants: context.variants });
+      const filled = fillPaper(source.papers[index]!, reading, { readBy, variants: context.variants, cover });
       source.papers[index] = filled.paper;
       return { ...base, status: filled.problems.length ? "check" : "named", problems: filled.problems, confidence: filled.paper.confidence };
     } catch (error) {
@@ -256,6 +292,22 @@ export const readNames = async (context: NamesContext): Promise<NameRead[]> => {
     }),
   );
   rmSync(join(context.place.inbox, "_render"), { recursive: true, force: true });
+  // Swapped sheets are one paper's trouble; a split that drifted makes every
+  // range after it start off its cover. A suggestion beside a neighbour that
+  // also starts off a cover would move the next student's cover into this
+  // paper, so it is taken back.
+  const offCover = (paper: PlanPaper | undefined) => Boolean(paper?.reorder || paper?.note?.includes("does not look like a cover"));
+  for (const source of plan.sources) {
+    source.papers.forEach((paper, index) => {
+      if (!paper.reorder || !(offCover(source.papers[index - 1]) || offCover(source.papers[index + 1]))) return;
+      const cover = parsePages(paper.reorder)[0]!;
+      paper.note = paper.note!.replace(reorderNote(cover), DRIFT_NOTE);
+      const result = results.find((entry) => entry.file === source.file && entry.pages === String(paper.pages));
+      if (result) result.problems = result.problems.map((problem) => (problem.startsWith("not a cover") ? "not a cover — the split looks drifted" : problem));
+    });
+  }
+  // Second pass, so a pair of neighbours both lose their suggestion.
+  for (const source of plan.sources) for (const paper of source.papers) if (paper.note?.includes(DRIFT_NOTE)) delete paper.reorder;
   writePlan(context.place, plan);
   writeFileSync(logPath, JSON.stringify(log, null, 1) + "\n");
   const order = (entry: NameRead) => `${entry.file}#${String(parsePages(entry.pages)[0]).padStart(5, "0")}`;

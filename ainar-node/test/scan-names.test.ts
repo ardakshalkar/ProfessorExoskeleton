@@ -10,8 +10,8 @@ import { test } from "node:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildNamePrompt, fillPaper, nameRequest, nameTargets, readNames } from "../src/scan-names.ts";
-import { readPlan, scanPlace, writePlan } from "../src/scans.ts";
+import { buildNamePrompt, fillPaper, nameRequest, nameTargets, readNames, suggestOrder } from "../src/scan-names.ts";
+import { pagesSpec, parsePages, readPlan, scanPlace, writePlan } from "../src/scans.ts";
 
 const READ_BY = "test-model · effort low · 2026-10-06";
 
@@ -171,4 +171,87 @@ test("a run sends each first page, fills the plan and keeps the replies", async 
   const log = JSON.parse(readFileSync(join(place.inbox, "names.json"), "utf-8"));
   assert.equal(log["batch.pdf#9-10"].raw, "not json");
   assert.equal(existsSync(join(place.inbox, "_render")), false);
+});
+
+// ------------------------------------------------------------------ order
+
+test("a suggested order puts the cover first and keeps the rest as they were", () => {
+  assert.equal(pagesSpec([2, 1, 3, 4]), "2,1,3-4");
+  assert.equal(pagesSpec([5, 6, 7]), "5-7");
+  assert.equal(pagesSpec([9]), "9");
+  assert.equal(suggestOrder([1, 2, 3, 4], 2), "2,1,3-4");
+  assert.equal(suggestOrder([5, 6, 7, 8], 8), "8,5-7");
+  assert.deepEqual(parsePages(suggestOrder([1, 2, 3, 4], 3)), [3, 1, 2, 4], "it reads back as the same pages");
+});
+
+test("a cover found inside the range is suggested, never applied, and no name is written", () => {
+  const { paper, problems } = fillPaper(
+    { pages: "1-4" },
+    { is_first_page: false, name_as_written: "", confidence: "high" },
+    { readBy: READ_BY, variants: [], cover: 2 },
+  );
+  assert.equal(paper.pages, "1-4");
+  assert.equal(paper.reorder, "2,1,3-4");
+  assert.equal(paper.name, undefined);
+  assert.match(paper.note!, /looks like page 2/);
+  assert.deepEqual(problems, ["not a cover — reorder suggested: 2,1,3-4"]);
+  const reread = fillPaper({ ...paper, pages: "2,1,3-4" }, { is_first_page: true, name_as_written: "Eve", confidence: "high" }, { readBy: READ_BY, variants: [] });
+  assert.equal(reread.paper.reorder, undefined, "once the pages are put right the suggestion goes");
+  assert.equal(reread.paper.name, "Eve");
+});
+
+test("a run looks for the cover inside a range, and suggests nothing where the split drifted", async () => {
+  const place = scanPlace(mkdtempSync(join(tmpdir(), "scan-order-")), "RUN-1", "ASSESSMENT-Q");
+  mkdirSync(place.inbox, { recursive: true });
+  writeFileSync(join(place.inbox, "batch.pdf"), "not really a pdf");
+  writePlan(place, {
+    course_version_id: "RUN-1",
+    assessment_id: "ASSESSMENT-Q",
+    sources: [
+      {
+        file: "batch.pdf",
+        page_count: 16,
+        checksum: "sha256:x",
+        // 1-4: sheets swapped. 5-8: in order. 9-12 and 13-16: an extra sheet at 9 shifted both.
+        papers: [{ pages: "1-4" }, { pages: "5-8" }, { pages: "9-12" }, { pages: "13-16" }],
+      },
+    ],
+  });
+  const covers = new Set([2, 5, 10, 14]);
+  const rendered: number[] = [];
+  const results = await readNames({
+    place,
+    title: "Quiz",
+    courseId: "C-1",
+    variants: [],
+    model: "test-model",
+    effort: "low",
+    now: "2026-10-20T10:00:00Z",
+    render: async (_pdf, page) => {
+      rendered.push(page);
+      return [];
+    },
+    reader: async () => ({
+      text: JSON.stringify({ is_first_page: covers.has(rendered.at(-1)!), name_as_written: `Name ${rendered.at(-1)}`, confidence: "high" }),
+      model: "test-model",
+      usage: { prompt_tokens: 100, completion_tokens: 10 },
+      ms: 5,
+      at: "2026-10-20T12:00:00Z",
+    }),
+    concurrency: 1,
+  });
+  assert.deepEqual(rendered, [1, 2, 5, 9, 10, 13, 14], "it stops at the first cover it finds");
+  const papers = readPlan(place)!.sources[0]!.papers;
+  assert.equal(papers[0]!.reorder, "2,1,3-4");
+  assert.equal(papers[0]!.name, undefined);
+  assert.equal(papers[1]!.name, "Name 5");
+  assert.equal(papers[2]!.reorder, undefined);
+  assert.equal(papers[3]!.reorder, undefined);
+  assert.match(papers[2]!.note!, /drifted/);
+  assert.doesNotMatch(papers[2]!.note!, /copy `reorder:`/);
+  assert.deepEqual(
+    results.map((entry) => entry.problems),
+    [["not a cover — reorder suggested: 2,1,3-4"], [], ["not a cover — the split looks drifted"], ["not a cover — the split looks drifted"]],
+  );
+  assert.ok(readFileSync(join(place.inbox, "names.json"), "utf-8").includes("batch.pdf#1-4@2"), "every page looked at is logged");
 });

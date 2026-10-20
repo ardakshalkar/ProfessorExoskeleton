@@ -127,6 +127,15 @@ prints pages and confidence, never a name. It reads only entries nobody has
 filled; `--force` reads the unplaced ones again. A pile of 51 covers costs
 about ten cents.
 
+**Sheets out of order.** A range whose first page is not a cover makes
+`names` read the tops of its other pages until one is. If it finds the cover
+there, it writes `reorder: "2,1,3-4"` beside `pages:`, the same pages with the
+cover first, and no name. That is a suggestion: look at the cover page it
+names. If only the sheets were swapped, copy `reorder` into `pages`
+and run `names` again; it reads the paper then. When neighbouring ranges also
+start off their covers, the split has drifted rather than sheets swapped, and
+no order is suggested: fix the ranges from the first one that is off.
+
 It places nobody: `apply` still does the matching. On the 2026-10-05 Quiz 2
 pile of CSS-4007, every paper it placed matched a reading made by hand, and it
 left about one in four waiting that a careful look could place. Those, and every
