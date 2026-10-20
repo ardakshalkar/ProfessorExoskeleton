@@ -442,7 +442,7 @@ export function RecordingPanel(props) {
   const recording = desk.recording;
   const wholeMarks = desk.wholeMarks;
   const whole = recording.question === "Q0";
-  const phase = desk.professorTalking ? "professor" : desk.manualLevel > 0.02 ? "speaking" : "waiting";
+  const phase = desk.professorTalking ? "professor" : desk.manualVoiced ? "speaking" : "waiting";
   return h(
     "div",
     { className: "pp-dhands pp-dhandsdots" },

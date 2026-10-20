@@ -45,7 +45,7 @@ export function DefenceStage(props) {
           ? "idle"
           : desk.professorTalking
             ? "professor"
-            : desk.manualLevel > 0.02
+            : desk.manualVoiced
               ? "speaking"
               : "waiting"
         : // Transcribing a recording is the desk working, not waiting for a

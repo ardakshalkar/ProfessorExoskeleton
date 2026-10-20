@@ -35,6 +35,9 @@ const RECORDING_TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "a
 /** How long a proposed next question waits for the professor before it is asked. */
 const PROPOSE_MS = 5000;
 
+/** How long a manual take stays "speaking" after the last loud reading. */
+const VOICE_HOLD_MS = 1500;
+
 /**
  * A choice remembered in this browser only, read once when the desk opens.
  * Storage can be unavailable (a private window, a blocked origin); then the
@@ -84,6 +87,10 @@ export function DefenceDesk(props) {
   const [tick, setTick] = React.useState(0);
   const [elapsed, setElapsed] = React.useState(0);
   const [manualLevel, setManualLevel] = React.useState(0);
+  // Whether the student is speaking in a manual take: on at the first loud
+  // reading, off only after VOICE_HOLD_MS of quiet, so a breath between
+  // words does not flip the dots back to the microphone.
+  const [manualVoiced, setManualVoiced] = React.useState(false);
   // The stage (big button, live transcript, everything else in a drawer)
   // or the list (every control and question in one column). The list is
   // one press away.
@@ -337,6 +344,7 @@ export function DefenceDesk(props) {
           analyser.fftSize = 2048;
           audio.createMediaStreamSource(stream).connect(analyser);
           const samples = new Float32Array(analyser.fftSize);
+          let lastLoud = 0;
           meter = {
             audio,
             timer: setInterval(() => {
@@ -345,6 +353,9 @@ export function DefenceDesk(props) {
               for (let index = 0; index < samples.length; index += 1) sum += samples[index] * samples[index];
               const level = Math.sqrt(sum / samples.length);
               setManualLevel(level);
+              const now = Date.now();
+              if (level > 0.02) lastLoud = now;
+              setManualVoiced(now - lastLoud < VOICE_HOLD_MS);
               heard(level, 0.02);
             }, 150),
           };
@@ -364,6 +375,7 @@ export function DefenceDesk(props) {
             if (meter.audio.state !== "closed") meter.audio.close();
           }
           setManualLevel(0);
+          setManualVoiced(false);
           recorder.current = null;
           setRecording(null);
           showOnScreen(null, "idle");
@@ -815,6 +827,7 @@ export function DefenceDesk(props) {
     sending,
     elapsed,
     manualLevel,
+    manualVoiced,
     handsFree,
     proposal,
     setProposal,

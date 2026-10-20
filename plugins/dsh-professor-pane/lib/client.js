@@ -2079,7 +2079,7 @@ function RecordingPanel(props) {
   const recording = desk.recording;
   const wholeMarks = desk.wholeMarks;
   const whole = recording.question === "Q0";
-  const phase = desk.professorTalking ? "professor" : desk.manualLevel > 0.02 ? "speaking" : "waiting";
+  const phase = desk.professorTalking ? "professor" : desk.manualVoiced ? "speaking" : "waiting";
   return h(
     "div",
     { className: "pp-dhands pp-dhandsdots" },
@@ -2186,7 +2186,7 @@ function DefenceStage(props) {
   const consented = desk.consented;
   const mode = desk.mode;
   const wholeRec = Boolean(recording && recording.question === "Q0");
-  const stagePhase = proposal ? "proposing" : handsFree ? handsFree.phase : recording ? recording.paused ? "idle" : desk.professorTalking ? "professor" : desk.manualLevel > 0.02 ? "speaking" : "waiting" : (
+  const stagePhase = proposal ? "proposing" : handsFree ? handsFree.phase : recording ? recording.paused ? "idle" : desk.professorTalking ? "professor" : desk.manualVoiced ? "speaking" : "waiting" : (
     // Transcribing a recording is the desk working, not waiting for a
     // voice: a microphone there read as "still listening".
     splitting || desk.sending ? "thinking" : "idle"
@@ -2375,6 +2375,7 @@ function turnStep(state, level, now, options) {
 // client/defence-desk.js
 var RECORDING_TYPES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"];
 var PROPOSE_MS = 5e3;
+var VOICE_HOLD_MS = 1500;
 function useRememberedChoice(key, read) {
   const [value, setValue] = React.useState(() => {
     try {
@@ -2401,6 +2402,7 @@ function DefenceDesk(props) {
   const [tick, setTick] = React.useState(0);
   const [elapsed, setElapsed] = React.useState(0);
   const [manualLevel, setManualLevel] = React.useState(0);
+  const [manualVoiced, setManualVoiced] = React.useState(false);
   const [view, chooseView] = useRememberedChoice("professor-pane.defence-view", (stored) => stored || "stage");
   const [drawer, setDrawer] = React.useState(true);
   const [mode, chooseMode] = useRememberedChoice("professor-pane.defence-mode", (stored) => stored === "questions" ? "questions" : "whole");
@@ -2574,6 +2576,7 @@ function DefenceDesk(props) {
         analyser.fftSize = 2048;
         audio.createMediaStreamSource(stream).connect(analyser);
         const samples = new Float32Array(analyser.fftSize);
+        let lastLoud = 0;
         meter = {
           audio,
           timer: setInterval(() => {
@@ -2582,6 +2585,9 @@ function DefenceDesk(props) {
             for (let index = 0; index < samples.length; index += 1) sum += samples[index] * samples[index];
             const level = Math.sqrt(sum / samples.length);
             setManualLevel(level);
+            const now2 = Date.now();
+            if (level > 0.02) lastLoud = now2;
+            setManualVoiced(now2 - lastLoud < VOICE_HOLD_MS);
             heard(level, 0.02);
           }, 150)
         };
@@ -2601,6 +2607,7 @@ function DefenceDesk(props) {
           if (meter.audio.state !== "closed") meter.audio.close();
         }
         setManualLevel(0);
+        setManualVoiced(false);
         recorder.current = null;
         setRecording(null);
         showOnScreen(null, "idle");
@@ -2959,6 +2966,7 @@ function DefenceDesk(props) {
     sending,
     elapsed,
     manualLevel,
+    manualVoiced,
     handsFree,
     proposal,
     setProposal,
