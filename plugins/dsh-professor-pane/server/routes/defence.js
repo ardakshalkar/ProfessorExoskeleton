@@ -18,6 +18,7 @@ import {
   readPin,
   readSession,
   recordConsent,
+  recordInPersonSubmission,
   saveAnswer,
   setTranscript,
   transcribeTake,
@@ -424,10 +425,22 @@ export const routes = [
         return sendJson(res, 200, { error: "An assessment and a student id, please." });
       }
       if (!inPerson && !/^https:\/\/\S{3,300}$/.test(link)) return sendJson(res, 200, { error: "A fork link starts with https://" });
+      let loaded;
       try {
-        loadedRun(workspace, runId); // the run has to be this workspace's
+        loaded = loadedRun(workspace, runId); // the run has to be this workspace's
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
+      // In person: written here, in this process, from the course already
+      // loaded — the CLI took seconds to start and read the course again,
+      // and the desk waited on it.
+      if (inPerson) {
+        try {
+          const kept = recordInPersonSubmission(root, loaded.bundle, runId, assessmentId, studentId);
+          return sendJson(res, 200, { ok: true, output: `${kept.submission_id}: ${kept.created ? "in person, no link" : "already recorded"}` });
+        } catch (error) {
+          return sendJson(res, 200, { ok: false, error: String(error?.message ?? error) });
+        }
       }
       return runScans(
         ["defence", "fork", runId, "--assessment", assessmentId, "--student", studentId, ...(inPerson ? ["--in-person"] : ["--url", link])],

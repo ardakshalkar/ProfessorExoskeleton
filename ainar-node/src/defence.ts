@@ -45,6 +45,9 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { dirname, extname, join, relative, sep } from "node:path";
 import { promisify } from "node:util";
 import { parse, stringify } from "yaml";
+import { type CourseBundle, enrolledIn } from "./bundle.ts";
+import { pulledSubmissionId } from "./lms/pull.ts";
+import { writeRecords } from "./records-write.ts";
 import { parseReply } from "./scan-read.ts";
 import { evaluationId } from "./grade-board.ts";
 import { type Range, type Segment, type Transcriber, type Transcript, labelSpeakers, studentWords } from "./transcribe.ts";
@@ -1358,6 +1361,52 @@ export const defenceEvaluations = (context: {
     });
   }
   return { evaluations, decided };
+};
+
+// --------------------------------------------------------------------------
+// A defence in person, with nothing handed in
+// --------------------------------------------------------------------------
+
+/**
+ * The submission an in-person defence files under, when the student handed
+ * nothing in anywhere: the existing one if there is one, else a new one with
+ * no link, under the id the grade sheet gives it. Shared by `ainar defence
+ * fork --in-person` and the pane's *Audio defence*, which calls it in its own
+ * process rather than waiting seconds for the CLI to start and load the course.
+ */
+export const recordInPersonSubmission = (
+  root: string,
+  bundle: CourseBundle,
+  runId: string,
+  assessmentId: string,
+  studentId: string,
+): { submission_id: string; created: boolean; written: string[] } => {
+  const assessment = (bundle.assessments as any[]).find(
+    (entry) => entry.assessment_id === assessmentId && entry.course_version_id === runId,
+  );
+  if (!assessment) throw new Error(`${runId} has no assessment ${assessmentId}`);
+  if (!enrolledIn(bundle, runId).some((entry) => entry.student_id === studentId)) {
+    throw new Error(`${studentId} is not enrolled in ${runId}`);
+  }
+  const existing = (bundle.submissions as any[])
+    .filter((entry) => entry.assessment_id === assessmentId && entry.student_id === studentId)
+    .sort((a, b) => (b.attempt ?? 1) - (a.attempt ?? 1))[0];
+  if (existing) return { submission_id: existing.submission_id, created: false, written: [] };
+  const id = pulledSubmissionId(studentId, assessmentId);
+  const courseDir = join(root, "courses", (bundle.course as any).course_id as string);
+  const written = writeRecords(courseDir, {
+    submissions: [
+      {
+        submission_id: id,
+        assessment_id: assessmentId,
+        student_id: studentId,
+        status: "submitted",
+        note: "Defended in person; nothing handed in through Canvas",
+        extensions: { source: "fork" },
+      },
+    ] as never[],
+  });
+  return { submission_id: id, created: true, written };
 };
 
 // --------------------------------------------------------------------------

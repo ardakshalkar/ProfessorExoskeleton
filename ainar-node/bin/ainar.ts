@@ -159,6 +159,7 @@ import {
   transcribeTake,
   writeDefence,
   writePin,
+  recordInPersonSubmission,
   repoUrl,
 } from "../src/defence.ts";
 import { checkDefence } from "../src/defence-check.ts";
@@ -3311,26 +3312,13 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           break;
         }
         if (inPerson && !given) {
-          if (submission) {
-            out(`${submission.submission_id}: already recorded — the defence goes under it`);
+          const kept = recordInPersonSubmission(root, bundle, forkRun, forkAssessment, forkStudent);
+          if (!kept.created) {
+            out(`${kept.submission_id}: already recorded — the defence goes under it`);
             break;
           }
-          const id = pulledSubmissionId(forkStudent, forkAssessment);
-          for (const path of writeRecords(courseDir, {
-            submissions: [
-              {
-                submission_id: id,
-                assessment_id: forkAssessment,
-                student_id: forkStudent,
-                status: "submitted",
-                note: "Defended in person; nothing handed in through Canvas",
-                extensions: { source: "fork" },
-              },
-            ] as never[],
-          })) {
-            out(`wrote ${relative(root, path)}`);
-          }
-          out(`${id}: in person, no link`);
+          for (const path of kept.written) out(`wrote ${relative(root, path)}`);
+          out(`${kept.submission_id}: in person, no link`);
           break;
         }
         const url = repoUrl(given!);
