@@ -204,6 +204,7 @@ import {
   type Shape,
 } from "../src/scans.ts";
 import { nameTargets, readNames } from "../src/scan-names.ts";
+import { filenameHint, readCoverTitle, uploadedNames, usefulHint } from "../src/scan-identify.ts";
 import { DEFAULT_MODEL, deepseekKey, deepseekReader, EFFORTS, readScans, readTargets, type Effort } from "../src/scan-read.ts";
 import {
   acceptRubric,
@@ -484,9 +485,11 @@ const HELP = `ainar — the AINAR course model CLI
   Scanned papers. The PDFs stay in --submissions-dir (default
   ~/.ainar/submissions, or AINAR_SUBMISSIONS_DIR), outside the workspace:
 
-  scans identify RUN [--title T] [--date D] [--json]
+  scans identify RUN [--title T] [--date D] [--no-read] [--json]
                                            unfiled PDFs in RUN/_inbox, and the
-                                           run's assessments ranked against T
+                                           run's assessments ranked against T —
+                                           else each file's uploaded name, else
+                                           its printed cover title (vision model)
   scans file RUN FILE.pdf --assessment A   move an unfiled PDF under A
   scans status RUN --assessment A          what is in the inbox, placed, read
   scans plan RUN --assessment A [--per-file | --pages-per-student N]
@@ -2642,29 +2645,99 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       if (sub === "identify") {
         // Which assessment is this pile? Ranked, never decided: the reader puts
         // the top candidate to the professor, and `scans file` acts on the answer.
+        // With no --title, each file is ranked on its own hint: the name it was
+        // uploaded under, else the title printed on its cover (src/scan-identify.ts).
+        // The uploaded name is never printed — it may carry a student's.
         const files = await unfiledScans(unfiled);
-        out(`unfiled scans in ${unfiled}`);
-        if (!files.length) out("  none — put the uploaded PDFs here, then run this again");
-        for (const entry of files) out(`  ${entry.file}  ${entry.page_count} page(s)`);
-        const candidates = rankAssessments(runAssessments, bundle.items as any[], {
-          title: flag("title"),
-          date: flag("date"),
-        });
+        const courseId = (bundle.course as { course_id: string }).course_id;
+        const given = flag("title") || flag("date") ? { title: flag("title") ?? null, date: flag("date") ?? null, from: "the cover" } : null;
+        const originals = uploadedNames(unfiled);
+        let reader: ReturnType<typeof deepseekReader> | null | undefined;
+        let usd = 0;
+        const ranked: {
+          file: string;
+          page_count: number;
+          hint_from: string | null;
+          cover_title: string | null;
+          candidates: ReturnType<typeof rankAssessments>;
+          note?: string;
+        }[] = [];
+        for (const entry of files) {
+          let hint = given;
+          let coverTitle: string | null = null;
+          let note: string | undefined;
+          const original = originals.get(entry.file);
+          if (!hint && original) {
+            const fromName = filenameHint(original, courseId);
+            if (usefulHint(fromName, runAssessments)) hint = fromName;
+          }
+          if (!hint && !args.includes("--no-read")) {
+            if (reader === undefined) {
+              const apiKey = deepseekKey(fileURLToPath(new URL("../../", import.meta.url)));
+              reader = apiKey ? deepseekReader({ apiKey, model: flag("model") ?? DEFAULT_MODEL, effort: "low" }) : null;
+            }
+            if (!reader) note = "no DeepSeek key, so the cover was not read — read it, then pass --title";
+            else {
+              try {
+                const read = await readCoverTitle(join(unfiled, entry.file), {
+                  courseId,
+                  reader,
+                  work: mkdtempSync(join(tmpdir(), "ainar-identify-")),
+                });
+                usd += read.usd;
+                coverTitle = read.printed;
+                if (read.hint) hint = read.hint;
+                else note = "no printed title found on page 1";
+              } catch (error) {
+                note = `the cover could not be read: ${(error as Error).message}`;
+              }
+            }
+          }
+          ranked.push({
+            ...entry,
+            hint_from: hint?.from ?? null,
+            cover_title: coverTitle,
+            candidates: rankAssessments(runAssessments, bundle.items as any[], hint ?? {}),
+            ...(note ? { note } : {}),
+          });
+        }
+        // The pile's ranking, as before: the first file's, or the bare list when the inbox is empty.
+        const candidates = ranked[0]?.candidates ?? rankAssessments(runAssessments, bundle.items as any[], given ?? {});
         if (args.includes("--json")) {
-          out({ inbox: unfiled, files, candidates });
+          out({ inbox: unfiled, files: ranked, candidates });
           break;
         }
-        out(`\n${runId} assessments${flag("title") ? `, against "${flag("title")}"` : ""}:`);
-        if (!candidates.length) out("  none yet — this is a new assessment: /import-assessment");
-        for (const entry of candidates) {
-          out(
-            `  ${entry.score.toFixed(2)}  ${entry.assessment_id}  ${entry.title} (${entry.type})` +
-              `  ${entry.questions ? `${entry.questions} question(s)` : "NO QUESTIONS"}` +
-              (entry.variants.length ? `, variants ${entry.variants.join(", ")}` : "") +
-              (entry.due_at ? `  due ${String(entry.due_at).slice(0, 10)}` : ""),
-          );
-          if (entry.reasons.length) out(`        ${entry.reasons.join("; ")}`);
+        out(`unfiled scans in ${unfiled}`);
+        if (!files.length) out("  none — put the uploaded PDFs here, then run this again");
+        const show = (list: ReturnType<typeof rankAssessments>) => {
+          if (!list.length) out("  none yet — this is a new assessment: /import-assessment");
+          for (const entry of list) {
+            out(
+              `  ${entry.score.toFixed(2)}  ${entry.assessment_id}  ${entry.title} (${entry.type})` +
+                `  ${entry.questions ? `${entry.questions} question(s)` : "NO QUESTIONS"}` +
+                (entry.variants.length ? `, variants ${entry.variants.join(", ")}` : "") +
+                (entry.due_at ? `  due ${String(entry.due_at).slice(0, 10)}` : ""),
+            );
+            if (entry.reasons.length) out(`        ${entry.reasons.join("; ")}`);
+          }
+        };
+        if (!files.length) {
+          out(`\n${runId} assessments:`);
+          show(candidates);
         }
+        for (const entry of ranked) {
+          out(
+            `\n${entry.file}  ${entry.page_count} page(s)` +
+              (entry.hint_from ? `  — ranked by ${entry.hint_from === "the cover" && given ? `"${flag("title") ?? ""}"` : entry.hint_from}` : "") +
+              (entry.cover_title ? `, which reads "${entry.cover_title}"` : ""),
+          );
+          if (entry.note) out(`  ${entry.note}`);
+          show(entry.candidates);
+          if (!entry.candidates.some((candidate) => candidate.reasons.some((reason) => reason.startsWith("shares")))) {
+            out("  Nothing on this file points at an assessment: ask which it is, and recommend none.");
+          }
+        }
+        if (usd) out(`\nCovers read with the vision model: about $${usd.toFixed(4)}.`);
         out(
           "\nAsk the professor which it is. Then `scans file` it there — or, for an exam " +
             "the course has no record of, or one with no questions, /import-assessment.",

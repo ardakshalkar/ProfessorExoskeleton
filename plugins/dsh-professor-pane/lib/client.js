@@ -14078,7 +14078,7 @@ var uploadPrompt = (kind, runId, stored, note) => {
   const extra = note.trim() === "" ? "" : "\n\nWhat I can tell you: " + note.trim();
   const repeat = again ? " (" + again + " of them already uploaded before)" : "";
   if (kind === "scans") {
-    return "I uploaded " + stored.length + " scanned exam PDF(s) for " + runId + repeat + ", into the run's unfiled inbox:\n" + list + extra + "\n\nWork out which assessment they are from the covers and ask me before filing them (/import-assessment §1), then grade them (/grade-scans).";
+    return "I uploaded " + stored.length + " scanned exam PDF(s) for " + runId + repeat + ", into the run's unfiled inbox:\n" + list + extra + "\n\nWork out which assessment they are and ask me before filing them (/import-assessment §1), then grade them (/grade-scans). Start with `scans identify`: it ranks each file by the name I uploaded it under, which is kept privately, else by the title printed on its cover — you do not need to see the pages.";
   }
   return "I uploaded the exam paper / answer key for " + runId + repeat + ":\n" + list + extra + "\n\nUse them to record the exam's questions and key (/import-assessment) — ask me which assessment it is and about variants first.";
 };

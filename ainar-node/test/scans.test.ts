@@ -532,7 +532,7 @@ test("the run's assessments rank against the cover, and a contradicting number w
   assert.deepEqual(ranked[0]!.variants, ["A"]);
   assert.ok(ranked[0]!.reasons.some((reason) => /due within/.test(reason)));
   const two = ranked.find((entry) => entry.assessment_id === "ASSESSMENT-QUIZ-02")!;
-  assert.ok(two.reasons.some((reason) => /not the cover's/.test(reason)));
+  assert.ok(two.reasons.some((reason) => /not the one on the cover/.test(reason)));
   assert.equal(ranked.at(-1)!.assessment_id, "ASSESSMENT-HW-01");
 });
 

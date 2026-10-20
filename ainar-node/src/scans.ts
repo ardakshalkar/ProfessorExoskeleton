@@ -1123,7 +1123,7 @@ export const unfiledScans = async (inbox: string): Promise<UnfiledScan[]> => {
 };
 
 /** Lowercase words and numbers; `Quiz №3`, `quiz-3` and `QUIZ-03` agree. */
-const words = (text: string): string[] =>
+export const words = (text: string): string[] =>
   text
     .toLocaleLowerCase()
     .normalize("NFKC")
@@ -1155,10 +1155,18 @@ export interface Candidate {
  * contradicts the title's number weighs heavily against it: Quiz 2 and Quiz 3
  * share every other word.
  */
+/** The words an assessment answers to: its title, its id, its type. */
+export const vocabularyOf = (assessment: any): Set<string> =>
+  new Set([
+    ...words(String(assessment.title ?? "")),
+    ...words(shortOf(String(assessment.assessment_id))),
+    ...words(String(assessment.type ?? "")),
+  ]);
+
 export const rankAssessments = (
   assessments: any[],
   items: any[],
-  hint: { title?: string | null; date?: string | null },
+  hint: { title?: string | null; date?: string | null; from?: string },
 ): Candidate[] => {
   const read = words(hint.title ?? "");
   const readNumbers = read.filter((word) => /^\d+$/.test(word));
@@ -1167,21 +1175,17 @@ export const rankAssessments = (
     .map((assessment) => {
       const own = items.filter((item) => item.assessment_id === assessment.assessment_id);
       const title = String(assessment.title ?? "");
-      const vocabulary = new Set([
-        ...words(title),
-        ...words(shortOf(String(assessment.assessment_id))),
-        ...words(String(assessment.type ?? "")),
-      ]);
+      const vocabulary = vocabularyOf(assessment);
       const reasons: string[] = [];
       let score = 0;
       if (read.length) {
         const shared = read.filter((word) => vocabulary.has(word));
         score += shared.length / read.length;
-        if (shared.length) reasons.push(`shares ${shared.map((word) => `"${word}"`).join(", ")} with the cover`);
+        if (shared.length) reasons.push(`shares ${shared.map((word) => `"${word}"`).join(", ")} with ${hint.from ?? "the cover"}`);
         const theirs = [...vocabulary].filter((word) => /^\d+$/.test(word));
         if (readNumbers.length && theirs.length && !readNumbers.some((number) => theirs.includes(number))) {
           score *= 0.3;
-          reasons.push(`its number (${theirs.join(", ")}) is not the cover's (${readNumbers.join(", ")})`);
+          reasons.push(`its number (${theirs.join(", ")}) is not the one on ${hint.from ?? "the cover"} (${readNumbers.join(", ")})`);
         }
       }
       if (assessment.delivery === "paper_exam") {

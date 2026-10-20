@@ -49,7 +49,9 @@ const UPLOAD_KINDS = [
  *
  * Paths, never the original filenames: a scan's name can carry a student's,
  * and this sentence goes into the transcript. The server has already renamed
- * a scan by its content, so what is quoted here is safe to say.
+ * a scan by its content, so what is quoted here is safe to say. The original
+ * name still counts — `scans identify` reads it from `uploads.json` and ranks
+ * on it without printing it — so the message points the agent there.
  */
 const uploadPrompt = (kind, runId, stored, note) => {
   const fresh = stored.filter((entry) => !entry.duplicate);
@@ -61,8 +63,10 @@ const uploadPrompt = (kind, runId, stored, note) => {
     return (
       "I uploaded " + stored.length + " scanned exam PDF(s) for " + runId + repeat +
       ", into the run's unfiled inbox:\n" + list + extra +
-      "\n\nWork out which assessment they are from the covers and ask me before filing " +
-      "them (/import-assessment §1), then grade them (/grade-scans)."
+      "\n\nWork out which assessment they are and ask me before filing them " +
+      "(/import-assessment §1), then grade them (/grade-scans). Start with `scans identify`: " +
+      "it ranks each file by the name I uploaded it under, which is kept privately, else by " +
+      "the title printed on its cover — you do not need to see the pages."
     );
   }
   return (
