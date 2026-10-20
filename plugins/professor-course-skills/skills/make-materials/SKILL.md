@@ -236,6 +236,13 @@ Stanford, Harvard and Berkeley decks against the ones this skill wrote, in
   is the ceiling). Real decks run 42–54 an hour at a median of 33 words a slide;
   a plan of 25 slides for 75 minutes has already decided every slide will be
   dense.
+- **Every concept gets a concrete instance, not only a definition** — the real
+  thing first, then a drawing of it, then the one-sentence definition, and the
+  nearest non-example beside it. Plan it in the outline's `examples:`
+  (`references/outline-craft.md`); a concept with no instance there is not
+  planned. Prefer what the course already owns — its own skills, its own MCP
+  server and what it returns, its own harness — because those are real and
+  need no product claims.
 - **Carry one concrete example through the session.** Nine of eleven do —
   Pacman through search, one failing test through an agent's loop. Pick it in
   the outline, name it in the arc, and return to it at each beat.

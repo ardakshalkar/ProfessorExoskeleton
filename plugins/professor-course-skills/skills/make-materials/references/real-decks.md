@@ -90,7 +90,16 @@ so nothing here says how the spoken part was planned.
    one-sentence definition rule stands; what changed is that the artefact comes
    first where one exists. → SKILL.md §3.
 
-9. **Code alone.** Code appears in four decks, never more than about 25 lines,
+9. **Concepts with no instance.** The week 8 deck defines MCP, a skill and a
+   plugin in a sentence each, and shows no real skill, names no plugin and
+   calls no server students would recognise; the skills half (slides 18–22) is
+   definitions, a folder diagram and a table. Every real deck here teaches its
+   concepts through instances — CS2680 has students sort seven requirements into
+   Skill, MCP, Hook or Plugin; CS329Z shows a real `tools/list` exchange. →
+   `outline-craft.md` "Every concept gets an instance", the outline's
+   `examples:` field, and the template's example slot is no longer optional.
+
+10. **Code alone.** Code appears in four decks, never more than about 25 lines,
    always beside its diagram or as a schema next to its output (CS329Z shows the
    MCP `tools/list` request beside its response). → SKILL.md §3.
 

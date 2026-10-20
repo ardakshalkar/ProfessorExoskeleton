@@ -70,8 +70,11 @@ generated_by: make-materials-skill
 
 ## {{ worked example }}
 
-<!-- An example you construct yourself is fine and is labelled as one. A
-     statistic, dataset or quotation you cannot cite is not. -->
+<!-- Not optional: every concept on the deck gets one, before or beside its
+     definition — the outline's `examples:` names it. Prefer a real instance
+     the course owns (its skills, its server's output, its data). An example
+     you construct yourself is fine and is labelled as one. A statistic,
+     dataset or quotation you cannot cite is not. -->
 
 {{ the example, worked through }}
 

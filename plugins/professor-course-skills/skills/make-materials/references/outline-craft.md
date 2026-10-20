@@ -90,14 +90,56 @@ applications to tools and data" nowhere. Two rules close it:
   and a student who does not know the acronym should not wait six slides to
   find out what the lecture is about.
 
+## Every concept gets an instance, not only a definition
+
+The two rules above can be met by a deck with no example in it at all, and the
+week 8 deck was: MCP defined, a skill defined, a plugin defined, each in one
+good sentence — and not one real skill shown, not one plugin named, not one
+call to a server people actually use. The rebuild that added the three
+definitions paid for them by cutting slides, and what it cut was the room an
+example needed. A definition with no instance is a word to memorise; a room
+that has seen the thing can reconstruct the definition from it.
+
+So the outline carries, for every concept the module claims, the example that
+will teach it:
+
+```yaml
+examples:
+  - concept: CONCEPT-REUSABLE-SKILLS
+    instance: this course's own /prepare-lesson skill — its SKILL.md frontmatter
+      and first steps, shown as it is
+    depiction: the folder it lives in, drawn, with the description highlighted
+    non_example: a single tool call that looks up a grade — one action, no procedure
+```
+
+`instance` is the concrete thing, shown before the name (`concreteness fading`:
+start concrete, fade to a drawing, then to the definition — Fyfe, McNeil, Son
+and Goldstone, *Educational Psychology Review* 26, 2014). `depiction` is the
+intermediate picture, often the slide's figure. `non_example` is the nearest
+thing that is *not* it, which is what makes the boundary of a definition
+visible. A concept with no `instance` in the outline is not planned yet.
+
+**Prefer instances the course already owns.** A generator avoids naming real
+products because it cannot vouch for their current details, and the result is
+abstraction. A course workspace is full of real, citable instances that need no
+such caution: its own skills (`.claude/skills/`, the plugin's `skills/`), its own
+MCP server and the JSON it returns, its own harness as a plugin, its own data
+files, last week's homework. Show those, as they are. An external product is
+fine when its documentation was read this session and is cited on the slide.
+
+`examples` is read by you and the professor, not by the check — nothing in
+`ainar deck check` enforces it, so the discipline is yours.
+
 ## Timing, honestly
 
 The minutes on the outline are what makes it checkable against a real session,
 and they are the field most often filled in to satisfy the check rather than to
 describe the lecture. Two rules keep them honest:
 
-- **A concept slide is five to eight minutes, not two.** A deck whose slides
-  average three minutes is a deck that will run over, every time.
+- **A concept is five to eight minutes, spread over several slides** — the
+  instance, the definition, a contrast or build, a check — not one slide held
+  for five minutes. Real decks run a little over a minute a slide (`real-decks.md`);
+  a plan that gives a concept one slide has left no room for its example.
 - **Leave the last ten minutes alone.** Checks for understanding, questions and
   the thing you did not get to. A plan that fills the full hundred minutes has
   planned for a room with no questions in it.
