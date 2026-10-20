@@ -924,6 +924,21 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
   gap:4px;padding:0;color:inherit;font:inherit}
 .pp-stagebtn:focus-visible{outline:2px solid #2f6fd6;outline-offset:4px}
 .pp-stagelive{border-color:#c43030;background:rgba(196,48,48,.05)}
+.pp-stagego{border-color:#c43030;background:#c43030;box-shadow:0 0 0 0 rgba(196,48,48,.45);animation:pp-stagecall 2.2s ease-out infinite}
+.pp-stagego:hover{background:#a82626;border-color:#a82626}
+.pp-stagego .pp-stagebtnlabel{color:#fff;font-size:14px;font-weight:700;letter-spacing:.01em}
+@keyframes pp-stagecall{0%{box-shadow:0 0 0 0 rgba(196,48,48,.45)}70%{box-shadow:0 0 0 18px rgba(196,48,48,0)}100%{box-shadow:0 0 0 0 rgba(196,48,48,0)}}
+.pp-stagewait{cursor:progress;opacity:.55;border-style:dashed}
+.pp-stagebusy{display:flex;align-items:center;gap:10px;max-width:560px;padding:10px 16px;border-radius:10px;
+  border:1px solid #d9a400;background:#fff6d6;color:#5a4500;font-size:14px;line-height:1.4;text-align:left}
+.pp-stagebusy b{font-weight:700}
+.pp-stagespin{flex:none;display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;
+  animation:pp-stagespin .8s linear infinite}
+@keyframes pp-stagespin{to{transform:rotate(360deg)}}
+.pp-dpending{display:inline-flex;align-items:center;gap:6px;padding:2px 10px;border-radius:999px;background:#fff6d6;border:1px solid #d9a400;
+  color:#5a4500;font-size:12px;font-weight:600}
+.pp-dpending .pp-stagespin{width:11px;height:11px}
+@media(prefers-reduced-motion:reduce){.pp-stagego,.pp-stagespin{animation:none}}
 .pp-stagedots{display:block;width:130px;height:130px;margin-top:-10px}
 .pp-stagebtnlabel{position:absolute;bottom:14px;font-size:12px;font-weight:600;color:var(--dsw-alias-label-secondary,#444)}
 .pp-stagetr{max-width:720px;width:100%;min-height:3em;font-size:clamp(17px,2.2vw,24px);line-height:1.45;overflow-wrap:anywhere;
@@ -1731,7 +1746,7 @@ function ListeningDots(props) {
       shape,
       count: props.size && props.size > 100 ? 260 : 140,
       dotSize: props.size && props.size > 100 ? 2.5 : 2,
-      color: listening ? "#c43030" : props.phase === "professor" ? "#2f6fd6" : "#8d8f96",
+      color: props.color ? props.color : listening ? "#c43030" : props.phase === "professor" ? "#2f6fd6" : "#8d8f96",
       // The student's voice drives the swarm: louder is livelier.
       speed: props.phase === "speaking" ? 1 + Math.min(2, (props.level || 0) * 20) : 0.6,
       choreography: "flow",
@@ -2192,7 +2207,10 @@ function DefenceStage(props) {
     splitting || desk.sending ? "thinking" : "idle"
   );
   const stageQuestionId = handsFree && handsFree.question ? handsFree.question : recording ? recording.question : null;
-  const bigLabel = !consented ? "Consent first" : proposal ? "Ask now" : stagePhase === "thinking" && handsFree ? "Choosing…" : stagePhase === "reading" ? "Reading aloud" : wholeRec ? recording.paused ? "Resume" : "Next question" : handsFree || recording ? "End answer" : desk.sending ? "Transcribing…" : splitting ? "Dividing…" : "Start";
+  const bigLabel = !consented ? "Consent first" : proposal ? "Ask now" : stagePhase === "thinking" && handsFree ? "Choosing…" : stagePhase === "reading" ? "Reading aloud" : wholeRec ? recording.paused ? "Resume" : "Next question" : handsFree || recording ? "End answer" : desk.sending ? "Transcribing…" : splitting ? "Dividing…" : "● Start recording";
+  const busy = Boolean(consented && !recording && !handsFree && !proposal && (desk.sending || splitting));
+  const ready = Boolean(consented && !recording && !handsFree && !proposal && !busy);
+  const waitingOn = Math.max(desk.pending || 0, desk.sending ? 1 : 0);
   const stageRow = () => {
     if (!consented) return null;
     if (wholeRec) {
@@ -2272,15 +2290,28 @@ function DefenceStage(props) {
           mode === "whole" ? "One recording of the whole defence, transcribed as you talk. Press Space at each new question; it is divided into its questions afterwards." : "Hands-free, one question at a time: an answer ends after a pause, and the next question comes up."
         ) : null
       ),
+      busy ? h(
+        "div",
+        { className: "pp-stagebusy", role: "status" },
+        h("span", { className: "pp-stagespin", "aria-hidden": "true" }),
+        h(
+          "span",
+          null,
+          h("b", null, splitting ? "Dividing the defence into its questions" : "Transcribing " + (waitingOn > 1 ? waitingOn + " recordings" : "the recording")),
+          " — wait: the next recording can start once this is done."
+        )
+      ) : null,
       h(
         "button",
         {
           type: "button",
-          className: "pp-stagebtn" + (live ? " pp-stagelive" : ""),
+          className: "pp-stagebtn" + (live ? " pp-stagelive" : "") + (ready ? " pp-stagego" : "") + (busy ? " pp-stagewait" : ""),
           onClick: desk.bigPress,
-          "aria-label": bigLabel
+          "aria-label": bigLabel,
+          "aria-busy": busy || void 0,
+          "aria-disabled": busy || void 0
         },
-        h(ListeningDots, { phase: stagePhase, level: handsFree ? handsFree.level : desk.manualLevel, size: 130, className: "pp-stagedots" }),
+        h(ListeningDots, { phase: stagePhase, level: handsFree ? handsFree.level : desk.manualLevel, size: 130, className: "pp-stagedots", color: ready ? "#ffffff" : void 0 }),
         h("span", { className: "pp-stagebtnlabel" }, bigLabel + (recording ? " · " + clock(desk.elapsed) : ""))
       ),
       h("div", { className: "pp-approverow pp-stagerow" }, stageRow()),
@@ -2321,7 +2352,12 @@ function DefenceStage(props) {
           { type: "button", className: "pp-segbtn", "aria-expanded": desk.drawer, onClick: () => desk.setDrawer(!desk.drawer) },
           (desk.drawer ? "▾ " : "▴ ") + "Questions and controls"
         ),
-        desk.pending > 0 ? h("span", { className: "pp-dim" }, desk.pending + " recording(s) transcribing…") : null
+        desk.pending > 0 ? h(
+          "span",
+          { className: "pp-dpending", role: "status" },
+          h("span", { className: "pp-stagespin", "aria-hidden": "true" }),
+          desk.pending === 1 ? "1 recording transcribing…" : desk.pending + " recordings transcribing…"
+        ) : null
       ),
       desk.drawer ? h(
         "div",

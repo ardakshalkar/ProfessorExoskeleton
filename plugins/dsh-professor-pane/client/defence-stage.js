@@ -73,7 +73,13 @@ export function DefenceStage(props) {
                   ? "Transcribing…"
                   : splitting
                     ? "Dividing…"
-                    : "Start";
+                    : "● Start recording";
+  // While a take transcribes or a defence is divided the big button does
+  // nothing, so the stage says so loudly rather than seeming frozen.
+  const busy = Boolean(consented && !recording && !handsFree && !proposal && (desk.sending || splitting));
+  // At rest the big button is the call to action: a filled record button.
+  const ready = Boolean(consented && !recording && !handsFree && !proposal && !busy);
+  const waitingOn = Math.max(desk.pending || 0, desk.sending ? 1 : 0);
 
   /** The row beside the big button: what else the moment allows. */
   const stageRow = () => {
@@ -182,15 +188,30 @@ export function DefenceStage(props) {
                   )
                 : null,
       ),
+      busy
+        ? h(
+            "div",
+            { className: "pp-stagebusy", role: "status" },
+            h("span", { className: "pp-stagespin", "aria-hidden": "true" }),
+            h(
+              "span",
+              null,
+              h("b", null, splitting ? "Dividing the defence into its questions" : "Transcribing " + (waitingOn > 1 ? waitingOn + " recordings" : "the recording")),
+              " — wait: the next recording can start once this is done.",
+            ),
+          )
+        : null,
       h(
         "button",
         {
           type: "button",
-          className: "pp-stagebtn" + (live ? " pp-stagelive" : ""),
+          className: "pp-stagebtn" + (live ? " pp-stagelive" : "") + (ready ? " pp-stagego" : "") + (busy ? " pp-stagewait" : ""),
           onClick: desk.bigPress,
           "aria-label": bigLabel,
+          "aria-busy": busy || undefined,
+          "aria-disabled": busy || undefined,
         },
-        h(ListeningDots, { phase: stagePhase, level: handsFree ? handsFree.level : desk.manualLevel, size: 130, className: "pp-stagedots" }),
+        h(ListeningDots, { phase: stagePhase, level: handsFree ? handsFree.level : desk.manualLevel, size: 130, className: "pp-stagedots", color: ready ? "#ffffff" : undefined }),
         h("span", { className: "pp-stagebtnlabel" }, bigLabel + (recording ? " · " + clock(desk.elapsed) : "")),
       ),
       h("div", { className: "pp-approverow pp-stagerow" }, stageRow()),
@@ -259,7 +280,14 @@ export function DefenceStage(props) {
           { type: "button", className: "pp-segbtn", "aria-expanded": desk.drawer, onClick: () => desk.setDrawer(!desk.drawer) },
           (desk.drawer ? "▾ " : "▴ ") + "Questions and controls",
         ),
-        desk.pending > 0 ? h("span", { className: "pp-dim" }, desk.pending + " recording(s) transcribing…") : null,
+        desk.pending > 0
+          ? h(
+              "span",
+              { className: "pp-dpending", role: "status" },
+              h("span", { className: "pp-stagespin", "aria-hidden": "true" }),
+              desk.pending === 1 ? "1 recording transcribing…" : desk.pending + " recordings transcribing…",
+            )
+          : null,
       ),
       desk.drawer
         ? h(

@@ -68,7 +68,7 @@ export function ListeningDots(props) {
       shape,
       count: props.size && props.size > 100 ? 260 : 140,
       dotSize: props.size && props.size > 100 ? 2.5 : 2,
-      color: listening ? "#c43030" : props.phase === "professor" ? "#2f6fd6" : "#8d8f96",
+      color: props.color ? props.color : listening ? "#c43030" : props.phase === "professor" ? "#2f6fd6" : "#8d8f96",
       // The student's voice drives the swarm: louder is livelier.
       speed: props.phase === "speaking" ? 1 + Math.min(2, (props.level || 0) * 20) : 0.6,
       choreography: "flow",
