@@ -84,6 +84,11 @@ button.link{border:0;background:none;padding:0;font:inherit;font-size:13px;color
 .status{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding-left:9px;margin:-1px 0 3px;font-size:12px}
 .status .stat{color:var(--muted);font-variant-numeric:tabular-nums}
 .status .stat.yours{color:var(--draft);font-weight:500}
+.status .steps{display:inline-flex;gap:3px;align-items:center;margin-right:1px}
+.status .steps i{width:7px;height:7px;border-radius:50%;box-sizing:border-box;border:1px solid var(--line)}
+.status .steps i.done{background:var(--accent);border-color:var(--accent)}
+.status .steps i.yours{background:var(--draft);border-color:var(--draft)}
+.status .steps i.current{border:2px solid var(--accent)}
 .status .badge{border-radius:999px;padding:0 7px;border:1px dashed var(--flag-line);color:var(--flag)}
 .chip.act{font-size:12px;padding:1px 7px;border-color:var(--accent-line);color:var(--accent-ink)}
 .chip.act:hover{background:var(--accent-tint)}

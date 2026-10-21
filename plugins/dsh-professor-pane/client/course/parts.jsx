@@ -7,7 +7,7 @@
  * same classes, so the one stylesheet (shared/course-style.js) draws both.
  *
  * A press sends the message the page in the frame used to send — `ask`,
- * `view`, `grade`, `scans`, `defence-desk`, `publish` — on the same channel,
+ * `view`, `grade`, `scans`, `upload`, `defence-desk`, `publish` — on the same channel,
  * `window.postMessage`, so the pane's handler for them is the one it was.
  */
 
@@ -31,6 +31,7 @@ export const press = {
   ask: (prompt) => send({ kind: "ask", prompt }),
   grade: (assessment, label) => send({ kind: "grade", assessment, label }),
   scans: (assessment) => send({ kind: "scans", assessment }),
+  upload: (assessment, label) => send({ kind: "upload", assessment, label }),
   desk: (assessment, student) => send({ kind: "defence-desk", assessment, student }),
   publish: (assessment, label, target) => send({ kind: "publish", assessment, label, target }),
 };
@@ -209,15 +210,17 @@ export function StatusLine(props) {
       </Fragment>,
     );
   }
-  if (st.scans) {
+  if (st.scans && st.scans.none) {
     parts.push(
       <Fragment key="scans">
-        <span className={"stat" + (st.scans.whose === "you" ? " yours" : "")}>{st.scans.phrase}</span>
-        <button type="button" className="chip act" title="Open the pile in Scans" onClick={() => press.scans(id)}>
-          Scans
+        <span className="stat">no scans yet</span>
+        <button type="button" className="chip act" title={"Upload the scanned papers of " + label} onClick={() => press.upload(id, label)}>
+          Upload scans…
         </button>
       </Fragment>,
     );
+  } else if (st.scans) {
+    parts.push(<ScanSteps key="scans" id={id} label={label} scans={st.scans} graded={Boolean(st.grading)} />);
   }
   if (st.defences) {
     parts.push(
@@ -269,6 +272,57 @@ export function StatusLine(props) {
     );
   }
   return parts.length ? <span className="status">{parts}</span> : null;
+}
+
+/**
+ * A pile's steps under its work: a dot for each (done, yours, the one under
+ * way, to come), what the step is waiting for, and the one press that makes
+ * it — every word the host's (server/week-status.js). Scans stays beside
+ * the press unless the press already opens it; Grade is not said twice.
+ */
+function ScanSteps(props) {
+  const { id, label, scans } = props;
+  const act = scans.act;
+  const opensScans = act && act.kind === "scans";
+  const steps = scans.steps || [];
+  const strip = steps.map((step) => step.label + ": " + step.detail).join("\n");
+  let action = null;
+  if (act && act.kind === "ask") {
+    action = <AskButton className="chip act" label={act.label} prompt={act.prompt} title={act.prompt} />;
+  } else if (act && act.kind === "grade" && !props.graded) {
+    action = (
+      <button type="button" className="chip act" title="Open the Grade view" onClick={() => press.grade(id, label)}>
+        {act.label}
+      </button>
+    );
+  } else if (opensScans) {
+    action = (
+      <button type="button" className="chip act" title="Open the pile in Scans, on this step" onClick={() => press.scans(id)}>
+        {act.label}
+      </button>
+    );
+  }
+  return (
+    <Fragment>
+      {steps.length ? (
+        <span className="steps" role="img" aria-label={strip} title={strip}>
+          {steps.map((step) => (
+            <i key={step.label} className={step.state} />
+          ))}
+        </span>
+      ) : null}
+      <span className={"stat" + (scans.whose === "you" ? " yours" : "")}>
+        {scans.phrase}
+        {scans.whose === "assistant" ? " · the assistant's" : ""}
+      </span>
+      {action}
+      {opensScans ? null : (
+        <button type="button" className="chip act" title="Open the pile in Scans" onClick={() => press.scans(id)}>
+          Scans
+        </button>
+      )}
+    </Fragment>
+  );
 }
 
 /** "—" where a cell has nothing. */

@@ -267,7 +267,11 @@ happens.
    in Teaching and All weeks says where its work stands (suggested and decided,
    the scan pile's step, defended of handed in, not in Canvas or no starter
    repository), from `server/week-status.js`, and its button opens Grade, Scans,
-   the defence desk or Publish over course mode. **Students**, **Gradebook** and
+   the defence desk or Publish over course mode. Since 2026-10-21 paper work
+   (`delivery: paper_exam`, or a quiz or exam with no delivery) always has a
+   scans slot from its week on: *Upload scans…* opens the upload already naming
+   the assessment until a pile exists, then a dot per step (done, yours, under
+   way, to come) and the one press that makes the current step. **Students**, **Gradebook** and
    **Tasks** are chosen in the same row as the readings, past a divider: they
    read the course by person, mark and task rather than by week, so they are
    not a fifth way of painting the weeks, but they are whole views, not layers.

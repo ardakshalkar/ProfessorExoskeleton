@@ -10,21 +10,9 @@ import { BASE, scoped } from "./tabs.js";
 
 // ---------------------------------------------------------------- scans
 
-/**
- * What the assistant is asked for at the steps that need its judgement.
- * A skill and a target, nothing more: DSH loads the whole skill for any
- * `/name` in a message, and the skill finds where the pile stands itself,
- * so a procedure restated here would only be a second copy to drift. Read
- * is not here — it is a command, run by the pane's own button.
- * Pseudonyms and ids only.
- */
-export const STEP_PROMPTS = {
-  rubric: (runId, id) => "/import-assessment " + id + " " + runId + " — propose the rubric",
-  grade: (runId, id) => "/grade-batch " + id + " " + runId,
-  approve: (runId, id) =>
-    "Which suggested grades on " + id + " (" + runId + ") are still waiting for my decision, " +
-    "least confident first?",
-};
+// What the assistant is asked for at the steps that need its judgement:
+// shared/course-words.js, so a week's status line asks the same thing.
+export { STEP_PROMPTS } from "../shared/course-words.js";
 
 /**
  * Every name correspondence in the pile, as big cards over the conversation.

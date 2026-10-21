@@ -29,6 +29,8 @@ import { defencePlace, readDefence, readSession } from "@ainar/core/src/defence.
 import { gradeBoard } from "@ainar/core/src/grade-board.ts";
 import { scanPlace } from "@ainar/core/src/scans.ts";
 
+import { STEP_PROMPTS } from "../shared/course-words.js";
+
 import { isRepoWork } from "./course-views.js";
 import { scanPiles } from "./scans.js";
 import { canvasBinding } from "./unpublished.js";
@@ -93,13 +95,60 @@ const defencesOf = (bundle, root, runId, assessmentId, submissions) => {
 };
 
 /**
+ * Work sat on paper: said so by `delivery`, or a quiz or an exam that says
+ * nothing about how it arrives — the CSS-4007 quizzes record no delivery.
+ */
+const onPaper = (assessment) =>
+  assessment.delivery ? assessment.delivery === "paper_exam" : assessment.type === "quiz" || assessment.type === "exam";
+
+const WEEK = 7 * 24 * 60 * 60 * 1000;
+
+/** Whether its week has come, so a pile could exist. Undated work has. */
+const weekCome = (assessment, now) => {
+  const at = Date.parse(assessment.opens_at ?? assessment.due_at ?? "");
+  return Number.isNaN(at) || at <= now + WEEK;
+};
+
+/**
+ * The press that makes a pile's step, in words: where the Scans tab's step
+ * would send the professor, or what it would ask the assistant. `scans`
+ * opens the pile on its step, `grade` the Grade view, `ask` the chat.
+ */
+const actOf = (step, runId, id) => {
+  if (step.whose === "assistant" && step.ask && STEP_PROMPTS[step.ask]) {
+    return { kind: "ask", label: "Ask the assistant", prompt: STEP_PROMPTS[step.ask](runId, id) };
+  }
+  switch (step.action) {
+    case "match":
+      return { kind: "scans", label: "Place papers" };
+    case "read":
+      return { kind: "scans", label: "Read & record" };
+    case "grade":
+      return { kind: "grade", label: "Grade" };
+    case "canvas":
+      return { kind: "scans", label: "Send marks" };
+    default:
+      return null;
+  }
+};
+
+/** A pile as its week shows it: the step strip, the phrase, and the press. */
+const scansOf = (pile, standing, runId, id) => ({
+  phrase: pile.now.phrase,
+  whose: pile.now.whose,
+  steps: standing ? standing.stages.map(({ label, detail, state }) => ({ label, detail, state })) : [],
+  act: actOf(pile.now, runId, id),
+});
+
+/**
  * `{ [assessment_id]: { grading, canvas, repo, scans, defences } }` for the
  * run's assessments. `submissions` is the private folder, or null when it
  * cannot be resolved â€” then only the record's own facts are given.
  */
-export const assessmentStatus = ({ bundle, runId, root, submissions, ledger }) => {
+export const assessmentStatus = ({ bundle, runId, root, submissions, ledger, now = Date.now() }) => {
   const run = runById(bundle).get(runId) ?? {};
-  const piles = submissions ? attempt(() => scanPiles({ bundle, runId, submissions, ledger }))?.piles ?? [] : [];
+  const found = submissions ? attempt(() => scanPiles({ bundle, runId, submissions, ledger })) : null;
+  const piles = found?.piles ?? [];
   const status = {};
   for (const assessment of bundle.assessments.filter((entry) => entry.course_version_id === runId)) {
     const id = assessment.assessment_id;
@@ -111,7 +160,12 @@ export const assessmentStatus = ({ bundle, runId, root, submissions, ledger }) =
       // Publishing leaves a draft out, so a draft is offered no publish.
       canvas: !draft && binding && (binding.state === "none" || binding.state === "some") ? binding.state : null,
       repo: !draft && isRepoWork(assessment) && !assessment.extensions?.github?.template_repo,
-      scans: pile && pile.now ? { phrase: pile.now.phrase, whose: pile.now.whose } : null,
+      scans:
+        pile && pile.now
+          ? scansOf(pile, found.standings.get(id), runId, id)
+          : onPaper(assessment) && weekCome(assessment, now)
+            ? { none: true }
+            : null,
       defences: attempt(() => defencesOf(bundle, root, runId, id, submissions)),
     };
   }

@@ -96,7 +96,7 @@ const icon = (name) => `<svg class="i" aria-hidden="true"><use href="#i-${esc(na
 /**
  * Presses, out to the harness: the two messages every pane document sends,
  * and the four a status line's buttons send to open the pane's own windows
- * (`grade`, `scans`, `defence-desk`, `publish`). `parent === window` means the page was opened in a
+ * (`grade`, `scans`, `upload`, `defence-desk`, `publish`). `parent === window` means the page was opened in a
  * tab by itself, with nobody listening, so it takes no clicks at all. A
  * modified click keeps the tab a link always opened.
  *
@@ -149,10 +149,11 @@ addEventListener('message',function(e){var d=e.data;
 document.addEventListener('click',function(e){
   var b=e.target.closest&&e.target.closest('[data-ask]');
   if(b){e.preventDefault();parent.postMessage({source:'professor-pane',kind:'ask',prompt:b.getAttribute('data-ask')},'*');return;}
-  var w=e.target.closest&&e.target.closest('[data-grade],[data-scans],[data-desk],[data-publish]');
+  var w=e.target.closest&&e.target.closest('[data-grade],[data-scans],[data-upload],[data-desk],[data-publish]');
   if(w){e.preventDefault();var m={source:'professor-pane'};
     if(w.hasAttribute('data-grade')){m.kind='grade';m.assessment=w.getAttribute('data-grade');m.label=w.getAttribute('data-label')||'';}
     else if(w.hasAttribute('data-scans')){m.kind='scans';m.assessment=w.getAttribute('data-scans');}
+    else if(w.hasAttribute('data-upload')){m.kind='upload';m.assessment=w.getAttribute('data-upload');m.label=w.getAttribute('data-label')||'';}
     else if(w.hasAttribute('data-desk')){m.kind='defence-desk';m.assessment=w.getAttribute('data-desk');m.student=w.getAttribute('data-student');}
     else{m.kind='publish';m.assessment=w.getAttribute('data-publish');m.label=w.getAttribute('data-label')||'';m.target=w.getAttribute('data-target')||'';}
     parent.postMessage(m,'*');return;}
@@ -409,6 +410,29 @@ const workChip = (a, when) => {
  * Scans, Publish, the defence desk — and asks the chat nothing. Absent in the
  * student preview and in Planning, where the host sends no status.
  */
+/** A pile's steps: parts.jsx's `ScanSteps`, as a string. */
+const scanSteps = (id, label, scans, graded) => {
+  const act = scans.act;
+  const opensScans = act && act.kind === "scans";
+  const steps = scans.steps ?? [];
+  const strip = esc(steps.map((step) => `${step.label}: ${step.detail}`).join("\n"));
+  const dots = steps.length
+    ? `<span class="steps" role="img" aria-label="${strip}" title="${strip}">${steps.map((step) => `<i class="${esc(step.state)}"></i>`).join("")}</span>`
+    : "";
+  let action = "";
+  if (act && act.kind === "ask") {
+    action = `<button type="button" class="chip act" data-ask="${esc(act.prompt)}" title="${esc(act.prompt)}">${icon("ask")}${esc(act.label)}</button>`;
+  } else if (act && act.kind === "grade" && !graded) {
+    action = `<button type="button" class="chip act" data-grade="${id}" data-label="${label}" title="Open the Grade view">${esc(act.label)}</button>`;
+  } else if (opensScans) {
+    action = `<button type="button" class="chip act" data-scans="${id}" title="Open the pile in Scans, on this step">${esc(act.label)}</button>`;
+  }
+  return dots +
+    `<span class="stat${scans.whose === "you" ? " yours" : ""}">${esc(scans.phrase)}${scans.whose === "assistant" ? " · the assistant's" : ""}</span>` +
+    action +
+    (opensScans ? "" : `<button type="button" class="chip act" data-scans="${id}" title="Open the pile in Scans">Scans</button>`);
+};
+
 const statusLine = (a, status) => {
   const st = status ? status[a.assessment_id] : null;
   if (!st) return "";
@@ -419,9 +443,11 @@ const statusLine = (a, status) => {
     parts.push(`<span class="stat">${st.grading.suggested} suggested · ${st.grading.decided} decided</span>` +
       `<button type="button" class="chip act" data-grade="${id}" data-label="${label}" title="Open the Grade view">Grade</button>`);
   }
-  if (st.scans) {
-    parts.push(`<span class="stat${st.scans.whose === "you" ? " yours" : ""}">${esc(st.scans.phrase)}</span>` +
-      `<button type="button" class="chip act" data-scans="${id}" title="Open the pile in Scans">Scans</button>`);
+  if (st.scans && st.scans.none) {
+    parts.push(`<span class="stat">no scans yet</span>` +
+      `<button type="button" class="chip act" data-upload="${id}" data-label="${label}" title="Upload the scanned papers of ${label}">Upload scans…</button>`);
+  } else if (st.scans) {
+    parts.push(scanSteps(id, label, st.scans, Boolean(st.grading)));
   }
   if (st.defences) {
     parts.push(`<span class="stat">${st.defences.defended} of ${st.defences.of} defended</span>` +

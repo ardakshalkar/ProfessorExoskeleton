@@ -141,6 +141,41 @@ test("a chip says where its work stands, with the press that opens its window", 
   assert.equal(term.match(/data-grade="ASM-Q"/g).length, 1);
 });
 
+test("paper work with no pile offers the upload, already naming the assessment", () => {
+  const html = courseModeDocument(payload(), { mode: "term", status: { "ASM-Q": { scans: { none: true } } } });
+  assert.match(html, /no scans yet/);
+  assert.match(html, /data-upload="ASM-Q"/);
+  assert.equal(/data-scans="ASM-Q"/.test(html), false);
+});
+
+test("a pile's steps are drawn as dots, with the one press that makes the step", () => {
+  const steps = [
+    { label: "Identify", detail: "Quiz", state: "done" },
+    { label: "Match", detail: "8 of 8 placed", state: "done" },
+    { label: "Read", detail: "0 of 8", state: "current" },
+    { label: "Rubric", detail: "not proposed", state: "todo" },
+  ];
+  const yours = courseModeDocument(payload(), {
+    mode: "term",
+    status: { "ASM-Q": { scans: { phrase: "8 papers to read", whose: "you", steps, act: { kind: "scans", label: "Read & record" } } } },
+  });
+  assert.equal(yours.match(/<span class="steps"[^>]*>(.*?)<\/span>/)[1], '<i class="done"></i><i class="done"></i><i class="current"></i><i class="todo"></i>');
+  assert.match(yours, /data-scans="ASM-Q"[^>]*>Read &amp; record</);
+  // The press opens Scans already: no second Scans chip beside it.
+  assert.equal(yours.match(/data-scans="ASM-Q"/g).length, 1);
+  const theirs = courseModeDocument(payload(), {
+    mode: "term",
+    status: {
+      "ASM-Q": {
+        scans: { phrase: "Rubric to propose", whose: "assistant", steps, act: { kind: "ask", label: "Ask the assistant", prompt: "/import-assessment ASM-Q R — propose the rubric" } },
+      },
+    },
+  });
+  assert.match(theirs, /Rubric to propose · the assistant's/);
+  assert.match(theirs, /data-ask="\/import-assessment ASM-Q R — propose the rubric"/);
+  assert.match(theirs, /data-scans="ASM-Q"[^>]*>Scans</);
+});
+
 test("the student preview carries no status, whatever the host sent", () => {
   const html = courseModeDocument(payload(), { mode: "term", student: true, status });
   assert.equal(/suggested ·|defended<|not in Canvas|data-grade="|data-publish="/.test(html), false);

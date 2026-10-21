@@ -452,6 +452,16 @@ export function ProfessorPane(props) {
         else setGrading({ assessment: data.assessment, label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment });
         return;
       }
+      // "Upload scans…" on a paper assessment's row with no pile yet: the
+      // upload dialog, already knowing which assessment the papers are.
+      if (data.kind === "upload") {
+        if (!/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+        setUploading({
+          assessment: data.assessment,
+          label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment,
+        });
+        return;
+      }
       // The Students tab's "Sync from sheet": the Syncs view, where the sheet
       // is read directly or brought in as a downloaded file.
       if (data.kind === "syncs") {
@@ -866,6 +876,8 @@ export function ProfessorPane(props) {
           runId: current.runId,
           sessionId: props.sessionId,
           ask: props.ask,
+          // Pressed on an assessment's row: which one the papers are.
+          assessment: uploading === true ? null : uploading,
           onRecordings: () => setBatch(true),
           onClose: () => setUploading(false),
         })

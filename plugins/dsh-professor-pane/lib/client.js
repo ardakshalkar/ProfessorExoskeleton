@@ -4678,12 +4678,136 @@ function WaitingList(props) {
   );
 }
 
-// client/marks.js
+// shared/course-words.js
+var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var shortDate = (value) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? ""));
+  return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}` : "";
+};
+var pct = (value) => value === null || value === void 0 ? "" : `${Math.round(value * 100)}%`;
+var weightPct = (value) => value === null || value === void 0 ? "" : `${Number((value * 100).toFixed(2))}%`;
+var ICONS = {
+  lecture: '<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>',
+  lab: '<path d="M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.6a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4l-5.1-10.2a2 2 0 0 1-.2-.9V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>',
+  seminar: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',
+  slides: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="m10 7.5 4.5 2.5-4.5 2.5z"/><path d="M8 21h8"/><path d="M12 17v4"/>',
+  reading: '<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>',
+  data: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+  notebook: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="m10 10-2 2 2 2"/><path d="m14 10 2 2-2 2"/>',
+  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  brief: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
+  video: '<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
+  quiz: '<path d="m3 7 2 2 4-4"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
+  homework: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  project: '<path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/>',
+  exam: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+  outcome: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+  concept: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/>',
+  module: '<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
+  misdated: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M12 13.5v3"/><path d="M12 19.2h.01"/>',
+  weight: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
+  ask: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'
+};
+var MEETING_ICON = {
+  lecture: "lecture",
+  lab: "lab",
+  seminar: "seminar",
+  discussion: "seminar",
+  review: "seminar",
+  exercise: "homework",
+  project_work: "project",
+  field_work: "project",
+  reading: "reading"
+};
+var RESOURCE_ICON = {
+  slides: "slides",
+  reading: "reading",
+  textbook_chapter: "reading",
+  dataset: "data",
+  notebook: "notebook",
+  video: "video",
+  link: "link",
+  tool: "notebook"
+};
+var RESOURCE_WORD = { textbook_chapter: "chapter", dataset: "dataset" };
+var WORK_ICON = {
+  quiz: "quiz",
+  assignment: "homework",
+  project: "project",
+  exam: "exam",
+  presentation: "lecture",
+  oral_defense: "seminar",
+  participation: "seminar"
+};
+var WORK_WORD = { assignment: "homework", oral_defense: "defence" };
+var GAP = {
+  module: { icon: "module", verb: "Plan module" },
+  deck: { icon: "slides", verb: "Draft deck" },
+  misdated: { icon: "misdated", verb: "Check date" },
+  deadline: { icon: "calendar", verb: "Set dates" },
+  weight: { icon: "weight", verb: "Set weight" },
+  brief: { icon: "brief", verb: "Write brief" }
+};
+var promptFor = (kind, week, run2, ref) => {
+  const module2 = (week.modules ?? [])[0];
+  const about = `week ${week.week} of ${run2.id}` + (module2 ? ` (${module2.module_id}, "${module2.title}")` : "");
+  const gap = (week.gaps ?? []).find((g) => g.kind === kind) ?? { ids: [] };
+  switch (kind) {
+    case "deck":
+      return `Draft the slides for ${about} with /make-materials. It meets in ${gap.ids.join(", ") || "its meetings"} and has no deck. Register it as a resource marked approval: draft.`;
+    case "module":
+      return `Week ${week.week} of ${run2.id} has no module. Propose what it should teach, given the weeks either side, as a draft module for me to read. Change nothing else.`;
+    case "misdated":
+      return `${ref} is drawn under ${about}, but its date falls outside that week. Which is wrong: its date, its module's week, or the run's start date? Tell me what you find and change nothing until I say.`;
+    case "weight":
+      return `What should ${gap.ids.join(", ")} in ${about} be worth? The weight is mine to set; propose one and wait.`;
+    case "brief":
+      return `${ref} in ${about} has no brief students can read. Draft one from its rubric and outcomes with /design-assessment, as a draft for me to read.`;
+    default:
+      return `For ${about}, what is still missing?`;
+  }
+};
+var datesPrompt = (a, run2) => `Ask me this now, in your first message, before running any command: what are the open and due dates for ${a.assessment_id} ("${a.title}")? Skip the usual opening validate and inbox sweep, and do not read any file first: these two dates exist only in my head, so nothing on disk can answer this. Once I have answered, set opens_at and due_at on the ${a.assessment_id} entry in ` + (a.source_file ?? `courses/${run2.course_id}/versions/${run2.term}/assessments/ (grep for the id)`) + ", and then just confirm what you wrote.";
+var tierOf = (week, current) => {
+  if (week.urgency) return week.urgency;
+  if (week.when === "past") return "past";
+  if (current !== null && week.week <= current + 1) return "soon";
+  return "later";
+};
+var hasBrief = (a) => Boolean(a.url || a.brief_url || String(a.description ?? "").trim());
+var titleOf = (w) => (w.modules ?? []).map((m) => m.title).join(" · ");
+var conceptsOf = (w) => (w.modules ?? []).flatMap((m) => m.concepts ?? []);
+var KINDS = { quiz: ["Quizzes", "q"], assignment: ["Homework", "hw"], project: ["Project", "pj"], exam: ["Exams", "ex"] };
+var kindOf = (type) => KINDS[type] ?? ["Other", "ot"];
+var LANES = [["test", "Exams & Quizzes", "q", ["quiz", "exam"]], ["assignment", "Homework", "hw", ["assignment"]], ["project", "Project", "pj", ["project"]]];
+var laneOf = (type) => LANES.find((l) => l[3].includes(type)) ?? ["other", "Other", "ot", []];
+var runOffset = (data) => {
+  const run2 = data.run ?? {};
+  try {
+    if (run2.timezone && run2.start_date) {
+      const name = new Intl.DateTimeFormat("en-US", { timeZone: run2.timezone, timeZoneName: "longOffset" }).formatToParts(/* @__PURE__ */ new Date(`${run2.start_date}T12:00:00Z`)).find((p) => p.type === "timeZoneName")?.value ?? "";
+      const m = /GMT([+-]\d{2}:\d{2})?/.exec(name);
+      if (m) return m[1] ?? "+00:00";
+    }
+  } catch {
+  }
+  for (const a of data.assessments ?? []) {
+    const m = /([+-]\d{2}:\d{2}|Z)$/.exec(String(a.due_at ?? a.opens_at ?? ""));
+    if (m) return m[1] === "Z" ? "+00:00" : m[1];
+  }
+  return "+00:00";
+};
+var REVISIT_BELOW = 0.6;
 var STEP_PROMPTS = {
   rubric: (runId, id) => "/import-assessment " + id + " " + runId + " — propose the rubric",
   grade: (runId, id) => "/grade-batch " + id + " " + runId,
   approve: (runId, id) => "Which suggested grades on " + id + " (" + runId + ") are still waiting for my decision, least confident first?"
 };
+
+// client/marks.js
 function MatchReview(props) {
   const matched = props.papers.filter(
     (paper) => paper.resolved && !paper.pinned && paper.has_name && (paper.lane === "check" || paper.lane === "placed")
@@ -5669,7 +5793,7 @@ function Unpublished(props) {
 
 // client/canvas-card.js
 var hostName = (url) => String(url || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
-var shortDate = (iso) => {
+var shortDate2 = (iso) => {
   if (!iso) return null;
   const at = new Date(iso);
   return Number.isNaN(at.getTime()) ? null : at.toLocaleDateString([], { day: "numeric", month: "short" });
@@ -6117,7 +6241,7 @@ var rowState = (entry, reachable) => {
     );
   }
   parts.push(
-    entry.a.definitionSent ? { key: "def", text: "brief sent " + shortDate(entry.a.definitionSent), tone: "" } : { key: "def", text: "no brief sent", tone: "quiet" }
+    entry.a.definitionSent ? { key: "def", text: "brief sent " + shortDate2(entry.a.definitionSent), tone: "" } : { key: "def", text: "no brief sent", tone: "quiet" }
   );
   const c = entry.u && entry.u.canvas;
   if (!c || c.ready === 0) parts.push({ key: "marks", text: "no marks yet", tone: "quiet" });
@@ -6308,7 +6432,7 @@ function CanvasCard(props) {
           "span",
           { className: "pp-crowtitle" },
           entry.a.title || id,
-          entry.a.dueAt ? h("span", { className: "pp-as" }, " · due " + shortDate(entry.a.dueAt)) : null
+          entry.a.dueAt ? h("span", { className: "pp-as" }, " · due " + shortDate2(entry.a.dueAt)) : null
         ),
         h(
           "span",
@@ -7323,6 +7447,11 @@ button.link{border:0;background:none;padding:0;font:inherit;font-size:13px;color
 .status{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;padding-left:9px;margin:-1px 0 3px;font-size:12px}
 .status .stat{color:var(--muted);font-variant-numeric:tabular-nums}
 .status .stat.yours{color:var(--draft);font-weight:500}
+.status .steps{display:inline-flex;gap:3px;align-items:center;margin-right:1px}
+.status .steps i{width:7px;height:7px;border-radius:50%;box-sizing:border-box;border:1px solid var(--line)}
+.status .steps i.done{background:var(--accent);border-color:var(--accent)}
+.status .steps i.yours{background:var(--draft);border-color:var(--draft)}
+.status .steps i.current{border:2px solid var(--accent)}
 .status .badge{border-radius:999px;padding:0 7px;border:1px dashed var(--flag-line);color:var(--flag)}
 .chip.act{font-size:12px;padding:1px 7px;border-color:var(--accent-line);color:var(--accent-ink)}
 .chip.act:hover{background:var(--accent-tint)}
@@ -7511,136 +7640,13 @@ table.plan tr.projrow td{padding:3px 12px 5px;border-top:0}
   .cell::before{content:attr(data-col);color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase;flex:0 0 96px}
 }`;
 
-// shared/course-words.js
-var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-var shortDate2 = (value) => {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? ""));
-  return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}` : "";
-};
-var pct = (value) => value === null || value === void 0 ? "" : `${Math.round(value * 100)}%`;
-var weightPct = (value) => value === null || value === void 0 ? "" : `${Number((value * 100).toFixed(2))}%`;
-var ICONS = {
-  lecture: '<path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/>',
-  lab: '<path d="M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.6a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4l-5.1-10.2a2 2 0 0 1-.2-.9V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>',
-  seminar: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1a4 4 0 0 1 0 7.8"/>',
-  slides: '<rect x="2" y="3" width="20" height="14" rx="2"/><path d="m10 7.5 4.5 2.5-4.5 2.5z"/><path d="M8 21h8"/><path d="M12 17v4"/>',
-  reading: '<path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/>',
-  data: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
-  notebook: '<rect x="4" y="2" width="16" height="20" rx="2"/><path d="m10 10-2 2 2 2"/><path d="m14 10 2 2-2 2"/>',
-  file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
-  brief: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
-  video: '<rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/>',
-  link: '<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>',
-  quiz: '<path d="m3 7 2 2 4-4"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/>',
-  homework: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
-  project: '<path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/>',
-  exam: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
-  outcome: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
-  concept: '<path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/>',
-  module: '<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
-  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/>',
-  misdated: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M12 13.5v3"/><path d="M12 19.2h.01"/>',
-  weight: '<path d="M19 5 5 19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>',
-  ask: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
-  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'
-};
-var MEETING_ICON = {
-  lecture: "lecture",
-  lab: "lab",
-  seminar: "seminar",
-  discussion: "seminar",
-  review: "seminar",
-  exercise: "homework",
-  project_work: "project",
-  field_work: "project",
-  reading: "reading"
-};
-var RESOURCE_ICON = {
-  slides: "slides",
-  reading: "reading",
-  textbook_chapter: "reading",
-  dataset: "data",
-  notebook: "notebook",
-  video: "video",
-  link: "link",
-  tool: "notebook"
-};
-var RESOURCE_WORD = { textbook_chapter: "chapter", dataset: "dataset" };
-var WORK_ICON = {
-  quiz: "quiz",
-  assignment: "homework",
-  project: "project",
-  exam: "exam",
-  presentation: "lecture",
-  oral_defense: "seminar",
-  participation: "seminar"
-};
-var WORK_WORD = { assignment: "homework", oral_defense: "defence" };
-var GAP = {
-  module: { icon: "module", verb: "Plan module" },
-  deck: { icon: "slides", verb: "Draft deck" },
-  misdated: { icon: "misdated", verb: "Check date" },
-  deadline: { icon: "calendar", verb: "Set dates" },
-  weight: { icon: "weight", verb: "Set weight" },
-  brief: { icon: "brief", verb: "Write brief" }
-};
-var promptFor = (kind, week, run2, ref) => {
-  const module2 = (week.modules ?? [])[0];
-  const about = `week ${week.week} of ${run2.id}` + (module2 ? ` (${module2.module_id}, "${module2.title}")` : "");
-  const gap = (week.gaps ?? []).find((g) => g.kind === kind) ?? { ids: [] };
-  switch (kind) {
-    case "deck":
-      return `Draft the slides for ${about} with /make-materials. It meets in ${gap.ids.join(", ") || "its meetings"} and has no deck. Register it as a resource marked approval: draft.`;
-    case "module":
-      return `Week ${week.week} of ${run2.id} has no module. Propose what it should teach, given the weeks either side, as a draft module for me to read. Change nothing else.`;
-    case "misdated":
-      return `${ref} is drawn under ${about}, but its date falls outside that week. Which is wrong: its date, its module's week, or the run's start date? Tell me what you find and change nothing until I say.`;
-    case "weight":
-      return `What should ${gap.ids.join(", ")} in ${about} be worth? The weight is mine to set; propose one and wait.`;
-    case "brief":
-      return `${ref} in ${about} has no brief students can read. Draft one from its rubric and outcomes with /design-assessment, as a draft for me to read.`;
-    default:
-      return `For ${about}, what is still missing?`;
-  }
-};
-var datesPrompt = (a, run2) => `Ask me this now, in your first message, before running any command: what are the open and due dates for ${a.assessment_id} ("${a.title}")? Skip the usual opening validate and inbox sweep, and do not read any file first: these two dates exist only in my head, so nothing on disk can answer this. Once I have answered, set opens_at and due_at on the ${a.assessment_id} entry in ` + (a.source_file ?? `courses/${run2.course_id}/versions/${run2.term}/assessments/ (grep for the id)`) + ", and then just confirm what you wrote.";
-var tierOf = (week, current) => {
-  if (week.urgency) return week.urgency;
-  if (week.when === "past") return "past";
-  if (current !== null && week.week <= current + 1) return "soon";
-  return "later";
-};
-var hasBrief = (a) => Boolean(a.url || a.brief_url || String(a.description ?? "").trim());
-var titleOf = (w) => (w.modules ?? []).map((m) => m.title).join(" · ");
-var conceptsOf = (w) => (w.modules ?? []).flatMap((m) => m.concepts ?? []);
-var KINDS = { quiz: ["Quizzes", "q"], assignment: ["Homework", "hw"], project: ["Project", "pj"], exam: ["Exams", "ex"] };
-var kindOf = (type) => KINDS[type] ?? ["Other", "ot"];
-var LANES = [["test", "Exams & Quizzes", "q", ["quiz", "exam"]], ["assignment", "Homework", "hw", ["assignment"]], ["project", "Project", "pj", ["project"]]];
-var laneOf = (type) => LANES.find((l) => l[3].includes(type)) ?? ["other", "Other", "ot", []];
-var runOffset = (data) => {
-  const run2 = data.run ?? {};
-  try {
-    if (run2.timezone && run2.start_date) {
-      const name = new Intl.DateTimeFormat("en-US", { timeZone: run2.timezone, timeZoneName: "longOffset" }).formatToParts(/* @__PURE__ */ new Date(`${run2.start_date}T12:00:00Z`)).find((p) => p.type === "timeZoneName")?.value ?? "";
-      const m = /GMT([+-]\d{2}:\d{2})?/.exec(name);
-      if (m) return m[1] ?? "+00:00";
-    }
-  } catch {
-  }
-  for (const a of data.assessments ?? []) {
-    const m = /([+-]\d{2}:\d{2}|Z)$/.exec(String(a.due_at ?? a.opens_at ?? ""));
-    if (m) return m[1] === "Z" ? "+00:00" : m[1];
-  }
-  return "+00:00";
-};
-var REVISIT_BELOW = 0.6;
-
 // client/course/parts.jsx
 var send = (message) => window.postMessage(Object.assign({ source: "professor-pane" }, message), "*");
 var press = {
   ask: (prompt) => send({ kind: "ask", prompt }),
   grade: (assessment, label) => send({ kind: "grade", assessment, label }),
   scans: (assessment) => send({ kind: "scans", assessment }),
+  upload: (assessment, label) => send({ kind: "upload", assessment, label }),
   desk: (assessment, student) => send({ kind: "defence-desk", assessment, student }),
   publish: (assessment, label, target) => send({ kind: "publish", assessment, label, target })
 };
@@ -7725,10 +7731,12 @@ function StatusLine(props) {
       /* @__PURE__ */ h(Fragment2, { key: "grading" }, /* @__PURE__ */ h("span", { className: "stat" }, st.grading.suggested, " suggested · ", st.grading.decided, " decided"), /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the Grade view", onClick: () => press.grade(id, label) }, "Grade"))
     );
   }
-  if (st.scans) {
+  if (st.scans && st.scans.none) {
     parts.push(
-      /* @__PURE__ */ h(Fragment2, { key: "scans" }, /* @__PURE__ */ h("span", { className: "stat" + (st.scans.whose === "you" ? " yours" : "") }, st.scans.phrase), /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the pile in Scans", onClick: () => press.scans(id) }, "Scans"))
+      /* @__PURE__ */ h(Fragment2, { key: "scans" }, /* @__PURE__ */ h("span", { className: "stat" }, "no scans yet"), /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Upload the scanned papers of " + label, onClick: () => press.upload(id, label) }, "Upload scans…"))
     );
+  } else if (st.scans) {
+    parts.push(/* @__PURE__ */ h(ScanSteps, { key: "scans", id, label, scans: st.scans, graded: Boolean(st.grading) }));
   }
   if (st.defences) {
     parts.push(
@@ -7773,6 +7781,22 @@ function StatusLine(props) {
     );
   }
   return parts.length ? /* @__PURE__ */ h("span", { className: "status" }, parts) : null;
+}
+function ScanSteps(props) {
+  const { id, label, scans } = props;
+  const act = scans.act;
+  const opensScans = act && act.kind === "scans";
+  const steps = scans.steps || [];
+  const strip = steps.map((step) => step.label + ": " + step.detail).join("\n");
+  let action = null;
+  if (act && act.kind === "ask") {
+    action = /* @__PURE__ */ h(AskButton, { className: "chip act", label: act.label, prompt: act.prompt, title: act.prompt });
+  } else if (act && act.kind === "grade" && !props.graded) {
+    action = /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the Grade view", onClick: () => press.grade(id, label) }, act.label);
+  } else if (opensScans) {
+    action = /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the pile in Scans, on this step", onClick: () => press.scans(id) }, act.label);
+  }
+  return /* @__PURE__ */ h(Fragment2, null, steps.length ? /* @__PURE__ */ h("span", { className: "steps", role: "img", "aria-label": strip, title: strip }, steps.map((step) => /* @__PURE__ */ h("i", { key: step.label, className: step.state }))) : null, /* @__PURE__ */ h("span", { className: "stat" + (scans.whose === "you" ? " yours" : "") }, scans.phrase, scans.whose === "assistant" ? " · the assistant's" : ""), action, opensScans ? null : /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the pile in Scans", onClick: () => press.scans(id) }, "Scans"));
 }
 var Dash = () => /* @__PURE__ */ h("span", { className: "dash" }, "—");
 var twoDigits = (n) => n < 10 ? "0" + n : String(n);
@@ -8124,7 +8148,7 @@ function WeekRow(props) {
   const concepts = (w.modules || []).flatMap((m) => (m.concepts || []).map((c) => c.title || c.id));
   const lecture = (w.meetings || []).map((m) => {
     const resources = [...m.resources || []].sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
-    return /* @__PURE__ */ h("div", { className: "meeting", key: m.activity_id }, /* @__PURE__ */ h("span", { className: "chip meet" + (m.draft ? " draft" : ""), title: m.title || "" }, /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(m.on) || "no date"), /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), misdated.has(m.activity_id) ? /* @__PURE__ */ h(GapChip, { kind: "misdated", tier, prompt: promptFor("misdated", w, run2, m.activity_id), title: has("misdated").note }) : null, resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
+    return /* @__PURE__ */ h("div", { className: "meeting", key: m.activity_id }, /* @__PURE__ */ h("span", { className: "chip meet" + (m.draft ? " draft" : ""), title: m.title || "" }, /* @__PURE__ */ h("span", { className: "k mono" }, shortDate(m.on) || "no date"), /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), misdated.has(m.activity_id) ? /* @__PURE__ */ h(GapChip, { kind: "misdated", tier, prompt: promptFor("misdated", w, run2, m.activity_id), title: has("misdated").note }) : null, resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
   });
   const deckGap = has("deck");
   const seen = /* @__PURE__ */ new Set();
@@ -8133,7 +8157,7 @@ function WeekRow(props) {
     for (const a of list || []) {
       const last = verb === "due" || !(w.due || []).some((d) => d.assessment_id === a.assessment_id);
       graded.push(
-        /* @__PURE__ */ h(Fragment2, { key: verb + a.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: a, when: verb + " " + shortDate2(a[field]) }), /* @__PURE__ */ h(EditButton, { kind: "assessment", id: a.assessment_id, title: "Change its title or description" }), student || !last ? null : /* @__PURE__ */ h(StatusLine, { work: a, status }))
+        /* @__PURE__ */ h(Fragment2, { key: verb + a.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: a, when: verb + " " + shortDate(a[field]) }), /* @__PURE__ */ h(EditButton, { kind: "assessment", id: a.assessment_id, title: "Change its title or description" }), student || !last ? null : /* @__PURE__ */ h(StatusLine, { work: a, status }))
       );
       if (showGaps && !hasBrief(a) && !seen.has(a.assessment_id)) {
         seen.add(a.assessment_id);
@@ -8158,7 +8182,7 @@ function WeekRow(props) {
   const assessed = new Set((w.due || []).flatMap((a) => a.outcomes || []));
   const outcomeIds = [.../* @__PURE__ */ new Set([...taught.keys(), ...assessed])].sort();
   const titles = new Map((data.outcomes || []).map((o) => [o.outcome_id, o.title]));
-  return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "wkhead " + (w.when === "current" ? "now" : w.when === "past" ? "past" : ""), id: "week-" + w.week }, /* @__PURE__ */ h("b", null, twoDigits(w.week)), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), title ? /* @__PURE__ */ h("h3", null, /* @__PURE__ */ h(ModuleTitles, { modules: w.modules })) : /* @__PURE__ */ h("h3", { className: "none" }, "Unplanned"), w.when === "current" ? /* @__PURE__ */ h("span", { className: "pill now" }, "this week") : null, (w.modules || []).some((m) => m.draft) ? /* @__PURE__ */ h("span", { className: "pill draft" }, "draft") : null, gaps.filter((g) => g.kind === "module" || g.kind === "weight").map((g) => /* @__PURE__ */ h(GapChip, { key: g.kind, kind: g.kind, tier, prompt: promptFor(g.kind, w, run2), title: g.note })), module2 ? /* @__PURE__ */ h(
+  return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "wkhead " + (w.when === "current" ? "now" : w.when === "past" ? "past" : ""), id: "week-" + w.week }, /* @__PURE__ */ h("b", null, twoDigits(w.week)), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate(w.starts_on), " – ", shortDate(w.ends_on)), title ? /* @__PURE__ */ h("h3", null, /* @__PURE__ */ h(ModuleTitles, { modules: w.modules })) : /* @__PURE__ */ h("h3", { className: "none" }, "Unplanned"), w.when === "current" ? /* @__PURE__ */ h("span", { className: "pill now" }, "this week") : null, (w.modules || []).some((m) => m.draft) ? /* @__PURE__ */ h("span", { className: "pill draft" }, "draft") : null, gaps.filter((g) => g.kind === "module" || g.kind === "weight").map((g) => /* @__PURE__ */ h(GapChip, { key: g.kind, kind: g.kind, tier, prompt: promptFor(g.kind, w, run2), title: g.note })), module2 ? /* @__PURE__ */ h(
     AskButton,
     {
       className: "chip ask askw",
@@ -8177,9 +8201,9 @@ function BandRow(props) {
   const z = band[band.length - 1];
   const span = "Weeks " + a.week + "–" + z.week;
   const holds = current !== null && current >= a.week && current <= z.week;
-  return /* @__PURE__ */ h("div", { className: "band" + (holds ? " now" : ""), id: "week-" + a.week }, /* @__PURE__ */ h("b", null, /* @__PURE__ */ h(Icon, { name: "calendar" }), " ", span), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(a.starts_on), " – ", shortDate2(z.ends_on)), /* @__PURE__ */ h("span", { className: "none" }, student ? "no sessions scheduled" : "unplanned · " + band.length + " weeks"), band.flatMap((w) => [
-    ...(w.opens || []).map((x) => /* @__PURE__ */ h(Fragment2, { key: "o" + w.week + x.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: x, when: "opens " + shortDate2(x.opens_on) }), student ? null : /* @__PURE__ */ h(StatusLine, { work: x, status }))),
-    ...(w.due || []).map((x) => /* @__PURE__ */ h(Fragment2, { key: "d" + w.week + x.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: x, when: "due " + shortDate2(x.due_on) }), student ? null : /* @__PURE__ */ h(StatusLine, { work: x, status })))
+  return /* @__PURE__ */ h("div", { className: "band" + (holds ? " now" : ""), id: "week-" + a.week }, /* @__PURE__ */ h("b", null, /* @__PURE__ */ h(Icon, { name: "calendar" }), " ", span), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate(a.starts_on), " – ", shortDate(z.ends_on)), /* @__PURE__ */ h("span", { className: "none" }, student ? "no sessions scheduled" : "unplanned · " + band.length + " weeks"), band.flatMap((w) => [
+    ...(w.opens || []).map((x) => /* @__PURE__ */ h(Fragment2, { key: "o" + w.week + x.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: x, when: "opens " + shortDate(x.opens_on) }), student ? null : /* @__PURE__ */ h(StatusLine, { work: x, status }))),
+    ...(w.due || []).map((x) => /* @__PURE__ */ h(Fragment2, { key: "d" + w.week + x.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: x, when: "due " + shortDate(x.due_on) }), student ? null : /* @__PURE__ */ h(StatusLine, { work: x, status })))
   ]), student ? null : /* @__PURE__ */ h(
     "button",
     {
@@ -8253,13 +8277,13 @@ function Evidence(props) {
     const here = signals.filter((s) => signalWeek(s) === w.week);
     const module2 = (w.modules || [])[0];
     const weak = conceptsOf(w).filter((c) => has(c) && concepts[c.id].class_mean < REVISIT_BELOW);
-    return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "wkhead " + (w.when === "current" ? "now" : w.when === "past" ? "past" : ""), id: "week-" + w.week }, /* @__PURE__ */ h("b", null, twoDigits(w.week)), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), titleOf(w) ? /* @__PURE__ */ h("h3", null, titleOf(w)) : /* @__PURE__ */ h("h3", { className: "none" }, "Unplanned"), w.when === "current" ? /* @__PURE__ */ h("span", { className: "pill now" }, "this week") : null, /* @__PURE__ */ h("span", { className: "askw" }, weak.length ? /* @__PURE__ */ h(
+    return /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "wkhead " + (w.when === "current" ? "now" : w.when === "past" ? "past" : ""), id: "week-" + w.week }, /* @__PURE__ */ h("b", null, twoDigits(w.week)), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate(w.starts_on), " – ", shortDate(w.ends_on)), titleOf(w) ? /* @__PURE__ */ h("h3", null, titleOf(w)) : /* @__PURE__ */ h("h3", { className: "none" }, "Unplanned"), w.when === "current" ? /* @__PURE__ */ h("span", { className: "pill now" }, "this week") : null, /* @__PURE__ */ h("span", { className: "askw" }, weak.length ? /* @__PURE__ */ h(
       AskButton,
       {
         prompt: "In week " + w.week + " of " + run2.id + (module2 ? " (" + module2.module_id + ")" : "") + ", the class is weakest on " + weak.map((c) => c.id).join(", ") + ". Read the approved evidence for those concepts and tell me what went wrong and what to revisit. Change nothing.",
         label: "Why did this week go wrong?"
       }
-    ) : null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Due that week" }, (w.due || []).length ? /* @__PURE__ */ h("ul", { className: "facts" }, w.due.map((a) => /* @__PURE__ */ h("li", { key: a.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: a, when: "due " + shortDate2(a.due_on) }), /* @__PURE__ */ h(Figures, { a, w, work }), /* @__PURE__ */ h(StatusLine, { work: a, status })))) : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Concepts taught" }, conceptsOf(w).length ? /* @__PURE__ */ h("ul", { className: "facts" }, conceptsOf(w).map((c) => {
+    ) : null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Due that week" }, (w.due || []).length ? /* @__PURE__ */ h("ul", { className: "facts" }, w.due.map((a) => /* @__PURE__ */ h("li", { key: a.assessment_id }, /* @__PURE__ */ h(WorkChip, { work: a, when: "due " + shortDate(a.due_on) }), /* @__PURE__ */ h(Figures, { a, w, work }), /* @__PURE__ */ h(StatusLine, { work: a, status })))) : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Concepts taught" }, conceptsOf(w).length ? /* @__PURE__ */ h("ul", { className: "facts" }, conceptsOf(w).map((c) => {
       const x = concepts[c.id];
       const low = has(c) && x.class_mean < REVISIT_BELOW;
       return /* @__PURE__ */ h("li", { key: c.id, className: low ? "flagged" : "" }, /* @__PURE__ */ h(Icon, { name: "concept" }), /* @__PURE__ */ h("span", null, c.title || c.id), /* @__PURE__ */ h("small", null, has(c) ? "class " + pct(x.class_mean) + " · " + (x.coverage || "") + " observed" + (low ? " · revisit" : "") : "not assessed yet"));
@@ -8270,7 +8294,7 @@ function Evidence(props) {
     const a = row.band[0];
     const z = row.band[row.band.length - 1];
     const holds = current !== null && current >= a.week && current <= z.week;
-    return /* @__PURE__ */ h("div", { key: "band" + a.week, className: "band" + (holds ? " now" : ""), id: "week-" + a.week }, /* @__PURE__ */ h("b", null, /* @__PURE__ */ h(Icon, { name: "calendar" }), " Weeks ", a.week, "–", z.week), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate2(a.starts_on), " – ", shortDate2(z.ends_on)), /* @__PURE__ */ h("span", { className: "none" }, "nothing due, nothing measured yet"));
+    return /* @__PURE__ */ h("div", { key: "band" + a.week, className: "band" + (holds ? " now" : ""), id: "week-" + a.week }, /* @__PURE__ */ h("b", null, /* @__PURE__ */ h(Icon, { name: "calendar" }), " Weeks ", a.week, "–", z.week), /* @__PURE__ */ h("span", { className: "k mono" }, shortDate(a.starts_on), " – ", shortDate(z.ends_on)), /* @__PURE__ */ h("span", { className: "none" }, "nothing due, nothing measured yet"));
   })), /* @__PURE__ */ h("p", { className: "foot" }, "Hand-ins and marks are the gradebook's, from approved decisions; a concept's class mean is over approved evidence. A concept under", " ", pct(REVISIT_BELOW), " is marked to revisit."));
 }
 
@@ -9013,7 +9037,7 @@ function Planning(props) {
   };
   const said = (text) => text + (run2.id ? " in " + run2.id : "");
   const topicWords = (m, n) => said(m.module_id + " “" + m.title + "” (week " + n + ")");
-  const workWords = (a) => said(a.assessment_id + " “" + a.title + "” (" + (WORK_WORD[a.type] || a.type || "work") + (a.due_on ? ", due " + shortDate2(a.due_on) : "") + ")");
+  const workWords = (a) => said(a.assessment_id + " “" + a.title + "” (" + (WORK_WORD[a.type] || a.type || "work") + (a.due_on ? ", due " + shortDate(a.due_on) : "") + ")");
   const mentioned = (written) => {
     if (!written) say("The chat’s message box cannot be reached from here.");
   };
@@ -9024,8 +9048,8 @@ function Planning(props) {
     const locked = withResults.has(a.assessment_id) || taught(weekOf(record.due_on));
     const why = withResults.has(a.assessment_id) ? "has results — its dates stay" : "due in a week already taught";
     const movable = editable && !locked;
-    const dueWords = "due " + shortDate2(a.due_on) + " · " + (weightPct(a.weight) || "no weight");
-    const tip = a.title + (a.opens_on ? " · opens " + shortDate2(a.opens_on) : "") + " · due " + shortDate2(a.due_on) + (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
+    const dueWords = "due " + shortDate(a.due_on) + " · " + (weightPct(a.weight) || "no weight");
+    const tip = a.title + (a.opens_on ? " · opens " + shortDate(a.opens_on) : "") + " · due " + shortDate(a.due_on) + (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
     return { href, locked, movable, dueWords, tip };
   };
   const target = pending ? pending.to : null;
@@ -9093,7 +9117,7 @@ function Planning(props) {
         },
         ...editable ? rowHandlers(r) : {}
       },
-      /* @__PURE__ */ h("td", { className: "wkn" }, /* @__PURE__ */ h("b", null, w.week), /* @__PURE__ */ h("small", null, shortDate2(w.starts_on))),
+      /* @__PURE__ */ h("td", { className: "wkn" }, /* @__PURE__ */ h("b", null, w.week), /* @__PURE__ */ h("small", null, shortDate(w.starts_on))),
       /* @__PURE__ */ h("td", { className: "topic" }, !title ? /* @__PURE__ */ h("span", { className: "notopic" }, "No topic yet") : editable && !taught(w.week) ? /* @__PURE__ */ h(Fragment2, null, here.map((x, i) => /* @__PURE__ */ h(Fragment2, { key: x.module.module_id }, i ? /* @__PURE__ */ h("span", { className: "dash" }, " · ") : null, /* @__PURE__ */ h(
         "span",
         {
@@ -9158,7 +9182,7 @@ function Planning(props) {
         /* @__PURE__ */ h("span", { className: "pl-kind" }, "Project"),
         /* @__PURE__ */ h(EditableTitle, { kind: "assessment", id: a.assessment_id, title: a.title, className: "segt" }, href ? /* @__PURE__ */ h(ViewLink, { draggable: "false", href, view: a.title, format: a.viewable && a.url ? a.format : "html" }, a.title) : a.title),
         /* @__PURE__ */ h(Mention, { mention, fresh, chat: chatTitle, label: "“" + a.title + "”", text: workWords(a), onDone: mentioned }),
-        /* @__PURE__ */ h("span", { className: "pl-span" }, s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end, a.opens_on ? " · opens " + shortDate2(a.opens_on) : ""),
+        /* @__PURE__ */ h("span", { className: "pl-span" }, s.start === s.end ? "week " + s.end : "weeks " + s.start + "–" + s.end, a.opens_on ? " · opens " + shortDate(a.opens_on) : ""),
         movable ? /* @__PURE__ */ h(
           "button",
           {
@@ -9209,7 +9233,7 @@ function WorkLine(props) {
   const { a, verb, date, withHanded, week, handed, status } = props;
   const got = handed[a.assessment_id];
   const showStatus = withHanded || !(week && week.due || []).some((d) => d.assessment_id === a.assessment_id);
-  return /* @__PURE__ */ h("li", null, /* @__PURE__ */ h(WorkChip, { work: a, when: verb + " " + shortDate2(date) }), /* @__PURE__ */ h(EditButton, { kind: "assessment", id: a.assessment_id, title: "Change its title or description" }), withHanded && got && got.enrolled ? /* @__PURE__ */ h("small", null, got.received, " of ", got.enrolled, " handed in") : null, showStatus ? /* @__PURE__ */ h(StatusLine, { work: a, status }) : null);
+  return /* @__PURE__ */ h("li", null, /* @__PURE__ */ h(WorkChip, { work: a, when: verb + " " + shortDate(date) }), /* @__PURE__ */ h(EditButton, { kind: "assessment", id: a.assessment_id, title: "Change its title or description" }), withHanded && got && got.enrolled ? /* @__PURE__ */ h("small", null, got.received, " of ", got.enrolled, " handed in") : null, showStatus ? /* @__PURE__ */ h(StatusLine, { work: a, status }) : null);
 }
 function DeckNeed(props) {
   const { w, run: run2 } = props;
@@ -9223,7 +9247,7 @@ function Side(props) {
     return /* @__PURE__ */ h("div", { className: "side empty" }, /* @__PURE__ */ h("small", null, label), /* @__PURE__ */ h("p", null, "Outside the run."));
   }
   const taught = current !== null && w.week < current;
-  return /* @__PURE__ */ h("div", { className: "side" }, /* @__PURE__ */ h("small", null, label, " · week ", w.week), /* @__PURE__ */ h("b", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), /* @__PURE__ */ h("ul", { className: "facts" }, (w.meetings || []).map((m) => /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate2(m.on) || "no date", " · ", m.type), /* @__PURE__ */ h("small", null, m.location || ""))), (w.opens || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "o" + a.assessment_id, a, verb: "opens", date: a.opens_on, withHanded: false, week: w, handed, status })), (w.due || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "d" + a.assessment_id, a, verb: "due", date: a.due_on, withHanded: true, handed, status })), taught ? conceptsOf(w).map((c) => {
+  return /* @__PURE__ */ h("div", { className: "side" }, /* @__PURE__ */ h("small", null, label, " · week ", w.week), /* @__PURE__ */ h("b", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), /* @__PURE__ */ h("ul", { className: "facts" }, (w.meetings || []).map((m) => /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate(m.on) || "no date", " · ", m.type), /* @__PURE__ */ h("small", null, m.location || ""))), (w.opens || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "o" + a.assessment_id, a, verb: "opens", date: a.opens_on, withHanded: false, week: w, handed, status })), (w.due || []).map((a) => /* @__PURE__ */ h(WorkLine, { key: "d" + a.assessment_id, a, verb: "due", date: a.due_on, withHanded: true, handed, status })), taught ? conceptsOf(w).map((c) => {
     const x = concepts[c.id];
     return /* @__PURE__ */ h("li", { key: c.id }, /* @__PURE__ */ h(Icon, { name: "concept" }), /* @__PURE__ */ h("span", null, c.title || c.id), /* @__PURE__ */ h("small", null, x && x.class_mean !== null && x.class_mean !== void 0 ? "class " + pct(x.class_mean) + " · " + (x.coverage || "") : "not assessed yet"));
   }) : null), /* @__PURE__ */ h(DeckNeed, { w, run: run2 }), /* @__PURE__ */ h("button", { type: "button", className: "link", onClick: () => onGo(w.week) }, "Make this the focus ›"));
@@ -9241,13 +9265,13 @@ function Focus(props) {
   );
   const module2 = (w.modules || [])[0];
   const prepare = "For week " + w.week + " of " + run2.id + (module2 ? " (" + module2.module_id + ")" : "") + ", what should I teach and what should I revisit first?" + (revisit.length ? " The class is weakest on " + revisit.map((r) => r.c.title || r.c.id).join(" and ") + "." : "");
-  return /* @__PURE__ */ h("div", { className: "focus" }, /* @__PURE__ */ h("small", null, w.week === current ? "This week" : "Week " + w.week, " · ", shortDate2(w.starts_on), " – ", shortDate2(w.ends_on)), /* @__PURE__ */ h("h2", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), conceptsOf(w).length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), conceptsOf(w).map((c) => /* @__PURE__ */ h("span", { className: "chip concept", key: c.id }, c.title || c.id))) : null, meetings.length ? /* @__PURE__ */ h("ul", { className: "facts big" }, meetings.map((m) => {
+  return /* @__PURE__ */ h("div", { className: "focus" }, /* @__PURE__ */ h("small", null, w.week === current ? "This week" : "Week " + w.week, " · ", shortDate(w.starts_on), " – ", shortDate(w.ends_on)), /* @__PURE__ */ h("h2", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), conceptsOf(w).length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), conceptsOf(w).map((c) => /* @__PURE__ */ h("span", { className: "chip concept", key: c.id }, c.title || c.id))) : null, meetings.length ? /* @__PURE__ */ h("ul", { className: "facts big" }, meetings.map((m) => {
     const resources = [...m.resources || []].sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
-    return /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate2(m.on) || "no date", " · ", [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
+    return /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate(m.on) || "no date", " · ", [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
   })) : /* @__PURE__ */ h("p", { className: "calm" }, "No meeting this week."), misdated ? misdated.ids.map((id) => {
     const m = meetings.find((x) => x.activity_id === id) || {};
     const word = m.type ? m.type.charAt(0).toUpperCase() + m.type.slice(1) : "A meeting";
-    return /* @__PURE__ */ h("div", { className: "need warn", title: misdated.note, key: id }, /* @__PURE__ */ h(Icon, { name: "misdated" }), /* @__PURE__ */ h("span", null, word, " dated ", shortDate2(m.on), ",", " ", m.on < w.starts_on ? "before this week starts (" + shortDate2(w.starts_on) + ")" : "after this week ends (" + shortDate2(w.ends_on) + ")"), /* @__PURE__ */ h(AskButton, { prompt: promptFor("misdated", w, run2, id), label: "Check date", className: "chip ask strong" }));
+    return /* @__PURE__ */ h("div", { className: "need warn", title: misdated.note, key: id }, /* @__PURE__ */ h(Icon, { name: "misdated" }), /* @__PURE__ */ h("span", null, word, " dated ", shortDate(m.on), ",", " ", m.on < w.starts_on ? "before this week starts (" + shortDate(w.starts_on) + ")" : "after this week ends (" + shortDate(w.ends_on) + ")"), /* @__PURE__ */ h(AskButton, { prompt: promptFor("misdated", w, run2, id), label: "Check date", className: "chip ask strong" }));
   }) : null, /* @__PURE__ */ h(DeckNeed, { w, run: run2 }), work.length ? /* @__PURE__ */ h("ul", { className: "facts" }, work) : /* @__PURE__ */ h("p", { className: "calm" }, "Nothing graded opens or falls due this week."), revisit.length || signals.length ? /* @__PURE__ */ h("div", { className: "revisit" }, /* @__PURE__ */ h("b", null, "Revisit first"), revisit.map((r) => /* @__PURE__ */ h("p", { key: r.c.id + r.week }, r.c.title || r.c.id, " — class ", pct(r.x.class_mean), " on ", r.x.coverage || "", " observed, taught in week ", r.week)), signals.length ? /* @__PURE__ */ h("p", null, signals.length, " open signal", signals.length === 1 ? "" : "s", ": ", signals[0].description || "") : null) : null, /* @__PURE__ */ h(AskButton, { prompt: prepare, label: "Prepare this week", className: "primary" }));
 }
 function Teaching(props) {
@@ -14071,12 +14095,16 @@ var UPLOAD_KINDS = [
     hint: "Defences recorded elsewhere — on a phone, in another room — one file per student. Kept outside the course, renamed so no name travels with them; matched to students and priced before anything is sent."
   }
 ];
-var uploadPrompt = (kind, runId, stored, note) => {
+var uploadPrompt = (kind, runId, stored, note, assessment) => {
   const fresh = stored.filter((entry) => !entry.duplicate);
   const again = stored.length - fresh.length;
   const list = stored.map((entry) => "- " + entry.path).join("\n");
   const extra = note.trim() === "" ? "" : "\n\nWhat I can tell you: " + note.trim();
   const repeat = again ? " (" + again + " of them already uploaded before)" : "";
+  if (assessment) {
+    const id = assessment.assessment;
+    return kind === "scans" ? "I uploaded " + stored.length + " scanned exam PDF(s) for " + id + " (" + runId + ")" + repeat + ", into the run's unfiled inbox:\n" + list + extra + "\n\nI uploaded them from " + id + "'s row in course mode, so that is which assessment they are — no need to identify it from the covers. Check its questions are recorded (/import-assessment) and ask me about variants, then file and grade them (/grade-scans)." : "I uploaded the exam paper / answer key for " + id + " (" + runId + ")" + repeat + ":\n" + list + extra + "\n\nUse them to record " + id + "'s questions and key (/import-assessment) — ask me about variants first.";
+  }
   if (kind === "scans") {
     return "I uploaded " + stored.length + " scanned exam PDF(s) for " + runId + repeat + ", into the run's unfiled inbox:\n" + list + extra + "\n\nWork out which assessment they are and ask me before filing them (/import-assessment §1), then grade them (/grade-scans). Start with `scans identify`: it ranks each file by the name I uploaded it under, which is kept privately, else by the title printed on its cover — you do not need to see the pages.";
   }
@@ -14246,7 +14274,7 @@ function UploadModal(props) {
     const next = (index) => {
       if (index >= files.length) {
         if (kind === "recordings" && props.onRecordings) props.onRecordings();
-        else props.ask(uploadPrompt(kind, props.runId, stored, note));
+        else props.ask(uploadPrompt(kind, props.runId, stored, note, props.assessment));
         close();
         return;
       }
@@ -14300,7 +14328,7 @@ function UploadModal(props) {
         h(
           "div",
           { className: "pp-modalhead" },
-          h("div", { className: "pp-modaltitle" }, "Upload · " + props.runId),
+          h("div", { className: "pp-modaltitle" }, "Upload · " + (props.assessment ? props.assessment.label : props.runId)),
           h(
             "button",
             { type: "button", className: "pp-close", "aria-label": "Close", disabled: busy, onClick: close },
@@ -14313,7 +14341,8 @@ function UploadModal(props) {
           h(
             "div",
             { className: "pp-approverow" },
-            UPLOAD_KINDS.map(
+            // For one assessment: its papers and its key; recordings are the run's.
+            UPLOAD_KINDS.filter((entry) => !props.assessment || entry.id !== "recordings").map(
               (entry) => h(
                 "button",
                 {
@@ -14655,6 +14684,14 @@ function ProfessorPane(props) {
         else setGrading({ assessment: data.assessment, label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment });
         return;
       }
+      if (data.kind === "upload") {
+        if (!/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+        setUploading({
+          assessment: data.assessment,
+          label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment
+        });
+        return;
+      }
       if (data.kind === "syncs") {
         focusCard("sheets");
         return;
@@ -14965,6 +15002,8 @@ function ProfessorPane(props) {
       runId: current.runId,
       sessionId: props.sessionId,
       ask: props.ask,
+      // Pressed on an assessment's row: which one the papers are.
+      assessment: uploading === true ? null : uploading,
       onRecordings: () => setBatch(true),
       onClose: () => setUploading(false)
     }) : null,

@@ -53,12 +53,25 @@ const UPLOAD_KINDS = [
  * name still counts — `scans identify` reads it from `uploads.json` and ranks
  * on it without printing it — so the message points the agent there.
  */
-const uploadPrompt = (kind, runId, stored, note) => {
+const uploadPrompt = (kind, runId, stored, note, assessment) => {
   const fresh = stored.filter((entry) => !entry.duplicate);
   const again = stored.length - fresh.length;
   const list = stored.map((entry) => "- " + entry.path).join("\n");
   const extra = note.trim() === "" ? "" : "\n\nWhat I can tell you: " + note.trim();
   const repeat = again ? " (" + again + " of them already uploaded before)" : "";
+  // Pressed on the assessment's own row, so the press said which exam it is:
+  // the agent files the pile there instead of working it out from the covers.
+  if (assessment) {
+    const id = assessment.assessment;
+    return kind === "scans"
+      ? "I uploaded " + stored.length + " scanned exam PDF(s) for " + id + " (" + runId + ")" + repeat +
+          ", into the run's unfiled inbox:\n" + list + extra +
+          "\n\nI uploaded them from " + id + "'s row in course mode, so that is which assessment they " +
+          "are — no need to identify it from the covers. Check its questions are recorded " +
+          "(/import-assessment) and ask me about variants, then file and grade them (/grade-scans)."
+      : "I uploaded the exam paper / answer key for " + id + " (" + runId + ")" + repeat + ":\n" + list + extra +
+          "\n\nUse them to record " + id + "'s questions and key (/import-assessment) — ask me about variants first.";
+  }
   if (kind === "scans") {
     return (
       "I uploaded " + stored.length + " scanned exam PDF(s) for " + runId + repeat +
@@ -272,7 +285,7 @@ export function UploadModal(props) {
         // Recordings are the pane's to file — they go to the private folder,
         // which the session cannot write — so they open the batch dialog.
         if (kind === "recordings" && props.onRecordings) props.onRecordings();
-        else props.ask(uploadPrompt(kind, props.runId, stored, note));
+        else props.ask(uploadPrompt(kind, props.runId, stored, note, props.assessment));
         close();
         return;
       }
@@ -342,7 +355,7 @@ export function UploadModal(props) {
         h(
           "div",
           { className: "pp-modalhead" },
-          h("div", { className: "pp-modaltitle" }, "Upload · " + props.runId),
+          h("div", { className: "pp-modaltitle" }, "Upload · " + (props.assessment ? props.assessment.label : props.runId)),
           h(
             "button",
             { type: "button", className: "pp-close", "aria-label": "Close", disabled: busy, onClick: close },
@@ -355,7 +368,8 @@ export function UploadModal(props) {
           h(
             "div",
             { className: "pp-approverow" },
-            UPLOAD_KINDS.map((entry) =>
+            // For one assessment: its papers and its key; recordings are the run's.
+            UPLOAD_KINDS.filter((entry) => !props.assessment || entry.id !== "recordings").map((entry) =>
               h(
                 "button",
                 {
