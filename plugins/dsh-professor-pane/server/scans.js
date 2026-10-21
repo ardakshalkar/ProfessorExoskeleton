@@ -29,14 +29,16 @@ import { assessmentsOf, enrolledIn, runById } from "@ainar/core/src/bundle.ts";
 import { exportable, gradeRows } from "@ainar/core/src/gradebook.ts";
 import { lmsScale, rescales, toLms } from "@ainar/core/src/lms-scale.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
-import { RosterStore } from "@ainar/core/src/roster.ts";
+import { refuseInsideRepo, RosterStore } from "@ainar/core/src/roster.ts";
 import {
+  itemsForVariant,
   nameCandidates,
   parsePages,
   readPlan,
   scanPlace,
   scanStatus,
   scanSubmissionId,
+  submissionsDir,
 } from "@ainar/core/src/scans.ts";
 
 const ID = /^[A-Z0-9][A-Z0-9-]*$/;
@@ -69,6 +71,28 @@ const safePages = (pages) => {
   } catch {
     return [];
   }
+};
+
+/**
+ * The enrolled students a paper's written names are nearest, closest first,
+ * three at most, never the student it is already placed on. Every name on the
+ * cover suggests; a clash does not — the name already found its student, and
+ * the question is which paper is theirs.
+ */
+const nearestOf = (paper, { store, enrolled }) => {
+  const written = [paper.name, ...(paper.also ?? [])].filter(Boolean).map(String);
+  if (!written.length || paper.clash?.length) return [];
+  const nearest = new Map();
+  for (const text of written) {
+    for (const candidate of nameCandidates(text, { store, enrolled, not: paper.not ?? [] })) {
+      const before = nearest.get(candidate.student);
+      if (!before || candidate.distance < before.distance) nearest.set(candidate.student, candidate);
+    }
+  }
+  return [...nearest.values()]
+    .filter((candidate) => candidate.student !== paper.resolved)
+    .sort((a, b) => a.distance - b.distance || a.student.localeCompare(b.student))
+    .slice(0, 3);
 };
 
 /** Which lane a planned paper sits in. */
@@ -114,11 +138,10 @@ export const canvasMarks = ({ bundle, runId, assessmentId, ledger }) => {
  * Seven steps, each with how far it has got. `state` is done, current, waiting
  * (yours to decide) or todo; the first one not done is current.
  */
-const stagesOf = ({ papers, status, assessment, rubric, items, responses, evaluations, low, canvas }) => {
+const stagesOf = ({ papers, status, assessment, rubric, expected, responses, evaluations, low, canvas }) => {
   const placed = status.placed.length;
   const held = papers.filter((paper) => paper.lane === "held").length;
   const check = papers.filter((paper) => paper.lane === "check").length;
-  const expected = placed * items;
   const graded = new Set(evaluations.map((entry) => entry.submission_id)).size;
   const decided = evaluations.filter((entry) => entry.professor_decision).length;
   // An inline rubric is accepted with its assessment: the word is on the assessment.
@@ -328,16 +351,66 @@ const standingOf = ({ bundle, runId, submissions, assessment, enrolled, ledger }
   const plan = readPlan(place);
   const status = scanStatus(place, enrolled);
   const lanes = (plan?.sources ?? []).flatMap((source) => (source.papers ?? []).map((paper) => ({ lane: laneOf(paper) })));
-  const items = bundle.items.filter((item) => item.assessment_id === id).length;
+  const questions = bundle.items.filter((item) => item.assessment_id === id);
+  const items = questions.length;
   const ids = new Set(status.placed.map((student) => scanSubmissionId(student, id)));
+  // The answers a read pile should hold: each paper's own variant's questions,
+  // not every variant's — six variants of fifteen would expect ninety a paper.
+  const variantOf = new Map(
+    bundle.submissions.filter((entry) => ids.has(entry.submission_id)).map((entry) => [entry.submission_id, entry.extensions?.scan?.variant]),
+  );
+  const expected = [...ids].reduce((sum, submission) => sum + itemsForVariant(questions, variantOf.get(submission) ?? undefined).length, 0);
   const responses = bundle.item_responses.filter((entry) => ids.has(entry.submission_id)).length;
   const evaluations = bundle.evaluations.filter((entry) => ids.has(entry.submission_id));
   const rubricId = assessment.rubric_id ?? assessment.rubric?.rubric_id ?? null;
   const rubric = rubricId ? (bundle.rubrics ?? []).find((entry) => entry.rubric_id === rubricId) ?? assessment.rubric ?? null : null;
   const low = status.placed.reduce((sum, student) => sum + lowConfidence(place, student), 0);
   const canvas = canvasMarks({ bundle, runId, assessmentId: id, ledger });
-  const { stages, next, counts } = stagesOf({ papers: lanes, status, assessment, rubric, items, responses, evaluations, low, canvas });
-  return { place, plan, status, items, responses, canvas, stages, next, now: nowOf(next, counts, canvas) };
+  const { stages, next, counts } = stagesOf({ papers: lanes, status, assessment, rubric, expected, responses, evaluations, low, canvas });
+  const lane = (name) => lanes.filter((entry) => entry.lane === name).length;
+  return {
+    place, plan, status, items, responses, canvas, stages, next, now: nowOf(next, counts, canvas),
+    lanes: { placed: lane("placed"), check: lane("check"), held: lane("held"), skipped: lane("skipped") },
+  };
+};
+
+/**
+ * A pile's papers placed on nobody, each with the enrolled students its
+ * written name is nearest. `written` is the name as read: the caller draws it
+ * only when names are on, as it does the crop.
+ */
+export const heldPapers = (plan, { store, enrolled }) =>
+  (plan?.sources ?? []).flatMap((source) =>
+    (source.papers ?? [])
+      .filter((paper) => laneOf(paper) === "held")
+      .map((paper) => ({
+        file: source.file,
+        pages: String(paper.pages),
+        variant: paper.variant ?? null,
+        written: paper.name ? String(paper.name) : null,
+        candidates: nearestOf(paper, { store, enrolled }).map((candidate) => candidate.student),
+      })),
+  );
+
+/**
+ * Every pile's standing for a run, or an empty map when the private folder
+ * cannot be read: for views that only mention scans beside something else
+ * (the Students view's assessment window), where no pile is not an error.
+ * With the roster's directory, each standing also carries its `held` papers.
+ */
+export const scanStandings = (bundle, runId, root, rosterDirectory = null) => {
+  try {
+    const submissions = submissionsDir(null);
+    refuseInsideRepo(submissions, root);
+    const { standings, enrolled } = scanPiles({ bundle, runId, submissions, ledger: Ledger.load(runId) });
+    if (rosterDirectory) {
+      const store = RosterStore.load(rosterDirectory);
+      for (const standing of standings.values()) standing.held = heldPapers(standing.plan, { store, enrolled });
+    }
+    return standings;
+  } catch {
+    return new Map();
+  }
 };
 
 /**
@@ -412,22 +485,8 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
         page_list: paper.clash?.length ? safePages(paper.pages) : [],
         candidates: [],
       };
-      // Every name on the cover suggests; a clash does not — the name already
-      // found its student, and the question is which paper is theirs.
-      const written = [paper.name, ...(paper.also ?? [])].filter(Boolean).map(String);
-      if ((lane === "held" || lane === "check") && written.length && !entry.clash.length) {
-        const nearest = new Map();
-        for (const text of written) {
-          for (const candidate of nameCandidates(text, { store, enrolled, not: paper.not ?? [] })) {
-            const before = nearest.get(candidate.student);
-            if (!before || candidate.distance < before.distance) nearest.set(candidate.student, candidate);
-          }
-        }
-        entry.candidates = [...nearest.values()]
-          .filter((candidate) => candidate.student !== paper.resolved)
-          .sort((a, b) => a.distance - b.distance || a.student.localeCompare(b.student))
-          .slice(0, 3)
-          .map((candidate) => ({ ...candidate, name: nameOf(candidate.student) }));
+      if (lane === "held" || lane === "check") {
+        entry.candidates = nearestOf(paper, { store, enrolled }).map((candidate) => ({ ...candidate, name: nameOf(candidate.student) }));
       }
       papers.push(entry);
     }

@@ -48,7 +48,8 @@ let placeCount = 0;
 
 /**
  * Ask the pane to open a place: `{ mode }` for a reading of the weeks,
- * `{ view }` for a course-wide view, `{ tab }` for a tab in the right column.
+ * `{ view }` for a course-wide view, `{ tab }` for a tab in the right column;
+ * `scans` beside any of them opens that pile in Scans over the place.
  *
  * Kept as well as announced. The pane is session-scoped and the details
  * column can be closed, so the press may land while no pane is listening; the
@@ -127,6 +128,7 @@ const ICONS = {
   plus: ["M12 5v14", "M5 12h14"],
   chevron: ["M8 10l4 4 4-4"],
   course: ["M12 4l9 4-9 4-9-4z", "M7 10v5c0 1.5 2.5 3 5 3s5-1.5 5-3v-5"],
+  held: ["M7 3.5h7l4 4v12a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 19.5v-14.5A1.5 1.5 0 0 1 7 3.5z", "M14 3.5v4h4", "M12 11v4", "M12 18h.01"],
 };
 
 /**
@@ -379,6 +381,31 @@ function ThisWeek(props) {
   );
 }
 
+/**
+ * Scanned papers placed on nobody, one row per pile. Each opens that pile in
+ * Scans, where the papers are named; until they are, whoever wrote them reads
+ * as missing.
+ */
+function HeldPapers(props) {
+  if (!props.piles.length) return null;
+  return h(
+    React.Fragment,
+    null,
+    h("div", { className: "pp-nav-label" }, h("span", null, "Held papers")),
+    props.piles.map((pile) =>
+      h(Row, {
+        key: pile.assessment_id,
+        icon: "held",
+        label: shortTitle(pile.title),
+        hint: pile.title + " — " + pile.held + (pile.held === 1 ? " scanned paper is" : " scanned papers are") + " placed on nobody yet. Say who in Scans.",
+        badge: String(pile.held),
+        badgeHint: pile.held + " not placed on a student",
+        onClick: () => props.onOpen(pile.assessment_id),
+      }),
+    ),
+  );
+}
+
 /** The chats in this course, newest first, six until asked for all. */
 function Chats(props) {
   const [all, setAll] = React.useState(false);
@@ -491,12 +518,17 @@ export function CourseNavigator(props) {
   };
   const pending = data && data.grading ? data.grading.pending : 0;
   const gaps = data && !data.error ? data.gaps : 0;
+  const heldPiles = data && !data.error && Array.isArray(data.held) ? data.held : [];
+  const held = heldPiles.reduce((sum, pile) => sum + pile.held, 0);
+  const openPile = (assessmentId) => place({ view: "files", scans: assessmentId });
   const badgeOf = (id) =>
     id === "weeks" && gaps
       ? { badge: gaps + (gaps === 1 ? " gap" : " gaps"), hint: gaps + " weeks have something missing" }
       : id === "tasks" && pending
         ? { badge: String(pending), hint: pending + " suggested marks wait for your decision" }
-        : { badge: null, hint: null };
+        : id === "files" && held
+          ? { badge: held + " held", hint: held + " scanned papers are placed on nobody yet" }
+          : { badge: null, hint: null };
 
   if (!props.wide) {
     return h(
@@ -561,6 +593,7 @@ export function CourseNavigator(props) {
           })
         : h("div", { className: "pp-nav-quiet" }, "Add a course folder with Folders and search, below."),
       run ? h(ThisWeek, { week: data.week, nextDue: data.next_due, runId: run.run_id }) : null,
+      run ? h(HeldPapers, { piles: heldPiles, onOpen: openPile }) : null,
       run ? h("div", { className: "pp-nav-label" }, h("span", null, "Course")) : null,
       run
         ? PLACES.map((entry) => {

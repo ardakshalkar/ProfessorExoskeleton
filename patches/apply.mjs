@@ -153,7 +153,54 @@ const sessionBrowserTitle = {
   note: "session tab titles carry this host's name, not DeepSeek's",
 };
 
-const PATCHES = [detailsWithoutSession, sessionBrowserTitle];
+/**
+ * The sandbox's private temp directory, re-made when it has disappeared.
+ *
+ * On Windows, `sandbox-local` gives each session one private temp directory
+ * (`%TEMP%\dsh-XXXXXX`, ACL-granted to the confined token) and caches it for the
+ * life of the process:
+ *
+ *     const existing = this.tempCapabilities.get(key);
+ *     if (existing !== void 0) return existing;
+ *
+ * Nothing checks that the directory is still there. On 2026-10-18 it was gone
+ * after a night idle — what deleted it is still unknown — and from then on
+ * EVERY confined command failed with `windows-acl-run: --temp is not an
+ * existing directory`, until the harness was restarted. The model read that as
+ * "the sandbox is broken" and asked for full access on every command, hours
+ * after the restart had fixed it (traced in session-704e6afd).
+ *
+ * The fix is the obvious one: a cached capability whose directory is missing
+ * has its grant disposed and is dropped, and the code below it makes a fresh
+ * directory and grant exactly as it does for a session's first command. There
+ * is no setting for this and no hook in front of it — the cache is a private
+ * field of the provider — so it is a patch.
+ */
+const sandboxTempRecreated = {
+  package: "@deepseek-ai/dsh-sandbox-local",
+  file: "lib/index.js",
+  find:
+    "\t\tconst existing = this.tempCapabilities.get(key);\n" +
+    "\t\tif (existing !== void 0) return existing;\n",
+  replace:
+    "\t\tconst existing = this.tempCapabilities.get(key);\n" +
+    "\t\t/* PATCHED (patches/apply.mjs: sandbox temp): a cached temp directory that\n" +
+    "\t\t   has been deleted is dropped and made again below, instead of failing\n" +
+    "\t\t   every confined command until a restart. */\n" +
+    "\t\tif (existing !== void 0 && !existsSync(existing.dir)) {\n" +
+    "\t\t\tthis.tempCapabilities.delete(key);\n" +
+    "\t\t\ttry {\n" +
+    "\t\t\t\texisting.grant.dispose();\n" +
+    "\t\t\t} catch (error) {\n" +
+    "\t\t\t\tthis.ctx.logger.warn(error);\n" +
+    "\t\t\t}\n" +
+    "\t\t\tthis.ctx.logger.warn(`sandbox-local: temp directory ${existing.dir} was deleted; making a new one`);\n" +
+    "\t\t} else if (existing !== void 0) return existing;\n",
+  marker: "PATCHED (patches/apply.mjs: sandbox temp)",
+  note: "a deleted sandbox temp directory is made again instead of failing every command",
+};
+
+const PATCHES = [detailsWithoutSession, sessionBrowserTitle, sandboxTempRecreated];
 
 let changed = 0;
 let already = 0;

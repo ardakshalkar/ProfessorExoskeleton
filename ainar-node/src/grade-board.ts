@@ -392,7 +392,17 @@ export const gradeBoard = (options: {
     const groupOf = new Map<string, number>();
     itemGroups.forEach((group, index) => (group.students ?? []).forEach((student) => groupOf.set(student, index)));
 
-    const answers: BoardAnswer[] = submissions.map((submission) => {
+    // A variant's question is on that variant's papers only. The variants of
+    // one question share a criterion, so without this a grader's mark for it
+    // would be offered on every variant's copy of the question, read or not.
+    // A paper whose variant is unknown is shown every question, as before.
+    const variant = item.extensions?.variant ?? null;
+    const sat = (submission: any) => {
+      const own = submission.extensions?.scan?.variant ?? null;
+      return variant === null || own === null || String(own) === String(variant);
+    };
+
+    const answers: BoardAnswer[] = submissions.filter(sat).map((submission) => {
       const student = String(submission.student_id);
       const response = responses.get(`${student}|${item.item_id}`);
       const read = transcripts.get(student)?.get(item.item_id);
@@ -572,6 +582,27 @@ export interface DecideResult {
 }
 
 /**
+ * Why a mark has no answer to go on, said so the professor can act on it.
+ * Either the student has no paper at all, or their paper is another variant
+ * and holds no such question. A list sent from the Grade view only does that
+ * when the page was drawn from an older board, so the remedy is a reload.
+ */
+const notOnPaper = (board: Board, bundle: CourseBundle, decision: Decision): string => {
+  const reload = "If this came from the Grade view, the page is out of date: reload it, then press again. Nothing was written.";
+  const submission = (bundle.submissions as any[]).find(
+    (entry) => entry.assessment_id === board.assessment.id && entry.student_id === decision.student,
+  );
+  if (!submission) return `${decision.student} has no paper for ${board.assessment.id}. ${reload}`;
+  const own = submission.extensions?.scan?.variant ?? null;
+  const theirs = (bundle.items as any[]).find((entry) => entry.item_id === decision.item)?.extensions?.variant ?? null;
+  const number = board.items.find((entry) => entry.item_id === decision.item)?.number;
+  return (
+    `${decision.item}${number != null ? ` (question ${number}${theirs ? ` of variant ${theirs}` : ""})` : ""} is not on ` +
+    `${decision.student}'s paper${own ? `, which is variant ${own}` : ""}. ${reload}`
+  );
+};
+
+/**
  * The professor's marks, as Evaluations ready for `writeRecords`.
  *
  * Refuses the whole list before returning anything: a question with no
@@ -599,8 +630,17 @@ export const decideGrades = (options: {
     );
   }
   const items = new Map(board.items.map((item) => [item.item_id, item]));
-  const shared = new Map<string, number>();
-  for (const item of board.items) if (item.criterion) shared.set(item.criterion.criterion_id, (shared.get(item.criterion.criterion_id) ?? 0) + 1);
+  // How many of a criterion's questions are on one student's paper. Variants
+  // of a question share its criterion, one per paper, and that is fine; two
+  // on the same paper would write two marks to one evaluation.
+  const onPaper = new Map<string, number>();
+  for (const item of board.items) {
+    if (!item.criterion) continue;
+    for (const answer of item.answers) {
+      const key = `${answer.student}|${item.criterion.criterion_id}`;
+      onPaper.set(key, (onPaper.get(key) ?? 0) + 1);
+    }
+  }
   const existing = new Map((bundle.evaluations as any[]).map((entry) => [String(entry.evaluation_id), entry]));
 
   const written: any[] = [];
@@ -611,11 +651,13 @@ export const decideGrades = (options: {
     const item = items.get(decision.item);
     if (!item) throw new Error(`${decision.item} is not a written question of ${board.assessment.id}`);
     const criterion = item.criterion!;
-    if ((shared.get(criterion.criterion_id) ?? 0) > 1) {
-      throw new Error(`${criterion.criterion_id} marks more than one question, so a mark per question cannot be written to it`);
+    if ((onPaper.get(`${decision.student}|${criterion.criterion_id}`) ?? 0) > 1) {
+      throw new Error(
+        `${criterion.criterion_id} marks more than one question on ${decision.student}'s paper, so a mark per question cannot be written to it`,
+      );
     }
     const answer = item.answers.find((entry) => entry.student === decision.student);
-    if (!answer) throw new Error(`${decision.student} has no paper for ${board.assessment.id}`);
+    if (!answer) throw new Error(notOnPaper(board, bundle, decision));
     const score = Number(decision.score);
     if (!Number.isFinite(score) || score < 0 || score > criterion.maximum_score) {
       throw new Error(`${decision.student} ${decision.item}: ${decision.score} is outside 0–${criterion.maximum_score}`);

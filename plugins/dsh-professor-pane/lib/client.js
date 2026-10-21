@@ -12001,7 +12001,8 @@ var ICONS2 = {
   folders: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z", "M10.5 14.5a2 2 0 1 0 0-.01", "M12 15.5l2 2"],
   plus: ["M12 5v14", "M5 12h14"],
   chevron: ["M8 10l4 4 4-4"],
-  course: ["M12 4l9 4-9 4-9-4z", "M7 10v5c0 1.5 2.5 3 5 3s5-1.5 5-3v-5"]
+  course: ["M12 4l9 4-9 4-9-4z", "M7 10v5c0 1.5 2.5 3 5 3s5-1.5 5-3v-5"],
+  held: ["M7 3.5h7l4 4v12a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 19.5v-14.5A1.5 1.5 0 0 1 7 3.5z", "M14 3.5v4h4", "M12 11v4", "M12 18h.01"]
 };
 var PLACES = [
   { id: "weeks", label: "Weeks", hint: "The term, week by week — what is planned and what is missing", request: { mode: "planning" } },
@@ -12196,6 +12197,25 @@ function ThisWeek(props) {
     h("div", { className: "pp-nav-week" }, lines.length ? lines : h("div", { className: "pp-nav-quiet" }, "Nothing scheduled"))
   );
 }
+function HeldPapers(props) {
+  if (!props.piles.length) return null;
+  return h(
+    React.Fragment,
+    null,
+    h("div", { className: "pp-nav-label" }, h("span", null, "Held papers")),
+    props.piles.map(
+      (pile) => h(Row, {
+        key: pile.assessment_id,
+        icon: "held",
+        label: shortTitle(pile.title),
+        hint: pile.title + " — " + pile.held + (pile.held === 1 ? " scanned paper is" : " scanned papers are") + " placed on nobody yet. Say who in Scans.",
+        badge: String(pile.held),
+        badgeHint: pile.held + " not placed on a student",
+        onClick: () => props.onOpen(pile.assessment_id)
+      })
+    )
+  );
+}
 function Chats(props) {
   const [all, setAll] = React.useState(false);
   const now = Date.now();
@@ -12270,7 +12290,10 @@ function CourseNavigator(props) {
   };
   const pending = data && data.grading ? data.grading.pending : 0;
   const gaps = data && !data.error ? data.gaps : 0;
-  const badgeOf = (id) => id === "weeks" && gaps ? { badge: gaps + (gaps === 1 ? " gap" : " gaps"), hint: gaps + " weeks have something missing" } : id === "tasks" && pending ? { badge: String(pending), hint: pending + " suggested marks wait for your decision" } : { badge: null, hint: null };
+  const heldPiles = data && !data.error && Array.isArray(data.held) ? data.held : [];
+  const held = heldPiles.reduce((sum, pile) => sum + pile.held, 0);
+  const openPile = (assessmentId) => place({ view: "files", scans: assessmentId });
+  const badgeOf = (id) => id === "weeks" && gaps ? { badge: gaps + (gaps === 1 ? " gap" : " gaps"), hint: gaps + " weeks have something missing" } : id === "tasks" && pending ? { badge: String(pending), hint: pending + " suggested marks wait for your decision" } : id === "files" && held ? { badge: held + " held", hint: held + " scanned papers are placed on nobody yet" } : { badge: null, hint: null };
   if (!props.wide) {
     return h(
       "div",
@@ -12325,6 +12348,7 @@ function CourseNavigator(props) {
         onPick: pick
       }) : h("div", { className: "pp-nav-quiet" }, "Add a course folder with Folders and search, below."),
       run2 ? h(ThisWeek, { week: data.week, nextDue: data.next_due, runId: run2.run_id }) : null,
+      run2 ? h(HeldPapers, { piles: heldPiles, onOpen: openPile }) : null,
       run2 ? h("div", { className: "pp-nav-label" }, h("span", null, "Course")) : null,
       run2 ? PLACES.map((entry) => {
         const badge = badgeOf(entry.id);
@@ -13546,7 +13570,15 @@ function ScansTab(props) {
   const [focus, setFocus] = React.useState(0);
   const [reviewing, setReviewing] = React.useState(false);
   const [grading, setGrading] = React.useState(false);
-  const [openStep, setOpenStep] = React.useState(null);
+  const [openStep, setOpenStep] = React.useState(props.step || null);
+  const [heldFirst, setHeldFirst] = React.useState(props.lane === "held");
+  const heldLane = React.useRef(null);
+  const scrolled = React.useRef(false);
+  React.useEffect(() => {
+    if (!heldFirst || scrolled.current || state.phase !== "ready" || !heldLane.current) return;
+    scrolled.current = true;
+    heldLane.current.scrollIntoView({ block: "start" });
+  });
   const names = props.names;
   const query = (path) => scoped(
     BASE + path + "?run=" + encodeURIComponent(props.runId) + (pile ? "&assessment=" + encodeURIComponent(pile) : ""),
@@ -13631,7 +13663,7 @@ function ScansTab(props) {
   const reviewable = doc.papers.filter(
     (paper) => paper.resolved && !paper.pinned && paper.has_name && (paper.lane === "check" || paper.lane === "placed") || paper.lane === "held" && paper.candidates.length
   ).length;
-  const work = doc.papers.filter((paper) => paper.lane === "check" || paper.lane === "held");
+  const work = heldFirst ? doc.papers.filter((paper) => paper.lane === "held").concat(doc.papers.filter((paper) => paper.lane === "check")) : doc.papers.filter((paper) => paper.lane === "check" || paper.lane === "held");
   const at = Math.min(focus, Math.max(0, work.length - 1));
   const unplaced = doc.class.filter((entry) => !entry.placed);
   const placedPeople = doc.class.filter((entry) => entry.placed);
@@ -13769,10 +13801,24 @@ function ScansTab(props) {
   const held = work.filter((paper) => paper.lane === "held");
   const placed2 = doc.papers.filter((paper) => paper.lane === "placed");
   const skipped = doc.papers.filter((paper) => paper.lane === "skipped");
+  const checkBlock = check.length ? [
+    h(
+      "div",
+      { className: "pp-lane", key: "check-lane" },
+      "Check",
+      h("span", null, "· " + check.length + " placed on a close spelling or one word of the name — confirm, or say who it is")
+    ),
+    ...check.map((paper) => card(paper, work.indexOf(paper)))
+  ] : [];
+  const heldBlock = held.length ? [
+    h("div", { className: "pp-lane", key: "held-lane", ref: heldLane }, "Held", h("span", null, "· " + held.length + " not placed")),
+    ...held.map((paper) => card(paper, work.indexOf(paper)))
+  ] : [];
   const WHOSE = { you: "Your move", assistant: "Assistant", done: "Done" };
   const whose = (value) => h("span", { className: "pp-whose pp-whose-" + value }, WHOSE[value] || value);
   const choosePile = (id) => {
     setOpenStep(null);
+    setHeldFirst(false);
     setFocus(0);
     setPile(id);
   };
@@ -13929,15 +13975,7 @@ function ScansTab(props) {
         "Review all " + reviewable + " name matches"
       )
     ) : null,
-    check.length ? h(
-      "div",
-      { className: "pp-lane", key: "check-lane" },
-      "Check",
-      h("span", null, "· " + check.length + " placed on a close spelling or one word of the name — confirm, or say who it is")
-    ) : null,
-    ...check.map((paper) => card(paper, work.indexOf(paper))),
-    held.length ? h("div", { className: "pp-lane", key: "held-lane" }, "Held", h("span", null, "· " + held.length + " not placed")) : null,
-    ...held.map((paper) => card(paper, work.indexOf(paper))),
+    ...heldFirst ? heldBlock.concat(checkBlock) : checkBlock.concat(heldBlock),
     work.length ? h("div", { className: "pp-cardmeta", key: "keys" }, "j / k to move between papers, Enter to confirm") : null,
     h(
       "details",
@@ -14066,7 +14104,9 @@ function ScansModal(props) {
           ask: props.ask,
           onWrite: props.onWrite,
           revision: props.revision,
-          pile: props.pile
+          pile: props.pile,
+          step: props.step,
+          lane: props.lane
         })
       )
     ),
@@ -14512,6 +14552,7 @@ function ProfessorPane(props) {
   const [batch, setBatch] = React.useState(false);
   const [grading, setGrading] = React.useState(null);
   const [scansPile, setScansPile] = React.useState(null);
+  const [scansStep, setScansStep] = React.useState(null);
   const openRef = React.useRef(props.openDetails);
   openRef.current = props.openDetails;
   React.useEffect(() => {
@@ -14529,6 +14570,10 @@ function ProfessorPane(props) {
       if (request.compose) setChatBeside(false);
       setPlaceRequest(request);
       setCourseMode(true);
+      if (typeof request.scans === "string" && /^[A-Z0-9][A-Z0-9-]*$/.test(request.scans)) {
+        setScansStep("match");
+        setScansPile(request.scans);
+      }
     };
     answer(takePendingPlace());
     const onPlace = (event) => {
@@ -14675,6 +14720,28 @@ function ProfessorPane(props) {
             "/defend-submission " + data.assessment + " " + run2 + " " + data.student + " — the clone failed: " + said
           );
         }).catch(() => write(["defence"]));
+        return;
+      }
+      if (data.kind === "scans-place") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run2 = currentRunRef.current;
+        if (!run2 || !id.test(String(data.assessment)) || !/^STUDENT-[A-Z0-9]+$/.test(String(data.student))) return;
+        fetch(
+          scoped(BASE + "/api/scans/assign?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file: String(data.file || ""), pages: String(data.pages || ""), student: data.student })
+          }
+        ).then((response) => response.json()).then((result) => {
+          if (result.error || !result.ok) {
+            window.alert(String(result.error || result.output || "the paper was not placed").trim().split("\n").slice(-2).join(" "));
+          }
+          write(["scans", "files"]);
+        }).catch((error) => {
+          window.alert("the paper was not placed: " + String(error));
+          write(["scans", "files"]);
+        });
         return;
       }
       if (data.kind === "grade" || data.kind === "scans") {
@@ -14987,11 +15054,17 @@ function ProfessorPane(props) {
       runId: current.runId,
       sessionId: props.sessionId,
       pile: scansPile,
+      step: scansStep,
+      // Opened at Match from Held papers: the held lane first.
+      lane: scansStep === "match" ? "held" : null,
       names,
       revision: scansVersion,
       ask: props.ask,
       onWrite: () => write(["scans", "files"]),
-      onClose: () => setScansPile(null)
+      onClose: () => {
+        setScansPile(null);
+        setScansStep(null);
+      }
     }) : null,
     batch && current ? h(BatchModal, {
       runId: current.runId,

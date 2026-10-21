@@ -2295,7 +2295,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       if (!SUBS.includes(sub) || !runId || !assessmentId) {
         console.error(
           "usage: grade status RUN --assessment A [--json]\n" +
-            "       grade decide RUN --assessment A --decisions '[{\"student\":\"STUDENT-…\",\"item\":\"ITEM-…\",\"score\":2}]' [--via one|group|all] [--by USER-…]\n" +
+            "       grade decide RUN --assessment A --decisions '[{\"student\":\"STUDENT-…\",\"item\":\"ITEM-…\",\"score\":2}]' (or - to read it from stdin) [--via one|group|all] [--by USER-…]\n" +
             "       grade move RUN --assessment A --item ITEM (--group N (--score S | --unscored) | --student S (--to N | --ungroup))\n" +
             "       grade choose RUN --assessment A --proposal ID [--item ITEM]\n" +
             "       grade {accept-rubric|points-only} RUN --assessment A",
@@ -2346,7 +2346,9 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       if (sub === "decide") {
         const given = flag("decisions");
         if (!given) throw new Error("--decisions is a JSON list of {student, item, score, comment?}");
-        const decisions = JSON.parse(given);
+        // `-` reads the list from stdin, which the pane uses: thousands of marks
+        // do not fit on a Windows command line.
+        const decisions = JSON.parse(given === "-" ? readFileSync(0, "utf8") : given);
         if (!Array.isArray(decisions) || !decisions.length) throw new Error("--decisions is a JSON list of {student, item, score, comment?}");
         const via = (flag("via") ?? "one") as DecidedVia;
         if (!["one", "group", "all"].includes(via)) throw new Error(`--via is one, group or all, not ${via}`);

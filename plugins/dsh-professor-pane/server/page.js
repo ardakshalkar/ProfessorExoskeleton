@@ -268,13 +268,25 @@ export const todoOr = (value) =>
  * mistake this whole pane is shaped to avoid.
  */
 
-/** `2026-09-18T09:00:00+05:00` as `2026-09-18 09:00`, in the run's own offset. */
+/**
+ * `2026-09-18T09:00:00+05:00` as `2026-09-18 09:00`, in the run's own offset;
+ * `2026-10-20T04:54:00.501Z` as `2026-10-20 09:54` on a machine at +05:00.
+ */
 export const stamp = (value) => {
   const text = String(value ?? "");
   const match = /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/.exec(text);
   if (!match) return text.slice(0, 10);
-  // Sliced, not parsed: `new Date(...)` would re-render this in the machine's
-  // timezone, and a deadline is a claim in the course's.
+  // A `Z` is a moment this machine wrote down — a recording, a hand-in, a
+  // sync — and reads in the professor's own clock.
+  if (/Z$/i.test(text)) {
+    const at = new Date(text);
+    if (!Number.isNaN(at.getTime())) {
+      const two = (n) => String(n).padStart(2, "0");
+      return `${at.getFullYear()}-${two(at.getMonth() + 1)}-${two(at.getDate())} ${two(at.getHours())}:${two(at.getMinutes())}`;
+    }
+  }
+  // An offset is sliced, not parsed: `new Date(...)` would re-render it in the
+  // machine's timezone, and a deadline is a claim in the course's.
   return `${match[1]} ${match[2]}`;
 };
 

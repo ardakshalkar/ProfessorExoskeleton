@@ -4,8 +4,9 @@
  * The sidebar is the professor's "where am I" — which course, which week, what
  * is waiting — and it is drawn on every screen, so this is deliberately small:
  * the run the navigator stands on, the current week as the outline payload
- * already has it, the next week anything falls due in, and two counts that
- * payloads already carry. No figure is computed here that a payload did not
+ * already has it, the next week anything falls due in, two counts that
+ * payloads already carry, and each scan pile's held papers as the Scans tab
+ * counts them. No figure is computed here that another document did not
  * already hold; the navigator picks fields, it does not add them up.
  *
  * Which halves:
@@ -18,7 +19,8 @@
  *   over the record it is always zero.
  */
 
-import { runsDocument, viewPayload } from "./workspace.js";
+import { scanStandings } from "./scans.js";
+import { loadedRun, runsDocument, viewPayload } from "./workspace.js";
 
 /** Today in the machine's calendar, as the ISO date the run's dates are. */
 const today = () => {
@@ -112,6 +114,20 @@ export const navigatorDocument = (workspace, root, askedRun, askedWeek = null) =
     grading = null;
   }
 
+  // Scanned papers placed on nobody, pile by pile: until each is, whoever
+  // wrote it reads as missing everywhere else in the pane. The Scans tab's
+  // own lane count, so the sidebar and the tab cannot disagree.
+  let held = [];
+  try {
+    const { bundle } = loadedRun(workspace, runId);
+    const titles = new Map((bundle.assessments ?? []).map((entry) => [entry.assessment_id, entry.title ?? entry.assessment_id]));
+    held = [...scanStandings(bundle, runId, root).entries()]
+      .filter(([, standing]) => standing.lanes.held > 0)
+      .map(([assessmentId, standing]) => ({ assessment_id: assessmentId, title: titles.get(assessmentId) ?? assessmentId, held: standing.lanes.held }));
+  } catch {
+    held = [];
+  }
+
   return {
     courses,
     run: {
@@ -135,5 +151,6 @@ export const navigatorDocument = (workspace, root, askedRun, askedWeek = null) =
     next_due: next && next !== current ? { week: next.week, due: next.due.map(workLine) } : null,
     gaps: outline.totals && outline.totals.gaps ? outline.totals.gaps.weeks : 0,
     grading,
+    held,
   };
 };

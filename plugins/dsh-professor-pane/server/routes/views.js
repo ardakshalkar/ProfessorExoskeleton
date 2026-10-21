@@ -17,9 +17,11 @@ import { defenceReader, forksReader } from "../defence-desk.js";
 import { send, sendErrorPage } from "../http.js";
 import { withMaterialLinks } from "../materials.js";
 import { widgetDocument } from "../page.js";
+import { scanStandings } from "../scans.js";
 import { studentsDocument } from "../students.js";
 import {
   payload,
+  rosterDir,
   viewPayload,
   VIEWS,
   withRecordPaths,
@@ -103,6 +105,7 @@ export const routes = [
           url.searchParams.get("session") ?? "",
           defenceReader(root, runId),
           forksReader(root, runId),
+          (bundle) => scanStandings(bundle, runId, root, rosterDir()),
         ),
       );
     },

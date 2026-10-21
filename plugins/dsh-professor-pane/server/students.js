@@ -9,6 +9,7 @@ import { gradeChanges } from "@ainar/core/src/grade-changes.ts";
 import { finalRange, gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { ASSESSMENT_KINDS } from "@ainar/core/src/assessment-kinds.ts";
 
+import { assessmentDialog, assessmentWindowScript, assessmentWindowStyle, summarise, windowPanel } from "./assessment-window.js";
 import { BASE } from "./http.js";
 import { escapeText } from "./markdown.js";
 import { extensionOfKey, SHOWABLE } from "./materials.js";
@@ -24,6 +25,7 @@ export const studentsDocument = (
   sessionId,
   defenceOf = null,
   forksOf = null,
+  pilesOf = null,
 ) => {
   const { bundle, issues } = loadedRun(workspace, runId);
   const enrolled = enrollmentsOf(bundle, runId);
@@ -1257,7 +1259,8 @@ export const studentsDocument = (
               kind.assessments
                 .map(
                   (a, i) =>
-                    '<span class="n" title="' + escapeText(a.title ?? a.assessment_id) + '">' + escapeText(shortOf(a, i)) + "</span>",
+                    '<button type="button" class="n" data-aw="' + escapeText(a.assessment_id) + '" title="' +
+                    escapeText((a.title ?? a.assessment_id) + " — press for the class's results") + '">' + escapeText(shortOf(a, i)) + "</button>",
                 )
                 .join("") +
               "</span></span>",
@@ -1267,6 +1270,46 @@ export const studentsDocument = (
       : "") +
     active.slice().sort(byDisplayed).map((entry) => student(entry, false)).join("") +
     "</div>";
+
+  /*
+   * The window a header number opens: that assessment across the active
+   * class, from the same cells the rows draw, the rubric's questions with
+   * their decided marks, and — for a paper exam — its pile's standing.
+   */
+  const piles = weighted.length && pilesOf ? pilesOf(bundle) : new Map();
+  const rubrics = allRubrics(bundle);
+  const standings = new Map(active.map((entry) => [String(entry.student_id ?? ""), standingOf(String(entry.student_id ?? ""))]));
+  const assessmentPanels = weighted.map((a) => {
+    const record = (bundle.assessments ?? []).find((entry) => entry.assessment_id === a.assessment_id) ?? a;
+    const rubric = rubrics.get(record.rubric_id ?? record.rubric?.rubric_id ?? "") ?? null;
+    const subs = new Set((bundle.submissions ?? []).filter((entry) => entry.assessment_id === a.assessment_id).map((entry) => entry.submission_id));
+    return windowPanel(
+      summarise({
+        assessment: { ...record, weight: a.weight ?? record.weight, due_at: a.due_at ?? record.due_at },
+        cells: active.map((entry) => {
+          const id = String(entry.student_id ?? "");
+          const cell = standings.get(id).cells.get(a.assessment_id);
+          return { student: id, group: label(entry), state: cell.state, entry: cell.entry };
+        }),
+        criteria: rubric?.criteria ?? [],
+        evaluations: (bundle.evaluations ?? []).filter((entry) => subs.has(entry.submission_id)),
+        pile: piles.get(a.assessment_id) ?? null,
+        names: Boolean(people),
+      }),
+      {
+        nameOf: (id) => (people && typeof people[id]?.name === "string" && people[id].name.trim() ? people[id].name.trim() : id),
+        when: stamp,
+        // The top of the paper is the handwritten name: only with names on.
+        crop: (paper) =>
+          people
+            ? `${origin}${BASE}/api/scans/crop?run=` + encodeURIComponent(runId) + "&assessment=" + encodeURIComponent(a.assessment_id) +
+              "&file=" + encodeURIComponent(paper.file) + "&pages=" + encodeURIComponent(paper.pages) +
+              (sessionId ? "&session=" + encodeURIComponent(sessionId) : "")
+            : null,
+      },
+    );
+  });
+  const assessmentWindow = weighted.length ? assessmentDialog(assessmentPanels) : "";
 
   const departed = inactive.length
     ? '<section class="tbl" data-departed="1" style="--cols:' + columns + '"><h2>No longer active</h2>' +
@@ -1808,7 +1851,8 @@ export const studentsDocument = (
     "});})();</script>";
 
   return documentPage(
-    workStyle + header + filterBar + list + legend + departed + drawer + filterScript + drawerScript + defenceScript + VIEW_SCRIPT,
+    workStyle + "<style>" + assessmentWindowStyle + "</style>" + header + filterBar + list + legend + departed + drawer + assessmentWindow +
+      filterScript + drawerScript + defenceScript + assessmentWindowScript + VIEW_SCRIPT,
     dark,
   );
 };

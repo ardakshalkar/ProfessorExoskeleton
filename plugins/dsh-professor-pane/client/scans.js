@@ -27,7 +27,18 @@ function ScansTab(props) {
   const [reviewing, setReviewing] = React.useState(false);
   const [grading, setGrading] = React.useState(false);
   // The step whose detail is open; null follows the pile's current step.
-  const [openStep, setOpenStep] = React.useState(null);
+  // `props.step` opens on one: Match, when the press was on its held papers.
+  const [openStep, setOpenStep] = React.useState(props.step || null);
+  // `props.lane === "held"`: opened from the navigator's Held papers, so
+  // Match shows the held lane first and is scrolled to it once it draws.
+  const [heldFirst, setHeldFirst] = React.useState(props.lane === "held");
+  const heldLane = React.useRef(null);
+  const scrolled = React.useRef(false);
+  React.useEffect(() => {
+    if (!heldFirst || scrolled.current || state.phase !== "ready" || !heldLane.current) return;
+    scrolled.current = true;
+    heldLane.current.scrollIntoView({ block: "start" });
+  });
   const names = props.names;
 
   const query = (path) =>
@@ -148,7 +159,10 @@ function ScansTab(props) {
       (paper.resolved && !paper.pinned && paper.has_name && (paper.lane === "check" || paper.lane === "placed")) ||
       (paper.lane === "held" && paper.candidates.length),
   ).length;
-  const work = doc.papers.filter((paper) => paper.lane === "check" || paper.lane === "held");
+  // The cards in the order they are drawn, so j/k and Enter follow the page.
+  const work = heldFirst
+    ? doc.papers.filter((paper) => paper.lane === "held").concat(doc.papers.filter((paper) => paper.lane === "check"))
+    : doc.papers.filter((paper) => paper.lane === "check" || paper.lane === "held");
   const at = Math.min(focus, Math.max(0, work.length - 1));
   const unplaced = doc.class.filter((entry) => !entry.placed);
   const placedPeople = doc.class.filter((entry) => entry.placed);
@@ -318,11 +332,29 @@ function ScansTab(props) {
   const held = work.filter((paper) => paper.lane === "held");
   const placed = doc.papers.filter((paper) => paper.lane === "placed");
   const skipped = doc.papers.filter((paper) => paper.lane === "skipped");
+  const checkBlock = check.length
+    ? [
+        h(
+          "div",
+          { className: "pp-lane", key: "check-lane" },
+          "Check",
+          h("span", null, "· " + check.length + " placed on a close spelling or one word of the name — confirm, or say who it is"),
+        ),
+        ...check.map((paper) => card(paper, work.indexOf(paper))),
+      ]
+    : [];
+  const heldBlock = held.length
+    ? [
+        h("div", { className: "pp-lane", key: "held-lane", ref: heldLane }, "Held", h("span", null, "· " + held.length + " not placed")),
+        ...held.map((paper) => card(paper, work.indexOf(paper))),
+      ]
+    : [];
 
   const WHOSE = { you: "Your move", assistant: "Assistant", done: "Done" };
   const whose = (value) => h("span", { className: "pp-whose pp-whose-" + value }, WHOSE[value] || value);
   const choosePile = (id) => {
     setOpenStep(null);
+    setHeldFirst(false);
     setFocus(0);
     setPile(id);
   };
@@ -512,19 +544,7 @@ function ScansTab(props) {
             ),
           )
         : null,
-    check.length
-      ? h(
-          "div",
-          { className: "pp-lane", key: "check-lane" },
-          "Check",
-          h("span", null, "· " + check.length + " placed on a close spelling or one word of the name — confirm, or say who it is"),
-        )
-      : null,
-    ...check.map((paper) => card(paper, work.indexOf(paper))),
-    held.length
-      ? h("div", { className: "pp-lane", key: "held-lane" }, "Held", h("span", null, "· " + held.length + " not placed"))
-      : null,
-    ...held.map((paper) => card(paper, work.indexOf(paper))),
+    ...(heldFirst ? heldBlock.concat(checkBlock) : checkBlock.concat(heldBlock)),
     work.length ? h("div", { className: "pp-cardmeta", key: "keys" }, "j / k to move between papers, Enter to confirm") : null,
     h(
       "details",
@@ -677,6 +697,8 @@ export function ScansModal(props) {
           onWrite: props.onWrite,
           revision: props.revision,
           pile: props.pile,
+          step: props.step,
+          lane: props.lane,
         }),
       ),
     ),

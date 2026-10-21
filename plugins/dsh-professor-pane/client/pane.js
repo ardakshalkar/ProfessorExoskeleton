@@ -168,6 +168,8 @@ export function ProfessorPane(props) {
   // course mode: `{ assessment, label }` and an assessment id, or null.
   const [grading, setGrading] = React.useState(null);
   const [scansPile, setScansPile] = React.useState(null);
+  // The step Scans opens on, or null for the pile's current one.
+  const [scansStep, setScansStep] = React.useState(null);
 
   // Open the column this pane lives in, once per session.
   //
@@ -220,6 +222,12 @@ export function ProfessorPane(props) {
       if (request.compose) setChatBeside(false);
       setPlaceRequest(request);
       setCourseMode(true);
+      // `scans`: a pile pressed under Held papers, opened in Scans over the
+      // place at Match, where the held papers are named.
+      if (typeof request.scans === "string" && /^[A-Z0-9][A-Z0-9-]*$/.test(request.scans)) {
+        setScansStep("match");
+        setScansPile(request.scans);
+      }
     };
     answer(takePendingPlace());
     const onPlace = (event) => {
@@ -440,6 +448,34 @@ export function ProfessorPane(props) {
             );
           })
           .catch(() => write(["defence"]));
+        return;
+      }
+      // "This is …" on a held paper in the Students view's exam window:
+      // `scans assign`, exactly as the Scans tab's Held lane sends it. The
+      // frame has nowhere to say a refusal, so it is said here.
+      if (data.kind === "scans-place") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run = currentRunRef.current;
+        if (!run || !id.test(String(data.assessment)) || !/^STUDENT-[A-Z0-9]+$/.test(String(data.student))) return;
+        fetch(
+          scoped(BASE + "/api/scans/assign?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ file: String(data.file || ""), pages: String(data.pages || ""), student: data.student }),
+          },
+        )
+          .then((response) => response.json())
+          .then((result) => {
+            if (result.error || !result.ok) {
+              window.alert(String(result.error || result.output || "the paper was not placed").trim().split("\n").slice(-2).join(" "));
+            }
+            write(["scans", "files"]);
+          })
+          .catch((error) => {
+            window.alert("the paper was not placed: " + String(error));
+            write(["scans", "files"]);
+          });
         return;
       }
       // Planning writes its own dates now (client/course/planning.jsx).
@@ -857,11 +893,17 @@ export function ProfessorPane(props) {
           runId: current.runId,
           sessionId: props.sessionId,
           pile: scansPile,
+          step: scansStep,
+          // Opened at Match from Held papers: the held lane first.
+          lane: scansStep === "match" ? "held" : null,
           names: names,
           revision: scansVersion,
           ask: props.ask,
           onWrite: () => write(["scans", "files"]),
-          onClose: () => setScansPile(null),
+          onClose: () => {
+            setScansPile(null);
+            setScansStep(null);
+          },
         })
       : null,
     batch && current

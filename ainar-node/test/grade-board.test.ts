@@ -224,7 +224,7 @@ test("decisions are refused whole: no accepted rubric, a score out of range, a s
   const board = gradeBoard({ bundle, runId: RUN, assessmentId: QUIZ, place });
   const decide = (decisions: any[], by = "USER-PROF") => () => decideGrades({ board, bundle, by, at: AT, via: "one", decisions });
   assert.throws(decide([{ student: A, item: "ITEM-Q9-01", score: 3 }]), /outside 0–2/);
-  assert.throws(decide([{ student: "STUDENT-ZZZZZZ", item: "ITEM-Q9-01", score: 1 }]), /has no paper/);
+  assert.throws(decide([{ student: "STUDENT-ZZZZZZ", item: "ITEM-Q9-01", score: 1 }]), /has no paper for ASSESSMENT-QUIZ-09\. .*reload it/);
   assert.throws(decide([{ student: A, item: "ITEM-Q9-07", score: 1 }]), /not a written question/);
   assert.throws(decide([one[0], one[0]]), /decided twice/);
   assert.throws(decide(one, ""), /not a USER- id/);
@@ -452,4 +452,48 @@ test("revising a rubric that has marks keeps them, and can be accepted in the sa
   assert.equal(a.decision!.score, 1);
   assert.equal(a.now, 0);
   assert.deepEqual(again.marks.at["1"], { decided: 1, suggested: 0 });
+});
+test("variants: each copy of a question lists its own variant's papers, and their shared criterion takes one mark each", () => {
+  const { place, bundle } = fixture();
+  // Question 1 in two variants, one criterion between them; A sat A, B sat B.
+  bundle.items = [
+    item(1, { item_id: "ITEM-Q9-A-01", criterion_id: "CRIT-Q9-01", extensions: { variant: "A" } }),
+    item(1, { item_id: "ITEM-Q9-B-01", criterion_id: "CRIT-Q9-01", extensions: { variant: "B" } }),
+  ];
+  bundle.submissions = [
+    { submission_id: sub(A), assessment_id: QUIZ, student_id: A, extensions: { scan: { variant: "A" } } },
+    { submission_id: sub(B), assessment_id: QUIZ, student_id: B, extensions: { scan: { variant: "B" } } },
+  ];
+  bundle.item_responses = [];
+  writeFileSync(join(place.base, A, "transcript.yaml"), `answers:\n  - { item: ITEM-Q9-A-01, text: "tokens are rare", page: 1 }\n`);
+  writeFileSync(join(place.base, B, "transcript.yaml"), `answers:\n  - { item: ITEM-Q9-B-01, text: "few Kazakh pieces", page: 1 }\n`);
+  writeGroups(place, { assessment_id: QUIZ, items: [] });
+  // A grader's suggestion is kept per criterion, so it used to show on both copies.
+  bundle.evaluations = [
+    { evaluation_id: evaluationId(A, "CRIT-Q9-01"), submission_id: sub(A), criterion_id: "CRIT-Q9-01", status: "suggested", ai_suggestion: { score: 1 } },
+  ];
+  const board = gradeBoard({ bundle, runId: RUN, assessmentId: QUIZ, place });
+  const [qa, qb] = board.items;
+  assert.deepEqual(qa!.answers.map((answer) => answer.student), [A]);
+  assert.deepEqual(qb!.answers.map((answer) => answer.student), [B]);
+  assert.equal(qa!.answers[0]!.suggestion!.source, "grader");
+
+  const result = decideGrades({
+    board, bundle, by: "USER-PROF", at: AT, via: "all",
+    decisions: [{ student: A, item: "ITEM-Q9-A-01", score: 1 }, { student: B, item: "ITEM-Q9-B-01", score: 2 }],
+  });
+  assert.equal(result.written, 2);
+  assert.throws(
+    () => decideGrades({ board, bundle, by: "USER-PROF", at: AT, via: "one", decisions: [{ student: A, item: "ITEM-Q9-B-01", score: 1 }] }),
+    /ITEM-Q9-B-01 \(question 1 of variant B\) is not on STUDENT-AAAAAA's paper, which is variant A\. .*reload it/,
+    "a paper is not offered another variant's question, and a stale page is told to reload",
+  );
+
+  // Two questions under one criterion on the same paper still cannot each take a mark.
+  bundle.items = bundle.items.map(({ extensions, ...rest }: any) => rest);
+  const both = gradeBoard({ bundle, runId: RUN, assessmentId: QUIZ, place });
+  assert.throws(
+    () => decideGrades({ board: both, bundle, by: "USER-PROF", at: AT, via: "one", decisions: [{ student: A, item: "ITEM-Q9-A-01", score: 1 }] }),
+    /more than one question on STUDENT-AAAAAA's paper/,
+  );
 });

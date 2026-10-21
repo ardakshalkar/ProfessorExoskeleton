@@ -20,7 +20,8 @@
  *   pane, the assistant, an editor.
  * * **Tags** for what the pane writes outside those files: `integrations`
  *   (connections, credentials, Canvas links), `syncs`, `scans`, `files`,
- *   `preferences`, `grading`, `defence`. A write names its tag.
+ *   `preferences`, `grading`, `defence`, `canvas` (a check of Canvas noted
+ *   what it holds; client/canvas-check.js). A write names its tag.
  *
  * After its own write the pane calls `wrote(tags)`: the tags are bumped and the
  * revision is asked at once (`fresh`, past the server's one-second cache), so
@@ -194,11 +195,11 @@ export function wrote(sessionId, tags = []) {
  */
 export const AREAS = {
   everything: ["*"],
-  integrations: ["integrations", "version", "course", "assessments"],
-  syncs: ["syncs", "records", "assessments", "integrations"],
-  marks: ["records", "assessments", "syncs", "integrations", "grading"],
+  integrations: ["integrations", "version", "course", "assessments", "canvas"],
+  syncs: ["syncs", "records", "assessments", "integrations", "canvas"],
+  marks: ["records", "assessments", "syncs", "integrations", "grading", "canvas"],
   grading: ["grading", "version", "assessments", "records"],
   files: ["files", "scans", "defence", "records"],
   scans: ["scans", "files", "records", "assessments"],
-  grade: ["records", "assessments", "items", "grading"],
+  grade: ["records", "assessments", "items", "grading", "canvas"],
 };

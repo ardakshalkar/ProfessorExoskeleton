@@ -85,11 +85,14 @@ export const routes = [
       if (WRITES.includes(path)) {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
         loadedRun(workspace, runId); // the run has to be this workspace's
-        return readBody(req)
+        // Accept all sends a mark per suggested answer — thousands on a long
+        // exam — so the body may be larger than a card's press.
+        return readBody(req, 8 * 1024 * 1024)
           .then((text) => {
             const body = text ? JSON.parse(text) : {};
             const sub = path.slice("/api/grade/".length);
             const args = ["grade", sub, runId, "--assessment", assessmentId];
+            let input = null;
             const itemId = (value) => {
               if (!/^ITEM-[A-Z0-9][A-Z0-9-]*$/.test(String(value))) throw new Error("Not a question id.");
               return String(value);
@@ -105,7 +108,8 @@ export const routes = [
             };
             if (sub === "decide") {
               const list = Array.isArray(body.decisions) ? body.decisions : [];
-              if (!list.length || list.length > 2000) throw new Error("No marks given.");
+              if (!list.length) throw new Error("No marks given.");
+              if (list.length > 50000) throw new Error(`${list.length} marks in one press is more than this route takes (50,000).`);
               const decisions = list.map((entry) => ({
                 student: pseudonym(entry.student),
                 item: itemId(entry.item),
@@ -113,7 +117,10 @@ export const routes = [
                 ...(entry.comment ? { comment: String(entry.comment).slice(0, 2000) } : {}),
               }));
               const via = ["one", "group", "all"].includes(body.via) ? body.via : "one";
-              args.push("--decisions", JSON.stringify(decisions), "--via", via);
+              // On stdin, not the command line: Windows caps that at 32,767
+              // characters, which a few hundred marks pass.
+              args.push("--decisions", "-", "--via", via);
+              input = JSON.stringify(decisions);
             } else if (sub === "choose") {
               if (!/^[A-Za-z0-9][\w-]{0,30}$/.test(String(body.proposal ?? ""))) throw new Error("Not a proposal id.");
               args.push("--proposal", String(body.proposal));
@@ -133,7 +140,7 @@ export const routes = [
                 else args.push("--score", String(score(body.score)));
               }
             }
-            return runScans(args, root).then((result) => sendJson(res, 200, result));
+            return runScans(args, root, 300000, input).then((result) => sendJson(res, 200, result));
           })
           .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
       }

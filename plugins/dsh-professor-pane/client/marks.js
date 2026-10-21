@@ -3,6 +3,7 @@
  * not been published yet.
  */
 
+import { useCanvasCheck } from "./canvas-check.js";
 import { Message } from "./common.js";
 import { h, React, ReactDOM } from "./react.js";
 import { initials, when } from "./syncs.js";
@@ -721,51 +722,6 @@ export function useUnpublished(runId, sessionId, revision) {
   return state;
 }
 
-/** How old a check of Canvas may be before opening the Gradebook asks again. */
-const CANVAS_CHECK_FRESH = 5 * 60 * 1000;
-
-/**
- * `/api/canvas/check` for one run: what Canvas holds, asked of Canvas. The
- * last answer comes back at once; if there is none, or it is older than five
- * minutes, a new check runs in the background. `onChecked` fires when one
- * finishes — the check notes in the ledger what Canvas already holds, so the
- * counts drawn from the ledger are re-read then.
- */
-function useCanvasCheck(runId, sessionId, onChecked) {
-  const [state, setState] = React.useState({ phase: "loading", value: null });
-  const live = React.useRef(true);
-  const url = scoped(BASE + "/api/canvas/check?run=" + encodeURIComponent(runId || ""), sessionId);
-  const run = React.useCallback(() => {
-    setState((current) => Object.assign({}, current, { phase: "running" }));
-    fetch(url, { method: "POST", headers: { accept: "application/json" } })
-      .then((response) => response.json())
-      .then((answer) => {
-        if (!live.current) return;
-        setState({ phase: "ready", value: answer });
-        if (onChecked) onChecked();
-      })
-      .catch((error) => live.current && setState({ phase: "ready", value: { error: String(error) } }));
-  }, [url]);
-  React.useEffect(() => {
-    live.current = true;
-    if (!runId) return undefined;
-    fetch(url, { headers: { accept: "application/json" } })
-      .then((response) => response.json())
-      .then((answer) => {
-        if (!live.current) return;
-        if (answer.state === "running") return run();
-        const stale = answer.state !== "ready" || !answer.at || Date.now() - Date.parse(answer.at) > CANVAS_CHECK_FRESH;
-        setState({ phase: "ready", value: answer });
-        if (stale) run();
-      })
-      .catch(() => live.current && run());
-    return () => {
-      live.current = false;
-    };
-  }, [url]);
-  return [state, run];
-}
-
 /** Per assessment, the marks someone changed in Canvas, from the last check. */
 const editedIn = (check) => {
   const found = new Map();
@@ -850,10 +806,10 @@ export const TitleWithTag = (props) => {
  * saying "nothing handed in" would bury the two that matter.
  */
 export function GradebookStatus(props) {
-  // Re-read after a check of Canvas: it notes in the ledger what Canvas holds.
-  const [checked, setChecked] = React.useState(0);
-  const state = useUnpublished(props.runId, props.sessionId, props.revision + "." + checked);
-  const [check, recheck] = useCanvasCheck(props.runId, props.sessionId, () => setChecked((value) => value + 1));
+  // A finished check of Canvas bumps the `canvas` tag, which the marks
+  // revision follows: it notes in the ledger what Canvas holds.
+  const state = useUnpublished(props.runId, props.sessionId, props.revision);
+  const [check, recheck] = useCanvasCheck(props.runId, props.sessionId);
   // The one assessment whose Canvas send is open under its row.
   const [open, setOpen] = React.useState(null);
   if (state.phase === "loading" || !state.value || state.value.error) return null;

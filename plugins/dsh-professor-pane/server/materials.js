@@ -331,31 +331,71 @@ export const withMaterialLinks = (data, origin, sessionId, workspace, dark, with
     return at === documentId ? null : at;
   };
 
+  /**
+   * Everything rendered from a document, any number of hops down.
+   *
+   * `rendered_from` read backwards. A resource that names the deck's MARKDOWN
+   * — the usual case since decks are written as `.md` and built by
+   * `ainar deck` — reaches its `.pptx` and `.pdf` only this way: the stem
+   * pairing below never offered them, because it only counted office formats
+   * and a markdown source is not one, so the chip had no siblings to show.
+   */
+  const derivedOf = (documentId) => {
+    const out = [];
+    const seen = new Set([documentId]);
+    const queue = [documentId];
+    while (queue.length > 0) {
+      const at = queue.shift();
+      for (const [child, parent] of renderedFrom) {
+        if (parent !== at || seen.has(child)) continue;
+        seen.add(child);
+        out.push(child);
+        queue.push(child);
+      }
+    }
+    return out;
+  };
+
   /** The formats a document is available in, itself first. */
   const formatsFor = (documentId) => {
-    for (const [, group] of byStem) {
-      const self = group.find((entry) => entry.id === documentId);
-      if (!self) continue;
-      // Only formats worth a separate button. A deck beside its own build
-      // script shares no stem, so this stays a small set in practice.
-      const shown = group.filter((entry) => ["pptx", "pdf", "docx"].includes(entry.extension));
-      if (shown.length < 2) return [];
-      return shown
-        .sort((a, b) => (a.id === documentId ? -1 : b.id === documentId ? 1 : 0))
-        .map((entry) => ({
-          label: entry.extension.toUpperCase(),
-          url: address(entry.id),
-          viewable: showable(entry.id),
-          // The extension travels with the link because the overlay sandboxes
-          // a document and does not sandbox a PDF. See MEDIA in `client.js`.
-          //
-          // What is served, not what is stored: a `.pptx` this machine can
-          // render arrives as a PDF, and a frame told it is a `.pptx` would
-          // sandbox the browser's own PDF viewer and paint nothing.
-          format: servedFormat(entry.id),
-        }));
+    const own = extensionOf.get(documentId);
+    if (own === undefined) return [];
+    // Only formats worth a separate button. A deck beside its own build
+    // script shares no stem, so this stays a small set in practice.
+    const OFFICE = ["pptx", "pdf", "docx"];
+    const others = new Map();
+    for (const id of derivedOf(documentId)) {
+      const extension = extensionOf.get(id);
+      if (OFFICE.includes(extension)) others.set(id, extension);
     }
-    return [];
+    for (const [, group] of byStem) {
+      if (!group.some((entry) => entry.id === documentId)) continue;
+      for (const entry of group) {
+        if (entry.id !== documentId && OFFICE.includes(entry.extension)) others.set(entry.id, entry.extension);
+      }
+    }
+    // One button per format: a PDF registered beside a PPTX that this machine
+    // would also render as PDF is still two files, but two "PDF" buttons are not.
+    const byFormat = new Map();
+    for (const [id, extension] of others) {
+      if (extension !== own && !byFormat.has(extension)) byFormat.set(extension, id);
+    }
+    if (byFormat.size === 0) return [];
+    // Self first: the view drops the first entry, because the chip itself
+    // already opens it.
+    return [{ id: documentId, extension: own }, ...[...byFormat].map(([extension, id]) => ({ id, extension }))]
+      .map((entry) => ({
+        label: entry.extension.toUpperCase(),
+        url: address(entry.id),
+        viewable: showable(entry.id),
+        // The extension travels with the link because the overlay sandboxes
+        // a document and does not sandbox a PDF. See MEDIA in `client.js`.
+        //
+        // What is served, not what is stored: a `.pptx` this machine can
+        // render arrives as a PDF, and a frame told it is a `.pptx` would
+        // sandbox the browser's own PDF viewer and paint nothing.
+        format: servedFormat(entry.id),
+      }));
   };
 
   const link = (resource) => {

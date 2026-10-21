@@ -40,14 +40,20 @@ export const AINAR_CLI = fileURLToPath(new URL("../../../ainar-node/bin/ainar.ts
 /** The bundled `dots-swarm` animation the defence desk loads; see vendor/build-dots.mjs. */
 export const DOTS_BUNDLE = fileURLToPath(new URL("../vendor/dots-swarm.js", import.meta.url));
 
-/** `ainar scans …`, for the Scans tab's two writes. The output is the answer. */
-export const runScans = (args, root, timeout = 300000) =>
+/**
+ * `ainar scans …`, for the Scans tab's two writes. The output is the answer.
+ *
+ * `input`, when given, is written to the CLI's stdin: a payload too long for a
+ * command line goes there (Windows refuses a command line past 32,767
+ * characters — a few hundred marks as one `--decisions` argument).
+ */
+export const runScans = (args, root, timeout = 300000, input = null) =>
   new Promise((resolveRun) => {
     if (!existsSync(AINAR_CLI)) {
       resolveRun({ ok: false, error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.` });
       return;
     }
-    execFile(
+    const child = execFile(
       process.execPath,
       ["--experimental-strip-types", AINAR_CLI, ...args, "--root", root],
       { cwd: root, timeout, maxBuffer: 4 * 1024 * 1024 },
@@ -63,6 +69,7 @@ export const runScans = (args, root, timeout = 300000) =>
         resolveRun({ ok: code === 0, exitCode: code, command: `bin/ainar ${args.join(" ")}`, output });
       },
     );
+    if (input !== null) child.stdin.end(input);
   });
 
 /**

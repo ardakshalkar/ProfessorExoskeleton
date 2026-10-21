@@ -10,8 +10,9 @@
 import http from "node:http";
 
 import { defenceReader, forksReader } from "../server/defence-desk.js";
+import { scanStandings } from "../server/scans.js";
 import { studentsDocument } from "../server/students.js";
-import { resolveWorkspace } from "../server/workspace.js";
+import { resolveWorkspace, rosterDir } from "../server/workspace.js";
 
 const PORT = Number(process.env.PORT ?? 3093);
 const RUN = process.argv[2] ?? "CSS-4007-2026-FALL";
@@ -34,6 +35,7 @@ http
       defenceReader(root, RUN),
       // Read per request: `ainar homework forks` run beside this shows on reload.
       forksReader(root, RUN),
+      (bundle) => scanStandings(bundle, RUN, root, rosterDir()),
     );
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(body);
