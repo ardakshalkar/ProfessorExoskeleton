@@ -493,6 +493,31 @@ export const nameCandidates = (
 };
 
 /**
+ * The enrolled students a written name is nearest, however far: the order a
+ * person picking from the class reads them in, rather than the alphabet.
+ * `close` and `possible` say how near, on the scale a match is made at.
+ */
+export const nameRanking = (
+  name: string,
+  context: { store: RosterStore; enrolled: Set<string>; not?: string[] },
+  limit = 8,
+): { student: string; distance: number; near: "close" | "possible" | "far" }[] => {
+  if (!nameWords(name).length) return [];
+  const not = new Set(context.not ?? []);
+  const people = Object.entries(context.store.people).filter(([id]) => context.enrolled.has(id) && !not.has(id));
+  return rankByName(name, people)
+    .slice(0, limit)
+    .map((candidate) => ({
+      student: candidate.id,
+      distance: Math.round(candidate.mean * 100) / 100,
+      near: candidate.mean <= CLOSE.mean ? "close" : candidate.mean <= CLOSE.hint ? "possible" : "far",
+    }));
+};
+
+/** A name as one search key: every word's skeleton, so any script finds it. */
+export const nameSearchKey = (name: string): string => nameWords(name).join(" ");
+
+/**
  * The pseudonym a paper belongs to, from what is written on it.
  *
  * A student number is exact: it is hashed with the roster's salt exactly as

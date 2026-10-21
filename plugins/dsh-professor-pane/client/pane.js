@@ -10,6 +10,7 @@ import { Inspector } from "./inspector.js";
 import { SheetNotice } from "./marks.js";
 import { CourseMode, MaterialModal, materialUrl } from "./materials.js";
 import { carryPlace, deliverCarried, PLACE_EVENT, takePendingPlace } from "./navigator.js";
+import { enqueuePlacement, onPlacements, placementsNow, placementsWaiting } from "./scans-queue.js";
 import { PublishModal } from "./publish.js";
 import { h, React } from "./react.js";
 import { GradeBoard } from "./grade-board.js";
@@ -170,6 +171,23 @@ export function ProfessorPane(props) {
   const [scansPile, setScansPile] = React.useState(null);
   // The step Scans opens on, or null for the pile's current one.
   const [scansStep, setScansStep] = React.useState(null);
+  // The Students view's exam window as it last said — `{ panel, scroll }` or
+  // null — and when a placement last came back: its redraws reopen it.
+  const examWindow = React.useRef(null);
+  const placedAt = React.useRef(0);
+  // The line of placements, told to every frame as it moves, so the exam
+  // window marks what is queued whichever page pressed it.
+  React.useEffect(
+    () =>
+      onPlacements((line) => {
+        for (const frame of document.querySelectorAll("iframe")) {
+          if (frame.contentWindow) {
+            frame.contentWindow.postMessage({ source: "professor-pane", kind: "scans-queue", running: line.running, queued: line.queued }, "*");
+          }
+        }
+      }),
+    [],
+  );
 
   // Open the column this pane lives in, once per session.
   //
@@ -451,31 +469,50 @@ export function ProfessorPane(props) {
         return;
       }
       // "This is …" on a held paper in the Students view's exam window:
-      // `scans assign`, exactly as the Scans tab's Held lane sends it. The
-      // frame has nowhere to say a refusal, so it is said here.
+      // `scans assign`, in the same line the Scans tab's presses wait in, so
+      // one press need not wait for the last. The frame has nowhere to say a
+      // refusal, so it is said here.
       if (data.kind === "scans-place") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run = currentRunRef.current;
         if (!run || !id.test(String(data.assessment)) || !/^STUDENT-[A-Z0-9]+$/.test(String(data.student))) return;
-        fetch(
-          scoped(BASE + "/api/scans/assign?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ file: String(data.file || ""), pages: String(data.pages || ""), student: data.student }),
-          },
-        )
-          .then((response) => response.json())
-          .then((result) => {
+        const pages = String(data.pages || "");
+        enqueuePlacement({
+          runId: run,
+          sessionId: props.sessionId,
+          assessment: data.assessment,
+          file: String(data.file || ""),
+          pages: pages,
+          answer: { student: data.student },
+          onDone: (result) => {
+            placedAt.current = Date.now();
             if (result.error || !result.ok) {
-              window.alert(String(result.error || result.output || "the paper was not placed").trim().split("\n").slice(-2).join(" "));
+              window.alert(
+                "pp. " + pages + " was not placed: " +
+                  String(result.error || result.output || "no answer").trim().split("\n").slice(-2).join(" "),
+              );
             }
             write(["scans", "files"]);
-          })
-          .catch((error) => {
-            window.alert("the paper was not placed: " + String(error));
-            write(["scans", "files"]);
-          });
+          },
+        });
+        return;
+      }
+      // The exam window, which every placement redraws: what it has open,
+      // and on load the line as it stands — with that panel to reopen while
+      // placements are going through, so the professor keeps pressing.
+      if (data.kind === "aw-state") {
+        const panel = typeof data.panel === "string" && /^[A-Z0-9][A-Z0-9-]*$/.test(data.panel) ? data.panel : null;
+        examWindow.current = panel ? { panel: panel, scroll: Math.max(0, Number(data.scroll) || 0) } : null;
+        return;
+      }
+      if (data.kind === "scans-queue-hello") {
+        if (!event.source) return;
+        const line = placementsNow();
+        const going = placementsWaiting(line) || Date.now() - placedAt.current < 15000;
+        event.source.postMessage(
+          { source: "professor-pane", kind: "scans-queue", running: line.running, queued: line.queued, restore: going ? examWindow.current : null },
+          "*",
+        );
         return;
       }
       // Planning writes its own dates now (client/course/planning.jsx).

@@ -6,6 +6,7 @@ import { Message } from "./common.js";
 import { GradeBoard } from "./grade-board.js";
 import { CanvasMarks, MatchReview, STEP_PROMPTS } from "./marks.js";
 import { h, React, ReactDOM } from "./react.js";
+import { enqueuePlacement, placementKey, placementsWaiting, usePlacements } from "./scans-queue.js";
 import { BASE, scoped } from "./tabs.js";
 
 /**
@@ -21,23 +22,33 @@ function ScansTab(props) {
   const [pile, setPile] = React.useState(props.pile || "");
   const [tick, setTick] = React.useState(0);
   const [state, setState] = React.useState({ phase: "loading", value: null });
+  // A whole-pile write in flight (read, apply, the review's Confirm), or null.
+  // Placing one paper is not one: those wait in line (client/scans-queue.js).
   const [busy, setBusy] = React.useState(null);
+  const placements = usePlacements();
+  // Read, apply and the review rewrite the whole plan, so they wait for the
+  // line to empty, and the line waits for them.
+  const blocked = Boolean(busy) || placementsWaiting(placements);
   const [said, setSaid] = React.useState(null);
-  const [focus, setFocus] = React.useState(0);
+  // Match's desk: the paper chosen in its list (file|pages, or null for the
+  // first that waits), which papers the list shows, and the class search.
+  const [selected, setSelected] = React.useState(null);
+  const [laneView, setLaneView] = React.useState(props.lane === "held" ? "held" : "all");
+  const [search, setSearch] = React.useState("");
+  const searchBox = React.useRef(null);
   const [reviewing, setReviewing] = React.useState(false);
   const [grading, setGrading] = React.useState(false);
   // The step whose detail is open; null follows the pile's current step.
   // `props.step` opens on one: Match, when the press was on its held papers.
   const [openStep, setOpenStep] = React.useState(props.step || null);
   // `props.lane === "held"`: opened from the navigator's Held papers, so
-  // Match shows the held lane first and is scrolled to it once it draws.
-  const [heldFirst, setHeldFirst] = React.useState(props.lane === "held");
-  const heldLane = React.useRef(null);
+  // the desk lists the held papers and is scrolled to once it draws.
+  const deskRef = React.useRef(null);
   const scrolled = React.useRef(false);
   React.useEffect(() => {
-    if (!heldFirst || scrolled.current || state.phase !== "ready" || !heldLane.current) return;
+    if (props.lane !== "held" || scrolled.current || state.phase !== "ready" || !deskRef.current) return;
     scrolled.current = true;
-    heldLane.current.scrollIntoView({ block: "start" });
+    deskRef.current.scrollIntoView({ block: "start" });
   });
   const names = props.names;
 
@@ -65,7 +76,7 @@ function ScansTab(props) {
   const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
 
   const post = (path, body, label, done) => {
-    if (busy) return;
+    if (blocked) return;
     setBusy(label);
     setSaid(null);
     fetch(query(path).replace(/assessment=[^&]*/, "") + "&assessment=" + encodeURIComponent(assessmentId), {
@@ -92,8 +103,37 @@ function ScansTab(props) {
         setSaid({ error: true, text: String(error) });
       });
   };
-  const assign = (paper, to, label) =>
-    post("/api/scans/assign", Object.assign({ pages: paper.pages, file: paper.file }, to), label);
+  // One paper: into the line, so the next can be pressed at once. Each
+  // answer is said as it comes back, and the pile is read again after it.
+  const assign = (paper, to) => {
+    if (busy) return;
+    setSaid(null);
+    enqueuePlacement({
+      runId: props.runId,
+      sessionId: props.sessionId,
+      assessment: assessmentId,
+      file: paper.file,
+      pages: paper.pages,
+      answer: to,
+      onDone: (result) => {
+        const stale = /no route \/api\/scans/.test(String(result.error || ""));
+        const failed = Boolean(result.error) || !result.ok;
+        setSaid({
+          error: failed,
+          text: stale
+            ? "The harness was started before this tab existed. Restart it, then try again."
+            : (failed ? "pp. " + paper.pages + " was not placed: " : "") + (result.error || result.output || "Done."),
+        });
+        setTick((value) => value + 1);
+        props.onWrite();
+      },
+    });
+  };
+  // "placing", "queued" or null, for one paper of this pile.
+  const statusOf = (paper) => {
+    const key = placementKey(assessmentId, paper.file, paper.pages);
+    return placements.running === key ? "placing" : placements.queued.includes(key) ? "queued" : null;
+  };
 
   if (state.phase === "loading") return h(Message, null, "Reading the pile…");
   if (doc.error) {
@@ -159,167 +199,310 @@ function ScansTab(props) {
       (paper.resolved && !paper.pinned && paper.has_name && (paper.lane === "check" || paper.lane === "placed")) ||
       (paper.lane === "held" && paper.candidates.length),
   ).length;
-  // The cards in the order they are drawn, so j/k and Enter follow the page.
-  const work = heldFirst
-    ? doc.papers.filter((paper) => paper.lane === "held").concat(doc.papers.filter((paper) => paper.lane === "check"))
-    : doc.papers.filter((paper) => paper.lane === "check" || paper.lane === "held");
-  const at = Math.min(focus, Math.max(0, work.length - 1));
-  const unplaced = doc.class.filter((entry) => !entry.placed);
-  const placedPeople = doc.class.filter((entry) => entry.placed);
 
-  const picker = (paper, label) => {
-    const id = "pick-" + paper.file + "-" + paper.pages;
-    return h(
-      "select",
-      {
-        key: id,
-        "aria-label": label,
-        value: "",
-        disabled: Boolean(busy),
-        onChange: (event) => {
-          if (event.target.value) assign(paper, { student: event.target.value }, paper.pages);
-        },
-      },
-      h("option", { value: "" }, label + "…"),
-      h(
-        "optgroup",
-        { label: "No paper yet" },
-        unplaced.map((entry) => h("option", { value: entry.student, key: entry.student }, who(entry.student, entry.name))),
-      ),
-      h(
-        "optgroup",
-        { label: "Already have a paper" },
-        placedPeople.map((entry) => h("option", { value: entry.student, key: entry.student }, who(entry.student, entry.name))),
-      ),
-    );
+  // ---------------------------------------------------------- Match's desk
+  //
+  // One line per paper that needs the professor, and the chosen one in full
+  // beside it: the name line, the class ranked by how near each student is to
+  // what is written, a search over the whole class, and who has no paper yet.
+  // It replaced a card per paper, which put 36 papers a long scroll apart.
+  const keyOf = (paper) => paper.file + "|" + paper.pages;
+  const held = doc.papers.filter((paper) => paper.lane === "held");
+  const check = doc.papers.filter((paper) => paper.lane === "check");
+  const placed = doc.papers.filter((paper) => paper.lane === "placed");
+  const skipped = doc.papers.filter((paper) => paper.lane === "skipped");
+  // Held first: they are the papers nobody is placed on. A filter left empty
+  // — the last held paper just placed — shows all that still need a person.
+  const view = (laneView === "held" && !held.length) || (laneView === "check" && !check.length) ? "all" : laneView;
+  const work = view === "held" ? held : view === "check" ? check : held.concat(check);
+  const current =
+    work.find((paper) => keyOf(paper) === selected) || work.find((paper) => !statusOf(paper)) || work[0] || null;
+  const noPaper = doc.class.filter((entry) => !entry.placed);
+  const hasPaper = new Set(doc.class.filter((entry) => entry.placed).map((entry) => entry.student));
+  const waiting = doc.papers.filter((paper) => statusOf(paper)).length;
+
+  // The next paper still to press, after this one, round to the top.
+  const nextAfter = (paper) => {
+    const index = work.indexOf(paper);
+    return work.slice(index + 1).concat(work.slice(0, Math.max(0, index))).find((entry) => entry !== paper && !statusOf(entry)) || null;
+  };
+  // Place a paper and go on to the next, so a run of presses works down the list.
+  const place = (paper, to) => {
+    if (busy || !paper || statusOf(paper)) return;
+    assign(paper, to);
+    const next = nextAfter(paper);
+    setSelected(next ? keyOf(next) : null);
+    setSearch("");
   };
 
-  const card = (paper, index) => {
-    const key = paper.file + "|" + paper.pages;
-    const primary =
-      paper.lane === "check"
-        ? () => assign(paper, { student: paper.resolved }, paper.pages)
-        : paper.candidates.length
-          ? () => assign(paper, { student: paper.candidates[0].student }, paper.pages)
-          : null;
-    const pending = busy === paper.pages;
+  // Typed names meet roster names in any script: the roster's side arrives
+  // as `search`, a skeleton the server made; this is the same for Latin typed.
+  const skeleton = (word) =>
+    word
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .replace(/kh|x/g, "h")
+      .replace(/zh/g, "j")
+      .replace(/q/g, "k")
+      .replace(/w/g, "u")
+      .replace(/y/g, "i")
+      .replace(/(.)\1+/g, "$1")
+      .replace(/[^a-z0-9]/g, "");
+  const found = (entry, text) =>
+    text
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .every((word) => {
+        const latin = skeleton(word);
+        return (
+          String(entry.name || "").toLowerCase().includes(word) ||
+          entry.student.toLowerCase().includes(word) ||
+          (latin !== "" && String(entry.search || "").includes(latin))
+        );
+      });
+  const searched = search.trim()
+    ? noPaper.filter((entry) => found(entry, search)).concat(doc.class.filter((entry) => entry.placed && found(entry, search))).slice(0, 12)
+    : [];
+
+  const NEAR = { close: "close", possible: "possible", far: "far" };
+  const studentLine = (paper, student) =>
+    student === paper.resolved ? "placed here now" : hasPaper.has(student) ? "has a paper" : "no paper yet";
+  const rankRow = (paper, entry, index, off) =>
+    h(
+      "li",
+      { key: entry.student },
+      h(
+        "button",
+        {
+          type: "button",
+          className: "pp-rankrow" + (entry.student === paper.resolved ? " pp-rankrow-now" : ""),
+          disabled: off,
+          title: "Place pp. " + paper.pages + " on " + who(entry.student, entry.name) + (index < 9 ? " — key " + (index + 1) : ""),
+          onClick: () => place(paper, { student: entry.student }),
+        },
+        h("span", { className: "pp-ranknum" }, index < 9 ? String(index + 1) : ""),
+        h("span", { className: "pp-rankname" }, entry.name || entry.student),
+        entry.near
+          ? h(
+              "span",
+              { className: "pp-near pp-near-" + entry.near, title: NEAR[entry.near] + " · distance " + entry.distance },
+              h("i", { style: { width: Math.round(Math.max(0.06, 1 - Math.min(1, entry.distance)) * 100) + "%" } }),
+            )
+          : h("span"),
+        h("span", { className: "pp-as" + (hasPaper.has(entry.student) && entry.student !== paper.resolved ? " pp-as-warn" : "") }, studentLine(paper, entry.student)),
+      ),
+    );
+
+  const deskDetail = (paper) => {
+    if (!paper) return h("div", { className: "pp-mdetail pp-as" }, "Nothing here needs you.");
+    const status = statusOf(paper);
+    const off = Boolean(busy) || Boolean(status);
+    const ranked = paper.ranked && paper.ranked.length ? paper.ranked : paper.candidates;
     return h(
       "div",
-      {
-        key,
-        className: "pp-card" + (index === at ? " pp-focus" : ""),
-        tabIndex: 0,
-        onFocus: () => setFocus(index),
-      },
+      { className: "pp-mdetail" },
       names && doc.crops
         ? h("img", {
+            key: keyOf(paper),
             className: "pp-crop",
-            alt: "The top of page " + paper.pages.split("-")[0] + ", where the name is written",
-            loading: "lazy",
+            alt: "The top of page " + paper.pages.split(/[-,]/)[0] + ", where the name is written",
             src: cropUrl(paper),
           })
         : null,
       h(
         "div",
-        null,
+        { className: "pp-mhead" },
         names
           ? paper.written
-            ? h("span", null, "Written: ", h("span", { className: "pp-written" }, paper.written))
+            ? h("span", null, "Read as ", h("span", { className: "pp-written" }, paper.written))
             : h("span", null, paper.has_name ? "A number is written" : "No name written")
-          : h("span", null, "Pages " + paper.pages),
+          : null,
+        h("span", { className: "pp-as" }, "pp. " + paper.pages + (paper.variant ? " · variant " + paper.variant : "")),
+        status ? h("span", { className: "pp-qchip" }, status === "placing" ? "Placing…" : "Queued") : null,
       ),
       names && paper.also.length
         ? h("div", { className: "pp-cardmeta" }, "Also written: ", paper.also.map((text) => "“" + text + "”").join(", "))
         : null,
+      h(
+        "div",
+        { className: "pp-cardmeta" },
+        paper.lane === "check"
+          ? (paper.match === "partial" ? "Placed on one word of the name: " : "Placed on a close spelling: ") + who(paper.resolved, paper.resolved_name)
+          : paper.problem || "Not placed yet",
+      ),
+      names && doc.crops && paper.clash.length ? sideBySide(paper) : null,
       paper.lane === "check"
         ? h(
             "div",
-            { className: "pp-cardmeta" },
-            (paper.match === "partial" ? "Placed on one word of the name: " : "Placed on a close spelling: ") +
-              who(paper.resolved, paper.resolved_name),
-          )
-        : h("div", { className: "pp-cardmeta" }, paper.problem || "Not placed yet"),
-      names && doc.crops && paper.clash.length ? sideBySide(paper) : null,
-      paper.lane === "held" && paper.candidates.length
-        ? h(
-            "div",
-            { className: "pp-cardmeta" },
-            "Nearest: " + paper.candidates.map((entry) => who(entry.student, entry.name)).join("; "),
+            { className: "pp-actions" },
+            h(
+              "button",
+              { type: "button", className: "pp-primary", disabled: off, onClick: () => place(paper, { student: paper.resolved }) },
+              "Confirm " + (paper.resolved_name ? paper.resolved_name.split(/\s+/).slice(0, 2).join(" ") : paper.resolved),
+            ),
+            h("span", { className: "pp-as" }, "Enter"),
           )
         : null,
-      h(
-        "div",
-        { className: "pp-actions" },
-        paper.lane === "check"
+      ranked.length
+        ? h(
+            React.Fragment,
+            null,
+            h("div", { className: "pp-mlabel" }, "Possible matches, nearest first"),
+            h("ol", { className: "pp-ranked" }, ranked.map((entry, index) => rankRow(paper, entry, index, off))),
+          )
+        : h("div", { className: "pp-cardmeta" }, "No enrolled student is near what is written — search the class below."),
+      h("input", {
+        ref: searchBox,
+        className: "pp-msearch",
+        type: "search",
+        value: search,
+        disabled: off,
+        placeholder: "Someone else — type a name or number  ( / )",
+        "aria-label": "Search the class for who wrote pp. " + paper.pages,
+        onChange: (event) => setSearch(event.target.value),
+      }),
+      search.trim()
+        ? searched.length
           ? h(
-              "button",
-              { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: primary },
-              "Confirm",
+              "ol",
+              { className: "pp-ranked" },
+              searched.map((entry, index) => rankRow(paper, { student: entry.student, name: entry.name }, index + 100, off)),
             )
-          : null,
-        paper.lane === "held"
-          ? paper.candidates.map((entry) =>
+          : h("div", { className: "pp-cardmeta" }, "Nobody in the class matches “" + search.trim() + "”.")
+        : noPaper.length
+          ? h(
+              "details",
+              { className: "pp-folded pp-nopaper" },
+              h("summary", null, noPaper.length + (noPaper.length === 1 ? " student has" : " students have") + " no paper yet"),
               h(
-                "button",
-                {
-                  type: "button",
-                  className: "pp-segbtn",
-                  key: entry.student,
-                  disabled: Boolean(busy),
-                  onClick: () => assign(paper, { student: entry.student }, paper.pages),
-                },
-                "It's " + (entry.name ? entry.name.split(/\s+/).slice(0, 2).join(" ") : entry.student),
+                "div",
+                { className: "pp-chips" },
+                noPaper.map((entry) =>
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      key: entry.student,
+                      className: "pp-segbtn",
+                      disabled: off,
+                      title: "Place pp. " + paper.pages + " on " + who(entry.student, entry.name),
+                      onClick: () => place(paper, { student: entry.student }),
+                    },
+                    entry.name || entry.student,
+                  ),
+                ),
               ),
             )
           : null,
+      h(
+        "div",
+        { className: "pp-actions" },
         paper.clash.length
           ? h(
               "button",
               {
                 type: "button",
                 className: "pp-segbtn",
-                disabled: Boolean(busy),
+                disabled: off,
                 title: "This one is not their paper — a copy they started and gave up, handed in with the real one",
-                onClick: () =>
-                  assign(paper, { skip: "spoiled copy — the paper is pp. " + paper.clash.map((entry) => entry.pages).join(", ") }, paper.pages),
+                onClick: () => place(paper, { skip: "spoiled copy — the paper is pp. " + paper.clash.map((entry) => entry.pages).join(", ") }),
               },
               "Spoiled copy",
             )
           : null,
-        picker(paper, paper.lane === "check" ? "Someone else" : paper.clash.length ? "Someone else's" : "Pick from class"),
         paper.lane === "held" && !paper.clash.length
           ? h(
               "button",
               {
                 type: "button",
                 className: "pp-segbtn",
-                disabled: Boolean(busy),
+                disabled: off,
                 title: "Not one of this run's students — a visitor, or a sheet that is nobody's",
-                onClick: () => assign(paper, { skip: "not a student of this run" }, paper.pages),
+                onClick: () => place(paper, { skip: "not a student of this run" }),
               },
               "Not a student",
             )
           : null,
-        pending ? h("span", { className: "pp-as" }, "Placing…") : null,
       ),
     );
   };
 
+  const deskRow = (paper) => {
+    const status = statusOf(paper);
+    const guess = paper.lane === "check" ? paper.resolved_name || paper.resolved : (paper.candidates[0] || {}).name || (paper.candidates[0] || {}).student;
+    return h(
+      "button",
+      {
+        type: "button",
+        key: keyOf(paper),
+        className: "pp-mrow" + (paper === current ? " pp-mrow-on" : ""),
+        "aria-current": paper === current ? "true" : undefined,
+        onClick: () => {
+          setSelected(keyOf(paper));
+          setSearch("");
+        },
+      },
+      h("span", { className: "pp-mdot pp-mdot-" + paper.lane, title: paper.lane === "check" ? "Weak match, to check" : "Held — placed on nobody" }),
+      h(
+        "span",
+        { className: "pp-mrowmain" },
+        h("b", null, names && paper.written ? paper.written : "pp. " + paper.pages),
+        h("span", null, (names && paper.written ? "pp. " + paper.pages : paper.lane === "check" ? "to check" : "held") + (guess ? " → " + guess : "")),
+      ),
+      status ? h("span", { className: "pp-qchip" }, status === "placing" ? "Placing…" : "Queued") : null,
+    );
+  };
+
+  // Keys: j/k through the list, 1–9 a ranked match, Enter the first (or the
+  // confirm), / the search, and in the search Enter its first answer.
   const onKey = (event) => {
-    if (event.target.tagName === "SELECT" || event.target.tagName === "INPUT") return;
+    if (shown !== "match" || !current) return;
+    if (event.target.tagName === "INPUT") {
+      if (event.key === "Enter" && searched.length) {
+        place(current, { student: searched[0].student });
+        event.preventDefault();
+      } else if (event.key === "Escape" && search) {
+        setSearch("");
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+    if (event.target.tagName === "SELECT" || event.target.tagName === "TEXTAREA") return;
+    const index = work.indexOf(current);
+    const ranked = current.ranked && current.ranked.length ? current.ranked : current.candidates;
     if (event.key === "j" || event.key === "ArrowDown") {
-      setFocus((value) => Math.min(value + 1, work.length - 1));
+      const next = work[Math.min(index + 1, work.length - 1)];
+      if (next) setSelected(keyOf(next));
       event.preventDefault();
     } else if (event.key === "k" || event.key === "ArrowUp") {
-      setFocus((value) => Math.max(value - 1, 0));
+      const next = work[Math.max(index - 1, 0)];
+      if (next) setSelected(keyOf(next));
       event.preventDefault();
-    } else if (event.key === "Enter" && event.target.classList.contains("pp-card")) {
-      const paper = work[at];
-      if (!paper) return;
-      if (paper.lane === "check") assign(paper, { student: paper.resolved }, paper.pages);
-      else if (paper.candidates.length) assign(paper, { student: paper.candidates[0].student }, paper.pages);
+    } else if (/^[1-9]$/.test(event.key) && ranked[Number(event.key) - 1]) {
+      place(current, { student: ranked[Number(event.key) - 1].student });
+      event.preventDefault();
+    } else if (event.key === "Enter" && !event.target.closest("button")) {
+      if (current.lane === "check") place(current, { student: current.resolved });
+      else if (ranked.length) place(current, { student: ranked[0].student });
+      event.preventDefault();
+    } else if (event.key === "/" && searchBox.current) {
+      searchBox.current.focus();
       event.preventDefault();
     }
+  };
+
+  // Confirm every weak match at once: one `scans assign --assignments`, as
+  // the review's Confirm sends it, so the plan is checked whole and applied once.
+  const confirmAll = () => {
+    const papers = check.filter((paper) => !statusOf(paper)).map((paper) => ({ file: paper.file, pages: paper.pages, student: paper.resolved }));
+    if (!papers.length) return;
+    const ok = window.confirm(
+      "Confirm all " + papers.length + " weak matches? Each paper stays on the student it was matched to, and is marked as confirmed by you.",
+    );
+    if (ok) post("/api/scans/assign", { papers: papers }, "confirm-all");
   };
 
   // A harness from before `now` existed sends none; the tab still draws.
@@ -328,34 +511,14 @@ function ScansTab(props) {
   const stageOf = (id) => doc.stages.find((stage) => stage.id === id) || null;
   const shownStage = stageOf(shown);
   const gradable = doc.answers > 0;
-  const check = work.filter((paper) => paper.lane === "check");
-  const held = work.filter((paper) => paper.lane === "held");
-  const placed = doc.papers.filter((paper) => paper.lane === "placed");
-  const skipped = doc.papers.filter((paper) => paper.lane === "skipped");
-  const checkBlock = check.length
-    ? [
-        h(
-          "div",
-          { className: "pp-lane", key: "check-lane" },
-          "Check",
-          h("span", null, "· " + check.length + " placed on a close spelling or one word of the name — confirm, or say who it is"),
-        ),
-        ...check.map((paper) => card(paper, work.indexOf(paper))),
-      ]
-    : [];
-  const heldBlock = held.length
-    ? [
-        h("div", { className: "pp-lane", key: "held-lane", ref: heldLane }, "Held", h("span", null, "· " + held.length + " not placed")),
-        ...held.map((paper) => card(paper, work.indexOf(paper))),
-      ]
-    : [];
 
   const WHOSE = { you: "Your move", assistant: "Assistant", done: "Done" };
   const whose = (value) => h("span", { className: "pp-whose pp-whose-" + value }, WHOSE[value] || value);
   const choosePile = (id) => {
     setOpenStep(null);
-    setHeldFirst(false);
-    setFocus(0);
+    setLaneView("all");
+    setSelected(null);
+    setSearch("");
     setPile(id);
   };
 
@@ -369,7 +532,7 @@ function ScansTab(props) {
         type: "button",
         key: "read",
         className: primary ? "pp-primary" : "pp-segbtn",
-        disabled: Boolean(busy),
+        disabled: blocked,
         title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
         onClick: () => post("/api/scans/read", {}, "read"),
       },
@@ -518,72 +681,150 @@ function ScansTab(props) {
     ),
   );
 
-  // Match's tools: the papers that need a person, the review of every
-  // match, and what was placed.
-  const matchTools = () => [
-    !names
-      ? h(
-          Message,
-          { key: "pseudonyms" },
-          "Pseudonyms are showing, so the handwritten names and their crops are hidden. Press Names to match papers.",
-        )
-      : reviewable
-        ? h(
-            "div",
-            { className: "pp-actions", key: "review" },
-            h(
-              "button",
-              {
-                type: "button",
-                className: "pp-segbtn",
-                disabled: Boolean(busy),
-                title: "Every name the pile was matched on, as big cards — confirm them all at once, reject the wrong ones",
-                onClick: () => setReviewing(true),
-              },
-              "Review all " + reviewable + " name matches",
-            ),
-          )
-        : null,
-    ...(heldFirst ? heldBlock.concat(checkBlock) : checkBlock.concat(heldBlock)),
-    work.length ? h("div", { className: "pp-cardmeta", key: "keys" }, "j / k to move between papers, Enter to confirm") : null,
-    h(
-      "details",
-      { className: "pp-folded", key: "placed" },
+  // Match's tools: where the pile stands in one bar, the presses that act on
+  // many papers, then the desk, then what was placed.
+  const matchTools = () => {
+    const counted = placed.length + check.length + held.length;
+    const share = (n) => (counted ? (100 * n) / counted : 0) + "%";
+    const filter = (id, label, n) =>
       h(
-        "summary",
-        null,
-        placed.length + " placed" + (skipped.length ? " · " + skipped.length + " set aside" : "") + " · " + doc.missing + " enrolled with no paper",
-      ),
-      h(
-        "ul",
-        null,
-        placed.map((paper) =>
-          h(
-            "li",
-            { key: paper.file + paper.pages },
-            "pp. " + paper.pages + " → " + who(paper.resolved, paper.resolved_name) +
-              (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : paper.match === "partial" ? " (one word)" : ""),
-          ),
-        ),
-        skipped.map((paper) => h("li", { key: paper.file + paper.pages }, "pp. " + paper.pages + " — " + paper.skip)),
-      ),
+        "button",
+        {
+          type: "button",
+          key: id,
+          className: "pp-segbtn",
+          "aria-pressed": view === id,
+          onClick: () => {
+            setLaneView(id);
+            setSelected(null);
+            setSearch("");
+          },
+        },
+        label + " " + n,
+      );
+    return [
       h(
         "div",
-        { className: "pp-actions" },
+        { className: "pp-msum", key: "sum" },
         h(
-          "button",
-          {
-            type: "button",
-            className: "pp-segbtn",
-            disabled: Boolean(busy),
-            title: "Run `scans apply` again — after editing plan.yaml by hand, say",
-            onClick: () => post("/api/scans/apply", {}, "apply"),
-          },
-          busy === "apply" ? "Applying…" : "Re-apply the plan",
+          "div",
+          { className: "pp-mbar", role: "img", "aria-label": placed.length + " placed, " + check.length + " to check, " + held.length + " held" },
+          h("i", { className: "pp-mbar-placed", style: { width: share(placed.length) } }),
+          h("i", { className: "pp-mbar-check", style: { width: share(check.length) } }),
+          h("i", { className: "pp-mbar-held", style: { width: share(held.length) } }),
+        ),
+        h(
+          "div",
+          { className: "pp-mkey" },
+          h("span", null, h("i", { className: "pp-mdot pp-mdot-placed" }), placed.length + " of " + counted + " placed"),
+          check.length ? h("span", null, h("i", { className: "pp-mdot pp-mdot-check" }), check.length + " weak matches to check") : null,
+          held.length ? h("span", null, h("i", { className: "pp-mdot pp-mdot-held" }), held.length + " held") : null,
+          waiting ? h("span", null, waiting + " queued") : null,
+          h("span", { className: "pp-as" }, doc.missing + " enrolled with no paper"),
         ),
       ),
-    ),
-  ];
+      !names
+        ? h(
+            Message,
+            { key: "pseudonyms" },
+            "Pseudonyms are showing, so the handwritten names and their crops are hidden. Press Names to match papers.",
+          )
+        : null,
+      check.length || (names && reviewable)
+        ? h(
+            "div",
+            { className: "pp-actions", key: "many" },
+            check.length
+              ? h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-primary",
+                    disabled: blocked,
+                    title: "Keep every weak match on the student it was matched to, as one write — or check them one by one below",
+                    onClick: confirmAll,
+                  },
+                  busy === "confirm-all" ? "Confirming…" : "Confirm all " + check.length + " weak matches",
+                )
+              : null,
+            names && reviewable
+              ? h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    disabled: blocked,
+                    title: "Every name the pile was matched on, as big cards — confirm them all at once, reject the wrong ones",
+                    onClick: () => setReviewing(true),
+                  },
+                  "Review all " + reviewable + " name matches",
+                )
+              : null,
+          )
+        : null,
+      held.length + check.length
+        ? h(
+            "div",
+            { className: "pp-desk", key: "desk", ref: deskRef },
+            h(
+              "div",
+              { className: "pp-mside" },
+              h(
+                "div",
+                { className: "pp-mfilter" },
+                filter("held", "Held", held.length),
+                filter("check", "To check", check.length),
+                filter("all", "All", held.length + check.length),
+              ),
+              h(
+                "div",
+                { className: "pp-mlist", role: "list", "aria-label": "Papers that need you" },
+                work.length ? work.map(deskRow) : h("div", { className: "pp-as pp-mempty" }, "None here."),
+              ),
+              h("div", { className: "pp-as pp-mkeys" }, "j / k move · 1–9 pick · Enter first · / search"),
+            ),
+            deskDetail(current),
+          )
+        : h("div", { className: "pp-cardmeta", key: "none" }, "Every paper is placed on a student."),
+      h(
+        "details",
+        { className: "pp-folded", key: "placed" },
+        h(
+          "summary",
+          null,
+          placed.length + " placed" + (skipped.length ? " · " + skipped.length + " set aside" : "") + " · " + doc.missing + " enrolled with no paper",
+        ),
+        h(
+          "ul",
+          null,
+          placed.map((paper) =>
+            h(
+              "li",
+              { key: paper.file + paper.pages },
+              "pp. " + paper.pages + " → " + who(paper.resolved, paper.resolved_name) +
+                (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : paper.match === "partial" ? " (one word)" : ""),
+            ),
+          ),
+          skipped.map((paper) => h("li", { key: paper.file + paper.pages }, "pp. " + paper.pages + " — " + paper.skip)),
+        ),
+        h(
+          "div",
+          { className: "pp-actions" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              disabled: blocked,
+              title: "Run `scans apply` again — after editing plan.yaml by hand, say",
+              onClick: () => post("/api/scans/apply", {}, "apply"),
+            },
+            busy === "apply" ? "Applying…" : "Re-apply the plan",
+          ),
+        ),
+      ),
+    ];
+  };
 
   // The open step's detail: what it says, and its tools when they are not
   // already the headline's action.

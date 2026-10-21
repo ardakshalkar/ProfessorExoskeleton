@@ -345,6 +345,58 @@ a.pp-segbtn{display:inline-flex}
 .pp-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center}
 .pp-actions select{font:inherit;font-size:11px;max-width:100%;padding:2px 4px;border-radius:6px;
   color:inherit;background:0 0;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+/* Match's desk (client/scans.js): the pile in one bar, a list of the papers
+   that need a person, and the chosen paper with the class ranked beside it.
+   Green placed, blue a weak match to check, amber held. */
+.pp-msum{margin:8px 0 6px}
+.pp-mbar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:1px;background:var(--dsw-alias-fill-secondary,#ececf0)}
+.pp-mbar i{display:block;height:100%}
+.pp-mbar-placed,.pp-mdot-placed{background:#2f7d4f}
+.pp-mbar-check,.pp-mdot-check{background:#3b6fb6}
+.pp-mbar-held,.pp-mdot-held{background:#a5561f}
+.pp-mkey{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:5px;font-size:11.5px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-mkey span{display:inline-flex;align-items:center;gap:5px}
+.pp-mdot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+.pp-desk{display:grid;grid-template-columns:minmax(190px,36%) minmax(0,1fr);gap:12px;margin-top:10px;align-items:start}
+@media (max-width:620px){.pp-desk{grid-template-columns:1fr}}
+.pp-mside{min-width:0;position:sticky;top:0}
+.pp-mfilter{display:flex;gap:4px;margin:0 0 6px;flex-wrap:wrap}
+.pp-mlist{max-height:min(58vh,520px);overflow:auto;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:8px}
+.pp-mrow{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:6px 9px;border:0;
+  border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:0 0;color:inherit;font:inherit;font-size:12px;cursor:pointer}
+.pp-mrow:last-child{border-bottom:0}
+.pp-mrow:hover{background:var(--dsw-alias-fill-secondary,#f5f5f7)}
+.pp-mrow-on,.pp-mrow-on:hover{background:var(--dsw-alias-fill-secondary,#ececf0);box-shadow:inset 3px 0 0 var(--dsw-alias-label-primary,#111)}
+.pp-mrowmain{flex:1;min-width:0;display:flex;flex-direction:column}
+.pp-mrowmain b,.pp-mrowmain span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-mrowmain b{font-weight:600;font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);font-size:11.5px}
+.pp-mrowmain span{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-mempty{padding:10px}
+.pp-mkeys{margin-top:5px}
+.pp-qchip{flex:none;font-size:10.5px;padding:1px 7px;border-radius:9px;color:#3b6fb6;border:1px solid currentColor}
+.pp-mdetail{min-width:0;font-size:12px;line-height:1.45}
+.pp-mhead{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;margin:0 0 2px}
+.pp-mlabel{margin:10px 0 4px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-ranked{list-style:none;padding:0;margin:0 0 8px}
+.pp-rankrow{display:grid;grid-template-columns:16px minmax(0,1fr) 64px auto;align-items:center;gap:8px;width:100%;text-align:left;
+  padding:5px 8px;margin:0 0 3px;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:6px;
+  background:0 0;color:inherit;font:inherit;font-size:12px;cursor:pointer}
+.pp-rankrow:hover:not(:disabled){border-color:var(--dsw-alias-label-primary,#111)}
+.pp-rankrow:disabled{opacity:.55;cursor:default}
+.pp-rankrow-now{border-color:#3b6fb6}
+.pp-ranknum{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b);text-align:center}
+.pp-rankname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-near{display:block;height:6px;border-radius:3px;overflow:hidden;background:var(--dsw-alias-fill-secondary,#ececf0)}
+.pp-near i{display:block;height:100%}
+.pp-near-close i{background:#2f7d4f}
+.pp-near-possible i{background:#a5561f}
+.pp-near-far i{background:var(--dsw-alias-label-tertiary,#9a9a9a)}
+.pp-as-warn{color:#a5561f}
+.pp-msearch{display:block;width:100%;box-sizing:border-box;margin:4px 0 6px;padding:6px 9px;border-radius:6px;font:inherit;font-size:12px;
+  color:inherit;background:0 0;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-msearch:focus{outline:0;border-color:var(--dsw-alias-label-primary,#111)}
+.pp-nopaper summary{margin:4px 0}
+.pp-chips{display:flex;flex-wrap:wrap;gap:4px}
 .pp-folded{font-size:11.5px;color:var(--dsw-alias-label-secondary,#555)}
 .pp-folded summary{cursor:pointer;margin:12px 0 4px}
 .pp-folded li{margin:1px 0}

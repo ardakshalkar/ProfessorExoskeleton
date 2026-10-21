@@ -33,6 +33,8 @@ import { refuseInsideRepo, RosterStore } from "@ainar/core/src/roster.ts";
 import {
   itemsForVariant,
   nameCandidates,
+  nameRanking,
+  nameSearchKey,
   parsePages,
   readPlan,
   scanPlace,
@@ -93,6 +95,23 @@ const nearestOf = (paper, { store, enrolled }) => {
     .filter((candidate) => candidate.student !== paper.resolved)
     .sort((a, b) => a.distance - b.distance || a.student.localeCompare(b.student))
     .slice(0, 3);
+};
+
+/**
+ * Every enrolled student in the order the paper's written names are nearest
+ * them, eight at most: what Match offers to pick from, before the whole class.
+ * Unlike `nearestOf` it keeps the far ones and the student already placed.
+ */
+const rankedOf = (paper, { store, enrolled }) => {
+  const written = [paper.name, ...(paper.also ?? [])].filter(Boolean).map(String);
+  const nearest = new Map();
+  for (const text of written) {
+    for (const candidate of nameRanking(text, { store, enrolled, not: paper.not ?? [] })) {
+      const before = nearest.get(candidate.student);
+      if (!before || candidate.distance < before.distance) nearest.set(candidate.student, candidate);
+    }
+  }
+  return [...nearest.values()].sort((a, b) => a.distance - b.distance || a.student.localeCompare(b.student)).slice(0, 8);
 };
 
 /** Which lane a planned paper sits in. */
@@ -464,6 +483,7 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
       const entry = {
         file: source.file,
         pages: String(paper.pages),
+        variant: paper.variant ?? null,
         lane,
         written: names && paper.name ? String(paper.name) : null,
         also: names ? (paper.also ?? []).map(String) : [],
@@ -484,9 +504,11 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
         }),
         page_list: paper.clash?.length ? safePages(paper.pages) : [],
         candidates: [],
+        ranked: [],
       };
       if (lane === "held" || lane === "check") {
         entry.candidates = nearestOf(paper, { store, enrolled }).map((candidate) => ({ ...candidate, name: nameOf(candidate.student) }));
+        entry.ranked = rankedOf(paper, { store, enrolled }).map((candidate) => ({ ...candidate, name: nameOf(candidate.student) }));
       }
       papers.push(entry);
     }
@@ -495,7 +517,12 @@ export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, ass
   const placedSet = new Set(status.placed);
   const classList = [...enrolled]
     .sort()
-    .map((student) => ({ student, name: nameOf(student), placed: placedSet.has(student) }));
+    // `search`: the name's skeleton, so "Kozhakhan" typed finds "Қожахан". It
+    // spells the name, so only with names on.
+    .map((student) => {
+      const name = nameOf(student);
+      return { student, name, placed: placedSet.has(student), search: name ? nameSearchKey(name) : null };
+    });
   if (names) classList.sort((a, b) => (a.name ?? a.student).localeCompare(b.name ?? b.student));
 
   const count = (lane) => papers.filter((paper) => paper.lane === lane).length;

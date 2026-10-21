@@ -380,6 +380,58 @@ a.pp-segbtn{display:inline-flex}
 .pp-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center}
 .pp-actions select{font:inherit;font-size:11px;max-width:100%;padding:2px 4px;border-radius:6px;
   color:inherit;background:0 0;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+/* Match's desk (client/scans.js): the pile in one bar, a list of the papers
+   that need a person, and the chosen paper with the class ranked beside it.
+   Green placed, blue a weak match to check, amber held. */
+.pp-msum{margin:8px 0 6px}
+.pp-mbar{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:1px;background:var(--dsw-alias-fill-secondary,#ececf0)}
+.pp-mbar i{display:block;height:100%}
+.pp-mbar-placed,.pp-mdot-placed{background:#2f7d4f}
+.pp-mbar-check,.pp-mdot-check{background:#3b6fb6}
+.pp-mbar-held,.pp-mdot-held{background:#a5561f}
+.pp-mkey{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:5px;font-size:11.5px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-mkey span{display:inline-flex;align-items:center;gap:5px}
+.pp-mdot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+.pp-desk{display:grid;grid-template-columns:minmax(190px,36%) minmax(0,1fr);gap:12px;margin-top:10px;align-items:start}
+@media (max-width:620px){.pp-desk{grid-template-columns:1fr}}
+.pp-mside{min-width:0;position:sticky;top:0}
+.pp-mfilter{display:flex;gap:4px;margin:0 0 6px;flex-wrap:wrap}
+.pp-mlist{max-height:min(58vh,520px);overflow:auto;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:8px}
+.pp-mrow{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:6px 9px;border:0;
+  border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:0 0;color:inherit;font:inherit;font-size:12px;cursor:pointer}
+.pp-mrow:last-child{border-bottom:0}
+.pp-mrow:hover{background:var(--dsw-alias-fill-secondary,#f5f5f7)}
+.pp-mrow-on,.pp-mrow-on:hover{background:var(--dsw-alias-fill-secondary,#ececf0);box-shadow:inset 3px 0 0 var(--dsw-alias-label-primary,#111)}
+.pp-mrowmain{flex:1;min-width:0;display:flex;flex-direction:column}
+.pp-mrowmain b,.pp-mrowmain span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-mrowmain b{font-weight:600;font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);font-size:11.5px}
+.pp-mrowmain span{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-mempty{padding:10px}
+.pp-mkeys{margin-top:5px}
+.pp-qchip{flex:none;font-size:10.5px;padding:1px 7px;border-radius:9px;color:#3b6fb6;border:1px solid currentColor}
+.pp-mdetail{min-width:0;font-size:12px;line-height:1.45}
+.pp-mhead{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;margin:0 0 2px}
+.pp-mlabel{margin:10px 0 4px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-ranked{list-style:none;padding:0;margin:0 0 8px}
+.pp-rankrow{display:grid;grid-template-columns:16px minmax(0,1fr) 64px auto;align-items:center;gap:8px;width:100%;text-align:left;
+  padding:5px 8px;margin:0 0 3px;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:6px;
+  background:0 0;color:inherit;font:inherit;font-size:12px;cursor:pointer}
+.pp-rankrow:hover:not(:disabled){border-color:var(--dsw-alias-label-primary,#111)}
+.pp-rankrow:disabled{opacity:.55;cursor:default}
+.pp-rankrow-now{border-color:#3b6fb6}
+.pp-ranknum{font-size:10.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b);text-align:center}
+.pp-rankname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-near{display:block;height:6px;border-radius:3px;overflow:hidden;background:var(--dsw-alias-fill-secondary,#ececf0)}
+.pp-near i{display:block;height:100%}
+.pp-near-close i{background:#2f7d4f}
+.pp-near-possible i{background:#a5561f}
+.pp-near-far i{background:var(--dsw-alias-label-tertiary,#9a9a9a)}
+.pp-as-warn{color:#a5561f}
+.pp-msearch{display:block;width:100%;box-sizing:border-box;margin:4px 0 6px;padding:6px 9px;border-radius:6px;font:inherit;font-size:12px;
+  color:inherit;background:0 0;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-msearch:focus{outline:0;border-color:var(--dsw-alias-label-primary,#111)}
+.pp-nopaper summary{margin:4px 0}
+.pp-chips{display:flex;flex-wrap:wrap;gap:4px}
 .pp-folded{font-size:11.5px;color:var(--dsw-alias-label-secondary,#555)}
 .pp-folded summary{cursor:pointer;margin:12px 0 4px}
 .pp-folded li{margin:1px 0}
@@ -2511,11 +2563,11 @@ function DefenceDesk(props) {
   React.useEffect(() => () => {
     const held = recorder.current;
     if (held && held.state !== "inactive") held.stop();
-    const running = loop.current;
-    if (running) {
-      clearInterval(running.timer);
-      running.stream.getTracks().forEach((track) => track.stop());
-      if (running.audio.state !== "closed") running.audio.close();
+    const running2 = loop.current;
+    if (running2) {
+      clearInterval(running2.timer);
+      running2.stream.getTracks().forEach((track) => track.stop());
+      if (running2.audio.state !== "closed") running2.audio.close();
       loop.current = null;
     }
   }, []);
@@ -2695,34 +2747,34 @@ function DefenceDesk(props) {
   const releaseMicrophone = (final) => {
     stopCaptions();
     showOnScreen(null, final === "done" ? "done" : "paused");
-    const running = loop.current;
-    if (!running) return;
-    clearInterval(running.timer);
-    running.stream.getTracks().forEach((track) => track.stop());
-    if (running.audio && running.audio.state !== "closed") running.audio.close();
+    const running2 = loop.current;
+    if (!running2) return;
+    clearInterval(running2.timer);
+    running2.stream.getTracks().forEach((track) => track.stop());
+    if (running2.audio && running2.audio.state !== "closed") running2.audio.close();
     loop.current = null;
     setHandsFree(null);
     setProposal(null);
   };
   const beginTake = (questionId) => {
-    const running = loop.current;
-    if (!running) return;
+    const running2 = loop.current;
+    if (!running2) return;
     if (!questionId) {
       releaseMicrophone("done");
       setSaid({ error: false, text: "Every question has an answer. Follow-up questions, if you ask for them, appear below." });
       return;
     }
-    running.asked.add(questionId);
+    running2.asked.add(questionId);
     const record = () => {
-      if (loop.current !== running || running.take) return;
-      const media = new MediaRecorder(running.stream, running.type ? { mimeType: running.type } : void 0);
+      if (loop.current !== running2 || running2.take) return;
+      const media = new MediaRecorder(running2.stream, running2.type ? { mimeType: running2.type } : void 0);
       const chunks = [];
       media.ondataavailable = (event) => {
         if (event.data && event.data.size) chunks.push(event.data);
       };
-      running.take = { question: questionId, media, chunks, started: Date.now(), turn: null, keep: true, spoke: false, shown: "listening" };
-      startCaptions(running.stream, questionId, running.type);
-      openMarks(running.take.started);
+      running2.take = { question: questionId, media, chunks, started: Date.now(), turn: null, keep: true, spoke: false, shown: "listening" };
+      startCaptions(running2.stream, questionId, running2.type);
+      openMarks(running2.take.started);
       media.start(1e3);
       setHandsFree({ question: questionId, phase: "waiting", level: 0, threshold: 0 });
       showOnScreen(questionId, "listening");
@@ -2746,18 +2798,18 @@ function DefenceDesk(props) {
     record();
   };
   const endTake = (how) => {
-    const running = loop.current;
-    const take = running && running.take;
+    const running2 = loop.current;
+    const take = running2 && running2.take;
     if (!take || take.media.state === "inactive") return;
-    running.take = null;
+    running2.take = null;
     stopCaptions();
     const ranges = closeMarks();
     const keep = how !== "skip" && how !== "withdraw" && (take.spoke || how === "space");
     take.media.onstop = () => {
-      const blob = new Blob(take.chunks, { type: (take.media.mimeType || running.type || "audio/webm").split(";")[0] });
+      const blob = new Blob(take.chunks, { type: (take.media.mimeType || running2.type || "audio/webm").split(";")[0] });
       const sent = keep && blob.size ? upload(take.question, blob, (Date.now() - take.started) / 1e3, ranges, take.started) : Promise.resolve();
       if (how === "pause" || how === "withdraw") releaseMicrophone();
-      else if (running.chooser && keep) {
+      else if (running2.chooser && keep) {
         showOnScreen(null, "between");
         setHandsFree({ question: null, phase: "thinking", level: 0, threshold: 0 });
         sent.then(() => propose(take.question));
@@ -2855,13 +2907,13 @@ function DefenceDesk(props) {
       const type = RECORDING_TYPES.find((candidate) => MediaRecorder.isTypeSupported(candidate));
       loop.current = { stream, audio, analyser, samples, type, chooser, asked: /* @__PURE__ */ new Set(), take: null, timer: null };
       loop.current.timer = setInterval(() => {
-        const running = loop.current;
-        const take = running && running.take;
+        const running2 = loop.current;
+        const take = running2 && running2.take;
         if (!take) return;
-        running.analyser.getFloatTimeDomainData(running.samples);
+        running2.analyser.getFloatTimeDomainData(running2.samples);
         let sum = 0;
-        for (let index = 0; index < running.samples.length; index += 1) sum += running.samples[index] * running.samples[index];
-        const level = Math.sqrt(sum / running.samples.length);
+        for (let index = 0; index < running2.samples.length; index += 1) sum += running2.samples[index] * running2.samples[index];
+        const level = Math.sqrt(sum / running2.samples.length);
         if (marks.current.held !== null) {
           take.resumed = true;
           setHandsFree({ question: take.question, phase: "professor", level, threshold: 0 });
@@ -2910,9 +2962,9 @@ function DefenceDesk(props) {
   const withdraw = () => {
     setConfirmWithdraw(false);
     setProposal(null);
-    const running = loop.current;
-    if (running && running.take) endTake("withdraw");
-    else if (running) releaseMicrophone();
+    const running2 = loop.current;
+    if (running2 && running2.take) endTake("withdraw");
+    else if (running2) releaseMicrophone();
     if (recorder.current && recorder.current.state !== "inactive") {
       discard.current = true;
       recorder.current.stop();
@@ -3226,19 +3278,19 @@ function Secret(props) {
 function GoogleConnect(props) {
   const google = props.google || {};
   const client = google.client || {};
-  const [waiting, setWaiting] = React.useState(false);
+  const [waiting2, setWaiting] = React.useState(false);
   const [phase, setPhase] = React.useState("idle");
   const [error, setError] = React.useState(null);
   const [note, setNote] = React.useState(null);
   React.useEffect(() => {
-    if (!waiting) return void 0;
+    if (!waiting2) return void 0;
     const back = () => {
       setWaiting(false);
       if (props.onChanged) props.onChanged();
     };
     window.addEventListener("focus", back);
     return () => window.removeEventListener("focus", back);
-  }, [waiting]);
+  }, [waiting2]);
   const disconnect = () => {
     setPhase("working");
     setError(null);
@@ -3298,7 +3350,7 @@ function GoogleConnect(props) {
       "div",
       { className: "pp-saverow" },
       connectLink(google.broken ? "Reconnect Google" : "Connect Google"),
-      waiting ? h("span", { className: "pp-savenote" }, "Finish the sign-in in the new tab, then come back here.") : google.broken ? h("span", { className: "pp-saveerr" }, "The saved sign-in is incomplete. Connecting again fixes it.") : null
+      waiting2 ? h("span", { className: "pp-savenote" }, "Finish the sign-in in the new tab, then come back here.") : google.broken ? h("span", { className: "pp-saveerr" }, "The saved sign-in is incomplete. Connecting again fixes it.") : null
     );
   }
   return h(
@@ -5371,7 +5423,7 @@ function GradebookStatus(props) {
   const edited = editedIn(check);
   const unplaced = unplacedIn(check);
   const said = new Map(rows.map((entry) => [entry.id, markState(entry, unplaced.get(entry.id) || 0)]));
-  const waiting = rows.reduce((n, entry) => n + said.get(entry.id).waiting, 0);
+  const waiting2 = rows.reduce((n, entry) => n + said.get(entry.id).waiting, 0);
   const answer = check.value || {};
   const checking = check.phase === "running" || check.phase === "loading";
   const unreachable = !checking && (answer.error || answer.state === "ready" && !answer.value);
@@ -5384,8 +5436,8 @@ function GradebookStatus(props) {
       h("b", null, "Marking"),
       h(
         "span",
-        { className: waiting ? "pp-chip pp-chip-warn" : "pp-chip pp-chip-ok" },
-        waiting ? waiting + " marks waiting for Canvas" : "Canvas has every mark"
+        { className: waiting2 ? "pp-chip pp-chip-warn" : "pp-chip pp-chip-ok" },
+        waiting2 ? waiting2 + " marks waiting for Canvas" : "Canvas has every mark"
       ),
       // Where the Canvas figures come from: a check under way, the last one,
       // or this machine's record because Canvas could not be reached.
@@ -6926,7 +6978,7 @@ function SheetsCard(props) {
   const [editing, setEditing] = React.useState(false);
   if (!syncs.length && !(row && row.state !== "absent")) return null;
   const ids = new Set(syncs.map((sync) => sync.id));
-  const waiting = props.syncs ? props.syncs.waiting.filter((entry) => ids.has(entry.sync)) : [];
+  const waiting2 = props.syncs ? props.syncs.waiting.filter((entry) => ids.has(entry.sync)) : [];
   const checkOf = (sync) => checks && checks.checks ? checks.checks.find((entry) => entry.sync === sync.id) : null;
   const changed = syncs.filter((sync) => {
     const check = checkOf(sync);
@@ -6936,7 +6988,7 @@ function SheetsCard(props) {
     google.connected ? "connected as " + (google.account || "your Google account") : "Google not connected · sheets come in as downloads",
     syncs.length ? syncs.length + " sheet" + (syncs.length === 1 ? "" : "s") : null
   ].filter(Boolean).join(" · ");
-  const chip = waiting.length ? { text: waiting.length + " waiting", tone: "warn" } : changed.length ? { text: "changed in Google", tone: "warn" } : google.connected ? { text: "ready", tone: "ok" } : null;
+  const chip = waiting2.length ? { text: waiting2.length + " waiting", tone: "warn" } : changed.length ? { text: "changed in Google", tone: "warn" } : google.connected ? { text: "ready", tone: "ok" } : null;
   return h(
     "section",
     { className: "pp-ccard", id: "pp-card-sheets" },
@@ -6958,7 +7010,7 @@ function SheetsCard(props) {
       )
     ),
     h(WaitingList, {
-      rows: waiting,
+      rows: waiting2,
       students: props.syncs ? props.syncs.students : [],
       names: props.syncs ? props.syncs.names : false,
       runId: props.runId,
@@ -7204,7 +7256,7 @@ function CourseIntegrations(props) {
   const reachable = Boolean(canvasRow) && canvasRow.steps.slice(0, 3).every((step) => step.done);
   const counts = canvasCounts(data, props.unpublished);
   const syncs = props.syncs ? props.syncs.syncs : [];
-  const waiting = props.syncs ? props.syncs.waiting.length : 0;
+  const waiting2 = props.syncs ? props.syncs.waiting.length : 0;
   const others = (data.integrations || []).filter((row) => !CARDED.has(row.id));
   const synced = new Set(syncs.map((sync) => sync.service));
   const isUsed = (row) => row.state !== "absent" || synced.has(row.id);
@@ -7236,11 +7288,11 @@ function CourseIntegrations(props) {
     });
   };
   const needs = [
-    waiting ? {
+    waiting2 ? {
       key: "waiting",
       service: "sheets",
       mark: "GS",
-      text: plural2(waiting, "name", "names") + " from the grade sheet to confirm",
+      text: plural2(waiting2, "name", "names") + " from the grade sheet to confirm",
       go: () => scrollTo("pp-card-sheets")
     } : null,
     reachable && counts.unlinked.length ? {
@@ -10449,32 +10501,32 @@ var assistantPrompt = (runId, request, draft, doc) => {
 };
 function AssistantPanel(props) {
   const [text, setText] = React.useState("");
-  const [waiting, setWaiting] = React.useState(null);
+  const [waiting2, setWaiting] = React.useState(null);
   const [sent, setSent] = React.useState([]);
   const known = (props.proposals || []).map((p) => p.id);
   const [, tick] = React.useState(0);
   React.useEffect(() => {
-    if (!waiting) return void 0;
+    if (!waiting2) return void 0;
     const timer = setInterval(() => tick((n) => n + 1), 1e3);
     return () => clearInterval(timer);
-  }, [waiting]);
-  const elapsed = waiting ? Math.floor((Date.now() - waiting.since) / 1e3) : 0;
+  }, [waiting2]);
+  const elapsed = waiting2 ? Math.floor((Date.now() - waiting2.since) / 1e3) : 0;
   const clock2 = Math.floor(elapsed / 60) + ":" + String(elapsed % 60).padStart(2, "0");
   React.useEffect(() => {
-    if (!waiting) return void 0;
+    if (!waiting2) return void 0;
     const timer = setInterval(() => {
-      if (Date.now() - waiting.since > ASSISTANT_WAIT_MS) {
+      if (Date.now() - waiting2.since > ASSISTANT_WAIT_MS) {
         setWaiting(null);
         return;
       }
       props.refresh();
     }, 3e3);
     return () => clearInterval(timer);
-  }, [waiting]);
+  }, [waiting2]);
   React.useEffect(() => {
-    if (waiting && known.some((id) => !waiting.known.has(id))) {
+    if (waiting2 && known.some((id) => !waiting2.known.has(id))) {
       setWaiting(null);
-      const fresh = props.proposals.filter((p) => !waiting.known.has(p.id)).pop();
+      const fresh = props.proposals.filter((p) => !waiting2.known.has(p.id)).pop();
       if (fresh && !fresh.stale) props.onLoad(fresh);
     }
   }, [known.join(",")]);
@@ -10495,7 +10547,7 @@ function AssistantPanel(props) {
       "div",
       { className: "pp-review pp-gbthread" },
       !props.ask ? h(Message, { error: true }, "No session is open beside the pane, so there is nobody to ask. Open one and come back.") : null,
-      !cards.length && !waiting ? h(
+      !cards.length && !waiting2 ? h(
         "div",
         { className: "pp-as pp-gbassisthint" },
         "Say what you want; the assistant reads the course and proposes a whole policy. It never writes the policy — you load a proposal, read the diff and the impact, and apply it yourself.",
@@ -10505,11 +10557,11 @@ function AssistantPanel(props) {
           ASSISTANT_EXAMPLES.map((example) => h("button", { key: example, type: "button", className: "pp-gbexample", onClick: () => setText(example) }, example))
         )
       ) : null,
-      waiting ? h(
+      waiting2 ? h(
         "div",
         { className: "pp-gbwaiting", role: "status" },
         h("span", { className: "pp-checkspin" }),
-        h("span", null, h("b", null, "Asked: "), "“" + waiting.request + "” — the assistant is working on it (" + clock2 + "). Its proposal appears here and opens in the editor; the conversation shows each step."),
+        h("span", null, h("b", null, "Asked: "), "“" + waiting2.request + "” — the assistant is working on it (" + clock2 + "). Its proposal appears here and opens in the editor; the conversation shows each step."),
         h("button", { type: "button", className: "pp-linkbtn", onClick: () => setWaiting(null) }, "stop waiting")
       ) : null,
       cards.map(
@@ -10535,7 +10587,7 @@ function AssistantPanel(props) {
           )
         )
       ),
-      sent.length && !waiting && cards.length === 0 ? h("div", { className: "pp-as" }, "No proposal came back. The session may have asked you something — look at the conversation.") : null
+      sent.length && !waiting2 && cards.length === 0 ? h("div", { className: "pp-as" }, "No proposal came back. The session may have asked you something — look at the conversation.") : null
     ),
     h(
       "div",
@@ -10558,7 +10610,7 @@ function AssistantPanel(props) {
         "div",
         { className: "pp-gbrow" },
         h("span", { className: "pp-as", style: { flex: 1 } }, "Ctrl+Enter sends. Ids and weights only — no names."),
-        h("button", { type: "button", className: "pp-primary", disabled: !props.ask || !text.trim() || Boolean(waiting), onClick: send2 }, waiting ? "Waiting…" : "Ask")
+        h("button", { type: "button", className: "pp-primary", disabled: !props.ask || !text.trim() || Boolean(waiting2), onClick: send2 }, waiting2 ? "Waiting…" : "Ask")
       )
     )
   );
@@ -11308,7 +11360,7 @@ function CourseMode(props) {
   if (syncs.phase === "ready") {
     shown.current.waiting = syncs.value && !syncs.value.error ? (syncs.value.waiting || []).length : 0;
   }
-  const waiting = shown.current.waiting;
+  const waiting2 = shown.current.waiting;
   const canvasLine = shown.current.canvas;
   const viewBody = () => {
     if (view === "files") {
@@ -11515,11 +11567,11 @@ function CourseMode(props) {
             // open their own windows on top, so course mode is still here when
             // they close. The wiring line opens Integrations in place, where
             // Canvas stands, what is waiting, and the setup are all answered.
-            canvasLine || waiting ? h(
+            canvasLine || waiting2 ? h(
               "button",
               {
                 type: "button",
-                className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
+                className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting2 ? " pp-wiring-waiting" : ""),
                 title: preview ? "Private — not shown while previewing as a student" : "Open Integrations",
                 disabled: preview,
                 onClick: () => {
@@ -11529,7 +11581,7 @@ function CourseMode(props) {
               },
               [
                 canvasLine ? "Canvas: " + (CONNECTION_STATE[canvasLine.state] || canvasLine.state) : null,
-                waiting ? waiting + " waiting" : null
+                waiting2 ? waiting2 + " waiting" : null
               ].filter(Boolean).join(" · ")
             ) : null,
             h(
@@ -12462,7 +12514,7 @@ function Inspector(props) {
   const signals = nav && nav.grading ? nav.grading.signals : 0;
   const gaps = nav && !nav.error ? nav.gaps || 0 : 0;
   const draftKinds = recent && !recent.error ? recent.drafts_by || [] : [];
-  const waiting = [
+  const waiting2 = [
     pending ? { text: pending + (pending === 1 ? " mark waits" : " marks wait") + " for your decision", place: { view: "tasks" } } : null,
     // Drafts by kind, the three largest: what is a draft matters more than how many.
     ...draftKinds.slice(0, 3).map((kind) => ({
@@ -12479,7 +12531,7 @@ function Inspector(props) {
     h(
       Section,
       { label: "Waiting" },
-      waiting.length ? waiting.map(
+      waiting2.length ? waiting2.map(
         (entry, index) => h(Line, { key: index, text: entry.text, onClick: () => props.openPlace(entry.place), hint: "Open it in the centre" })
       ) : h("div", { className: "pp-insp-quiet" }, nav ? "Nothing is waiting for you" : "Reading the course…")
     ),
@@ -12512,6 +12564,67 @@ function Inspector(props) {
       }) : h("div", { className: "pp-insp-quiet" }, recent ? "No records yet" : "Reading the course…")
     )
   );
+}
+
+// client/scans-queue.js
+var placementKey = (assessment, file, pages) => assessment + "|" + (file || "") + "|" + pages;
+var waiting = [];
+var running = null;
+var snapshot = { running: null, queued: [] };
+var listeners3 = /* @__PURE__ */ new Set();
+var publish = () => {
+  snapshot = { running: running ? running.key : null, queued: waiting.map((job) => job.key) };
+  for (const listener of listeners3) listener(snapshot);
+};
+var pump = () => {
+  if (running || !waiting.length) return;
+  running = waiting.shift();
+  publish();
+  const job = running;
+  fetch(
+    scoped(
+      BASE + "/api/scans/assign?run=" + encodeURIComponent(job.runId) + "&assessment=" + encodeURIComponent(job.assessment),
+      job.sessionId
+    ),
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.assign({ pages: job.pages, file: job.file }, job.answer))
+    }
+  ).then((response) => response.json()).catch((error) => ({ error: String(error) })).then((result) => {
+    running = null;
+    publish();
+    try {
+      if (job.onDone) job.onDone(result);
+    } finally {
+      pump();
+    }
+  });
+};
+function enqueuePlacement(job) {
+  const key = placementKey(job.assessment, job.file, job.pages);
+  if (running && running.key === key || waiting.some((entry) => entry.key === key)) return false;
+  waiting.push(Object.assign({}, job, { key }));
+  publish();
+  pump();
+  return true;
+}
+var placementsNow = () => snapshot;
+var placementsWaiting = (state = snapshot) => state.running !== null || state.queued.length > 0;
+function usePlacements() {
+  const [state, setState] = React.useState(snapshot);
+  React.useEffect(() => {
+    listeners3.add(setState);
+    setState(snapshot);
+    return () => {
+      listeners3.delete(setState);
+    };
+  }, []);
+  return state;
+}
+function onPlacements(listener) {
+  listeners3.add(listener);
+  return () => listeners3.delete(listener);
 }
 
 // client/publish.js
@@ -13169,7 +13282,7 @@ function GradeBoard(props) {
     },
     labelText
   );
-  const waiting = (answers) => answers.filter((answer) => !answer.decision && answer.suggestion);
+  const waiting2 = (answers) => answers.filter((answer) => !answer.decision && answer.suggestion);
   const disagrees = (answer) => answer.decision && answer.now !== null && answer.now !== answer.decision.score;
   const sections = [];
   item.groups.forEach(
@@ -13300,10 +13413,10 @@ function GradeBoard(props) {
       event.preventDefault();
     }
   };
-  const allHere = waiting(item.answers);
+  const allHere = waiting2(item.answers);
   const allEverywhere = [].concat.apply(
     [],
-    doc.items.map((entry) => waiting(entry.answers).map((answer) => ({ item: entry.item_id, student: answer.student, score: answer.suggestion.score })))
+    doc.items.map((entry) => waiting2(entry.answers).map((answer) => ({ item: entry.item_id, student: answer.student, score: answer.suggestion.score })))
   );
   const disagreeing = item.answers.filter(disagrees);
   const marksKeys = scale.slice().reverse().filter((value) => item.marks.at[String(value)] || item.criterion && item.criterion.levels.some((level) => level.score === value));
@@ -13490,7 +13603,7 @@ function GradeBoard(props) {
           h("span", { className: "pp-as" }, "decided as " + (doc.decided_by || "nobody — the run lists no instructor"))
         ),
         visible.map((section) => {
-          const open = waiting(section.answers);
+          const open = waiting2(section.answers);
           return h(
             React.Fragment,
             { key: section.key },
@@ -13566,18 +13679,22 @@ function ScansTab(props) {
   const [tick, setTick] = React.useState(0);
   const [state, setState] = React.useState({ phase: "loading", value: null });
   const [busy, setBusy] = React.useState(null);
+  const placements = usePlacements();
+  const blocked = Boolean(busy) || placementsWaiting(placements);
   const [said, setSaid] = React.useState(null);
-  const [focus, setFocus] = React.useState(0);
+  const [selected, setSelected] = React.useState(null);
+  const [laneView, setLaneView] = React.useState(props.lane === "held" ? "held" : "all");
+  const [search, setSearch] = React.useState("");
+  const searchBox = React.useRef(null);
   const [reviewing, setReviewing] = React.useState(false);
   const [grading, setGrading] = React.useState(false);
   const [openStep, setOpenStep] = React.useState(props.step || null);
-  const [heldFirst, setHeldFirst] = React.useState(props.lane === "held");
-  const heldLane = React.useRef(null);
+  const deskRef = React.useRef(null);
   const scrolled = React.useRef(false);
   React.useEffect(() => {
-    if (!heldFirst || scrolled.current || state.phase !== "ready" || !heldLane.current) return;
+    if (props.lane !== "held" || scrolled.current || state.phase !== "ready" || !deskRef.current) return;
     scrolled.current = true;
-    heldLane.current.scrollIntoView({ block: "start" });
+    deskRef.current.scrollIntoView({ block: "start" });
   });
   const names = props.names;
   const query = (path) => scoped(
@@ -13596,7 +13713,7 @@ function ScansTab(props) {
   const doc = state.value;
   const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
   const post = (path, body, label, done) => {
-    if (busy) return;
+    if (blocked) return;
     setBusy(label);
     setSaid(null);
     fetch(query(path).replace(/assessment=[^&]*/, "") + "&assessment=" + encodeURIComponent(assessmentId), {
@@ -13618,7 +13735,32 @@ function ScansTab(props) {
       setSaid({ error: true, text: String(error) });
     });
   };
-  const assign = (paper, to, label) => post("/api/scans/assign", Object.assign({ pages: paper.pages, file: paper.file }, to), label);
+  const assign = (paper, to) => {
+    if (busy) return;
+    setSaid(null);
+    enqueuePlacement({
+      runId: props.runId,
+      sessionId: props.sessionId,
+      assessment: assessmentId,
+      file: paper.file,
+      pages: paper.pages,
+      answer: to,
+      onDone: (result) => {
+        const stale2 = /no route \/api\/scans/.test(String(result.error || ""));
+        const failed = Boolean(result.error) || !result.ok;
+        setSaid({
+          error: failed,
+          text: stale2 ? "The harness was started before this tab existed. Restart it, then try again." : (failed ? "pp. " + paper.pages + " was not placed: " : "") + (result.error || result.output || "Done.")
+        });
+        setTick((value) => value + 1);
+        props.onWrite();
+      }
+    });
+  };
+  const statusOf = (paper) => {
+    const key = placementKey(assessmentId, paper.file, paper.pages);
+    return placements.running === key ? "placing" : placements.queued.includes(key) ? "queued" : null;
+  };
   if (state.phase === "loading") return h(Message, null, "Reading the pile…");
   if (doc.error) {
     return h(
@@ -13663,163 +13805,248 @@ function ScansTab(props) {
   const reviewable = doc.papers.filter(
     (paper) => paper.resolved && !paper.pinned && paper.has_name && (paper.lane === "check" || paper.lane === "placed") || paper.lane === "held" && paper.candidates.length
   ).length;
-  const work = heldFirst ? doc.papers.filter((paper) => paper.lane === "held").concat(doc.papers.filter((paper) => paper.lane === "check")) : doc.papers.filter((paper) => paper.lane === "check" || paper.lane === "held");
-  const at = Math.min(focus, Math.max(0, work.length - 1));
-  const unplaced = doc.class.filter((entry) => !entry.placed);
-  const placedPeople = doc.class.filter((entry) => entry.placed);
-  const picker = (paper, label) => {
-    const id = "pick-" + paper.file + "-" + paper.pages;
-    return h(
-      "select",
-      {
-        key: id,
-        "aria-label": label,
-        value: "",
-        disabled: Boolean(busy),
-        onChange: (event) => {
-          if (event.target.value) assign(paper, { student: event.target.value }, paper.pages);
-        }
-      },
-      h("option", { value: "" }, label + "…"),
-      h(
-        "optgroup",
-        { label: "No paper yet" },
-        unplaced.map((entry) => h("option", { value: entry.student, key: entry.student }, who(entry.student, entry.name)))
-      ),
-      h(
-        "optgroup",
-        { label: "Already have a paper" },
-        placedPeople.map((entry) => h("option", { value: entry.student, key: entry.student }, who(entry.student, entry.name)))
-      )
-    );
+  const keyOf = (paper) => paper.file + "|" + paper.pages;
+  const held = doc.papers.filter((paper) => paper.lane === "held");
+  const check = doc.papers.filter((paper) => paper.lane === "check");
+  const placed2 = doc.papers.filter((paper) => paper.lane === "placed");
+  const skipped = doc.papers.filter((paper) => paper.lane === "skipped");
+  const view = laneView === "held" && !held.length || laneView === "check" && !check.length ? "all" : laneView;
+  const work = view === "held" ? held : view === "check" ? check : held.concat(check);
+  const current = work.find((paper) => keyOf(paper) === selected) || work.find((paper) => !statusOf(paper)) || work[0] || null;
+  const noPaper = doc.class.filter((entry) => !entry.placed);
+  const hasPaper = new Set(doc.class.filter((entry) => entry.placed).map((entry) => entry.student));
+  const waiting2 = doc.papers.filter((paper) => statusOf(paper)).length;
+  const nextAfter = (paper) => {
+    const index = work.indexOf(paper);
+    return work.slice(index + 1).concat(work.slice(0, Math.max(0, index))).find((entry) => entry !== paper && !statusOf(entry)) || null;
   };
-  const card = (paper, index) => {
-    const key = paper.file + "|" + paper.pages;
-    const primary = paper.lane === "check" ? () => assign(paper, { student: paper.resolved }, paper.pages) : paper.candidates.length ? () => assign(paper, { student: paper.candidates[0].student }, paper.pages) : null;
-    const pending = busy === paper.pages;
+  const place = (paper, to) => {
+    if (busy || !paper || statusOf(paper)) return;
+    assign(paper, to);
+    const next = nextAfter(paper);
+    setSelected(next ? keyOf(next) : null);
+    setSearch("");
+  };
+  const skeleton = (word) => word.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/kh|x/g, "h").replace(/zh/g, "j").replace(/q/g, "k").replace(/w/g, "u").replace(/y/g, "i").replace(/(.)\1+/g, "$1").replace(/[^a-z0-9]/g, "");
+  const found = (entry, text) => text.trim().toLowerCase().split(/\s+/).every((word) => {
+    const latin = skeleton(word);
+    return String(entry.name || "").toLowerCase().includes(word) || entry.student.toLowerCase().includes(word) || latin !== "" && String(entry.search || "").includes(latin);
+  });
+  const searched = search.trim() ? noPaper.filter((entry) => found(entry, search)).concat(doc.class.filter((entry) => entry.placed && found(entry, search))).slice(0, 12) : [];
+  const NEAR = { close: "close", possible: "possible", far: "far" };
+  const studentLine = (paper, student) => student === paper.resolved ? "placed here now" : hasPaper.has(student) ? "has a paper" : "no paper yet";
+  const rankRow = (paper, entry, index, off) => h(
+    "li",
+    { key: entry.student },
+    h(
+      "button",
+      {
+        type: "button",
+        className: "pp-rankrow" + (entry.student === paper.resolved ? " pp-rankrow-now" : ""),
+        disabled: off,
+        title: "Place pp. " + paper.pages + " on " + who(entry.student, entry.name) + (index < 9 ? " — key " + (index + 1) : ""),
+        onClick: () => place(paper, { student: entry.student })
+      },
+      h("span", { className: "pp-ranknum" }, index < 9 ? String(index + 1) : ""),
+      h("span", { className: "pp-rankname" }, entry.name || entry.student),
+      entry.near ? h(
+        "span",
+        { className: "pp-near pp-near-" + entry.near, title: NEAR[entry.near] + " · distance " + entry.distance },
+        h("i", { style: { width: Math.round(Math.max(0.06, 1 - Math.min(1, entry.distance)) * 100) + "%" } })
+      ) : h("span"),
+      h("span", { className: "pp-as" + (hasPaper.has(entry.student) && entry.student !== paper.resolved ? " pp-as-warn" : "") }, studentLine(paper, entry.student))
+    )
+  );
+  const deskDetail = (paper) => {
+    if (!paper) return h("div", { className: "pp-mdetail pp-as" }, "Nothing here needs you.");
+    const status = statusOf(paper);
+    const off = Boolean(busy) || Boolean(status);
+    const ranked = paper.ranked && paper.ranked.length ? paper.ranked : paper.candidates;
     return h(
       "div",
-      {
-        key,
-        className: "pp-card" + (index === at ? " pp-focus" : ""),
-        tabIndex: 0,
-        onFocus: () => setFocus(index)
-      },
+      { className: "pp-mdetail" },
       names && doc.crops ? h("img", {
+        key: keyOf(paper),
         className: "pp-crop",
-        alt: "The top of page " + paper.pages.split("-")[0] + ", where the name is written",
-        loading: "lazy",
+        alt: "The top of page " + paper.pages.split(/[-,]/)[0] + ", where the name is written",
         src: cropUrl(paper)
       }) : null,
       h(
         "div",
-        null,
-        names ? paper.written ? h("span", null, "Written: ", h("span", { className: "pp-written" }, paper.written)) : h("span", null, paper.has_name ? "A number is written" : "No name written") : h("span", null, "Pages " + paper.pages)
+        { className: "pp-mhead" },
+        names ? paper.written ? h("span", null, "Read as ", h("span", { className: "pp-written" }, paper.written)) : h("span", null, paper.has_name ? "A number is written" : "No name written") : null,
+        h("span", { className: "pp-as" }, "pp. " + paper.pages + (paper.variant ? " · variant " + paper.variant : "")),
+        status ? h("span", { className: "pp-qchip" }, status === "placing" ? "Placing…" : "Queued") : null
       ),
       names && paper.also.length ? h("div", { className: "pp-cardmeta" }, "Also written: ", paper.also.map((text) => "“" + text + "”").join(", ")) : null,
+      h(
+        "div",
+        { className: "pp-cardmeta" },
+        paper.lane === "check" ? (paper.match === "partial" ? "Placed on one word of the name: " : "Placed on a close spelling: ") + who(paper.resolved, paper.resolved_name) : paper.problem || "Not placed yet"
+      ),
+      names && doc.crops && paper.clash.length ? sideBySide(paper) : null,
       paper.lane === "check" ? h(
         "div",
-        { className: "pp-cardmeta" },
-        (paper.match === "partial" ? "Placed on one word of the name: " : "Placed on a close spelling: ") + who(paper.resolved, paper.resolved_name)
-      ) : h("div", { className: "pp-cardmeta" }, paper.problem || "Not placed yet"),
-      names && doc.crops && paper.clash.length ? sideBySide(paper) : null,
-      paper.lane === "held" && paper.candidates.length ? h(
-        "div",
-        { className: "pp-cardmeta" },
-        "Nearest: " + paper.candidates.map((entry) => who(entry.student, entry.name)).join("; ")
+        { className: "pp-actions" },
+        h(
+          "button",
+          { type: "button", className: "pp-primary", disabled: off, onClick: () => place(paper, { student: paper.resolved }) },
+          "Confirm " + (paper.resolved_name ? paper.resolved_name.split(/\s+/).slice(0, 2).join(" ") : paper.resolved)
+        ),
+        h("span", { className: "pp-as" }, "Enter")
+      ) : null,
+      ranked.length ? h(
+        React.Fragment,
+        null,
+        h("div", { className: "pp-mlabel" }, "Possible matches, nearest first"),
+        h("ol", { className: "pp-ranked" }, ranked.map((entry, index) => rankRow(paper, entry, index, off)))
+      ) : h("div", { className: "pp-cardmeta" }, "No enrolled student is near what is written — search the class below."),
+      h("input", {
+        ref: searchBox,
+        className: "pp-msearch",
+        type: "search",
+        value: search,
+        disabled: off,
+        placeholder: "Someone else — type a name or number  ( / )",
+        "aria-label": "Search the class for who wrote pp. " + paper.pages,
+        onChange: (event) => setSearch(event.target.value)
+      }),
+      search.trim() ? searched.length ? h(
+        "ol",
+        { className: "pp-ranked" },
+        searched.map((entry, index) => rankRow(paper, { student: entry.student, name: entry.name }, index + 100, off))
+      ) : h("div", { className: "pp-cardmeta" }, "Nobody in the class matches “" + search.trim() + "”.") : noPaper.length ? h(
+        "details",
+        { className: "pp-folded pp-nopaper" },
+        h("summary", null, noPaper.length + (noPaper.length === 1 ? " student has" : " students have") + " no paper yet"),
+        h(
+          "div",
+          { className: "pp-chips" },
+          noPaper.map(
+            (entry) => h(
+              "button",
+              {
+                type: "button",
+                key: entry.student,
+                className: "pp-segbtn",
+                disabled: off,
+                title: "Place pp. " + paper.pages + " on " + who(entry.student, entry.name),
+                onClick: () => place(paper, { student: entry.student })
+              },
+              entry.name || entry.student
+            )
+          )
+        )
       ) : null,
       h(
         "div",
         { className: "pp-actions" },
-        paper.lane === "check" ? h(
-          "button",
-          { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: primary },
-          "Confirm"
-        ) : null,
-        paper.lane === "held" ? paper.candidates.map(
-          (entry) => h(
-            "button",
-            {
-              type: "button",
-              className: "pp-segbtn",
-              key: entry.student,
-              disabled: Boolean(busy),
-              onClick: () => assign(paper, { student: entry.student }, paper.pages)
-            },
-            "It's " + (entry.name ? entry.name.split(/\s+/).slice(0, 2).join(" ") : entry.student)
-          )
-        ) : null,
         paper.clash.length ? h(
           "button",
           {
             type: "button",
             className: "pp-segbtn",
-            disabled: Boolean(busy),
+            disabled: off,
             title: "This one is not their paper — a copy they started and gave up, handed in with the real one",
-            onClick: () => assign(paper, { skip: "spoiled copy — the paper is pp. " + paper.clash.map((entry) => entry.pages).join(", ") }, paper.pages)
+            onClick: () => place(paper, { skip: "spoiled copy — the paper is pp. " + paper.clash.map((entry) => entry.pages).join(", ") })
           },
           "Spoiled copy"
         ) : null,
-        picker(paper, paper.lane === "check" ? "Someone else" : paper.clash.length ? "Someone else's" : "Pick from class"),
         paper.lane === "held" && !paper.clash.length ? h(
           "button",
           {
             type: "button",
             className: "pp-segbtn",
-            disabled: Boolean(busy),
+            disabled: off,
             title: "Not one of this run's students — a visitor, or a sheet that is nobody's",
-            onClick: () => assign(paper, { skip: "not a student of this run" }, paper.pages)
+            onClick: () => place(paper, { skip: "not a student of this run" })
           },
           "Not a student"
-        ) : null,
-        pending ? h("span", { className: "pp-as" }, "Placing…") : null
+        ) : null
       )
     );
   };
+  const deskRow = (paper) => {
+    const status = statusOf(paper);
+    const guess = paper.lane === "check" ? paper.resolved_name || paper.resolved : (paper.candidates[0] || {}).name || (paper.candidates[0] || {}).student;
+    return h(
+      "button",
+      {
+        type: "button",
+        key: keyOf(paper),
+        className: "pp-mrow" + (paper === current ? " pp-mrow-on" : ""),
+        "aria-current": paper === current ? "true" : void 0,
+        onClick: () => {
+          setSelected(keyOf(paper));
+          setSearch("");
+        }
+      },
+      h("span", { className: "pp-mdot pp-mdot-" + paper.lane, title: paper.lane === "check" ? "Weak match, to check" : "Held — placed on nobody" }),
+      h(
+        "span",
+        { className: "pp-mrowmain" },
+        h("b", null, names && paper.written ? paper.written : "pp. " + paper.pages),
+        h("span", null, (names && paper.written ? "pp. " + paper.pages : paper.lane === "check" ? "to check" : "held") + (guess ? " → " + guess : ""))
+      ),
+      status ? h("span", { className: "pp-qchip" }, status === "placing" ? "Placing…" : "Queued") : null
+    );
+  };
   const onKey = (event) => {
-    if (event.target.tagName === "SELECT" || event.target.tagName === "INPUT") return;
+    if (shown !== "match" || !current) return;
+    if (event.target.tagName === "INPUT") {
+      if (event.key === "Enter" && searched.length) {
+        place(current, { student: searched[0].student });
+        event.preventDefault();
+      } else if (event.key === "Escape" && search) {
+        setSearch("");
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      return;
+    }
+    if (event.target.tagName === "SELECT" || event.target.tagName === "TEXTAREA") return;
+    const index = work.indexOf(current);
+    const ranked = current.ranked && current.ranked.length ? current.ranked : current.candidates;
     if (event.key === "j" || event.key === "ArrowDown") {
-      setFocus((value) => Math.min(value + 1, work.length - 1));
+      const next = work[Math.min(index + 1, work.length - 1)];
+      if (next) setSelected(keyOf(next));
       event.preventDefault();
     } else if (event.key === "k" || event.key === "ArrowUp") {
-      setFocus((value) => Math.max(value - 1, 0));
+      const next = work[Math.max(index - 1, 0)];
+      if (next) setSelected(keyOf(next));
       event.preventDefault();
-    } else if (event.key === "Enter" && event.target.classList.contains("pp-card")) {
-      const paper = work[at];
-      if (!paper) return;
-      if (paper.lane === "check") assign(paper, { student: paper.resolved }, paper.pages);
-      else if (paper.candidates.length) assign(paper, { student: paper.candidates[0].student }, paper.pages);
+    } else if (/^[1-9]$/.test(event.key) && ranked[Number(event.key) - 1]) {
+      place(current, { student: ranked[Number(event.key) - 1].student });
+      event.preventDefault();
+    } else if (event.key === "Enter" && !event.target.closest("button")) {
+      if (current.lane === "check") place(current, { student: current.resolved });
+      else if (ranked.length) place(current, { student: ranked[0].student });
+      event.preventDefault();
+    } else if (event.key === "/" && searchBox.current) {
+      searchBox.current.focus();
       event.preventDefault();
     }
+  };
+  const confirmAll = () => {
+    const papers = check.filter((paper) => !statusOf(paper)).map((paper) => ({ file: paper.file, pages: paper.pages, student: paper.resolved }));
+    if (!papers.length) return;
+    const ok = window.confirm(
+      "Confirm all " + papers.length + " weak matches? Each paper stays on the student it was matched to, and is marked as confirmed by you."
+    );
+    if (ok) post("/api/scans/assign", { papers }, "confirm-all");
   };
   const now = doc.now || { step: doc.next || null, index: 0, total: doc.stages.length, title: "", body: "", whose: "you", action: null };
   const shown = openStep || now.step || "canvas";
   const stageOf = (id) => doc.stages.find((stage) => stage.id === id) || null;
   const shownStage = stageOf(shown);
   const gradable = doc.answers > 0;
-  const check = work.filter((paper) => paper.lane === "check");
-  const held = work.filter((paper) => paper.lane === "held");
-  const placed2 = doc.papers.filter((paper) => paper.lane === "placed");
-  const skipped = doc.papers.filter((paper) => paper.lane === "skipped");
-  const checkBlock = check.length ? [
-    h(
-      "div",
-      { className: "pp-lane", key: "check-lane" },
-      "Check",
-      h("span", null, "· " + check.length + " placed on a close spelling or one word of the name — confirm, or say who it is")
-    ),
-    ...check.map((paper) => card(paper, work.indexOf(paper)))
-  ] : [];
-  const heldBlock = held.length ? [
-    h("div", { className: "pp-lane", key: "held-lane", ref: heldLane }, "Held", h("span", null, "· " + held.length + " not placed")),
-    ...held.map((paper) => card(paper, work.indexOf(paper)))
-  ] : [];
   const WHOSE = { you: "Your move", assistant: "Assistant", done: "Done" };
   const whose = (value) => h("span", { className: "pp-whose pp-whose-" + value }, WHOSE[value] || value);
   const choosePile = (id) => {
     setOpenStep(null);
-    setHeldFirst(false);
-    setFocus(0);
+    setLaneView("all");
+    setSelected(null);
+    setSearch("");
     setPile(id);
   };
   const readButton = (primary) => h(
@@ -13828,7 +14055,7 @@ function ScansTab(props) {
       type: "button",
       key: "read",
       className: primary ? "pp-primary" : "pp-segbtn",
-      disabled: Boolean(busy),
+      disabled: blocked,
       title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
       onClick: () => post("/api/scans/read", {}, "read")
     },
@@ -13955,65 +14182,136 @@ function ScansTab(props) {
       )
     )
   );
-  const matchTools = () => [
-    !names ? h(
-      Message,
-      { key: "pseudonyms" },
-      "Pseudonyms are showing, so the handwritten names and their crops are hidden. Press Names to match papers."
-    ) : reviewable ? h(
-      "div",
-      { className: "pp-actions", key: "review" },
-      h(
-        "button",
-        {
-          type: "button",
-          className: "pp-segbtn",
-          disabled: Boolean(busy),
-          title: "Every name the pile was matched on, as big cards — confirm them all at once, reject the wrong ones",
-          onClick: () => setReviewing(true)
-        },
-        "Review all " + reviewable + " name matches"
-      )
-    ) : null,
-    ...heldFirst ? heldBlock.concat(checkBlock) : checkBlock.concat(heldBlock),
-    work.length ? h("div", { className: "pp-cardmeta", key: "keys" }, "j / k to move between papers, Enter to confirm") : null,
-    h(
-      "details",
-      { className: "pp-folded", key: "placed" },
-      h(
-        "summary",
-        null,
-        placed2.length + " placed" + (skipped.length ? " · " + skipped.length + " set aside" : "") + " · " + doc.missing + " enrolled with no paper"
-      ),
-      h(
-        "ul",
-        null,
-        placed2.map(
-          (paper) => h(
-            "li",
-            { key: paper.file + paper.pages },
-            "pp. " + paper.pages + " → " + who(paper.resolved, paper.resolved_name) + (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : paper.match === "partial" ? " (one word)" : "")
-          )
-        ),
-        skipped.map((paper) => h("li", { key: paper.file + paper.pages }, "pp. " + paper.pages + " — " + paper.skip))
-      ),
+  const matchTools = () => {
+    const counted = placed2.length + check.length + held.length;
+    const share = (n) => (counted ? 100 * n / counted : 0) + "%";
+    const filter = (id, label, n) => h(
+      "button",
+      {
+        type: "button",
+        key: id,
+        className: "pp-segbtn",
+        "aria-pressed": view === id,
+        onClick: () => {
+          setLaneView(id);
+          setSelected(null);
+          setSearch("");
+        }
+      },
+      label + " " + n
+    );
+    return [
       h(
         "div",
-        { className: "pp-actions" },
+        { className: "pp-msum", key: "sum" },
         h(
+          "div",
+          { className: "pp-mbar", role: "img", "aria-label": placed2.length + " placed, " + check.length + " to check, " + held.length + " held" },
+          h("i", { className: "pp-mbar-placed", style: { width: share(placed2.length) } }),
+          h("i", { className: "pp-mbar-check", style: { width: share(check.length) } }),
+          h("i", { className: "pp-mbar-held", style: { width: share(held.length) } })
+        ),
+        h(
+          "div",
+          { className: "pp-mkey" },
+          h("span", null, h("i", { className: "pp-mdot pp-mdot-placed" }), placed2.length + " of " + counted + " placed"),
+          check.length ? h("span", null, h("i", { className: "pp-mdot pp-mdot-check" }), check.length + " weak matches to check") : null,
+          held.length ? h("span", null, h("i", { className: "pp-mdot pp-mdot-held" }), held.length + " held") : null,
+          waiting2 ? h("span", null, waiting2 + " queued") : null,
+          h("span", { className: "pp-as" }, doc.missing + " enrolled with no paper")
+        )
+      ),
+      !names ? h(
+        Message,
+        { key: "pseudonyms" },
+        "Pseudonyms are showing, so the handwritten names and their crops are hidden. Press Names to match papers."
+      ) : null,
+      check.length || names && reviewable ? h(
+        "div",
+        { className: "pp-actions", key: "many" },
+        check.length ? h(
+          "button",
+          {
+            type: "button",
+            className: "pp-primary",
+            disabled: blocked,
+            title: "Keep every weak match on the student it was matched to, as one write — or check them one by one below",
+            onClick: confirmAll
+          },
+          busy === "confirm-all" ? "Confirming…" : "Confirm all " + check.length + " weak matches"
+        ) : null,
+        names && reviewable ? h(
           "button",
           {
             type: "button",
             className: "pp-segbtn",
-            disabled: Boolean(busy),
-            title: "Run `scans apply` again — after editing plan.yaml by hand, say",
-            onClick: () => post("/api/scans/apply", {}, "apply")
+            disabled: blocked,
+            title: "Every name the pile was matched on, as big cards — confirm them all at once, reject the wrong ones",
+            onClick: () => setReviewing(true)
           },
-          busy === "apply" ? "Applying…" : "Re-apply the plan"
+          "Review all " + reviewable + " name matches"
+        ) : null
+      ) : null,
+      held.length + check.length ? h(
+        "div",
+        { className: "pp-desk", key: "desk", ref: deskRef },
+        h(
+          "div",
+          { className: "pp-mside" },
+          h(
+            "div",
+            { className: "pp-mfilter" },
+            filter("held", "Held", held.length),
+            filter("check", "To check", check.length),
+            filter("all", "All", held.length + check.length)
+          ),
+          h(
+            "div",
+            { className: "pp-mlist", role: "list", "aria-label": "Papers that need you" },
+            work.length ? work.map(deskRow) : h("div", { className: "pp-as pp-mempty" }, "None here.")
+          ),
+          h("div", { className: "pp-as pp-mkeys" }, "j / k move · 1–9 pick · Enter first · / search")
+        ),
+        deskDetail(current)
+      ) : h("div", { className: "pp-cardmeta", key: "none" }, "Every paper is placed on a student."),
+      h(
+        "details",
+        { className: "pp-folded", key: "placed" },
+        h(
+          "summary",
+          null,
+          placed2.length + " placed" + (skipped.length ? " · " + skipped.length + " set aside" : "") + " · " + doc.missing + " enrolled with no paper"
+        ),
+        h(
+          "ul",
+          null,
+          placed2.map(
+            (paper) => h(
+              "li",
+              { key: paper.file + paper.pages },
+              "pp. " + paper.pages + " → " + who(paper.resolved, paper.resolved_name) + (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : paper.match === "partial" ? " (one word)" : "")
+            )
+          ),
+          skipped.map((paper) => h("li", { key: paper.file + paper.pages }, "pp. " + paper.pages + " — " + paper.skip))
+        ),
+        h(
+          "div",
+          { className: "pp-actions" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              disabled: blocked,
+              title: "Run `scans apply` again — after editing plan.yaml by hand, say",
+              onClick: () => post("/api/scans/apply", {}, "apply")
+            },
+            busy === "apply" ? "Applying…" : "Re-apply the plan"
+          )
         )
       )
-    )
-  ];
+    ];
+  };
   const stepTools = () => {
     if (shown === "match") return matchTools();
     if (shown === "read") return now.action === "read" ? [] : [h("div", { className: "pp-actions", key: "a" }, readButton(false))];
@@ -14553,6 +14851,18 @@ function ProfessorPane(props) {
   const [grading, setGrading] = React.useState(null);
   const [scansPile, setScansPile] = React.useState(null);
   const [scansStep, setScansStep] = React.useState(null);
+  const examWindow = React.useRef(null);
+  const placedAt = React.useRef(0);
+  React.useEffect(
+    () => onPlacements((line) => {
+      for (const frame of document.querySelectorAll("iframe")) {
+        if (frame.contentWindow) {
+          frame.contentWindow.postMessage({ source: "professor-pane", kind: "scans-queue", running: line.running, queued: line.queued }, "*");
+        }
+      }
+    }),
+    []
+  );
   const openRef = React.useRef(props.openDetails);
   openRef.current = props.openDetails;
   React.useEffect(() => {
@@ -14726,22 +15036,39 @@ function ProfessorPane(props) {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run2 = currentRunRef.current;
         if (!run2 || !id.test(String(data.assessment)) || !/^STUDENT-[A-Z0-9]+$/.test(String(data.student))) return;
-        fetch(
-          scoped(BASE + "/api/scans/assign?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ file: String(data.file || ""), pages: String(data.pages || ""), student: data.student })
+        const pages = String(data.pages || "");
+        enqueuePlacement({
+          runId: run2,
+          sessionId: props.sessionId,
+          assessment: data.assessment,
+          file: String(data.file || ""),
+          pages,
+          answer: { student: data.student },
+          onDone: (result) => {
+            placedAt.current = Date.now();
+            if (result.error || !result.ok) {
+              window.alert(
+                "pp. " + pages + " was not placed: " + String(result.error || result.output || "no answer").trim().split("\n").slice(-2).join(" ")
+              );
+            }
+            write(["scans", "files"]);
           }
-        ).then((response) => response.json()).then((result) => {
-          if (result.error || !result.ok) {
-            window.alert(String(result.error || result.output || "the paper was not placed").trim().split("\n").slice(-2).join(" "));
-          }
-          write(["scans", "files"]);
-        }).catch((error) => {
-          window.alert("the paper was not placed: " + String(error));
-          write(["scans", "files"]);
         });
+        return;
+      }
+      if (data.kind === "aw-state") {
+        const panel = typeof data.panel === "string" && /^[A-Z0-9][A-Z0-9-]*$/.test(data.panel) ? data.panel : null;
+        examWindow.current = panel ? { panel, scroll: Math.max(0, Number(data.scroll) || 0) } : null;
+        return;
+      }
+      if (data.kind === "scans-queue-hello") {
+        if (!event.source) return;
+        const line = placementsNow();
+        const going = placementsWaiting(line) || Date.now() - placedAt.current < 15e3;
+        event.source.postMessage(
+          { source: "professor-pane", kind: "scans-queue", running: line.running, queued: line.queued, restore: going ? examWindow.current : null },
+          "*"
+        );
         return;
       }
       if (data.kind === "grade" || data.kind === "scans") {
@@ -15125,8 +15452,8 @@ function apply(ctx) {
     let current = "";
     try {
       const state = input.state;
-      const snapshot = state !== void 0 && typeof state.getSnapshot === "function" ? state.getSnapshot() : void 0;
-      const draft = snapshot === void 0 ? void 0 : snapshot.draft;
+      const snapshot2 = state !== void 0 && typeof state.getSnapshot === "function" ? state.getSnapshot() : void 0;
+      const draft = snapshot2 === void 0 ? void 0 : snapshot2.draft;
       if (typeof draft === "string") current = draft;
     } catch {
       current = "";

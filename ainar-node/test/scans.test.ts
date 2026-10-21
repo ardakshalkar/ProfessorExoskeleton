@@ -26,6 +26,8 @@ import {
   itemsForVariant,
   nameCandidates,
   nameKey,
+  nameRanking,
+  nameSearchKey,
   nameSkeleton,
   parsePages,
   planScans,
@@ -236,6 +238,19 @@ test("candidates for a written name are suggestions, nearest first, within reach
   assert.deepEqual(nameCandidates("Zhuldyz Omarova", known), []);
   assert.deepEqual(nameCandidates("", known), []);
   assert.deepEqual(nameCandidates("Bob Browne", { ...known, not: [s.bob] }), [], "never the one turned down");
+});
+
+test("the ranking keeps everyone, nearest first, and says how near", () => {
+  const s = setting();
+  const known = { store: s.store, enrolled: s.enrolled };
+  const ranked = nameRanking("Bob Browne", known);
+  assert.equal(ranked[0]!.student, s.bob);
+  assert.equal(ranked[0]!.near, "close");
+  assert.ok(ranked.some((entry) => entry.student === s.carol), "Carol Brown is far, but still in the order");
+  assert.ok(ranked.every((entry, i) => i === 0 || entry.distance >= ranked[i - 1]!.distance));
+  assert.ok(!nameRanking("Bob Browne", { ...known, not: [s.bob] }).some((entry) => entry.student === s.bob));
+  assert.deepEqual(nameRanking("", known), []);
+  assert.equal(nameSearchKey("Қожахан Бижамал"), nameSearchKey("Kozhakhan Bizhamal"), "one key whatever the script");
 });
 
 test("a match turned down is never made from the name again", () => {

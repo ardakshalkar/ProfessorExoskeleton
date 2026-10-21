@@ -362,28 +362,49 @@ export const assessmentWindowStyle =
   ".awmay{color:var(--warn)}" +
   ".awhp{border:1px solid var(--line);border-radius:6px;padding:6px 9px;margin:0 0 6px}.awhp .awp{margin:4px 0 0}" +
   ".awcrop{display:block;max-width:100%;max-height:90px;margin:0 0 4px;border-radius:3px;background:#fff}" +
-  "[data-aw-place][disabled]{opacity:.6}";
+  "[data-aw-place][disabled]{opacity:.6}" +
+  ".awstate{font-size:11px;align-self:center}";
 
 /*
  * Open the column's panel; close on ×, Esc (the dialog's own) or a press on
  * the backdrop. A student's name opens their hand-in in the drawer, as the
  * cell in their row would. Scans and Grade go up to the browser half, which
  * opens them over this view, as course mode's chips do. "This is …" on a held
- * paper goes up too, since this frame may not fetch: the browser half runs
- * `scans assign` and the redraw shows the paper placed.
+ * paper goes up too, since this frame may not fetch: the browser half puts it
+ * in the line of placements (client/scans-queue.js), and the redraw shows the
+ * paper placed.
+ *
+ * The line is drawn here as the browser half reports it (`scans-queue`): each
+ * paper waiting says Queued, the one in hand Placing…, and its buttons are off.
+ * Every placement redraws this view, which would close the window under a
+ * professor still pressing; so the frame says which panel is open and how far
+ * it is scrolled (`aw-state`), asks on load (`scans-queue-hello`), and the
+ * answer reopens it while placements are going through.
  */
 export const assessmentWindowScript =
   "<script>(function(){var dlg=document.querySelector('dialog.aw');if(!dlg)return;" +
+  "var up=parent!==window;function say(m){if(up){m.source='professor-pane';parent.postMessage(m,'*');}}" +
   "function shut(){if(dlg.open)dlg.close();}" +
+  "function shownId(){var p=dlg.querySelector('[data-aw-panel]:not([hidden])');return dlg.open&&p?p.getAttribute('data-aw-panel'):null;}" +
+  "function report(){var id=shownId(),b=id&&dlg.querySelector('[data-aw-panel=\"'+id+'\"] .awbody');say({kind:'aw-state',panel:id,scroll:b?b.scrollTop:0});}" +
+  "function show(id,top){[].slice.call(dlg.querySelectorAll('[data-aw-panel]')).forEach(function(p){p.hidden=p.getAttribute('data-aw-panel')!==id;});" +
+  "if(!dlg.open)dlg.showModal();var b=dlg.querySelector('[data-aw-panel=\"'+id+'\"] .awbody');if(b)b.scrollTop=top||0;report();}" +
+  "dlg.addEventListener('close',report);" +
+  "[].slice.call(dlg.querySelectorAll('.awbody')).forEach(function(b){b.addEventListener('scroll',report);});" +
+  "function note(p,s){[].slice.call(p.querySelectorAll('[data-aw-place]')).forEach(function(x){x.disabled=!!s;});" +
+  "var t=p.querySelector('.awstate');if(!t){t=document.createElement('span');t.className='awstate dim';p.querySelector('.awp').appendChild(t);}t.textContent=s;}" +
+  "function mark(m){var on={};if(m.running)on[m.running]='Placing…';(m.queued||[]).forEach(function(k){on[k]='Queued';});" +
+  "[].slice.call(dlg.querySelectorAll('.awhp')).forEach(function(p){var b=p.querySelector('[data-aw-place]');if(!b)return;" +
+  "note(p,on[b.getAttribute('data-aw-place')+'|'+b.getAttribute('data-file')+'|'+b.getAttribute('data-pages')]||'');});}" +
+  "window.addEventListener('message',function(e){var d=e.data;if(!d||d.source!=='professor-pane'||d.kind!=='scans-queue')return;" +
+  "mark(d);if(d.restore&&d.restore.panel&&dlg.querySelector('[data-aw-panel=\"'+d.restore.panel+'\"]'))show(d.restore.panel,d.restore.scroll);});" +
+  "say({kind:'scans-queue-hello'});" +
   "document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;" +
-  "var h=t.closest('[data-aw]');if(h){var id=h.getAttribute('data-aw');" +
-  "[].slice.call(dlg.querySelectorAll('[data-aw-panel]')).forEach(function(p){p.hidden=p.getAttribute('data-aw-panel')!==id;});" +
-  "if(!dlg.open)dlg.showModal();var b=dlg.querySelector('[data-aw-panel=\"'+id+'\"] .awbody');if(b)b.scrollTop=0;return;}" +
+  "var h=t.closest('[data-aw]');if(h){show(h.getAttribute('data-aw'),0);return;}" +
   "if(t===dlg||t.closest('[data-aw-close]')){shut();return;}" +
-  "var pl=t.closest('[data-aw-place]');if(pl){if(pl.disabled||parent===window)return;" +
-  "[].slice.call(pl.parentNode.querySelectorAll('[data-aw-place]')).forEach(function(b){b.disabled=true;});pl.textContent='Placing…';" +
-  "parent.postMessage({source:'professor-pane',kind:'scans-place',assessment:pl.getAttribute('data-aw-place'),file:pl.getAttribute('data-file')," +
-  "pages:pl.getAttribute('data-pages'),student:pl.getAttribute('data-student')},'*');return;}" +
+  "var pl=t.closest('[data-aw-place]');if(pl){if(pl.disabled||!up)return;note(pl.closest('.awhp'),'Queued');" +
+  "say({kind:'scans-place',assessment:pl.getAttribute('data-aw-place'),file:pl.getAttribute('data-file')," +
+  "pages:pl.getAttribute('data-pages'),student:pl.getAttribute('data-student')});return;}" +
   "var s=t.closest('[data-aw-student]');if(s){var a=s.getAttribute('data-aw-hw'),who=s.getAttribute('data-aw-student');" +
   "var cell=[].slice.call(document.querySelectorAll('[data-hw]')).filter(function(c){return c.getAttribute('data-hw')===a&&c.getAttribute('data-hw-student')===who;})[0];" +
   "shut();if(cell)cell.click();return;}" +

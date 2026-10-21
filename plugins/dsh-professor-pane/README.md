@@ -292,6 +292,13 @@ the submission and its drafted answers are removed, and what was read off the
 paper follows it to the right student. It is refused once there is an
 evaluation on it: then it is a grade to reconsider, not a placement to undo.
 
+Presses do not wait for each other. Each joins one line for the whole page
+(`client/scans-queue.js`), shared with the Students view's exam window, and
+the papers are placed one `scans assign` at a time in the order pressed — the
+plan has no lock, and two at once would lose one. A paper waiting says
+*Queued*, the one in hand *Placing…*. Read, Re-apply and the review's Confirm
+rewrite the whole plan, so they wait for the line to empty.
+
 **Review all name matches** opens every correspondence at once, as big cards
 over the conversation: the name line, the name as read, the roster name. Two
 sections. *Matched by name* is every paper the roster placed and nobody has
