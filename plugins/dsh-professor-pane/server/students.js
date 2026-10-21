@@ -1282,7 +1282,9 @@ export const studentsDocument = (
   const assessmentPanels = weighted.map((a) => {
     const record = (bundle.assessments ?? []).find((entry) => entry.assessment_id === a.assessment_id) ?? a;
     const rubric = rubrics.get(record.rubric_id ?? record.rubric?.rubric_id ?? "") ?? null;
-    const subs = new Set((bundle.submissions ?? []).filter((entry) => entry.assessment_id === a.assessment_id).map((entry) => entry.submission_id));
+    const handed = (bundle.submissions ?? []).filter((entry) => entry.assessment_id === a.assessment_id);
+    const subs = new Set(handed.map((entry) => entry.submission_id));
+    const scanned = piles.has(a.assessment_id);
     return windowPanel(
       summarise({
         assessment: { ...record, weight: a.weight ?? record.weight, due_at: a.due_at ?? record.due_at },
@@ -1295,6 +1297,9 @@ export const studentsDocument = (
         evaluations: (bundle.evaluations ?? []).filter((entry) => subs.has(entry.submission_id)),
         pile: piles.get(a.assessment_id) ?? null,
         names: Boolean(people),
+        items: (bundle.items ?? []).filter((entry) => entry.assessment_id === a.assessment_id),
+        responses: (bundle.item_responses ?? []).filter((entry) => subs.has(entry.submission_id)),
+        submissions: handed,
       }),
       {
         nameOf: (id) => (people && typeof people[id]?.name === "string" && people[id].name.trim() ? people[id].name.trim() : id),
@@ -1304,6 +1309,14 @@ export const studentsDocument = (
           people
             ? `${origin}${BASE}/api/scans/crop?run=` + encodeURIComponent(runId) + "&assessment=" + encodeURIComponent(a.assessment_id) +
               "&file=" + encodeURIComponent(paper.file) + "&pages=" + encodeURIComponent(paper.pages) +
+              (sessionId ? "&session=" + encodeURIComponent(sessionId) : "")
+            : null,
+        // The Grade view's own page route; the page carries the name, so it
+        // is drawn with names only when they are on.
+        page: (student, n) =>
+          scanned
+            ? `${origin}${BASE}/api/grade/page?run=` + encodeURIComponent(runId) + "&assessment=" + encodeURIComponent(a.assessment_id) +
+              "&student=" + encodeURIComponent(student) + "&page=" + encodeURIComponent(n) + (people ? "&names=1" : "") +
               (sessionId ? "&session=" + encodeURIComponent(sessionId) : "")
             : null,
       },

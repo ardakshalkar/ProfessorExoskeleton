@@ -39,8 +39,12 @@ export const describe = (values) => {
  * `evaluations` the assessment's. `pile` is the scan standing, or null; its
  * `held` papers, when it has them, are listed with their nearest students, and
  * their written names kept only when `names` is on.
+ *
+ * `items`, `responses` and `submissions` are the assessment's, for what a
+ * question opens into: its wording in each variant, the key and guidance it
+ * is marked by, and every answer with the mark it got and why.
  */
-export const summarise = ({ assessment, cells, criteria = [], evaluations = [], pile = null, names = false }) => {
+export const summarise = ({ assessment, cells, criteria = [], evaluations = [], pile = null, names = false, items = [], responses = [], submissions = [] }) => {
   const count = (state) => cells.filter((cell) => cell.state === state).length;
   const missing = cells.filter((cell) => cell.state === "missing").map((cell) => cell.student);
   // A student counted missing while a paper placed on nobody is nearest them:
@@ -72,11 +76,38 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
         })
       : [];
 
+  const studentOf = new Map(submissions.map((entry) => [entry.submission_id, String(entry.student_id ?? "")]));
+  const isDecided = (entry) => entry.professor_decision && ["approved", "overridden"].includes(entry.status);
   const questions = criteria.map((criterion) => {
     const mine = evaluations.filter((entry) => entry.criterion_id === criterion.criterion_id);
-    const decided = mine.filter((entry) => entry.professor_decision && ["approved", "overridden"].includes(entry.status));
+    const decided = mine.filter(isDecided);
     const maximum = Number(criterion.maximum_score) || 0;
     const stats = describe(decided.map((entry) => Number(entry.professor_decision.score)));
+    // The same question in every variant: one criterion, one item per variant.
+    const asked = items
+      .filter((item) => item.criterion_id === criterion.criterion_id)
+      .sort((a, b) => String(a.extensions?.variant ?? "").localeCompare(String(b.extensions?.variant ?? "")));
+    const variantOf = new Map(asked.map((item) => [item.item_id, item.extensions?.variant ?? null]));
+    const answers = mine.map((entry) => {
+      const response = responses.find((row) => row.submission_id === entry.submission_id && variantOf.has(row.item_id));
+      const scan = response?.extensions?.scan ?? {};
+      const text = String(response?.raw_response ?? "").trim();
+      const mark = isDecided(entry) ? entry.professor_decision : entry.ai_suggestion;
+      return {
+        student: studentOf.get(entry.submission_id) ?? entry.submission_id,
+        variant: response ? variantOf.get(response.item_id) : null,
+        text,
+        blank: Boolean(response) && (Boolean(scan.blank) || !text),
+        page: scan.page ?? null,
+        read: scan.confidence ?? null,
+        score: mark && typeof mark.score === "number" ? mark.score : null,
+        decided: Boolean(isDecided(entry)),
+        // The professor's own comment when there is one, else the grader's reason.
+        comment: entry.professor_decision?.comment || entry.ai_suggestion?.comment || null,
+        suggested: entry.ai_suggestion && typeof entry.ai_suggestion.score === "number" ? entry.ai_suggestion.score : null,
+      };
+    });
+    const at = (score) => answers.filter((answer) => answer.score === score).length;
     return {
       id: criterion.criterion_id,
       title: String(criterion.title ?? criterion.criterion_id),
@@ -85,6 +116,17 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
       waiting: mine.length - decided.length,
       mean: stats.mean,
       percent: stats.mean === null || !maximum ? null : (100 * stats.mean) / maximum,
+      variants: asked.map((item) => ({
+        variant: item.extensions?.variant ?? null,
+        item_id: item.item_id,
+        prompt: String(item.prompt ?? ""),
+        key: item.answer_key ? String(item.answer_key) : null,
+        guidance: item.marking_guidance ? String(item.marking_guidance) : null,
+      })),
+      levels: (criterion.levels ?? [])
+        .map((level) => ({ score: Number(level.score), description: String(level.description ?? level.label ?? ""), count: at(Number(level.score)) }))
+        .sort((a, b) => b.score - a.score),
+      answers,
     };
   });
 
@@ -137,9 +179,10 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
  * The panel for one summary, hidden until its header number is pressed.
  * `nameOf(student)` is the name to draw, or the pseudonym; `when(iso)` a date;
  * `crop(paper)` the address of a held paper's name line, or null — it is the
- * handwritten name, so only with names on.
+ * handwritten name, so only with names on; `page(student, n)` the address of a
+ * page of a student's scan, or null, loaded only when its answer is opened.
  */
-export const windowPanel = (summary, { nameOf, when, crop = () => null }) => {
+export const windowPanel = (summary, { nameOf, when, crop = () => null, page = () => null }) => {
   const s = summary;
   const c = s.counts;
   const stat = (label, value, warm = false) =>
@@ -217,18 +260,94 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null }) => {
       "</tbody></table>"
     : "";
 
-  const questions = s.questions.length
-    ? "<h3>By question</h3><p class=\"dim awnote\">From decided marks only; a suggestion is counted as waiting.</p>" +
-      '<table class="awt"><thead><tr><th>Question</th><th>Mean</th><th></th><th>Decided</th><th>Waiting</th></tr></thead><tbody>' +
-      s.questions
+  // Questions: the list on the left, and what the one pressed opens into on
+  // the right — how it is marked, then every answer under the mark it got.
+  const qbar = (q) =>
+    '<span class="awq"><span class="' + (q.percent !== null && q.percent < 50 ? "low" : "") + '" style="width:' + (q.percent ?? 0) + '%"></span></span>';
+  const qmean = (q) => (q.mean === null ? "—" : round(q.mean) + " / " + round(q.maximum));
+  const markText = (value) => (value === null ? "—" : round(value));
+  const answerCard = (answer) =>
+    '<div class="awans' + (answer.decided ? "" : " sug") + '">' +
+    '<div class="awansh"><span class="awmark">' + markText(answer.score) + "</span>" +
+    go(answer.student) +
+    (answer.variant ? '<span class="dim">variant ' + escapeText(answer.variant) + "</span>" : "") +
+    (answer.decided ? "" : '<span class="dim">suggested, not decided</span>') +
+    (answer.decided && answer.suggested !== null && answer.suggested !== answer.score
+      ? '<span class="dim">suggested ' + markText(answer.suggested) + "</span>"
+      : "") +
+    (answer.read && answer.read !== "high" ? '<span class="awmay">' + escapeText(answer.read) + " reading</span>" : "") +
+    "</div>" +
+    (answer.blank
+      ? '<div class="dim">Nothing written.</div>'
+      : answer.text
+        ? '<div class="awanst">' + escapeText(answer.text) + "</div>"
+        : "") +
+    (answer.comment && !answer.blank ? '<div class="awwhy">' + escapeText(answer.comment) + "</div>" : "") +
+    (answer.page && page(answer.student, answer.page)
+      ? '<details class="awpg"><summary>page ' + answer.page + "</summary>" +
+        '<img loading="lazy" alt="Page ' + answer.page + '" src="' + escapeText(page(answer.student, answer.page)) + '"></details>'
+      : "") +
+    "</div>";
+  const questionDetail = (q, index) => {
+    const placed = new Set(q.levels.map((level) => level.score));
+    const under = (score) => q.answers.filter((answer) => answer.score === score && !answer.blank);
+    const elsewhere = q.answers.filter((answer) => !answer.blank && !placed.has(answer.score));
+    const blanks = q.answers.filter((answer) => answer.blank);
+    return (
+      '<div class="awqd" data-aw-qd="' + index + '"' + (index === 0 ? "" : " hidden") + ">" +
+      "<h3>" + escapeText(q.title) + ' <span class="dim">· mean ' + qmean(q) + " · " + q.decided + " decided" +
+      (q.waiting ? " · " + q.waiting + " waiting" : "") + "</span></h3>" +
+      q.variants
         .map(
-          (q) =>
-            "<tr><td>" + escapeText(q.title) + '</td><td class="num">' + (q.mean === null ? "—" : round(q.mean) + " / " + round(q.maximum)) +
-            '</td><td><span class="awq"><span class="' + (q.percent !== null && q.percent < 50 ? "low" : "") + '" style="width:' +
-            (q.percent ?? 0) + '%"></span></span></td><td class="num">' + q.decided + '</td><td class="num">' + (q.waiting || "") + "</td></tr>",
+          (v) =>
+            '<details class="awvar"' + (q.variants.length === 1 ? " open" : "") + "><summary>" +
+            (v.variant ? "Variant " + escapeText(v.variant) : "The question") + "</summary>" +
+            '<div class="awpr">' + escapeText(v.prompt) + "</div>" +
+            (v.key ? '<div class="awkey"><b>Key</b> ' + escapeText(v.key) + "</div>" : "") +
+            (v.guidance ? '<div class="awkey"><b>Marking</b> ' + escapeText(v.guidance) + "</div>" : "") +
+            "</details>",
         )
         .join("") +
-      "</tbody></table>"
+      (q.levels.length
+        ? q.levels
+            .map((level) => {
+              const here = under(level.score);
+              return (
+                '<div class="awlv"><div class="awlvh"><span class="awmark">' + markText(level.score) + "</span>" +
+                "<span>" + escapeText(level.description) + '</span><span class="dim">' + here.length + "</span></div>" +
+                here.map(answerCard).join("") + "</div>"
+              );
+            })
+            .join("")
+        : "") +
+      (elsewhere.length
+        ? '<div class="awlv"><div class="awlvh"><span class="awmark">·</span><span>' +
+          (q.levels.length ? "Off the rubric's levels, or no mark yet" : "The answers") +
+          '</span><span class="dim">' + elsewhere.length + "</span></div>" +
+          elsewhere.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map(answerCard).join("") + "</div>"
+        : "") +
+      (blanks.length
+        ? '<details class="awlv"><summary class="awlvh"><span class="awmark">0</span><span>Nothing written</span><span class="dim">' +
+          blanks.length + "</span></summary>" + blanks.map(answerCard).join("") + "</details>"
+        : "") +
+      (!q.answers.length ? '<p class="dim">No answer to this question is graded or suggested yet.</p>' : "") +
+      "</div>"
+    );
+  };
+  const questions = s.questions.length
+    ? '<p class="dim awnote">Means from decided marks only; a suggestion is counted as waiting. Press a question for its answers and how each was marked.</p>' +
+      '<div class="awqs"><div class="awql">' +
+      s.questions
+        .map(
+          (q, index) =>
+            '<button type="button" class="awqi' + (index === 0 ? " on" : "") + '" data-aw-q="' + index + '">' +
+            '<span class="awqt">' + escapeText(q.title) + "</span>" +
+            '<span class="awqm num">' + qmean(q) + "</span>" + qbar(q) +
+            (q.waiting ? '<span class="awqw dim">' + q.waiting + " waiting</span>" : "") +
+            "</button>",
+        )
+        .join("") +
+      '</div><div class="awqdetail">' + s.questions.map(questionDetail).join("") + "</div></div>"
     : "";
 
   const maybe = new Set(s.maybe_held ?? []);
@@ -310,11 +429,25 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null }) => {
       })()
     : "";
 
+  // One tab per part, so each is a press away rather than a scroll down.
+  const tabs = [
+    ["overview", "Overview", results + groups],
+    ["questions", "Questions" + (s.questions.length ? " (" + s.questions.length + ")" : ""), questions],
+    ["scans", "Scans", scans],
+    ["people", "Students" + (s.missing.length ? " · " + s.missing.length + " missing" : ""), people],
+  ].filter(([, , html]) => html);
   return (
     '<div class="awpanel" data-aw-panel="' + escapeText(s.id) + '" hidden>' +
-    '<div class="awhead"><div><div class="awtitle">' + escapeText(s.title) + '</div><div class="dim">' + facts.join(" · ") + "</div></div>" +
+    '<div class="awhead"><div class="awheadtop"><div><div class="awtitle">' + escapeText(s.title) + '</div><div class="dim">' + facts.join(" · ") + "</div></div>" +
     '<button type="button" class="dwk" data-aw-close aria-label="Close" title="Close (Esc)">×</button></div>' +
-    '<div class="awbody">' + results + scans + questions + groups + people + "</div>" +
+    '<div class="awtabs" role="tablist">' +
+    tabs
+      .map(([key, title], index) => '<button type="button" role="tab" data-aw-tab="' + key + '" aria-selected="' + (index === 0) + '">' + escapeText(title) + "</button>")
+      .join("") +
+    "</div></div>" +
+    '<div class="awbody">' +
+    tabs.map(([key, , html], index) => '<section data-aw-sec="' + key + '"' + (index === 0 ? "" : " hidden") + ">" + html + "</section>").join("") +
+    "</div>" +
     "</div>"
   );
 };
@@ -325,14 +458,40 @@ export const assessmentDialog = (panels) => '<dialog class="aw" aria-label="Asse
 export const assessmentWindowStyle =
   ".th .n[data-aw]{cursor:pointer;font:inherit;font-size:10px;background:none;border:0;padding:0;color:var(--dim)}" +
   ".th .n[data-aw]:hover,.th .n[data-aw]:focus-visible{color:var(--info);outline:1px solid var(--accent-line,var(--info));outline-offset:1px}" +
-  "dialog.aw{width:min(680px,94vw);max-height:88vh;padding:0;border:1px solid var(--line);border-radius:8px;" +
-  "background:var(--dwbg);color:var(--fg);box-shadow:0 10px 40px rgba(0,0,0,.25)}" +
-  "dialog.aw::backdrop{background:rgba(0,0,0,.28)}" +
-  ".awpanel[hidden]{display:none}" +
-  ".awhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:12px 16px 8px;border-bottom:1px solid var(--line);" +
-  "position:sticky;top:0;background:var(--dwbg)}" +
+  // Docked to the right, the full height: the class list stays in view at the left.
+  "dialog.aw{width:min(1180px,96vw);height:100vh;max-height:100vh;margin:0 0 0 auto;padding:0;border:0;border-left:1px solid var(--line);" +
+  "border-radius:0;background:var(--dwbg);color:var(--fg);box-shadow:-10px 0 40px rgba(0,0,0,.22);overflow:hidden}" +
+  "dialog.aw::backdrop{background:rgba(0,0,0,.22)}" +
+  ".awpanel{display:flex;flex-direction:column;height:100%}.awpanel[hidden]{display:none}" +
+  ".awhead{padding:12px 18px 0;border-bottom:1px solid var(--line);background:var(--dwbg)}" +
+  ".awheadtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}" +
   ".awtitle{font-size:16px;font-weight:600}" +
-  ".awbody{padding:4px 16px 16px}" +
+  ".awtabs{display:flex;gap:2px;margin-top:10px}" +
+  ".awtabs button{font:inherit;font-size:12px;background:none;border:0;border-bottom:2px solid transparent;padding:6px 12px;color:var(--dim);cursor:pointer}" +
+  ".awtabs button[aria-selected=true]{color:var(--fg);border-bottom-color:var(--info);font-weight:600}" +
+  ".awbody{flex:1;min-height:0;overflow:auto;padding:4px 18px 18px}" +
+  ".awbody section[hidden]{display:none}" +
+  ".awqs{display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr);gap:16px;align-items:start}" +
+  ".awql{position:sticky;top:0;display:flex;flex-direction:column;gap:2px;padding-top:6px}" +
+  ".awqi{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;text-align:left;font:inherit;font-size:12px;" +
+  "background:none;border:1px solid transparent;border-radius:6px;padding:6px 8px;color:var(--fg);cursor:pointer}" +
+  ".awqi:hover{background:var(--line)}.awqi.on{border-color:var(--info);background:var(--infobg)}" +
+  ".awqi .awq{grid-column:1/-1;width:100%}.awqw{grid-column:1/-1;font-size:10.5px}" +
+  ".awqd[hidden]{display:none}.awqd h3{margin-top:10px}" +
+  ".awvar{border:1px solid var(--line);border-radius:6px;padding:4px 10px;margin:0 0 6px;font-size:12px}" +
+  ".awvar summary{cursor:pointer;font-weight:600}" +
+  ".awpr{white-space:pre-wrap;margin:6px 0}.awkey{margin:4px 0;color:var(--dim)}.awkey b{color:var(--fg)}" +
+  ".awlv{margin:12px 0 0}.awlvh{display:flex;gap:8px;align-items:baseline;font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)}" +
+  "summary.awlvh{cursor:pointer}.awlvh .dim{margin-left:auto}" +
+  ".awmark{display:inline-block;min-width:30px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;" +
+  "border-radius:4px;padding:1px 4px;background:var(--infobg)}" +
+  ".awans{border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin:6px 0 0;font-size:12px}" +
+  ".awans.sug .awmark{background:none;border:1px dashed var(--line)}" +
+  ".awansh{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px}" +
+  ".awanst{white-space:pre-wrap;line-height:1.45}" +
+  ".awwhy{margin-top:4px;padding-left:8px;border-left:2px solid var(--info);color:var(--dim)}" +
+  ".awpg summary{cursor:pointer;font-size:11px;color:var(--dim);margin-top:4px}" +
+  ".awpg img{display:block;max-width:100%;margin-top:4px;border-radius:4px;background:#fff;border:1px solid var(--line)}" +
   ".awbody h3{font-size:13px;margin:16px 0 6px}" +
   ".awbar{display:flex;height:12px;border-radius:3px;overflow:hidden;gap:1px}" +
   ".awbar .m{height:12px;border-radius:0;min-width:3px}" +
@@ -401,6 +560,15 @@ export const assessmentWindowScript =
   "say({kind:'scans-queue-hello'});" +
   "document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;" +
   "var h=t.closest('[data-aw]');if(h){show(h.getAttribute('data-aw'),0);return;}" +
+  // A tab shows its section; a question shows what it opens into.
+  "var tb=t.closest('[data-aw-tab]');if(tb){var pn=tb.closest('[data-aw-panel]'),k=tb.getAttribute('data-aw-tab');" +
+  "[].slice.call(pn.querySelectorAll('[data-aw-tab]')).forEach(function(x){x.setAttribute('aria-selected',String(x===tb));});" +
+  "[].slice.call(pn.querySelectorAll('[data-aw-sec]')).forEach(function(x){x.hidden=x.getAttribute('data-aw-sec')!==k;});" +
+  "pn.querySelector('.awbody').scrollTop=0;report();return;}" +
+  "var qb=t.closest('[data-aw-q]');if(qb){var sc=qb.closest('section'),i=qb.getAttribute('data-aw-q');" +
+  "[].slice.call(sc.querySelectorAll('[data-aw-q]')).forEach(function(x){x.classList.toggle('on',x===qb);});" +
+  "[].slice.call(sc.querySelectorAll('[data-aw-qd]')).forEach(function(x){x.hidden=x.getAttribute('data-aw-qd')!==i;});" +
+  "var bd=qb.closest('.awbody');if(bd&&bd.scrollTop>sc.offsetTop)bd.scrollTop=sc.offsetTop;return;}" +
   "if(t===dlg||t.closest('[data-aw-close]')){shut();return;}" +
   "var pl=t.closest('[data-aw-place]');if(pl){if(pl.disabled||!up)return;note(pl.closest('.awhp'),'Queued');" +
   "say({kind:'scans-place',assessment:pl.getAttribute('data-aw-place'),file:pl.getAttribute('data-file')," +
