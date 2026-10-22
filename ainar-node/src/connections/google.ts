@@ -29,9 +29,9 @@
  */
 
 import { createHash, randomBytes } from "node:crypto";
-import { readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { type Transport, json } from "../lms/http.ts";
 
 export const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -70,10 +70,50 @@ export class GoogleAuthError extends Error {
   }
 }
 
-/** What a revoked grant reads as, everywhere. Not an HTTP code. */
-export const RECONNECT =
-  "Google no longer accepts this sign-in (it was revoked, or has expired). " +
-  "Reconnect Google in Integrations → Credentials.";
+/**
+ * What a revoked grant reads as, everywhere. Not an HTTP code. Short, because
+ * the pane puts a Reconnect button beside it; the where is for the CLI.
+ */
+export const RECONNECT = "Google no longer accepts this sign-in. Reconnect Google in Integrations → Credentials.";
+
+export const EXPIRED_NAME = "google-expired.json";
+
+/** Beside the client file: machine state, like the sign-in it is about. */
+export const expiredPath = (): string => join(dirname(clientPath()), EXPIRED_NAME);
+
+/**
+ * Remember that Google refused the saved sign-in, so the pane can say
+ * "Reconnect" before anything else asks Google and fails. Only a timestamp.
+ * Best effort: a sandboxed session cannot write here, and the refusal it is
+ * reporting still reaches the professor as the error.
+ */
+export const markExpired = (): void => {
+  try {
+    mkdirSync(dirname(expiredPath()), { recursive: true });
+    writeFileSync(expiredPath(), JSON.stringify({ at: new Date().toISOString() }) + "\n", "utf-8");
+  } catch {
+    // The error itself still says Reconnect.
+  }
+};
+
+/** When Google last refused the saved sign-in, or null while it is accepted. */
+export const expiredAt = (): string | null => {
+  try {
+    const at = JSON.parse(readFileSync(expiredPath(), "utf-8"))?.at;
+    return typeof at === "string" ? at : null;
+  } catch {
+    return null;
+  }
+};
+
+/** A new sign-in, a Disconnect, or a refresh that worked. */
+export const clearExpired = (): void => {
+  try {
+    if (existsSync(expiredPath())) rmSync(expiredPath(), { force: true });
+  } catch {
+    // Read again on the next refresh.
+  }
+};
 
 export interface ClientConfig {
   clientId: string;

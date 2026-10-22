@@ -19,6 +19,7 @@
 
 import { h, React } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
+import { ReconnectGoogle } from "./integration-parts.js";
 
 /**
  * Why a row is waiting, in two or three words for the badge. The matcher's
@@ -284,7 +285,10 @@ export function SyncCard(props) {
     check && check.state === "same"
       ? h("span", { className: "pp-chip", key: "c", title: "Checked " + new Date(check.checked_at).toLocaleTimeString() }, "up to date")
       : null,
-    check && check.state === "error" ? h("span", { className: "pp-chip", key: "c", title: check.said }, "could not check") : null,
+    check && check.state === "error" && !check.reconnect ? h("span", { className: "pp-chip", key: "c", title: check.said }, "could not check") : null,
+    sync.reconnect || (check && check.reconnect)
+      ? h("span", { className: "pp-chip pp-chip-warn", key: "g", title: "Google refused the saved sign-in" }, "Google sign-in expired")
+      : null,
     sync.remembered ? h("span", { className: "pp-chip", key: "r", title: "Students found by a saved link" }, sync.remembered + " remembered") : null,
     // On a service's card the header already counts what waits.
     sync.waiting && !props.bare ? h("span", { className: "pp-chip pp-chip-warn", key: "w" }, sync.waiting + " waiting") : null,
@@ -444,6 +448,16 @@ export function SyncCard(props) {
               )
             : null,
           h("span", { className: "pp-segspacer" }),
+          // Before Preview: pressing it with a refused sign-in only fails again.
+          sync.reconnect || (check && check.reconnect) || (result && result.reconnect)
+            ? h(ReconnectGoogle, {
+                className: "pp-syncbtn pp-syncbtn-send",
+                onBack: () => {
+                  setResult(null);
+                  done();
+                },
+              })
+            : null,
           h(
             "button",
             { type: "button", className: "pp-syncbtn", disabled: Boolean(busy) || !ready, onClick: () => press("plan") },

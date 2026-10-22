@@ -56,8 +56,10 @@ import {
   GoogleAuthError,
   SHEETS_SCOPE,
   TOKEN_URL,
+  clearExpired,
   clientConfig,
   clientPath,
+  markExpired,
   refreshAccess,
 } from "../connections/google.ts";
 
@@ -235,10 +237,12 @@ export class OAuthRefresh implements Credentials {
     try {
       const fresh = await refreshAccess(this.client, this.refreshToken, transport);
       accessCache.set(key, { value: fresh.value, expires: now + fresh.expiresIn });
+      clearExpired();
       return fresh.value;
     } catch (error) {
       // A revoked grant must not keep answering from the cache either.
       accessCache.delete(key);
+      if (error instanceof GoogleAuthError && error.revoked) markExpired();
       if (error instanceof GoogleAuthError) throw new SheetsError(error.message);
       throw error;
     }

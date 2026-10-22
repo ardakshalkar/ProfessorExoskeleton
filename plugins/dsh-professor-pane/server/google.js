@@ -34,9 +34,11 @@ import {
   GOOGLE_CONNECTION,
   REFRESH_TOKEN_ENV,
   authorizationUrl,
+  clearExpired,
   clientConfig,
   clientPath,
   exchangeCode,
+  expiredAt,
   loopbackRedirect,
   newState,
   pkce,
@@ -75,12 +77,15 @@ export const googleStatus = (registry, refs) => {
   const connection =
     (registry?.connections ?? []).find((entry) => entry.type === "sheets" && entry.credential === "oauth") ?? null;
   const ref = connection?.tokenEnv ?? REFRESH_TOKEN_ENV;
+  const connected = Boolean(connection && refs?.[ref]?.configured);
   return {
     client,
     connection: connection?.name ?? null,
     account: connection?.account ?? null,
     tokenEnv: ref,
-    connected: Boolean(connection && refs?.[ref]?.configured),
+    connected,
+    // Saved, but the last time anything asked, Google refused it.
+    expired: connected ? expiredAt() : null,
     // Recorded but the token is gone, or the token is there and the registry
     // entry is not. Either way, Connect is the fix and the pane says so.
     broken: Boolean(connection) !== Boolean(refs?.[ref]?.configured),
@@ -208,6 +213,7 @@ export const finishSignIn = async (url, res, credentials) => {
       false,
     );
   }
+  clearExpired();
 
   const added = await addConnection(null, {
     name: GOOGLE_CONNECTION,
@@ -265,6 +271,7 @@ export const disconnect = async (res, credentials, registry) => {
     const removed = await removeConnection(null, status.connection);
     if (removed.error) return sendJson(res, 200, { error: removed.error });
   }
+  clearExpired();
   return sendJson(res, 200, {
     ok: true,
     revoked: revoked ? revoked.revoked : null,

@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, test } from "node:test";
 import {
   CLIENT_ENV,
@@ -12,6 +12,8 @@ import {
   clientConfig,
   emailOf,
   exchangeCode,
+  expiredAt,
+  expiredPath,
   loopbackRedirect,
   pkce,
   refreshAccess,
@@ -205,6 +207,25 @@ test("a revoked sign-in surfaces as a SheetsError saying Reconnect", async () =>
   const credentials = loadCredentials(null, { connectionsPath: oauthRegistry() });
   const transport = new RecordedTransport({ "POST /token": response(400, { error: "invalid_grant" }) });
   await assert.rejects(credentials.token(transport), (error: Error) => error instanceof SheetsError && /Reconnect Google/.test(error.message));
+});
+
+test("a refusal is remembered beside the client file, and a refresh that works forgets it", async () => {
+  process.env[CLIENT_ENV] = clientFile(DESKTOP);
+  process.env[REFRESH_TOKEN_ENV] = "1//later";
+  delete process.env.AINAR_SHEETS_TOKEN;
+  assert.equal(expiredAt(), null);
+  const credentials = loadCredentials(null, { connectionsPath: oauthRegistry() });
+
+  await assert.rejects(credentials.token(new RecordedTransport({ "POST /token": response(400, { error: "invalid_grant" }) })));
+  assert.ok(expiredAt());
+  assert.equal(dirname(expiredPath()), dirname(process.env[CLIENT_ENV]!));
+
+  // Google having a bad minute is not an expiry, and does not clear one either.
+  await assert.rejects(credentials.token(new RecordedTransport({ "POST /token": response(503, { error: "backend" }) })));
+  assert.ok(expiredAt());
+
+  await credentials.token(new RecordedTransport({ "POST /token": response(200, { access_token: "ya29.back" }) }));
+  assert.equal(expiredAt(), null);
 });
 
 test("an oauth connection with no saved sign-in, or no client file, says which half is missing", () => {

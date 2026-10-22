@@ -26,6 +26,7 @@ import { LinkTable } from "@ainar/core/src/sync/links.ts";
 import { syncsOf } from "@ainar/core/src/sync/registry.ts";
 import { checkSheet } from "@ainar/core/src/sync/sheet-watch.ts";
 
+import { expiredAt } from "@ainar/core/src/connections/google.ts";
 import { loadCredentials } from "@ainar/core/src/lms/sheets.ts";
 
 import { runScans } from "./actions.js";
@@ -132,6 +133,16 @@ const googleReady = () => {
     return false;
   }
 };
+
+/**
+ * A failed answer gets `reconnect` when Google has refused the saved sign-in,
+ * so the card can offer Reconnect where the refusal is read. The refusal is
+ * remembered by whichever read met it — this process or the CLI it spawned.
+ */
+const withReconnect = (answer) =>
+  answer && (answer.error || answer.ok === false || answer.state === "error") && expiredAt()
+    ? Object.assign({}, answer, { reconnect: true })
+    : answer;
 
 /**
  * Where the professor's own browser downloads the sheet as CSV, for a machine
@@ -244,6 +255,8 @@ export const syncsDocument = (workspace, runId, { names = false } = {}) => {
     // professors have none: they download it in their browser and drop the
     // file on the card, and it is kept at `exportPath`.
     canReadLive: isMarksSheet(sync) ? googleReady() : null,
+    // The sign-in is saved but Google refused it last time: Reconnect, before a press finds out.
+    reconnect: isMarksSheet(sync) ? Boolean(expiredAt()) : null,
     download: isMarksSheet(sync) ? downloadOf(sync) : null,
     remembered: Object.keys(links.links[sync.sync_id] || {}).length,
     waiting: links.queued(sync.sync_id).length,
@@ -312,7 +325,9 @@ export const sheetChecks = async (workspace, runId) => {
   for (const sync of sheets) {
     const key = runId + "|" + sync.sync_id + "|" + (ledger.lastRun(sync.sync_id) || "");
     const cached = checked.get(key);
-    if (cached && Date.now() - cached.at < CHECK_EVERY) {
+    // A refusal stops counting the moment the professor reconnects.
+    const stale = cached && cached.answer.reconnect && !expiredAt();
+    if (cached && !stale && Date.now() - cached.at < CHECK_EVERY) {
       checks.push(cached.answer);
       continue;
     }
@@ -322,6 +337,7 @@ export const sheetChecks = async (workspace, runId) => {
     } catch (error) {
       answer = { sync: sync.sync_id, label: LABELS["sheets|marks"], state: "error", said: String(error?.message ?? error), checked_at: new Date().toISOString() };
     }
+    answer = withReconnect(answer);
     checked.set(key, { at: Date.now(), answer });
     checks.push(answer);
   }
@@ -390,7 +406,7 @@ export const runSyncAction = async (workspace, root, runId, body) => {
   if (action === "run" && confirm) args.push("--confirm");
   // Names by default, as the CLI prints them; codes when the pane shows pseudonyms.
   if (isMarksSheet(sync) && body.names === false) args.push("--codes");
-  return runScans(args, root);
+  return withReconnect(await runScans(args, root));
 };
 
 const NO_LOGIN = "This computer has no Google login of its own, so it cannot open the sheet directly.";

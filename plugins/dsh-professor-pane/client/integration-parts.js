@@ -167,6 +167,36 @@ export function Secret(props) {
 }
 
 /**
+ * Reconnect Google from wherever its refusal is read — a sync card, a check.
+ * The same link Credentials uses, and the same return: `onBack` on the first
+ * focus after it is pressed, so the place that failed reads itself again.
+ */
+export function ReconnectGoogle(props) {
+  const [waiting, setWaiting] = React.useState(false);
+  React.useEffect(() => {
+    if (!waiting) return undefined;
+    const back = () => {
+      setWaiting(false);
+      if (props.onBack) props.onBack();
+    };
+    window.addEventListener("focus", back);
+    return () => window.removeEventListener("focus", back);
+  }, [waiting]);
+  return h(
+    "a",
+    {
+      className: props.className || "pp-segbtn",
+      href: BASE + "/api/google/start",
+      target: "_blank",
+      rel: "noopener",
+      title: "Opens Google's sign-in in a new tab. Come back here when it says Google is connected.",
+      onClick: () => setWaiting(true),
+    },
+    waiting ? "Finish in the new tab…" : props.label || "Reconnect Google",
+  );
+}
+
+/**
  * Connect Google: sign in once, and the grade-sheet syncs reach the
  * professor's own spreadsheets with no key to download or share.
  *
@@ -248,6 +278,28 @@ export function GoogleConnect(props) {
     );
   } else if (client.error) {
     body = h("p", { className: "pp-saveerr" }, client.error);
+  } else if (google.connected && google.expired) {
+    body = h(
+      "div",
+      null,
+      h(
+        "div",
+        { className: "pp-saverow" },
+        connectLink("Reconnect Google"),
+        h(
+          "span",
+          { className: "pp-saveerr", title: "Refused " + new Date(google.expired).toLocaleString() },
+          "Google stopped accepting the sign-in" + (google.account ? " for " + google.account : "") + ".",
+        ),
+      ),
+      // GAU-1: a consent screen in Testing ends every sign-in after 7 days.
+      h(
+        "p",
+        { className: "pp-absent" },
+        "If this happens every week, the app's consent screen in Google Cloud is still in Testing, where a sign-in " +
+          "lasts 7 days. Publishing it (Google Auth Platform → Audience → Publish app) makes it last.",
+      ),
+    );
   } else if (google.connected) {
     body = h(
       "div",

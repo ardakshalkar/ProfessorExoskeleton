@@ -3275,6 +3275,30 @@ function Secret(props) {
     ) : null
   );
 }
+function ReconnectGoogle(props) {
+  const [waiting2, setWaiting] = React.useState(false);
+  React.useEffect(() => {
+    if (!waiting2) return void 0;
+    const back = () => {
+      setWaiting(false);
+      if (props.onBack) props.onBack();
+    };
+    window.addEventListener("focus", back);
+    return () => window.removeEventListener("focus", back);
+  }, [waiting2]);
+  return h(
+    "a",
+    {
+      className: props.className || "pp-segbtn",
+      href: BASE + "/api/google/start",
+      target: "_blank",
+      rel: "noopener",
+      title: "Opens Google's sign-in in a new tab. Come back here when it says Google is connected.",
+      onClick: () => setWaiting(true)
+    },
+    waiting2 ? "Finish in the new tab…" : props.label || "Reconnect Google"
+  );
+}
 function GoogleConnect(props) {
   const google = props.google || {};
   const client = google.client || {};
@@ -3333,6 +3357,27 @@ function GoogleConnect(props) {
     );
   } else if (client.error) {
     body = h("p", { className: "pp-saveerr" }, client.error);
+  } else if (google.connected && google.expired) {
+    body = h(
+      "div",
+      null,
+      h(
+        "div",
+        { className: "pp-saverow" },
+        connectLink("Reconnect Google"),
+        h(
+          "span",
+          { className: "pp-saveerr", title: "Refused " + new Date(google.expired).toLocaleString() },
+          "Google stopped accepting the sign-in" + (google.account ? " for " + google.account : "") + "."
+        )
+      ),
+      // GAU-1: a consent screen in Testing ends every sign-in after 7 days.
+      h(
+        "p",
+        { className: "pp-absent" },
+        "If this happens every week, the app's consent screen in Google Cloud is still in Testing, where a sign-in lasts 7 days. Publishing it (Google Auth Platform → Audience → Publish app) makes it last."
+      )
+    );
   } else if (google.connected) {
     body = h(
       "div",
@@ -4444,7 +4489,8 @@ function SyncCard(props) {
       "changed in Google" + (check.modified ? " " + when(check.modified) : "")
     ) : null,
     check && check.state === "same" ? h("span", { className: "pp-chip", key: "c", title: "Checked " + new Date(check.checked_at).toLocaleTimeString() }, "up to date") : null,
-    check && check.state === "error" ? h("span", { className: "pp-chip", key: "c", title: check.said }, "could not check") : null,
+    check && check.state === "error" && !check.reconnect ? h("span", { className: "pp-chip", key: "c", title: check.said }, "could not check") : null,
+    sync.reconnect || check && check.reconnect ? h("span", { className: "pp-chip pp-chip-warn", key: "g", title: "Google refused the saved sign-in" }, "Google sign-in expired") : null,
     sync.remembered ? h("span", { className: "pp-chip", key: "r", title: "Students found by a saved link" }, sync.remembered + " remembered") : null,
     // On a service's card the header already counts what waits.
     sync.waiting && !props.bare ? h("span", { className: "pp-chip pp-chip-warn", key: "w" }, sync.waiting + " waiting") : null,
@@ -4571,6 +4617,14 @@ function SyncCard(props) {
         })
       ) : null,
       h("span", { className: "pp-segspacer" }),
+      // Before Preview: pressing it with a refused sign-in only fails again.
+      sync.reconnect || check && check.reconnect || result && result.reconnect ? h(ReconnectGoogle, {
+        className: "pp-syncbtn pp-syncbtn-send",
+        onBack: () => {
+          setResult(null);
+          done();
+        }
+      }) : null,
       h(
         "button",
         { type: "button", className: "pp-syncbtn", disabled: Boolean(busy) || !ready, onClick: () => press2("plan") },
@@ -6996,11 +7050,12 @@ function SheetsCard(props) {
     const check = checkOf(sync);
     return check && check.state === "changed";
   });
+  const expired = google.connected && Boolean(google.expired || checks && checks.checks && checks.checks.some((entry) => entry.reconnect));
   const subtitle = [
-    google.connected ? "connected as " + (google.account || "your Google account") : "Google not connected · sheets come in as downloads",
+    expired ? "Google stopped accepting the sign-in" + (google.account ? " for " + google.account : "") : google.connected ? "connected as " + (google.account || "your Google account") : "Google not connected · sheets come in as downloads",
     syncs.length ? syncs.length + " sheet" + (syncs.length === 1 ? "" : "s") : null
   ].filter(Boolean).join(" · ");
-  const chip = waiting2.length ? { text: waiting2.length + " waiting", tone: "warn" } : changed.length ? { text: "changed in Google", tone: "warn" } : google.connected ? { text: "ready", tone: "ok" } : null;
+  const chip = expired ? { text: "reconnect", tone: "warn" } : waiting2.length ? { text: waiting2.length + " waiting", tone: "warn" } : changed.length ? { text: "changed in Google", tone: "warn" } : google.connected ? { text: "ready", tone: "ok" } : null;
   return h(
     "section",
     { className: "pp-ccard", id: "pp-card-sheets" },

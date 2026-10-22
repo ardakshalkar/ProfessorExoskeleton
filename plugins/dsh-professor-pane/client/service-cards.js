@@ -63,13 +63,21 @@ export function SheetsCard(props) {
     return check && check.state === "changed";
   });
 
+  // Saved but refused: known from the status, or from a check that just met it.
+  const expired = google.connected && Boolean(google.expired || (checks && checks.checks && checks.checks.some((entry) => entry.reconnect)));
   const subtitle = [
-    google.connected ? "connected as " + (google.account || "your Google account") : "Google not connected · sheets come in as downloads",
+    expired
+      ? "Google stopped accepting the sign-in" + (google.account ? " for " + google.account : "")
+      : google.connected
+        ? "connected as " + (google.account || "your Google account")
+        : "Google not connected · sheets come in as downloads",
     syncs.length ? syncs.length + " sheet" + (syncs.length === 1 ? "" : "s") : null,
   ]
     .filter(Boolean)
     .join(" · ");
-  const chip = waiting.length
+  const chip = expired
+    ? { text: "reconnect", tone: "warn" }
+    : waiting.length
     ? { text: waiting.length + " waiting", tone: "warn" }
     : changed.length
       ? { text: "changed in Google", tone: "warn" }
