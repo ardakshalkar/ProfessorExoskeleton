@@ -111,7 +111,13 @@ export const readGroups = (place: ScanPlace): GroupsFile | null => {
   const path = groupsPath(place);
   if (!existsSync(path)) return null;
   const parsed = parseYaml(readFileSync(path, "utf-8")) ?? {};
-  return { assessment_id: String(parsed.assessment_id ?? ""), ...parsed, items: parsed.items ?? [] };
+  // A group written with no `score:` — the usual case before a proposal is
+  // chosen — is unplaced, the same as `score: null`, not undefined.
+  const items = (parsed.items ?? []).map((entry: any) => ({
+    ...entry,
+    groups: (entry.groups ?? []).map((group: any) => ({ ...group, score: group.score ?? null })),
+  }));
+  return { assessment_id: String(parsed.assessment_id ?? ""), ...parsed, items };
 };
 
 export const writeGroups = (place: ScanPlace, file: GroupsFile): void => {

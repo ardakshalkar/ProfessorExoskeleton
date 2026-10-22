@@ -442,7 +442,7 @@ export function GradeBoard(props) {
       ? item.criterion.levels
       : scale.slice().reverse().map((score) => ({ score: score, label: null, description: "" }));
     const placedAt = (score) => item.groups.filter((group) => group.score === score);
-    const unplaced = item.groups.filter((group) => group.score === null || !levels.some((level) => level.score === group.score));
+    const unplaced = item.groups.filter((group) => group.score == null || !levels.some((level) => level.score === group.score));
     const groupChip = (group) => {
       const open = openGroups[item.item_id + "|" + group.index];
       const members = item.answers.filter((answer) => answer.group === group.index);
@@ -466,7 +466,7 @@ export function GradeBoard(props) {
             "select",
             {
               "aria-label": "Move this group to a level",
-              value: group.score === null ? "" : String(group.score),
+              value: group.score == null ? "" : String(group.score),
               disabled: Boolean(busy),
               onChange: (event) =>
                 post(
@@ -573,7 +573,8 @@ export function GradeBoard(props) {
     sections.push({
       key: "g" + group.index,
       title: group.label,
-      score: group.score,
+      // No score yet (no proposal chosen) is unplaced, not "undefined".
+      score: group.score == null ? null : group.score,
       unsure: group.unsure,
       answers: item.answers.filter((answer) => answer.group === group.index && !answer.blank && !answer.unread),
     }),
@@ -805,7 +806,7 @@ export function GradeBoard(props) {
               "select",
               {
                 "aria-label": "Move " + group.label + " to another mark",
-                value: group.score === null ? "" : String(group.score),
+                value: group.score == null ? "" : String(group.score),
                 disabled: Boolean(busy),
                 onChange: (event) =>
                   post("/api/grade/move", { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) }, "move"),
@@ -936,7 +937,7 @@ export function GradeBoard(props) {
             h(
               "div",
               { className: "pp-gsection" },
-              section.score !== null && section.key !== "unread"
+              section.score != null && section.key !== "unread"
                 ? h("span", { className: "pp-gsecmark" }, label(section.score))
                 : h("span", { className: "pp-gsecmark pp-gsecmark-none" }, "—"),
               h("b", null, section.title),

@@ -253,6 +253,22 @@ test("groups move, answers move between them, and a grouping that breaks a rule 
   assert.match(readFileSync(join(place.base, "groups.yaml"), "utf-8"), /^# PRIVATE/);
 });
 
+test("a group written with no score, before any proposal is chosen, is unplaced — null, never undefined", () => {
+  const { place, bundle } = fixture();
+  writeFileSync(
+    join(place.base, "groups.yaml"),
+    `assessment_id: ${QUIZ}\nitems:\n  - item_id: ITEM-Q9-01\n    groups:\n      - label: names the vocabulary\n        students: [${B}]\n      - label: says tokens are rare\n        students: [${A}]\n`,
+  );
+  const groups = readGroups(place)!;
+  assert.deepEqual(groups.items[0]!.groups.map((group) => group.score), [null, null]);
+  const [q] = gradeBoard({ bundle, runId: RUN, assessmentId: QUIZ, place }).items;
+  assert.deepEqual(q!.groups.map((group) => group.score), [null, null]);
+  const byStudent = new Map(q!.answers.map((answer) => [answer.student, answer]));
+  assert.equal(byStudent.get(B)!.suggestion, null, "no score, no suggestion");
+  assert.equal(byStudent.get(B)!.now, null);
+  assert.deepEqual(checkGroups(groups, [item(1)]), []);
+});
+
 /** A course on disk with Quiz 9 in its own folder, as `import-paper` writes it. */
 const courseOnDisk = (assessmentExtra: string) => {
   const root = mkdtempSync(join(tmpdir(), "ainar-grade-root-"));
