@@ -387,8 +387,18 @@ const standingOf = ({ bundle, runId, submissions, assessment, enrolled, ledger }
   const canvas = canvasMarks({ bundle, runId, assessmentId: id, ledger });
   const { stages, next, counts } = stagesOf({ papers: lanes, status, assessment, rubric, expected, responses, evaluations, low, canvas });
   const lane = (name) => lanes.filter((entry) => entry.lane === name).length;
+  // How many pages each placed student's paper has: their `scan.pdf` is those
+  // pages cut out of the batch, numbered from 1 — what the Students view's
+  // Scans tab draws one by one.
+  const pages = new Map();
+  for (const source of plan?.sources ?? []) {
+    for (const paper of source.papers ?? []) {
+      if (paper.skip || !paper.resolved || !status.placed.includes(paper.resolved)) continue;
+      pages.set(paper.resolved, (pages.get(paper.resolved) ?? 0) + safePages(paper.pages).length);
+    }
+  }
   return {
-    place, plan, status, items, responses, canvas, stages, next, now: nowOf(next, counts, canvas),
+    place, plan, status, items, responses, canvas, stages, next, now: nowOf(next, counts, canvas), pages,
     lanes: { placed: lane("placed"), check: lane("check"), held: lane("held"), skipped: lane("skipped") },
   };
 };

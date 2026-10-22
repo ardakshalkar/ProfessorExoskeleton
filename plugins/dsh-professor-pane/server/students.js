@@ -377,6 +377,10 @@ export const studentsDocument = (
     responsesOf.get(key).push(response);
   }
 
+  // Every scanned pile's standing — read here, before any row is drawn, for a
+  // hand-in's Scans tab as well as the assessment window further down.
+  const piles = weighted.length && pilesOf ? pilesOf(bundle) : new Map();
+
   const itemById = new Map((bundle.items ?? []).map((item) => [item.item_id, item]));
   const documentById = new Map((bundle.documents ?? []).map((row) => [row.document_id, row]));
 
@@ -913,6 +917,38 @@ export const studentsDocument = (
     );
   };
 
+  /*
+   * A paper exam's hand-in: what was read off the paper and the paper itself,
+   * as two tabs — Answers first, Scans one press away. The pages are the
+   * Grade view's own route, so the first page is drawn from below the name
+   * line unless names are on. `loading="lazy"` inside a hidden tab: nothing is
+   * drawn until Scans is pressed.
+   */
+  const answersAndScans = (submission, responses, pages) => {
+    const student = String(submission.student_id);
+    const src = (n) =>
+      `${origin}${BASE}/api/grade/page?run=` + encodeURIComponent(runId) + "&assessment=" + encodeURIComponent(submission.assessment_id) +
+      "&student=" + encodeURIComponent(student) + "&page=" + n + (people ? "&names=1" : "") +
+      (sessionId ? "&session=" + encodeURIComponent(sessionId) : "");
+    const tab = (key, text, count, on) =>
+      '<button type="button" class="tb" data-tab="' + key + '" aria-pressed="' + String(on) + '">' + escapeText(text) +
+      ' <span class="dim">' + count + "</span></button>";
+    const scans = Array.from({ length: pages }, (_, i) =>
+      '<figure class="pg"><img loading="lazy" alt="Page ' + (i + 1) + '" src="' + escapeText(src(i + 1)) + '">' +
+      '<figcaption class="dim">page ' + (i + 1) + (i === 0 && !people ? " · name line hidden" : "") + "</figcaption></figure>",
+    ).join("");
+    return (
+      '<div class="part tabs"><div class="tbs">' +
+      tab("answers", "Answers", responses.length, true) +
+      tab("scans", "Scans", pages, false) +
+      "</div>" +
+      '<div class="tp" data-pane="answers">' +
+      (responses.length ? responses.map(answer).join("") : '<p class="dim">No answers read off the paper yet.</p>') +
+      "</div>" +
+      '<div class="tp" data-pane="scans" hidden>' + scans + "</div></div>"
+    );
+  };
+
   /**
    * One hand-in, in full, in the order a professor works through it: the
    * defence (recording, verdict, rubric check), the repository, then what was
@@ -934,6 +970,7 @@ export const studentsDocument = (
         );
       });
     const files = Array.isArray(submission.files) ? submission.files : [];
+    const scanPages = piles.get(submission.assessment_id)?.pages?.get(String(submission.student_id)) ?? 0;
     // When, which attempt, in what state — the id is the hover, not the line:
     // it is for typing back into a command, not for reading.
     const facts = [
@@ -950,14 +987,16 @@ export const studentsDocument = (
         "Repository",
         submission.url ? repositoryLine(submission) : picker ? '<p class="fork"><span class="dim">None linked</span> ' + picker + "</p>" : "",
       ) +
-      part("Answers", responses.map(answer).join(""), responses.length ? String(responses.length) : "") +
+      (scanPages
+        ? answersAndScans(submission, responses, scanPages)
+        : part("Answers", responses.map(answer).join(""), responses.length ? String(responses.length) : "")) +
       part("Files", files.map(fileRow).join("")) +
       changesBlock(submission) +
       // Handed in, and nothing to read: a file-only submission whose bytes
       // are elsewhere, or a row created before any answer was recorded. Both
       // are facts, and an empty panel would look broken. A sheet mark is the
       // common case, and "nothing recorded" beside 4 / 4 read as a contradiction.
-      (responses.length === 0 && files.length === 0 && !submission.url && !prepared(submission).recorded
+      (responses.length === 0 && files.length === 0 && !scanPages && !submission.url && !prepared(submission).recorded
         ? '<p class="dim nothing">' +
           (graded ? "Only the mark is recorded — no answers or files." : "Nothing is recorded under this submission — no answers, no files.") +
           "</p>"
@@ -1276,7 +1315,6 @@ export const studentsDocument = (
    * class, from the same cells the rows draw, the rubric's questions with
    * their decided marks, and — for a paper exam — its pile's standing.
    */
-  const piles = weighted.length && pilesOf ? pilesOf(bundle) : new Map();
   const rubrics = allRubrics(bundle);
   const standings = new Map(active.map((entry) => [String(entry.student_id ?? ""), standingOf(String(entry.student_id ?? ""))]));
   const assessmentPanels = weighted.map((a) => {
@@ -1574,6 +1612,7 @@ export const studentsDocument = (
     "body.appendChild(d);d.hidden=false;cur={st:st,d:d,a:null};st.querySelector('.sr').setAttribute('aria-expanded','true');}" +
     "var line=a?lineOf(cur.d,a):null;if(!line)a=null;" +
     "all('.it.on',cur.d).forEach(function(x){x.classList.remove('on');});cur.a=a;dw.classList.toggle('one',!!line);" +
+    "document.body.classList.toggle('dwone',!!line);" +
     "if(line){line.classList.add('on');var m=line.closest('details');if(m)m.open=true;}" +
     "var nm=st.querySelector('.nm');title.textContent=nm&&nm.firstChild?nm.firstChild.textContent:'';" +
     "if(line){var s=document.createElement('span');s.className='dim';s.textContent=' \\u203a ';title.appendChild(s);" +
@@ -1582,7 +1621,7 @@ export const studentsDocument = (
     "dw.hidden=false;document.body.classList.add('dwopen');light(a);" +
     "st.querySelector('.sr').scrollIntoView({block:'nearest'});body.scrollTop=0;" +
     "if(!dw.contains(document.activeElement))dw.focus({preventScroll:true});}" +
-    "function close(){var st=cur&&cur.st;park();dw.hidden=true;dw.classList.remove('one');document.body.classList.remove('dwopen');" +
+    "function close(){var st=cur&&cur.st;park();dw.hidden=true;dw.classList.remove('one');document.body.classList.remove('dwopen','dwone');" +
     "if(st)st.querySelector('.sr').focus({preventScroll:true});}" +
     "function step(by){if(!cur)return;var list=rows(),n=list[list.indexOf(cur.st)+by];if(n)show(n,cur.a);}" +
     "function side(by){if(!cur||!cur.a)return;var list=ids(),n=list[list.indexOf(cur.a)+by];if(n)show(cur.st,n);}" +
@@ -1596,6 +1635,10 @@ export const studentsDocument = (
     "document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;" +
     "var k=t.closest('[data-dw]');if(k){ACT[k.getAttribute('data-dw')]();return;}" +
     "var p=t.closest('[data-paste]');if(p){var fp=p.closest('.fp');if(fp)reveal(fp);return;}" +
+    // Answers / Scans: the pressed tab's pane shown, the other hidden.
+    "var tb=t.closest('[data-tab]');if(tb){var g=tb.closest('.tabs'),w=tb.getAttribute('data-tab');" +
+    "all('[data-tab]',g).forEach(function(x){x.setAttribute('aria-pressed',String(x===tb));});" +
+    "all('[data-pane]',g).forEach(function(x){x.hidden=x.getAttribute('data-pane')!==w;});return;}" +
     "var c=t.closest('[data-hw]');if(c){var cs=c.closest('.st'),ca=c.getAttribute('data-hw');" +
     "if(cur&&cur.st===cs&&cur.a===ca)close();else show(cs,ca);return;}" +
     "if(cur&&dw.contains(t)){var it=t.closest('.it');" +
@@ -1635,12 +1678,22 @@ export const studentsDocument = (
     // and a panel over the list must not let the rows show through.
     ":root{--dwbg:#ffffff}" +
     (dark ? ":root{--dwbg:#1e1e1e}" : "@media(prefers-color-scheme:dark){:root{--dwbg:#1e1e1e}}") +
-    ".drawer{position:fixed;top:0;right:0;bottom:0;width:min(500px,44vw);display:flex;flex-direction:column;" +
+    // A student is a list of lines; one hand-in is answers and pages of
+    // handwriting, so the drawer widens when it is turned to one.
+    ":root{--dww:min(580px,46vw)}body.dwone{--dww:min(920px,66vw)}" +
+    ".drawer{position:fixed;top:0;right:0;bottom:0;width:var(--dww);display:flex;flex-direction:column;" +
     "background:var(--dwbg);border-left:1px solid var(--line);box-shadow:-6px 0 18px rgba(0,0,0,.12);z-index:10;outline:none}" +
     ".drawer[hidden]{display:none}" +
     // Wide enough, the list gives the drawer its room rather than sitting under it.
-    "@media(min-width:900px){body.dwopen{padding-right:calc(min(500px,44vw) + 16px)}}" +
-    "@media(max-width:899px){.drawer{width:min(560px,100%)}}" +
+    "@media(min-width:900px){body.dwopen{padding-right:calc(var(--dww) + 16px)}}" +
+    "@media(max-width:899px){.drawer{width:min(640px,100%)}body.dwone .drawer{width:100%}}" +
+    // Answers / Scans on a paper exam's hand-in.
+    ".tbs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 8px}" +
+    ".tb{font:inherit;font-size:13px;background:none;border:0;border-bottom:2px solid transparent;padding:5px 12px;color:var(--dim);cursor:pointer;margin-bottom:-1px}" +
+    ".tb:hover{color:var(--fg)}.tb[aria-pressed=true]{color:var(--fg);font-weight:600;border-bottom-color:var(--info)}" +
+    ".tp[hidden]{display:none}" +
+    ".pg{margin:0 0 12px}.pg img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;background:#fff}" +
+    ".pg figcaption{font-size:11px;margin-top:3px}" +
     ".dwh{display:flex;align-items:center;gap:4px;padding:8px 10px 8px 14px;border-bottom:1px solid var(--line)}" +
     ".dwt{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
     ".dwt b{font-weight:600}" +
