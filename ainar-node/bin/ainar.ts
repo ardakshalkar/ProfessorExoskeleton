@@ -44,6 +44,7 @@ import {
   requireGroups,
   runById,
   enrolledIn,
+  assessmentsOf,
 } from "../src/bundle.ts";
 import { blueprintPayload } from "../src/blueprint.ts";
 import { gradebookPayload } from "../src/gradebook.ts";
@@ -183,6 +184,7 @@ import {
 import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
 import { setCurve } from "../src/curve.ts";
+import { setMissingWork } from "../src/missing-work.ts";
 import { casesOf, decideCase, describeCase, integrityDir, openCase } from "../src/integrity.ts";
 import { examReport, reportPlace, reportsDir, writeExamReports } from "../src/exam-report.ts";
 import {
@@ -1296,13 +1298,53 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
     case "grading": {
       // The policy and the assistant's proposals for it (src/grading-proposals.ts).
       // A proposal is never the change: the professor applies it in the pane.
-      const sub = ["propose", "discard"].includes(rest[0] ?? "") ? rest[0]! : null;
+      const sub = ["propose", "discard", "missing-work"].includes(rest[0] ?? "") ? rest[0]! : null;
       const runId = sub ? rest[1] : rest[0];
       if (!runId) {
-        console.error("usage: grading RUN [--json] | grading propose RUN --file P.json [--note WHY] [--request WORDS] | grading discard RUN (ID | --all)");
+        console.error(
+          "usage: grading RUN [--json] | grading propose RUN --file P.json [--note WHY] [--request WORDS] | grading discard RUN (ID | --all)\n" +
+            "       grading missing-work RUN (blank | zero | --clear) [--assessment A] [--note WHY] [--by USER-…]",
+        );
         process.exit(2);
       }
       const bundle = forRun(runId);
+      if (sub === "missing-work") {
+        // What work not handed in gets once it is due (src/missing-work.ts).
+        // The professor's rule: typed, or said to the session in their words.
+        const clear = args.includes("--clear");
+        const rule = clear ? null : rest[2];
+        if (!clear && rule !== "blank" && rule !== "zero") {
+          console.error("usage: grading missing-work RUN (blank | zero | --clear) [--assessment A] [--note WHY] [--by USER-…]");
+          process.exit(2);
+        }
+        const run = runById(bundle).get(runId) as { timezone?: string; instructors?: string[] };
+        const assessmentId = flag("assessment") ?? null;
+        try {
+          const written = setMissingWork({
+            root,
+            bundle,
+            runId,
+            assessmentId,
+            rule: (rule ?? null) as "blank" | "zero" | null,
+            at: decidedAt(run?.timezone),
+            by: flag("by") ?? run?.instructors?.[0] ?? null,
+            note: flag("note") ?? null,
+          });
+          for (const path of written) out(`wrote ${relative(root, path)}`);
+          const what = assessmentId ?? runId;
+          out(
+            !written.length
+              ? `${what}: already ${rule ?? (assessmentId ? "on the run's rule" : "blank")}`
+              : rule === null && assessmentId
+                ? `${assessmentId}: back on the run's rule`
+                : `${what}: work not handed in is ${rule ?? "blank"} once due`,
+          );
+        } catch (error) {
+          console.error(`not written: ${String((error as Error).message)}`);
+          process.exit(1);
+        }
+        break;
+      }
       if (sub === "propose") {
         const file = flag("file");
         if (!file) {
@@ -1358,6 +1400,9 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         }
       };
       out(`${runId} grading policy${doc.locked ? " (locked)" : ""}`);
+      const scheme = (runById(bundle).get(runId) as any)?.grading_scheme;
+      const own = assessmentsOf(bundle, runId).filter((a: any) => a.missing_work).map((a: any) => `${a.assessment_id} ${a.missing_work}`);
+      out(`  work not handed in: ${scheme?.missing_work ?? "blank"} once due${own.length ? ` (own rule: ${own.join(", ")})` : ""}`);
       children(null, 1);
       const loose = Object.entries(policy.assignments).filter(([, a]) => !a.component);
       if (loose.length) out("  in no block: " + loose.map(([id, a]) => `${id} ${a.weight == null ? "—" : +(a.weight * 100).toFixed(4) + "%"}`).join(", "));

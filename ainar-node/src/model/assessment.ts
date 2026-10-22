@@ -42,6 +42,7 @@ import {
   IntegrityCaseId,
   IntegrityOutcome,
   IntegrityState,
+  MissingWork,
   SignalId,
   UserId,
   Weight,
@@ -167,6 +168,8 @@ export const Assessment = entity({
   settings: z.record(z.string(), z.unknown()).default({}),
   design: AssessmentDesign.nullish(),
   curve: ScoreCurve.nullish(),
+  /** This assessment's own rule for work not handed in; absent, the run's `grading_scheme.missing_work`. */
+  missing_work: MissingWork.nullish(),
 })
   // An inline rubric fills in `rubric_id`, and contradicting it is an error.
   // Ported from `_rubric_consistency`; without it every assessment carrying an

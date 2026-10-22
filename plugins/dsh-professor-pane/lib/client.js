@@ -10174,7 +10174,7 @@ function ChangeLine(props) {
         "div",
         { className: "pp-gbwhat" },
         h("div", null, h("b", null, event.action === "lock" ? "Policy locked" : event.action === "unlock" ? "Policy unlocked" : "Grading policy changed"), stamp),
-        event.action === "change" ? h("ul", { className: "pp-gbsummary" }, event.summary.slice(0, 4).map((line, i) => h("li", { key: i }, line))) : null,
+        event.action === "change" || event.action === "missing_work" ? h("ul", { className: "pp-gbsummary" }, event.summary.slice(0, 4).map((line, i) => h("li", { key: i }, line))) : null,
         event.note ? h("div", { className: "pp-as" }, "“" + event.note + "”") : null,
         event.restorable ? h("button", { type: "button", className: "pp-linkbtn", disabled: busy, onClick: restore }, busy ? "Opening…" : "Open the policy as it was before…") : null
       )

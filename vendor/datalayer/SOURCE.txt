@@ -12,3 +12,7 @@ Fork, 2026-10-15 (MOD-1): schema/preference_profile.schema.json `scope` gains
 Fork, 2026-10-22: schema/assessment.schema.json and course-bundle.schema.json
 gain `ScoreCurve` and `Assessment.curve`, matching ainar-node/src/model/assessment.ts
 (see schema/README.md).
+
+Fork, 2026-10-22: assessment.schema.json, course_version.schema.json and
+course-bundle.schema.json gain `missing_work` (blank | zero) on Assessment and
+GradingScheme, matching ainar-node/src/model/common.ts `MissingWork`.

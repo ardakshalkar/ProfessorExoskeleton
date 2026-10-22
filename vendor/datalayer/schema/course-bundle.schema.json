@@ -432,6 +432,23 @@
           ],
           "default": null,
           "description": "The professor's curve on the total, applied by the gradebook after totalling."
+        },
+        "missing_work": {
+          "anyOf": [
+            {
+              "enum": [
+                "blank",
+                "zero"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "This assessment's own rule for work not handed in once it is due; absent, the run's grading_scheme.missing_work.",
+          "title": "Missing Work"
         }
       },
       "required": [
@@ -1887,6 +1904,23 @@
           "default": null,
           "description": "The professor has frozen the policy. A writer that changes components, weights or which block an assessment counts in refuses while this is true; unlocking is its own recorded step.",
           "title": "Locked"
+        },
+        "missing_work": {
+          "anyOf": [
+            {
+              "enum": [
+                "blank",
+                "zero"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What work not handed in gets once its due date has passed, for every assessment that does not say otherwise. Absent, blank: no score and nothing sent.",
+          "title": "Missing Work"
         }
       },
       "title": "GradingScheme",

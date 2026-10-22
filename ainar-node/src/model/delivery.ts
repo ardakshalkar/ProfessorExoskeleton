@@ -16,6 +16,7 @@ import {
   EnrollmentId,
   EnrollmentRole,
   EnrollmentStatus,
+  MissingWork,
   ModuleId,
   OutcomeId,
   ResourceId,
@@ -84,6 +85,12 @@ export const GradingScheme = entity({
    * scaled by this policy; a lock is how it stays the one they were scaled by.
    */
   locked: z.boolean().nullish(),
+  /**
+   * What work not handed in gets once its due date has passed, for every
+   * assessment that does not say otherwise (`Assessment.missing_work`).
+   * Absent, `blank`: no score and nothing sent, as it always was.
+   */
+  missing_work: MissingWork.nullish(),
 });
 
 export const CourseVersion = entity({

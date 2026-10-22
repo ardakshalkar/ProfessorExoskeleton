@@ -687,6 +687,23 @@
       ],
       "default": null,
       "description": "The professor's curve on the total, applied by the gradebook after totalling."
+    },
+    "missing_work": {
+      "anyOf": [
+        {
+          "enum": [
+            "blank",
+            "zero"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "This assessment's own rule for work not handed in once it is due; absent, the run's grading_scheme.missing_work.",
+      "title": "Missing Work"
     }
   },
   "required": [

@@ -162,6 +162,13 @@ export const IntegrityState = z.enum(["open", "cleared", "upheld"]);
  */
 export const IntegrityOutcome = z.enum(["no_penalty", "adjusted", "zero", "voided"]);
 /**
+ * What a student who handed nothing in gets once the due date has passed:
+ * `blank` leaves the mark empty (no score, nothing sent), `zero` makes it 0.
+ * Before the due date, or with no due date, the work is not missing yet and
+ * the mark stays blank whatever this says.
+ */
+export const MissingWork = z.enum(["blank", "zero"]);
+/**
  * Whether a person stands behind a record an agent wrote.
  *
  * Agents write straight into the course file a record belongs in and mark it

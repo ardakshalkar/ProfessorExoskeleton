@@ -8,7 +8,9 @@
  * 1. Only decisions count. `approved`/`overridden`, read from
  *    `professor_decision`. A suggestion never becomes a grade.
  * 2. A missing judgement is not a zero. Undecided → `partially_graded`, not
- *    exportable; never submitted → `score: null`, never 0.
+ *    exportable; never submitted → `score: null`, never 0 — unless the
+ *    professor's policy says so (`missing_work: zero`, `missingWorkOf`), and
+ *    then only once the due date has passed.
  * 3. Nothing is rescaled silently. Criteria summing to 90 against a maximum of
  *    100 blocks the row rather than stretching it. The one stretch is the
  *    professor's own: an assessment's `curve`, applied to the total after
@@ -207,6 +209,20 @@ const assessmentIssues = (assessment: any, criteria: any[]): string[] => {
 export const curveOf = (assessment: any): any | null =>
   assessment?.curve && assessment.curve.approval !== "draft" ? assessment.curve : null;
 
+/**
+ * The rule for work not handed in: the assessment's own, else the run's,
+ * else `blank`. A zero is the professor's decision, written in the policy;
+ * nothing here infers one.
+ */
+export const missingWorkOf = (run: any, assessment: any): "blank" | "zero" =>
+  (assessment?.missing_work ?? run?.grading_scheme?.missing_work ?? "blank") === "zero" ? "zero" : "blank";
+
+/** Whether the work is missing rather than not due yet: no due date, never. */
+const pastDue = (assessment: any, now: number): boolean => {
+  const due = assessment?.due_at ? Date.parse(assessment.due_at) : NaN;
+  return Number.isFinite(due) && due < now;
+};
+
 /** `maximum × (raw / anchor) ^ exponent`, never above the maximum. */
 export const curved = (raw: number, curve: any, maximum: number): number =>
   roundHalfEven(Math.min(maximum, maximum * Math.pow(Math.max(0, raw) / curve.anchor, curve.exponent)), 2);
@@ -239,9 +255,12 @@ export const gradeRows = (
     assessmentId?: string | null;
     allowPartial?: boolean;
     groups?: readonly string[] | null;
+    /** The moment a due date is measured against; tests pin it. */
+    now?: number;
   } = {},
 ): Map<string, GradeRow[]> => {
-  const { assessmentId = null, allowPartial = false, groups = null } = options;
+  const { assessmentId = null, allowPartial = false, groups = null, now = Date.now() } = options;
+  const run = runById(b).get(courseVersionId) as any;
   const assessments = assessmentsOf(b, courseVersionId).filter(
     (a) => assessmentId === null || a.assessment_id === assessmentId,
   );
@@ -274,6 +293,7 @@ export const gradeRows = (
     }
     const structural = assessmentIssues(assessment, criteria);
     const curve = curveOf(assessment);
+    const zeroMissing = missingWorkOf(run, assessment) === "zero" && pastDue(assessment, now);
 
     const submissionsByStudent = new Map<string, any[]>();
     for (const submission of b.submissions as any[]) {
@@ -303,7 +323,11 @@ export const gradeRows = (
 
       const submission = latestSubmission(submissionsByStudent.get(studentId) ?? []);
       if (!submission) {
-        row.blocked.push("no submission");
+        // Status stays `not_submitted`, so every count still says who handed
+        // nothing in; the 0 is what the policy gives it, and it is sent. A
+        // structural problem still blocks it, like any other score.
+        if (zeroMissing) row.score = 0;
+        else row.blocked.push("no submission");
         rows.push(settle(row, integrity));
         continue;
       }
@@ -379,6 +403,7 @@ const distribution = (rows: GradeRow[]): Record<string, unknown> => {
   const curvedRows = graded.some((row) => row.raw_score !== undefined);
   const held = rows.filter((row) => row.status === "held").length;
   const voided = rows.filter((row) => row.status === "voided").length;
+  const zeroed = rows.filter((row) => row.status === "not_submitted" && row.score === 0).length;
 
   return {
     enrolled: rows.length,
@@ -394,6 +419,8 @@ const distribution = (rows: GradeRow[]): Record<string, unknown> => {
     // Only when a case touches the assessment, so a course without one reads as it did.
     ...(held ? { held } : {}),
     ...(voided ? { voided } : {}),
+    // Not handed in and given 0 by the policy; the mean above is over marked papers only.
+    ...(zeroed ? { zeroed } : {}),
   };
 };
 
@@ -446,7 +473,9 @@ const totals = (
       // Voided by an integrity case: out of this student's total altogether,
       // neither counted nor waited for.
       if (row.status === "voided") continue;
-      if (row.status === "graded" && row.score !== null && row.maximum) {
+      // A 0 the missing-work policy gave counts like any mark.
+      const counts = row.status === "graded" || (row.status === "not_submitted" && !row.blocked.length);
+      if (counts && row.score !== null && row.maximum) {
         const earned = (row.score / row.maximum) * assessment.weight;
         entry.earned_weighted += earned;
         entry.weight_graded += assessment.weight;
@@ -579,6 +608,14 @@ export const gradebookPayload = (
     notes.push(
       `${curvedIds.join(", ")} ${curvedIds.length === 1 ? "is" : "are"} curved: a row's \`score\` is the ` +
         "curved total and the one every total and export uses; `raw_score` is what the criteria add up to.",
+    );
+  }
+  const zeroedIds = payloadAssessments.filter((a: any) => a.summary.zeroed).map((a) => a.assessment_id);
+  if (zeroedIds.length) {
+    notes.push(
+      `${zeroedIds.join(", ")} ${zeroedIds.length === 1 ? "is" : "are"} past due under a missing-work policy of ` +
+        "zero: a row with no submission scores 0, counts in the totals and is exported; the summary's mean is " +
+        "over marked papers only, and `zeroed` says how many were given 0.",
     );
   }
   const touched = payloadAssessments.flatMap((a) => a.rows).filter((row: any) => row.integrity);
