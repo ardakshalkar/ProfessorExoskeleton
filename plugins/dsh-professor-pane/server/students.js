@@ -1025,9 +1025,10 @@ export const studentsDocument = (
     '<p class="dim">New marks arrive as suggestions; the current ones stay until you accept the new ones in Grade.</p></div></details>';
 
   /*
-   * An academic-integrity case on this hand-in: each case's state, the note
-   * folded, and — when none is open — *Open a case*, which holds the mark
-   * until it is decided in the exam window's Integrity tab. Nothing here is
+   * An academic-integrity case on one student's assessment: each case's state,
+   * the note folded, and — when none is open — *Open a case*, which holds the
+   * mark until it is decided in the exam window's Integrity tab. Drawn on the
+   * assessment's line whether or not anything was handed in. Nothing here is
    * sent to the student.
    */
   const caseState = (entry) => {
@@ -1040,9 +1041,10 @@ export const studentsDocument = (
         String(entry.outcome))
     );
   };
-  const integrityPart = (submission) => {
+  const integrityPart = (assessmentId, studentId) => {
+    const submission = { assessment_id: assessmentId, student_id: studentId };
     const mine = runCases.filter(
-      (entry) => entry.student_id === submission.student_id && (entry.assessments ?? []).includes(submission.assessment_id),
+      (entry) => entry.student_id === studentId && (entry.assessments ?? []).includes(assessmentId),
     );
     const open = mine.some((entry) => (entry.state ?? "open") === "open");
     const opener = open
@@ -1134,7 +1136,6 @@ export const studentsDocument = (
       (facts.length ? '<p class="dim">' + escapeText(facts.join(" · ")) + "</p>" : "") +
       (submission.note ? '<p class="dim">' + escapeText(String(submission.note)) + "</p>" : "") +
       reportLine(submission) +
-      integrityPart(submission) +
       (responses.length || scanPages ? regradeBlock(submission) : "") +
       defencePart(submission) +
       part(
@@ -1240,7 +1241,11 @@ export const studentsDocument = (
       : "";
     // Handed in without a repository — a sheet mark, a Canvas text entry: the
     // link can still be brought, in the latest hand-in's Repository part.
-    const body = subs
+    // The integrity part comes first and once per assessment, handed in or
+    // not: a paper taken in the room, or one never imported, can be under a case.
+    const body =
+      integrityPart(id, studentId) +
+      subs
       .map((submission) =>
         submissionSection(
           submission,
