@@ -610,6 +610,34 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-wiring{flex:none;font:inherit;font-size:11px;cursor:pointer;background:none;border:0;padding:2px 4px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);text-decoration:underline;text-underline-offset:2px}
 .pp-wiring-absent,.pp-wiring-partial{color:#a4362f}
+/* Connections in the header (connections-menu.js): a mark per service, then
+   the worst of them in words; pressed, a panel of each with its syncs. */
+.pp-conn{position:relative;flex:none}
+.pp-connbtn{display:inline-flex;align-items:center;gap:4px;font:inherit;font-size:11px;cursor:pointer;
+  padding:2px 7px 2px 4px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);
+  background:var(--dsw-alias-bg-l1,#fff);color:var(--dsw-alias-label-secondary,#555)}
+.pp-connbtn[disabled]{opacity:.45;cursor:not-allowed}
+.pp-connbtn.pp-conn-bad{color:#a4362f;border-color:rgba(180,52,42,.35)}
+.pp-connbtn.pp-conn-warn{color:#a5561f;border-color:rgba(165,86,31,.35)}
+.pp-conndot{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;
+  font-size:8.5px;font-weight:700;background:rgba(47,138,78,.13);color:#2f8a4e}
+.pp-conndot.pp-conn-warn{background:rgba(165,86,31,.14);color:#a5561f}
+.pp-conndot.pp-conn-bad{background:rgba(180,52,42,.14);color:#b4342a}
+.pp-connlabel{margin-left:2px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-connchev{font-size:9px;opacity:.7}
+.pp-connpanel{position:fixed;z-index:4100;max-height:min(70vh,640px);overflow:auto;padding:6px;border-radius:12px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);
+  box-shadow:0 10px 30px rgba(0,0,0,.14)}
+.pp-connrow{padding:8px 8px 10px;border-radius:9px}
+.pp-connrow+.pp-connrow{border-top:1px solid var(--dsw-alias-border-l2,#ececef)}
+.pp-connhead{display:flex;align-items:center;gap:8px}
+.pp-connname{display:flex;flex-direction:column;font-size:12.5px;font-weight:600;line-height:1.25}
+.pp-connstate{font-size:11px;font-weight:500;color:#2f8a4e}
+.pp-conn-warn .pp-connstate{color:#a5561f}
+.pp-conn-bad .pp-connstate{color:#b4342a}
+.pp-connline{margin:4px 0 0 30px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-connsync{margin:8px 0 0 30px}
+.pp-connsync .pp-synccard{margin-top:2px}
 .pp-coursebody .pp-frame{background:transparent}
 .pp-coursehead{flex-wrap:wrap}
 /* The chat's text field at the foot of an open place (CourseComposer in materials.js). */

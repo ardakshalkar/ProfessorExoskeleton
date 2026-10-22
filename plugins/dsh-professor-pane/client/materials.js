@@ -10,6 +10,7 @@ import { courseModeEscape } from "./course-escape.js";
 import { GradebookPanes } from "./gradebook.js";
 import { GradebookStatus, Unpublished } from "./marks.js";
 import { Files } from "./files.js";
+import { ConnectionsMenu } from "./connections-menu.js";
 import { Integrations } from "./integrations.js";
 import { Preferences } from "./preferences.js";
 import { h, React, ReactDOM } from "./react.js";
@@ -529,6 +530,8 @@ export function CourseMode(props) {
       // listener runs first, at the window, so the editor's own handler
       // cannot stop it; the mark on the editor is how it is told.
       if (event.composedPath().some((node) => node instanceof Element && (node.hasAttribute("data-own-escape") || node.classList.contains("planform")))) return;
+      // The connections panel, open from the header, closes first.
+      if (document.querySelector(".pp-connpanel")) return;
       // A deck opened from the term plan sits on top and owns Escape: it
       // closes first, and this stays where the professor was reading.
       if (courseModeEscape({ covered: props.covered }) === "close") close();
@@ -553,13 +556,24 @@ export function CourseMode(props) {
   );
   // The last answer of each read is kept while the next one loads, so a
   // confirm or a run — which move their versions — does not blank the line.
-  const shown = React.useRef({ canvas: null, waiting: 0 });
-  if (wiring.phase === "ready") shown.current.canvas = canvas;
+  const shown = React.useRef({ canvas: null, waiting: 0, data: null, roads: null });
+  if (wiring.phase === "ready") {
+    shown.current.canvas = canvas;
+    shown.current.data = wiring.value && !wiring.value.error ? wiring.value : null;
+  }
   if (syncs.phase === "ready") {
     shown.current.waiting = syncs.value && !syncs.value.error ? (syncs.value.waiting || []).length : 0;
+    shown.current.roads = syncs.value && !syncs.value.error ? syncs.value : null;
   }
   const waiting = shown.current.waiting;
   const canvasLine = shown.current.canvas;
+  // A press in the connections panel jumps to that service's card.
+  const [jump, setJump] = React.useState(null);
+  const openCard = (service) => {
+    setJump((current) => ({ service, tick: (current ? current.tick : 0) + 1 }));
+    setSub("settings", "integrations");
+    setView("settings");
+  };
 
   const viewBody = () => {
     if (view === "files") {
@@ -590,7 +604,7 @@ export function CourseMode(props) {
               revision: integrationsVersion,
               names: props.names,
               ask: props.ask,
-              focus: props.integrationsFocus,
+              focus: jump || props.integrationsFocus,
               key: props.runId,
             }),
       );
@@ -776,9 +790,23 @@ export function CourseMode(props) {
               ),
           // The pane's header, which this veil covers. Publish and Upload
           // open their own windows on top, so course mode is still here when
-          // they close. The wiring line opens Integrations in place, where
-          // Canvas stands, what is waiting, and the setup are all answered.
-          canvasLine || waiting
+          // they close. The connections button says how each service stands
+          // and holds their syncs; with none to show (no payload yet), the
+          // old Canvas line stands in.
+          shown.current.data
+            ? h(ConnectionsMenu, {
+                data: shown.current.data,
+                roads: shown.current.roads,
+                waiting,
+                runId: props.runId,
+                sessionId: props.sessionId,
+                names: props.names,
+                revision: integrationsVersion + "." + syncsVersion,
+                disabled: preview,
+                onOpen: openCard,
+                onDone: () => props.wrote(["syncs", "marks", "integrations"]),
+              })
+            : canvasLine || waiting
             ? h(
                 "button",
                 {

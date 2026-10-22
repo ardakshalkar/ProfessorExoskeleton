@@ -645,6 +645,34 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-wiring{flex:none;font:inherit;font-size:11px;cursor:pointer;background:none;border:0;padding:2px 4px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);text-decoration:underline;text-underline-offset:2px}
 .pp-wiring-absent,.pp-wiring-partial{color:#a4362f}
+/* Connections in the header (connections-menu.js): a mark per service, then
+   the worst of them in words; pressed, a panel of each with its syncs. */
+.pp-conn{position:relative;flex:none}
+.pp-connbtn{display:inline-flex;align-items:center;gap:4px;font:inherit;font-size:11px;cursor:pointer;
+  padding:2px 7px 2px 4px;border-radius:999px;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);
+  background:var(--dsw-alias-bg-l1,#fff);color:var(--dsw-alias-label-secondary,#555)}
+.pp-connbtn[disabled]{opacity:.45;cursor:not-allowed}
+.pp-connbtn.pp-conn-bad{color:#a4362f;border-color:rgba(180,52,42,.35)}
+.pp-connbtn.pp-conn-warn{color:#a5561f;border-color:rgba(165,86,31,.35)}
+.pp-conndot{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;
+  font-size:8.5px;font-weight:700;background:rgba(47,138,78,.13);color:#2f8a4e}
+.pp-conndot.pp-conn-warn{background:rgba(165,86,31,.14);color:#a5561f}
+.pp-conndot.pp-conn-bad{background:rgba(180,52,42,.14);color:#b4342a}
+.pp-connlabel{margin-left:2px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-connchev{font-size:9px;opacity:.7}
+.pp-connpanel{position:fixed;z-index:4100;max-height:min(70vh,640px);overflow:auto;padding:6px;border-radius:12px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);
+  box-shadow:0 10px 30px rgba(0,0,0,.14)}
+.pp-connrow{padding:8px 8px 10px;border-radius:9px}
+.pp-connrow+.pp-connrow{border-top:1px solid var(--dsw-alias-border-l2,#ececef)}
+.pp-connhead{display:flex;align-items:center;gap:8px}
+.pp-connname{display:flex;flex-direction:column;font-size:12.5px;font-weight:600;line-height:1.25}
+.pp-connstate{font-size:11px;font-weight:500;color:#2f8a4e}
+.pp-conn-warn .pp-connstate{color:#a5561f}
+.pp-conn-bad .pp-connstate{color:#b4342a}
+.pp-connline{margin:4px 0 0 30px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-connsync{margin:8px 0 0 30px}
+.pp-connsync .pp-synccard{margin-top:2px}
 .pp-coursebody .pp-frame{background:transparent}
 .pp-coursehead{flex-wrap:wrap}
 /* The chat's text field at the foot of an open place (CourseComposer in materials.js). */
@@ -7342,7 +7370,7 @@ function CourseIntegrations(props) {
     setFilter((current) => ({ id, tick: current.tick + 1 }));
     scrollTo("pp-card-canvas");
   };
-  const plural2 = (count, one, many) => count + " " + (count === 1 ? one : many);
+  const plural3 = (count, one, many) => count + " " + (count === 1 ? one : many);
   const migrate = () => {
     setMigrating("working");
     fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
@@ -7359,21 +7387,21 @@ function CourseIntegrations(props) {
       key: "waiting",
       service: "sheets",
       mark: "GS",
-      text: plural2(waiting2, "name", "names") + " from the grade sheet to confirm",
+      text: plural3(waiting2, "name", "names") + " from the grade sheet to confirm",
       go: () => scrollTo("pp-card-sheets")
     } : null,
     reachable && counts.unlinked.length ? {
       key: "unlinked",
       service: "canvas",
       mark: "Cv",
-      text: plural2(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
+      text: plural3(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
       go: () => show("unlinked")
     } : null,
     counts.toSend.length ? {
       key: "marks",
       service: "canvas",
       mark: "Cv",
-      text: "Canvas is missing marks for " + plural2(counts.toSend.length, "assessment", "assessments"),
+      text: "Canvas is missing marks for " + plural3(counts.toSend.length, "assessment", "assessments"),
       go: () => show("marks")
     } : null
   ].filter(Boolean);
@@ -7478,7 +7506,7 @@ function CourseIntegrations(props) {
       h(
         "span",
         { className: "pp-as" },
-        (implied === syncs.length ? "All " : implied + " of ") + plural2(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
+        (implied === syncs.length ? "All " : implied + " of ") + plural3(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
       ),
       h(
         "button",
@@ -10928,6 +10956,202 @@ function Files(props) {
   );
 }
 
+// client/connections-menu.js
+var MARK = { canvas: "Cv", sheets: "GS", github: "GH", telegram: "Tg", moodle: "Md", transcription: "Tr" };
+var RANK = { bad: 3, warn: 2, ok: 1 };
+var plural2 = (count, one, many) => count + " " + (count === 1 ? one : many);
+var connectionsOf = (data, roads, checks) => {
+  if (!data) return [];
+  const rows = data.integrations || [];
+  const rowOf = (id) => rows.find((row) => row.id === id) || null;
+  const syncs = roads && roads.syncs ? roads.syncs : [];
+  const syncsOf = (service) => syncs.filter((sync) => sync.service === service);
+  const waitingOf = (service) => {
+    const ids = new Set(syncsOf(service).map((sync) => sync.id));
+    return (roads && roads.waiting ? roads.waiting : []).filter((entry) => ids.has(entry.sync)).length;
+  };
+  const missing = (row) => "Still to set up: " + row.steps.filter((step) => !step.done).map((step) => step.label).join(", ") + ".";
+  const used = (id) => {
+    const row = rowOf(id);
+    return Boolean(row && row.state !== "absent" || syncsOf(id).length);
+  };
+  const fromSteps = (row) => !row || row.state === "absent" ? { tone: "bad", state: "not set up", line: "Nothing is recorded for it yet.", fix: "setup" } : row.state === "partial" ? { tone: "warn", state: "partly set up", line: missing(row), fix: "setup" } : { tone: "ok", state: "set up", line: row.what ? "For " + row.what + "." : "Set up.", fix: null };
+  const out = [];
+  if (used("canvas")) {
+    const row = rowOf("canvas");
+    const state = fromSteps(row);
+    const waiting2 = waitingOf("canvas");
+    if (row && row.state === "ready") {
+      state.state = "connected";
+      state.line = (data.canvas && data.canvas.host ? data.canvas.host : "Canvas") + " · every step recorded.";
+    }
+    if (waiting2 && state.tone === "ok") Object.assign(state, { tone: "warn", state: plural2(waiting2, "row", "rows") + " to confirm" });
+    out.push(Object.assign({ id: "canvas", name: "Canvas", syncs: syncsOf("canvas") }, state));
+  }
+  const sheetSyncs = syncsOf("sheets");
+  if (used("sheets")) {
+    const google = data.google || {};
+    const found = checks && checks.checks ? checks.checks : [];
+    const expired = Boolean(google.connected && (google.expired || found.some((check) => check.reconnect) || sheetSyncs.some((sync) => sync.reconnect)));
+    const readsLive = google.connected || sheetSyncs.some((sync) => sync.canReadLive);
+    const changed = found.filter((check) => check.state === "changed");
+    const waiting2 = waitingOf("sheets");
+    const who = google.account ? " for " + google.account : "";
+    const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural2(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
+      tone: "warn",
+      state: "changed in Google",
+      line: "The sheet changed" + (changed[0].modified ? " " + when(changed[0].modified) : "") + " since the last sync.",
+      fix: null
+    } : {
+      tone: "ok",
+      state: found.some((check) => check.state === "same") ? "up to date" : "connected",
+      line: google.account ? "Signed in as " + google.account + "." : "This computer can read the sheet.",
+      fix: null
+    };
+    out.push(Object.assign({ id: "sheets", name: "Google Sheets", syncs: sheetSyncs }, state));
+  }
+  const github = data.github || {};
+  const githubSyncs = syncsOf("github");
+  if (githubSyncs.length || github.connection) {
+    const gh = github.gh || {};
+    const state = github.via === "token" ? { tone: "ok", state: "signed in", line: "A saved token" + (github.owner ? ", repositories under " + github.owner : "") + ".", fix: null } : github.via === "gh" ? { tone: "ok", state: "signed in", line: "The gh command line, as " + gh.account + ".", fix: null } : {
+      tone: "bad",
+      state: "not signed in",
+      line: gh.installed ? "gh is installed but not signed in, and no token is saved." : "No GitHub token is saved, and gh is not installed.",
+      fix: "setup"
+    };
+    out.push(Object.assign({ id: "github", name: "GitHub", syncs: githubSyncs }, state));
+  }
+  for (const id of ["telegram", "moodle"]) {
+    if (!used(id)) continue;
+    const row = rowOf(id);
+    out.push(Object.assign({ id, name: row ? row.label : id, syncs: syncsOf(id) }, fromSteps(row)));
+  }
+  const refs = data.credentials && data.credentials.refs || {};
+  const transcription = (data.registry && data.registry.connections || []).find((entry) => entry.type === "transcription");
+  if (transcription) {
+    const saved = Boolean(refs[transcription.tokenEnv] && refs[transcription.tokenEnv].configured || transcription.tokenInEnv);
+    const what = [transcription.provider, transcription.model].filter(Boolean).join(" · ");
+    out.push(
+      saved ? { id: "transcription", name: "Transcription", tone: "ok", state: "key saved", line: (what || "A provider") + ", for recorded defences.", fix: null, syncs: [] } : { id: "transcription", name: "Transcription", tone: "bad", state: "no key", line: "No key is saved for " + (what || "the provider") + ".", fix: "setup", syncs: [] }
+    );
+  }
+  return out;
+};
+var worstOf = (rows) => rows.reduce((worst, row) => !worst || RANK[row.tone] > RANK[worst.tone] ? row : worst, null);
+function ConnectionsMenu(props) {
+  const [open2, setOpen] = React.useState(false);
+  const [at, setAt] = React.useState(null);
+  const box = React.useRef(null);
+  const layer = React.useRef(null);
+  const checks = useSheetCheck(props.runId, props.sessionId, String(props.revision || 0));
+  const rows = connectionsOf(props.data, props.roads, checks);
+  React.useEffect(() => {
+    if (!open2) return void 0;
+    const place = () => {
+      if (!box.current) return;
+      const rect = box.current.getBoundingClientRect();
+      const width = Math.min(560, window.innerWidth - 32);
+      setAt({ top: rect.bottom + 6, left: Math.max(16, Math.min(rect.left, window.innerWidth - width - 16)), width });
+    };
+    place();
+    const away = (event) => {
+      const inside = [box.current, layer.current].some((node) => node && node.contains(event.target));
+      if (!inside) setOpen(false);
+    };
+    const onKey = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", away);
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("resize", place);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open2]);
+  if (!rows.length) return null;
+  const worst = worstOf(rows);
+  const label = worst.tone === "ok" ? "Connections" : worst.name + ": " + worst.state + (rows.filter((row) => row.tone !== "ok").length > 1 ? " · more" : "");
+  const go = (id) => {
+    setOpen(false);
+    if (props.onOpen) props.onOpen(id);
+  };
+  const fixOf = (row) => {
+    if (row.fix === "reconnect" || row.fix === "connect") {
+      return h(ReconnectGoogle, { label: row.fix === "connect" ? "Connect Google" : "Reconnect Google", onBack: props.onDone });
+    }
+    if (row.fix === "setup") return h("button", { type: "button", className: "pp-segbtn", onClick: () => go(row.id) }, "Set up");
+    return null;
+  };
+  const panel = h(
+    "div",
+    {
+      className: "pp-connpanel",
+      ref: layer,
+      role: "dialog",
+      "aria-label": "Connections",
+      style: at ? { top: at.top + "px", left: at.left + "px", width: at.width + "px" } : { visibility: "hidden" }
+    },
+    // What needs the professor first; otherwise in the header's order.
+    rows.slice().sort((left, right) => RANK[right.tone] - RANK[left.tone]).map(
+      (row) => h(
+        "section",
+        { className: "pp-connrow pp-conn-" + row.tone, key: row.id },
+        h(
+          "div",
+          { className: "pp-connhead" },
+          h("span", { className: "pp-svc pp-svc-small pp-svc-" + row.id, "aria-hidden": "true" }, MARK[row.id] || row.id.slice(0, 2)),
+          h("span", { className: "pp-connname" }, row.name, h("span", { className: "pp-connstate" }, row.state)),
+          h("span", { className: "pp-segspacer" }),
+          fixOf(row),
+          h("button", { type: "button", className: "pp-segbtn", title: "Its card on Integrations", onClick: () => go(row.id) }, "Open")
+        ),
+        h("p", { className: "pp-connline" }, row.line),
+        row.syncs.map(
+          (sync) => h(
+            "div",
+            { className: "pp-connsync", key: sync.id },
+            h("div", { className: "pp-csubtitle" }, sync.label, h("span", { className: "pp-syncid" }, sync.id)),
+            h(SyncCard, {
+              sync,
+              bare: true,
+              check: checks && checks.checks ? checks.checks.find((entry) => entry.sync === sync.id) || null : null,
+              assessments: props.roads ? props.roads.assessments : [],
+              runId: props.runId,
+              sessionId: props.sessionId,
+              names: props.names,
+              onDone: props.onDone
+            })
+          )
+        )
+      )
+    )
+  );
+  return h(
+    "span",
+    { className: "pp-conn", ref: box },
+    h(
+      "button",
+      {
+        type: "button",
+        className: "pp-connbtn pp-conn-" + worst.tone + (props.waiting ? " pp-wiring-waiting" : ""),
+        "aria-expanded": open2,
+        disabled: props.disabled,
+        title: props.disabled ? "Private — not shown while previewing as a student" : "Each connection, and its syncs",
+        onClick: () => setOpen(!open2)
+      },
+      rows.map(
+        (row) => h("span", { className: "pp-conndot pp-conn-" + row.tone, key: row.id, title: row.name + ": " + row.state }, MARK[row.id] || row.id.slice(0, 2))
+      ),
+      h("span", { className: "pp-connlabel" }, [label, props.waiting && worst.tone === "ok" ? plural2(props.waiting, "row", "rows") + " waiting" : null].filter(Boolean).join(" · ")),
+      h("span", { className: "pp-connchev", "aria-hidden": "true" }, open2 ? "▴" : "▾")
+    ),
+    open2 ? ReactDOM.createPortal(panel, document.body) : null
+  );
+}
+
 // client/preferences.js
 function Layer(props) {
   const layer = props.layer;
@@ -11410,6 +11634,7 @@ function CourseMode(props) {
       const target = event.target;
       if (props.chat && veilRef.current && target instanceof Node && target !== document.body && !veilRef.current.contains(target)) return;
       if (event.composedPath().some((node) => node instanceof Element && (node.hasAttribute("data-own-escape") || node.classList.contains("planform")))) return;
+      if (document.querySelector(".pp-connpanel")) return;
       if (courseModeEscape({ covered: props.covered }) === "close") close();
     };
     window.addEventListener("keydown", onKey, true);
@@ -11422,13 +11647,23 @@ function CourseMode(props) {
   const syncs = useJson(
     scoped(BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + "&r=" + syncsVersion, props.sessionId)
   );
-  const shown = React.useRef({ canvas: null, waiting: 0 });
-  if (wiring.phase === "ready") shown.current.canvas = canvas;
+  const shown = React.useRef({ canvas: null, waiting: 0, data: null, roads: null });
+  if (wiring.phase === "ready") {
+    shown.current.canvas = canvas;
+    shown.current.data = wiring.value && !wiring.value.error ? wiring.value : null;
+  }
   if (syncs.phase === "ready") {
     shown.current.waiting = syncs.value && !syncs.value.error ? (syncs.value.waiting || []).length : 0;
+    shown.current.roads = syncs.value && !syncs.value.error ? syncs.value : null;
   }
   const waiting2 = shown.current.waiting;
   const canvasLine = shown.current.canvas;
+  const [jump, setJump] = React.useState(null);
+  const openCard = (service) => {
+    setJump((current) => ({ service, tick: (current ? current.tick : 0) + 1 }));
+    setSub("settings", "integrations");
+    setView("settings");
+  };
   const viewBody = () => {
     if (view === "files") {
       return h(
@@ -11456,7 +11691,7 @@ function CourseMode(props) {
           revision: integrationsVersion,
           names: props.names,
           ask: props.ask,
-          focus: props.integrationsFocus,
+          focus: jump || props.integrationsFocus,
           key: props.runId
         })
       );
@@ -11632,9 +11867,21 @@ function CourseMode(props) {
             ),
             // The pane's header, which this veil covers. Publish and Upload
             // open their own windows on top, so course mode is still here when
-            // they close. The wiring line opens Integrations in place, where
-            // Canvas stands, what is waiting, and the setup are all answered.
-            canvasLine || waiting2 ? h(
+            // they close. The connections button says how each service stands
+            // and holds their syncs; with none to show (no payload yet), the
+            // old Canvas line stands in.
+            shown.current.data ? h(ConnectionsMenu, {
+              data: shown.current.data,
+              roads: shown.current.roads,
+              waiting: waiting2,
+              runId: props.runId,
+              sessionId: props.sessionId,
+              names: props.names,
+              revision: integrationsVersion + "." + syncsVersion,
+              disabled: preview,
+              onOpen: openCard,
+              onDone: () => props.wrote(["syncs", "marks", "integrations"])
+            }) : canvasLine || waiting2 ? h(
               "button",
               {
                 type: "button",
