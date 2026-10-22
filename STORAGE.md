@@ -533,6 +533,7 @@ that go with it are not:
 | the address and the credential's variable | `~/.ainar/connections.json` | machine configuration; the token itself is in the environment |
 | which student a row is — a name pin, an anchor tag, a Canvas user id — and the matches waiting for review | `~/.ainar/links/<RUN>.json` | a link ties a name as written to a pseudonym |
 | the values as last synced, the base of the three-way comparison | `~/.ainar/sync/<RUN>.json` | they are gradebook values held for the far side |
+| a difference with Canvas the professor settled with "keep Canvas" — both sides as they stood | `~/.ainar/sync/<RUN>.json`, `syncs["canvas-keep"]` | the same values, and a choice about them rather than a fact of the course |
 
 The older places — `extensions.lms`, `extensions.telegram`,
 `~/.ainar/sheets/<RUN>.json` — are still read, as *implied* syncs, until

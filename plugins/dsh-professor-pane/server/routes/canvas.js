@@ -4,6 +4,7 @@
  */
 
 import { canvasCheckState, runAssignmentPush, runCanvasCheck, runMarksPush } from "../actions.js";
+import { canvasDifferences, canvasResolve, canvasSyncAll } from "../canvas-sync.js";
 import { canvasAssignmentList, canvasCourseList } from "../connections.js";
 import { readBody, sendJson } from "../http.js";
 import {
@@ -296,6 +297,57 @@ export const routes = [
       if (req.method !== "POST") return sendJson(res, 405, { error: "GET the last check, or POST to run one" });
       return runCanvasCheck(root, runId)
         .then((state) => sendJson(res, 200, state))
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    },
+  },
+  // Where the run and Canvas differ, from the last check: a read of this
+  // server's memory, so GET.
+  {
+    paths: ["/api/canvas/differences"],
+    handle(c) {
+      const { res, url, runId } = c;
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return sendJson(res, 200, canvasDifferences(runId, { names: url.searchParams.get("names") === "1" }));
+    },
+  },
+  // Sync all: POST for `/api/canvas/marks`' reason — the preview asks Canvas,
+  // and the send changes what students see.
+  {
+    paths: ["/api/canvas/sync-all"],
+    handle(c) {
+      const { req, res, runId, root } = c;
+      if (req.method !== "POST") return sendJson(res, 405, { error: "Sync all is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then(async (raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          return sendJson(res, 200, await canvasSyncAll(root, runId, body ?? {}));
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    },
+  },
+  // One difference settled: keep AINAR's (a send) or Canvas's (a note here).
+  {
+    paths: ["/api/canvas/resolve"],
+    handle(c) {
+      const { req, res, runId, root } = c;
+      if (req.method !== "POST") return sendJson(res, 405, { error: "settling a difference is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then(async (raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          return sendJson(res, 200, await canvasResolve(root, runId, body ?? {}));
+        })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     },
   },

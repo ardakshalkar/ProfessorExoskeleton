@@ -378,6 +378,22 @@ export const runCanvasCheck = (root, runId) => {
   return entry.running;
 };
 
+/** The last finished check's answer for a run, or null — for the Canvas differences. */
+export const lastCanvasCheck = (runId) => {
+  const entry = checks.get(runId);
+  return entry && entry.value ? { at: entry.at, value: entry.value, running: Boolean(entry.running) } : null;
+};
+
+/**
+ * Put a corrected answer in place of the last check's: a difference the
+ * professor just settled leaves the list at once, rather than when the next
+ * check has asked Canvas again.
+ */
+export const amendCanvasCheck = (runId, value) => {
+  const entry = checks.get(runId);
+  if (entry && entry.value) entry.value = value;
+};
+
 /** `lms plan --json`'s object, out of output that may carry a warning line around it. */
 const planOf = (output) => {
   const start = output.indexOf("{");

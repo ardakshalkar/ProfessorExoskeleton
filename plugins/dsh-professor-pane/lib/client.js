@@ -1142,6 +1142,35 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-waitline .pp-waitpair{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px}
 .pp-waitline .pp-avatar{width:18px;height:18px;font-size:8.5px;flex:none}
 .pp-waitmeta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+/* Canvas card: where the run and Canvas differ, and Sync all. */
+.pp-cdiff{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:9px;
+  background:var(--dsw-alias-fill-secondary,#f3f3f5)}
+.pp-cdiffhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.pp-cdifftitle{font-weight:600}
+.pp-cdiffkinds{display:flex;gap:4px;flex-wrap:wrap}
+.pp-cdiffkind{display:inline-flex;gap:5px;align-items:baseline;padding:2px 8px;border-radius:7px;font-size:11.5px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);cursor:pointer;color:inherit;font-family:inherit}
+.pp-cdiffkind[aria-pressed=true]{border-color:#2f6fd6;box-shadow:0 0 0 1px #2f6fd6 inset}
+.pp-cdiffkind b{font-weight:600}
+.pp-cdiffways{font-size:11.5px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-cdiffways .pp-way-conflict{color:#b4342a;font-weight:600}
+.pp-dlist{display:flex;flex-direction:column}
+.pp-dgroup{font-size:11px;font-weight:600;margin:8px 0 2px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-drow{display:flex;flex-direction:column;gap:3px;padding:5px 0;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6);font-size:12px}
+.pp-drowline{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.pp-drowwho{flex:1 1 140px;min-width:0;overflow-wrap:anywhere}
+.pp-dvals{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pp-dvals s{color:var(--dsw-alias-label-tertiary,#9a9a9a)}
+.pp-dtag{font-size:10.5px;padding:0 6px;border-radius:10px;white-space:nowrap}
+.pp-dtag-push{background:rgba(47,111,214,.12);color:#2456a8}
+.pp-dtag-pull{background:rgba(214,130,32,.15);color:#b4600f}
+.pp-dtag-conflict{background:rgba(180,52,42,.12);color:#b4342a}
+.pp-dtag-held{background:var(--dsw-alias-fill-secondary,#ececef);color:var(--dsw-alias-label-secondary,#555)}
+.pp-dwhy{font-size:11px;color:var(--dsw-alias-label-tertiary,#7a7a7a)}
+.pp-dacts{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
+.pp-syncall{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:9px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);font-size:12px}
+.pp-syncall ul{margin:0;padding-left:18px}
 .pp-waitwhy{flex:1 1 160px;min-width:0}
 .pp-syncsection .pp-waitlist{gap:0}
 .pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}
@@ -4263,6 +4292,10 @@ function useCanvasWatch(runId, sessionId, runIds = []) {
     };
   }, [runId, sessionId]);
 }
+var noteCanvasCheck = (runId, answer, sessionId) => {
+  set(runId, { phase: "ready", value: answer });
+  wrote(sessionId, ["canvas"]);
+};
 function useCanvasCheck(runId, sessionId) {
   const subscribe2 = React.useCallback(
     (listener) => {
@@ -4283,45 +4316,35 @@ function useCanvasCheck(runId, sessionId) {
   return [state, again];
 }
 
-// client/common.js
-function useJson(url) {
-  const [state, setState] = React.useState({ phase: "loading" });
-  React.useEffect(() => {
-    if (url === null) return void 0;
-    let live = true;
-    setState({ phase: "loading" });
-    fetch(url, { headers: { accept: "application/json" } }).then((response) => response.json()).then((value) => {
-      if (live) setState({ phase: "ready", value });
-    }).catch((error) => {
-      if (live) setState({ phase: "ready", value: { error: String(error.message || error) } });
-    });
-    return () => {
-      live = false;
-    };
-  }, [url]);
-  return state;
-}
-function decodeIssues(raw) {
-  if (!raw) return [];
-  try {
-    return decodeURIComponent(raw).split(" | ").filter(Boolean);
-  } catch {
-    return [];
+// client/canvas-diff-count.js
+var KINDS = [
+  { id: "grades", label: "Marks" },
+  { id: "assignments", label: "Definitions" },
+  { id: "roster", label: "Class list" }
+];
+var DIRECTIONS = [
+  { id: "push", label: "to Canvas", tag: "changed here" },
+  { id: "pull", label: "from Canvas", tag: "changed in Canvas" },
+  { id: "conflict", label: "conflicts", tag: "changed on both sides" },
+  { id: "held", label: "held", tag: "held for you" }
+];
+var zero = () => ({ push: 0, pull: 0, conflict: 0, held: 0, total: 0 });
+var applicable = (entry) => entry.direction === "push" && entry.kind !== "roster" || entry.direction === "pull" && entry.kind === "roster";
+var diffSummary = (answer) => {
+  if (!answer || !Array.isArray(answer.differences)) return null;
+  const kinds = { grades: zero(), assignments: zero(), roster: zero() };
+  const directions = zero();
+  let canApply = 0;
+  for (const entry of answer.differences) {
+    const kind = kinds[entry.kind] || (kinds[entry.kind] = zero());
+    kind[entry.direction] += 1;
+    kind.total += 1;
+    directions[entry.direction] += 1;
+    directions.total += 1;
+    if (applicable(entry)) canApply += 1;
   }
-}
-function useDark() {
-  const read = () => typeof document !== "undefined" && document.body.hasAttribute("data-ds-dark-theme");
-  const [dark, setDark] = React.useState(read);
-  React.useEffect(() => {
-    const observer = new MutationObserver(() => setDark(read()));
-    observer.observe(document.body, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
-    return () => observer.disconnect();
-  }, []);
-  return dark;
-}
-function Message(props) {
-  return h("div", { className: "pp-msg" + (props.error ? " pp-err" : "") }, props.children);
-}
+  return { total: directions.total, kinds, directions, applicable: canApply, kept: answer.kept || 0 };
+};
 
 // client/syncs.js
 var shortWhy = (why) => {
@@ -4824,6 +4847,429 @@ function WaitingList(props) {
   );
 }
 
+// client/canvas-diff.js
+var post = (path, runId, sessionId, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(body)
+}).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) }));
+var plural = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
+var subject = (entry) => entry.kind === "assignments" ? entry.field.replace(/_/g, " ") : entry.name || entry.student_id || entry.theirs || "—";
+var valueText = (value) => {
+  if (value === null || value === void 0) return "—";
+  const text = String(value);
+  if (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(text) && !Number.isNaN(Date.parse(text))) {
+    return new Date(text).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  return text;
+};
+var grouped = (rows) => {
+  const out = [];
+  const index = /* @__PURE__ */ new Map();
+  for (const entry of rows) {
+    const id = entry.kind === "roster" ? "roster" : entry.kind + "|" + entry.assessment_id + "|" + (entry.group || "");
+    if (!index.has(id)) {
+      const kind = KINDS.find((item) => item.id === entry.kind);
+      const title = entry.kind === "roster" ? "Class list" : (entry.title || entry.assessment_id) + (entry.kind === "assignments" ? " · definition" : "");
+      index.set(id, out.length);
+      out.push({ id, title: title + (entry.group && entry.kind !== "roster" ? " · " + entry.group : ""), kind, rows: [] });
+    }
+    out[index.get(id)].rows.push(entry);
+  }
+  return out;
+};
+var ROWS_AT_FIRST = 12;
+function DiffRow(props) {
+  const entry = props.entry;
+  const [phase, setPhase] = React.useState("idle");
+  const [preview, setPreview] = React.useState(null);
+  const [answer, setAnswer] = React.useState(null);
+  const direction = DIRECTIONS.find((item) => item.id === entry.direction);
+  const choosable = entry.kind !== "roster" && (entry.direction === "conflict" || entry.direction === "pull");
+  const settle = (keep, confirm) => {
+    setPhase(keep + (confirm ? ":send" : ""));
+    post("/api/canvas/resolve", props.runId, props.sessionId, { key: entry.key, keep, confirm, names: Boolean(props.names) }).then((body) => {
+      setPhase("idle");
+      if (body.preview) return setPreview(body.preview);
+      setPreview(null);
+      setAnswer(body);
+      if (!body.error && body.ok && props.onSettled) props.onSettled();
+    });
+  };
+  return h(
+    "div",
+    { className: "pp-drow" },
+    h(
+      "div",
+      { className: "pp-drowline" },
+      h("span", { className: "pp-drowwho" }, subject(entry)),
+      h(
+        "span",
+        { className: "pp-dvals", title: entry.base !== null && entry.base !== void 0 ? "Last synced: " + entry.base : "Never synced" },
+        entry.kind === "roster" ? null : "AINAR " + valueText(entry.ours) + " · Canvas " + valueText(entry.theirs)
+      ),
+      h("span", { className: "pp-dtag pp-dtag-" + entry.direction }, direction ? direction.tag : entry.direction)
+    ),
+    entry.reason ? h("span", { className: "pp-dwhy" }, entry.reason) : null,
+    choosable && !answer ? h(
+      "div",
+      { className: "pp-dacts" },
+      preview ? h(
+        React.Fragment,
+        null,
+        h("span", { className: "pp-dwhy" }, preview),
+        h(
+          "button",
+          { type: "button", className: "pp-segbtn pp-danger", disabled: phase !== "idle", onClick: () => settle("ainar", true) },
+          phase === "ainar:send" ? "Sending…" : "Send to Canvas"
+        ),
+        h("button", { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: () => setPreview(null) }, "Cancel")
+      ) : h(
+        React.Fragment,
+        null,
+        h(
+          "button",
+          {
+            type: "button",
+            className: "pp-segbtn",
+            disabled: phase !== "idle" || entry.ours === null,
+            title: "Send AINAR's value to Canvas, over what Canvas holds. Previewed first.",
+            onClick: () => settle("ainar", false)
+          },
+          phase === "ainar" ? "Looking…" : "Keep AINAR"
+        ),
+        h(
+          "button",
+          {
+            type: "button",
+            className: "pp-segbtn",
+            disabled: phase !== "idle",
+            title: entry.kind === "grades" ? "Leave Canvas's mark. Nothing is sent; the decision here stays as it is until you change it in the Grade view." : "Leave Canvas's value. Nothing is sent; the record stays as it is.",
+            onClick: () => settle("canvas", false)
+          },
+          phase === "canvas" ? "Keeping…" : "Keep Canvas"
+        )
+      )
+    ) : null,
+    answer ? h(
+      "pre",
+      { className: "pp-approveout" + (answer.error || !answer.ok ? " pp-approveerr" : "") },
+      answer.error || answer.output || (answer.kept === "canvas" ? "Kept Canvas's." : "Sent.")
+    ) : null
+  );
+}
+function SyncAll(props) {
+  const preview = props.preview;
+  const [phase, setPhase] = React.useState("idle");
+  const [result, setResult] = React.useState(null);
+  const [open2, setOpen] = React.useState(false);
+  const send2 = preview.send;
+  const take = preview.take;
+  const held = preview.held;
+  const marks = send2.filter((entry) => entry.kind === "grades");
+  const fields = send2.filter((entry) => entry.kind === "assignments");
+  const nothing = !send2.length && !take.length;
+  const go = () => {
+    setPhase("sending");
+    post("/api/canvas/sync-all", props.runId, props.sessionId, {
+      confirm: true,
+      keys: send2.concat(take).map((entry) => entry.key)
+    }).then((body) => {
+      setPhase("idle");
+      setResult(body);
+      if (body.check && props.onChecked) props.onChecked(body.check);
+    });
+  };
+  if (result) {
+    return h(
+      "div",
+      { className: "pp-syncall" },
+      result.error ? h("pre", { className: "pp-approveout pp-approveerr" }, result.error) : result.results.map(
+        (entry, index) => h(
+          "pre",
+          { className: "pp-approveout" + (entry.ok ? "" : " pp-approveerr"), key: index },
+          (entry.ok ? "✓ " : "✗ ") + entry.command + "\n" + entry.output
+        )
+      ),
+      h("div", { className: "pp-dacts" }, h("button", { type: "button", className: "pp-segbtn", onClick: props.onClose }, "Close"))
+    );
+  }
+  const byAssessment = (rows) => {
+    const counts = /* @__PURE__ */ new Map();
+    for (const entry of rows) {
+      const title = entry.title || entry.assessment_id;
+      const line = counts.get(title) || { total: 0, groups: /* @__PURE__ */ new Map() };
+      line.total += 1;
+      if (entry.group) line.groups.set(entry.group, (line.groups.get(entry.group) || 0) + 1);
+      counts.set(title, line);
+    }
+    return [...counts].map(
+      ([title, line]) => h(
+        "li",
+        { key: title },
+        title + ": " + line.total,
+        line.groups.size > 1 ? h("span", { className: "pp-as" }, " (" + [...line.groups].sort().map(([group, count]) => group + " " + count).join(", ") + ")") : null
+      )
+    );
+  };
+  return h(
+    "div",
+    { className: "pp-syncall" },
+    h("span", { className: "pp-as" }, "Asked Canvas " + when(props.checkedAt) + ". Nothing has been sent yet."),
+    nothing ? h("span", null, "Nothing one-sided to apply.") : null,
+    marks.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(marks.length, "mark")), h("ul", null, byAssessment(marks))) : null,
+    fields.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(fields.length, "definition field")), h("ul", null, byAssessment(fields))) : null,
+    take.length ? h("b", null, "Into the class list: " + plural(take.length, "student") + " Canvas has and this run does not") : null,
+    send2.length ? h(
+      "button",
+      { type: "button", className: "pp-morebtn", style: { marginLeft: 0 }, onClick: () => setOpen(!open2) },
+      open2 ? "Hide what goes" : "Show what goes, row by row"
+    ) : null,
+    open2 ? h(
+      "div",
+      { className: "pp-dlist" },
+      send2.map(
+        (entry) => h(
+          "div",
+          { className: "pp-drowline", key: entry.key },
+          h("span", { className: "pp-drowwho" }, (entry.title || entry.assessment_id) + " · " + subject(entry)),
+          h("span", { className: "pp-dvals" }, h("s", null, valueText(entry.theirs)), " → " + valueText(entry.ours))
+        )
+      )
+    ) : null,
+    held.length ? h(
+      "span",
+      { className: "pp-as" },
+      "Left for you: " + plural(held.length, "difference") + " — conflicts, what Canvas changed, and what is held. Each is in Details, with Keep AINAR and Keep Canvas."
+    ) : null,
+    h(
+      "div",
+      { className: "pp-dacts" },
+      nothing ? null : h(
+        "button",
+        { type: "button", className: "pp-segbtn pp-danger", disabled: phase !== "idle", onClick: go },
+        phase === "sending" ? "Syncing…" : [send2.length ? "Send " + send2.length + " to Canvas" : null, take.length ? "bring in " + take.length : null].filter(Boolean).join(" and ")
+      ),
+      h("button", { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: props.onClose }, "Cancel")
+    )
+  );
+}
+function CanvasDifferences(props) {
+  const [check, again] = useCanvasCheck(props.runId, props.sessionId);
+  const version = useVersion(["canvas"]);
+  const [tick, setTick] = React.useState(0);
+  const [answer, setAnswer] = React.useState(null);
+  const [open2, setOpen] = React.useState(false);
+  const [kind, setKind] = React.useState(null);
+  const [way, setWay] = React.useState("all");
+  const [more, setMore] = React.useState({});
+  const [syncing, setSyncing] = React.useState(null);
+  const url = scoped(
+    BASE + "/api/canvas/differences?run=" + encodeURIComponent(props.runId || "") + (props.names ? "&names=1" : "") + // Read again when a check lands — this pane's, or one the server
+    // already had — and after a press here.
+    "&v=" + encodeURIComponent(String(version) + "." + tick + "." + (check.value && check.value.at || "")),
+    props.sessionId
+  );
+  React.useEffect(() => {
+    let live = true;
+    fetch(url, { headers: { accept: "application/json" } }).then((response) => response.json()).then((body) => live && setAnswer(body)).catch(() => null);
+    return () => {
+      live = false;
+    };
+  }, [url]);
+  const running2 = check.phase === "running";
+  const summary = diffSummary(answer);
+  const reread = () => setTick((value) => value + 1);
+  const preview = () => {
+    setSyncing("asking");
+    post("/api/canvas/sync-all", props.runId, props.sessionId, { confirm: false, names: Boolean(props.names) }).then((body) => {
+      if (body.error) return setSyncing({ error: body.error });
+      setSyncing(body);
+      reread();
+    });
+  };
+  const head = h(
+    "div",
+    { className: "pp-cdiffhead" },
+    h("span", { className: "pp-cdifftitle" }, "Differences with Canvas"),
+    summary ? h("span", { className: "pp-chip " + (summary.total ? "pp-chip-warn" : "pp-chip-ok") }, summary.total ? String(summary.total) : "none") : null,
+    h("span", { className: "pp-segspacer" }),
+    h("button", { type: "button", className: "pp-segbtn", disabled: running2, onClick: again }, running2 ? "Checking…" : "Check again")
+  );
+  const checked = running2 ? "checking…" : answer && answer.at ? "checked " + when(answer.at) : "";
+  if (!summary) {
+    return h(
+      "div",
+      { className: "pp-cdiff" },
+      head,
+      h(
+        "span",
+        { className: "pp-as" },
+        answer && answer.error ? answer.error : answer && answer.outdated ? "The last check was made before differences were counted. Check again." : running2 ? "Asking Canvas what it holds…" : answer && answer.state === "none" ? "Not checked yet." : "Not compared yet."
+      )
+    );
+  }
+  const shownWay = way !== "all" && !summary.directions[way] ? "all" : way;
+  const rows = answer.differences.filter((entry) => (!kind || entry.kind === kind) && (shownWay === "all" || entry.direction === shownWay));
+  const ways = [{ id: "all", label: "All " + summary.total }].concat(
+    DIRECTIONS.filter((item) => summary.directions[item.id]).map((item) => ({
+      id: item.id,
+      label: summary.directions[item.id] + " " + (summary.directions[item.id] === 1 && item.id === "conflict" ? "conflict" : item.label)
+    }))
+  );
+  return h(
+    "div",
+    { className: "pp-cdiff", id: "pp-canvas-diff" },
+    head,
+    h(
+      "div",
+      { className: "pp-cdiffkinds" },
+      KINDS.map(
+        (item) => h(
+          "button",
+          {
+            type: "button",
+            className: "pp-cdiffkind",
+            key: item.id,
+            "aria-pressed": kind === item.id,
+            title: "Show only " + item.label.toLowerCase(),
+            onClick: () => {
+              setKind(kind === item.id ? null : item.id);
+              setOpen(true);
+            }
+          },
+          item.label,
+          h("b", null, String(summary.kinds[item.id].total))
+        )
+      )
+    ),
+    h(
+      "span",
+      { className: "pp-cdiffways" },
+      summary.directions.push + " to Canvas · " + summary.directions.pull + " from Canvas · ",
+      h("span", { className: summary.directions.conflict ? "pp-way-conflict" : null }, plural(summary.directions.conflict, "conflict")),
+      " · " + summary.directions.held + " held" + (summary.kept ? " · " + summary.kept + " kept as Canvas has them" : ""),
+      checked ? h("span", { className: "pp-as" }, " — " + checked) : null
+    ),
+    answer.roster && answer.roster.error ? h("span", { className: "pp-saveerr" }, "Class list: " + answer.roster.error) : null,
+    h(
+      "div",
+      { className: "pp-dacts" },
+      h(
+        "button",
+        { type: "button", className: "pp-segbtn", "aria-expanded": open2, disabled: !summary.total, onClick: () => setOpen(!open2) },
+        open2 ? "Hide details" : "Details"
+      ),
+      h(
+        "button",
+        {
+          type: "button",
+          className: "pp-segbtn",
+          disabled: running2 || syncing === "asking" || Boolean(syncing && syncing.preview),
+          title: "Ask Canvas again and show what Sync all would send and bring in. Nothing is sent until you press Send.",
+          onClick: preview
+        },
+        syncing === "asking" ? "Asking Canvas…" : "Sync all…"
+      )
+    ),
+    syncing && syncing.error ? h("p", { className: "pp-saveerr" }, syncing.error) : null,
+    syncing && syncing.preview ? h(SyncAll, {
+      preview: syncing.preview,
+      checkedAt: syncing.checkedAt,
+      runId: props.runId,
+      sessionId: props.sessionId,
+      onChecked: (state) => noteCanvasCheck(props.runId, state, props.sessionId),
+      onClose: () => {
+        setSyncing(null);
+        reread();
+        if (props.onWrite) props.onWrite();
+      }
+    }) : null,
+    open2 ? h(
+      "div",
+      { className: "pp-dlist" },
+      h(
+        "div",
+        { className: "pp-dacts" },
+        ways.map(
+          (item) => h(
+            "button",
+            { type: "button", className: "pp-segbtn", key: item.id, "aria-pressed": shownWay === item.id, onClick: () => setWay(item.id) },
+            item.label
+          )
+        )
+      ),
+      rows.length ? grouped(rows).map((group) => {
+        const shown = more[group.id] ? group.rows : group.rows.slice(0, ROWS_AT_FIRST);
+        return h(
+          React.Fragment,
+          { key: group.id },
+          h("p", { className: "pp-dgroup" }, group.title + " · " + group.rows.length),
+          shown.map(
+            (entry) => h(DiffRow, {
+              entry,
+              key: entry.key,
+              runId: props.runId,
+              sessionId: props.sessionId,
+              names: props.names,
+              onSettled: reread
+            })
+          ),
+          group.rows.length > shown.length ? h(
+            "button",
+            {
+              type: "button",
+              className: "pp-morebtn",
+              onClick: () => setMore(Object.assign({}, more, { [group.id]: true }))
+            },
+            "Show " + (group.rows.length - shown.length) + " more"
+          ) : null
+        );
+      }) : h("p", { className: "pp-as" }, "Nothing here.")
+    ) : null
+  );
+}
+
+// client/common.js
+function useJson(url) {
+  const [state, setState] = React.useState({ phase: "loading" });
+  React.useEffect(() => {
+    if (url === null) return void 0;
+    let live = true;
+    setState({ phase: "loading" });
+    fetch(url, { headers: { accept: "application/json" } }).then((response) => response.json()).then((value) => {
+      if (live) setState({ phase: "ready", value });
+    }).catch((error) => {
+      if (live) setState({ phase: "ready", value: { error: String(error.message || error) } });
+    });
+    return () => {
+      live = false;
+    };
+  }, [url]);
+  return state;
+}
+function decodeIssues(raw) {
+  if (!raw) return [];
+  try {
+    return decodeURIComponent(raw).split(" | ").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+function useDark() {
+  const read = () => typeof document !== "undefined" && document.body.hasAttribute("data-ds-dark-theme");
+  const [dark, setDark] = React.useState(read);
+  React.useEffect(() => {
+    const observer = new MutationObserver(() => setDark(read()));
+    observer.observe(document.body, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
+    return () => observer.disconnect();
+  }, []);
+  return dark;
+}
+function Message(props) {
+  return h("div", { className: "pp-msg" + (props.error ? " pp-err" : "") }, props.children);
+}
+
 // shared/course-words.js
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var shortDate = (value) => {
@@ -4926,8 +5372,8 @@ var tierOf = (week, current) => {
 var hasBrief = (a) => Boolean(a.url || a.brief_url || String(a.description ?? "").trim());
 var titleOf = (w) => (w.modules ?? []).map((m) => m.title).join(" · ");
 var conceptsOf = (w) => (w.modules ?? []).flatMap((m) => m.concepts ?? []);
-var KINDS = { quiz: ["Quizzes", "q"], assignment: ["Homework", "hw"], project: ["Project", "pj"], exam: ["Exams", "ex"] };
-var kindOf = (type) => KINDS[type] ?? ["Other", "ot"];
+var KINDS2 = { quiz: ["Quizzes", "q"], assignment: ["Homework", "hw"], project: ["Project", "pj"], exam: ["Exams", "ex"] };
+var kindOf = (type) => KINDS2[type] ?? ["Other", "ot"];
 var LANES = [["test", "Exams & Quizzes", "q", ["quiz", "exam"]], ["assignment", "Homework", "hw", ["assignment"]], ["project", "Project", "pj", ["project"]]];
 var laneOf = (type) => LANES.find((l) => l[3].includes(type)) ?? ["other", "Other", "ot", []];
 var runOffset = (data) => {
@@ -6395,7 +6841,7 @@ var rowState = (entry, reachable) => {
   else parts.push({ key: "marks", text: c.unsent + c.changed + " marks to send", tone: "warn" });
   return parts;
 };
-var ROWS_AT_FIRST = 8;
+var ROWS_AT_FIRST2 = 8;
 var canvasCounts = (data, unpublished) => {
   const courses = canvasCoursesOf(data);
   const usage = {};
@@ -6453,7 +6899,7 @@ function CanvasCard(props) {
   const matching = rows.filter(
     (entry) => current === "unlinked" ? unlinked.includes(entry) : current === "marks" ? toSend.includes(entry) : current === "attention" ? attention.includes(entry) : true
   );
-  const shown = more ? matching : matching.slice(0, ROWS_AT_FIRST);
+  const shown = more ? matching : matching.slice(0, ROWS_AT_FIRST2);
   const choose = (id) => {
     setFilter(id);
     setMore(false);
@@ -6705,6 +7151,8 @@ function CanvasCard(props) {
       h("span", { className: "pp-chip pp-chip-" + chip.tone }, chip.text)
     ),
     setup,
+    // How far this run and Canvas have drifted apart, and Sync all.
+    reachable ? h(CanvasDifferences, { runId: props.runId, sessionId: props.sessionId, names: props.names, onWrite: props.onWrite }) : null,
     reachable && rosterSync ? h(CanvasRead, {
       sync: rosterSync,
       label: "Class list",
@@ -7370,7 +7818,7 @@ function CourseIntegrations(props) {
     setFilter((current) => ({ id, tick: current.tick + 1 }));
     scrollTo("pp-card-canvas");
   };
-  const plural3 = (count, one, many) => count + " " + (count === 1 ? one : many);
+  const plural4 = (count, one, many) => count + " " + (count === 1 ? one : many);
   const migrate = () => {
     setMigrating("working");
     fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
@@ -7387,21 +7835,21 @@ function CourseIntegrations(props) {
       key: "waiting",
       service: "sheets",
       mark: "GS",
-      text: plural3(waiting2, "name", "names") + " from the grade sheet to confirm",
+      text: plural4(waiting2, "name", "names") + " from the grade sheet to confirm",
       go: () => scrollTo("pp-card-sheets")
     } : null,
     reachable && counts.unlinked.length ? {
       key: "unlinked",
       service: "canvas",
       mark: "Cv",
-      text: plural3(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
+      text: plural4(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
       go: () => show("unlinked")
     } : null,
     counts.toSend.length ? {
       key: "marks",
       service: "canvas",
       mark: "Cv",
-      text: "Canvas is missing marks for " + plural3(counts.toSend.length, "assessment", "assessments"),
+      text: "Canvas is missing marks for " + plural4(counts.toSend.length, "assessment", "assessments"),
       go: () => show("marks")
     } : null
   ].filter(Boolean);
@@ -7506,7 +7954,7 @@ function CourseIntegrations(props) {
       h(
         "span",
         { className: "pp-as" },
-        (implied === syncs.length ? "All " : implied + " of ") + plural3(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
+        (implied === syncs.length ? "All " : implied + " of ") + plural4(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
       ),
       h(
         "button",
@@ -9027,7 +9475,7 @@ function Planning(props) {
       })
     );
   };
-  const post = (path, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId), sessionId), {
+  const post2 = (path, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId), sessionId), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
@@ -9036,7 +9484,7 @@ function Planning(props) {
     const p = pending;
     const o = dates[p.id];
     setPending(Object.assign({}, p, { saving: true }));
-    post("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at }).then((result) => {
+    post2("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at }).then((result) => {
       if (result.error) {
         setDates((d) => {
           const next = Object.assign({}, d);
@@ -9083,7 +9531,7 @@ function Planning(props) {
     const moves = [{ module: p.id, week: p.to, meetings: stamps(p.id, p.meetings) }];
     if (p.other && p.swap) moves.push({ module: p.other, week: p.from, meetings: stamps(p.other, p.otherMeetings) });
     setPending(Object.assign({}, p, { saving: true }));
-    post("/api/plan/topic", { moves }).then((result) => {
+    post2("/api/plan/topic", { moves }).then((result) => {
       const ids = [p.id, p.other].filter(Boolean);
       if (result.error) {
         setTopicWeeks((tw) => {
@@ -10724,7 +11172,7 @@ var size = (bytes) => {
   return (value >= 10 || unit === 0 ? Math.round(value) : Math.round(value * 10) / 10) + " " + units[unit];
 };
 var minutes = (seconds) => seconds ? Math.max(1, Math.round(seconds / 60)) + " min" : "—";
-var plural = (n, one, many) => n + " " + (n === 1 ? one : many);
+var plural2 = (n, one, many) => n + " " + (n === 1 ? one : many);
 var WHOSE_MOVE = { you: "Your move", assistant: "Assistant", done: "Done" };
 function PileProgress(props) {
   const standing = props.standing;
@@ -10816,14 +11264,14 @@ function Files(props) {
           "div",
           { className: "pp-filetile" },
           h("span", { className: "pp-filetilehead" }, "Scans"),
-          h("b", null, plural(doc.totals.scans.files, "PDF", "PDFs")),
+          h("b", null, plural2(doc.totals.scans.files, "PDF", "PDFs")),
           h("span", { className: "pp-as" }, size(doc.totals.scans.bytes))
         ),
         h(
           "div",
           { className: "pp-filetile" },
           h("span", { className: "pp-filetilehead" }, "Audio"),
-          h("b", null, doc.totals.audio.takes ? plural(doc.totals.audio.takes, "recording", "recordings") : "None yet"),
+          h("b", null, doc.totals.audio.takes ? plural2(doc.totals.audio.takes, "recording", "recordings") : "None yet"),
           h(
             "span",
             { className: "pp-as" },
@@ -10837,7 +11285,7 @@ function Files(props) {
           h(
             "b",
             null,
-            [doc.unfiled.count ? plural(doc.unfiled.count, "scan", "scans") : null, doc.recordings.count ? plural(doc.recordings.count, "recording", "recordings") : null].filter(Boolean).join(" · ")
+            [doc.unfiled.count ? plural2(doc.unfiled.count, "scan", "scans") : null, doc.recordings.count ? plural2(doc.recordings.count, "recording", "recordings") : null].filter(Boolean).join(" · ")
           ),
           h("span", { className: "pp-as" }, "uploaded, not yet given to an assessment or a student")
         ) : null
@@ -10950,7 +11398,7 @@ function Files(props) {
       doc.papers.count ? h(
         "p",
         { className: "pp-as" },
-        "Also stored: " + plural(doc.papers.count, "question paper or answer key", "question papers and answer keys") + " (" + size(doc.papers.bytes) + ")."
+        "Also stored: " + plural2(doc.papers.count, "question paper or answer key", "question papers and answer keys") + " (" + size(doc.papers.bytes) + ")."
       ) : null
     )
   );
@@ -10959,7 +11407,7 @@ function Files(props) {
 // client/connections-menu.js
 var MARK = { canvas: "Cv", sheets: "GS", github: "GH", telegram: "Tg", moodle: "Md", transcription: "Tr" };
 var RANK = { bad: 3, warn: 2, ok: 1 };
-var plural2 = (count, one, many) => count + " " + (count === 1 ? one : many);
+var plural3 = (count, one, many) => count + " " + (count === 1 ? one : many);
 var connectionsOf = (data, roads, checks) => {
   if (!data) return [];
   const rows = data.integrations || [];
@@ -10985,7 +11433,7 @@ var connectionsOf = (data, roads, checks) => {
       state.state = "connected";
       state.line = (data.canvas && data.canvas.host ? data.canvas.host : "Canvas") + " · every step recorded.";
     }
-    if (waiting2 && state.tone === "ok") Object.assign(state, { tone: "warn", state: plural2(waiting2, "row", "rows") + " to confirm" });
+    if (waiting2 && state.tone === "ok") Object.assign(state, { tone: "warn", state: plural3(waiting2, "row", "rows") + " to confirm" });
     out.push(Object.assign({ id: "canvas", name: "Canvas", syncs: syncsOf("canvas") }, state));
   }
   const sheetSyncs = syncsOf("sheets");
@@ -10997,7 +11445,7 @@ var connectionsOf = (data, roads, checks) => {
     const changed = found.filter((check) => check.state === "changed");
     const waiting2 = waitingOf("sheets");
     const who = google.account ? " for " + google.account : "";
-    const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural2(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
+    const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural3(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
       tone: "warn",
       state: "changed in Google",
       line: "The sheet changed" + (changed[0].modified ? " " + when(changed[0].modified) : "") + " since the last sync.",
@@ -11145,7 +11593,7 @@ function ConnectionsMenu(props) {
       rows.map(
         (row) => h("span", { className: "pp-conndot pp-conn-" + row.tone, key: row.id, title: row.name + ": " + row.state }, MARK[row.id] || row.id.slice(0, 2))
       ),
-      h("span", { className: "pp-connlabel" }, [label, props.waiting && worst.tone === "ok" ? plural2(props.waiting, "row", "rows") + " waiting" : null].filter(Boolean).join(" · ")),
+      h("span", { className: "pp-connlabel" }, [label, props.waiting && worst.tone === "ok" ? plural3(props.waiting, "row", "rows") + " waiting" : null].filter(Boolean).join(" · ")),
       h("span", { className: "pp-connchev", "aria-hidden": "true" }, open2 ? "▴" : "▾")
     ),
     open2 ? ReactDOM.createPortal(panel, document.body) : null
@@ -13213,7 +13661,7 @@ function GradeBoard(props) {
     const node = document.querySelector(".pp-gcard.pp-focus");
     if (node && document.activeElement && document.activeElement.tagName !== "INPUT") node.focus({ preventScroll: false });
   }, [focus, at, tick, state.phase]);
-  const post = (path, body, label2) => {
+  const post2 = (path, body, label2) => {
     if (busy) return;
     setBusy(label2);
     setSaid(null);
@@ -13376,7 +13824,7 @@ function GradeBoard(props) {
                 className: mine ? "pp-segbtn" : "pp-primary",
                 disabled: Boolean(busy) || item.counts.decided > 0,
                 title: item.counts.decided ? qName + " already has marks decided against its rubric" : "Write this as " + qName + "'s rubric, as a draft to review",
-                onClick: () => post("/api/grade/choose", { proposal: proposal.id, item: item.item_id }, "choose")
+                onClick: () => post2("/api/grade/choose", { proposal: proposal.id, item: item.item_id }, "choose")
               },
               busy === "choose" ? "Writing…" : mine ? "Use again for " + qName : "Use for " + qName
             ),
@@ -13386,7 +13834,7 @@ function GradeBoard(props) {
                 type: "button",
                 className: "pp-segbtn",
                 disabled: Boolean(busy) || doc.items.some((entry) => entry.counts.decided > 0),
-                onClick: () => post("/api/grade/choose", { proposal: proposal.id }, "choose")
+                onClick: () => post2("/api/grade/choose", { proposal: proposal.id }, "choose")
               },
               "Use for every question"
             ) : null
@@ -13409,7 +13857,7 @@ function GradeBoard(props) {
           type: "button",
           className: "pp-primary",
           disabled: Boolean(busy) || rest.some((entry) => entry.counts.decided > 0),
-          onClick: () => post("/api/grade/choose", { proposal: same.id, items: rest.map((entry) => entry.item_id) }, "choose")
+          onClick: () => post2("/api/grade/choose", { proposal: same.id, items: rest.map((entry) => entry.item_id) }, "choose")
         },
         busy === "choose" ? "Writing…" : "Use “" + same.title + "” for " + without.join(", ")
       ) : null,
@@ -13472,7 +13920,7 @@ function GradeBoard(props) {
                 className: "pp-segbtn",
                 disabled: Boolean(busy),
                 title: "One criterion per question, worth its marks, accepted now — then 0…" + label(max) + " buttons on every answer",
-                onClick: () => post("/api/grade/points-only", {}, "points")
+                onClick: () => post2("/api/grade/points-only", {}, "points")
               },
               busy === "points" ? "Writing…" : "Grade by points only"
             ) : null
@@ -13489,7 +13937,7 @@ function GradeBoard(props) {
   if (itemState === "draft") {
     const levels = item.criterion && item.criterion.levels.length ? item.criterion.levels : scale.slice().reverse().map((score) => ({ score, label: null, description: "" }));
     const placedAt = (score) => item.groups.filter((group) => group.score === score);
-    const unplaced = item.groups.filter((group) => group.score === null || !levels.some((level) => level.score === group.score));
+    const unplaced = item.groups.filter((group) => group.score == null || !levels.some((level) => level.score === group.score));
     const groupChip = (group) => {
       const open2 = openGroups[item.item_id + "|" + group.index];
       const members = item.answers.filter((answer) => answer.group === group.index);
@@ -13513,9 +13961,9 @@ function GradeBoard(props) {
             "select",
             {
               "aria-label": "Move this group to a level",
-              value: group.score === null ? "" : String(group.score),
+              value: group.score == null ? "" : String(group.score),
               disabled: Boolean(busy),
-              onChange: (event) => post(
+              onChange: (event) => post2(
                 "/api/grade/move",
                 { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) },
                 "move"
@@ -13579,14 +14027,14 @@ function GradeBoard(props) {
             key: "accept",
             className: "pp-primary",
             disabled: Boolean(busy) || without.length > 0,
-            onClick: () => post("/api/grade/accept-rubric", {}, "accept")
+            onClick: () => post2("/api/grade/accept-rubric", {}, "accept")
           },
           busy === "accept" ? "Accepting…" : "Accept rubric"
         )
       ]
     );
   }
-  const decide = (list, via, labelText) => post(
+  const decide = (list, via, labelText) => post2(
     "/api/grade/decide",
     {
       via,
@@ -13603,7 +14051,8 @@ function GradeBoard(props) {
     (group) => sections.push({
       key: "g" + group.index,
       title: group.label,
-      score: group.score,
+      // No score yet (no proposal chosen) is unplaced, not "undefined".
+      score: group.score == null ? null : group.score,
       unsure: group.unsure,
       answers: item.answers.filter((answer) => answer.group === group.index && !answer.blank && !answer.unread)
     })
@@ -13802,9 +14251,9 @@ function GradeBoard(props) {
               "select",
               {
                 "aria-label": "Move " + group.label + " to another mark",
-                value: group.score === null ? "" : String(group.score),
+                value: group.score == null ? "" : String(group.score),
                 disabled: Boolean(busy),
-                onChange: (event) => post("/api/grade/move", { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) }, "move")
+                onChange: (event) => post2("/api/grade/move", { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) }, "move")
               },
               h("option", { value: "" }, "no mark"),
               levelsNow.map((option) => h("option", { value: String(option.score), key: option.score }, "→ " + label(option.score)))
@@ -13838,7 +14287,7 @@ function GradeBoard(props) {
               className: "pp-primary",
               disabled: Boolean(busy),
               title: "Write it as " + qName + "'s rubric, accepted. Marks already given stay; any it disagrees with are flagged.",
-              onClick: () => post("/api/grade/choose", { proposal: proposal.id, item: item.item_id, keepMarks: true, accept: true }, "revise")
+              onClick: () => post2("/api/grade/choose", { proposal: proposal.id, item: item.item_id, keepMarks: true, accept: true }, "revise")
             },
             busy === "revise" ? "Applying…" : "Use this"
           ),
@@ -13924,7 +14373,7 @@ function GradeBoard(props) {
             h(
               "div",
               { className: "pp-gsection" },
-              section.score !== null && section.key !== "unread" ? h("span", { className: "pp-gsecmark" }, label(section.score)) : h("span", { className: "pp-gsecmark pp-gsecmark-none" }, "—"),
+              section.score != null && section.key !== "unread" ? h("span", { className: "pp-gsecmark" }, label(section.score)) : h("span", { className: "pp-gsecmark pp-gsecmark-none" }, "—"),
               h("b", null, section.title),
               section.unsure ? h("i", null, "unsure") : null,
               h("span", { className: "pp-as" }, section.answers.length + " answer" + (section.answers.length === 1 ? "" : "s")),
@@ -14026,7 +14475,7 @@ function ScansTab(props) {
   }, [props.runId, pile, names, props.revision, tick]);
   const doc = state.value;
   const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
-  const post = (path, body, label, done) => {
+  const post2 = (path, body, label, done) => {
     if (blocked) return;
     setBusy(label);
     setSaid(null);
@@ -14347,7 +14796,7 @@ function ScansTab(props) {
     const ok = window.confirm(
       "Confirm all " + papers.length + " weak matches? Each paper stays on the student it was matched to, and is marked as confirmed by you."
     );
-    if (ok) post("/api/scans/assign", { papers }, "confirm-all");
+    if (ok) post2("/api/scans/assign", { papers }, "confirm-all");
   };
   const now = doc.now || { step: doc.next || null, index: 0, total: doc.stages.length, title: "", body: "", whose: "you", action: null };
   const shown = openStep || now.step || "canvas";
@@ -14371,7 +14820,7 @@ function ScansTab(props) {
       className: primary ? "pp-primary" : "pp-segbtn",
       disabled: blocked,
       title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
-      onClick: () => post("/api/scans/read", {}, "read")
+      onClick: () => post2("/api/scans/read", {}, "read")
     },
     busy === "read" ? "Reading… a few minutes for a class" : "Read and record the answers"
   );
@@ -14618,7 +15067,7 @@ function ScansTab(props) {
               className: "pp-segbtn",
               disabled: blocked,
               title: "Run `scans apply` again — after editing plan.yaml by hand, say",
-              onClick: () => post("/api/scans/apply", {}, "apply")
+              onClick: () => post2("/api/scans/apply", {}, "apply")
             },
             busy === "apply" ? "Applying…" : "Re-apply the plan"
           )
@@ -14672,7 +15121,7 @@ function ScansTab(props) {
       cropUrl,
       busy: busy === "review",
       onClose: () => setReviewing(false),
-      onSubmit: (papers) => post("/api/scans/assign", { papers }, "review", () => setReviewing(false))
+      onSubmit: (papers) => post2("/api/scans/assign", { papers }, "review", () => setReviewing(false))
     }) : null
   );
 }
@@ -15295,7 +15744,7 @@ function ProfessorPane(props) {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run2 = currentRunRef.current;
         if (!run2 || !id.test(String(data.assessment))) return;
-        const post = (what, body2) => fetch(
+        const post2 = (what, body2) => fetch(
           scoped(BASE + "/api/reports/" + what + "?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
           { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) }
         ).then((response) => response.json());
@@ -15305,7 +15754,7 @@ function ProfessorPane(props) {
           write(["grading"]);
         };
         if (data.kind === "reports-make") {
-          post("make", {}).then((result) => {
+          post2("make", {}).then((result) => {
             if (!result.ok) window.alert(said(result).split("\n").slice(-3).join(" ") || "the reports were not made");
             done();
           }).catch((error) => {
@@ -15314,7 +15763,7 @@ function ProfessorPane(props) {
           });
           return;
         }
-        post("send", { confirm: false }).then((plan) => {
+        post2("send", { confirm: false }).then((plan) => {
           if (!plan.ok) {
             window.alert(said(plan).split("\n").slice(-3).join(" ") || "the send could not be planned");
             done();
@@ -15331,7 +15780,7 @@ function ProfessorPane(props) {
             done();
             return null;
           }
-          return post("send", { confirm: true }).then((result) => {
+          return post2("send", { confirm: true }).then((result) => {
             window.alert(said(result).split("\n").slice(-3).join("\n") || (result.ok ? "sent" : "not sent"));
             done();
           });

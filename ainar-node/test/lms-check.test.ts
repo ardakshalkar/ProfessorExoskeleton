@@ -90,7 +90,7 @@ const args = (syncDir: string, assessment: string): LmsArgs =>
   }) as LmsArgs;
 
 /** Run `lms check` against a Canvas that holds `held` for the one marked student. */
-const check = async (held: (score: number) => number) => {
+const check = async (held: (score: number) => number, sent?: (score: number) => number, whole = false) => {
   process.env.AINAR_CANVAS_TOKEN = "test-token";
   const { bundle, assessment, rows } = linkedBundle();
   assert.ok(rows.length >= 1, "the fixture has a marked student");
@@ -111,16 +111,89 @@ const check = async (held: (score: number) => number) => {
     ]),
   });
   const syncDir = scratch();
+  // What this machine last saw Canvas hold: the baseline of the comparison.
+  if (sent) {
+    const ledger = Ledger.load(RUN, syncDir);
+    ledger.record("canvas-api", assessment.assessment_id, [{ student_id: row.student_id, score: sent(row.score!), maximum: null }], {
+      at: "2026-10-01T10:00:00+05:00",
+      state: "applied",
+    });
+    ledger.save();
+  }
   const lines: string[] = [];
-  await runLms(args(syncDir, assessment.assessment_id), bundle, ROOT, {
+  await runLms({ ...args(syncDir, assessment.assessment_id), assessment: whole ? null : assessment.assessment_id }, bundle, ROOT, {
     out: (line) => lines.push(line),
     transport,
     directory: new Directory(new RosterStore(scratch(), PEOPLE), Buffer.from("a-fixed-salt", "utf-8")),
   });
-  const cell = JSON.parse(lines.join("\n")).assessments[0].groups[0];
+  const answer = JSON.parse(lines.join("\n"));
+  const cell = answer.assessments.find((entry: any) => entry.assessment_id === assessment.assessment_id).groups[0];
   const noted = Ledger.load(RUN, syncDir).prepared("canvas-api", assessment.assessment_id);
-  return { cell, noted, row, transport };
+  return { cell, noted, row, transport, answer };
 };
+
+test("lms check says which side moved: Canvas alone is a pull, both is a conflict, ours alone a push", async () => {
+  const mine = (cell: any, student: string) => cell.differences.find((entry: any) => entry.student_id === student);
+
+  const pulled = await check((score) => score - 5, (score) => score);
+  assert.equal(pulled.cell.ok, true, pulled.cell.error);
+  assert.deepEqual(
+    [mine(pulled.cell, pulled.row.student_id).direction, mine(pulled.cell, pulled.row.student_id).changed],
+    ["pull", "canvas"],
+  );
+
+  const both = await check((score) => score - 5, (score) => score - 1);
+  assert.equal(mine(both.cell, both.row.student_id).direction, "conflict");
+
+  // The whole run, which is when the class list is compared too.
+  const pushed = await check((score) => score - 1, (score) => score - 1, true);
+  assert.equal(mine(pushed.cell, pushed.row.student_id).direction, "push");
+  assert.equal(pushed.answer.tally.grades.push >= 1, true);
+  assert.equal(pushed.answer.roster.ok, true, pushed.answer.roster.error);
+  assert.equal(
+    pushed.answer.differences.some((entry: any) => entry.kind === "roster" && entry.student_id === pushed.row.student_id),
+    false,
+    "a student Canvas enrols and this run has is no class-list difference",
+  );
+  assert.deepEqual(pushed.answer.differences, pushed.answer.assessments.flatMap((entry: any) => entry.groups.flatMap((g: any) => g.differences)));
+
+  const same = await check((score) => score, (score) => score);
+  assert.equal(mine(same.cell, same.row.student_id), undefined, "agreeing is no difference");
+  for (const run of [pulled, both, pushed, same]) assert.equal(run.transport.bodies("POST").length, 0, "nothing is posted");
+});
+
+test("lms push --student sends exactly the named rows — what Sync all previewed, and nobody else", async () => {
+  process.env.AINAR_CANVAS_TOKEN = "test-token";
+  const push = async (students: string[]) => {
+    const { bundle, assessment, rows } = linkedBundle();
+    const transport = new RecordedTransport({
+      "GET /api/v1/courses/1/assignments/2": response(200, { id: 2, name: assessment.title, points_possible: Number(assessment.maximum_score), published: true }),
+      "GET /api/v1/courses/1/users": response(
+        200,
+        Object.entries(PEOPLE).map(([id, person]: [string, any]) => ({ id: CANVAS_USER[id], sis_user_id: person.institutional_id })),
+      ),
+      "GET /api/v1/courses/1/assignments/2/submissions": response(200, []),
+      "POST /api/v1/courses/1/assignments/2/submissions/update_grades": response(200, { id: "77", workflow_state: "queued" }),
+      "GET /api/v1/progress/77": response(200, { id: "77", workflow_state: "completed" }),
+    });
+    await runLms({ ...args(scratch(), assessment.assessment_id), subcommand: "push", confirm: true, json: false, students }, bundle, ROOT, {
+      out: () => {},
+      transport,
+      directory: new Directory(new RosterStore(scratch(), PEOPLE), Buffer.from("a-fixed-salt", "utf-8")),
+      sleep: async () => {},
+    });
+    return { transport, row: rows[0]! };
+  };
+  const nobody = await push(["STUDENT-NOBODY"]);
+  assert.equal(nobody.transport.bodies("POST").length, 0, "a student not in the plan sends nothing");
+  const one = await push([linkedBundle().rows[0]!.student_id]);
+  const bodies = one.transport.bodies("POST");
+  assert.equal(bodies.length, 1);
+  assert.match(bodies[0]!, new RegExp(`grade_data%5B${CANVAS_USER[one.row.student_id]}%5D`));
+  for (const [student, user] of Object.entries(CANVAS_USER)) {
+    if (student !== one.row.student_id) assert.equal(bodies[0]!.includes(`grade_data%5B${user}%5D`), false, `${student} was not named`);
+  }
+});
 
 test("lms check notes a mark Canvas already holds at the decided value", async () => {
   const { cell, noted, row, transport } = await check((score) => score);

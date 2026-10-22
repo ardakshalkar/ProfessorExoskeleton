@@ -20,7 +20,12 @@
 import http from "node:http";
 import { readFileSync } from "node:fs";
 
+import { assessmentsOf, enrollmentsOf, runById } from "@ainar/core/src/bundle.ts";
+import { exportable, gradeRows } from "@ainar/core/src/gradebook.ts";
+import { gradeDifferences, rosterKey, syncAllPlan, tallyDifferences } from "@ainar/core/src/lms/canvas-diff.ts";
+import { canvasAssignmentFor } from "@ainar/core/src/lms/index.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
+import { lmsScale, rescales, toLms } from "@ainar/core/src/lms-scale.ts";
 
 import { integrationsAnswer } from "../server/integrations.js";
 import { runSyncAction, syncsDocument } from "../server/syncs.js";
@@ -97,6 +102,81 @@ const syncsFor = (names) => {
     syncs: real.syncs.map((sync) => (sync.id === sheet.id ? { ...sync, waiting: rows.length } : sync)),
   };
 };
+
+// ---- differences with Canvas, without asking Canvas ----------------------
+//
+// The real comparison (`lms check`) reads Canvas. Here Canvas is taken to hold
+// exactly what the ledger last noted it holding, so every difference is a mark
+// decided here and not in Canvas — Quiz 3's, for the v1 run. `--demo-diff`
+// adds one made-up difference of each other kind, on made-up students, so the
+// rows and their choices can be looked at.
+
+const ledgerDifferences = () => {
+  const { bundle } = loadedRun(workspace, RUN);
+  const run = runById(bundle).get(RUN);
+  const ledger = Ledger.load(RUN);
+  const groupOf = new Map(enrollmentsOf(bundle, RUN).map((entry) => [entry.student_id, entry.group ?? null]));
+  const assessments = assessmentsOf(bundle, RUN);
+  const found = [];
+  for (const assessment of assessments) {
+    const id = assessment.assessment_id;
+    const rows = gradeRows(bundle, RUN, { assessmentId: id }).get(id) ?? [];
+    if (!rows.some((row) => row.score !== null)) continue;
+    const scale = lmsScale(run, assessment, assessments);
+    const prepared = ledger.prepared("canvas-api", id);
+    const byGroup = new Map();
+    for (const row of rows) {
+      const group = groupOf.get(row.student_id) ?? null;
+      const ok = exportable(row);
+      const score = ok && rescales(scale) && !scale.problem ? toLms(row.score, scale) : row.score;
+      byGroup.set(group, [
+        ...(byGroup.get(group) ?? []),
+        { student_id: row.student_id, action: ok ? "change" : "skip", score: ok ? score : null, reason: ok ? null : row.blocked.join("; ") },
+      ]);
+    }
+    for (const [group, planRows] of byGroup) {
+      // As the real check: only a course where the assessment has a Canvas column.
+      if (!canvasAssignmentFor(assessment, group)) continue;
+      found.push(
+        ...gradeDifferences({
+          assessmentId: id,
+          title: assessment.title ?? id,
+          group,
+          canvasCourse: null,
+          rows: planRows,
+          current: prepared,
+          excused: new Set(),
+          prepared,
+          pins: new Map(),
+        }),
+      );
+    }
+  }
+  if (process.argv.includes("--demo-diff")) {
+    const made = (fields) => ({ field: null, assessment_id: "ASSESSMENT-DEMO", title: "Made-up quiz", group: "ENG-8", canvas_course: null, base: "6", pin_ours: "", pin_theirs: "", ...fields });
+    found.push(
+      made({ kind: "grades", key: "grade|demo|1", direction: "pull", changed: "canvas", student_id: "STUDENT-AAAA01", ours: "6", theirs: "4", reason: "changed in Canvas; a Canvas total is not split into criteria here", pin_ours: "6", pin_theirs: "4" }),
+      made({ kind: "grades", key: "grade|demo|2", direction: "conflict", changed: "both", student_id: "STUDENT-AAAA02", ours: "7", theirs: "5", reason: null, pin_ours: "7", pin_theirs: "5" }),
+      made({ kind: "assignments", key: "field|demo|due", direction: "pull", changed: "canvas", student_id: null, field: "due_at", ours: "2026-10-20T18:00:00Z", theirs: "2026-10-21T18:00:00Z", base: null, reason: "edited in Canvas; the record is not changed from here" }),
+      made({ kind: "roster", key: rosterKey("ENG-8", "STUDENT-AAAA03"), direction: "pull", changed: "canvas", assessment_id: null, title: null, student_id: "STUDENT-AAAA03", ours: null, theirs: "ENG-8", base: null, reason: "new in Canvas" }),
+      made({ kind: "roster", key: rosterKey("ENG-9", "STUDENT-AAAA04"), direction: "held", changed: "unknown", assessment_id: null, title: null, group: "ENG-9", student_id: "STUDENT-AAAA04", ours: "ENG-9", theirs: null, base: null, reason: "enrolled here, not in the Canvas course" }),
+    );
+  }
+  return found;
+};
+
+let checked = null;
+const checkNow = () => {
+  const differences = ledgerDifferences();
+  checked = {
+    state: "ready",
+    at: new Date().toISOString(),
+    value: { run: RUN, assessments: [], roster: { ok: true, error: null }, differences, tally: tallyDifferences(differences), kept: 0 },
+  };
+  return checked;
+};
+const withNames = (differences, names) =>
+  differences.map((entry) => ({ ...entry, name: names && entry.student_id ? (named(entry.student_id)?.name ?? null) : null }));
 
 // ---- the page ------------------------------------------------------------
 
@@ -186,6 +266,19 @@ http
         });
       }
       if (path === "/api/marks-activity") return json(res, { runId: RUN, names: false, events: [] });
+      if (path === "/api/canvas/check") return json(res, req.method === "POST" || !checked ? checkNow() : checked);
+      if (path === "/api/canvas/differences") {
+        if (!checked) return json(res, { state: "none", differences: null });
+        const { value } = checked;
+        return json(res, {
+          state: "ready",
+          at: checked.at,
+          differences: withNames(value.differences, url.searchParams.get("names") === "1"),
+          tally: value.tally,
+          kept: value.kept,
+          roster: value.roster,
+        });
+      }
       if (req.method === "POST") {
         let raw = "";
         for await (const chunk of req) raw += chunk;
@@ -208,6 +301,33 @@ http
             confirmed: body.confirm === true,
             groups: [{ group: null, courseId: "0", ok: true, unlinked: false, output: "(mock) marks " + (body.confirm ? "sent" : "planned") + " for " + body.assessment }],
           });
+        }
+        if (path === "/api/canvas/sync-all") {
+          if (body.confirm !== true) {
+            const state = checkNow();
+            const plan = syncAllPlan(state.value.differences);
+            const names = body.names === true;
+            return json(res, {
+              checkedAt: state.at,
+              preview: { send: withNames(plan.send, names), take: withNames(plan.take, names), held: withNames(plan.held, names), batches: plan.batches },
+            });
+          }
+          return json(res, {
+            confirmed: true,
+            results: [{ kind: "grades", ok: true, command: "(mock) sync all", output: `(mock) ${body.keys.length} difference(s) — nothing was sent` }],
+            check: checked,
+          });
+        }
+        if (path === "/api/canvas/resolve") {
+          const entry = checked?.value.differences.find((item) => item.key === body.key);
+          if (!entry) return json(res, { error: "That difference is not in the last check any more." });
+          if (body.keep === "ainar" && body.confirm !== true) {
+            return json(res, { preview: `${entry.student_id ?? entry.field}: Canvas has ${entry.theirs ?? "nothing"}, and would get ${entry.ours}.` });
+          }
+          checked.value.differences = checked.value.differences.filter((item) => item.key !== body.key);
+          checked.value.tally = tallyDifferences(checked.value.differences);
+          if (body.keep === "canvas") checked.value.kept += 1;
+          return json(res, { ok: true, kept: body.keep, output: `(mock) kept ${body.keep === "canvas" ? "Canvas's" : "AINAR's"} — nothing was ${body.keep === "canvas" ? "noted" : "sent"}` });
         }
         if (path === "/api/syncs/action") {
           // The real plan, which writes nothing; everything else from memory.

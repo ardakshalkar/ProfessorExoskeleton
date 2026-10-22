@@ -19,7 +19,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { decidedAt, upsertRecords, writeRecords, zoneOffsetMinutes } from "../records-write.ts";
-import { allRubrics, assessmentById, assessmentsOf, enrollmentsOf, runById } from "../bundle.ts";
+import { ROSTER_ROLES, allRubrics, assessmentById, assessmentsOf, enrollmentsOf, runById } from "../bundle.ts";
 import { type CourseBundle } from "../bundle.ts";
 import { type GradeRow, gradeRows, gradebookPayload } from "../gradebook.ts";
 import { type LmsScale, lmsScale, rescales, toLms } from "../lms-scale.ts";
@@ -91,6 +91,20 @@ import { decide } from "../sync/reconcile.ts";
 import { changesGrid, gradeChanges, realChanges } from "../grade-changes.ts";
 import { FetchTransport, type Transport } from "./http.ts";
 import { Ledger } from "./ledger.ts";
+import {
+  type Difference,
+  type PinNotes,
+  assignmentDifferences,
+  dropPin,
+  fieldKey,
+  gradeDifferences,
+  gradeKey,
+  keepCanvas,
+  pinsOf,
+  rosterDifferences,
+  tallyDifferences,
+} from "./canvas-diff.ts";
+import { matchSections, readSections } from "./roster-sync.ts";
 import { writeSheet } from "./sheet.ts";
 import {
   SheetsClient,
@@ -159,6 +173,11 @@ export interface LmsArgs {
   again?: boolean;
   /** `lms send-reports --dir`: where the reports are, if not `~/.ainar/reports`. */
   reportsDir?: string | null;
+  /** `lms assignment-push --field` and `lms keep --field`: only these definition fields. */
+  fields?: string[];
+  /** `lms keep --ours/--canvas`: the two values as the professor saw them. */
+  ours?: string | null;
+  theirs?: string | null;
 }
 
 /** Everything a gradebook target needs, gathered before anything is decided. */
@@ -574,6 +593,12 @@ const makePlan = (
           "Canvas enrollment list disagree";
       }
     }
+  }
+  // `--student`: only these rows, for a difference settled one student at a
+  // time and for Sync all, which sends exactly the rows it previewed.
+  if (args.students?.length) {
+    const only = new Set(args.students);
+    plan.rows = plan.rows.filter((row) => only.has(row.student_id));
   }
   return { plan, ledger, rows: recorded };
 };
@@ -1527,6 +1552,67 @@ interface AssignmentRun {
   wrote: boolean;
 }
 
+/** What an assessment's definition says, read once for every course it goes to. */
+const definitionSpec = (bundle: CourseBundle, run: any, assessment: any, root: string) => {
+  // The brief: the same document for every subgroup.
+  const brief = briefHtml(bundle, assessment, root);
+  const scale = lmsScale(run, assessment, assessmentsOf(bundle, run.course_version_id));
+  return { brief, scale, spec: specFor(assessment, brief.html, scale.problem ? null : scale.maximum) };
+};
+
+/**
+ * One course's definition plan: the spec, this course's assignment group, and
+ * what Canvas and the ledger hold. Shared by `assignment-plan`/`-push` and by
+ * `lms check`, so the comparison a check reports is the one a push acts on.
+ */
+const definitionPlan = (
+  definition: ReturnType<typeof definitionSpec>,
+  input: {
+    run: any;
+    assessment: any;
+    group: string | null;
+    courseId: string;
+    linked: string | null;
+    current: Record<string, any> | null;
+    ledger: Ledger;
+  },
+): { plan: AssignmentPlan; spec: AssignmentSpec } => {
+  const { run, assessment, group, courseId } = input;
+  const { brief, scale, spec } = definition;
+  const notes = brief.note ? [brief.note] : [];
+  if (scale.problem) {
+    notes.push(`! ${scale.problem} — points_possible stays at maximum_score, ${g(assessment.maximum_score)}.`);
+  } else if (rescales(scale)) {
+    notes.push(`points_possible is ${g(scale.maximum)}, not ${g(assessment.maximum_score)}: ${scale.why}.`);
+  }
+  // The assignment group is per Canvas course: the run's grading component,
+  // mapped to this course's group by `lms groups --link`.
+  const targetSpec: AssignmentSpec = {
+    ...spec,
+    assignment_group_id: canvasAssignmentGroupFor(run, assessment.component, group),
+  };
+  if (assessment.component && !targetSpec.assignment_group_id) {
+    notes.push(
+      `${assessment.assessment_id} counts in ${assessment.component}, which has no Canvas ` +
+        `assignment group recorded for ${group ?? "this course"} — it goes where Canvas puts it. ` +
+        "`ainar lms groups` maps the components.",
+    );
+  }
+  const remembered = input.ledger.preparedAssignment(assessment.assessment_id, courseId);
+  const plan = planAssignment({
+    courseVersionId: run.course_version_id,
+    assessmentId: assessment.assessment_id,
+    group,
+    canvasCourseId: courseId,
+    canvasAssignmentId: input.linked,
+    spec: targetSpec,
+    current: input.current,
+    prepared: remembered ? (remembered.spec as any) : null,
+    notes,
+  });
+  return { plan, spec: targetSpec };
+};
+
 /**
  * Plan, and optionally push, one assessment's definition to every linked course.
  *
@@ -1561,10 +1647,8 @@ const runAssignment = async (
     );
   }
 
-  // The brief, read once: it is the same document for every subgroup.
-  const brief = briefHtml(bundle, assessment, root);
-  const scale = lmsScale(run, assessment, assessmentsOf(bundle, args.run));
-  const spec = specFor(assessment, brief.html, scale.problem ? null : scale.maximum);
+  const definition = definitionSpec(bundle, run, assessment, root);
+  const spec = definition.spec;
 
   const config = loadCanvasConfig(rosterDir(args.rosterDir), {
     baseUrl: args.canvasUrl,
@@ -1606,36 +1690,14 @@ const runAssignment = async (
       }
     }
 
-    const notes = brief.note ? [brief.note] : [];
-    if (scale.problem) {
-      notes.push(`! ${scale.problem} — points_possible stays at maximum_score, ${g(assessment.maximum_score)}.`);
-    } else if (rescales(scale)) {
-      notes.push(`points_possible is ${g(scale.maximum)}, not ${g(assessment.maximum_score)}: ${scale.why}.`);
-    }
-    // The assignment group is per Canvas course: the run's grading component,
-    // mapped to this course's group by `lms groups --link`.
-    const targetSpec: AssignmentSpec = {
-      ...spec,
-      assignment_group_id: canvasAssignmentGroupFor(run, assessment.component, group),
-    };
-    if (assessment.component && !targetSpec.assignment_group_id) {
-      notes.push(
-        `${assessment.assessment_id} counts in ${assessment.component}, which has no Canvas ` +
-          `assignment group recorded for ${group ?? "this course"} — it goes where Canvas puts it. ` +
-          "`ainar lms groups` maps the components.",
-      );
-    }
-    const remembered = ledger.preparedAssignment(assessment.assessment_id, courseId);
-    const plan = planAssignment({
-      courseVersionId: args.run,
-      assessmentId: assessment.assessment_id,
+    const { plan, spec: targetSpec } = definitionPlan(definition, {
+      run,
+      assessment,
       group,
-      canvasCourseId: courseId,
-      canvasAssignmentId: linked,
-      spec: targetSpec,
+      courseId,
+      linked,
       current,
-      prepared: remembered ? (remembered.spec as any) : null,
-      notes,
+      ledger,
     });
     result.plans.push(plan);
     specs.set(plan, targetSpec);
@@ -1680,6 +1742,14 @@ const runAssignment = async (
         if (encoded) Object.assign(send, encoded);
       }
     }
+    // `--field`: only these, for a difference settled one field at a time.
+    if (args.fields?.length) {
+      for (const name of Object.keys(send)) if (!args.fields.includes(name)) delete send[name];
+      if (!Object.keys(send).length) {
+        deps.out(`${plan.canvas_course_id}: nothing to send for ${args.fields.join(", ")}`);
+        continue;
+      }
+    }
     if (!willWrite(plan) && !Object.keys(send).length) {
       deps.out(`${plan.canvas_course_id}: already matches, nothing sent`);
       continue;
@@ -1703,7 +1773,13 @@ const runAssignment = async (
         `assignment ${newId} (${Object.keys(send).length} field(s))`,
     );
 
-    ledger.recordAssignment(plan.assessment_id, plan.canvas_course_id, newId, { ...planSpec }, at);
+    // What was sent is the baseline. With `--field` that is those fields; the
+    // rest keep what was last sent, or a conflict would read as settled.
+    const before = ledger.preparedAssignment(plan.assessment_id, plan.canvas_course_id)?.spec ?? {};
+    const sentSpec = args.fields?.length
+      ? { ...before, ...Object.fromEntries(args.fields.filter((name) => name in planSpec).map((name) => [name, (planSpec as any)[name]])) }
+      : { ...planSpec };
+    ledger.recordAssignment(plan.assessment_id, plan.canvas_course_id, newId, sentSpec, at);
     if (plan.operation === "create" && newId) {
       anyCreated = true;
       if (plan.group === null) created.set("", newId);
@@ -2117,6 +2193,8 @@ interface CheckCell {
   recorded: number;
   /** Values someone changed in Canvas: what Canvas holds, what this workspace decided. */
   edited: { student_id: string; in_canvas: number | null; here: number | null }[];
+  /** Where this assessment's marks and definition differ from Canvas, and which side moved. */
+  differences: Difference[];
   error: string | null;
 }
 
@@ -2147,14 +2225,63 @@ const runCheck = async (args: LmsArgs, bundle: CourseBundle, root: string, deps:
   const quiet: Deps = { ...deps, out: () => {} };
   const at = decidedAt(run?.timezone);
   const results: { assessment_id: string; title: string; groups: CheckCell[] }[] = [];
+  const pins = pinsOf(Ledger.load(args.run, args.syncDir));
+  const pinNotes: PinNotes = { kept: new Set(), agreed: new Set() };
+  const differences: Difference[] = [];
+  const targets = new Map(assignmentTargets(run, null));
+  // One client for the reads no grade context makes: definitions of assessments
+  // without marks, and the class lists. Opened on first use.
+  let shared: CanvasClient | null = null;
+  const client = (): CanvasClient => {
+    shared ??= new CanvasClient(
+      loadCanvasConfig(rosterDir(args.rosterDir), {
+        baseUrl: args.canvasUrl,
+        connection: args.connection,
+        connectionsPath: args.connections,
+      }),
+      deps.transport ?? new FetchTransport(),
+    );
+    return shared;
+  };
+  /** The definition half for one assessment in one course, only once one was sent from here. */
+  const definitionDifferences = (assessment: any, group: string | null, courseId: string | null, current: Record<string, any> | null) => {
+    if (!courseId || !current) return [];
+    const ledger = Ledger.load(args.run, args.syncDir);
+    if (!ledger.preparedAssignment(assessment.assessment_id, courseId)) return [];
+    const { plan } = definitionPlan(definitionSpec(bundle, run, assessment, root), {
+      run,
+      assessment,
+      group,
+      courseId,
+      linked: canvasAssignmentFor(assessment, group),
+      current,
+      ledger,
+    });
+    return assignmentDifferences({ plan, title: String(assessment.title ?? assessment.assessment_id), sent: true, pins, notes: pinNotes });
+  };
 
   for (const assessment of wanted) {
     const id = String(assessment.assessment_id);
     const marked = (gradeRows(bundle, args.run, { assessmentId: id }).get(id) ?? []).some((row) => row.score !== null);
-    if (!marked) continue;
+    const title = String(assessment.title ?? id);
+    if (!marked) {
+      // No marks to compare, but a definition sent from here can still have moved.
+      const ledger = Ledger.load(args.run, args.syncDir);
+      for (const group of groups) {
+        const courseId = targets.get(group) ?? null;
+        const linked = canvasAssignmentFor(assessment, group);
+        if (!courseId || !linked || !ledger.preparedAssignment(id, courseId)) continue;
+        try {
+          differences.push(...definitionDifferences(assessment, group, courseId, await client().assignment(courseId, linked)));
+        } catch {
+          // A definition that cannot be read is said by the push that needs it.
+        }
+      }
+      continue;
+    }
     const cells: CheckCell[] = [];
     for (const group of groups) {
-      const cell: CheckCell = { group, linked: true, ok: false, course: null, counts: {}, recorded: 0, edited: [], error: null };
+      const cell: CheckCell = { group, linked: true, ok: false, course: null, counts: {}, recorded: 0, edited: [], differences: [], error: null };
       if (!canvasAssignmentFor(assessment, group)) {
         cell.linked = false;
         cells.push(cell);
@@ -2166,23 +2293,90 @@ const runCheck = async (args: LmsArgs, bundle: CourseBundle, root: string, deps:
         const { plan, ledger } = makePlan(one, context);
         cell.course = context.courseId;
         cell.counts = counts(plan);
+        // The baseline as it stood before this check noted anything.
+        const prepared = ledger.prepared("canvas-api", id);
         const held = plan.rows.filter((row) => row.action === "unchanged" && row.last_prepared === null);
         if (held.length) {
           cell.recorded = ledger.record("canvas-api", id, held, { at, state: "applied" });
           ledger.save();
         }
         cell.edited = drift(plan).map((row) => ({ student_id: row.student_id, in_canvas: row.current, here: row.score }));
+        cell.differences = [
+          ...gradeDifferences({
+            assessmentId: id,
+            title,
+            group,
+            canvasCourse: context.courseId,
+            rows: plan.rows,
+            current: apiCurrentScores(context.submissions, context.userIds),
+            excused: apiExcused(context.submissions, context.userIds),
+            prepared,
+            pins,
+            notes: pinNotes,
+          }),
+          ...definitionDifferences(assessment, group, context.courseId, context.canvasAssignment),
+        ];
+        differences.push(...cell.differences);
         cell.ok = true;
       } catch (error) {
         cell.error = String((error as Error).message ?? error).trim();
       }
       cells.push(cell);
     }
-    results.push({ assessment_id: id, title: String(assessment.title ?? id), groups: cells });
+    results.push({ assessment_id: id, title, groups: cells });
   }
 
+  // The class list, from every Canvas course the run is taught in. Only for
+  // the whole run: a check of one assessment is not a check of who is enrolled.
+  const roster: { ok: boolean; error: string | null } = { ok: false, error: null };
+  if (!args.assessment && targets.size) {
+    try {
+      const sections = await readSections(client(), run, null);
+      const directory = deps.directory ?? Directory.open(args.rosterDir);
+      const enrollments = enrollmentsOf(bundle, args.run);
+      const matches = matchSections(sections, {
+        store: directory.store,
+        salt: directory.salt,
+        enrolled: new Set(
+          enrollments.filter((entry: any) => entry.status === "active" || entry.status === "dropped").map((entry: any) => entry.student_id),
+        ),
+      });
+      const active = new Map<string, string>(
+        enrollments
+          .filter((entry: any) => entry.status === "active" && ROSTER_ROLES.has(entry.role ?? "student"))
+          .map((entry: any) => [String(entry.student_id), String(entry.group ?? "")]),
+      );
+      differences.push(...rosterDifferences({ matches, enrolled: active, groups: sections.map((section) => section.group) }));
+      roster.ok = true;
+    } catch (error) {
+      roster.error = String((error as Error).message ?? error).trim();
+    }
+  }
+
+  // A pin whose two sides now agree has done its work.
+  if (pinNotes.agreed.size) {
+    const ledger = Ledger.load(args.run, args.syncDir);
+    for (const key of pinNotes.agreed) dropPin(ledger, key);
+    ledger.save();
+  }
+  const tally = tallyDifferences(differences);
+
   if (args.json) {
-    deps.out(JSON.stringify({ run: args.run, checked_at: new Date().toISOString(), assessments: results }, null, 2));
+    deps.out(
+      JSON.stringify(
+        {
+          run: args.run,
+          checked_at: new Date().toISOString(),
+          assessments: results,
+          roster,
+          differences,
+          tally,
+          kept: pinNotes.kept.size,
+        },
+        null,
+        2,
+      ),
+    );
     return 0;
   }
   for (const entry of results) {
@@ -2199,6 +2393,18 @@ const runCheck = async (args: LmsArgs, bundle: CourseBundle, root: string, deps:
         );
       }
     }
+  }
+  if (roster.error) deps.out(`class list: could not read Canvas — ${roster.error}`);
+  const kinds: [keyof typeof tally, string][] = [
+    ["grades", "marks"],
+    ["assignments", "definition fields"],
+    ["roster", "class list"],
+  ];
+  deps.out(`\n${differences.length} difference(s) with Canvas` + (pinNotes.kept.size ? `; ${pinNotes.kept.size} kept as Canvas has them` : ""));
+  for (const [kind, label] of kinds) {
+    const t = tally[kind];
+    if (!t.push && !t.pull && !t.conflict && !t.held) continue;
+    deps.out(`  ${label}: ${t.push} to Canvas, ${t.pull} from Canvas, ${t.conflict} conflict(s), ${t.held} held`);
   }
   deps.out("Nothing in Canvas was changed.");
   return 0;
@@ -2287,6 +2493,35 @@ const runSendReports = async (args: LmsArgs, bundle: CourseBundle, root: string,
   return 0;
 };
 
+/**
+ * `lms keep RUN --assessment A [--group G] (--student S | --field F) --ours X --canvas Y`
+ * — the professor's "keep Canvas" for one difference `lms check` reported.
+ *
+ * Nothing is sent and no record changes: the two values are pinned in the
+ * ledger as they stood, so the difference stops being one — no push takes
+ * Canvas's value away, no check reports it — until either side moves again.
+ * A mark kept this way still differs from the decision here; re-deciding it
+ * in the Grade view to match is the professor's, and the pin then falls away.
+ */
+const runKeep = (args: LmsArgs, bundle: CourseBundle, deps: Deps): number => {
+  const run = runOf(bundle, args.run);
+  if (!run) throw new Error(`unknown run '${args.run}'`);
+  if (!args.assessment) throw new Error("lms keep needs --assessment");
+  const student = args.students?.length === 1 ? args.students[0]! : null;
+  const field = args.fields?.length === 1 ? args.fields[0]! : null;
+  if (Boolean(student) === Boolean(field)) throw new Error("lms keep names one --student, or one --field");
+  if (args.ours === null || args.ours === undefined || args.theirs === null || args.theirs === undefined) {
+    throw new Error("lms keep needs --ours and --canvas: the two values as `lms check` showed them");
+  }
+  if (args.group && !isPerSubgroup(run)) throw new Error(`${args.run} is one Canvas course; drop --group`);
+  const key = student ? gradeKey(args.assessment, args.group, student) : fieldKey(args.assessment, args.group, field!);
+  const ledger = Ledger.load(args.run, args.syncDir);
+  keepCanvas(ledger, key, args.ours, args.theirs, decidedAt(run.timezone));
+  deps.out(`kept Canvas's ${args.theirs || "blank"} for ${student ?? field} (here: ${args.ours || "blank"}); noted in ${ledger.save()}`);
+  deps.out("Nothing was sent. It shows again if either side changes.");
+  return 0;
+};
+
 export const runLms = async (
   args: LmsArgs,
   bundle: CourseBundle,
@@ -2325,6 +2560,7 @@ export const runLms = async (
   // Opens a context per assessment and course itself.
   if (args.subcommand === "check") return runCheck(args, bundle, root, deps);
   if (args.subcommand === "send-reports") return runSendReports(args, bundle, root, deps);
+  if (args.subcommand === "keep") return runKeep(args, bundle, deps);
 
   const context = await openContext(args, bundle, root, deps);
   switch (args.subcommand) {

@@ -1523,7 +1523,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       const subcommand = rest[0];
       if (!subcommand || !rest[1]) {
         console.error(
-          "usage: lms {plan|push|diff|check|import-submissions|assignment-plan|" +
+          "usage: lms {plan|push|diff|check|keep|import-submissions|assignment-plan|" +
             "assignment-push|assignments|link|groups} RUN --assessment A [--target T]",
         );
         process.exit(1);
@@ -1573,6 +1573,9 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           students: (flag("student") ?? "").split(",").map((id) => id.trim()).filter(Boolean),
           again: args.includes("--again"),
           reportsDir: flag("dir") ?? null,
+          fields: flagList("field"),
+          ours: flag("ours") ?? null,
+          theirs: flag("canvas") ?? null,
         },
         forRun(rest[1]!),
         root,

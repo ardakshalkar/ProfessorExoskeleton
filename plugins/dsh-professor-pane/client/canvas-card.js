@@ -16,6 +16,9 @@
  * binder. The rules that make those safe — preview before send, the red button
  * only for what leaves the machine, drift needing its own press — come with
  * them unchanged.
+ *
+ * Above the rows, the run's differences with Canvas and Sync all
+ * (canvas-diff.js), read from the pane's running Canvas check.
  */
 
 import {
@@ -26,6 +29,7 @@ import {
   Secret,
   SubgroupCourses,
 } from "./integration-parts.js";
+import { CanvasDifferences } from "./canvas-diff.js";
 import { CanvasMarks } from "./marks.js";
 import { h, React } from "./react.js";
 import { when } from "./syncs.js";
@@ -1058,6 +1062,10 @@ export function CanvasCard(props) {
       h("span", { className: "pp-chip pp-chip-" + chip.tone }, chip.text),
     ),
     setup,
+    // How far this run and Canvas have drifted apart, and Sync all.
+    reachable
+      ? h(CanvasDifferences, { runId: props.runId, sessionId: props.sessionId, names: props.names, onWrite: props.onWrite })
+      : null,
     reachable && rosterSync
       ? h(CanvasRead, {
           sync: rosterSync,

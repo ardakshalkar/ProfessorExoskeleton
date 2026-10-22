@@ -70,7 +70,7 @@
             "runtimeExecutable": "cmd",
             "runtimeArgs": [
                 "/c",
-                "set AINAR_WORKSPACE=C:\\Users\\Ardak Shalkar\\OneDrive\\Documents\\AI Course 2026 v1&& node --experimental-strip-types plugins/dsh-professor-pane/test/integrations-page.mjs CSS-4007-2026-FALL --ready --waiting"
+                "set AINAR_WORKSPACE=C:\\Users\\Ardak Shalkar\\OneDrive\\Documents\\AI Course 2026 v1&& node --experimental-strip-types plugins/dsh-professor-pane/test/integrations-page.mjs CSS-4007-2026-FALL --ready --waiting --demo-diff"
             ],
             "port": 3094
         }

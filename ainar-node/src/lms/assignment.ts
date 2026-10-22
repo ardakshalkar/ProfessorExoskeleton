@@ -73,6 +73,12 @@ export interface FieldPlan {
   desired: string | null;
   current: string | null;
   reason: string | null;
+  /**
+   * Whether the workspace's value moved since it was last sent: null when it
+   * never was. With `drift` it splits "Canvas changed it" (false) from "both
+   * sides did" (true) — `canvas-diff.ts` reads it.
+   */
+  ours_changed?: boolean | null;
 }
 
 export interface AssignmentPlan {
@@ -394,6 +400,7 @@ export const planAssignment = ({
       desired: show(desired),
       current: show(currentValue),
       reason,
+      ours_changed: known ? !(preparedValue !== null && preparedValue !== undefined && same(desired, preparedValue)) : null,
     });
     if (action === "unchanged" || action === "drift") return;
     const encoded = encode(desired);

@@ -116,6 +116,12 @@ export function useCanvasWatch(runId, sessionId, runIds = []) {
   }, [runId, sessionId]);
 }
 
+/** An answer a press brought back with it (Sync all checks again when it is done). */
+export const noteCanvasCheck = (runId, answer, sessionId) => {
+  set(runId, { phase: "ready", value: answer });
+  wrote(sessionId, ["canvas"]);
+};
+
 /**
  * The run's last check, `{ phase, value }`, and a function that checks again
  * now. Starts a check itself if the pane is not watching this run.
