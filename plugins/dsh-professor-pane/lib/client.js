@@ -15240,6 +15240,31 @@ function ProfessorPane(props) {
         ).then(() => write(["defence"])).catch(() => write(["defence"]));
         return;
       }
+      if (data.kind === "curve") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run2 = currentRunRef.current;
+        if (!run2 || !id.test(String(data.assessment))) return;
+        const body2 = data.clear ? { clear: true } : {
+          anchor: Number(data.anchor),
+          exponent: Number(data.exponent),
+          exclude: Array.isArray(data.exclude) ? data.exclude.map(String) : [],
+          note: data.note ? String(data.note) : ""
+        };
+        fetch(
+          scoped(BASE + "/api/grade/curve?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) }
+        ).then((response) => response.json()).then((result) => {
+          if (!result.ok) {
+            window.alert(String(result.error || result.output || "the curve was not written").trim().split("\n").slice(-2).join(" "));
+          }
+          placedAt.current = Date.now();
+          write(["grading"]);
+        }).catch((error) => {
+          window.alert(String(error));
+          write(["grading"]);
+        });
+        return;
+      }
       if (data.kind === "defence-audio") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run2 = currentRunRef.current;
@@ -15372,7 +15397,8 @@ function ProfessorPane(props) {
       }
       if (data.kind === "aw-state") {
         const panel = typeof data.panel === "string" && /^[A-Z0-9][A-Z0-9-]*$/.test(data.panel) ? data.panel : null;
-        examWindow.current = panel ? { panel, scroll: Math.max(0, Number(data.scroll) || 0) } : null;
+        const tab = typeof data.tab === "string" && /^[a-z]+$/.test(data.tab) ? data.tab : null;
+        examWindow.current = panel ? { panel, scroll: Math.max(0, Number(data.scroll) || 0), tab } : null;
         return;
       }
       if (data.kind === "scans-queue-hello") {

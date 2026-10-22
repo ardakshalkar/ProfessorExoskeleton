@@ -106,6 +106,22 @@ test("the payload shows the curve, the curved summary, and the raw one beside it
   assert.equal(row.score, maximum);
 });
 
+test("a student the curve passes over keeps the total the criteria add up to", () => {
+  const passed = target.graded[0];
+  const rows = gradeRows(withCurve({ ...SQRT, exclude: [passed.student_id] }), RUN, { assessmentId: target.id }).get(target.id)!;
+  const theirs = rows.find((r) => r.student_id === passed.student_id)!;
+  assert.equal(theirs.score, passed.score);
+  assert.equal("raw_score" in theirs, false);
+  // Everyone else is still curved.
+  for (const before of target.graded.slice(1)) {
+    const row = rows.find((r) => r.student_id === before.student_id)!;
+    assert.equal(row.score, curved(before.score as number, SQRT, maximum));
+  }
+  assert.equal(Assessment.safeParse({ ...(sample.assessments as any[]).find((a) => a.assessment_id === target.id), curve: { ...SQRT, exclude: ["not-an-id"] } }).success, false);
+  assert.deepEqual(codes(withCurve({ ...SQRT, exclude: [passed.student_id] })).filter((c) => c.startsWith("grading.curve")), []);
+  assert.ok(codes(withCurve({ ...SQRT, exclude: ["STUDENT-NOBODY"] })).includes("grading.curve_exclude_unknown"));
+});
+
 test("a draft curve is shown but not applied", () => {
   const payload: any = gradebookPayload(withCurve({ ...SQRT, approval: "draft" }), RUN, { assessmentId: target.id });
   const entry = payload.assessments[0];

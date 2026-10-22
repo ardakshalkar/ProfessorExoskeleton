@@ -123,6 +123,10 @@ export const Rubric = entity({
  * `anchor` is a number, not "whoever scored highest", so a paper marked later
  * cannot move everyone else's grade. An exponent above 1, or an anchor above
  * the maximum, would lower someone's mark, and neither is a curve.
+ *
+ * `exclude` lists the students the curve passes over — a paper under an
+ * academic-integrity case, a retake marked on its own terms — whose total
+ * counts as marked. The reason is the professor's, in `note`.
  */
 export const ScoreCurve = entity({
   approval: Approval.optional(),
@@ -130,6 +134,7 @@ export const ScoreCurve = entity({
   /** The raw total that becomes full marks. */
   anchor: z.number().gt(0),
   exponent: z.number().gt(0).lte(1),
+  exclude: z.array(StudentId).nullish(),
   decided_by: UserId.nullish(),
   decided_at: awareDatetime().nullish(),
   note: z.string().nullish(),

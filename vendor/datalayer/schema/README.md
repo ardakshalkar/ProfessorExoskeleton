@@ -62,6 +62,10 @@ about an afternoon and has not been done.
   `exponent` above 1 would lower a mark and is refused. Inserted as text: the
   definition in sorted position, `curve` after `design`, in `assessment` and
   the bundle.
+- **2026-10-22 — students a curve passes over.** `ScoreCurve.exclude`, a list
+  of student ids whose total counts as marked — an integrity case, a retake
+  marked on its own terms — with the reason in `note`. Inserted as text after
+  `exponent`, in `assessment` and the bundle.
 
 ## Conventions
 

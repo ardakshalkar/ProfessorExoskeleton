@@ -182,6 +182,7 @@ import {
 } from "../src/recordings.ts";
 import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
+import { setCurve } from "../src/curve.ts";
 import {
   applyScans,
   assignPaper,
@@ -576,6 +577,13 @@ const HELP = `ainar — the AINAR course model CLI
   grade accept-rubric RUN --assessment A   the rubric's approval: draft -> approved
   grade points-only RUN --assessment A     no written rubric: one criterion per
                                            question, worth its marks
+
+  curve RUN --assessment A --anchor N [--exponent E] [--exclude S[,S]] [--note T] [--by USER-…]
+                                           stretch the totals: raw t becomes
+                                           max x (t / N) ^ E (E 1 = straight,
+                                           0.5 = square root); --exclude passes
+                                           students over; signed, in force
+  curve RUN --assessment A --clear         take the curve off
 
   import-paper RUN --assessment A --paper PAPER.md [--paper PAPER-B.md]
                [--key KEY.md] [--title T] [--type exam] [--dry-run]
@@ -2453,6 +2461,48 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         out(`${assessmentId}: one criterion per question, worth its marks — mark each answer by points`);
         break;
       }
+      break;
+    }
+
+    case "curve": {
+      // The professor's curve on one assessment's totals: src/curve.ts. Run
+      // because the professor said so — typed, or pressed in the pane.
+      const runId = rest[0];
+      const assessmentId = flag("assessment");
+      const clear = args.includes("--clear");
+      if (!runId || !assessmentId || (!clear && !flag("anchor"))) {
+        console.error(
+          "usage: curve RUN --assessment A --anchor N [--exponent E] [--exclude S[,S]] [--note T] [--by USER-…]\n" +
+            "       curve RUN --assessment A --clear",
+        );
+        process.exit(2);
+      }
+      const bundle = forRun(runId);
+      const run = runById(bundle).get(runId) as { timezone?: string; instructors?: string[] };
+      const number = (name: string, fallback?: number) => {
+        const given = flag(name);
+        const value = given === undefined ? fallback : Number(given);
+        if (value === undefined || !Number.isFinite(value)) throw new Error(`--${name} takes a number`);
+        return value;
+      };
+      const settings = clear
+        ? null
+        : {
+            anchor: number("anchor"),
+            exponent: number("exponent", 1),
+            exclude: (flag("exclude") ?? "").split(",").map((id) => id.trim()).filter(Boolean),
+            note: flag("note") ?? null,
+            by: flag("by") ?? run?.instructors?.[0] ?? "",
+            at: decidedAt(run?.timezone),
+          };
+      const written = setCurve({ root, bundle, runId, assessmentId, settings });
+      for (const path of written) out(`wrote ${relative(root, path)}`);
+      out(
+        !settings
+          ? written.length ? `${assessmentId}: curve taken off` : `${assessmentId}: had no curve`
+          : `${assessmentId}: curved, anchor ${settings.anchor}, exponent ${settings.exponent}` +
+              (settings.exclude.length ? `, passing over ${settings.exclude.length}` : ""),
+      );
       break;
     }
 

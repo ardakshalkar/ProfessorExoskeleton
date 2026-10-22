@@ -81,6 +81,32 @@ export const routes = [
           return send(res, 404, "text/plain; charset=utf-8", String(error?.message ?? error));
         }
       }
+      // The professor's curve on the totals, or taking it off: `ainar curve`.
+      if (path === "/api/grade/curve") {
+        if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+        loadedRun(workspace, runId);
+        return readBody(req, 64 * 1024)
+          .then((text) => {
+            const body = text ? JSON.parse(text) : {};
+            const args = ["curve", runId, "--assessment", assessmentId];
+            if (body.clear === true) {
+              args.push("--clear");
+            } else {
+              const anchor = Number(body.anchor);
+              const exponent = Number(body.exponent);
+              if (!Number.isFinite(anchor) || anchor <= 0 || anchor > 100000) throw new Error("The anchor is a raw total above 0.");
+              if (!Number.isFinite(exponent) || exponent <= 0 || exponent > 1) throw new Error("The exponent is above 0 and at most 1.");
+              args.push("--anchor", String(anchor), "--exponent", String(exponent));
+              const exclude = (Array.isArray(body.exclude) ? body.exclude : []).map(String);
+              if (exclude.some((id) => !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(id))) throw new Error("Not a pseudonym.");
+              if (exclude.length) args.push("--exclude", exclude.join(","));
+              const note = String(body.note ?? "").trim().slice(0, 500);
+              if (note) args.push("--note", note);
+            }
+            return runScans(args, root, 120000).then((result) => sendJson(res, 200, result));
+          })
+          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+      }
       const WRITES = ["/api/grade/decide", "/api/grade/move", "/api/grade/choose", "/api/grade/accept-rubric", "/api/grade/points-only"];
       if (WRITES.includes(path)) {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });

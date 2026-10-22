@@ -10,7 +10,7 @@
  * A suggested mark is counted as waiting, never averaged in: it is not a grade.
  */
 
-import { escapeText } from "./markdown.js";
+import { escapeAttribute, escapeText } from "./markdown.js";
 
 const round = (value) => String(Math.round(value * 10) / 10);
 
@@ -163,6 +163,10 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
     percents: { ...describe(percents), under_half: percents.filter((value) => value < 50).length },
     bins,
     binned,
+    // The curve on the record, and each graded total before it — what the
+    // Curve tab previews a new curve against.
+    curve: assessment.curve ?? null,
+    raws: graded.map((cell) => ({ student: cell.student, raw: cell.entry.raw_score ?? cell.entry.score })),
     groups,
     questions,
     lowest,
@@ -231,7 +235,7 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
         .map(
           (n, i) =>
             '<span class="awc" title="' +
-            escapeText(
+            escapeAttribute(
               (i * 10) + "–" + (i === 9 ? 100 : i * 10 + 9) + "%: " + n +
                 (s.binned?.[i] ?? []).map((who) => "\n" + nameOf(who.student) + " — " + round(who.score)).join(""),
             ) +
@@ -494,9 +498,69 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
       })()
     : "";
 
+  /*
+   * The curve: set on this assessment only, never by itself, and applied by
+   * the gradebook to each total after totalling (`ainar curve`). The preview
+   * is the same formula over the raw totals, redrawn as the numbers change;
+   * the students ticked are passed over and keep their marked total.
+   */
+  const curveTab = (() => {
+    if (!s.raws?.length || s.maximum === null) return "";
+    const max = Number(s.maximum);
+    const cv = s.curve;
+    const inForce = cv && cv.approval !== "draft";
+    const passed = new Set(cv?.exclude ?? []);
+    const topRaw = Math.max(...s.raws.map((r) => r.raw));
+    const anchor = cv ? cv.anchor : Math.min(max, topRaw);
+    const exponent = cv ? cv.exponent : 1;
+    const status = !cv
+      ? '<p class="dim">No curve: every total counts as marked.</p>'
+      : '<p class="awcvnow' + (inForce ? " on" : "") + '"><b>' + (inForce ? "Curved" : "A draft curve, not applied") + "</b> " +
+        '<span class="dim">anchor ' + escapeText(round(cv.anchor)) + " · exponent " + escapeText(round(cv.exponent)) +
+        (passed.size ? " · passing over " + passed.size : "") +
+        (cv.decided_at ? " · set " + escapeText(when(cv.decided_at)) : "") +
+        (cv.note ? " · “" + escapeText(cv.note) + "”" : "") + "</span></p>";
+    const everyone = [...new Set([...s.raws.map((r) => r.student), ...passed])]
+      .map((student) => ({ student, name: nameOf(student), raw: s.raws.find((r) => r.student === student)?.raw ?? null }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const preset = (value, label) =>
+      '<button type="button" class="chip" data-cv-exp="' + value + '">' + escapeText(label) + "</button>";
+    return (
+      "<h3>Curve</h3>" + status +
+      '<div class="awcv" data-cv="' + escapeText(s.id) + '" data-max="' + max + '" data-raws="' +
+      escapeAttribute(JSON.stringify(s.raws.map((r) => [r.student, r.raw]))) + '">' +
+      '<div class="awcvf"><label>Anchor <input type="number" data-cv-anchor min="0.01" max="' + max + '" step="0.5" value="' + escapeText(round(anchor)) + '">' +
+      '<span class="dim">the raw total that becomes ' + escapeText(round(max)) + " · highest marked " + escapeText(round(topRaw)) + "</span></label>" +
+      '<label>Exponent <input type="number" data-cv-exponent min="0.05" max="1" step="0.05" value="' + escapeText(round(exponent)) + '">' +
+      '<span class="awcvp">' + preset(1, "1 · straight") + preset(0.75, "0.75") + preset(0.5, "0.5 · square root") + "</span></label>" +
+      '<p class="dim awnote">Each raw total t becomes ' + escapeText(round(max)) + " × (t ÷ anchor)^exponent, never above " + escapeText(round(max)) +
+      ". Under 1 the low marks rise most. The marks on each question are never changed; taking the curve off puts every total back.</p></div>" +
+      '<div class="awcvpre" aria-live="polite"></div>' +
+      '<details class="awcvx"' + (passed.size ? " open" : "") + '><summary>Pass over students <span class="dim" data-cv-count>' +
+      (passed.size ? passed.size + " passed over" : "none") + "</span></summary>" +
+      '<p class="dim awnote">A ticked student keeps the total they were marked — an integrity case, a retake marked on its own terms. Say why in the note.</p>' +
+      '<input type="search" class="awcvq" placeholder="Find a student" aria-label="Find a student">' +
+      '<div class="awcvl">' +
+      everyone
+        .map(
+          (p) =>
+            '<label data-cv-who="' + escapeText(p.name.toLowerCase()) + '"><input type="checkbox" data-cv-ex="' + escapeText(p.student) + '"' +
+            (passed.has(p.student) ? " checked" : "") + "> " + escapeText(p.name) +
+            ' <span class="dim">' + (p.raw === null ? "not graded" : escapeText(round(p.raw))) + "</span></label>",
+        )
+        .join("") +
+      "</div></details>" +
+      '<label class="awcvn">Note <input type="text" data-cv-note maxlength="500" placeholder="Why this curve, and why anyone is passed over" value="' +
+      escapeAttribute(cv?.note ?? "") + '"></label>' +
+      '<p class="awgo"><button type="button" class="chip act" data-cv-apply>' + (cv ? "Apply the changed curve" : "Apply curve") + "</button> " +
+      (cv ? '<button type="button" class="chip" data-cv-clear>Take the curve off</button>' : "") + "</p></div>"
+    );
+  })();
+
   // One tab per part, so each is a press away rather than a scroll down.
   const tabs = [
     ["overview", "Overview", results + groups],
+    ["curve", "Curve" + (s.curve && s.curve.approval !== "draft" ? " · on" : ""), curveTab],
     ["questions", "Questions" + (s.questions.length ? " (" + s.questions.length + ")" : ""), questions],
     ["scans", "Scans", scans],
     ["people", "Students" + (s.missing.length ? " · " + s.missing.length + " missing" : ""), people],
@@ -599,6 +663,23 @@ export const assessmentWindowStyle =
   ".awhp{border:1px solid var(--line);border-radius:6px;padding:6px 9px;margin:0 0 6px}.awhp .awp{margin:4px 0 0}" +
   ".awcrop{display:block;max-width:100%;max-height:90px;margin:0 0 4px;border-radius:3px;background:#fff}" +
   "[data-aw-place][disabled]{opacity:.6}" +
+  ".awcvnow{margin:0 0 8px}.awcvnow.on b{color:var(--info)}" +
+  ".awcvf{display:flex;flex-direction:column;gap:8px;margin:4px 0 6px}" +
+  ".awcvf label,.awcvn{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12px;font-weight:600}" +
+  ".awcvf label .dim{font-weight:400}.awcvf input{width:80px;font:inherit;font-size:13px}" +
+  ".awcvp{display:inline-flex;gap:4px;font-weight:400}" +
+  ".awcvn{margin:10px 0 0}.awcvn input{flex:1;min-width:200px;font:inherit;font-size:13px}" +
+  ".awcvpre{margin:8px 0;padding:8px 10px;border-radius:6px;background:var(--infobg);font-size:12px}" +
+  ".awcvpre b{font-variant-numeric:tabular-nums}" +
+  ".awcvh{display:flex;align-items:flex-end;gap:3px;height:70px;margin:6px 0 2px;border-bottom:1px solid var(--line)}" +
+  ".awcvh span{flex:1;display:flex;align-items:flex-end;height:100%;gap:1px}" +
+  ".awcvh i{flex:1;display:block;border-radius:2px 2px 0 0;background:var(--dim);opacity:.35}.awcvh i+i{background:var(--info);opacity:.75}" +
+  ".awcvk{display:flex;gap:12px;font-size:11px}.awcvk i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;background:var(--dim);opacity:.35}" +
+  ".awcvk i.after{background:var(--info);opacity:.75}" +
+  ".awcvx{border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin:8px 0 0}.awcvx summary{cursor:pointer;font-size:12px;font-weight:600}" +
+  ".awcvq{margin:6px 0;font:inherit;font-size:12px;width:200px}" +
+  ".awcvl{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 12px;max-height:260px;overflow:auto;font-size:12px}" +
+  ".awcvl label{display:flex;gap:6px;align-items:center;cursor:pointer}.awcvl label[hidden]{display:none}.awcvl .dim{margin-left:auto}" +
   ".awstate{font-size:11px;align-self:center}";
 
 /*
@@ -622,9 +703,45 @@ export const assessmentWindowScript =
   "var up=parent!==window;function say(m){if(up){m.source='professor-pane';parent.postMessage(m,'*');}}" +
   "function shut(){if(dlg.open)dlg.close();}" +
   "function shownId(){var p=dlg.querySelector('[data-aw-panel]:not([hidden])');return dlg.open&&p?p.getAttribute('data-aw-panel'):null;}" +
-  "function report(){var id=shownId(),b=id&&dlg.querySelector('[data-aw-panel=\"'+id+'\"] .awbody');say({kind:'aw-state',panel:id,scroll:b?b.scrollTop:0});}" +
-  "function show(id,top){[].slice.call(dlg.querySelectorAll('[data-aw-panel]')).forEach(function(p){p.hidden=p.getAttribute('data-aw-panel')!==id;});" +
-  "if(!dlg.open)dlg.showModal();var b=dlg.querySelector('[data-aw-panel=\"'+id+'\"] .awbody');if(b)b.scrollTop=top||0;report();}" +
+  "function report(){var id=shownId(),pn=id&&dlg.querySelector('[data-aw-panel=\"'+id+'\"]'),b=pn&&pn.querySelector('.awbody')," +
+  "tb=pn&&pn.querySelector('[data-aw-tab][aria-selected=true]');say({kind:'aw-state',panel:id,scroll:b?b.scrollTop:0,tab:tb?tb.getAttribute('data-aw-tab'):null});}" +
+  "function tabTo(pn,k){var tb=pn.querySelector('[data-aw-tab=\"'+k+'\"]');if(!tb)return;" +
+  "[].slice.call(pn.querySelectorAll('[data-aw-tab]')).forEach(function(x){x.setAttribute('aria-selected',String(x===tb));});" +
+  "[].slice.call(pn.querySelectorAll('[data-aw-sec]')).forEach(function(x){x.hidden=x.getAttribute('data-aw-sec')!==k;});}" +
+  "function show(id,top,tab){[].slice.call(dlg.querySelectorAll('[data-aw-panel]')).forEach(function(p){p.hidden=p.getAttribute('data-aw-panel')!==id;});" +
+  "var pn=dlg.querySelector('[data-aw-panel=\"'+id+'\"]');if(pn&&tab)tabTo(pn,tab);" +
+  "if(!dlg.open)dlg.showModal();var b=pn&&pn.querySelector('.awbody');if(b)b.scrollTop=top||0;report();}" +
+  // The Curve tab's preview: the gradebook's formula over the raw totals,
+  // with the students ticked left as marked. A preview only — `ainar curve`
+  // writes the curve and the gradebook applies it.
+  "function r2(x){return Math.round(x*100)/100;}" +
+  "function mid(v){var s=v.slice().sort(function(a,b){return a-b;}),n=s.length;return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2;}" +
+  "function avg(v){return v.reduce(function(a,b){return a+b;},0)/v.length;}" +
+  "function cvDraw(box){var max=Number(box.getAttribute('data-max')),raws=JSON.parse(box.getAttribute('data-raws'))," +
+  "a=Number(box.querySelector('[data-cv-anchor]').value),e=Number(box.querySelector('[data-cv-exponent]').value),ex={}," +
+  "out=box.querySelector('.awcvpre'),ap=box.querySelector('[data-cv-apply]');" +
+  "[].slice.call(box.querySelectorAll('[data-cv-ex]:checked')).forEach(function(c){ex[c.getAttribute('data-cv-ex')]=1;});" +
+  "var n=Object.keys(ex).length,ct=box.querySelector('[data-cv-count]');if(ct)ct.textContent=n?n+' passed over':'none';" +
+  "if(!(a>0&&a<=max&&e>0&&e<=1)){out.textContent='The anchor is above 0 and at most '+max+'; the exponent above 0 and at most 1.';if(ap)ap.disabled=true;return;}" +
+  "if(ap)ap.disabled=false;" +
+  "var be=raws.map(function(r){return r[1];}),af=raws.map(function(r){return ex[r[0]]?r[1]:r2(Math.min(max,max*Math.pow(Math.max(0,r[1])/a,e)));});" +
+  "var up=0;be.forEach(function(x,i){up=Math.max(up,af[i]-x);});" +
+  "function cnt(v,f){return v.filter(f).length;}function full(x){return x>=max;}function low(x){return x<max/2;}" +
+  "function pair(l,x,y){return l+' <b>'+x+' → '+y+'</b>';}" +
+  "var bins=[0,0,0,0,0,0,0,0,0,0].map(function(){return [0,0];});" +
+  "be.forEach(function(x,i){bins[Math.min(9,Math.floor(10*x/max))][0]++;bins[Math.min(9,Math.floor(10*af[i]/max))][1]++;});" +
+  "var top=Math.max.apply(null,bins.map(function(b){return Math.max(b[0],b[1]);}).concat([1]));" +
+  "out.innerHTML=[pair('Mean',r2(avg(be)),r2(avg(af))),pair('median',r2(mid(be)),r2(mid(af))),pair('lowest',r2(Math.min.apply(null,be)),r2(Math.min.apply(null,af)))," +
+  "pair('under half',cnt(be,low),cnt(af,low)),pair('full marks',cnt(be,full),cnt(af,full)),'raised by at most <b>'+r2(up)+'</b>'].join(' · ')+" +
+  "'<div class=\"awcvh\">'+bins.map(function(b,i){return '<span title=\"'+(i*10)+'–'+(i===9?100:i*10+9)+'%: '+b[0]+' before, '+b[1]+' after\">'+" +
+  "'<i style=\"height:'+(100*b[0]/top)+'%\"></i><i style=\"height:'+(100*b[1]/top)+'%\"></i></span>';}).join('')+'</div>'+" +
+  "'<div class=\"awcvk dim\"><span><i></i>as marked</span><span><i class=\"after\"></i>with this curve</span></div>';}" +
+  "[].slice.call(dlg.querySelectorAll('.awcv')).forEach(cvDraw);" +
+  "dlg.addEventListener('input',function(e){var t=e.target,box=t.closest&&t.closest('.awcv');if(!box)return;" +
+  "if(t.classList.contains('awcvq')){var w=t.value.trim().toLowerCase();" +
+  "[].slice.call(box.querySelectorAll('[data-cv-who]')).forEach(function(l){l.hidden=!!w&&l.getAttribute('data-cv-who').indexOf(w)<0;});return;}" +
+  "cvDraw(box);});" +
+  "dlg.addEventListener('change',function(e){var box=e.target.closest&&e.target.closest('.awcv');if(box)cvDraw(box);});" +
   "dlg.addEventListener('close',report);" +
   "[].slice.call(dlg.querySelectorAll('.awbody')).forEach(function(b){b.addEventListener('scroll',report);});" +
   "function note(p,s){[].slice.call(p.querySelectorAll('[data-aw-place]')).forEach(function(x){x.disabled=!!s;});" +
@@ -633,15 +750,22 @@ export const assessmentWindowScript =
   "[].slice.call(dlg.querySelectorAll('.awhp')).forEach(function(p){var b=p.querySelector('[data-aw-place]');if(!b)return;" +
   "note(p,on[b.getAttribute('data-aw-place')+'|'+b.getAttribute('data-file')+'|'+b.getAttribute('data-pages')]||'');});}" +
   "window.addEventListener('message',function(e){var d=e.data;if(!d||d.source!=='professor-pane'||d.kind!=='scans-queue')return;" +
-  "mark(d);if(d.restore&&d.restore.panel&&dlg.querySelector('[data-aw-panel=\"'+d.restore.panel+'\"]'))show(d.restore.panel,d.restore.scroll);});" +
+  "mark(d);if(d.restore&&d.restore.panel&&dlg.querySelector('[data-aw-panel=\"'+d.restore.panel+'\"]'))show(d.restore.panel,d.restore.scroll,d.restore.tab);});" +
   "say({kind:'scans-queue-hello'});" +
   "document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;" +
   "var h=t.closest('[data-aw]');if(h){show(h.getAttribute('data-aw'),0);return;}" +
   // A tab shows its section; a question shows what it opens into.
-  "var tb=t.closest('[data-aw-tab]');if(tb){var pn=tb.closest('[data-aw-panel]'),k=tb.getAttribute('data-aw-tab');" +
-  "[].slice.call(pn.querySelectorAll('[data-aw-tab]')).forEach(function(x){x.setAttribute('aria-selected',String(x===tb));});" +
-  "[].slice.call(pn.querySelectorAll('[data-aw-sec]')).forEach(function(x){x.hidden=x.getAttribute('data-aw-sec')!==k;});" +
+  "var tb=t.closest('[data-aw-tab]');if(tb){var pn=tb.closest('[data-aw-panel]');tabTo(pn,tb.getAttribute('data-aw-tab'));" +
   "pn.querySelector('.awbody').scrollTop=0;report();return;}" +
+  // The curve's presses: an exponent preset, Apply, Take it off.
+  "var cx=t.closest('[data-cv-exp]');if(cx){var bx=cx.closest('.awcv');bx.querySelector('[data-cv-exponent]').value=cx.getAttribute('data-cv-exp');cvDraw(bx);return;}" +
+  "var ca=t.closest('[data-cv-apply],[data-cv-clear]');if(ca){if(ca.disabled||!up)return;var bx=ca.closest('.awcv');" +
+  "[].slice.call(bx.querySelectorAll('[data-cv-apply],[data-cv-clear]')).forEach(function(x){x.disabled=true;});" +
+  "ca.textContent=ca.hasAttribute('data-cv-clear')?'Taking it off…':'Applying…';" +
+  "say(ca.hasAttribute('data-cv-clear')?{kind:'curve',assessment:bx.getAttribute('data-cv'),clear:true}:{kind:'curve',assessment:bx.getAttribute('data-cv')," +
+  "anchor:Number(bx.querySelector('[data-cv-anchor]').value),exponent:Number(bx.querySelector('[data-cv-exponent]').value)," +
+  "exclude:[].slice.call(bx.querySelectorAll('[data-cv-ex]:checked')).map(function(c){return c.getAttribute('data-cv-ex');})," +
+  "note:bx.querySelector('[data-cv-note]').value.trim()});return;}" +
   "var lb=t.closest('[data-aw-lv]');if(lb){var qd=lb.closest('[data-aw-qd]'),v=lb.getAttribute('data-aw-lv');" +
   "[].slice.call(qd.querySelectorAll('[data-aw-lv]')).forEach(function(x){x.setAttribute('aria-pressed',String(x===lb));});" +
   "[].slice.call(qd.querySelectorAll('.awlv')).forEach(function(x){x.hidden=v!=='all'&&x.getAttribute('data-lv')!==v;" +

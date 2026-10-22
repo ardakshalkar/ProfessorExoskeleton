@@ -3421,6 +3421,23 @@
           "title": "Exponent",
           "type": "number"
         },
+        "exclude": {
+          "anyOf": [
+            {
+              "items": {
+                "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Students the curve passes over; their total counts as marked.",
+          "title": "Exclude"
+        },
         "decided_by": {
           "anyOf": [
             {

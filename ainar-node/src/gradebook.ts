@@ -299,7 +299,7 @@ export const gradeRows = (
 
       if (usable.length) {
         row.score = roundHalfEven(usable.reduce((sum, c) => sum + (c.score as number), 0), 2);
-        if (curve) {
+        if (curve && !(curve.exclude ?? []).includes(studentId)) {
           row.raw_score = row.score;
           row.score = curved(row.score, curve, row.maximum);
         }

@@ -182,6 +182,7 @@ export const TOTAL_CODES = 94;
 export const ADDED = [
   "grading.component_sum",
   "grading.curve_caps",
+  "grading.curve_exclude_unknown",
   "grading.curve_unsigned",
   "grading.cycle",
   "grading.duplicate_component",
@@ -586,6 +587,16 @@ const curveIssues = (b: CourseBundle, runId: string, assessments: any[], issues:
       issues.warn(
         "grading.curve_caps",
         `${above.length} raw total(s) above the curve's anchor ${curve.anchor} (highest ${top}) all become full marks`,
+        assessment.assessment_id,
+      );
+    }
+    // A student passed over who is not in the run: a typo, or someone who left.
+    const enrolled = new Set(rows.map((row) => row.student_id));
+    const strangers = (curve.exclude ?? []).filter((id: string) => !enrolled.has(id));
+    if (strangers.length) {
+      issues.warn(
+        "grading.curve_exclude_unknown",
+        `the curve passes over ${strangers.join(", ")}, not enrolled in the run`,
         assessment.assessment_id,
       );
     }

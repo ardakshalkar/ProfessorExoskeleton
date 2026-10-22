@@ -323,6 +323,39 @@ export function ProfessorPane(props) {
           .catch(() => write(["defence"]));
         return;
       }
+      // *Apply curve* / *Take the curve off* in the exam window: the server
+      // runs `ainar curve`. The redraw closes the window, so it is reopened
+      // as a placement's is; a refusal is said here, the frame has no place.
+      if (data.kind === "curve") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run = currentRunRef.current;
+        if (!run || !id.test(String(data.assessment))) return;
+        const body = data.clear
+          ? { clear: true }
+          : {
+              anchor: Number(data.anchor),
+              exponent: Number(data.exponent),
+              exclude: Array.isArray(data.exclude) ? data.exclude.map(String) : [],
+              note: data.note ? String(data.note) : "",
+            };
+        fetch(
+          scoped(BASE + "/api/grade/curve?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+        )
+          .then((response) => response.json())
+          .then((result) => {
+            if (!result.ok) {
+              window.alert(String(result.error || result.output || "the curve was not written").trim().split("\n").slice(-2).join(" "));
+            }
+            placedAt.current = Date.now();
+            write(["grading"]);
+          })
+          .catch((error) => {
+            window.alert(String(error));
+            write(["grading"]);
+          });
+        return;
+      }
       // A fork the student brought in person (`defence fork`). A link the
       // command refuses comes back as its own words, since the frame that
       // asked has no place to show them.
@@ -502,7 +535,8 @@ export function ProfessorPane(props) {
       // placements are going through, so the professor keeps pressing.
       if (data.kind === "aw-state") {
         const panel = typeof data.panel === "string" && /^[A-Z0-9][A-Z0-9-]*$/.test(data.panel) ? data.panel : null;
-        examWindow.current = panel ? { panel: panel, scroll: Math.max(0, Number(data.scroll) || 0) } : null;
+        const tab = typeof data.tab === "string" && /^[a-z]+$/.test(data.tab) ? data.tab : null;
+        examWindow.current = panel ? { panel: panel, scroll: Math.max(0, Number(data.scroll) || 0), tab: tab } : null;
         return;
       }
       if (data.kind === "scans-queue-hello") {
