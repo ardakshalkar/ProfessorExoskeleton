@@ -262,13 +262,47 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
 
   // Questions: the list on the left, and what the one pressed opens into on
   // the right — how it is marked, then every answer under the mark it got.
-  const qbar = (q) =>
-    '<span class="awq"><span class="' + (q.percent !== null && q.percent < 50 ? "low" : "") + '" style="width:' + (q.percent ?? 0) + '%"></span></span>';
+  // How the answers spread over the marks, lowest at the left: one segment
+  // per mark, as wide as the answers given it, stronger the higher it is.
+  // Blank answers are their own grey segment, apart from a written zero.
+  const qbar = (q) => {
+    const marked = q.answers.filter((answer) => answer.score !== null);
+    if (!marked.length) return '<span class="awdist"></span>';
+    const counts = new Map();
+    for (const answer of marked) {
+      const key = answer.blank ? "blank" : String(answer.score);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const keys = [...counts.keys()].sort((a, b) => (a === "blank" ? -1 : b === "blank" ? 1 : Number(a) - Number(b)));
+    const label = keys.map((key) => (key === "blank" ? "blank" : round(Number(key))) + ": " + counts.get(key)).join(" · ");
+    return (
+      '<span class="awdist" role="img" aria-label="' + escapeText(label) + '">' +
+      keys
+        .map((key) => {
+          const n = counts.get(key);
+          const share = (100 * n) / marked.length;
+          const title = (key === "blank" ? "Nothing written" : round(Number(key)) + " / " + round(q.maximum)) + ": " + n + " answer" + (n === 1 ? "" : "s");
+          if (key === "blank") return '<span class="blank" style="width:' + share + '%" title="' + escapeText(title) + '"></span>';
+          const fraction = q.maximum ? Number(key) / q.maximum : 0;
+          return (
+            '<span class="' + (fraction < 0.5 ? "low" : "") + '" style="width:' + share + "%;opacity:" + (0.35 + 0.65 * fraction).toFixed(2) +
+            '" title="' + escapeText(title) + '"></span>'
+          );
+        })
+        .join("") +
+      "</span>"
+    );
+  };
   const qmean = (q) => (q.mean === null ? "—" : round(q.mean) + " / " + round(q.maximum));
   const markText = (value) => (value === null ? "—" : round(value));
-  const answerCard = (answer) =>
+  // A mark as a circle filled as far as it is of the full marks, then the number.
+  const pie = (value, maximum) =>
+    '<span class="awpie" style="--f:' + (value === null || !maximum ? 0 : Math.max(0, Math.min(100, (100 * value) / maximum))).toFixed(1) +
+    '%" aria-hidden="true"></span>';
+  const mark = (value, maximum) => '<span class="awmark">' + pie(value, maximum) + markText(value) + "</span>";
+  const answerCard = (q) => (answer) =>
     '<div class="awans' + (answer.decided ? "" : " sug") + '">' +
-    '<div class="awansh"><span class="awmark">' + markText(answer.score) + "</span>" +
+    '<div class="awansh">' + mark(answer.score, q.maximum) +
     go(answer.student) +
     (answer.variant ? '<span class="dim">variant ' + escapeText(answer.variant) + "</span>" : "") +
     (answer.decided ? "" : '<span class="dim">suggested, not decided</span>') +
@@ -293,6 +327,22 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
     const under = (score) => q.answers.filter((answer) => answer.score === score && !answer.blank);
     const elsewhere = q.answers.filter((answer) => !answer.blank && !placed.has(answer.score));
     const blanks = q.answers.filter((answer) => answer.blank);
+    const card = answerCard(q);
+    // The groups as a row of chips above them: press one to see only it.
+    const groups = [
+      ...q.levels.filter((level) => under(level.score).length).map((level) => [String(level.score), mark(level.score, q.maximum), under(level.score).length, level.description]),
+      ...(elsewhere.length ? [["other", '<span class="awmark">·</span>', elsewhere.length, "Off the rubric's levels, or no mark yet"]] : []),
+      ...(blanks.length ? [["blank", '<span class="awmark">' + pie(0, 1) + "—</span>", blanks.length, "Nothing written"]] : []),
+    ];
+    const selector = groups.length > 1
+      ? '<div class="awlvsel" role="group" aria-label="Show one mark">' +
+        '<button type="button" data-aw-lv="all" aria-pressed="true">All <span class="dim">' + q.answers.length + "</span></button>" +
+        groups
+          .map(([key, badge, n, title]) => '<button type="button" data-aw-lv="' + key + '" aria-pressed="false" title="' + escapeText(title) + '">' + badge +
+            ' <span class="dim">' + n + "</span></button>")
+          .join("") +
+        "</div>"
+      : "";
     return (
       '<div class="awqd" data-aw-qd="' + index + '"' + (index === 0 ? "" : " hidden") + ">" +
       "<h3>" + escapeText(q.title) + ' <span class="dim">· mean ' + qmean(q) + " · " + q.decided + " decided" +
@@ -308,34 +358,36 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
             "</details>",
         )
         .join("") +
+      selector +
       (q.levels.length
         ? q.levels
             .map((level) => {
               const here = under(level.score);
               return (
-                '<div class="awlv"><div class="awlvh"><span class="awmark">' + markText(level.score) + "</span>" +
+                '<div class="awlv" data-lv="' + level.score + '"><div class="awlvh">' + mark(level.score, q.maximum) +
                 "<span>" + escapeText(level.description) + '</span><span class="dim">' + here.length + "</span></div>" +
-                here.map(answerCard).join("") + "</div>"
+                here.map(card).join("") + "</div>"
               );
             })
             .join("")
         : "") +
       (elsewhere.length
-        ? '<div class="awlv"><div class="awlvh"><span class="awmark">·</span><span>' +
+        ? '<div class="awlv" data-lv="other"><div class="awlvh"><span class="awmark">·</span><span>' +
           (q.levels.length ? "Off the rubric's levels, or no mark yet" : "The answers") +
           '</span><span class="dim">' + elsewhere.length + "</span></div>" +
-          elsewhere.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map(answerCard).join("") + "</div>"
+          elsewhere.sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).map(card).join("") + "</div>"
         : "") +
       (blanks.length
-        ? '<details class="awlv"><summary class="awlvh"><span class="awmark">0</span><span>Nothing written</span><span class="dim">' +
-          blanks.length + "</span></summary>" + blanks.map(answerCard).join("") + "</details>"
+        ? '<details class="awlv" data-lv="blank"><summary class="awlvh"><span class="awmark">' + pie(0, 1) + "—</span><span>Nothing written</span><span class=\"dim\">" +
+          blanks.length + "</span></summary>" + blanks.map(card).join("") + "</details>"
         : "") +
       (!q.answers.length ? '<p class="dim">No answer to this question is graded or suggested yet.</p>' : "") +
       "</div>"
     );
   };
   const questions = s.questions.length
-    ? '<p class="dim awnote">Means from decided marks only; a suggestion is counted as waiting. Press a question for its answers and how each was marked.</p>' +
+    ? '<p class="dim awnote">Means from decided marks only; a suggestion is counted as waiting. Each strip is how the answers spread over the marks, ' +
+      "zero at the left, grey for nothing written — hover a segment for its count. Press a question for its answers and how each was marked.</p>" +
       '<div class="awqs"><div class="awql">' +
       s.questions
         .map(
@@ -476,17 +528,29 @@ export const assessmentWindowStyle =
   ".awqi{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;text-align:left;font:inherit;font-size:12px;" +
   "background:none;border:1px solid transparent;border-radius:6px;padding:6px 8px;color:var(--fg);cursor:pointer}" +
   ".awqi:hover{background:var(--line)}.awqi.on{border-color:var(--info);background:var(--infobg)}" +
-  ".awqi .awq{grid-column:1/-1;width:100%}.awqw{grid-column:1/-1;font-size:10.5px}" +
+  ".awqw{grid-column:1/-1;font-size:10.5px}" +
+  ".awdist{grid-column:1/-1;display:flex;gap:1px;height:9px;border-radius:3px;overflow:hidden;background:var(--line)}" +
+  ".awdist span{display:block;height:100%;min-width:2px;background:var(--info)}.awdist span.low{background:var(--warn)}" +
+  ".awdist span.blank{background:var(--dim);opacity:.25}" +
   ".awqd[hidden]{display:none}.awqd h3{margin-top:10px}" +
   ".awvar{border:1px solid var(--line);border-radius:6px;padding:4px 10px;margin:0 0 6px;font-size:12px}" +
   ".awvar summary{cursor:pointer;font-weight:600}" +
   ".awpr{white-space:pre-wrap;margin:6px 0}.awkey{margin:4px 0;color:var(--dim)}.awkey b{color:var(--fg)}" +
   ".awlv{margin:12px 0 0}.awlvh{display:flex;gap:8px;align-items:baseline;font-size:12px;padding:4px 0;border-bottom:1px solid var(--line)}" +
   "summary.awlvh{cursor:pointer}.awlvh .dim{margin-left:auto}" +
-  ".awmark{display:inline-block;min-width:30px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums;" +
-  "border-radius:4px;padding:1px 4px;background:var(--infobg)}" +
+  ".awmark{display:inline-flex;align-items:center;gap:5px;min-width:30px;font-weight:700;font-variant-numeric:tabular-nums;" +
+  "border-radius:4px;padding:1px 6px 1px 4px;background:var(--infobg)}" +
+  ".awpie{display:inline-block;flex:none;width:13px;height:13px;border-radius:50%;box-sizing:border-box;border:1.5px solid var(--info);" +
+  "background:conic-gradient(var(--info) var(--f),transparent 0)}" +
   ".awans{border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin:6px 0 0;font-size:12px}" +
   ".awans.sug .awmark{background:none;border:1px dashed var(--line)}" +
+  ".awlvsel{display:flex;flex-wrap:wrap;gap:4px;margin:10px 0 2px;position:sticky;top:0;z-index:1;padding:6px 0;background:var(--dwbg)}" +
+  ".awlvsel button{display:inline-flex;align-items:center;gap:3px;font:inherit;font-size:12px;cursor:pointer;color:var(--fg);" +
+  "background:none;border:1px solid var(--line);border-radius:14px;padding:2px 8px 2px 3px}" +
+  ".awlvsel button .awmark{background:none;padding:0 2px}" +
+  ".awlvsel button[data-aw-lv=all]{padding-left:9px}" +
+  ".awlvsel button[aria-pressed=true]{border-color:var(--info);background:var(--infobg)}" +
+  ".awlv[hidden]{display:none}" +
   ".awansh{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px}" +
   ".awanst{white-space:pre-wrap;line-height:1.45}" +
   ".awwhy{margin-top:4px;padding-left:8px;border-left:2px solid var(--info);color:var(--dim)}" +
@@ -565,6 +629,10 @@ export const assessmentWindowScript =
   "[].slice.call(pn.querySelectorAll('[data-aw-tab]')).forEach(function(x){x.setAttribute('aria-selected',String(x===tb));});" +
   "[].slice.call(pn.querySelectorAll('[data-aw-sec]')).forEach(function(x){x.hidden=x.getAttribute('data-aw-sec')!==k;});" +
   "pn.querySelector('.awbody').scrollTop=0;report();return;}" +
+  "var lb=t.closest('[data-aw-lv]');if(lb){var qd=lb.closest('[data-aw-qd]'),v=lb.getAttribute('data-aw-lv');" +
+  "[].slice.call(qd.querySelectorAll('[data-aw-lv]')).forEach(function(x){x.setAttribute('aria-pressed',String(x===lb));});" +
+  "[].slice.call(qd.querySelectorAll('.awlv')).forEach(function(x){x.hidden=v!=='all'&&x.getAttribute('data-lv')!==v;" +
+  "if(v==='blank'&&x.tagName==='DETAILS')x.open=true;});return;}" +
   "var qb=t.closest('[data-aw-q]');if(qb){var sc=qb.closest('section'),i=qb.getAttribute('data-aw-q');" +
   "[].slice.call(sc.querySelectorAll('[data-aw-q]')).forEach(function(x){x.classList.toggle('on',x===qb);});" +
   "[].slice.call(sc.querySelectorAll('[data-aw-qd]')).forEach(function(x){x.hidden=x.getAttribute('data-aw-qd')!==i;});" +
