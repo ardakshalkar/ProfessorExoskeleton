@@ -119,7 +119,12 @@ export class Directory {
 /** A row that will be written. */
 export const WRITES = new Set(["new", "change"]);
 
-export type Action = "new" | "change" | "unchanged" | "drift" | "skip" | "unmatched";
+/**
+ * `excuse` is Canvas's EX, sent for a mark an upheld integrity case voided.
+ * It carries no score, so it is not in `WRITES` and the ledger never records
+ * it; the next plan reads it back from Canvas as excused, and calls it unchanged.
+ */
+export type Action = "new" | "change" | "unchanged" | "drift" | "skip" | "unmatched" | "excuse";
 
 /** One student's cell in one target, and what should happen to it. */
 export interface PlanRow {

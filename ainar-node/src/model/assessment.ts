@@ -39,6 +39,10 @@ import {
   SubmissionStatus,
   DefenceOutcome,
   DefenceCheck,
+  IntegrityCaseId,
+  IntegrityOutcome,
+  IntegrityState,
+  SignalId,
   UserId,
   Weight,
   CognitiveLevel,
@@ -297,4 +301,40 @@ export const Evaluation = entity({
   ai_suggestion: AiSuggestion.nullish(),
   professor_decision: ProfessorDecision.nullish(),
   status: EvaluationStatus.default("suggested"),
+});
+
+/**
+ * An academic-integrity case: one student, the assessments it concerns.
+ *
+ * Opened and decided by the professor alone — nothing in this package opens
+ * one, and a similarity check may at most raise a draft signal the case can
+ * name. While it is `open` the gradebook holds the student's mark on those
+ * assessments; `cleared` lets it count as marked; `upheld` applies `outcome`.
+ *
+ * `note` is the professor's private account. Nothing student-facing reads a
+ * case: not the course page, not a Canvas comment. Evidence that names people
+ * (the papers side by side, notes from the meeting) stays outside the
+ * repository, under `~/.ainar/integrity/`.
+ */
+export const IntegrityCase = entity({
+  case_id: IntegrityCaseId,
+  course_version_id: CourseVersionId,
+  student_id: StudentId,
+  assessments: z.array(AssessmentId).min(1),
+  submissions: z.array(SubmissionId).default([]),
+  state: IntegrityState.default("open"),
+  outcome: IntegrityOutcome.nullish(),
+  signal_id: SignalId.nullish(),
+  opened_by: UserId.nullish(),
+  opened_at: awareDatetime().nullish(),
+  decided_by: UserId.nullish(),
+  decided_at: awareDatetime().nullish(),
+  note: z.string().nullish(),
+}).superRefine((value, ctx) => {
+  if (value.state === "upheld" && !value.outcome) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${value.case_id}: an upheld case says its outcome` });
+  }
+  if (value.state !== "upheld" && value.outcome) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `${value.case_id}: only an upheld case has an outcome, not one ${value.state}` });
+  }
 });

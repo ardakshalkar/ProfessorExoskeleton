@@ -356,6 +356,41 @@ export function ProfessorPane(props) {
           });
         return;
       }
+      // An integrity case: *Open a case* on a hand-in, or *Clear* / *Uphold* /
+      // *Reopen* in the exam window's Integrity tab. The server runs `ainar
+      // integrity`; the redraw shows the case, and a refusal is said here.
+      if (data.kind === "integrity") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run = currentRunRef.current;
+        if (!run || !id.test(String(data.assessment))) return;
+        const body =
+          data.action === "open"
+            ? { action: "open", student: String(data.student), note: data.note ? String(data.note) : "" }
+            : {
+                action: "decide",
+                case: String(data.case),
+                state: String(data.state),
+                ...(data.outcome ? { outcome: String(data.outcome) } : {}),
+                note: data.note ? String(data.note) : "",
+              };
+        fetch(
+          scoped(BASE + "/api/grade/integrity?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+        )
+          .then((response) => response.json())
+          .then((result) => {
+            if (!result.ok) {
+              window.alert(String(result.error || result.output || "the case was not written").trim().split("\n").slice(-2).join(" "));
+            }
+            placedAt.current = Date.now();
+            write(["grading"]);
+          })
+          .catch((error) => {
+            window.alert(String(error));
+            write(["grading"]);
+          });
+        return;
+      }
       // Exam reports from the exam window. *Make* runs `report exam` (about a
       // minute). *Send* asks for the plan, shows it, and only on the
       // professor's OK sends with --confirm — each student then sees theirs

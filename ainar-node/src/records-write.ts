@@ -53,6 +53,7 @@ export const RECORD_FILES: Record<string, string | ((record: Record_, context: P
   capability_states: "records/capability-states.yaml",
   signals: "records/signals.yaml",
   interventions: "records/interventions.yaml",
+  integrity_cases: "records/integrity.yaml",
   events: "records/events.yaml",
   action_items: "records/action-items.yaml",
 };

@@ -158,6 +158,11 @@ export const studentsDocument = (
 
   const number = (value) => String(Math.round(value * 10) / 10);
 
+  // The run's integrity cases (src/integrity.ts). Pseudonyms only; the note is
+  // the professor's and is folded away wherever it is drawn — this pane is projected.
+  const runCases = (bundle.integrity_cases ?? []).filter((entry) => entry.course_version_id === runId);
+  const hasCases = runCases.length > 0;
+
   /** One student's state on every weighted assessment, and the gradebook's bounds. */
   const standingOf = (studentId) => {
     const cells = new Map();
@@ -167,7 +172,11 @@ export const studentsDocument = (
       const entry = rowFor.get(assessment.assessment_id + "|" + studentId);
       const due = assessment.due_at ? Date.parse(assessment.due_at) : NaN;
       let state;
-      if (entry && entry.status === "graded" && entry.score !== null && entry.maximum) {
+      // An integrity case holds the mark, or voids it: the gradebook's word,
+      // drawn as its own state so it is never read as missing or waiting.
+      if (entry && (entry.status === "held" || entry.status === "voided")) {
+        state = entry.status;
+      } else if (entry && entry.status === "graded" && entry.score !== null && entry.maximum) {
         state = "graded";
       } else {
         if (entry && entry.submission_id) {
@@ -191,9 +200,17 @@ export const studentsDocument = (
   const tipOf = (assessment, { state, entry, due }) => {
     const title = assessment.title ?? assessment.assessment_id;
     const when = Number.isFinite(due) ? " · due " + stamp(assessment.due_at) : " · no due date";
+    const caseSaid = entry?.integrity
+      ? " · integrity case " + entry.integrity.case_id + " " + entry.integrity.state.replace("_", " ") +
+        (entry.integrity.outcome ? ", " + entry.integrity.outcome.replace("_", " ") : "")
+      : "";
     const said =
-      state === "graded"
-        ? number(entry.score) + " of " + number(entry.maximum)
+      state === "held"
+        ? "mark held — an integrity case is open"
+        : state === "voided"
+          ? "voided by an integrity case — out of the total"
+          : state === "graded"
+        ? number(entry.score) + " of " + number(entry.maximum) + caseSaid
         : state === "in"
           ? "handed in, not graded yet"
           : state === "missing"
@@ -245,7 +262,12 @@ export const studentsDocument = (
               // The mark itself, small, where there is one; the state's sign
               // where there is not. A cell not yet due stays a bare slot.
               const text =
-                at.state === "graded" ? number(at.entry.score) : { in: "✓", missing: "✗", unrecorded: "?" }[at.state] ?? "";
+                at.state === "graded"
+                  ? number(at.entry.score)
+                  : { in: "✓", missing: "✗", unrecorded: "?", held: "⚑", voided: "EX" }[at.state] ?? "";
+              // A mark an upheld case decided (zero, no penalty) keeps its
+              // number, with the flag in the corner.
+              const flagged = at.state === "graded" && at.entry?.integrity && at.entry.integrity.state !== "cleared";
               // A mark fills its cell from the bottom as far as it is of the
               // full marks, warm under half: good and bad read down a column.
               const share =
@@ -253,7 +275,7 @@ export const studentsDocument = (
                   ? Math.max(0, Math.min(100, (100 * Number(at.entry.score)) / Number(at.entry.maximum)))
                   : null;
               return (
-                '<span class="m ' + at.state + (share !== null && share < 50 ? " lo" : "") + '"' +
+                '<span class="m ' + at.state + (share !== null && share < 50 ? " lo" : "") + (flagged ? " ic" : "") + '"' +
                 (share !== null ? ' style="--f:' + share.toFixed(0) + '%"' : "") +
                 ' title="' + escapeText(tipOf(a, at)) + '"' + opens(studentId, a) + ">" +
                 escapeText(text) + "</span>"
@@ -1003,6 +1025,50 @@ export const studentsDocument = (
     '<p class="dim">New marks arrive as suggestions; the current ones stay until you accept the new ones in Grade.</p></div></details>';
 
   /*
+   * An academic-integrity case on this hand-in: each case's state, the note
+   * folded, and — when none is open — *Open a case*, which holds the mark
+   * until it is decided in the exam window's Integrity tab. Nothing here is
+   * sent to the student.
+   */
+  const caseState = (entry) => {
+    const state = entry.state ?? "open";
+    if (state === "open") return "open — the mark is held";
+    if (state === "cleared") return "cleared — the mark counts";
+    return (
+      "upheld — " +
+      ({ no_penalty: "no penalty", adjusted: "mark adjusted", zero: "the mark is 0", voided: "voided, out of the total" }[entry.outcome] ??
+        String(entry.outcome))
+    );
+  };
+  const integrityPart = (submission) => {
+    const mine = runCases.filter(
+      (entry) => entry.student_id === submission.student_id && (entry.assessments ?? []).includes(submission.assessment_id),
+    );
+    const open = mine.some((entry) => (entry.state ?? "open") === "open");
+    const opener = open
+      ? ""
+      : '<details class="dc integrity"><summary>Open an integrity case</summary>' +
+        '<div class="rgb"><textarea data-ic-note rows="3" maxlength="2000" ' +
+        'placeholder="What you saw — private, never sent to the student"></textarea>' +
+        '<button type="button" class="chip act" data-ic-open="' + escapeText(submission.assessment_id) +
+        '" data-student="' + escapeText(submission.student_id) + '">Open a case</button>' +
+        '<p class="dim">The mark is held, and kept off the curve, until you decide the case in the exam window’s Integrity tab.</p></div></details>';
+    if (!mine.length) return opener;
+    return part(
+      "Integrity",
+      mine
+        .map(
+          (entry) =>
+            '<div class="icl' + ((entry.state ?? "open") === "open" ? " on" : "") + '"><b>' + escapeText(entry.case_id) + "</b> " +
+            escapeText(caseState(entry)) +
+            (entry.note ? ' <details class="icn"><summary>note</summary>' + escapeText(String(entry.note)) + "</details>" : "") +
+            "</div>",
+        )
+        .join("") + opener,
+    );
+  };
+
+  /*
    * A paper exam's hand-in: what was read off the paper and the paper itself,
    * as two tabs — Answers first, Scans one press away. The pages are the
    * Grade view's own route, so the first page is drawn from below the name
@@ -1068,6 +1134,7 @@ export const studentsDocument = (
       (facts.length ? '<p class="dim">' + escapeText(facts.join(" · ")) + "</p>" : "") +
       (submission.note ? '<p class="dim">' + escapeText(String(submission.note)) + "</p>" : "") +
       reportLine(submission) +
+      integrityPart(submission) +
       (responses.length || scanPages ? regradeBlock(submission) : "") +
       defencePart(submission) +
       part(
@@ -1425,6 +1492,7 @@ export const studentsDocument = (
         items: (bundle.items ?? []).filter((entry) => entry.assessment_id === a.assessment_id),
         responses: (bundle.item_responses ?? []).filter((entry) => subs.has(entry.submission_id)),
         submissions: handed,
+        cases: runCases.filter((entry) => (entry.assessments ?? []).includes(a.assessment_id)),
       }),
       {
         nameOf: (id) => (people && typeof people[id]?.name === "string" && people[id].name.trim() ? people[id].name.trim() : id),
@@ -1605,7 +1673,9 @@ export const studentsDocument = (
 
   const legend = weighted.length
     ? '<p class="legend dim"><span class="m graded"></span>graded <span class="m in"></span>handed in ' +
-      '<span class="m missing"></span>missing <span class="m unrecorded"></span>not imported <span class="m ahead"></span>not due · ' +
+      '<span class="m missing"></span>missing <span class="m unrecorded"></span>not imported <span class="m ahead"></span>not due' +
+      (hasCases ? ' <span class="m held"></span>held by an integrity case' : "") +
+      " · " +
       "press a row for the student, a cell for that hand-in · ↑ ↓ next student, ← → next assessment</p>"
     : "";
 
@@ -1966,6 +2036,14 @@ export const studentsDocument = (
     ".m.missing{background:var(--warnbg);border-color:var(--warn);color:var(--warn);font-weight:600}" +
     ".m.unrecorded{color:var(--dim)}" +
     ".m.unrecorded{border-style:dotted;border-color:var(--dim)}" +
+    // Integrity: held is the professor's to decide, so it is loud; voided is
+    // settled and out of the total, so it is quiet.
+    ".m.held{background:var(--warnbg);border:1px solid var(--warn);color:var(--warn);font-weight:700}" +
+    ".m.voided{border-style:dashed;border-color:var(--dim);color:var(--dim);font-size:8px}" +
+    ".m.ic{position:relative}.m.ic::after{content:'';position:absolute;top:0;right:0;border-style:solid;" +
+    "border-width:0 6px 6px 0;border-color:transparent var(--warn) transparent transparent}" +
+    ".icl{margin:0 0 4px;font-size:12px}.icl.on b{color:var(--warn)}" +
+    ".icn{display:inline-block;margin-left:6px;font-size:11px;color:var(--dim)}.icn summary{cursor:pointer}" +
     ".legend{font-size:11px;margin:8px 0 16px}.legend .m{margin:0 3px 0 8px}.legend .m:first-child{margin-left:0}" +
     ".detail>p{margin:0 0 4px}" +
     "section.tbl{margin-top:18px}" +
@@ -2013,6 +2091,11 @@ export const studentsDocument = (
     "if(c){if(c.disabled)return;var o=c.getAttribute('data-check'),x=c.closest('.crit').querySelector('input.dcs'),v=o==='partly'&&x&&x.value!==''?Number(x.value):null;" +
     "c.disabled=true;parent.postMessage({source:'professor-pane',kind:'defence-check',outcome:o,score:v," +
     "criterion:c.getAttribute('data-criterion'),assessment:c.getAttribute('data-assessment'),student:c.getAttribute('data-student')},'*');return;}" +
+    // Open an integrity case, with the note typed above the press.
+    "var ic=e.target.closest&&e.target.closest('button[data-ic-open]');" +
+    "if(ic){if(ic.disabled)return;var icn=ic.parentNode.querySelector('textarea[data-ic-note]');ic.disabled=true;ic.textContent='Opening…';" +
+    "parent.postMessage({source:'professor-pane',kind:'integrity',action:'open',assessment:ic.getAttribute('data-ic-open')," +
+    "student:ic.getAttribute('data-student'),note:icn?icn.value.trim():''},'*');return;}" +
     "var m=e.target.closest&&e.target.closest('button[data-defended]');" +
     "if(m){if(m.disabled)return;m.disabled=true;" +
     "parent.postMessage({source:'professor-pane',kind:'defended',outcome:m.getAttribute('data-defended')," +

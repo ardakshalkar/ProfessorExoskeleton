@@ -1,6 +1,6 @@
 /** PostgreSQL-backed CourseStore over the canonical CourseBundle read model. */
 
-import { COLLECTION_NAMES, COLLECTION_SCHEMAS, type CourseBundle } from "../bundle.ts";
+import { COLLECTION_NAMES, COLLECTION_SCHEMAS, OMIT_WHEN_EMPTY, type CourseBundle } from "../bundle.ts";
 import { IssueList } from "../issues.ts";
 import type { LoadResult } from "../loader.ts";
 import { Course } from "../model/academic.ts";
@@ -122,7 +122,9 @@ const parsePayload = (row: BundleRow): LoadResult => {
 
   const data: Record<string, unknown[]> = {};
   for (const name of COLLECTION_NAMES) {
-    const collection = envelope[name];
+    // A collection newer than the payload format (`OMIT_WHEN_EMPTY` in
+    // bundle.ts) is left out when empty, and absent reads as empty.
+    const collection = envelope[name] ?? (OMIT_WHEN_EMPTY.has(name) ? [] : undefined);
     if (!Array.isArray(collection)) {
       issues.error("postgres.bundle_collection", `${name} is not an array`, row.course_code);
       data[name] = [];

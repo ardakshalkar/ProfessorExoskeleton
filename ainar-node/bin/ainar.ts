@@ -183,6 +183,7 @@ import {
 import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
 import { setCurve } from "../src/curve.ts";
+import { casesOf, decideCase, describeCase, integrityDir, openCase } from "../src/integrity.ts";
 import { examReport, reportPlace, reportsDir, writeExamReports } from "../src/exam-report.ts";
 import {
   applyScans,
@@ -585,6 +586,18 @@ const HELP = `ainar — the AINAR course model CLI
                                            0.5 = square root); --exclude passes
                                            students over; signed, in force
   curve RUN --assessment A --clear         take the curve off
+
+  integrity open RUN --student S --assessment A[,A] [--note T] [--signal SIGNAL-…] [--by USER-…]
+                                           open an academic-integrity case: the
+                                           mark is held, off the curve, until
+                                           it is decided; private, never sent
+  integrity decide RUN --case INTEGRITY-… --state cleared|upheld|open
+                   [--outcome no_penalty|adjusted|zero|voided] [--note T] [--by USER-…]
+                                           clear it, uphold it (zero makes the
+                                           mark 0, voided takes it out of the
+                                           total and excuses it in Canvas), or
+                                           reopen it
+  integrity list RUN [--json]              every case of the run, and its effect
 
   report exam RUN --assessment A [--student S[,S]] [--dir DIR] [--no-names]
                                            exam reports as PDFs, outside the
@@ -2556,6 +2569,79 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           : `${assessmentId}: curved, anchor ${settings.anchor}, exponent ${settings.exponent}` +
               (settings.exclude.length ? `, passing over ${settings.exclude.length}` : ""),
       );
+      break;
+    }
+
+    case "integrity": {
+      // Academic-integrity cases: src/integrity.ts. Run because the professor
+      // said so — typed, or pressed in the pane. Nothing here reaches a student.
+      const sub = rest[0];
+      const runId = rest[1];
+      const usage =
+        "usage: integrity open RUN --student S --assessment A[,A] [--note T] [--signal SIGNAL-…] [--by USER-…]\n" +
+        "       integrity decide RUN --case INTEGRITY-… --state cleared|upheld|open [--outcome no_penalty|adjusted|zero|voided] [--note T] [--by USER-…]\n" +
+        "       integrity list RUN [--json]";
+      if (!["open", "decide", "list"].includes(sub ?? "") || !runId) {
+        console.error(usage);
+        process.exit(2);
+      }
+      const bundle = forRun(runId);
+      const run = runById(bundle).get(runId) as { timezone?: string; instructors?: string[] };
+      const by = flag("by") ?? run?.instructors?.[0] ?? "";
+      const note = flag("note");
+      if (sub === "list") {
+        const cases = casesOf(bundle, runId);
+        if (args.includes("--json")) {
+          out(JSON.stringify(cases, null, 2));
+        } else if (!cases.length) {
+          out(`${runId}: no integrity cases`);
+        } else {
+          for (const entry of cases) out(describeCase(entry));
+        }
+        break;
+      }
+      if (sub === "open") {
+        const studentId = flag("student");
+        const assessmentIds = (flag("assessment") ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+        if (!studentId || !assessmentIds.length) {
+          console.error(usage);
+          process.exit(2);
+        }
+        const opened = openCase({
+          root,
+          bundle,
+          runId,
+          studentId,
+          assessmentIds,
+          note: note ?? null,
+          signalId: flag("signal") ?? null,
+          by,
+          at: decidedAt(run?.timezone),
+        });
+        for (const path of opened.written) out(`wrote ${relative(root, path)}`);
+        out(`${opened.caseId} opened on ${studentId}, ${assessmentIds.join(", ")}: the mark is held until it is decided`);
+        out(`Evidence that names anyone belongs in ${integrityDir(runId)}, not in the course.`);
+        break;
+      }
+      const caseId = flag("case");
+      const state = flag("state") as any;
+      if (!caseId || !state) {
+        console.error(usage);
+        process.exit(2);
+      }
+      const decided = decideCase({
+        root,
+        bundle,
+        runId,
+        caseId,
+        state,
+        outcome: (flag("outcome") as any) ?? null,
+        ...(note !== undefined ? { note } : {}),
+        by,
+        at: decidedAt(run?.timezone),
+      });
+      for (const path of decided.written) out(`wrote ${relative(root, path)}`);
+      out(describeCase(decided.record));
       break;
     }
 

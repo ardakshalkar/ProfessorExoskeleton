@@ -50,6 +50,7 @@ export const EvaluationId = id("EVAL-[A-Z0-9][A-Z0-9-]*");
 export const EvidenceId = id("EVID-[A-Z0-9][A-Z0-9-]*");
 export const SignalId = id("SIGNAL-[A-Z0-9][A-Z0-9-]*");
 export const InterventionId = id("INT-[A-Z0-9][A-Z0-9-]*");
+export const IntegrityCaseId = id("INTEGRITY-[A-Z0-9][A-Z0-9-]*");
 export const ActionId = id("ACTION-[A-Z0-9][A-Z0-9-]*");
 export const EventId = id("EVENT-[A-Z0-9][A-Z0-9-]*");
 /**
@@ -152,6 +153,14 @@ export const DefenceOutcome = z.enum(["defended", "not_defended"]);
 /** The professor's check of one rubric criterion at the defence. */
 export const DefenceCheck = z.enum(["confirmed", "partly", "not_confirmed"]);
 export const EvaluationStatus = z.enum(["suggested", "in_review", "approved", "overridden"]);
+/** Where an academic-integrity case stands. Only the professor moves it. */
+export const IntegrityState = z.enum(["open", "cleared", "upheld"]);
+/**
+ * What an upheld case does to the mark: `no_penalty` and `adjusted` leave the
+ * total as decided (an adjustment is made in the decisions themselves), `zero`
+ * makes it 0, `voided` takes the assessment out of the student's total.
+ */
+export const IntegrityOutcome = z.enum(["no_penalty", "adjusted", "zero", "voided"]);
 /**
  * Whether a person stands behind a record an agent wrote.
  *

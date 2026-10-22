@@ -15,6 +15,14 @@
  *    totalling, with the raw total kept beside it as `raw_score`.
  * 4. Only the professor's words travel. Row comments come from
  *    `professor_decision.comment` alone.
+ *
+ * One more decision is read after totalling: an academic-integrity case on the
+ * student's work (`src/integrity.ts`). Open, it holds the row (`held`, not
+ * exportable, counted as outstanding); upheld, `zero` makes the score 0 and
+ * `voided` takes the assessment out of the student's total. Any case not
+ * cleared keeps the student off the curve. A row a case touches says so in
+ * `integrity`, and loses its comment — the case is never a student's to read
+ * through a feedback field.
  */
 
 import {
@@ -26,6 +34,7 @@ import {
   type CourseBundle,
 } from "./bundle.ts";
 import { roundHalfEven } from "./grading.ts";
+import { caseIndex } from "./integrity.ts";
 import { lmsScale, rescales } from "./lms-scale.ts";
 
 export const GRADEBOOK_VERSION = "gradebook/2026.08.1";
@@ -58,7 +67,36 @@ export interface GradeRow {
   criteria: CriterionScore[];
   comment: string | null;
   blocked: string[];
+  /** The integrity case deciding this mark, when there is one. */
+  integrity?: { case_id: string; state: string; outcome: string | null };
 }
+
+/**
+ * What a case does to a totalled row. Cleared, nothing. The reason is never
+ * written into the row: `blocked` names the case by id, for the professor.
+ */
+const settle = (row: GradeRow, integrity: any | null): GradeRow => {
+  if (!integrity) return row;
+  const state = integrity.state ?? "open";
+  row.integrity = { case_id: integrity.case_id, state, outcome: integrity.outcome ?? null };
+  if (state === "cleared") return row;
+  row.comment = null;
+  if (state === "open") {
+    row.status = "held";
+    row.blocked.push(`integrity case ${integrity.case_id} is open — the mark is held until it is decided`);
+  } else if (integrity.outcome === "zero") {
+    row.status = "graded";
+    row.score = 0;
+    delete row.raw_score;
+    row.blocked = [];
+  } else if (integrity.outcome === "voided") {
+    row.status = "voided";
+    row.score = null;
+    delete row.raw_score;
+    row.blocked = [`voided by integrity case ${integrity.case_id}`];
+  }
+  return row;
+};
 
 /** Python's `%g`: shortest representation, no trailing zeros. */
 export const g = (value: number): string => String(Number(value.toPrecision(6)));
@@ -191,6 +229,7 @@ const rowAsDict = (row: GradeRow): Record<string, unknown> => ({
   exportable: exportable(row),
   blocked: [...row.blocked],
   criteria: row.criteria.map((c) => ({ ...c })),
+  ...(row.integrity ? { integrity: { ...row.integrity } } : {}),
 });
 
 export const gradeRows = (
@@ -222,6 +261,7 @@ export const gradeRows = (
     table.set(response.item_id, response);
     responsesBySubmission.set(response.submission_id, table);
   }
+  const cases = caseIndex(b, courseVersionId);
 
   const out = new Map<string, GradeRow[]>();
   for (const assessment of assessments) {
@@ -257,18 +297,21 @@ export const gradeRows = (
         comment: null,
         blocked: [...structural],
       };
+      const integrity = cases.get(`${studentId}|${assessment.assessment_id}`) ?? null;
+      // A case not cleared takes the paper off the curve: it counts as marked.
+      const offCurve = (curve?.exclude ?? []).includes(studentId) || (integrity !== null && integrity.state !== "cleared");
 
       const submission = latestSubmission(submissionsByStudent.get(studentId) ?? []);
       if (!submission) {
         row.blocked.push("no submission");
-        rows.push(row);
+        rows.push(settle(row, integrity));
         continue;
       }
 
       row.submission_id = submission.submission_id;
       if (!criteria.length) {
         row.status = "no_rubric";
-        rows.push(row);
+        rows.push(settle(row, integrity));
         continue;
       }
 
@@ -299,14 +342,14 @@ export const gradeRows = (
 
       if (usable.length) {
         row.score = roundHalfEven(usable.reduce((sum, c) => sum + (c.score as number), 0), 2);
-        if (curve && !(curve.exclude ?? []).includes(studentId)) {
+        if (curve && !offCurve) {
           row.raw_score = row.score;
           row.score = curved(row.score, curve, row.maximum);
         }
       }
       const comments = row.criteria.filter((c) => c.comment).map((c) => `${c.title}: ${c.comment}`);
       row.comment = comments.length ? comments.join("\n") : null;
-      rows.push(row);
+      rows.push(settle(row, integrity));
     }
 
     out.set(assessment.assessment_id, rows);
@@ -334,6 +377,8 @@ const distribution = (rows: GradeRow[]): Record<string, unknown> => {
   const graded = rows.filter((row) => row.status === "graded" && row.score !== null);
   const scores = graded.map((row) => row.score as number);
   const curvedRows = graded.some((row) => row.raw_score !== undefined);
+  const held = rows.filter((row) => row.status === "held").length;
+  const voided = rows.filter((row) => row.status === "voided").length;
 
   return {
     enrolled: rows.length,
@@ -346,6 +391,9 @@ const distribution = (rows: GradeRow[]): Record<string, unknown> => {
     ...shape(scores),
     // The same papers before the curve, so its effect is never out of sight.
     ...(curvedRows ? { raw: shape(graded.map((row) => (row.raw_score ?? row.score) as number)) } : {}),
+    // Only when a case touches the assessment, so a course without one reads as it did.
+    ...(held ? { held } : {}),
+    ...(voided ? { voided } : {}),
   };
 };
 
@@ -395,6 +443,9 @@ const totals = (
         perStudent.set(row.student_id, entry);
       }
       const within = chain(assessment.component);
+      // Voided by an integrity case: out of this student's total altogether,
+      // neither counted nor waited for.
+      if (row.status === "voided") continue;
       if (row.status === "graded" && row.score !== null && row.maximum) {
         const earned = (row.score / row.maximum) * assessment.weight;
         entry.earned_weighted += earned;
@@ -528,6 +579,14 @@ export const gradebookPayload = (
     notes.push(
       `${curvedIds.join(", ")} ${curvedIds.length === 1 ? "is" : "are"} curved: a row's \`score\` is the ` +
         "curved total and the one every total and export uses; `raw_score` is what the criteria add up to.",
+    );
+  }
+  const touched = payloadAssessments.flatMap((a) => a.rows).filter((row: any) => row.integrity);
+  if (touched.length) {
+    notes.push(
+      `${touched.length} mark(s) are decided by an integrity case (a row's \`integrity\`): an open case holds ` +
+        "the mark, upheld `zero` makes it 0, upheld `voided` takes the assessment out of that student's total, " +
+        "and any case not cleared keeps the paper off the curve.",
     );
   }
   if (assessmentId !== null) {

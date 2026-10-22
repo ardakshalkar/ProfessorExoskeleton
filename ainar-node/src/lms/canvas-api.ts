@@ -397,13 +397,17 @@ export class CanvasClient {
   async updateGrades(
     courseId: string,
     assignmentId: string,
-    grades: Map<string, [number, string | null]>,
+    grades: Map<string, [number | null, string | null]>,
   ): Promise<Progress> {
     if (!grades.size) throw new Error("no grades to send");
     const fields: Record<string, string> = {};
     for (const userId of [...grades.keys()].sort()) {
       const [score, comment] = grades.get(userId)!;
-      fields[`grade_data[${userId}][posted_grade]`] = String(Number(score.toPrecision(6)));
+      // No score is an excuse (EX): a mark an integrity case voided. Never a
+      // blank sent to mean zero — a row with no score and no case is skipped
+      // long before it gets here.
+      if (score === null) fields[`grade_data[${userId}][excuse]`] = "true";
+      else fields[`grade_data[${userId}][posted_grade]`] = String(Number(score.toPrecision(6)));
       if (comment) fields[`grade_data[${userId}][text_comment]`] = comment;
     }
 
@@ -649,6 +653,17 @@ export const canvasUserIds = (
     mapped.set(studentId, String(student.id));
   }
   return { mapped, unmatched };
+};
+
+/** The pseudonyms Canvas already has excused on this assignment. */
+export const apiExcused = (submissions: Record<string, any>[], userToStudent: Map<string, string>): Set<string> => {
+  const byUser = new Map([...userToStudent].map(([studentId, userId]) => [userId, studentId]));
+  return new Set(
+    submissions
+      .filter((submission) => submission.excused)
+      .map((submission) => byUser.get(String(submission.user_id)))
+      .filter((studentId): studentId is string => studentId !== undefined),
+  );
 };
 
 /**

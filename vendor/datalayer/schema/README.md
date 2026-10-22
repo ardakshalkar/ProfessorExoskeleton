@@ -66,6 +66,17 @@ about an afternoon and has not been done.
   of student ids whose total counts as marked — an integrity case, a retake
   marked on its own terms — with the reason in `note`. Inserted as text after
   `exponent`, in `assessment` and the bundle.
+- **2026-10-22 — integrity cases.** A new entity, `integrity_case`
+  (`IntegrityCase`: one student, the assessments it concerns, `state` open /
+  cleared / upheld, an `outcome` — no_penalty, adjusted, zero, voided — set
+  only when upheld, who opened and decided it and when, a private `note`).
+  Opened and decided by the professor alone; read by the gradebook, which
+  holds an open case's mark, zeroes or voids an upheld one, and keeps any case
+  not cleared off the curve. Its own file was written from the zod model by a
+  one-off script; in the bundle the three definitions were inserted as text
+  before `Intervention` and `integrity_cases` after `interventions`. A bundle
+  payload leaves `integrity_cases` out when it is empty, so a course without a
+  case serialises exactly as before.
 
 ## Conventions
 

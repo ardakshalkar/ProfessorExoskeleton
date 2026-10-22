@@ -31,7 +31,7 @@
 
 import type { z } from "zod";
 import { Capability, Concept, ConceptEdge, Course, LearningOutcome, Module } from "./model/academic.ts";
-import { Assessment, AssessmentItem, Evaluation, ItemModel, ItemResponse, Rubric, Submission } from "./model/assessment.ts";
+import { Assessment, AssessmentItem, Evaluation, IntegrityCase, ItemModel, ItemResponse, Rubric, Submission } from "./model/assessment.ts";
 import { Document } from "./model/content.ts";
 import { CourseVersion, Enrollment, LearningActivity, Resource, User } from "./model/delivery.ts";
 import { ActionItem, CourseEvent } from "./model/harness.ts";
@@ -97,6 +97,8 @@ export const COLLECTION_SPECS = {
   capability_states: spec(StudentCapabilityState, records("capability-states"), null, "student_capability_state", true),
   signals: spec(StudentSignal, records("signals"), "signal_id", "student_signal", true),
   interventions: spec(Intervention, records("interventions"), "intervention_id", "intervention", true),
+  // The professor's alone: an agent never opens or decides one (model/assessment.ts).
+  integrity_cases: spec(IntegrityCase, records("integrity"), "case_id", "integrity_case"),
   events: spec(CourseEvent, records("events"), "event_id", "course_event", true),
   action_items: spec(ActionItem, records("action-items"), "action_id", "action_item", true),
 } as const;

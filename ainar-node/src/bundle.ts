@@ -36,13 +36,26 @@ export const dropNulls = (value: unknown): unknown => {
   return value;
 };
 
+/**
+ * Collections the Python model never had: written into a payload only when
+ * they hold something, so a course without them serialises byte for byte as
+ * `export.bundle_payload` did, and the golden fixtures stay its witness.
+ */
+export const OMIT_WHEN_EMPTY: ReadonlySet<string> = new Set(["integrity_cases"]);
+
 /** The canonical bundle as plain JSON-ready data. Mirrors `export.bundle_payload`. */
-export const bundlePayload = (bundle: CourseBundle): Record<string, unknown> => ({
-  format: "ainar.course-bundle",
-  format_version: "1",
-  course_id: bundle.course.course_id,
-  ...(dropNulls(bundle) as Record<string, unknown>),
-});
+export const bundlePayload = (bundle: CourseBundle): Record<string, unknown> => {
+  const payload = dropNulls(bundle) as Record<string, unknown>;
+  for (const name of OMIT_WHEN_EMPTY) {
+    if (Array.isArray(payload[name]) && !(payload[name] as unknown[]).length) delete payload[name];
+  }
+  return {
+    format: "ainar.course-bundle",
+    format_version: "1",
+    course_id: bundle.course.course_id,
+    ...payload,
+  };
+};
 
 // --------------------------------------------------------------------------
 // Indexes and selections

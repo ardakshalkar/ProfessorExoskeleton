@@ -106,6 +106,8 @@ workspace/                                  the folder that contains courses/
 │        ├─ capability-states.yaml          derived
 │        ├─ signals.yaml                    proposed
 │        ├─ interventions.yaml              proposed
+│        ├─ integrity.yaml                  decided — integrity cases, the
+│        │                                  professor's alone; never published
 │        ├─ action-items.yaml               proposed
 │        ├─ events.yaml                     fact
 │        └─ publications.yaml               fact — what was sent where, when
@@ -130,6 +132,8 @@ workspace/                                  the folder that contains courses/
 ├─ submissions/<RUN>/<ASSESSMENT>/
 │  ├─ _inbox/                               scans as you upload them, before matching
 │  └─ <STUDENT>/                            one student's work: a fork, an upload, a scan
+├─ integrity/<RUN>/                         an integrity case's evidence: papers side
+│                                           by side, notes of the meeting
 
 └─ reports/<RUN>/                           anything with a real name in it
 ```

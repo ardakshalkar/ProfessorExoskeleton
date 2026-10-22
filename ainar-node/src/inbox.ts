@@ -199,6 +199,17 @@ export const inboxPayload = (
       scheduled_at: intervention.scheduled_at ?? null,
     }));
 
+  // Integrity cases still open: each holds a mark until the professor decides
+  // it. The note is not carried — the inbox is read by the session's model.
+  const openCases = (((b as any).integrity_cases ?? []) as any[])
+    .filter((entry) => entry.course_version_id === courseVersionId && (entry.state ?? "open") === "open" && inScope(entry.student_id))
+    .map((entry) => ({
+      case_id: entry.case_id,
+      student_id: entry.student_id,
+      assessments: entry.assessments,
+      opened_at: entry.opened_at ?? null,
+    }));
+
   const waiting = drafts(b).filter(
     (draft) => draft.collection !== "evaluations" && draft.collection !== "interventions",
   );
@@ -257,5 +268,7 @@ export const inboxPayload = (
     // drafts now live. Grades and interventions are above, in their own
     // sections. Present only when there is one, like `groups`.
     ...(waiting.length ? { drafts_awaiting_approval: waiting } : {}),
+    // Present only when there is one, so a run without cases reads as inbox.py's.
+    ...(openCases.length ? { open_integrity_cases: openCases } : {}),
   };
 };

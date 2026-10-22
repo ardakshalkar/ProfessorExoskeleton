@@ -242,7 +242,7 @@ const ID_FIELDS: [collection: string, field: string][] = Object.entries(COLLECTI
 const checkDuplicates = (b: CourseBundle, issues: IssueList): void => {
   for (const [collection, field] of ID_FIELDS) {
     const seen = new Set<string>();
-    for (const record of (b as any)[collection] as any[]) {
+    for (const record of ((b as any)[collection] ?? []) as any[]) {
       const identifier = record[field];
       if (seen.has(identifier)) {
         issues.error("id.duplicate", `${collection}: identifier defined more than once`, identifier);
@@ -2633,6 +2633,32 @@ const checkRuntime = (b: CourseBundle, issues: IssueList): void => {
         `status is ${intervention.status} but approved_by is empty`,
         intervention.intervention_id,
       );
+    }
+  }
+
+  // An integrity case is the professor's decision about a person, so a case
+  // naming an assessment or a paper that is not there is refused, and a
+  // decided one says who decided it and when — as a decided evaluation does.
+  for (const integrity of (b.integrity_cases as any[] | undefined) ?? []) {
+    const where = integrity.case_id;
+    if (!runs.has(integrity.course_version_id)) {
+      issues.error("ref.course_run", `unknown course_version_id ${integrity.course_version_id}`, where);
+    }
+    for (const assessmentId of (integrity.assessments as string[]) ?? []) {
+      if (!assessments.has(assessmentId)) issues.error("ref.assessment", `unknown assessment ${assessmentId}`, where);
+    }
+    for (const submissionId of (integrity.submissions as string[]) ?? []) {
+      const submission = submissions.get(submissionId) as any;
+      if (!submission) issues.error("ref.submission", `unknown submission ${submissionId}`, where);
+      else if (submission.student_id !== integrity.student_id) {
+        issues.error("integrity.someone_elses_paper", `${submissionId} is ${submission.student_id}'s, not ${integrity.student_id}'s`, where);
+      }
+    }
+    if (integrity.signal_id && !signalIds.has(integrity.signal_id)) {
+      issues.error("ref.signal", `unknown signal ${integrity.signal_id}`, where);
+    }
+    if (integrity.state !== "open" && (!integrity.decided_by || !integrity.decided_at)) {
+      issues.error("integrity.unsigned", `the case is ${integrity.state} but does not say who decided it and when`, where);
     }
   }
 

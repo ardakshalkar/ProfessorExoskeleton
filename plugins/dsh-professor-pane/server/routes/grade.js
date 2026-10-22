@@ -107,6 +107,37 @@ export const routes = [
           })
           .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
       }
+      // An academic-integrity case on a student's work: `ainar integrity`.
+      // Opened from the hand-in, decided in the exam window's Integrity tab;
+      // the professor's press each time. Nothing here reaches a student.
+      if (path === "/api/grade/integrity") {
+        if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+        loadedRun(workspace, runId);
+        return readBody(req, 64 * 1024)
+          .then((text) => {
+            const body = text ? JSON.parse(text) : {};
+            const note = String(body.note ?? "").trim().slice(0, 2000);
+            let args;
+            if (body.action === "open") {
+              if (!/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(String(body.student))) throw new Error("Not a pseudonym.");
+              args = ["integrity", "open", runId, "--student", String(body.student), "--assessment", assessmentId];
+              if (note) args.push("--note", note);
+            } else if (body.action === "decide") {
+              if (!/^INTEGRITY-[A-Z0-9][A-Z0-9-]*$/.test(String(body.case))) throw new Error("Not a case id.");
+              if (!["open", "cleared", "upheld"].includes(body.state)) throw new Error("A case is open, cleared or upheld.");
+              args = ["integrity", "decide", runId, "--case", String(body.case), "--state", body.state];
+              if (body.state === "upheld") {
+                if (!["no_penalty", "adjusted", "zero", "voided"].includes(body.outcome)) throw new Error("Say what it does to the mark.");
+                args.push("--outcome", body.outcome);
+              }
+              if (note) args.push("--note", note);
+            } else {
+              throw new Error("Open a case, or decide one.");
+            }
+            return runScans(args, root, 120000).then((result) => sendJson(res, 200, result));
+          })
+          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+      }
       const WRITES = ["/api/grade/decide", "/api/grade/move", "/api/grade/choose", "/api/grade/accept-rubric", "/api/grade/points-only"];
       if (WRITES.includes(path)) {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });

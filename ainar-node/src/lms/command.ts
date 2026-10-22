@@ -78,6 +78,7 @@ import {
   CanvasClient,
   CanvasError,
   apiCurrentScores,
+  apiExcused,
   canvasUserIds,
   isDone,
   hasFailed,
@@ -548,10 +549,25 @@ const makePlan = (
   }
   if (context.scaleProblem) plan.notes.push(`! ${context.scaleProblem}`);
 
+  // A mark an upheld integrity case voided goes to Canvas as excused (EX) —
+  // the one thing about a case a student can see, and only through the
+  // assignment no longer counting. The case and its note stay here.
+  if (args.target === "canvas-api") {
+    const voided = new Set(
+      rows.filter((row) => row.integrity?.state === "upheld" && row.integrity.outcome === "voided").map((row) => row.student_id),
+    );
+    const excused = apiExcused(context.submissions, context.userIds);
+    for (const row of plan.rows) {
+      if (!voided.has(row.student_id)) continue;
+      row.action = excused.has(row.student_id) ? "unchanged" : "excuse";
+      row.reason = "voided by an integrity case — excused (EX) in Canvas";
+    }
+  }
+
   // A live target can only be written to for students Canvas knows by id.
   if (args.target === "canvas-api") {
     for (const row of plan.rows) {
-      if ((row.action === "new" || row.action === "change") && !context.userIds.has(row.student_id)) {
+      if ((row.action === "new" || row.action === "change" || row.action === "excuse") && !context.userIds.has(row.student_id)) {
         row.action = "unmatched";
         row.reason =
           "no Canvas user id for this pseudonym — the roster and the " +
@@ -564,7 +580,7 @@ const makePlan = (
 
 const printPlan = (plan: PushPlan, out: (line: string) => void, verbose = true): void => {
   const tally = counts(plan);
-  const order = ["new", "change", "unchanged", "drift", "skip", "unmatched"];
+  const order = ["new", "change", "excuse", "unchanged", "drift", "skip", "unmatched"];
   const summary = order
     .filter((key) => key in tally)
     .map((key) => `${tally[key]} ${key}`)
@@ -594,6 +610,11 @@ const printPlan = (plan: PushPlan, out: (line: string) => void, verbose = true):
       const was = row.current === null ? "blank" : g(row.current);
       out(`    ${row.student_id}  ${was} -> ${g(row.score!)} / ${g(row.maximum!)}`);
     }
+  }
+  const excusing = plan.rows.filter((row) => row.action === "excuse");
+  if (excusing.length) {
+    out("\n  excuse (EX), voided by an integrity case:");
+    for (const row of excusing) out(`    ${row.student_id}  ${row.current === null ? "blank" : g(row.current)} -> EX`);
   }
 
   const skipped = plan.rows.filter((row) => row.action === "skip" || row.action === "unmatched");
@@ -786,12 +807,16 @@ const pushToCanvas = async (
   deps: Deps,
 ): Promise<number> => {
   const rows = writable(plan);
+  const excusing = plan.rows.filter((row) => row.action === "excuse");
   const withComments = rows.filter((row) => args.comments && row.comment);
   deps.out(
     `\n${rows.length} grade(s) would be posted to Canvas assignment ` +
       `${context.assignmentId}` +
       (args.comments ? `, ${withComments.length} with a comment` : ", scores only"),
   );
+  if (excusing.length) {
+    deps.out(`  ${excusing.length} would be excused (EX): voided by an integrity case. No reason is sent.`);
+  }
   if (!args.comments) {
     deps.out("  Comments stay here unless you pass --comments.");
   } else {
@@ -806,10 +831,14 @@ const pushToCanvas = async (
     return 0;
   }
 
-  const grades = new Map<string, [number, string | null]>();
+  const grades = new Map<string, [number | null, string | null]>();
   for (const row of rows) {
     const userId = context.userIds.get(row.student_id);
     if (userId) grades.set(userId, [row.score!, args.comments ? row.comment : null]);
+  }
+  for (const row of excusing) {
+    const userId = context.userIds.get(row.student_id);
+    if (userId) grades.set(userId, [null, null]);
   }
 
   let final;
@@ -1209,7 +1238,7 @@ const runPush = async (args: LmsArgs, context: LmsContext, deps: Deps): Promise<
   // Canvas is ours.
   const held =
     args.target === "canvas-api" && args.confirm
-      ? plan.rows.filter((row) => row.action === "unchanged" && row.last_prepared === null)
+      ? plan.rows.filter((row) => row.action === "unchanged" && row.last_prepared === null && row.score !== null)
       : [];
   const noteHeld = (): void => {
     if (!held.length) return;
@@ -1218,7 +1247,7 @@ const runPush = async (args: LmsArgs, context: LmsContext, deps: Deps): Promise<
     deps.out(`Canvas already holds ${held.length} of these: noted ${touched} applied value(s) in ${ledger.save()}`);
   };
 
-  if (!writable(plan).length && args.target !== "sheets-api") {
+  if (!writable(plan).length && !plan.rows.some((row) => row.action === "excuse") && args.target !== "sheets-api") {
     deps.out("\nnothing to send — no row would change in the target");
     noteHeld();
     return 0;

@@ -44,7 +44,7 @@ export const describe = (values) => {
  * question opens into: its wording in each variant, the key and guidance it
  * is marked by, and every answer with the mark it got and why.
  */
-export const summarise = ({ assessment, cells, criteria = [], evaluations = [], pile = null, names = false, items = [], responses = [], submissions = [] }) => {
+export const summarise = ({ assessment, cells, criteria = [], evaluations = [], pile = null, names = false, items = [], responses = [], submissions = [], cases = [] }) => {
   const count = (state) => cells.filter((cell) => cell.state === state).length;
   const missing = cells.filter((cell) => cell.state === "missing").map((cell) => cell.student);
   // A student counted missing while a paper placed on nobody is nearest them:
@@ -158,7 +158,22 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
       missing: count("missing"),
       unrecorded: count("unrecorded"),
       ahead: count("ahead"),
+      held: count("held"),
+      voided: count("voided"),
     },
+    // The integrity cases on this assessment, open first: the Integrity tab.
+    cases: cases
+      .map((entry) => ({
+        id: entry.case_id,
+        student: String(entry.student_id),
+        state: entry.state ?? "open",
+        outcome: entry.outcome ?? null,
+        note: entry.note ?? null,
+        opened_at: entry.opened_at ?? null,
+        decided_at: entry.decided_at ?? null,
+        others: (entry.assessments ?? []).filter((id) => id !== assessment.assessment_id),
+      }))
+      .sort((a, b) => Number(b.state === "open") - Number(a.state === "open") || a.id.localeCompare(b.id)),
     scores: describe(graded.map((cell) => cell.entry.score)),
     percents: { ...describe(percents), under_half: percents.filter((value) => value < 50).length },
     bins,
@@ -217,6 +232,8 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
     ["missing", c.missing, "missing"],
     ["unrecorded", c.unrecorded, "not imported"],
     ["ahead", c.ahead, "not due"],
+    ["held", c.held ?? 0, "held by an integrity case"],
+    ["voided", c.voided ?? 0, "voided by an integrity case"],
   ].filter(([, n]) => n > 0);
   const handIns =
     '<div class="awbar" role="img" aria-label="' +
@@ -590,10 +607,71 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
     );
   })();
 
+  /*
+   * Integrity cases on this assessment: each with its student, where it
+   * stands and the professor's note folded away (this window is projected),
+   * and the decision — Clear, or Uphold with what it does to the mark — for an
+   * open one, Reopen for a decided one. `ainar integrity decide` writes it;
+   * a case is opened from the student's hand-in, not here.
+   */
+  const integrityTab = (() => {
+    const cases = s.cases ?? [];
+    if (!cases.length && !c.handed) return "";
+    const said = (entry) =>
+      entry.state === "open"
+        ? "open — the mark is held, off the curve"
+        : entry.state === "cleared"
+          ? "cleared — the mark counts as marked"
+          : "upheld — " +
+            ({
+              no_penalty: "no penalty: the mark counts, off the curve",
+              adjusted: "mark adjusted: the decided mark counts, off the curve",
+              zero: "the mark is 0",
+              voided: "voided: out of the student's total, excused in Canvas",
+            }[entry.outcome] ?? entry.outcome);
+    const decide = (entry) =>
+      entry.state === "open"
+        ? '<span class="awicd" data-ic="' + escapeText(entry.id) + '">' +
+          '<button type="button" class="chip" data-ic-decide="cleared">Clear</button> ' +
+          '<select data-ic-outcome aria-label="What upholding it does to the mark">' +
+          '<option value="zero">Uphold — mark 0</option>' +
+          '<option value="voided">Uphold — void it (EX)</option>' +
+          '<option value="adjusted">Uphold — I adjusted the marks</option>' +
+          '<option value="no_penalty">Uphold — no penalty</option>' +
+          "</select> " +
+          '<button type="button" class="chip act" data-ic-decide="upheld">Decide</button></span>'
+        : '<span class="awicd" data-ic="' + escapeText(entry.id) + '"><button type="button" class="chip" data-ic-decide="open">Reopen</button></span>';
+    return (
+      "<h3>Integrity</h3>" +
+      '<p class="dim awnote">An open case holds the student’s mark and keeps it off the curve. Clearing it lets the mark count; upholding it applies what you choose. ' +
+      "Only the mark reaches Canvas — a voided one as excused (EX) — never the case or its note. To open a case, press the student’s cell and open it on their hand-in.</p>" +
+      (cases.length
+        ? '<div class="awic" data-ic-for="' + escapeText(s.id) + '">' +
+          cases
+            .map(
+              (entry) =>
+                '<div class="awicr' + (entry.state === "open" ? " on" : "") + '">' +
+                '<div><b>' + escapeText(nameOf(entry.student)) + '</b> <span class="dim">' + escapeText(entry.id) +
+                (entry.others.length ? " · also " + escapeText(entry.others.join(", ")) : "") +
+                (entry.opened_at ? " · opened " + escapeText(when(entry.opened_at)) : "") +
+                (entry.decided_at ? " · decided " + escapeText(when(entry.decided_at)) : "") + "</span></div>" +
+                '<div class="awics">' + escapeText(said(entry)) + "</div>" +
+                (entry.note ? '<details class="awicn"><summary>Note</summary>' + escapeText(entry.note) + "</details>" : "") +
+                decide(entry) +
+                "</div>",
+            )
+            .join("") +
+          "</div>"
+        : '<p class="dim">No integrity cases on this assessment.</p>')
+    );
+  })();
+  const openCases = (s.cases ?? []).filter((entry) => entry.state === "open").length;
+
   // One tab per part, so each is a press away rather than a scroll down.
   const tabs = [
     ["overview", "Overview", results + groups],
     ["curve", "Curve" + (s.curve && s.curve.approval !== "draft" ? " · on" : ""), curveTab],
+    ["integrity", "Integrity" + (openCases ? " · " + openCases + " open" : (s.cases ?? []).length ? " (" + s.cases.length + ")" : ""), integrityTab],
     ["reports", "Reports" + (reports?.made ? " · " + reports.count : ""), reportsTab],
     ["questions", "Questions" + (s.questions.length ? " (" + s.questions.length + ")" : ""), questions],
     ["scans", "Scans", scans],
@@ -714,7 +792,14 @@ export const assessmentWindowStyle =
   ".awcvq{margin:6px 0;font:inherit;font-size:12px;width:200px}" +
   ".awcvl{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:2px 12px;max-height:260px;overflow:auto;font-size:12px}" +
   ".awcvl label{display:flex;gap:6px;align-items:center;cursor:pointer}.awcvl label[hidden]{display:none}.awcvl .dim{margin-left:auto}" +
-  ".awstate{font-size:11px;align-self:center}";
+  ".awstate{font-size:11px;align-self:center}" +
+  ".awic{display:flex;flex-direction:column;gap:6px}" +
+  ".awicr{border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-size:12px}" +
+  ".awicr.on{border-color:var(--warn);background:var(--warnbg)}" +
+  ".awics{margin:3px 0 5px}.awicn{font-size:11px;color:var(--dim);margin:0 0 6px}.awicn summary{cursor:pointer}" +
+  ".awicd{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.awicd select{font:inherit;font-size:12px}" +
+  ".awbar .m.held{background:var(--warn)}.awbar .m.voided{background:var(--dim);opacity:.4}" +
+  ".awk .m.held{background:var(--warn)}.awk .m.voided{background:var(--dim);opacity:.4}";
 
 /*
  * Open the column's panel; close on ×, Esc (the dialog's own) or a press on
@@ -796,6 +881,11 @@ export const assessmentWindowScript =
   "[].slice.call(rb.querySelectorAll('button')).forEach(function(x){x.disabled=true;});" +
   "var mk=rp.hasAttribute('data-rp-make');rp.textContent=mk?'Making… about a minute':'Checking who gets one…';" +
   "say({kind:mk?'reports-make':'reports-send',assessment:rb.getAttribute('data-rp')});return;}" +
+  // An integrity case decided: Clear, Decide (with the outcome chosen), Reopen.
+  "var dc=t.closest('[data-ic-decide]');if(dc){if(dc.disabled||!up)return;var rw=dc.closest('[data-ic]'),st=dc.getAttribute('data-ic-decide')," +
+  "oc=rw.querySelector('[data-ic-outcome]');[].slice.call(rw.querySelectorAll('button,select')).forEach(function(x){x.disabled=true;});" +
+  "dc.textContent='Writing…';say({kind:'integrity',action:'decide',assessment:dc.closest('[data-ic-for]').getAttribute('data-ic-for')," +
+  "case:rw.getAttribute('data-ic'),state:st,outcome:st==='upheld'&&oc?oc.value:null});return;}" +
   // The curve's presses: an exponent preset, Apply, Take it off.
   "var cx=t.closest('[data-cv-exp]');if(cx){var bx=cx.closest('.awcv');bx.querySelector('[data-cv-exponent]').value=cx.getAttribute('data-cv-exp');cvDraw(bx);return;}" +
   "var ca=t.closest('[data-cv-apply],[data-cv-clear]');if(ca){if(ca.disabled||!up)return;var bx=ca.closest('.awcv');" +

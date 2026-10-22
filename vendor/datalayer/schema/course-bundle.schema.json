@@ -1892,6 +1892,174 @@
       "title": "GradingScheme",
       "type": "object"
     },
+    "IntegrityCase": {
+      "additionalProperties": false,
+      "description": "An academic-integrity case: one student, the assessments it concerns.\n\nOpened and decided by the professor alone. While open the gradebook holds the mark; cleared lets it count as marked; upheld applies the outcome. Any case not cleared keeps the paper off the assessment's curve. The note is private: nothing student-facing reads a case.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "case_id": {
+          "pattern": "^INTEGRITY-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string",
+          "title": "Case Id"
+        },
+        "course_version_id": {
+          "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+          "type": "string",
+          "title": "Course Version Id"
+        },
+        "student_id": {
+          "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string",
+          "title": "Student Id"
+        },
+        "assessments": {
+          "items": {
+            "pattern": "^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Assessments",
+          "type": "array"
+        },
+        "submissions": {
+          "items": {
+            "pattern": "^SUB-[A-Z0-9][A-Z0-9-]*$",
+            "type": "string"
+          },
+          "title": "Submissions",
+          "type": "array"
+        },
+        "state": {
+          "$ref": "#/$defs/IntegrityState",
+          "default": "open"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/IntegrityOutcome"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Set when, and only when, the case is upheld.",
+          "title": "Outcome"
+        },
+        "signal_id": {
+          "anyOf": [
+            {
+              "pattern": "^SIGNAL-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Signal Id"
+        },
+        "opened_by": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opened By"
+        },
+        "opened_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Opened At"
+        },
+        "decided_by": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided By"
+        },
+        "decided_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided At"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The professor's private account.",
+          "title": "Note"
+        }
+      },
+      "required": [
+        "case_id",
+        "course_version_id",
+        "student_id",
+        "assessments"
+      ],
+      "title": "IntegrityCase",
+      "type": "object"
+    },
+    "IntegrityOutcome": {
+      "description": "What an upheld case does to the mark: no_penalty and adjusted leave the total as decided, zero makes it 0, voided takes the assessment out of the student's total.",
+      "enum": [
+        "no_penalty",
+        "adjusted",
+        "zero",
+        "voided"
+      ],
+      "title": "IntegrityOutcome",
+      "type": "string"
+    },
+    "IntegrityState": {
+      "description": "Where an academic-integrity case stands. Only the professor moves it.",
+      "enum": [
+        "open",
+        "cleared",
+        "upheld"
+      ],
+      "title": "IntegrityState",
+      "type": "string"
+    },
     "Intervention": {
       "additionalProperties": false,
       "description": "What the professor decided to do about a signal.\n\nRecording the intervention is what later allows AINAR to measure whether\nit worked: new evidence after the intervention is compared with the state\nthat triggered it.",
@@ -4472,6 +4640,13 @@
       "items": {
         "$ref": "#/$defs/Intervention"
       },
+    "integrity_cases": {
+      "items": {
+        "$ref": "#/$defs/IntegrityCase"
+      },
+      "title": "Integrity Cases",
+      "type": "array"
+    },
       "title": "Interventions",
       "type": "array"
     },
