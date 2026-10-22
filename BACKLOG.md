@@ -1669,6 +1669,70 @@ is worth building.
       needs; the envelope and `preference_profile` are not done), and
       `sqlgen.ts`/`schema.sql`, which stay hand-written by design.
 
+## E34 · Long work in the background, and pages that open at once — no `FUTURE.md` section yet
+
+> **Rank: before the next exam pile.** Proposed 2026-10-22. Reading a pile of
+> scans (`scans read` + `scans record`) and transcribing recorded defences
+> (`defence batch transcribe`) each hold one HTTP request open for up to 30
+> minutes (`routes/scans.js:69`, `routes/defence.js:93`, through `runScans`
+> in `server/actions.js`). The server itself is not blocked — the CLI is an
+> async child process — but the *page* is: the scans view sets `busy` and
+> every other step's button goes dead (`client/scans.js:31`), the defence
+> batch dialog cannot be closed while it runs (`client/upload.js`), and a
+> reload or a second tab forgets that anything is running. What actually
+> keeps two writers apart today lives only in that client state; the server
+> holds no lock. Separately, pages in the pane are slow to appear after a
+> click, cause not yet measured.
+
+- [ ] **JOB-1** What is secured, written down. One table: every pane action
+      that writes the private folder or the run's records, what it rewrites
+      (one student's transcript, the whole plan, `version.yaml`, a take), and
+      what keeps a second writer out today — client `busy`, the placements
+      queue (`client/scans-queue.js`), nothing. Mark which pairs really
+      conflict (read vs. apply rewriting the same plan) and which are only
+      blocked because the button shared a `busy` (read vs. opening the
+      grading cards, vs. another assessment's pile, vs. the gradebook). This
+      decides JOB-2's lock keys. `S` · depends: —
+- [ ] **JOB-2** A server-side job runner. `POST` starts the job and returns a
+      job id at once; the CLI child runs on in the harness process; `GET
+      /api/jobs` lists running and recent jobs with their progress and
+      output. Locks are per key from JOB-1 (e.g. `scans-plan:<run>:<assessment>`,
+      `defence:<run>:<assessment>`), held by the server, so a second tab or a
+      reload sees the same lock and a conflicting press is refused with
+      "Reading is running for Quiz 1" instead of being raced. `M` · depends:
+      JOB-1
+- [ ] **JOB-3** Progress, not a spinner. `scans read` and `defence batch
+      transcribe` print a line per student/take; the runner turns those into
+      *12 of 48 read* and the pane shows it in the step strip and the
+      navigator, and on reopening the page. Finished jobs say what they did
+      (the same `readSummary`) and bump the revision so the views refresh.
+      `S` · depends: JOB-2
+- [ ] **JOB-4** The pane un-blocked. Only the presses JOB-1 marks as
+      conflicting wait for a running job; everything else — other steps,
+      grading cards, another assessment, other pages — stays usable. The
+      defence batch dialog closes while transcription runs on. The live
+      per-take transcription on the desk (`routes/defence.js:352`) stays
+      inline: it is seconds, and the desk needs the text back. `S` · depends:
+      JOB-2
+- [ ] **JOB-5** Survive a restart. A job's state is kept on disk under
+      `~/.ainar/jobs/`; a harness restart marks a running job as interrupted
+      (its partial transcripts are already on disk — `scans read` writes per
+      student) and offers "continue", which re-runs only what is missing.
+      Cancel kills the child. `S` · depends: JOB-2
+- [ ] **JOB-6** Measure why pages load late. Time each page from click to
+      drawn: the server-side cost of each `/api/*` read (bundle load and
+      validation per request, `loadedRun`, scans status walking the private
+      folder, `lms check` on Gradebook open), the client waiting on more than
+      one fetch in series, and the revision tick refetching everything. A
+      table of the five slowest, with the cause of each. `S` · depends: —
+- [ ] **JOB-7** Fix what JOB-6 finds. Likely candidates: cache the loaded
+      bundle per run keyed by file mtimes instead of reloading per request;
+      draw the page from the last answer while the fresh one loads
+      (stale-while-revalidate, as `client/data.js`'s watcher half does);
+      fetch a page's reads in parallel; move anything that calls out
+      (`lms check`) behind the page, not in front of it. Target: a page
+      shows something within 300 ms of the click. `M` · depends: JOB-6
+
 ---
 
 ## Suggested order
