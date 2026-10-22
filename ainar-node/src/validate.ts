@@ -50,6 +50,7 @@ import {
 } from "./bundle.ts";
 import { statSync } from "node:fs";
 import { join } from "node:path";
+import { curveOf, gradeRows } from "./gradebook.ts";
 import { IssueList, type Issue } from "./issues.ts";
 import { lmsScale } from "./lms-scale.ts";
 
@@ -180,6 +181,8 @@ export const TOTAL_CODES = 94;
  */
 export const ADDED = [
   "grading.component_sum",
+  "grading.curve_caps",
+  "grading.curve_unsigned",
   "grading.cycle",
   "grading.duplicate_component",
   "grading.locked",
@@ -556,6 +559,36 @@ const checkAssessments = (b: CourseBundle, issues: IssueList): void => {
       );
     }
     gradingSchemeIssues(run, assessments, issues);
+    curveIssues(b, run.course_version_id, assessments, issues);
+  }
+};
+
+/**
+ * A curve in force against the marks it curves.
+ *
+ * Both are warnings: the model already refuses a curve that would lower a
+ * mark. What is left is a curve nobody signed, and an anchor that marking has
+ * since passed — every total above it lands on full marks, so the students
+ * above the anchor stop being told apart. A paper marked after the curve was
+ * set is the usual way that happens.
+ */
+const curveIssues = (b: CourseBundle, runId: string, assessments: any[], issues: IssueList): void => {
+  for (const assessment of assessments) {
+    const curve = curveOf(assessment);
+    if (!curve) continue;
+    if (!curve.decided_by || !curve.decided_at) {
+      issues.warn("grading.curve_unsigned", "a curve is in force but names no decided_by and decided_at", assessment.assessment_id);
+    }
+    const rows = gradeRows(b, runId, { assessmentId: assessment.assessment_id }).get(assessment.assessment_id) ?? [];
+    const above = rows.filter((row) => row.raw_score != null && row.raw_score > curve.anchor);
+    if (above.length) {
+      const top = Math.max(...above.map((row) => row.raw_score as number));
+      issues.warn(
+        "grading.curve_caps",
+        `${above.length} raw total(s) above the curve's anchor ${curve.anchor} (highest ${top}) all become full marks`,
+        assessment.assessment_id,
+      );
+    }
   }
 };
 

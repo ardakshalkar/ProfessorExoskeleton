@@ -9,8 +9,10 @@
  *    `professor_decision`. A suggestion never becomes a grade.
  * 2. A missing judgement is not a zero. Undecided → `partially_graded`, not
  *    exportable; never submitted → `score: null`, never 0.
- * 3. Nothing is rescaled. Criteria summing to 90 against a maximum of 100
- *    blocks the row rather than stretching it.
+ * 3. Nothing is rescaled silently. Criteria summing to 90 against a maximum of
+ *    100 blocks the row rather than stretching it. The one stretch is the
+ *    professor's own: an assessment's `curve`, applied to the total after
+ *    totalling, with the raw total kept beside it as `raw_score`.
  * 4. Only the professor's words travel. Row comments come from
  *    `professor_decision.comment` alone.
  */
@@ -49,7 +51,10 @@ export interface GradeRow {
   maximum: number;
   submission_id: string | null;
   status: string;
+  /** What counts: the curved total when the assessment has a curve. */
   score: number | null;
+  /** The criteria's own total, set only when a curve was applied to it. */
+  raw_score?: number | null;
   criteria: CriterionScore[];
   comment: string | null;
   blocked: string[];
@@ -160,6 +165,14 @@ const assessmentIssues = (assessment: any, criteria: any[]): string[] => {
   return [];
 };
 
+/** The assessment's curve when it is in force — a curve still `approval: draft` is not. */
+export const curveOf = (assessment: any): any | null =>
+  assessment?.curve && assessment.curve.approval !== "draft" ? assessment.curve : null;
+
+/** `maximum × (raw / anchor) ^ exponent`, never above the maximum. */
+export const curved = (raw: number, curve: any, maximum: number): number =>
+  roundHalfEven(Math.min(maximum, maximum * Math.pow(Math.max(0, raw) / curve.anchor, curve.exponent)), 2);
+
 export const percent = (row: GradeRow): number | null =>
   row.score === null || !row.maximum ? null : roundHalfEven((row.score / row.maximum) * 100, 1);
 
@@ -171,6 +184,7 @@ const rowAsDict = (row: GradeRow): Record<string, unknown> => ({
   submission_id: row.submission_id,
   status: row.status,
   score: row.score,
+  ...(row.raw_score !== undefined ? { raw_score: row.raw_score } : {}),
   maximum: row.maximum,
   percent: percent(row),
   comment: row.comment,
@@ -219,6 +233,7 @@ export const gradeRows = (
       itemsByCriterion.set(item.criterion_id, [...(itemsByCriterion.get(item.criterion_id) ?? []), item]);
     }
     const structural = assessmentIssues(assessment, criteria);
+    const curve = curveOf(assessment);
 
     const submissionsByStudent = new Map<string, any[]>();
     for (const submission of b.submissions as any[]) {
@@ -284,6 +299,10 @@ export const gradeRows = (
 
       if (usable.length) {
         row.score = roundHalfEven(usable.reduce((sum, c) => sum + (c.score as number), 0), 2);
+        if (curve) {
+          row.raw_score = row.score;
+          row.score = curved(row.score, curve, row.maximum);
+        }
       }
       const comments = row.criteria.filter((c) => c.comment).map((c) => `${c.title}: ${c.comment}`);
       row.comment = comments.length ? comments.join("\n") : null;
@@ -296,16 +315,25 @@ export const gradeRows = (
 };
 
 /** The shape of the batch, over graded rows **only** — a blank is not a zero. */
-const distribution = (rows: GradeRow[]): Record<string, unknown> => {
-  const scores = rows
-    .filter((row) => row.status === "graded" && row.score !== null)
-    .map((row) => row.score as number);
+const shape = (scores: number[]) => {
   const sorted = [...scores].sort((a, b2) => a - b2);
   const middle = sorted.length
     ? sorted.length % 2
       ? sorted[(sorted.length - 1) / 2]!
       : (sorted[sorted.length / 2 - 1]! + sorted[sorted.length / 2]!) / 2
     : null;
+  return {
+    mean: scores.length ? roundHalfEven(scores.reduce((a, b2) => a + b2, 0) / scores.length, 2) : null,
+    median: middle === null ? null : roundHalfEven(middle, 2),
+    minimum: scores.length ? Math.min(...scores) : null,
+    maximum: scores.length ? Math.max(...scores) : null,
+  };
+};
+
+const distribution = (rows: GradeRow[]): Record<string, unknown> => {
+  const graded = rows.filter((row) => row.status === "graded" && row.score !== null);
+  const scores = graded.map((row) => row.score as number);
+  const curvedRows = graded.some((row) => row.raw_score !== undefined);
 
   return {
     enrolled: rows.length,
@@ -315,10 +343,9 @@ const distribution = (rows: GradeRow[]): Record<string, unknown> => {
     not_submitted: rows.filter((row) => row.status === "not_submitted").length,
     exportable: rows.filter(exportable).length,
     n_scored: scores.length,
-    mean: scores.length ? roundHalfEven(scores.reduce((a, b2) => a + b2, 0) / scores.length, 2) : null,
-    median: middle === null ? null : roundHalfEven(middle, 2),
-    minimum: scores.length ? Math.min(...scores) : null,
-    maximum: scores.length ? Math.max(...scores) : null,
+    ...shape(scores),
+    // The same papers before the curve, so its effect is never out of sight.
+    ...(curvedRows ? { raw: shape(graded.map((row) => (row.raw_score ?? row.score) as number)) } : {}),
   };
 };
 
@@ -464,6 +491,7 @@ export const gradebookPayload = (
       maximum: assessment.maximum_score,
       // What the LMS has it out of, when the grading scheme rescales it.
       ...(lmsOut(run, assessment, [...assessments.values()])),
+      ...(assessment.curve ? { curve: { ...assessment.curve, applied: curveOf(assessment) !== null } } : {}),
       due_at: assessment.due_at ?? null,
       criteria: (rubric?.criteria ?? []).map((c: any) => ({
         criterion_id: c.criterion_id,
@@ -493,6 +521,13 @@ export const gradebookPayload = (
         "`points`, the scale the institution's journal takes; it grows as more is " +
         "graded, so it is final only when `complete`. An assessment's `lms.maximum` " +
         "is what Canvas has it out of; the marks here stay out of `maximum`.",
+    );
+  }
+  const curvedIds = payloadAssessments.filter((a) => curveOf(assessments.get(a.assessment_id))).map((a) => a.assessment_id);
+  if (curvedIds.length) {
+    notes.push(
+      `${curvedIds.join(", ")} ${curvedIds.length === 1 ? "is" : "are"} curved: a row's \`score\` is the ` +
+        "curved total and the one every total and export uses; `raw_score` is what the criteria add up to.",
     );
   }
   if (assessmentId !== null) {

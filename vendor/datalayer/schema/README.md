@@ -53,6 +53,15 @@ about an afternoon and has not been done.
   scheme, the lock included, keeps the state it replaced in the scheme's
   `extensions.history` — the same convention as an evaluation's — so no new
   property was needed for the log. Inserted as text after `description`.
+- **2026-10-22 — the curve.** `Assessment.curve` (`ScoreCurve`: `kind: power`,
+  `anchor`, `exponent`, who decided it and when). Each student's total `t`
+  becomes `maximum_score × (t / anchor) ^ exponent`, capped at the maximum. The
+  criterion decisions are not edited and stay the evidence; the gradebook
+  applies the curve after totalling, and every score downstream of it (block
+  totals, Canvas, sheets) is the curved one. `anchor` above `maximum_score` or
+  `exponent` above 1 would lower a mark and is refused. Inserted as text: the
+  definition in sorted position, `curve` after `design`, in `assessment` and
+  the bundle.
 
 ## Conventions
 

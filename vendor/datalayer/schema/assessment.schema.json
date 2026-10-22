@@ -371,6 +371,81 @@
       "title": "RubricCriterion",
       "type": "object"
     },
+    "ScoreCurve": {
+      "additionalProperties": false,
+      "description": "A curve the professor puts on an assessment once it is marked. Each student's total t becomes maximum_score x (t / anchor) ^ exponent, capped at maximum_score: exponent 1 is straight scaling, 0.5 the square root. The criterion decisions are never edited; the gradebook applies the curve after totalling. The anchor is a number, not the highest score, so a paper marked later cannot move everyone else's grade.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "kind": {
+          "const": "power",
+          "title": "Kind",
+          "type": "string"
+        },
+        "anchor": {
+          "description": "The raw total that becomes full marks; at most maximum_score.",
+          "exclusiveMinimum": 0,
+          "title": "Anchor",
+          "type": "number"
+        },
+        "exponent": {
+          "description": "1 is straight scaling, 0.5 the square root; above 1 would lower marks.",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Exponent",
+          "type": "number"
+        },
+        "decided_by": {
+          "anyOf": [
+            {
+              "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided By"
+        },
+        "decided_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decided At"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "kind",
+        "anchor",
+        "exponent"
+      ],
+      "title": "ScoreCurve",
+      "type": "object"
+    },
     "SubmissionFormat": {
       "enum": [
         "pdf",
@@ -583,6 +658,18 @@
       ],
       "default": null,
       "description": "Multidimensional blueprint agreed before item generation."
+    },
+    "curve": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScoreCurve"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The professor's curve on the total, applied by the gradebook after totalling."
     }
   },
   "required": [

@@ -113,6 +113,28 @@ export const Rubric = entity({
   criteria: z.array(RubricCriterion).default([]),
 });
 
+/**
+ * A curve the professor puts on an assessment once it is marked. Each
+ * student's total `t` becomes `maximum_score × (t / anchor) ^ exponent`,
+ * capped at `maximum_score`: exponent 1 is straight scaling, 0.5 the square
+ * root. The criterion decisions are never edited — they stay the evidence, and
+ * the curve is one more decision, applied by the gradebook after totalling.
+ *
+ * `anchor` is a number, not "whoever scored highest", so a paper marked later
+ * cannot move everyone else's grade. An exponent above 1, or an anchor above
+ * the maximum, would lower someone's mark, and neither is a curve.
+ */
+export const ScoreCurve = entity({
+  approval: Approval.optional(),
+  kind: z.literal("power"),
+  /** The raw total that becomes full marks. */
+  anchor: z.number().gt(0),
+  exponent: z.number().gt(0).lte(1),
+  decided_by: UserId.nullish(),
+  decided_at: awareDatetime().nullish(),
+  note: z.string().nullish(),
+});
+
 export const Assessment = entity({
   assessment_id: AssessmentId,
   approval: Approval.optional(),
@@ -135,6 +157,7 @@ export const Assessment = entity({
   instructions_document_id: DocumentId.nullish(),
   settings: z.record(z.string(), z.unknown()).default({}),
   design: AssessmentDesign.nullish(),
+  curve: ScoreCurve.nullish(),
 })
   // An inline rubric fills in `rubric_id`, and contradicting it is an error.
   // Ported from `_rubric_consistency`; without it every assessment carrying an
@@ -144,6 +167,14 @@ export const Assessment = entity({
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: `${value.assessment_id}: rubric_id ${value.rubric_id} does not match inline rubric ${value.rubric.rubric_id}`,
+      });
+    }
+    if (value.curve && value.curve.anchor > value.maximum_score) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          `${value.assessment_id}: curve anchor ${value.curve.anchor} is above maximum_score ` +
+          `${value.maximum_score}, so the curve would lower marks`,
       });
     }
   })

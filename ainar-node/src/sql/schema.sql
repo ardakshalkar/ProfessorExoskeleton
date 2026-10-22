@@ -333,9 +333,14 @@ CREATE TABLE IF NOT EXISTS assessment.assessments (
     settings       JSONB NOT NULL DEFAULT '{}',
     -- The reviewable outcome x cognitive-level x difficulty x item-type plan.
     design         JSONB,
+    -- The professor's curve on the total: {kind, anchor, exponent, decided_by,
+    -- decided_at}. The criterion decisions are never edited for it.
+    curve          JSONB,
     extensions     JSONB NOT NULL DEFAULT '{}',
     CHECK (opens_at IS NULL OR due_at IS NULL OR opens_at <= due_at)
 );
+-- Added 2026-10-22; a database loaded before then has the table without it.
+ALTER TABLE assessment.assessments ADD COLUMN IF NOT EXISTS curve JSONB;
 
 CREATE TABLE IF NOT EXISTS assessment.assessment_outcomes (
     assessment_id UUID NOT NULL REFERENCES assessment.assessments(id) ON DELETE CASCADE,

@@ -642,6 +642,8 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       instructions_document_id: ref(a.instructions_document_id),
       settings: a.settings,
       design: jsonb(a.design),
+      // Only when there is one, for the reason `url` is: the golden import predates it.
+      ...(a.curve ? { curve: jsonb(a.curve) } : {}),
       extensions: a.extensions,
     })),
   );

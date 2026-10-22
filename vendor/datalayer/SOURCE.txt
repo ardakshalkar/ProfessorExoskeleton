@@ -8,3 +8,7 @@ See PROVENANCE.md at the repository root for where every tree came from.
 
 Fork, 2026-10-15 (MOD-1): schema/preference_profile.schema.json `scope` gains
 `institution` and `run`, matching the layers ainar-node/src/profile.ts resolves.
+
+Fork, 2026-10-22: schema/assessment.schema.json and course-bundle.schema.json
+gain `ScoreCurve` and `Assessment.curve`, matching ainar-node/src/model/assessment.ts
+(see schema/README.md).
