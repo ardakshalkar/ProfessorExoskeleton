@@ -183,6 +183,7 @@ import {
 import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
 import { setCurve } from "../src/curve.ts";
+import { examReport, reportPlace, reportsDir, writeExamReports } from "../src/exam-report.ts";
 import {
   applyScans,
   assignPaper,
@@ -584,6 +585,17 @@ const HELP = `ainar — the AINAR course model CLI
                                            0.5 = square root); --exclude passes
                                            students over; signed, in force
   curve RUN --assessment A --clear         take the curve off
+
+  report exam RUN --assessment A [--student S[,S]] [--dir DIR] [--no-names]
+                                           exam reports as PDFs, outside the
+                                           repository (~/.ainar/reports): one
+                                           per student — questions, answers,
+                                           rubric, marks, the class's full
+                                           marks — and class.pdf, a page each
+  lms send-reports RUN --assessment A [--group G] [--student S[,S]] [--again] [--confirm]
+                                           each student's report to Canvas, as a
+                                           comment on their submission with the
+                                           PDF attached; a plan until --confirm
 
   import-paper RUN --assessment A --paper PAPER.md [--paper PAPER-B.md]
                [--key KEY.md] [--title T] [--type exam] [--dry-run]
@@ -1545,6 +1557,9 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           allTabs: args.includes("--all"),
           links: flagList("link"),
           accept: args.includes("--accept"),
+          students: (flag("student") ?? "").split(",").map((id) => id.trim()).filter(Boolean),
+          again: args.includes("--again"),
+          reportsDir: flag("dir") ?? null,
         },
         forRun(rest[1]!),
         root,
@@ -2461,6 +2476,44 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         out(`${assessmentId}: one criterion per question, worth its marks — mark each answer by points`);
         break;
       }
+      break;
+    }
+
+    case "report": {
+      // Exam reports, outside the repository: src/exam-report.ts. Making them
+      // sends nothing; `lms send-reports` is the send.
+      const sub = rest[0] ?? "";
+      const runId = rest[1];
+      const assessmentId = flag("assessment");
+      if (sub !== "exam" || !runId || !assessmentId) {
+        console.error("usage: report exam RUN --assessment A [--student S[,S]] [--dir DIR] [--no-names]");
+        process.exit(2);
+      }
+      const base = reportsDir(flag("dir"));
+      refuseInsideRepo(base, root);
+      const bundle = forRun(runId);
+      const run = runById(bundle).get(runId) as { timezone?: string };
+      let names: Record<string, string> | null = null;
+      if (!args.includes("--no-names")) {
+        try {
+          const store = RosterStore.load(rosterDir(flag("roster-dir")));
+          names = Object.fromEntries(
+            Object.entries(store.people as Record<string, any>)
+              .filter(([, person]) => typeof person?.name === "string" && person.name.trim())
+              .map(([id, person]) => [id, String(person.name).trim()]),
+          );
+        } catch {
+          out("no roster store here, so the reports carry pseudonyms");
+        }
+      }
+      const report = examReport({ bundle, runId, assessmentId, names });
+      const students = (flag("student") ?? "").split(",").map((id) => id.trim()).filter(Boolean);
+      const place = reportPlace(base, runId, assessmentId);
+      const written = await writeExamReports({ report, dir: place.dir, students, generatedAt: decidedAt(run?.timezone) });
+      if (written.classPdf) out(`wrote ${written.classPdf}`);
+      out(`wrote ${written.students.length} student report(s) in ${join(place.dir, "students")}`);
+      const waiting = report.students.filter((student) => student.total === null && (!students.length || students.includes(student.student)));
+      if (waiting.length) out(`${waiting.length} of them are not fully marked yet, and say so`);
       break;
     }
 

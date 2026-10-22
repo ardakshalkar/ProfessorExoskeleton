@@ -8,6 +8,8 @@ import { loadSheetConfig } from "@ainar/core/src/grade-sheet.ts";
 import { gradeChanges } from "@ainar/core/src/grade-changes.ts";
 import { finalRange, gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { ASSESSMENT_KINDS } from "@ainar/core/src/assessment-kinds.ts";
+import { reportPlace, reportsDir } from "@ainar/core/src/report-place.ts";
+import { existsSync, readFileSync } from "node:fs";
 
 import { assessmentDialog, assessmentWindowScript, assessmentWindowStyle, summarise, windowPanel } from "./assessment-window.js";
 import { BASE } from "./http.js";
@@ -388,6 +390,43 @@ export const studentsDocument = (
   // Every scanned pile's standing — read here, before any row is drawn, for a
   // hand-in's Scans tab as well as the assessment window further down.
   const piles = weighted.length && pilesOf ? pilesOf(bundle) : new Map();
+
+  /*
+   * Each assessment's exam reports, as `ainar report exam` left them in the
+   * private folder: who has one, and who was sent theirs. A report names the
+   * student, so it is opened only with names on — what Pseudonyms is for.
+   */
+  const reportsBase = (() => {
+    try {
+      return reportsDir(null);
+    } catch {
+      return null;
+    }
+  })();
+  const readJson = (path) => {
+    try {
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : null;
+    } catch {
+      return null;
+    }
+  };
+  const reportUrl = (assessmentId, who) =>
+    `${origin}${BASE}/api/reports/file?run=` + encodeURIComponent(runId) + "&assessment=" + encodeURIComponent(assessmentId) +
+    "&student=" + encodeURIComponent(who) + (sessionId ? "&session=" + encodeURIComponent(sessionId) : "");
+  const reportsOf = new Map();
+  if (reportsBase) {
+    for (const assessment of assessmentTitles.values()) {
+      const place = reportPlace(reportsBase, runId, assessment.assessment_id);
+      const manifest = readJson(place.manifest);
+      if (!manifest) continue;
+      reportsOf.set(assessment.assessment_id, {
+        manifest,
+        sent: readJson(place.sent) ?? {},
+        classPdf: existsSync(place.classPdf),
+        has: (student) => Boolean(manifest.students?.[student]) && existsSync(place.studentPdf(student)),
+      });
+    }
+  }
 
   const itemById = new Map((bundle.items ?? []).map((item) => [item.item_id, item]));
   const documentById = new Map((bundle.documents ?? []).map((row) => [row.document_id, row]));
@@ -932,6 +971,25 @@ export const studentsDocument = (
    * question beside the decided mark — still theirs to accept in Grade. The
    * prompt names the pseudonym, never the name: it becomes a turn in a chat.
    */
+  // This hand-in's exam report, when one was made: open it, and whether it was sent.
+  const reportLine = (submission) => {
+    const reports = reportsOf.get(submission.assessment_id);
+    const student = String(submission.student_id);
+    if (!reports || !reports.has(student)) return "";
+    const sent = reports.sent[student];
+    const title = (assessmentTitles.get(submission.assessment_id)?.title ?? submission.assessment_id) + " — report";
+    return (
+      '<p class="rpl">' +
+      (people
+        ? '<a class="chip-link" href="' + escapeText(reportUrl(submission.assessment_id, student)) + '" target="_blank" rel="noopener" data-view="' +
+          escapeText(title) + '" data-format="pdf">Report (PDF)</a>'
+        : '<span class="dim">Report made — it carries the name, so it opens with real names on</span>') +
+      ' <span class="dim">' +
+      (sent ? "sent to Canvas " + escapeText(stamp(sent.at)) : "not sent") +
+      "</span></p>"
+    );
+  };
+
   const regradeBlock = (submission) =>
     '<details class="dc regrade"><summary>Regrade the whole paper</summary>' +
     '<div class="rgb"><textarea data-note="the professor\'s note on how: " rows="3" ' +
@@ -1009,6 +1067,7 @@ export const studentsDocument = (
       '<section class="sub" title="' + escapeText(submission.submission_id) + '">' +
       (facts.length ? '<p class="dim">' + escapeText(facts.join(" · ")) + "</p>" : "") +
       (submission.note ? '<p class="dim">' + escapeText(String(submission.note)) + "</p>" : "") +
+      reportLine(submission) +
       (responses.length || scanPages ? regradeBlock(submission) : "") +
       defencePart(submission) +
       part(
@@ -1370,6 +1429,20 @@ export const studentsDocument = (
       {
         nameOf: (id) => (people && typeof people[id]?.name === "string" && people[id].name.trim() ? people[id].name.trim() : id),
         when: stamp,
+        reports: (() => {
+          const reports = reportsOf.get(a.assessment_id);
+          const students = Object.entries(reports?.manifest.students ?? {});
+          return {
+            made: Boolean(reports),
+            madeAt: reports?.manifest.class_made_at ?? null,
+            count: students.length,
+            ready: students.filter(([, entry]) => entry.status === "graded").length,
+            sent: Object.keys(reports?.sent ?? {}).length,
+            // The class report names everyone: only with names on.
+            classUrl: reports?.classPdf && people ? reportUrl(a.assessment_id, "class") : null,
+            hidden: Boolean(reports?.classPdf) && !people,
+          };
+        })(),
         // The top of the paper is the handwritten name: only with names on.
         crop: (paper) =>
           people

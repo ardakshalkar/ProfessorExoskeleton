@@ -16,7 +16,7 @@
  * against a recorded transport rather than against a process.
  */
 
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { decidedAt, upsertRecords, writeRecords, zoneOffsetMinutes } from "../records-write.ts";
 import { allRubrics, assessmentById, assessmentsOf, enrollmentsOf, runById } from "../bundle.ts";
@@ -102,7 +102,8 @@ import {
   trailingRange,
 } from "./sheets.ts";
 import { submissionsFromApi, submissionsFromExport } from "./pull.ts";
-import { rosterDir } from "../roster.ts";
+import { refuseInsideRepo, rosterDir } from "../roster.ts";
+import { reportPlace, reportsDir } from "../report-place.ts";
 
 /** Python's `%g`. */
 const g = (value: number): string => String(Number(value.toPrecision(6)));
@@ -151,6 +152,12 @@ export interface LmsArgs {
   links?: string[];
   /** `lms groups --accept`: record every unambiguous suggestion. */
   accept?: boolean;
+  /** `lms send-reports --student`: only these. */
+  students?: string[];
+  /** `lms send-reports --again`: send to students already sent this report. */
+  again?: boolean;
+  /** `lms send-reports --dir`: where the reports are, if not `~/.ainar/reports`. */
+  reportsDir?: string | null;
 }
 
 /** Everything a gradebook target needs, gathered before anything is decided. */
@@ -2172,6 +2179,85 @@ const runCheck = async (args: LmsArgs, bundle: CourseBundle, root: string, deps:
 // The entry point
 // --------------------------------------------------------------------------
 
+/**
+ * Each student's exam report to Canvas: a comment on their own submission,
+ * the PDF attached (`report exam` made them; src/exam-report.ts).
+ *
+ * A plan until `--confirm`, as a grade push is: who would get one, who has
+ * none yet, who is not fully marked, who Canvas cannot place. Only a fully
+ * marked report is sent — one still waiting on a mark would tell a student
+ * something the professor has not decided. What was sent is kept beside the
+ * reports in `sent.json`, and a student already sent this report is skipped
+ * unless `--again`. A run with a Canvas course per subgroup is sent course by
+ * course, every course unless `--group` names one.
+ */
+const runSendReports = async (args: LmsArgs, bundle: CourseBundle, root: string, deps: Deps): Promise<number> => {
+  if (!args.assessment) throw new Error("--assessment names the exam whose reports to send");
+  const base = reportsDir(args.reportsDir);
+  refuseInsideRepo(base, root);
+  const place = reportPlace(base, args.run, args.assessment);
+  if (!existsSync(place.manifest)) {
+    throw new Error(`no reports for ${args.assessment} yet — make them first: ainar report exam ${args.run} --assessment ${args.assessment}`);
+  }
+  const manifest = JSON.parse(readFileSync(place.manifest, "utf8"));
+  const sent: Record<string, { at: string; made_at: string; course: string }> = existsSync(place.sent)
+    ? JSON.parse(readFileSync(place.sent, "utf8"))
+    : {};
+  const only = args.students?.length ? new Set(args.students) : null;
+  const entries = Object.entries(manifest.students ?? {}).filter(([student]) => !only || only.has(student)) as [string, any][];
+  const notMarked = entries.filter(([, entry]) => entry.status !== "graded").map(([student]) => student);
+  const noFile = entries.filter(([student]) => !existsSync(place.studentPdf(student))).map(([student]) => student);
+  const already = entries.filter(([student, entry]) => sent[student] && sent[student].made_at === entry.made_at && !args.again).map(([student]) => student);
+  const ready = entries
+    .filter(([student, entry]) => entry.status === "graded" && existsSync(place.studentPdf(student)) && !already.includes(student))
+    .map(([student]) => student);
+
+  const run = runOf(bundle, args.run);
+  const groups = isPerSubgroup(run) ? (args.group ? [args.group] : [...canvasCourses(run).keys()].sort()) : [args.group];
+  const title = String(manifest.title ?? args.assessment);
+  const at = decidedAt(run?.timezone);
+  const placed = new Set<string>();
+  let delivered = 0;
+
+  deps.out(`${title}: ${entries.length} report(s); ${ready.length} ready to send`);
+  if (notMarked.length) deps.out(`  ${notMarked.length} not fully marked, so not sent: ${notMarked.join(", ")}`);
+  if (noFile.length) deps.out(`  ${noFile.length} with no PDF on disk: ${noFile.join(", ")}`);
+  if (already.length) deps.out(`  ${already.length} already sent this report (--again sends it again)`);
+
+  for (const group of groups) {
+    const context = await openContext({ ...args, target: "canvas-api", group: group ?? null }, bundle, root, deps);
+    const here = ready.filter((student) => context.userIds.has(student));
+    here.forEach((student) => placed.add(student));
+    deps.out(
+      `\nCanvas course ${context.courseId}, assignment ${context.assignmentId}${group ? ` (${group})` : ""}: ` +
+        `${here.length} report(s) to send, each as a comment with the PDF attached`,
+    );
+    if (!args.confirm || !here.length) continue;
+    for (const student of here) {
+      const bytes = new Uint8Array(readFileSync(place.studentPdf(student)));
+      await context.client!.commentWithFile(
+        context.courseId!,
+        context.assignmentId!,
+        context.userIds.get(student)!,
+        `Your report for ${title}: each question, your answer, how it was marked, and your mark.`,
+        { name: `${title.replace(/[\\/:*?"<>|]+/g, " ").trim()} report.pdf`, bytes },
+      );
+      sent[student] = { at, made_at: manifest.students[student].made_at, course: String(context.courseId) };
+      // Written after each one, so a send cut short knows who already has theirs.
+      writeFileSync(place.sent, JSON.stringify(sent, null, 2) + "\n");
+      delivered += 1;
+    }
+  }
+  const nowhere = ready.filter((student) => !placed.has(student));
+  if (nowhere.length) deps.out(`\n${nowhere.length} not matched to a Canvas user, so not sent: ${nowhere.join(", ")}`);
+  if (!args.confirm) {
+    deps.out("\nNothing was sent. Add --confirm to send them; each student sees theirs in Canvas at once.");
+    return 0;
+  }
+  deps.out(`\nsent ${delivered} report(s); noted in ${place.sent}`);
+  return 0;
+};
+
 export const runLms = async (
   args: LmsArgs,
   bundle: CourseBundle,
@@ -2209,6 +2295,7 @@ export const runLms = async (
   if (args.subcommand === "groups") return runGroups(args, bundle, root, deps);
   // Opens a context per assessment and course itself.
   if (args.subcommand === "check") return runCheck(args, bundle, root, deps);
+  if (args.subcommand === "send-reports") return runSendReports(args, bundle, root, deps);
 
   const context = await openContext(args, bundle, root, deps);
   switch (args.subcommand) {

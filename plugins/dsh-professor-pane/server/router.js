@@ -49,6 +49,7 @@ import { routes as preferences } from "./routes/preferences.js";
 import { routes as publicRoutes } from "./routes/public.js";
 import { routes as publish } from "./routes/publish.js";
 import { routes as records } from "./routes/records.js";
+import { routes as reports } from "./routes/reports.js";
 import { routes as scans } from "./routes/scans.js";
 import { routes as syncs } from "./routes/syncs.js";
 import { routes as views } from "./routes/views.js";
@@ -67,6 +68,7 @@ export const ROUTES = [
   ...canvas,
   ...plan,
   ...records,
+  ...reports,
   ...grading,
   ...materials,
   ...publish,

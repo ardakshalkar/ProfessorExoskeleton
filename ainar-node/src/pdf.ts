@@ -75,9 +75,20 @@ export type PdfResult = { pdf: string } | { error: string };
  * quietly, and a throwaway profile is what makes it convert.
  */
 export function toPdf(pptx: string, outDir: string): PdfResult {
+  const result = toPdfAll([pptx], outDir);
+  return "error" in result ? result : { pdf: result.pdfs[0]! };
+}
+
+/**
+ * Several documents — a deck, a `.docx` — through one LibreOffice run, which
+ * is the point: starting soffice costs seconds, and a class's sixty reports
+ * one run each would take minutes. Every PDF has to come out fresh, or the
+ * whole batch is a failure, for `toPdf`'s reasons.
+ */
+export function toPdfAll(sources: string[], outDir: string): { pdfs: string[] } | { error: string } {
   const found = officeAt();
   const binaries = [...new Set([...(found ? [found] : []), "soffice"])];
-  const pdf = join(outDir, basename(pptx).replace(/\.pptx$/i, ".pdf"));
+  const pdfs = sources.map((source) => join(outDir, basename(source).replace(/\.[^.]+$/, "") + ".pdf"));
   const attempts: string[] = [];
 
   const attempt = (binary: string, profile: string | null): "ok" | "absent" | string => {
@@ -86,24 +97,25 @@ export function toPdf(pptx: string, outDir: string): PdfResult {
       binary,
       [
         ...(profile ? [`-env:UserInstallation=${pathToFileURL(profile).href}`] : []),
-        "--headless", "--convert-to", "pdf", "--outdir", outDir, pptx,
+        "--headless", "--convert-to", "pdf", "--outdir", outDir, ...sources,
       ],
       { encoding: "utf8" },
     );
     if (result.error) return "absent";
     // A second of slack: some filesystems keep mtimes to the second.
-    const fresh = existsSync(pdf) && statSync(pdf).mtimeMs >= started - 1000;
-    if (result.status === 0 && fresh) return "ok";
+    const stale = pdfs.filter((pdf) => !(existsSync(pdf) && statSync(pdf).mtimeMs >= started - 1000));
+    if (result.status === 0 && !stale.length) return "ok";
     return (
       `exit ${result.status}` +
       (result.stderr?.trim() ? ` — ${result.stderr.trim().split(/\r?\n/)[0]}` : "") +
-      (existsSync(pdf) && !fresh ? " (a PDF is there, but it is from an earlier run)" : "")
+      (stale.length && stale.some((pdf) => existsSync(pdf)) ? " (a PDF is there, but it is from an earlier run)" : "") +
+      (stale.length && sources.length > 1 ? ` (${stale.length} of ${sources.length} not converted)` : "")
     );
   };
 
   for (const binary of binaries) {
     const first = attempt(binary, null);
-    if (first === "ok") return { pdf };
+    if (first === "ok") return { pdfs };
     if (first === "absent") {
       attempts.push(`${binary}: not found`);
       continue;
@@ -111,7 +123,7 @@ export function toPdf(pptx: string, outDir: string): PdfResult {
     const profile = mkdtempSync(join(tmpdir(), "ainar-soffice-"));
     try {
       const second = attempt(binary, profile);
-      if (second === "ok") return { pdf };
+      if (second === "ok") return { pdfs };
       attempts.push(`${binary}: ${first}; with a private profile, ${second === "absent" ? "not found" : second}`);
     } finally {
       rmSync(profile, { recursive: true, force: true });

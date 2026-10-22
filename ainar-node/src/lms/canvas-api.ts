@@ -470,6 +470,82 @@ export class CanvasClient {
     return payload as Record<string, any>;
   }
 
+  /**
+   * A comment on one student's submission, with a file attached — how a
+   * report reaches the student it is about, in the place they already look
+   * for their mark. Canvas's three steps: ask where to upload, upload there,
+   * then comment naming the file. Returns the comment's file id.
+   *
+   * The upload goes to the address Canvas gives, which carries its own
+   * authorisation; the token is not sent there.
+   */
+  async commentWithFile(
+    courseId: string,
+    assignmentId: string,
+    userId: string,
+    text: string,
+    file: { name: string; bytes: Uint8Array; type?: string },
+  ): Promise<string> {
+    const base = `${apiOf(this.config)}/courses/${courseId}/assignments/${assignmentId}/submissions/${userId}`;
+    const type = file.type ?? "application/pdf";
+    const asked = json(
+      this.check(
+        await this.transport.request("POST", `${base}/comments/files`, {
+          headers: { ...this.headers(), "Content-Type": "application/x-www-form-urlencoded" },
+          body: formEncode({ name: file.name, size: String(file.bytes.length), content_type: type }),
+        }),
+        `asking where to upload a file for user ${userId}`,
+      ),
+    ) ?? {};
+    if (!asked.upload_url) throw new TransportError("Canvas gave no upload_url for the comment file");
+
+    const boundary = `----ainar${Date.now().toString(16)}`;
+    const encoder = new TextEncoder();
+    const parts: Uint8Array[] = [];
+    for (const [key, value] of Object.entries(asked.upload_params ?? {})) {
+      parts.push(encoder.encode(`--${boundary}\r\nContent-Disposition: form-data; name="${key}"\r\n\r\n${value}\r\n`));
+    }
+    parts.push(
+      encoder.encode(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${file.name.replace(/"/g, "")}"\r\n` +
+          `Content-Type: ${type}\r\n\r\n`,
+      ),
+      file.bytes,
+      encoder.encode(`\r\n--${boundary}--\r\n`),
+    );
+    const body = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+    let at = 0;
+    for (const part of parts) {
+      body.set(part, at);
+      at += part.length;
+    }
+    const uploaded = json(
+      this.check(
+        await this.transport.request("POST", String(asked.upload_url), {
+          headers: { Accept: "application/json", "Content-Type": `multipart/form-data; boundary=${boundary}` },
+          body,
+        }),
+        `uploading ${file.name}`,
+      ),
+    ) ?? {};
+    const fileId = uploaded.id ?? uploaded.attachment?.id;
+    if (fileId === undefined || fileId === null) {
+      throw new TransportError(`Canvas did not say which file ${file.name} became — nothing was commented`);
+    }
+
+    this.check(
+      await this.transport.request("PUT", base, {
+        headers: { ...this.headers(), "Content-Type": "application/x-www-form-urlencoded" },
+        body: formEncode([
+          ["comment[text_comment]", text],
+          ["comment[file_ids][]", String(fileId)],
+        ]),
+      }),
+      `commenting on user ${userId}'s submission`,
+    );
+    return String(fileId);
+  }
+
   async progress(progressId: string): Promise<Progress> {
     return progressOf((await this.get(`/progress/${progressId}`)) ?? {});
   }

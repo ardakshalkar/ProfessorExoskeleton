@@ -356,6 +356,66 @@ export function ProfessorPane(props) {
           });
         return;
       }
+      // Exam reports from the exam window. *Make* runs `report exam` (about a
+      // minute). *Send* asks for the plan, shows it, and only on the
+      // professor's OK sends with --confirm — each student then sees theirs
+      // in Canvas. Either way the window is reopened after the redraw.
+      if (data.kind === "reports-make" || data.kind === "reports-send") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run = currentRunRef.current;
+        if (!run || !id.test(String(data.assessment))) return;
+        const post = (what, body) =>
+          fetch(
+            scoped(BASE + "/api/reports/" + what + "?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
+            { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+          ).then((response) => response.json());
+        const said = (result) => String(result.error || result.output || "").trim();
+        const done = () => {
+          placedAt.current = Date.now();
+          write(["grading"]);
+        };
+        if (data.kind === "reports-make") {
+          post("make", {})
+            .then((result) => {
+              if (!result.ok) window.alert(said(result).split("\n").slice(-3).join(" ") || "the reports were not made");
+              done();
+            })
+            .catch((error) => {
+              window.alert(String(error));
+              done();
+            });
+          return;
+        }
+        post("send", { confirm: false })
+          .then((plan) => {
+            if (!plan.ok) {
+              window.alert(said(plan).split("\n").slice(-3).join(" ") || "the send could not be planned");
+              done();
+              return null;
+            }
+            const text = said(plan).replace(/\n*Nothing was sent\..*$/s, "");
+            // One "N report(s) to send" per Canvas course.
+            const total = [...text.matchAll(/(\d+) report\(s\) to send/g)].reduce((sum, match) => sum + Number(match[1]), 0);
+            if (!total) {
+              window.alert(text + "\n\nNobody to send to.");
+              done();
+              return null;
+            }
+            if (!window.confirm(text + "\n\nSend these now? Each student sees theirs in Canvas at once.")) {
+              done();
+              return null;
+            }
+            return post("send", { confirm: true }).then((result) => {
+              window.alert(said(result).split("\n").slice(-3).join("\n") || (result.ok ? "sent" : "not sent"));
+              done();
+            });
+          })
+          .catch((error) => {
+            window.alert(String(error));
+            done();
+          });
+        return;
+      }
       // A fork the student brought in person (`defence fork`). A link the
       // command refuses comes back as its own words, since the frame that
       // asked has no place to show them.

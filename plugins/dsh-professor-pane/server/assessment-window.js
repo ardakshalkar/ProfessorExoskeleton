@@ -194,7 +194,7 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
  * handwritten name, so only with names on; `page(student, n)` the address of a
  * page of a student's scan, or null, loaded only when its answer is opened.
  */
-export const windowPanel = (summary, { nameOf, when, crop = () => null, page = () => null }) => {
+export const windowPanel = (summary, { nameOf, when, crop = () => null, page = () => null, reports = null }) => {
   const s = summary;
   const c = s.counts;
   const stat = (label, value, warm = false) =>
@@ -557,10 +557,44 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
     );
   })();
 
+  /*
+   * Exam reports: made in the harness (`ainar report exam`), one PDF per
+   * student and the professor's own with a page each; sent as a comment on
+   * each student's Canvas submission with theirs attached (`lms send-reports`).
+   * Sending asks for the plan first and shows it before anything leaves.
+   */
+  const reportsTab = (() => {
+    if (!reports || !s.counts.handed) return "";
+    const r = reports;
+    return (
+      "<h3>Reports</h3>" +
+      '<p class="dim awnote">Each student’s report has every question, their answer, the rubric with the level they got, their mark, and how many in the class got full marks. ' +
+      "Only decided marks are printed. Your report has a summary page, then one page per student.</p>" +
+      (r.made
+        ? '<div class="awst">' +
+          stat("Reports made", String(r.count) + (r.madeAt ? ' <span class="dim">' + escapeText(when(r.madeAt)) + "</span>" : "")) +
+          stat("Fully marked — can be sent", String(r.ready), r.ready < r.count) +
+          stat("Sent to Canvas", r.sent + '<span class="dim"> of ' + r.ready + "</span>") +
+          "</div>"
+        : '<p class="dim">No reports yet.</p>') +
+      '<p class="awgo" data-rp="' + escapeText(s.id) + '">' +
+      (r.classUrl
+        ? '<a class="chip act" href="' + escapeAttribute(r.classUrl) + '" target="_blank" rel="noopener" data-view="' +
+          escapeAttribute(s.title + " — class report") + '" data-format="pdf">Open my report (PDF)</a> '
+        : "") +
+      '<button type="button" class="chip' + (r.made ? "" : " act") + '" data-rp-make>' + (r.made ? "Make them again" : "Make the reports") + "</button> " +
+      (r.made && r.ready ? '<button type="button" class="chip act" data-rp-send>Send to students in Canvas…</button>' : "") +
+      "</p>" +
+      (r.hidden ? '<p class="dim awnote">Your report names everyone, so it opens with real names on.</p>' : "") +
+      '<p class="dim awnote">Making takes about a minute for a class of sixty. Making them again after a change of marks replaces the PDFs; a student already sent the earlier report is offered the new one.</p>'
+    );
+  })();
+
   // One tab per part, so each is a press away rather than a scroll down.
   const tabs = [
     ["overview", "Overview", results + groups],
     ["curve", "Curve" + (s.curve && s.curve.approval !== "draft" ? " · on" : ""), curveTab],
+    ["reports", "Reports" + (reports?.made ? " · " + reports.count : ""), reportsTab],
     ["questions", "Questions" + (s.questions.length ? " (" + s.questions.length + ")" : ""), questions],
     ["scans", "Scans", scans],
     ["people", "Students" + (s.missing.length ? " · " + s.missing.length + " missing" : ""), people],
@@ -757,6 +791,11 @@ export const assessmentWindowScript =
   // A tab shows its section; a question shows what it opens into.
   "var tb=t.closest('[data-aw-tab]');if(tb){var pn=tb.closest('[data-aw-panel]');tabTo(pn,tb.getAttribute('data-aw-tab'));" +
   "pn.querySelector('.awbody').scrollTop=0;report();return;}" +
+  // Reports: make them, or send them — the browser half shows the plan first.
+  "var rp=t.closest('[data-rp-make],[data-rp-send]');if(rp){if(rp.disabled||!up)return;var rb=rp.closest('[data-rp]');" +
+  "[].slice.call(rb.querySelectorAll('button')).forEach(function(x){x.disabled=true;});" +
+  "var mk=rp.hasAttribute('data-rp-make');rp.textContent=mk?'Making… about a minute':'Checking who gets one…';" +
+  "say({kind:mk?'reports-make':'reports-send',assessment:rb.getAttribute('data-rp')});return;}" +
   // The curve's presses: an exponent preset, Apply, Take it off.
   "var cx=t.closest('[data-cv-exp]');if(cx){var bx=cx.closest('.awcv');bx.querySelector('[data-cv-exponent]').value=cx.getAttribute('data-cv-exp');cvDraw(bx);return;}" +
   "var ca=t.closest('[data-cv-apply],[data-cv-clear]');if(ca){if(ca.disabled||!up)return;var bx=ca.closest('.awcv');" +
