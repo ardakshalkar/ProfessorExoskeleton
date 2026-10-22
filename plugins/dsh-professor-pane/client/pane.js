@@ -608,9 +608,14 @@ export function ProfessorPane(props) {
   const current = options.find((option) => option.runId === chosen) || options[0] || null;
   currentRunRef.current = current ? current.runId : null;
 
-  // Keep the run checked against Canvas whichever page is open, not only
-  // when the Gradebook is: a finished check redraws every Canvas count.
-  useCanvasWatch(current ? current.runId : null, props.sessionId);
+  // Check every run against Canvas the moment the pane opens, then keep the
+  // current one checked whichever page is open: a finished check redraws
+  // every Canvas count.
+  useCanvasWatch(
+    current ? current.runId : null,
+    props.sessionId,
+    options.map((option) => option.runId),
+  );
 
   // Switching run returns to the default rather than carrying the last
   // press across. It matters in one direction now: a professor who pressed

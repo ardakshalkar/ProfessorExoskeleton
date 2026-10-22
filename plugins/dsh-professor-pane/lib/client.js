@@ -1401,7 +1401,7 @@ function useCaptions(endpoint, marks, whole) {
       startPieces(loop, stream, questionId, type);
       return;
     }
-    let opened = false;
+    let opened2 = false;
     let audio = null;
     let source = null;
     let node = null;
@@ -1416,12 +1416,12 @@ function useCaptions(endpoint, marks, whole) {
     };
     const fallBack = () => {
       teardown();
-      if (loop.fellBack || opened || !loop.active) return;
+      if (loop.fellBack || opened2 || !loop.active) return;
       loop.fellBack = true;
       startPieces(loop, stream, questionId, type);
     };
     socket.onopen = () => {
-      opened = true;
+      opened2 = true;
       setCaptions((current) => current && current.question === questionId ? Object.assign({}, current, { mode: "streaming" }) : current);
       try {
         audio = new AudioContext();
@@ -3744,7 +3744,7 @@ function AssignmentBinder(props) {
   );
 }
 function IntegrationStatus(props) {
-  const [opened, setOpened] = React.useState(null);
+  const [opened2, setOpened] = React.useState(null);
   const rows = props.integrations || [];
   if (!rows.length) {
     return h("p", { className: "pp-absent" }, "Nothing to report about this run yet.");
@@ -3796,7 +3796,7 @@ function IntegrationStatus(props) {
           { className: "pp-absent" },
           "Grades cannot be pushed here — nothing in this workspace has a " + row.label + " gradebook target. It publishes content."
         ) : null,
-        opened === row.id ? h(
+        opened2 === row.id ? h(
           "div",
           null,
           // The steps still to do, in order, and only those. A
@@ -4160,16 +4160,28 @@ var refresh = (runId, sessionId) => {
     return;
   }
   fetch(urlFor(runId, sessionId), { headers: { accept: "application/json" } }).then((response) => response.json()).then((answer) => {
+    if (entryFor(runId).phase === "running") return void 0;
     if (answer.state === "running") return run(runId, sessionId);
     set(runId, { phase: "ready", value: answer });
     if (stale(answer)) run(runId, sessionId);
   }).catch(() => run(runId, sessionId));
 };
-function useCanvasWatch(runId, sessionId) {
+var opened = /* @__PURE__ */ new Set();
+var open = (runId, sessionId) => {
+  if (opened.has(runId)) return false;
+  opened.add(runId);
+  run(runId, sessionId);
+  return true;
+};
+function useCanvasWatch(runId, sessionId, runIds = []) {
+  const all = runIds.join("\n");
+  React.useEffect(() => {
+    for (const id of all ? all.split("\n") : []) open(id, sessionId);
+  }, [all, sessionId]);
   React.useEffect(() => {
     if (!runId) return void 0;
     const look = () => document.visibilityState === "visible" && refresh(runId, sessionId);
-    look();
+    if (!open(runId, sessionId)) look();
     const timer = setInterval(look, LOOK_MS);
     document.addEventListener("visibilitychange", look);
     return () => {
@@ -5416,7 +5428,7 @@ var TitleWithTag = (props) => {
 function GradebookStatus(props) {
   const state = useUnpublished(props.runId, props.sessionId, props.revision);
   const [check, recheck] = useCanvasCheck(props.runId, props.sessionId);
-  const [open, setOpen] = React.useState(null);
+  const [open2, setOpen] = React.useState(null);
   if (state.phase === "loading" || !state.value || state.value.error) return null;
   const rows = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0).sort(dueOrder);
   if (!rows.length) return null;
@@ -5429,7 +5441,7 @@ function GradebookStatus(props) {
   const unreachable = !checking && (answer.error || answer.state === "ready" && !answer.value);
   return h(
     "div",
-    { className: "pp-bookcard pp-bookstatus" + (open ? " pp-bookstatus-open" : "") },
+    { className: "pp-bookcard pp-bookstatus" + (open2 ? " pp-bookstatus-open" : "") },
     h(
       "div",
       { className: "pp-cardhead" },
@@ -5471,7 +5483,7 @@ function GradebookStatus(props) {
         { key: entry.id },
         h(
           "div",
-          { className: "pp-bookrow" + (open === entry.id ? " pp-bookrow-open" : "") },
+          { className: "pp-bookrow" + (open2 === entry.id ? " pp-bookrow-open" : "") },
           h(TitleWithTag, { title: entry.title }),
           h(
             "span",
@@ -5507,14 +5519,14 @@ function GradebookStatus(props) {
               },
               edited.get(entry.id).length + " changed in Canvas"
             ) : null,
-            state2.behind || open === entry.id ? h(
+            state2.behind || open2 === entry.id ? h(
               "button",
-              { type: "button", className: "pp-segbtn pp-sendbtn", "aria-expanded": open === entry.id, onClick: () => setOpen(open === entry.id ? null : entry.id) },
-              open === entry.id ? "Close" : "Send…"
+              { type: "button", className: "pp-segbtn pp-sendbtn", "aria-expanded": open2 === entry.id, onClick: () => setOpen(open2 === entry.id ? null : entry.id) },
+              open2 === entry.id ? "Close" : "Send…"
             ) : null
           )
         ),
-        open === entry.id ? h(
+        open2 === entry.id ? h(
           "div",
           { className: "pp-bookdrawer" },
           h(CanvasMarks, {
@@ -5697,12 +5709,12 @@ function SheetSyncedNotice(props) {
 }
 function RecentMarks(props) {
   const state = useMarksActivity(props.runId, props.sessionId, props.revision, props.names);
-  const [open, setOpen] = React.useState(false);
+  const [open2, setOpen] = React.useState(false);
   if (state.phase === "loading" || !state.value || state.value.error) return null;
   const events = state.value.events || [];
   if (!events.length) return null;
   const SHOWN = 6;
-  const shown = open ? events : events.slice(0, 2);
+  const shown = open2 ? events : events.slice(0, 2);
   const more = events.length > 2 || shown.some((event) => event.changes.length > SHOWN);
   return h(
     "div",
@@ -5712,10 +5724,10 @@ function RecentMarks(props) {
       { className: "pp-cardhead" },
       h("span", { className: "pp-svc pp-svc-sheets pp-svc-small", "aria-hidden": "true" }, "GS"),
       h("b", null, "Last added from the grade sheet"),
-      more ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setOpen(!open) }, open ? "Fewer" : "Show all") : null
+      more ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setOpen(!open2) }, open2 ? "Fewer" : "Show all") : null
     ),
     shown.map((event) => {
-      const rows = open ? event.changes : event.changes.slice(0, SHOWN);
+      const rows = open2 ? event.changes : event.changes.slice(0, SHOWN);
       return h(
         "div",
         { className: "pp-recentrun" + (event.changes.length ? "" : " pp-recentquiet"), key: event.sync + event.at },
@@ -5751,7 +5763,7 @@ function RecentMarks(props) {
 }
 function Unpublished(props) {
   const state = useUnpublished(props.runId, props.sessionId, props.revision);
-  const [open, setOpen] = React.useState(null);
+  const [open2, setOpen] = React.useState(null);
   if (state.phase === "loading") return h(Message, null, "Reading what has gone out…");
   const doc = state.value;
   if (doc.error) return h(Message, { error: true }, doc.error);
@@ -5782,11 +5794,11 @@ function Unpublished(props) {
             binding ? h("span", { className: "pp-behind" }, binding) : null,
             h(
               "button",
-              { type: "button", className: "pp-segbtn", onClick: () => setOpen(open === entry.id ? null : entry.id) },
-              open === entry.id ? "Close" : "Send…"
+              { type: "button", className: "pp-segbtn", onClick: () => setOpen(open2 === entry.id ? null : entry.id) },
+              open2 === entry.id ? "Close" : "Send…"
             )
           ),
-          open === entry.id ? h(CanvasMarks, {
+          open2 === entry.id ? h(CanvasMarks, {
             key: entry.id,
             runId: props.runId,
             sessionId: props.sessionId,
@@ -6325,7 +6337,7 @@ function CanvasCard(props) {
   const row = (data.integrations || []).find((entry) => entry.id === "canvas");
   const [filter, setFilter] = React.useState(props.filter || null);
   const [more, setMore] = React.useState(false);
-  const [open, setOpen] = React.useState(null);
+  const [open2, setOpen] = React.useState(null);
   const [binding, setBinding] = React.useState(false);
   const [editing, setEditing] = React.useState(null);
   const [tokenError, setTokenError] = React.useState(null);
@@ -6467,7 +6479,7 @@ function CanvasCard(props) {
   );
   const assessmentRow = (entry) => {
     const id = entry.a.assessmentId;
-    const expanded = open === id;
+    const expanded = open2 === id;
     return h(
       "div",
       { className: "pp-crow" + (expanded ? " pp-crow-open" : ""), key: id },
@@ -6718,9 +6730,9 @@ function Accounts(props) {
   const data = props.data;
   const refs = data.credentials && data.credentials.refs || {};
   const connections = data.registry && data.registry.connections || [];
-  const [open, setOpen] = React.useState(null);
+  const [open2, setOpen] = React.useState(null);
   const [errors, setErrors] = React.useState({});
-  const toggle = (id) => setOpen(open === id ? null : id);
+  const toggle = (id) => setOpen(open2 === id ? null : id);
   const saved = (body) => {
     setErrors({});
     if (props.onSaved) props.onSaved(body);
@@ -6750,7 +6762,7 @@ function Accounts(props) {
       connected: Boolean(canvas.host) && canvasToken,
       status: canvas.host ? bareHost(canvas.host) + " · " + (canvasToken ? "token saved" : "no token") : "no address yet",
       action: canvas.host ? canvasToken ? "Change" : "Add the token" : "Connect",
-      open: open === "canvas",
+      open: open2 === "canvas",
       onToggle: () => toggle("canvas"),
       error: errors.canvas
     },
@@ -6774,7 +6786,7 @@ function Accounts(props) {
       connected: Boolean(google.connected),
       status: google.connected ? "signed in as " + (google.account || "your Google account") + " · grade sheets are read directly" : "not signed in · grade sheets come in as downloads",
       action: google.connected ? "Change" : "Connect",
-      open: open === "google",
+      open: open2 === "google",
       onToggle: () => toggle("google")
     },
     h(GoogleConnect, { google, bare: true, onChanged: props.onRefresh })
@@ -6790,7 +6802,7 @@ function Accounts(props) {
       connected: Boolean(github.via),
       status: github.via === "token" ? "token saved" + (github.owner ? " · repositories under " + github.owner : "") : github.via === "gh" ? "through the gh CLI, signed in as " + github.gh.account : github.gh && github.gh.installed ? "the gh CLI is installed but not signed in" : "no token, and no gh CLI",
       action: github.via === "token" ? "Change" : github.via === "gh" ? "Use a token" : "Connect",
-      open: open === "github",
+      open: open2 === "github",
       onToggle: () => toggle("github")
     },
     h(
@@ -6818,7 +6830,7 @@ function Accounts(props) {
         connected: Boolean(entry) && token,
         status: entry ? describe(entry) + " · " + (token ? "token saved" : "no token") : "not set up",
         action: entry ? "Change" : "Connect",
-        open: open === type,
+        open: open2 === type,
         onToggle: () => toggle(type),
         error: errors[type]
       },
@@ -6841,7 +6853,7 @@ function Accounts(props) {
         (entry) => entry.name + " · " + [entry.provider, entry.model].filter(Boolean).join(" ") + (entry.pricePerMinute === null ? "" : " · $" + entry.pricePerMinute + "/min") + (configured(entry.tokenEnv) || entry.tokenInEnv ? "" : " · no token")
       ).join("; ") : "not set up · the defence desk records answers without transcribing them",
       action: voices.length ? "Change" : "How to connect",
-      open: open === "transcription",
+      open: open2 === "transcription",
       onToggle: () => toggle("transcription"),
       error: errors.transcription
     },
@@ -7067,7 +7079,7 @@ function GithubCard(props) {
   const data = props.data;
   const sync = props.syncs ? props.syncs.syncs.find((entry) => entry.service === "github") : null;
   const rows = (data.assessments || []).filter((assessment) => assessment.github).sort((left, right) => String(left.dueAt || "9999").localeCompare(String(right.dueAt || "9999")));
-  const [open, setOpen] = React.useState(null);
+  const [open2, setOpen] = React.useState(null);
   if (!sync && !rows.length) return null;
   const unpublished = rows.filter((assessment) => !assessment.github.published);
   const chip = !rows.length ? null : unpublished.length ? { text: unpublished.length + " not published", tone: "warn" } : { text: "all published", tone: "ok" };
@@ -7088,7 +7100,7 @@ function GithubCard(props) {
         const id = assessment.assessmentId;
         const repo = assessment.github.repo;
         const published = assessment.github.published;
-        const expanded = open === id;
+        const expanded = open2 === id;
         return h(
           "div",
           { className: "pp-crow" + (expanded ? " pp-crow-open" : ""), key: id },
@@ -8119,7 +8131,7 @@ function RecordDialog(props) {
   ));
 }
 function EditScope(props) {
-  const [open, setOpen] = React.useState(null);
+  const [open2, setOpen] = React.useState(null);
   const value = React.useMemo(
     () => ({
       runId: props.runId,
@@ -8129,7 +8141,7 @@ function EditScope(props) {
     }),
     [props.runId, props.sessionId, props.enabled]
   );
-  return /* @__PURE__ */ h(EditContext.Provider, { value }, props.children, open && props.enabled ? /* @__PURE__ */ h(RecordDialog, { key: open.kind + "|" + open.id, kind: open.kind, id: open.id, onClose: () => setOpen(null) }) : null);
+  return /* @__PURE__ */ h(EditContext.Provider, { value }, props.children, open2 && props.enabled ? /* @__PURE__ */ h(RecordDialog, { key: open2.kind + "|" + open2.id, kind: open2.kind, id: open2.id, onClose: () => setOpen(null) }) : null);
 }
 
 // client/course/term.jsx
@@ -9552,7 +9564,7 @@ var CHANGE_FILTERS = [
 function LastChanges(props) {
   const [state, setState] = React.useState({ phase: "loading" });
   const [filter, setFilter] = React.useState("all");
-  const [open, setOpen] = React.useState(false);
+  const [open2, setOpen] = React.useState(false);
   const [attempt, setAttempt] = React.useState(0);
   React.useEffect(() => {
     let live = true;
@@ -9575,7 +9587,7 @@ function LastChanges(props) {
         filter === "all" ? "No grade has been decided and the policy has not been changed here yet." : "Nothing of this kind yet."
       );
     }
-    const shown = open ? events : events.slice(0, 14);
+    const shown = open2 ? events : events.slice(0, 14);
     return h(
       React.Fragment,
       null,
@@ -12150,7 +12162,7 @@ function Row(props) {
   );
 }
 function CourseBlock(props) {
-  const [open, setOpen] = React.useState(false);
+  const [open2, setOpen] = React.useState(false);
   const run2 = props.run;
   const weekText = run2 && run2.current_week ? "week " + run2.current_week + " of " + run2.weeks : null;
   const sub = run2 ? [run2.course_id, run2.term, weekText].filter(Boolean).join(" · ") : props.subtitle;
@@ -12163,7 +12175,7 @@ function CourseBlock(props) {
         type: "button",
         className: "pp-nav-course",
         "aria-haspopup": "menu",
-        "aria-expanded": open,
+        "aria-expanded": open2,
         title: "Switch course",
         onClick: () => setOpen((value) => !value)
       },
@@ -12180,7 +12192,7 @@ function CourseBlock(props) {
         h("i", { style: { width: Math.min(100, Math.round(run2.current_week / run2.weeks * 100)) + "%" } })
       ) : null
     ),
-    open ? h(
+    open2 ? h(
       "div",
       { className: "pp-nav-menu", role: "menu", onMouseLeave: () => setOpen(false) },
       props.workspaces.map(
@@ -12201,14 +12213,14 @@ function CourseBlock(props) {
 }
 function ThisWeek(props) {
   const week = props.week;
-  const open = () => requestPlace({ mode: "teaching", run: props.runId });
+  const open2 = () => requestPlace({ mode: "teaching", run: props.runId });
   if (!week) return null;
   const lines = [];
   for (const meeting of week.meetings) {
     lines.push(
       h(
         "button",
-        { type: "button", className: "pp-nav-row pp-nav-line", key: "m" + lines.length, onClick: open, title: meeting.title },
+        { type: "button", className: "pp-nav-row pp-nav-line", key: "m" + lines.length, onClick: open2, title: meeting.title },
         h("span", { className: "pp-nav-text" }, capital(meeting.type) + " · " + meeting.title),
         meeting.deck ? null : h("span", { className: "pp-nav-badge" }, "no deck"),
         h("span", { className: "pp-nav-meta" }, navDate(meeting.on) || "no date")
@@ -12219,7 +12231,7 @@ function ThisWeek(props) {
     lines.push(
       h(
         "button",
-        { type: "button", className: "pp-nav-row pp-nav-line", key: "d" + lines.length, onClick: open, title: work.title },
+        { type: "button", className: "pp-nav-row pp-nav-line", key: "d" + lines.length, onClick: open2, title: work.title },
         h("span", { className: "pp-nav-text" }, shortTitle(work.title) + " due"),
         h("span", { className: "pp-nav-meta" }, navDate(work.due_on) || "no date")
       )
@@ -12231,7 +12243,7 @@ function ThisWeek(props) {
       lines.push(
         h(
           "button",
-          { type: "button", className: "pp-nav-row pp-nav-line", key: "n" + lines.length, onClick: open, title: work.title },
+          { type: "button", className: "pp-nav-row pp-nav-line", key: "n" + lines.length, onClick: open2, title: work.title },
           h("span", { className: "pp-nav-text" }, shortTitle(work.title)),
           h("span", { className: "pp-nav-meta" }, navDate(work.due_on) || "no date")
         )
@@ -13177,7 +13189,7 @@ function GradeBoard(props) {
     const placedAt = (score) => item.groups.filter((group) => group.score === score);
     const unplaced = item.groups.filter((group) => group.score === null || !levels.some((level) => level.score === group.score));
     const groupChip = (group) => {
-      const open = openGroups[item.item_id + "|" + group.index];
+      const open2 = openGroups[item.item_id + "|" + group.index];
       const members = item.answers.filter((answer) => answer.group === group.index);
       return h(
         "div",
@@ -13190,9 +13202,9 @@ function GradeBoard(props) {
             {
               type: "button",
               className: "pp-glink",
-              onClick: () => setOpenGroups((current2) => Object.assign({}, current2, { [item.item_id + "|" + group.index]: !open }))
+              onClick: () => setOpenGroups((current2) => Object.assign({}, current2, { [item.item_id + "|" + group.index]: !open2 }))
             },
-            (open ? "▾ " : "▸ ") + group.label
+            (open2 ? "▾ " : "▸ ") + group.label
           ),
           h("span", { className: "pp-as" }, group.count + (group.unsure ? " · unsure" : "")),
           h(
@@ -13212,7 +13224,7 @@ function GradeBoard(props) {
           )
         ),
         group.reason ? h("div", { className: "pp-as" }, group.reason) : null,
-        open ? members.map((answer) => h("div", { className: "pp-gplain", key: answer.student }, answerText(answer))) : null
+        open2 ? members.map((answer) => h("div", { className: "pp-gplain", key: answer.student }, answerText(answer))) : null
       );
     };
     return shell(
@@ -13603,7 +13615,7 @@ function GradeBoard(props) {
           h("span", { className: "pp-as" }, "decided as " + (doc.decided_by || "nobody — the run lists no instructor"))
         ),
         visible.map((section) => {
-          const open = waiting2(section.answers);
+          const open2 = waiting2(section.answers);
           return h(
             React.Fragment,
             { key: section.key },
@@ -13614,15 +13626,15 @@ function GradeBoard(props) {
               h("b", null, section.title),
               section.unsure ? h("i", null, "unsure") : null,
               h("span", { className: "pp-as" }, section.answers.length + " answer" + (section.answers.length === 1 ? "" : "s")),
-              open.length && section.key !== "unread" ? h(
+              open2.length && section.key !== "unread" ? h(
                 "button",
                 {
                   type: "button",
                   className: "pp-segbtn",
                   disabled: Boolean(busy),
-                  onClick: () => decide(open.map((answer) => ({ student: answer.student, score: answer.suggestion.score })), "group", "group")
+                  onClick: () => decide(open2.map((answer) => ({ student: answer.student, score: answer.suggestion.score })), "group", "group")
                 },
-                busy === "group" ? "Accepting…" : "Accept " + open.length + " at " + label(open[0].suggestion.score)
+                busy === "group" ? "Accepting…" : "Accept " + open2.length + " at " + label(open2[0].suggestion.score)
               ) : null
             ),
             section.answers.map(card)
@@ -14931,7 +14943,7 @@ function ProfessorPane(props) {
         const run2 = currentRunRef.current;
         if (!run2 || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
         setDesk({ assessment: data.assessment, student: data.student, preparing: true });
-        const settle = (next) => setDesk((open) => open && open.assessment === data.assessment && open.student === data.student ? next : open);
+        const settle = (next) => setDesk((open2) => open2 && open2.assessment === data.assessment && open2.student === data.student ? next : open2);
         fetch(
           scoped(
             BASE + "/api/defence/fork?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&inperson=1",
@@ -15138,7 +15150,11 @@ function ProfessorPane(props) {
   }
   const current = options.find((option) => option.runId === chosen) || options[0] || null;
   currentRunRef.current = current ? current.runId : null;
-  useCanvasWatch(current ? current.runId : null, props.sessionId);
+  useCanvasWatch(
+    current ? current.runId : null,
+    props.sessionId,
+    options.map((option) => option.runId)
+  );
   React.useEffect(() => {
     setNames(true);
   }, [current ? current.runId : null]);

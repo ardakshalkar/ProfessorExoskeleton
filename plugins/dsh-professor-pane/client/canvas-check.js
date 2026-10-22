@@ -6,7 +6,8 @@
  * Canvas card, the Grade view and the rest drew from a ledger nobody had
  * corrected from Canvas since the Gradebook was last looked at. Now the pane
  * keeps the run checked (`useCanvasWatch`) whichever page is open, and any
- * view can show the answer (`useCanvasCheck`).
+ * view can show the answer (`useCanvasCheck`). Since 2026-10-22 opening the
+ * pane checks every run at once, however fresh the last answer.
  *
  * The check writes nothing to Canvas; it notes in the ledger the marks Canvas
  * already holds, so when one finishes the `canvas` tag is bumped and every
@@ -65,6 +66,8 @@ const refresh = (runId, sessionId) => {
   fetch(urlFor(runId, sessionId), { headers: { accept: "application/json" } })
     .then((response) => response.json())
     .then((answer) => {
+      // A check started meanwhile (the pane opening) answers for itself.
+      if (entryFor(runId).phase === "running") return undefined;
       if (answer.state === "running") return run(runId, sessionId);
       set(runId, { phase: "ready", value: answer });
       if (stale(answer)) run(runId, sessionId);
@@ -72,16 +75,38 @@ const refresh = (runId, sessionId) => {
     .catch(() => run(runId, sessionId));
 };
 
+/** Runs already checked since this page loaded. */
+const opened = new Set();
+
 /**
- * Keep `runId` checked against Canvas while this is mounted: at once, on
- * coming back to a hidden pane, and every minute it stays open, each time
- * only if the last check is more than five minutes old.
+ * Check each run against Canvas once when the pane opens, however fresh the
+ * server's last answer is — opening the system is when the professor expects
+ * Canvas to be current. A run already checked since the page loaded is left
+ * to the watch below.
  */
-export function useCanvasWatch(runId, sessionId) {
+const open = (runId, sessionId) => {
+  if (opened.has(runId)) return false;
+  opened.add(runId);
+  run(runId, sessionId);
+  return true;
+};
+
+/**
+ * Keep `runId` checked against Canvas while this is mounted: at once when
+ * the pane opens, then on coming back to a hidden pane and every minute it
+ * stays open, each time only if the last check is more than five minutes old.
+ * `runIds` — every run in the workspace — are each checked once on opening
+ * too, so a run the professor switches to is already current.
+ */
+export function useCanvasWatch(runId, sessionId, runIds = []) {
+  const all = runIds.join("\n");
+  React.useEffect(() => {
+    for (const id of all ? all.split("\n") : []) open(id, sessionId);
+  }, [all, sessionId]);
   React.useEffect(() => {
     if (!runId) return undefined;
     const look = () => document.visibilityState === "visible" && refresh(runId, sessionId);
-    look();
+    if (!open(runId, sessionId)) look();
     const timer = setInterval(look, LOOK_MS);
     document.addEventListener("visibilitychange", look);
     return () => {
