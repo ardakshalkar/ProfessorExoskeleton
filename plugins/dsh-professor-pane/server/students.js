@@ -244,8 +244,16 @@ export const studentsDocument = (
               // where there is not. A cell not yet due stays a bare slot.
               const text =
                 at.state === "graded" ? number(at.entry.score) : { in: "✓", missing: "✗", unrecorded: "?" }[at.state] ?? "";
+              // A mark fills its cell from the bottom as far as it is of the
+              // full marks, warm under half: good and bad read down a column.
+              const share =
+                at.state === "graded" && Number(at.entry.maximum) > 0
+                  ? Math.max(0, Math.min(100, (100 * Number(at.entry.score)) / Number(at.entry.maximum)))
+                  : null;
               return (
-                '<span class="m ' + at.state + '" title="' + escapeText(tipOf(a, at)) + '"' + opens(studentId, a) + ">" +
+                '<span class="m ' + at.state + (share !== null && share < 50 ? " lo" : "") + '"' +
+                (share !== null ? ' style="--f:' + share.toFixed(0) + '%"' : "") +
+                ' title="' + escapeText(tipOf(a, at)) + '"' + opens(studentId, a) + ">" +
                 escapeText(text) + "</span>"
               );
             })
@@ -918,6 +926,25 @@ export const studentsDocument = (
   };
 
   /*
+   * Regrade the whole hand-in, with the professor's note on how. The press
+   * asks the session (`/grade-submission`), so the model judging is the one
+   * the professor is talking to, and what comes back is a fresh suggestion per
+   * question beside the decided mark — still theirs to accept in Grade. The
+   * prompt names the pseudonym, never the name: it becomes a turn in a chat.
+   */
+  const regradeBlock = (submission) =>
+    '<details class="dc regrade"><summary>Regrade the whole paper</summary>' +
+    '<div class="rgb"><textarea data-note="the professor\'s note on how: " rows="3" ' +
+    'placeholder="How to regrade it — e.g. accept answers in either notation; be stricter on Q4; read page 3 again"></textarea>' +
+    '<button type="button" class="chip act" data-ask="' +
+    escapeText(
+      "/grade-submission " + submission.assessment_id + " " + runId + " " + submission.student_id +
+        " — regrade the whole paper, every question afresh, as new suggestions beside the current marks",
+    ) +
+    '">Ask to regrade</button>' +
+    '<p class="dim">New marks arrive as suggestions; the current ones stay until you accept the new ones in Grade.</p></div></details>';
+
+  /*
    * A paper exam's hand-in: what was read off the paper and the paper itself,
    * as two tabs — Answers first, Scans one press away. The pages are the
    * Grade view's own route, so the first page is drawn from below the name
@@ -982,6 +1009,7 @@ export const studentsDocument = (
       '<section class="sub" title="' + escapeText(submission.submission_id) + '">' +
       (facts.length ? '<p class="dim">' + escapeText(facts.join(" · ")) + "</p>" : "") +
       (submission.note ? '<p class="dim">' + escapeText(String(submission.note)) + "</p>" : "") +
+      (responses.length || scanPages ? regradeBlock(submission) : "") +
       defencePart(submission) +
       part(
         "Repository",
@@ -1694,6 +1722,9 @@ export const studentsDocument = (
     ".tp[hidden]{display:none}" +
     ".pg{margin:0 0 12px}.pg img{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:4px;background:#fff}" +
     ".pg figcaption{font-size:11px;margin-top:3px}" +
+    ".rgb{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:8px 10px}" +
+    ".rgb textarea{box-sizing:border-box;width:100%;font:inherit;font-size:13px;resize:vertical}" +
+    ".rgb p{margin:0;font-size:12px}" +
     ".dwh{display:flex;align-items:center;gap:4px;padding:8px 10px 8px 14px;border-bottom:1px solid var(--line)}" +
     ".dwt{flex:1;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
     ".dwt b{font-weight:600}" +
@@ -1855,6 +1886,9 @@ export const studentsDocument = (
     ".kn{color:var(--fg);font-weight:600}" +
     ".m{display:inline-block;width:9px;height:14px;border-radius:2px;border:1px solid var(--line);vertical-align:-2px}" +
     ".m.graded{background:var(--infobg);border-color:var(--info);color:var(--fg)}" +
+    ".sk .m.graded{--cf:color-mix(in srgb,var(--info) 38%,transparent);" +
+    "background:linear-gradient(to top,var(--cf) var(--f,100%),transparent var(--f,100%))}" +
+    ".sk .m.graded.lo{--cf:color-mix(in srgb,var(--warn) 34%,transparent);border-color:var(--warn)}" +
     ".m.in{border:1px dashed var(--info);color:var(--info)}" +
     ".m.missing{background:var(--warnbg);border-color:var(--warn);color:var(--warn);font-weight:600}" +
     ".m.unrecorded{color:var(--dim)}" +
@@ -1882,7 +1916,10 @@ export const studentsDocument = (
     "document.addEventListener('click',function(e){" +
     "var k=e.target.closest&&e.target.closest('button[data-ask]');" +
     "if(k){if(k.disabled)return;k.disabled=true;k.textContent='Asked…';" +
-    "parent.postMessage({source:'professor-pane',kind:'ask',prompt:k.getAttribute('data-ask')},'*');return;}" +
+    // A note typed beside the press (Regrade) rides at the end of the prompt.
+    "var q=k.getAttribute('data-ask'),nt=k.parentNode.querySelector('textarea[data-note]');" +
+    "if(nt&&nt.value.trim()){q+='; '+nt.getAttribute('data-note')+nt.value.trim();nt.disabled=true;}" +
+    "parent.postMessage({source:'professor-pane',kind:'ask',prompt:q},'*');return;}" +
     "var s=e.target.closest&&e.target.closest('button[data-syncs]');" +
     "if(s){parent.postMessage({source:'professor-pane',kind:'syncs'},'*');return;}" +
     // Save a fork: their own (the button carries it), the one picked from

@@ -60,7 +60,14 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
   const percent = (cell) => (100 * cell.entry.score) / cell.entry.maximum;
   const percents = graded.map(percent);
   const bins = Array.from({ length: 10 }, () => 0);
-  for (const value of percents) bins[Math.min(9, Math.max(0, Math.floor(value / 10)))] += 1;
+  // Who is in each bar, highest mark first: the bar's hover names them.
+  const binned = Array.from({ length: 10 }, () => []);
+  for (const cell of graded) {
+    const bin = Math.min(9, Math.max(0, Math.floor(percent(cell) / 10)));
+    bins[bin] += 1;
+    binned[bin].push({ student: cell.student, score: cell.entry.score });
+  }
+  for (const list of binned) list.sort((a, b) => b.score - a.score || a.student.localeCompare(b.student));
 
   const groupNames = [...new Set(cells.map((cell) => cell.group))].sort();
   const groups =
@@ -155,6 +162,7 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
     scores: describe(graded.map((cell) => cell.entry.score)),
     percents: { ...describe(percents), under_half: percents.filter((value) => value < 50).length },
     bins,
+    binned,
     groups,
     questions,
     lowest,
@@ -222,7 +230,12 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
       s.bins
         .map(
           (n, i) =>
-            '<span class="awc" title="' + (i * 10) + "–" + (i === 9 ? 100 : i * 10 + 9) + "%: " + n + '">' +
+            '<span class="awc" title="' +
+            escapeText(
+              (i * 10) + "–" + (i === 9 ? 100 : i * 10 + 9) + "%: " + n +
+                (s.binned?.[i] ?? []).map((who) => "\n" + nameOf(who.student) + " — " + round(who.score)).join(""),
+            ) +
+            '">' +
             '<span class="awf' + (i < 5 ? " low" : "") + '" style="height:' + (100 * n) / tallest + '%"></span>' +
             '<span class="awn">' + (n || "") + "</span></span>",
         )
