@@ -3,6 +3,9 @@
  * server/router.js for the table they join and what `c` carries.
  */
 
+import { runById } from "@ainar/core/src/bundle.ts";
+import { casesOf, decideCase, openCase } from "@ainar/core/src/integrity.ts";
+import { decidedAt } from "@ainar/core/src/records-write.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
 import { runScans } from "../actions.js";
@@ -107,36 +110,52 @@ export const routes = [
           })
           .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
       }
-      // An academic-integrity case on a student's work: `ainar integrity`.
-      // Opened from the hand-in, decided in the exam window's Integrity tab;
-      // the professor's press each time. Nothing here reaches a student.
+      // An academic-integrity case on a student's work: src/integrity.ts, the
+      // same functions `ainar integrity` runs. Opened from the hand-in, decided
+      // in the exam window's Integrity tab; the professor's press each time.
+      // Written here, in the harness's process, over the course it already
+      // has loaded: spawning the CLI re-read the whole course for one record,
+      // seconds a press on a real one. Nothing here reaches a student.
       if (path === "/api/grade/integrity") {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
-        loadedRun(workspace, runId);
         return readBody(req, 64 * 1024)
           .then((text) => {
             const body = text ? JSON.parse(text) : {};
             const note = String(body.note ?? "").trim().slice(0, 2000);
-            let args;
+            const { bundle } = loadedRun(workspace, runId);
+            const run = runById(bundle).get(runId) ?? {};
+            const by = run.instructors?.[0] ?? "";
+            const at = decidedAt(run.timezone);
             if (body.action === "open") {
               if (!/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(String(body.student))) throw new Error("Not a pseudonym.");
-              args = ["integrity", "open", runId, "--student", String(body.student), "--assessment", assessmentId];
-              if (note) args.push("--note", note);
-            } else if (body.action === "decide") {
+              const opened = openCase({ root, bundle, runId, studentId: String(body.student), assessmentIds: [assessmentId], note: note || null, by, at });
+              return sendJson(res, 200, { ok: true, output: `${opened.caseId} opened: the mark is held until it is decided` });
+            }
+            if (body.action === "decide") {
               if (!/^INTEGRITY-[A-Z0-9][A-Z0-9-]*$/.test(String(body.case))) throw new Error("Not a case id.");
               if (!["open", "cleared", "upheld"].includes(body.state)) throw new Error("A case is open, cleared or upheld.");
-              args = ["integrity", "decide", runId, "--case", String(body.case), "--state", body.state];
-              if (body.state === "upheld") {
-                if (!["no_penalty", "adjusted", "zero", "voided"].includes(body.outcome)) throw new Error("Say what it does to the mark.");
-                args.push("--outcome", body.outcome);
+              if (body.state === "upheld" && !["no_penalty", "adjusted", "zero", "voided"].includes(body.outcome)) {
+                throw new Error("Say what it does to the mark.");
               }
-              if (note) args.push("--note", note);
-            } else {
-              throw new Error("Open a case, or decide one.");
+              // A note given with the decision is added under the one the case
+              // was opened with, not over it: what was seen stays on record.
+              const before = casesOf(bundle, runId).find((entry) => entry.case_id === body.case)?.note ?? "";
+              const decided = decideCase({
+                root,
+                bundle,
+                runId,
+                caseId: String(body.case),
+                state: body.state,
+                outcome: body.state === "upheld" ? body.outcome : null,
+                ...(note ? { note: (before ? before + "\n" : "") + "Decision: " + note } : {}),
+                by,
+                at,
+              });
+              return sendJson(res, 200, { ok: true, output: `${body.case}: ${decided.record.state}` });
             }
-            return runScans(args, root, 120000).then((result) => sendJson(res, 200, result));
+            throw new Error("Open a case, or decide one.");
           })
-          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+          .catch((error) => sendJson(res, 200, { ok: false, error: String(error?.message ?? error) }));
       }
       const WRITES = ["/api/grade/decide", "/api/grade/move", "/api/grade/choose", "/api/grade/accept-rubric", "/api/grade/points-only"];
       if (WRITES.includes(path)) {

@@ -632,6 +632,8 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
     const decide = (entry) =>
       entry.state === "open"
         ? '<span class="awicd" data-ic="' + escapeText(entry.id) + '">' +
+          presetChips(DECISION_NOTES) +
+          '<textarea data-ic-note rows="2" maxlength="2000" placeholder="Decision note (optional) — added under the opening note, private"></textarea>' +
           '<button type="button" class="chip" data-ic-decide="cleared">Clear</button> ' +
           '<select data-ic-outcome aria-label="What upholding it does to the mark">' +
           '<option value="zero">Uphold — mark 0</option>' +
@@ -692,6 +694,34 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
     "</div>"
   );
 };
+
+/*
+ * Preset answers for an integrity case's note: presses that add a line to the
+ * `[data-ic-note]` field beside them, once each, the field staying editable.
+ * Used by the opener on a hand-in (students.js) and the decision here.
+ */
+export const presetChips = (list) =>
+  '<span class="icp">' +
+  list
+    .map((text) => '<button type="button" class="chip" data-ic-preset="' + escapeAttribute(text) + '">' + escapeText(text) + "</button>")
+    .join("") +
+  "</span>";
+
+export const presetScript =
+  "<script>document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('[data-ic-preset]');if(!b)return;" +
+  "var box=b.closest('.rgb,.awicd'),f=box&&box.querySelector('[data-ic-note]');if(!f)return;" +
+  "var t=b.getAttribute('data-ic-preset'),v=f.value.trim();if(v.split('\\n').indexOf(t)<0)f.value=(v?v+'\\n':'')+t;" +
+  "b.setAttribute('aria-pressed','true');f.focus();});</script>";
+
+/** The decision notes offered beside an open case's Clear and Decide. */
+const DECISION_NOTES = [
+  "Admitted at the meeting",
+  "Confirmed by comparing the papers",
+  "Explanation accepted",
+  "Not enough evidence",
+  "First offence: a warning",
+  "Referred to the faculty committee",
+];
 
 /** The dialog holding every panel; one is shown at a time. */
 export const assessmentDialog = (panels) => '<dialog class="aw" aria-label="Assessment across the class">' + panels.join("") + "</dialog>";
@@ -798,6 +828,9 @@ export const assessmentWindowStyle =
   ".awicr.on{border-color:var(--warn);background:var(--warnbg)}" +
   ".awics{margin:3px 0 5px}.awicn{font-size:11px;color:var(--dim);margin:0 0 6px}.awicn summary{cursor:pointer}" +
   ".awicd{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.awicd select{font:inherit;font-size:12px}" +
+  ".awicd textarea{flex-basis:100%;font:inherit;font-size:12px}" +
+  ".icp{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 6px;flex-basis:100%}" +
+  ".icp .chip{font-size:11px;padding:2px 8px}.icp .chip[aria-pressed=true]{border-color:var(--info);background:var(--infobg)}" +
   ".awbar .m.held{background:var(--warn)}.awbar .m.voided{background:var(--dim);opacity:.4}" +
   ".awk .m.held{background:var(--warn)}.awk .m.voided{background:var(--dim);opacity:.4}";
 
@@ -885,7 +918,8 @@ export const assessmentWindowScript =
   "var dc=t.closest('[data-ic-decide]');if(dc){if(dc.disabled||!up)return;var rw=dc.closest('[data-ic]'),st=dc.getAttribute('data-ic-decide')," +
   "oc=rw.querySelector('[data-ic-outcome]');[].slice.call(rw.querySelectorAll('button,select')).forEach(function(x){x.disabled=true;});" +
   "dc.textContent='Writing…';say({kind:'integrity',action:'decide',assessment:dc.closest('[data-ic-for]').getAttribute('data-ic-for')," +
-  "case:rw.getAttribute('data-ic'),state:st,outcome:st==='upheld'&&oc?oc.value:null});return;}" +
+  "case:rw.getAttribute('data-ic'),state:st,outcome:st==='upheld'&&oc?oc.value:null," +
+  "note:rw.querySelector('[data-ic-note]')?rw.querySelector('[data-ic-note]').value.trim():''});return;}" +
   // The curve's presses: an exponent preset, Apply, Take it off.
   "var cx=t.closest('[data-cv-exp]');if(cx){var bx=cx.closest('.awcv');bx.querySelector('[data-cv-exponent]').value=cx.getAttribute('data-cv-exp');cvDraw(bx);return;}" +
   "var ca=t.closest('[data-cv-apply],[data-cv-clear]');if(ca){if(ca.disabled||!up)return;var bx=ca.closest('.awcv');" +

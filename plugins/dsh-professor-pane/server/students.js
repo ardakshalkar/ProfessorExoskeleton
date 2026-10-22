@@ -11,7 +11,15 @@ import { ASSESSMENT_KINDS } from "@ainar/core/src/assessment-kinds.ts";
 import { reportPlace, reportsDir } from "@ainar/core/src/report-place.ts";
 import { existsSync, readFileSync } from "node:fs";
 
-import { assessmentDialog, assessmentWindowScript, assessmentWindowStyle, summarise, windowPanel } from "./assessment-window.js";
+import {
+  assessmentDialog,
+  assessmentWindowScript,
+  assessmentWindowStyle,
+  presetChips,
+  presetScript,
+  summarise,
+  windowPanel,
+} from "./assessment-window.js";
 import { BASE } from "./http.js";
 import { escapeText } from "./markdown.js";
 import { extensionOfKey, SHOWABLE } from "./materials.js";
@@ -1042,6 +1050,17 @@ export const studentsDocument = (
     );
   };
   const integrityPart = (assessmentId, studentId) => {
+    // Presses that fill the note with what is usually seen; each adds a line,
+    // and the note stays editable before the case is opened.
+    const OPEN_REASONS = [
+      "Copied from another student's paper",
+      "Same unusual mistakes as another paper",
+      "Unauthorised notes or phone during the exam",
+      "Answers taken from the internet or another source",
+      "AI-generated work, not disclosed",
+      "Shared answers with another student",
+      "Someone else did the work or sat the exam",
+    ];
     const submission = { assessment_id: assessmentId, student_id: studentId };
     const mine = runCases.filter(
       (entry) => entry.student_id === studentId && (entry.assessments ?? []).includes(assessmentId),
@@ -1050,7 +1069,7 @@ export const studentsDocument = (
     const opener = open
       ? ""
       : '<details class="dc integrity"><summary>Open an integrity case</summary>' +
-        '<div class="rgb"><textarea data-ic-note rows="3" maxlength="2000" ' +
+        '<div class="rgb">' + presetChips(OPEN_REASONS) + '<textarea data-ic-note rows="3" maxlength="2000" ' +
         'placeholder="What you saw — private, never sent to the student"></textarea>' +
         '<button type="button" class="chip act" data-ic-open="' + escapeText(submission.assessment_id) +
         '" data-student="' + escapeText(submission.student_id) + '">Open a case</button>' +
@@ -2116,7 +2135,7 @@ export const studentsDocument = (
 
   return documentPage(
     workStyle + "<style>" + assessmentWindowStyle + "</style>" + header + filterBar + list + legend + departed + drawer + assessmentWindow +
-      filterScript + drawerScript + defenceScript + assessmentWindowScript + VIEW_SCRIPT,
+      filterScript + drawerScript + defenceScript + assessmentWindowScript + presetScript + VIEW_SCRIPT,
     dark,
   );
 };

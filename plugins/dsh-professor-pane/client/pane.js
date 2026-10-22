@@ -357,8 +357,9 @@ export function ProfessorPane(props) {
         return;
       }
       // An integrity case: *Open a case* on a hand-in, or *Clear* / *Uphold* /
-      // *Reopen* in the exam window's Integrity tab. The server runs `ainar
-      // integrity`; the redraw shows the case, and a refusal is said here.
+      // *Reopen* in the exam window's Integrity tab. The server writes it in
+      // its own process (src/integrity.ts); the redraw shows the case, and a
+      // refusal is said here.
       if (data.kind === "integrity") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run = currentRunRef.current;
