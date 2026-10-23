@@ -21,9 +21,13 @@
  * cost the professor the week.
  */
 
+import { Ledger } from "@ainar/core/src/lms/ledger.ts";
+
 import { navigatorDocument } from "./navigator.js";
+import { snoozesOf, todayIso } from "./snooze.js";
 import { syncsDocument } from "./syncs.js";
-import { viewPayload } from "./workspace.js";
+import { unpublishedDocument } from "./unpublished.js";
+import { loadedRun, viewPayload } from "./workspace.js";
 
 /** Below this class mean a concept is flagged to revisit — Evidence's line. */
 const REVISIT_BELOW = 0.6;
@@ -47,6 +51,13 @@ const safely = (read, fallback) => {
 };
 
 const plural = (n, one, many) => n + " " + (n === 1 ? one : many);
+
+/** The ISO date a week after `day`, for "due this week". */
+const weekAhead = (day) => {
+  const at = new Date(day + "T12:00:00");
+  at.setDate(at.getDate() + 7);
+  return at.toISOString().slice(0, 10);
+};
 
 /** The words for one week gap, as the week card's chips say them. */
 const GAP_WORDS = {
@@ -77,8 +88,9 @@ const COLLECTION_WORDS = {
  * (`{ mode }`, `{ view, sub }`) plus `{ grade }` and `{ scans }`, which open
  * the Grade view and the Scans window over course mode.
  */
-const waitingItems = ({ outline, inbox, held, syncs }) => {
+const waitingItems = ({ outline, inbox, held, syncs, unpublished, progress }) => {
   const items = [];
+  const asOf = (inbox && inbox.as_of) || todayIso();
 
   // Holes in this week and the next, still fixable before the class meets.
   for (const week of (outline && outline.weeks) || []) {
@@ -175,7 +187,8 @@ const waitingItems = ({ outline, inbox, held, syncs }) => {
         .join(" · "),
       count: drafts.length,
       urgency: "later",
-      open: { view: "tasks" },
+      // Waiting's Ready lists the drafts, kind by kind.
+      open: { view: "tasks", sub: "ready" },
     });
   }
 
@@ -190,6 +203,58 @@ const waitingItems = ({ outline, inbox, held, syncs }) => {
       count: cases.length,
       urgency: "blocks_students",
       open: { view: "students" },
+    });
+  }
+
+  // Marks decided here that Canvas does not have: students cannot see them
+  // until they are sent. One item for the run; To Canvas lists them.
+  const unsent = ((unpublished && unpublished.marks) || []).map((entry) => ({
+    title: entry.title,
+    n: (entry.canvas.unsent || 0) + (entry.canvas.changed || 0),
+  }));
+  const unsentTotal = unsent.reduce((sum, entry) => sum + entry.n, 0);
+  if (unsentTotal) {
+    items.push({
+      kind: "canvas",
+      id: "canvas-marks",
+      title: "Send marks to Canvas",
+      detail: plural(unsentTotal, "mark", "marks") + " across " + plural(unsent.length, "assessment", "assessments") + " that Canvas does not have",
+      count: unsentTotal,
+      urgency: "blocks_students",
+      open: { view: "gradebook", sub: "canvas" },
+    });
+  }
+
+  // Dated work from the run's action items: the one kind that can be
+  // overdue. Mark reviews are left out — "Decide marks" above already
+  // says them, counted from the evaluations themselves.
+  for (const action of (inbox && inbox.existing_action_items) || []) {
+    if (action.status !== "pending" || action.type === "review_grades") continue;
+    const due = action.due_at ? String(action.due_at).slice(0, 10) : null;
+    items.push({
+      kind: "action",
+      id: "action-" + action.action_id,
+      title: action.title || action.type,
+      detail: due ? (due < asOf ? "was due " : "due ") + due : action.type,
+      urgency: due && due < asOf ? "overdue" : due && due <= weekAhead(asOf) ? "this_week" : "later",
+      open: { view: "tasks", sub: "tasks" },
+    });
+  }
+
+  // Concept states somebody marked "needs review": the professor confirms
+  // them. None are recorded on most runs yet; the item appears when they are.
+  const review = progress && Array.isArray(progress.concepts)
+    ? progress.concepts.reduce((sum, concept) => sum + concept.cells.filter((cell) => cell.state === "needs_review").length, 0)
+    : 0;
+  if (review) {
+    items.push({
+      kind: "review",
+      id: "concept-review",
+      title: "Confirm concept states",
+      detail: plural(review, "student-concept state", "student-concept states") + " marked needs review",
+      count: review,
+      urgency: "later",
+      open: { view: "concepts" },
     });
   }
 
@@ -301,6 +366,17 @@ export const todayDocument = (workspace, root, askedRun) => {
   const inbox = safely(() => viewPayload(workspace, "action_inbox", runId, undefined, true).payload, null);
   const progress = safely(() => viewPayload(workspace, "class_progress", runId, undefined, false).payload, null);
   const syncs = safely(() => syncsDocument(workspace, runId), { error: "unread" });
+  const unpublished = safely(
+    () => unpublishedDocument({ bundle: loadedRun(workspace, runId).bundle, runId, root, ledger: Ledger.load(runId) }),
+    null,
+  );
+
+  // One list in one order; what the professor snoozed is set aside until its
+  // day, and said apart so it is never lost (HOME-5).
+  const snoozed = safely(() => snoozesOf(runId), {});
+  const all = waitingItems({ outline, inbox, held: nav.held, syncs, unpublished, progress });
+  const waiting = all.filter((item) => !snoozed[item.id]);
+  const later = all.filter((item) => snoozed[item.id]).map((item) => Object.assign({}, item, { until: snoozed[item.id] }));
 
   const readiness = inbox && inbox.readiness ? inbox.readiness : null;
   return {
@@ -313,7 +389,8 @@ export const todayDocument = (workspace, root, askedRun) => {
       next_step: readiness && readiness.next_step ? readiness.next_step : null,
       gaps: nav.gaps,
     },
-    waiting: waitingItems({ outline, inbox, held: nav.held, syncs }),
+    waiting,
+    snoozed: later,
     pulse: {
       concepts: conceptPulse(progress),
       hand_in: lastHandIn(inbox),

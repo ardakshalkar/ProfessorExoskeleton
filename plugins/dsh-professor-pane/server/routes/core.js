@@ -6,11 +6,12 @@
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
-import { sendJson } from "../http.js";
+import { readBody, sendJson } from "../http.js";
 import { recentDocument } from "../inspector.js";
 import { navigatorDocument } from "../navigator.js";
 import { todayDocument } from "../today.js";
 import { cellEvidence, conceptsGrid } from "../concepts-grid.js";
+import { setSnooze } from "../snooze.js";
 import { unpublishedDocument } from "../unpublished.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "../upload.js";
 import { loadedRun, revisionDocument, runsDocument } from "../workspace.js";
@@ -45,6 +46,27 @@ export const routes = [
     handle(c) {
       const { res, runId, workspace, root } = c;
       return sendJson(res, 200, todayDocument(workspace, root, runId));
+    },
+  },
+  // Snooze a waiting item until a day, or wake it: `{ item, until }` with
+  // `until` null to wake. Written on this machine only — see server/snooze.js.
+  {
+    paths: ["/api/today/snooze"],
+    handle(c) {
+      const { req, res, runId } = c;
+      if (req.method !== "POST") return sendJson(res, 405, { error: "a snooze is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then((raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}") ?? {};
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          return sendJson(res, 200, setSnooze(runId, String(body.item || ""), body.until === null || body.until === undefined ? null : String(body.until)));
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     },
   },
   // The Concepts place: concept × student, and the evidence behind a cell.

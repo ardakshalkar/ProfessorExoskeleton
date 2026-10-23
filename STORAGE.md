@@ -539,6 +539,12 @@ The older places — `extensions.lms`, `extensions.telegram`,
 `~/.ainar/sheets/<RUN>.json` — are still read, as *implied* syncs, until
 `ainar sync migrate RUN` writes them out.
 
+One more private file belongs to the pane rather than to a sync: a waiting
+item the professor snoozed, and the day it comes back, is
+`~/.ainar/pane/<RUN>.json` (`AINAR_PANE_DIR` moves it). It is a choice about
+when to be reminded, not a fact of the course, so it is never in the
+repository and changes no record.
+
 ---
 
 ## 8. Identifiers, the run, provenance

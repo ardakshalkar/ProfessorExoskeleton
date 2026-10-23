@@ -15,7 +15,7 @@ import { Integrations } from "./integrations.js";
 import { Preferences } from "./preferences.js";
 import { ConceptsGrid } from "./concepts.js";
 import { SyncView } from "./sync-view.js";
-import { Today } from "./today.js";
+import { Today, WaitingPlace } from "./today.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS } from "./tabs.js";
 
@@ -355,7 +355,10 @@ const COURSE_VIEWS = [
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
   // The class by concept: what used to be the right column's Progress tab.
   { id: "concepts", label: "Concepts", hint: "The class, by concept — what has been shown and what has not" },
-  { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
+  // Waiting (was Tasks): everything waiting on the professor in one list
+  // first, then the four lists it is drawn from (BACKLOG E37 HOME-13). The id
+  // stays `tasks`, which every jump into it already names.
+  { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze — and what is ready and what has not gone out" },
   // What the course has got, by kind rather than by week: the right
   // column's old Course outline sub-views, the student's outline last.
   { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, and the outline a student reads" },
@@ -375,7 +378,7 @@ const COURSE_VIEWS = [
  * default. Each is a real view of the run, not a filter over one payload.
  */
 const VIEW_SUBS = {
-  tasks: SUBVIEWS.tasks,
+  tasks: [{ id: "waiting", label: "Everything" }].concat(SUBVIEWS.tasks),
   materials: [
     { id: "assessments", label: "Assessments" },
     { id: "slides", label: "Slides" },
@@ -774,6 +777,18 @@ export function CourseMode(props) {
         title: "Gradebook",
       });
     }
+    if (taskSub === "waiting") {
+      return h(
+        "div",
+        { className: "pp-cviewpad" },
+        h(WaitingPlace, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          revision: everything + "." + syncsVersion + "." + filesVersion,
+          onOpen: openFromToday,
+        }),
+      );
+    }
     if (taskSub === "unpublished") {
       return h(Unpublished, {
         runId: props.runId,
@@ -821,7 +836,8 @@ export function CourseMode(props) {
     // The Concepts grid is a column per student.
     view === "concepts" ||
     (view === "settings" && subOf("settings") === "integrations") ||
-    (view === "tasks" && taskSub !== "unpublished");
+    // Everything names nobody; the lists it is drawn from do.
+    (view === "tasks" && taskSub !== "unpublished" && taskSub !== "waiting");
   // With the navigator in the sidebar the places are chosen there, and this
   // header keeps only the readings of the weeks. Without it — the stock
   // browser in the seat, nothing measured — the row is the only way in.

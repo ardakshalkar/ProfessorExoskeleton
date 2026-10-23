@@ -142,7 +142,8 @@ const ICONS = {
 const PLACES = [
   { id: "today", label: "Today", hint: "This week, what is waiting on you, and how the class and the syncs stand", request: { view: "today" } },
   { id: "weeks", label: "Weeks", hint: "The term, week by week — what is planned and what is missing", request: { mode: "planning" } },
-  { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out", request: { view: "tasks" } },
+  // Tasks, renamed: it opens on everything waiting, in one list (HOME-13).
+  { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze", request: { view: "tasks", sub: "waiting" } },
   { id: "students", label: "Students", hint: "The class list, by subgroup", request: { view: "students" } },
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment", request: { view: "gradebook" } },
   { id: "concepts", label: "Concepts", hint: "The class, by concept", request: { view: "concepts" } },

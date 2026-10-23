@@ -763,6 +763,20 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-tsync i{width:7px;height:7px;border-radius:50%;background:#2e7d4f}
 .pp-tsync-wait i{background:#a15c00}
 .pp-tsync:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-tsnoozed{margin:6px 0 0}
+/* Waiting · Everything: Today's row with a snooze beside it. */
+.pp-waiting{max-width:880px}
+.pp-wrow{display:flex;align-items:center;gap:8px;padding-right:10px;background:var(--dsw-alias-bg-l1,#fff);
+  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-wrow:first-child{border-top:0}
+.pp-wmain{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:9px 12px;font:inherit;text-align:left;
+  cursor:pointer;color:inherit;background:none;border:0}
+.pp-wmain:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-wmain:focus-visible{outline:2px solid #2f6fd6;outline-offset:-2px}
+.pp-wsnooze{flex:none;display:inline-flex;align-items:center;gap:4px}
+.pp-wdate{font:inherit;font-size:11px;padding:2px 4px;border-radius:6px;color:inherit;
+  background:var(--dsw-alias-bg-l1,#fff);border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-wlater .pp-wmain{opacity:.7}
 .pp-wiring-waiting{color:#a5561f;font-weight:600}
 .pp-stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:8px}
 .pp-stile{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;

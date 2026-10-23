@@ -151,6 +151,192 @@ function Waiting(props) {
           ),
         )
       : h("p", { className: "pp-as" }, "Nothing is waiting on you."),
+    // Snoozed items are set aside, never lost: said here, listed in Waiting.
+    props.snoozed && props.snoozed.length
+      ? h(
+          "p",
+          { className: "pp-as pp-tsnoozed" },
+          plural(props.snoozed.length, "item", "items") + " snoozed",
+          props.onOpenWaiting ? h("button", { type: "button", className: "pp-linkbtn", onClick: props.onOpenWaiting }, "See them in Waiting") : null,
+        )
+      : null,
+  );
+}
+
+// ------------------------------------------------------------- Waiting
+
+/** An ISO day `n` days from today, in the machine's calendar. */
+const daysAhead = (n) => {
+  const at = new Date();
+  at.setDate(at.getDate() + n);
+  return at.getFullYear() + "-" + String(at.getMonth() + 1).padStart(2, "0") + "-" + String(at.getDate()).padStart(2, "0");
+};
+/** The coming Monday, or the one after if today is Monday. */
+const nextMonday = () => {
+  const today = new Date().getDay();
+  return daysAhead(((8 - today) % 7) || 7);
+};
+
+const KIND_WORD = {
+  week: "Weeks",
+  marks: "Marks",
+  held: "Scans",
+  sync: "Sync",
+  reconnect: "Sync",
+  drafts: "Drafts",
+  integrity: "Integrity",
+  canvas: "Canvas",
+  action: "Dated work",
+  review: "Concepts",
+  signals: "Concepts",
+};
+
+/** Snooze, with the three days a professor actually picks, and any other. */
+function SnoozeControl(props) {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const pick = (until) => {
+    setBusy(true);
+    props.onSnooze(until).then(() => {
+      setBusy(false);
+      setOpen(false);
+    });
+  };
+  if (props.until) {
+    return h(
+      "span",
+      { className: "pp-wsnooze" },
+      h("span", { className: "pp-ttag" }, "until " + day(props.until)),
+      h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => pick(null) }, busy ? "…" : "Wake now"),
+    );
+  }
+  return h(
+    "span",
+    { className: "pp-wsnooze" },
+    open
+      ? h(
+          React.Fragment,
+          null,
+          h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => pick(daysAhead(1)) }, "Tomorrow"),
+          h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => pick(nextMonday()) }, "Next week"),
+          h("input", {
+            type: "date",
+            className: "pp-wdate",
+            min: daysAhead(1),
+            "aria-label": "Snooze until",
+            disabled: busy,
+            onChange: (event) => event.target.value && pick(event.target.value),
+          }),
+          h("button", { type: "button", className: "pp-close", "aria-label": "Cancel", onClick: () => setOpen(false) }, "×"),
+        )
+      : h(
+          "button",
+          { type: "button", className: "pp-segbtn", title: "Not now: set it aside until a day you choose. It comes back by itself.", onClick: () => setOpen(true) },
+          "Snooze",
+        ),
+  );
+}
+
+/** One row of Waiting: what, why, how urgent; a press opens its place. */
+function WaitingRow(props) {
+  const item = props.item;
+  return h(
+    "div",
+    { className: "pp-wrow" + (props.hot ? " pp-trow-hot" : "") },
+    h(
+      "button",
+      { type: "button", className: "pp-wmain", onClick: () => props.onOpen(item.open) },
+      h("span", { className: "pp-trowtext" }, h("b", null, item.title), item.detail ? h("span", null, item.detail) : null),
+      URGENCY_WORD[item.urgency] && !item.until ? h("span", { className: "pp-ttag" }, URGENCY_WORD[item.urgency]) : null,
+      h("span", { className: "pp-tgo", "aria-hidden": "true" }, "›"),
+    ),
+    h(SnoozeControl, { until: item.until || null, onSnooze: props.onSnooze }),
+  );
+}
+
+/**
+ * Course mode · Waiting · Everything: every item waiting on the professor,
+ * one list in one urgency order (BACKLOG E37 HOME-4), each snoozable until a
+ * day (HOME-5). The same document as Today's band — `/api/today` — so the
+ * two cannot disagree; here it is whole, filterable by kind, and the snoozed
+ * are listed with the day each comes back.
+ */
+export function WaitingPlace(props) {
+  const [tick, setTick] = React.useState(0);
+  const state = useToday(props.runId, props.sessionId, String(props.revision) + "." + tick);
+  const shown = React.useRef(null);
+  if (state.phase === "ready") shown.current = state.value;
+  const [kind, setKind] = React.useState(null);
+  const [failed, setFailed] = React.useState(null);
+  const doc = shown.current;
+  if (doc === null) return h(Message, null, "Reading what is waiting…");
+  if (doc.error) return h(Message, { error: true }, doc.error);
+  if (!doc.run) return h(Message, null, "This workspace has no course run yet.");
+
+  const snooze = (item, until) =>
+    fetch(scoped(BASE + "/api/today/snooze?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ item: item.id, until }),
+    })
+      .then((response) => response.json())
+      .catch((error) => ({ error: String((error && error.message) || error) }))
+      .then((answer) => {
+        setFailed(answer.error || null);
+        setTick((value) => value + 1);
+      });
+
+  const kinds = [...new Set(doc.waiting.concat(doc.snoozed || []).map((item) => KIND_WORD[item.kind] || item.kind))];
+  const match = (item) => !kind || (KIND_WORD[item.kind] || item.kind) === kind;
+  const items = doc.waiting.filter(match);
+  const later = (doc.snoozed || []).filter(match);
+  const hot = (item) => item.urgency === "overdue" || item.urgency === "this_week" || item.urgency === "blocks_students";
+
+  return h(
+    "div",
+    { className: "pp-today pp-waiting" },
+    kinds.length > 1
+      ? h(
+          "div",
+          { className: "pp-dacts" },
+          h("button", { type: "button", className: "pp-segbtn", "aria-pressed": !kind, onClick: () => setKind(null) }, "All " + doc.waiting.length),
+          kinds.map((word) =>
+            h(
+              "button",
+              { key: word, type: "button", className: "pp-segbtn", "aria-pressed": kind === word, onClick: () => setKind(kind === word ? null : word) },
+              word,
+            ),
+          ),
+        )
+      : null,
+    failed ? h("p", { className: "pp-saveerr" }, failed) : null,
+    h(
+      Band,
+      { title: "Waiting on you", count: items.length || null },
+      items.length
+        ? h(
+            "div",
+            { className: "pp-trows" },
+            items.map((item) => h(WaitingRow, { key: item.id, item, hot: hot(item), onOpen: props.onOpen, onSnooze: (until) => snooze(item, until) })),
+          )
+        : h("p", { className: "pp-as" }, kind ? "Nothing of this kind is waiting." : "Nothing is waiting on you."),
+    ),
+    later.length
+      ? h(
+          Band,
+          { title: "Snoozed" },
+          h(
+            "div",
+            { className: "pp-trows pp-wlater" },
+            later.map((item) => h(WaitingRow, { key: item.id, item, onOpen: props.onOpen, onSnooze: (until) => snooze(item, until) })),
+          ),
+        )
+      : null,
+    h(
+      "p",
+      { className: "pp-as" },
+      "An item leaves this list when what it is about is done — a mark decided, a paper placed, a draft accepted — not when it is ticked. A snooze is kept on this computer and changes nothing in the course.",
+    ),
   );
 }
 
@@ -241,7 +427,7 @@ export function Today(props) {
     "div",
     { className: "pp-today" },
     h(Now, { now: doc.now, run: doc.run, onOpen: props.onOpen }),
-    h(Waiting, { items: doc.waiting, onOpen: props.onOpen }),
+    h(Waiting, { items: doc.waiting, snoozed: doc.snoozed || [], onOpen: props.onOpen, onOpenWaiting: () => props.onOpen({ view: "tasks", sub: "waiting" }) }),
     h(Pulse, { pulse: doc.pulse, onOpen: props.onOpen }),
   );
 }

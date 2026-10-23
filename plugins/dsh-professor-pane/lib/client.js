@@ -798,6 +798,20 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-tsync i{width:7px;height:7px;border-radius:50%;background:#2e7d4f}
 .pp-tsync-wait i{background:#a15c00}
 .pp-tsync:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-tsnoozed{margin:6px 0 0}
+/* Waiting · Everything: Today's row with a snooze beside it. */
+.pp-waiting{max-width:880px}
+.pp-wrow{display:flex;align-items:center;gap:8px;padding-right:10px;background:var(--dsw-alias-bg-l1,#fff);
+  border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-wrow:first-child{border-top:0}
+.pp-wmain{flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:9px 12px;font:inherit;text-align:left;
+  cursor:pointer;color:inherit;background:none;border:0}
+.pp-wmain:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-wmain:focus-visible{outline:2px solid #2f6fd6;outline-offset:-2px}
+.pp-wsnooze{flex:none;display:inline-flex;align-items:center;gap:4px}
+.pp-wdate{font:inherit;font-size:11px;padding:2px 4px;border-radius:6px;color:inherit;
+  background:var(--dsw-alias-bg-l1,#fff);border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-wlater .pp-wmain{opacity:.7}
 .pp-wiring-waiting{color:#a5561f;font-weight:600}
 .pp-stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:8px}
 .pp-stile{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;
@@ -12866,7 +12880,158 @@ function Waiting(props) {
           onClick: () => props.onOpen(item.open)
         })
       )
-    ) : h("p", { className: "pp-as" }, "Nothing is waiting on you.")
+    ) : h("p", { className: "pp-as" }, "Nothing is waiting on you."),
+    // Snoozed items are set aside, never lost: said here, listed in Waiting.
+    props.snoozed && props.snoozed.length ? h(
+      "p",
+      { className: "pp-as pp-tsnoozed" },
+      plural7(props.snoozed.length, "item", "items") + " snoozed",
+      props.onOpenWaiting ? h("button", { type: "button", className: "pp-linkbtn", onClick: props.onOpenWaiting }, "See them in Waiting") : null
+    ) : null
+  );
+}
+var daysAhead = (n) => {
+  const at = /* @__PURE__ */ new Date();
+  at.setDate(at.getDate() + n);
+  return at.getFullYear() + "-" + String(at.getMonth() + 1).padStart(2, "0") + "-" + String(at.getDate()).padStart(2, "0");
+};
+var nextMonday = () => {
+  const today = (/* @__PURE__ */ new Date()).getDay();
+  return daysAhead((8 - today) % 7 || 7);
+};
+var KIND_WORD = {
+  week: "Weeks",
+  marks: "Marks",
+  held: "Scans",
+  sync: "Sync",
+  reconnect: "Sync",
+  drafts: "Drafts",
+  integrity: "Integrity",
+  canvas: "Canvas",
+  action: "Dated work",
+  review: "Concepts",
+  signals: "Concepts"
+};
+function SnoozeControl(props) {
+  const [open2, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const pick = (until) => {
+    setBusy(true);
+    props.onSnooze(until).then(() => {
+      setBusy(false);
+      setOpen(false);
+    });
+  };
+  if (props.until) {
+    return h(
+      "span",
+      { className: "pp-wsnooze" },
+      h("span", { className: "pp-ttag" }, "until " + day(props.until)),
+      h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => pick(null) }, busy ? "…" : "Wake now")
+    );
+  }
+  return h(
+    "span",
+    { className: "pp-wsnooze" },
+    open2 ? h(
+      React.Fragment,
+      null,
+      h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => pick(daysAhead(1)) }, "Tomorrow"),
+      h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: () => pick(nextMonday()) }, "Next week"),
+      h("input", {
+        type: "date",
+        className: "pp-wdate",
+        min: daysAhead(1),
+        "aria-label": "Snooze until",
+        disabled: busy,
+        onChange: (event) => event.target.value && pick(event.target.value)
+      }),
+      h("button", { type: "button", className: "pp-close", "aria-label": "Cancel", onClick: () => setOpen(false) }, "×")
+    ) : h(
+      "button",
+      { type: "button", className: "pp-segbtn", title: "Not now: set it aside until a day you choose. It comes back by itself.", onClick: () => setOpen(true) },
+      "Snooze"
+    )
+  );
+}
+function WaitingRow(props) {
+  const item = props.item;
+  return h(
+    "div",
+    { className: "pp-wrow" + (props.hot ? " pp-trow-hot" : "") },
+    h(
+      "button",
+      { type: "button", className: "pp-wmain", onClick: () => props.onOpen(item.open) },
+      h("span", { className: "pp-trowtext" }, h("b", null, item.title), item.detail ? h("span", null, item.detail) : null),
+      URGENCY_WORD[item.urgency] && !item.until ? h("span", { className: "pp-ttag" }, URGENCY_WORD[item.urgency]) : null,
+      h("span", { className: "pp-tgo", "aria-hidden": "true" }, "›")
+    ),
+    h(SnoozeControl, { until: item.until || null, onSnooze: props.onSnooze })
+  );
+}
+function WaitingPlace(props) {
+  const [tick, setTick] = React.useState(0);
+  const state = useToday(props.runId, props.sessionId, String(props.revision) + "." + tick);
+  const shown = React.useRef(null);
+  if (state.phase === "ready") shown.current = state.value;
+  const [kind, setKind] = React.useState(null);
+  const [failed, setFailed] = React.useState(null);
+  const doc = shown.current;
+  if (doc === null) return h(Message, null, "Reading what is waiting…");
+  if (doc.error) return h(Message, { error: true }, doc.error);
+  if (!doc.run) return h(Message, null, "This workspace has no course run yet.");
+  const snooze = (item, until) => fetch(scoped(BASE + "/api/today/snooze?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ item: item.id, until })
+  }).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) })).then((answer) => {
+    setFailed(answer.error || null);
+    setTick((value) => value + 1);
+  });
+  const kinds = [...new Set(doc.waiting.concat(doc.snoozed || []).map((item) => KIND_WORD[item.kind] || item.kind))];
+  const match = (item) => !kind || (KIND_WORD[item.kind] || item.kind) === kind;
+  const items = doc.waiting.filter(match);
+  const later = (doc.snoozed || []).filter(match);
+  const hot = (item) => item.urgency === "overdue" || item.urgency === "this_week" || item.urgency === "blocks_students";
+  return h(
+    "div",
+    { className: "pp-today pp-waiting" },
+    kinds.length > 1 ? h(
+      "div",
+      { className: "pp-dacts" },
+      h("button", { type: "button", className: "pp-segbtn", "aria-pressed": !kind, onClick: () => setKind(null) }, "All " + doc.waiting.length),
+      kinds.map(
+        (word) => h(
+          "button",
+          { key: word, type: "button", className: "pp-segbtn", "aria-pressed": kind === word, onClick: () => setKind(kind === word ? null : word) },
+          word
+        )
+      )
+    ) : null,
+    failed ? h("p", { className: "pp-saveerr" }, failed) : null,
+    h(
+      Band,
+      { title: "Waiting on you", count: items.length || null },
+      items.length ? h(
+        "div",
+        { className: "pp-trows" },
+        items.map((item) => h(WaitingRow, { key: item.id, item, hot: hot(item), onOpen: props.onOpen, onSnooze: (until) => snooze(item, until) }))
+      ) : h("p", { className: "pp-as" }, kind ? "Nothing of this kind is waiting." : "Nothing is waiting on you.")
+    ),
+    later.length ? h(
+      Band,
+      { title: "Snoozed" },
+      h(
+        "div",
+        { className: "pp-trows pp-wlater" },
+        later.map((item) => h(WaitingRow, { key: item.id, item, onOpen: props.onOpen, onSnooze: (until) => snooze(item, until) }))
+      )
+    ) : null,
+    h(
+      "p",
+      { className: "pp-as" },
+      "An item leaves this list when what it is about is done — a mark decided, a paper placed, a draft accepted — not when it is ticked. A snooze is kept on this computer and changes nothing in the course."
+    )
   );
 }
 function Pulse(props) {
@@ -12944,7 +13109,7 @@ function Today(props) {
     "div",
     { className: "pp-today" },
     h(Now, { now: doc.now, run: doc.run, onOpen: props.onOpen }),
-    h(Waiting, { items: doc.waiting, onOpen: props.onOpen }),
+    h(Waiting, { items: doc.waiting, snoozed: doc.snoozed || [], onOpen: props.onOpen, onOpenWaiting: () => props.onOpen({ view: "tasks", sub: "waiting" }) }),
     h(Pulse, { pulse: doc.pulse, onOpen: props.onOpen })
   );
 }
@@ -13063,7 +13228,10 @@ var COURSE_VIEWS = [
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
   // The class by concept: what used to be the right column's Progress tab.
   { id: "concepts", label: "Concepts", hint: "The class, by concept — what has been shown and what has not" },
-  { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out" },
+  // Waiting (was Tasks): everything waiting on the professor in one list
+  // first, then the four lists it is drawn from (BACKLOG E37 HOME-13). The id
+  // stays `tasks`, which every jump into it already names.
+  { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze — and what is ready and what has not gone out" },
   // What the course has got, by kind rather than by week: the right
   // column's old Course outline sub-views, the student's outline last.
   { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, and the outline a student reads" },
@@ -13078,7 +13246,7 @@ var COURSE_VIEWS = [
   { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume" }
 ];
 var VIEW_SUBS = {
-  tasks: SUBVIEWS.tasks,
+  tasks: [{ id: "waiting", label: "Everything" }].concat(SUBVIEWS.tasks),
   materials: [
     { id: "assessments", label: "Assessments" },
     { id: "slides", label: "Slides" },
@@ -13393,6 +13561,18 @@ function CourseMode(props) {
         title: "Gradebook"
       });
     }
+    if (taskSub === "waiting") {
+      return h(
+        "div",
+        { className: "pp-cviewpad" },
+        h(WaitingPlace, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          revision: everything + "." + syncsVersion + "." + filesVersion,
+          onOpen: openFromToday
+        })
+      );
+    }
     if (taskSub === "unpublished") {
       return h(Unpublished, {
         runId: props.runId,
@@ -13432,7 +13612,8 @@ function CourseMode(props) {
   const named = view === "students" || view === "syncs" || // The Gradebook names students (its marks, Last changes); without the
   // switch here a projected Gradebook could not be covered in place.
   view === "gradebook" || // The Concepts grid is a column per student.
-  view === "concepts" || view === "settings" && subOf("settings") === "integrations" || view === "tasks" && taskSub !== "unpublished";
+  view === "concepts" || view === "settings" && subOf("settings") === "integrations" || // Everything names nobody; the lists it is drawn from do.
+  view === "tasks" && taskSub !== "unpublished" && taskSub !== "waiting";
   const navigator2 = left > 0;
   const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
   const placeName = viewEntry ? viewEntry.label : navigator2 ? "Weeks" : props.title;
@@ -14035,7 +14216,8 @@ var ICONS2 = {
 var PLACES = [
   { id: "today", label: "Today", hint: "This week, what is waiting on you, and how the class and the syncs stand", request: { view: "today" } },
   { id: "weeks", label: "Weeks", hint: "The term, week by week — what is planned and what is missing", request: { mode: "planning" } },
-  { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out", request: { view: "tasks" } },
+  // Tasks, renamed: it opens on everything waiting, in one list (HOME-13).
+  { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze", request: { view: "tasks", sub: "waiting" } },
   { id: "students", label: "Students", hint: "The class list, by subgroup", request: { view: "students" } },
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment", request: { view: "gradebook" } },
   { id: "concepts", label: "Concepts", hint: "The class, by concept", request: { view: "concepts" } },

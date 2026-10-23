@@ -2011,15 +2011,23 @@ is worth building.
       stored: *before term* (Now is a readiness list — T1, T4, T7),
       *teaching* (this week), *closing* (the close checklist, EXM's Close at
       run level), *after* (reflection). `S` · depends: HOME-1
-- [ ] **HOME-4** Waiting as one list across kinds — marks suggested, papers
+- [x] **HOME-4** Waiting as one list across kinds — marks suggested, papers
       held, drafts, states marked `needs_review`, unsure sync rows, expired
       accounts — in one urgency order: overdue → due today → blocks students
       → blocks the assistant → the rest. An item leaves when the records say
       it is done. Until WF-6 / TODO-6 exist it merges today's sources; then it
-      reads them. `M` · depends: HOME-1
-- [ ] **HOME-5** Snooze: "not until <date>" on a waiting item, kept with the
+      reads them. Done 2026-10-23, in `server/today.js` (one document for
+      Today's band and the Waiting place). Kinds now: week gaps this week and
+      next, marks to decide, papers held, marks Canvas does not have, dated
+      action items (the one kind that can be overdue; mark reviews left to
+      "Decide marks"), unsure sync rows, Google reconnect, drafts, integrity
+      cases, `needs_review` states, class signals. `M` · depends: HOME-1
+- [x] **HOME-5** Snooze: "not until <date>" on a waiting item, kept with the
       run's private state, not on the record. Not TODO-10's postpone, which
-      moves a date students see. `S` · depends: HOME-4
+      moves a date students see. Done 2026-10-23: `server/snooze.js`,
+      `~/.ainar/pane/<RUN>.json` (STORAGE §7), `POST /api/today/snooze`.
+      Tomorrow / Next week / a date; the item comes back on its day by
+      itself; Today says how many are snoozed. `S` · depends: HOME-4
 - [x] **HOME-6** The sync strip: one chip per service (Canvas, Sheets,
       GitHub, Telegram) — last run, direction, waiting count, an expired
       warning — from `server/syncs.js`. **Sync all** opens one preview of
@@ -2086,8 +2094,11 @@ is worth building.
       3") as the professor types, Enter opens the match; no match goes to the
       session carrying the place as the context packet. `M` · depends:
       HOME-11, UI-1
-- [ ] **HOME-13** The navigator: *Tasks* becomes *Waiting* and opens HOME-4's
-      list in full; Course settings stays at the foot. `S` · depends: HOME-4
+- [x] **HOME-13** The navigator: *Tasks* becomes *Waiting* and opens HOME-4's
+      list in full; Course settings stays at the foot. Done 2026-10-23:
+      Waiting · **Everything** (kind filters, snooze, the snoozed listed with
+      their day) is its first part; Pending, Ready, Checklist and Unpublished
+      follow it. The view's id stays `tasks`. `S` · depends: HOME-4
 - [x] **HOME-14** `decision` Is Today a place in the navigator beside Weeks,
       or what course mode opens on when no place is asked for? Decided
       2026-10-23: both a place (first, above Weeks) and the landing of an
