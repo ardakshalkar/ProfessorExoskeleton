@@ -445,6 +445,10 @@ a.pp-segbtn{display:inline-flex}
   color:var(--dsw-alias-label-secondary,#555);
   background:var(--dsw-alias-fill-l2,rgba(124,58,237,.08))}
 .pp-banner b{font-weight:600}
+.pp-banner-folded{padding:3px 12px 4px}
+/* The drafts switch: one button and its count (docs/RIBBONS.md R4). */
+.pp-draftswitch{display:inline-flex;align-items:center;gap:5px}
+.pp-draftcount{font-size:10.5px;font-weight:600;opacity:.75}
 .pp-banner .pp-issues{display:block;margin-top:3px;
   font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);font-size:10.5px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);word-break:break-word}
@@ -1760,10 +1764,6 @@ var IDENTITY_MODES = [
     names: false,
     hint: "STUDENT-XXXXXX — press before screen-sharing or projecting"
   }
-];
-var DRAFT_MODES = [
-  { label: "Record", drafts: false, hint: "only what has been accepted" },
-  { label: "+ drafts", drafts: true, hint: "including records marked approval: draft" }
 ];
 
 // client/defence-screen.js
@@ -5345,6 +5345,53 @@ function useDark() {
 }
 function Message(props) {
   return h("div", { className: "pp-msg" + (props.error ? " pp-err" : "") }, props.children);
+}
+var BANNER_KEY = "professor-pane:drafts-banner-folded";
+var BANNER_EVENT = "professor-pane:drafts-banner";
+var bannerFolded = () => {
+  try {
+    return window.localStorage.getItem(BANNER_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+function DraftBanner(props) {
+  const [folded, setFolded] = React.useState(bannerFolded);
+  React.useEffect(() => {
+    const onFold = (event) => setFolded(Boolean(event.detail));
+    window.addEventListener(BANNER_EVENT, onFold);
+    return () => window.removeEventListener(BANNER_EVENT, onFold);
+  }, []);
+  const fold = (value) => {
+    try {
+      window.localStorage.setItem(BANNER_KEY, value ? "1" : "0");
+    } catch {
+    }
+    window.dispatchEvent(new CustomEvent(BANNER_EVENT, { detail: value }));
+  };
+  const issues = props.issues && props.issues.length ? h("span", { className: "pp-issues" }, props.issues.join("  ·  ")) : null;
+  if (folded) {
+    return h(
+      "div",
+      { className: "pp-banner pp-banner-folded" },
+      h("b", null, "Including drafts"),
+      " — records nobody has accepted yet.",
+      h("button", { type: "button", className: "pp-linkbtn", onClick: () => fold(false) }, "What this means"),
+      issues
+    );
+  }
+  return h(
+    "div",
+    { className: "pp-banner" },
+    h("b", null, "Record + drafts. "),
+    "Everything below includes records marked ",
+    h("code", null, "approval: draft"),
+    ", which nobody has accepted yet. Accepting one is changing that word to ",
+    h("code", null, "approved"),
+    " in its record, and that is yours to do.",
+    h("button", { type: "button", className: "pp-linkbtn", onClick: () => fold(true) }, "Got it"),
+    issues
+  );
 }
 
 // shared/course-words.js
@@ -10078,7 +10125,7 @@ function CourseView(props) {
     }
     return /* @__PURE__ */ h(Fragment2, null, strip, banner, /* @__PURE__ */ h(Term, { data, student: answer.student, status: answer.status }));
   };
-  return /* @__PURE__ */ h(Fragment2, null, answer && !answer.error && answer.drafts ? /* @__PURE__ */ h("div", { className: "pp-banner" }, /* @__PURE__ */ h("b", null, "Record + drafts. "), "Everything below includes records marked ", /* @__PURE__ */ h("code", null, "approval: draft"), ", which nobody has accepted yet. Accepting one is changing that word to", " ", /* @__PURE__ */ h("code", null, "approved"), " in its record, and that is yours to do.") : null, /* @__PURE__ */ h("div", { ref: hostRef, className: "pp-courseview", style: { flex: 1, minHeight: 0, overflow: "auto" } }, /* @__PURE__ */ h(ShadowContent, { host }, /* @__PURE__ */ h("style", null, sheet(dark)), /* @__PURE__ */ h("div", { className: "cm" }, /* @__PURE__ */ h(Sprite, null), /* @__PURE__ */ h(EditScope, { runId, sessionId, enabled: Boolean(answer && !answer.error && !answer.student) }, body())))));
+  return /* @__PURE__ */ h(Fragment2, null, answer && !answer.error && answer.drafts ? /* @__PURE__ */ h(DraftBanner, null) : null, /* @__PURE__ */ h("div", { ref: hostRef, className: "pp-courseview", style: { flex: 1, minHeight: 0, overflow: "auto" } }, /* @__PURE__ */ h(ShadowContent, { host }, /* @__PURE__ */ h("style", null, sheet(dark)), /* @__PURE__ */ h("div", { className: "cm" }, /* @__PURE__ */ h(Sprite, null), /* @__PURE__ */ h(EditScope, { runId, sessionId, enabled: Boolean(answer && !answer.error && !answer.student) }, body())))));
 }
 function ShadowContent(props) {
   const host = props.host;
@@ -12458,17 +12505,7 @@ function WidgetFrame(props) {
   return h(
     React.Fragment,
     null,
-    doc.mode === "merged" ? h(
-      "div",
-      { className: "pp-banner" },
-      h("b", null, "Record + drafts. "),
-      "Everything below includes records marked ",
-      h("code", null, "approval: draft"),
-      ", which nobody has accepted yet. Accepting one is changing that word to ",
-      h("code", null, "approved"),
-      " in its record, and that is yours to do.",
-      doc.issues.length ? h("span", { className: "pp-issues" }, doc.issues.join("  ·  ")) : null
-    ) : null,
+    doc.mode === "merged" ? h(DraftBanner, { issues: doc.issues }) : null,
     h("iframe", {
       className: "pp-frame",
       srcDoc: doc.html,
@@ -12672,6 +12709,9 @@ function CourseMode(props) {
   }
   const waiting2 = shown.current.waiting;
   const canvasLine = shown.current.canvas;
+  const recent = useJson(scoped(BASE + "/api/recent?r=" + everything, props.sessionId));
+  if (recent.phase === "ready" && recent.value && typeof recent.value.drafts === "number") shown.current.drafts = recent.value.drafts;
+  const draftCount = typeof shown.current.drafts === "number" ? shown.current.drafts : null;
   const [jump, setJump] = React.useState(null);
   const openCard = (service) => {
     setJump((current) => ({ service, tick: (current ? current.tick : 0) + 1 }));
@@ -12867,6 +12907,8 @@ function CourseMode(props) {
   const placeName = viewEntry ? viewEntry.label : navigator2 ? "Weeks" : props.title;
   const subLabel = view ? VIEW_SUBS[view] ? (VIEW_SUBS[view].find((entry) => entry.id === subOf(view)) || { label: null }).label : view === "today" ? (/* @__PURE__ */ new Date()).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) : null : (COURSE_MODES.find((entry) => entry.id === mode) || { label: null }).label;
   const placeTitle = subLabel ? placeName + " · " + subLabel : placeName;
+  const draftsApply = view === null || view === "concepts" || view === "materials" || view === "gradebook" || // Pending, whose id is `tasks`: the inbox, over the half the switch picks.
+  view === "tasks" && taskSub === "tasks";
   const readings = COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false));
   const previewSwitch = private_ ? null : h(
     "label",
@@ -12916,20 +12958,20 @@ function CourseMode(props) {
               navigator2 ? null : h("span", { className: "pp-segsep", "aria-hidden": "true" }),
               navigator2 ? null : COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
               h("span", { className: "pp-segspacer" }),
-              DRAFT_MODES.map(
-                (entry) => h(
-                  "button",
-                  {
-                    type: "button",
-                    className: "pp-segbtn",
-                    "aria-pressed": props.drafts === entry.drafts,
-                    title: entry.hint,
-                    onClick: () => props.setDrafts(entry.drafts),
-                    key: entry.label
-                  },
-                  entry.label
-                )
-              ),
+              // One switch with the count, and only where it changes what is
+              // drawn (docs/RIBBONS.md R4). Pressed: drafts are in the view.
+              draftsApply ? h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-segbtn pp-draftswitch",
+                  "aria-pressed": Boolean(props.drafts),
+                  title: props.drafts ? "Showing drafts with the record. Press to see only what has been accepted." : "Showing only what has been accepted. Press to include records marked approval: draft.",
+                  onClick: () => props.setDrafts(!props.drafts)
+                },
+                "Drafts",
+                draftCount !== null ? h("span", { className: "pp-draftcount" }, draftCount.toLocaleString()) : null
+              ) : null,
               navigator2 ? null : previewSwitch
             ),
             // The pane's header, which this veil covers. Publish opens its own

@@ -410,6 +410,10 @@ a.pp-segbtn{display:inline-flex}
   color:var(--dsw-alias-label-secondary,#555);
   background:var(--dsw-alias-fill-l2,rgba(124,58,237,.08))}
 .pp-banner b{font-weight:600}
+.pp-banner-folded{padding:3px 12px 4px}
+/* The drafts switch: one button and its count (docs/RIBBONS.md R4). */
+.pp-draftswitch{display:inline-flex;align-items:center;gap:5px}
+.pp-draftcount{font-size:10.5px;font-weight:600;opacity:.75}
 .pp-banner .pp-issues{display:block;margin-top:3px;
   font-family:var(--dsw-font-mono,ui-monospace,Consolas,monospace);font-size:10.5px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);word-break:break-word}

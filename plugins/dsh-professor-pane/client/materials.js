@@ -3,7 +3,7 @@
  * material overlay, and Course mode.
  */
 
-import { decodeIssues, Message, useJson } from "./common.js";
+import { decodeIssues, DraftBanner, Message, useJson } from "./common.js";
 import { AREAS, useVersion } from "./data.js";
 import { CourseView } from "./course/view.jsx";
 import { courseModeEscape } from "./course-escape.js";
@@ -16,7 +16,7 @@ import { Preferences } from "./preferences.js";
 import { SyncView } from "./sync-view.js";
 import { Today } from "./today.js";
 import { h, React, ReactDOM } from "./react.js";
-import { BASE, DRAFT_MODES, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS } from "./tabs.js";
+import { BASE, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS } from "./tabs.js";
 
 /**
  * A widget document in an iframe, delivered as `srcdoc` rather than `src`.
@@ -131,21 +131,7 @@ function WidgetFrame(props) {
   return h(
     React.Fragment,
     null,
-    doc.mode === "merged"
-      ? h(
-          "div",
-          { className: "pp-banner" },
-          h("b", null, "Record + drafts. "),
-          "Everything below includes records marked ",
-          h("code", null, "approval: draft"),
-          ", which nobody has accepted yet. Accepting one is changing that word to ",
-          h("code", null, "approved"),
-          " in its record, and that is yours to do.",
-          doc.issues.length
-            ? h("span", { className: "pp-issues" }, doc.issues.join("  ·  "))
-            : null,
-        )
-      : null,
+    doc.mode === "merged" ? h(DraftBanner, { issues: doc.issues }) : null,
     h("iframe", {
       className: "pp-frame",
       srcDoc: doc.html,
@@ -575,6 +561,12 @@ export function CourseMode(props) {
   }
   const waiting = shown.current.waiting;
   const canvasLine = shown.current.canvas;
+  // How many records say `approval: draft`, for the drafts switch: the
+  // count the right column's inspector reads, cached on the server per
+  // revision of the workspace.
+  const recent = useJson(scoped(BASE + "/api/recent?r=" + everything, props.sessionId));
+  if (recent.phase === "ready" && recent.value && typeof recent.value.drafts === "number") shown.current.drafts = recent.value.drafts;
+  const draftCount = typeof shown.current.drafts === "number" ? shown.current.drafts : null;
   // A press in the connections panel jumps to that service's card.
   const [jump, setJump] = React.useState(null);
   const openCard = (service) => {
@@ -799,6 +791,18 @@ export function CourseMode(props) {
         : null
     : (COURSE_MODES.find((entry) => entry.id === mode) || { label: null }).label;
   const placeTitle = subLabel ? placeName + " · " + subLabel : placeName;
+  // Where the drafts switch changes what is drawn: the weeks, and the views
+  // computed over the course model. Today, Students, Files, Sync and Course
+  // settings read the same either way, and so do Tasks' Ready and Checklist,
+  // which are about the drafted half whatever the switch says (see
+  // server/routes/views.js) — so the switch is not on them.
+  const draftsApply =
+    view === null ||
+    view === "concepts" ||
+    view === "materials" ||
+    view === "gradebook" ||
+    // Pending, whose id is `tasks`: the inbox, over the half the switch picks.
+    (view === "tasks" && taskSub === "tasks");
   // The readings of the weeks and Preview as student are Weeks' own, drawn
   // in its place bar under the header; without the navigator (the stock
   // browser in the seat) the header is the only row, and they stay in it.
@@ -857,20 +861,24 @@ export function CourseMode(props) {
             navigator ? null : h("span", { className: "pp-segsep", "aria-hidden": "true" }),
             navigator ? null : COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
             h("span", { className: "pp-segspacer" }),
-            DRAFT_MODES.map((entry) =>
-              h(
-                "button",
-                {
-                  type: "button",
-                  className: "pp-segbtn",
-                  "aria-pressed": props.drafts === entry.drafts,
-                  title: entry.hint,
-                  onClick: () => props.setDrafts(entry.drafts),
-                  key: entry.label,
-                },
-                entry.label,
-              ),
-            ),
+            // One switch with the count, and only where it changes what is
+            // drawn (docs/RIBBONS.md R4). Pressed: drafts are in the view.
+            draftsApply
+              ? h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn pp-draftswitch",
+                    "aria-pressed": Boolean(props.drafts),
+                    title: props.drafts
+                      ? "Showing drafts with the record. Press to see only what has been accepted."
+                      : "Showing only what has been accepted. Press to include records marked approval: draft.",
+                    onClick: () => props.setDrafts(!props.drafts),
+                  },
+                  "Drafts",
+                  draftCount !== null ? h("span", { className: "pp-draftcount" }, draftCount.toLocaleString()) : null,
+                )
+              : null,
             navigator ? null : previewSwitch,
           ),
           // The pane's header, which this veil covers. Publish opens its own

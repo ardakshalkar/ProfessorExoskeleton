@@ -42,6 +42,9 @@ export const routes = [
       const on = url.searchParams.get("date");
       const host = req.headers.host;
       const session = url.searchParams.get("session") ?? "";
+      // Which half, for the pane's banner: these pages take the drafts
+      // switch, and a view with drafts in it is never shown silently.
+      res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
       return send(
         res,
         200,
@@ -139,6 +142,7 @@ export const routes = [
       // half, and a "Record" setting that emptied it would be answering a
       // question nobody asked.
       const withDrafts = url.searchParams.get("drafts") === "1";
+      if (view === "grading") res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
       return send(
         res,
         200,

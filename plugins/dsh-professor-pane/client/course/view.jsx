@@ -24,6 +24,7 @@
 import { h, Fragment, React, ReactDOM } from "../react.js";
 import { BASE, scoped } from "../tabs.js";
 import { AREAS, useVersion } from "../data.js";
+import { DraftBanner } from "../common.js";
 import { DARK, LIGHT, STYLE } from "../../shared/course-style.js";
 import { Sprite } from "./parts.jsx";
 import { EditScope } from "./edit.jsx";
@@ -182,13 +183,7 @@ export function CourseView(props) {
 
   return (
     <Fragment>
-      {answer && !answer.error && answer.drafts ? (
-        <div className="pp-banner">
-          <b>Record + drafts. </b>
-          Everything below includes records marked <code>approval: draft</code>, which nobody has accepted yet. Accepting one is changing that word to{" "}
-          <code>approved</code> in its record, and that is yours to do.
-        </div>
-      ) : null}
+      {answer && !answer.error && answer.drafts ? <DraftBanner /> : null}
       <div ref={hostRef} className="pp-courseview" style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
         <ShadowContent host={host}>
           <style>{sheet(dark)}</style>

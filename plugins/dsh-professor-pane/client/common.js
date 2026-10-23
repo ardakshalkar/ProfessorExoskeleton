@@ -77,3 +77,66 @@ export function useDark() {
 export function Message(props) {
   return h("div", { className: "pp-msg" + (props.error ? " pp-err" : "") }, props.children);
 }
+
+/** Where the drafts banner's fold is kept: a reading preference, per browser. */
+const BANNER_KEY = "professor-pane:drafts-banner-folded";
+const BANNER_EVENT = "professor-pane:drafts-banner";
+
+const bannerFolded = () => {
+  try {
+    return window.localStorage.getItem(BANNER_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The line over a view computed with drafts in it. The pane never shows that
+ * half silently, so the banner never goes; what changes is its size. The
+ * paragraph is said in full until the professor folds it, then once as a
+ * line that opens it again (docs/RIBBONS.md R4). The fold is remembered in
+ * this browser, for every view that draws the banner.
+ *
+ * `issues` — what the draft read complained of — are always shown.
+ */
+export function DraftBanner(props) {
+  const [folded, setFolded] = React.useState(bannerFolded);
+  // The weeks stay mounted under a course-wide view, so two banners can be
+  // in the page at once; a fold in one is told to the other.
+  React.useEffect(() => {
+    const onFold = (event) => setFolded(Boolean(event.detail));
+    window.addEventListener(BANNER_EVENT, onFold);
+    return () => window.removeEventListener(BANNER_EVENT, onFold);
+  }, []);
+  const fold = (value) => {
+    try {
+      window.localStorage.setItem(BANNER_KEY, value ? "1" : "0");
+    } catch {
+      // A private window: folded until the page reloads.
+    }
+    window.dispatchEvent(new CustomEvent(BANNER_EVENT, { detail: value }));
+  };
+  const issues = props.issues && props.issues.length ? h("span", { className: "pp-issues" }, props.issues.join("  ·  ")) : null;
+  if (folded) {
+    return h(
+      "div",
+      { className: "pp-banner pp-banner-folded" },
+      h("b", null, "Including drafts"),
+      " — records nobody has accepted yet.",
+      h("button", { type: "button", className: "pp-linkbtn", onClick: () => fold(false) }, "What this means"),
+      issues,
+    );
+  }
+  return h(
+    "div",
+    { className: "pp-banner" },
+    h("b", null, "Record + drafts. "),
+    "Everything below includes records marked ",
+    h("code", null, "approval: draft"),
+    ", which nobody has accepted yet. Accepting one is changing that word to ",
+    h("code", null, "approved"),
+    " in its record, and that is yours to do.",
+    h("button", { type: "button", className: "pp-linkbtn", onClick: () => fold(true) }, "Got it"),
+    issues,
+  );
+}

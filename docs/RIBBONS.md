@@ -163,6 +163,18 @@ should not wait for the rest.
    · Slides*, *Course settings · Integrations*, *Today · Fri, Oct 23*, and
    the composer says the same. Without the navigator (the stock browser in
    the seat) the readings stay in the header, the only row there is.
-4. **R4** — drafts as one counted switch, on its five places only.
+4. ~~**R4** — drafts as one counted switch, on its five places only.~~
+   **Done 2026-10-23.** *Drafts · 1,648* is one button, pressed when drafts
+   are in the view, its count from `/api/recent`. It is drawn on Weeks,
+   Concepts, Materials, Gradebook and Tasks · Pending — not on Tasks' Ready,
+   Checklist and Unpublished, which read the drafted half whatever it says.
+   The banner (`DraftBanner` in `client/common.js`, one component for the
+   weeks and every frame) says its paragraph until *Got it*, then a line —
+   *Including drafts — records nobody has accepted yet* — that *What this
+   means* opens again; the fold is kept per browser and told to every banner
+   in the page. Found on the way: Materials' Assessments, Slides, Exams and
+   Grading policy took the switch but never said which half they showed, so
+   drafts appeared there with no banner. They now send the header the
+   banner reads.
 5. **R6** — Gradebook's and Course settings' sub-views into the place bar.
 6. **R8, R10** — Publish styled as outward; × and Escape return to Today.
