@@ -2004,8 +2004,9 @@ is worth building.
       place; a chat with nothing asked in it opens on Today once per session
       (`pane.js`), a chat with messages stays a chat. Every row and tile opens
       its place — Grade and Scans over course mode, the rest as views.
-      Escape still closes course mode rather than returning to Today. `M` ·
-      depends: HOME-1
+      Since RIBBONS R10 (2026-10-23), × and Escape return to Today from any
+      other place and close course mode only from Today. `M` · depends:
+      HOME-1
 - [ ] **HOME-3** The phase, computed from the run's dates and records, never
       stored: *before term* (Now is a readiness list — T1, T4, T7),
       *teaching* (this week), *closing* (the close checklist, EXM's Close at

@@ -59,6 +59,11 @@ var PANE_CSS = `
    An outline rather than a fill: it opens a dialog and publishes nothing by
    itself, so it should not look like the red button two presses further in. */
 .pp-publishbtn{flex:none}
+/* Publish in course mode's header: outlined in the colour of the send it
+   leads to, with the outward arrow; the fill stays for the Send itself. */
+.pp-publishbtn.pp-outward{display:inline-flex;align-items:center;gap:4px;color:#b4342a;border-color:rgba(180,52,42,.45)}
+.pp-publishbtn.pp-outward:hover:not(:disabled){background:rgba(180,52,42,.07);border-color:#b4342a}
+.pp-outwardmark{font-size:11px;line-height:1}
 .pp-close{flex:none;background:0 0;border:0;cursor:pointer;padding:2px 4px;border-radius:6px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);font-size:14px;line-height:1}
 .pp-close:hover{color:var(--dsw-alias-label-secondary,#444)}
@@ -12696,6 +12701,13 @@ function CourseMode(props) {
   }, []);
   const private_ = view !== null || mode === "teaching" || mode === "evidence";
   const preview = student && !private_;
+  const onToday = view === "today";
+  const onTodayRef = React.useRef(onToday);
+  onTodayRef.current = onToday;
+  const back = () => {
+    if (onTodayRef.current) close();
+    else setView("today");
+  };
   React.useEffect(() => {
     const onKey = (event) => {
       if (event.key !== "Escape") return;
@@ -12703,7 +12715,7 @@ function CourseMode(props) {
       if (props.chat && veilRef.current && target instanceof Node && target !== document.body && !veilRef.current.contains(target)) return;
       if (event.composedPath().some((node) => node instanceof Element && (node.hasAttribute("data-own-escape") || node.classList.contains("planform")))) return;
       if (document.querySelector(".pp-connpanel")) return;
-      if (courseModeEscape({ covered: props.covered }) === "close") close();
+      if (courseModeEscape({ covered: props.covered }) === "close") back();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -13036,8 +13048,17 @@ function CourseMode(props) {
             ) : null,
             h(
               "button",
-              { type: "button", className: "pp-publishbtn", title: "Publish the course page, an announcement, a repository or a Canvas brief", onClick: props.onPublish },
-              "Publish"
+              {
+                type: "button",
+                // The one control in the header whose result other people see:
+                // drawn as going out, not filled — it opens a preview, and the
+                // red fill is the Send inside it (docs/RIBBONS.md R8).
+                className: "pp-publishbtn pp-outward",
+                title: "Publish the course page, an announcement, a repository or a Canvas brief. Students see what you send; nothing goes until you confirm the preview.",
+                onClick: props.onPublish
+              },
+              "Publish",
+              h("span", { className: "pp-outwardmark", "aria-hidden": "true" }, "↗")
             ),
             // The conversation beside the place: a press on a hole starts a
             // turn there, and this is how to look at it again or put it away.
@@ -13060,9 +13081,9 @@ function CourseMode(props) {
               {
                 type: "button",
                 className: "pp-close",
-                "aria-label": "Close course mode",
-                title: "Back to the conversation (Esc)",
-                onClick: close
+                "aria-label": onToday ? "Close course mode" : "Back to Today",
+                title: onToday ? "Back to the conversation (Esc)" : "Back to Today (Esc)",
+                onClick: back
               },
               "×"
             )

@@ -186,4 +186,13 @@ should not wait for the rest.
    (`GradebookPanes` takes `only`). Course settings' bar is **Integrations ·
    Accounts · Preferences**; Integrations draws no header of its own there
    (`placed`), and keeps its Accounts button where it is drawn alone.
-6. **R8, R10** — Publish styled as outward; × and Escape return to Today.
+6. ~~**R8, R10** — Publish styled as outward; × and Escape return to Today.~~
+   **Done 2026-10-23.** Publish is outlined in the red of the Send it leads
+   to, with ↗, and its tooltip says students see what is sent and nothing
+   goes before the preview is confirmed; the fill stays for the Send
+   itself. × and Escape go back to Today from every other place and close
+   course mode only from Today; the button's tooltip says which
+   (*Back to Today* or *Back to the conversation*). A window on top —
+   a deck, Grade, Scans, the connections panel — still takes Escape first.
+
+All ten findings are done.

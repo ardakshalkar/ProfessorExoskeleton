@@ -24,6 +24,11 @@ const PANE_CSS = `
    An outline rather than a fill: it opens a dialog and publishes nothing by
    itself, so it should not look like the red button two presses further in. */
 .pp-publishbtn{flex:none}
+/* Publish in course mode's header: outlined in the colour of the send it
+   leads to, with the outward arrow; the fill stays for the Send itself. */
+.pp-publishbtn.pp-outward{display:inline-flex;align-items:center;gap:4px;color:#b4342a;border-color:rgba(180,52,42,.45)}
+.pp-publishbtn.pp-outward:hover:not(:disabled){background:rgba(180,52,42,.07);border-color:#b4342a}
+.pp-outwardmark{font-size:11px;line-height:1}
 .pp-close{flex:none;background:0 0;border:0;cursor:pointer;padding:2px 4px;border-radius:6px;
   color:var(--dsw-alias-label-tertiary,#6b6b6b);font-size:14px;line-height:1}
 .pp-close:hover{color:var(--dsw-alias-label-secondary,#444)}

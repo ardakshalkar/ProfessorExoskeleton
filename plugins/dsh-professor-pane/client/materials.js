@@ -523,6 +523,17 @@ export function CourseMode(props) {
   // names, so there is no student version of any of them to preview.
   const private_ = view !== null || mode === "teaching" || mode === "evidence";
   const preview = student && !private_;
+  // × and Escape go back to Today from any other place, and close course
+  // mode only from Today itself: closing from a place used to land on the
+  // empty chat Today replaced (docs/RIBBONS.md R10). Read through a ref, for
+  // the key handler registered once.
+  const onToday = view === "today";
+  const onTodayRef = React.useRef(onToday);
+  onTodayRef.current = onToday;
+  const back = () => {
+    if (onTodayRef.current) close();
+    else setView("today");
+  };
   React.useEffect(() => {
     const onKey = (event) => {
       if (event.key !== "Escape") return;
@@ -539,7 +550,7 @@ export function CourseMode(props) {
       if (document.querySelector(".pp-connpanel")) return;
       // A deck opened from the term plan sits on top and owns Escape: it
       // closes first, and this stays where the professor was reading.
-      if (courseModeEscape({ covered: props.covered }) === "close") close();
+      if (courseModeEscape({ covered: props.covered }) === "close") back();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -943,8 +954,19 @@ export function CourseMode(props) {
             : null,
           h(
             "button",
-            { type: "button", className: "pp-publishbtn", title: "Publish the course page, an announcement, a repository or a Canvas brief", onClick: props.onPublish },
+            {
+              type: "button",
+              // The one control in the header whose result other people see:
+              // drawn as going out, not filled — it opens a preview, and the
+              // red fill is the Send inside it (docs/RIBBONS.md R8).
+              className: "pp-publishbtn pp-outward",
+              title:
+                "Publish the course page, an announcement, a repository or a Canvas brief. Students see what you send; " +
+                "nothing goes until you confirm the preview.",
+              onClick: props.onPublish,
+            },
             "Publish",
+            h("span", { className: "pp-outwardmark", "aria-hidden": "true" }, "↗"),
           ),
           // The conversation beside the place: a press on a hole starts a
           // turn there, and this is how to look at it again or put it away.
@@ -971,9 +993,9 @@ export function CourseMode(props) {
             {
               type: "button",
               className: "pp-close",
-              "aria-label": "Close course mode",
-              title: "Back to the conversation (Esc)",
-              onClick: close,
+              "aria-label": onToday ? "Close course mode" : "Back to Today",
+              title: onToday ? "Back to the conversation (Esc)" : "Back to Today (Esc)",
+              onClick: back,
             },
             "×",
           ),
