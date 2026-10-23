@@ -136,6 +136,22 @@ test("a record without an assessment id is refused before anything is written", 
   assert.equal(existsSync(join(courseDir, "assessments")), false);
 });
 
+test("a file with a YAML syntax error is refused with yaml.invalid, not read cut short", () => {
+  const { root, courseDir } = workspace();
+  // The apostrophe ends the single-quoted scalar early; `parse()` throws on it.
+  put(
+    courseDir,
+    "records/evaluations.yaml",
+    "- evaluation_id: EVAL-1\n  submission_id: SUB-1\n  criterion_id: CRIT-1\n  status: suggested\n" +
+      "  ai_suggestion:\n    score: 1\n    comment: 'at the professor's\n      direction.'\n",
+  );
+  const { bundle, issues } = loadCourse(courseDir, root);
+  assert.deepEqual(bundle!.evaluations, []);
+  const codes = issues.errors.map((issue: any) => issue.code);
+  assert.ok(codes.length > 0 && codes.every((code: string) => code === "yaml.invalid"), codes.join(", "));
+  assert.match(issues.errors[0].message, /line 7/);
+});
+
 test("candidateFiles follows a * in a directory segment, and skips files it matches there", () => {
   const { root, courseDir } = workspace();
   put(courseDir, "assessments/ASSESSMENT-QUIZ-01/items.yaml", "items: []\n");

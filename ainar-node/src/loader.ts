@@ -103,7 +103,20 @@ const documents = (path: string, issues: IssueList): unknown[] => {
     return [];
   }
   try {
-    return parseAllDocuments(raw, MERGE_KEYS)
+    // `parseAllDocuments` does not throw: a syntax error is left on the
+    // document's `errors` and `toJS()` still answers, with the broken value cut
+    // short. An unescaped quote in a single-quoted comment came back truncated
+    // and validated clean while every `parse()` reader — the pane among them —
+    // refused the file. The file is refused here too, whole, as they refuse it.
+    const parsed = parseAllDocuments(raw, MERGE_KEYS);
+    const broken = parsed.flatMap((document) => document.errors);
+    if (broken.length) {
+      for (const error of broken) {
+        issues.error("yaml.invalid", `cannot parse YAML: ${error.message.split("\n")[0]}`, path);
+      }
+      return [];
+    }
+    return parsed
       .map((document) => document.toJS({ mapAsMap: false }))
       .filter((value) => value !== null && value !== undefined);
   } catch (error) {
