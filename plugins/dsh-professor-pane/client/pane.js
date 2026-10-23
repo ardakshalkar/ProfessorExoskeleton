@@ -747,6 +747,19 @@ export function ProfessorPane(props) {
     options.map((option) => option.runId),
   );
 
+  // The landing: a chat with nothing asked in it yet opens on Today, once per
+  // session, so opening the course answers "where are we, what is waiting".
+  // A chat with messages stays a chat, and a place already asked for — the
+  // navigator's New chat carrying one — wins. BACKLOG E37, HOME-2.
+  const landed = React.useRef(null);
+  React.useEffect(() => {
+    if (current === null || landed.current === props.sessionId) return;
+    landed.current = props.sessionId;
+    if (courseModeRef.current || placeRequest) return;
+    const chat = props.chatTitle ? props.chatTitle() : null;
+    if (chat && chat.blank) openPlace({ view: "today" });
+  }, [props.sessionId, current ? current.runId : null]);
+
   // Switching run returns to the default rather than carrying the last
   // press across. It matters in one direction now: a professor who pressed
   // `Pseudonyms` to cover one class list was covering THAT list, and the
@@ -1005,6 +1018,8 @@ export function ProfessorPane(props) {
           // For Files: a pile in the Scans window, the batch in the recordings dialog.
           onOpenScans: (assessment) => setScansPile(assessment),
           onRecordings: () => setBatch(true),
+          // For Today: marks waiting on one assessment, in the Grade view.
+          onGrade: (assessment, label) => setGrading({ assessment, label: label || assessment }),
           // For Students, Gradebook and Tasks: the pane's own identity choice, and what the
           // Unpublished view needs to send — the same props its tab gets.
           names: names,

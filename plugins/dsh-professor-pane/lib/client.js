@@ -732,6 +732,53 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
    each with its service's mark. */
 .pp-syncs{display:flex;flex-direction:column;gap:14px}
 .pp-cviewpad{padding:16px 20px 40px;max-width:880px}
+/* Today: three bands — Now, Waiting, Pulse — each row a link into its place. */
+.pp-today{display:flex;flex-direction:column;gap:18px;font-size:12px}
+.pp-tband h3{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:11px;font-weight:600;
+  letter-spacing:.05em;text-transform:uppercase;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-tcount{min-width:18px;padding:0 6px;border-radius:9px;font-size:10.5px;line-height:18px;text-align:center;
+  letter-spacing:0;color:#fff;background:#a15c00}
+.pp-tnow{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:10px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-tnowhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.pp-tnowhead b{font-size:16px;font-weight:600}
+.pp-tmods{font-weight:500}
+.pp-tlist{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:3px}
+.pp-tlist li{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.pp-tnow p{margin:0}
+.pp-tnowacts{display:flex;gap:6px;flex-wrap:wrap}
+.pp-trows{display:flex;flex-direction:column;border-radius:10px;overflow:hidden;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-trow{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;font:inherit;text-align:left;cursor:pointer;
+  color:inherit;background:var(--dsw-alias-bg-l1,#fff);border:0;border-top:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-trow:first-child{border-top:0}
+.pp-trow:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-trow:focus-visible{outline:2px solid #2f6fd6;outline-offset:-2px}
+.pp-trow-hot{box-shadow:inset 3px 0 0 #a15c00}
+.pp-trowtext{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.pp-trowtext b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-trowtext span{color:var(--dsw-alias-label-secondary,#555)}
+.pp-ttag{flex:none;padding:1px 7px;border-radius:9px;font-size:10.5px;
+  color:var(--dsw-alias-label-secondary,#555);background:var(--dsw-alias-fill-secondary,#f0f0f2)}
+.pp-ttag-warn{color:#a15c00;background:rgba(161,92,0,.1)}
+.pp-tgo{flex:none;font-size:16px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-ttiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:8px}
+.pp-ttile{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;font:inherit;text-align:left;
+  cursor:pointer;color:inherit;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-ttile:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
+.pp-ttile b{font-size:18px;font-weight:600}
+.pp-ttile .pp-as{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-ttile-warn{border-color:rgba(161,92,0,.4);background:rgba(161,92,0,.06)}
+.pp-ttile-warn b{color:#a15c00}
+.pp-ttilehead{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-tsyncs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px}
+.pp-tsyncs .pp-ttilehead{margin-right:4px}
+.pp-tsync{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;font:inherit;cursor:pointer;
+  color:inherit;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-tsync i{width:7px;height:7px;border-radius:50%;background:#2e7d4f}
+.pp-tsync-wait i{background:#a15c00}
+.pp-tsync:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
 .pp-wiring-waiting{color:#a5561f;font-weight:600}
 .pp-stiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr));gap:8px}
 .pp-stile{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;
@@ -4413,8 +4460,8 @@ var when = (iso) => {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return null;
   const clock2 = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const day = (date2) => new Date(date2.getFullYear(), date2.getMonth(), date2.getDate()).getTime();
-  const days = Math.round((day(/* @__PURE__ */ new Date()) - day(at)) / 864e5);
+  const day2 = (date2) => new Date(date2.getFullYear(), date2.getMonth(), date2.getDate()).getTime();
+  const days = Math.round((day2(/* @__PURE__ */ new Date()) - day2(at)) / 864e5);
   if (days <= 0) return "today " + clock2;
   if (days === 1) return "yesterday " + clock2;
   const date = at.toLocaleDateString([], { day: "numeric", month: "short" });
@@ -7830,7 +7877,7 @@ function CourseIntegrations(props) {
     setFilter((current) => ({ id, tick: current.tick + 1 }));
     scrollTo("pp-card-canvas");
   };
-  const plural4 = (count, one, many) => count + " " + (count === 1 ? one : many);
+  const plural5 = (count, one, many) => count + " " + (count === 1 ? one : many);
   const migrate = () => {
     setMigrating("working");
     fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
@@ -7847,21 +7894,21 @@ function CourseIntegrations(props) {
       key: "waiting",
       service: "sheets",
       mark: "GS",
-      text: plural4(waiting2, "name", "names") + " from the grade sheet to confirm",
+      text: plural5(waiting2, "name", "names") + " from the grade sheet to confirm",
       go: () => scrollTo("pp-card-sheets")
     } : null,
     reachable && counts.unlinked.length ? {
       key: "unlinked",
       service: "canvas",
       mark: "Cv",
-      text: plural4(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
+      text: plural5(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
       go: () => show("unlinked")
     } : null,
     counts.toSend.length ? {
       key: "marks",
       service: "canvas",
       mark: "Cv",
-      text: "Canvas is missing marks for " + plural4(counts.toSend.length, "assessment", "assessments"),
+      text: "Canvas is missing marks for " + plural5(counts.toSend.length, "assessment", "assessments"),
       go: () => show("marks")
     } : null
   ].filter(Boolean);
@@ -7966,7 +8013,7 @@ function CourseIntegrations(props) {
       h(
         "span",
         { className: "pp-as" },
-        (implied === syncs.length ? "All " : implied + " of ") + plural4(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
+        (implied === syncs.length ? "All " : implied + " of ") + plural5(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
       ),
       h(
         "button",
@@ -8971,18 +9018,18 @@ var placed = (x, y, width, height) => ({
 var daysBetween = (a, b) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 864e5);
 function WeekWhen(props) {
   const { value, rows, weekOf, isOpens, className, onChange } = props;
-  const day = value ? value.slice(0, 10) : "";
-  const row = day ? rows.find((r) => r.n === weekOf(day)) : null;
+  const day2 = value ? value.slice(0, 10) : "";
+  const row = day2 ? rows.find((r) => r.n === weekOf(day2)) : null;
   const time = value ? value.slice(11, 16) : isOpens ? "09:00" : "23:59";
   const days = (r) => Array.from({ length: daysBetween(r.from, r.to) + 1 }, (_, i) => addDays(r.from, i));
   const toWeek = (n) => {
     const r = rows.find((x) => x.n === n);
     if (!r) return onChange("");
     const len = daysBetween(r.from, r.to);
-    const at = row ? Math.min(daysBetween(row.from, day), len) : isOpens ? 0 : len;
+    const at = row ? Math.min(daysBetween(row.from, day2), len) : isOpens ? 0 : len;
     onChange(addDays(r.from, at) + "T" + time);
   };
-  return /* @__PURE__ */ h("span", { className: "pf-week-pick " + className }, /* @__PURE__ */ h("select", { value: row ? row.n : "", onChange: (e) => toWeek(Number(e.target.value)), "aria-label": "Week" }, /* @__PURE__ */ h("option", { value: "" }, isOpens ? "No opening" : "Week…"), rows.map((r) => /* @__PURE__ */ h("option", { key: r.n, value: r.n }, "Week " + r.n + " · " + nice(r.from)))), row ? /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("select", { value: day, onChange: (e) => onChange(e.target.value + "T" + time), "aria-label": "Day" }, days(row).map((d) => /* @__PURE__ */ h("option", { key: d, value: d }, dayName(d) + " " + nice(d)))), /* @__PURE__ */ h("input", { type: "time", value: time, onChange: (e) => e.target.value && onChange(day + "T" + e.target.value), "aria-label": "Time" })) : null);
+  return /* @__PURE__ */ h("span", { className: "pf-week-pick " + className }, /* @__PURE__ */ h("select", { value: row ? row.n : "", onChange: (e) => toWeek(Number(e.target.value)), "aria-label": "Week" }, /* @__PURE__ */ h("option", { value: "" }, isOpens ? "No opening" : "Week…"), rows.map((r) => /* @__PURE__ */ h("option", { key: r.n, value: r.n }, "Week " + r.n + " · " + nice(r.from)))), row ? /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("select", { value: day2, onChange: (e) => onChange(e.target.value + "T" + time), "aria-label": "Day" }, days(row).map((d) => /* @__PURE__ */ h("option", { key: d, value: d }, dayName(d) + " " + nice(d)))), /* @__PURE__ */ h("input", { type: "time", value: time, onChange: (e) => e.target.value && onChange(day2 + "T" + e.target.value), "aria-label": "Time" })) : null);
 }
 function DatesForm(props) {
   const { pending, item, rows, rowOf, weekOf, taughtBefore, onChange, onSave, onCancel } = props;
@@ -11858,6 +11905,200 @@ function Preferences(props) {
   );
 }
 
+// client/today.js
+var plural4 = (n, one, many) => n + " " + (n === 1 ? one : many);
+var MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var day = (iso) => {
+  const found = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  return found ? Number(found[3]) + " " + MONTHS2[Number(found[2]) - 1] : null;
+};
+var URGENCY_WORD = {
+  overdue: "overdue",
+  this_week: "this week",
+  blocks_students: "students wait",
+  blocks_assistant: "the assistant waits",
+  later: null
+};
+var PHASE_WORD = { before: "Before the term", teaching: "Teaching", after: "After the term" };
+function useToday(runId, sessionId, revision) {
+  const [state, setState] = React.useState({ phase: "loading", value: null });
+  React.useEffect(() => {
+    let live = true;
+    fetch(scoped(BASE + "/api/today?run=" + encodeURIComponent(runId || "") + "&r=" + revision, sessionId), {
+      headers: { accept: "application/json" }
+    }).then((response) => response.json()).then((value) => live && setState({ phase: "ready", value })).catch((error) => live && setState({ phase: "ready", value: { error: String(error) } }));
+    return () => {
+      live = false;
+    };
+  }, [runId, sessionId, revision]);
+  return state;
+}
+function Band(props) {
+  return h(
+    "section",
+    { className: "pp-tband" },
+    h("h3", null, props.title, props.count != null ? h("span", { className: "pp-tcount" }, props.count) : null),
+    props.children
+  );
+}
+function Row(props) {
+  return h(
+    "button",
+    { type: "button", className: "pp-trow" + (props.tone ? " pp-trow-" + props.tone : ""), onClick: props.onClick, title: props.tip },
+    h("span", { className: "pp-trowtext" }, h("b", null, props.title), props.detail ? h("span", null, props.detail) : null),
+    props.tag ? h("span", { className: "pp-ttag" }, props.tag) : null,
+    h("span", { className: "pp-tgo", "aria-hidden": "true" }, "›")
+  );
+}
+function Now(props) {
+  const now = props.now;
+  const week = now.week;
+  return h(
+    Band,
+    { title: "Now" },
+    h(
+      "div",
+      { className: "pp-tnow" },
+      h(
+        "div",
+        { className: "pp-tnowhead" },
+        h("b", null, week ? "Week " + week.week + (props.run.weeks ? " of " + props.run.weeks : "") : PHASE_WORD[now.phase] || "—"),
+        week ? h("span", null, [day(week.starts_on), day(week.ends_on)].filter(Boolean).join(" – ")) : null,
+        week && week.modules.length ? h("span", { className: "pp-tmods" }, week.modules.join(" · ")) : null
+      ),
+      week && week.meetings.length ? h(
+        "ul",
+        { className: "pp-tlist" },
+        week.meetings.map(
+          (meeting, i) => h(
+            "li",
+            { key: i },
+            h("span", null, meeting.title),
+            h("span", { className: "pp-as" }, [meeting.type, day(meeting.on), meeting.location].filter(Boolean).join(" · ")),
+            meeting.deck ? null : h("span", { className: "pp-ttag pp-ttag-warn" }, "no slides")
+          )
+        )
+      ) : null,
+      week && week.due.length ? h(
+        "ul",
+        { className: "pp-tlist" },
+        week.due.map(
+          (work) => h("li", { key: work.assessment_id }, h("span", null, "Due " + (day(work.due_on) || "—")), h("span", { className: "pp-as" }, work.title))
+        )
+      ) : null,
+      now.next_due ? h(
+        "p",
+        { className: "pp-as" },
+        "Next due, week " + now.next_due.week + ": " + now.next_due.due.map((work) => work.title).join(" · ")
+      ) : null,
+      h(
+        "div",
+        { className: "pp-tnowacts" },
+        h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "teaching" }) }, "Open this week"),
+        now.gaps ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "planning" }) }, plural4(now.gaps, "week has gaps", "weeks have gaps")) : null
+      )
+    )
+  );
+}
+function Waiting(props) {
+  const items = props.items;
+  return h(
+    Band,
+    { title: "Waiting on you", count: items.length || null },
+    items.length ? h(
+      "div",
+      { className: "pp-trows" },
+      items.map(
+        (item) => h(Row, {
+          key: item.id,
+          title: item.title,
+          detail: item.detail,
+          tag: URGENCY_WORD[item.urgency],
+          tone: item.urgency === "overdue" || item.urgency === "this_week" || item.urgency === "blocks_students" ? "hot" : null,
+          onClick: () => props.onOpen(item.open)
+        })
+      )
+    ) : h("p", { className: "pp-as" }, "Nothing is waiting on you.")
+  );
+}
+function Pulse(props) {
+  const pulse = props.pulse;
+  const concepts = pulse.concepts;
+  const handIn = pulse.hand_in;
+  const tile = (key, head, value, sub, onClick, warn) => h(
+    "button",
+    { type: "button", key, className: "pp-ttile" + (warn ? " pp-ttile-warn" : ""), onClick },
+    h("span", { className: "pp-ttilehead" }, head),
+    h("b", null, value),
+    sub ? h("span", { className: "pp-as" }, sub) : null
+  );
+  return h(
+    Band,
+    { title: "Pulse" },
+    h(
+      "div",
+      { className: "pp-ttiles" },
+      concepts ? tile(
+        "below",
+        "Concepts to revisit",
+        String(concepts.below.length),
+        "class mean under " + Math.round(concepts.threshold * 100) + "% · of " + concepts.total,
+        () => props.onOpen({ view: "concepts" }),
+        concepts.below.length > 0
+      ) : null,
+      concepts ? tile("none", "Not assessed yet", String(concepts.no_evidence), "concepts with no evidence", () => props.onOpen({ view: "concepts" }), false) : null,
+      handIn ? tile(
+        "handin",
+        "Last hand-in",
+        handIn.received != null && handIn.enrolled != null ? handIn.received + " / " + handIn.enrolled : "—",
+        handIn.title,
+        () => props.onOpen({ view: "gradebook" }),
+        handIn.missing > 0
+      ) : null
+    ),
+    pulse.syncs.length ? h(
+      "div",
+      { className: "pp-tsyncs" },
+      h("span", { className: "pp-ttilehead" }, "In step"),
+      pulse.syncs.map(
+        (chip) => h(
+          "button",
+          {
+            type: "button",
+            key: chip.service,
+            className: "pp-tsync" + (chip.waiting || chip.reconnect ? " pp-tsync-wait" : ""),
+            title: plural4(chip.roads, "road", "roads") + (chip.last ? " · last ran " + day(chip.last) : " · never run"),
+            onClick: () => props.onOpen({ view: "settings", sub: "integrations" })
+          },
+          h("i", { "aria-hidden": "true" }),
+          chip.label,
+          h(
+            "span",
+            { className: "pp-as" },
+            chip.reconnect ? "reconnect" : chip.waiting ? chip.waiting + " waiting" : chip.last ? day(chip.last) : "never"
+          )
+        )
+      )
+    ) : null
+  );
+}
+function Today(props) {
+  const state = useToday(props.runId, props.sessionId, props.revision);
+  const shown = React.useRef(null);
+  if (state.phase === "ready") shown.current = state.value;
+  const doc = shown.current;
+  if (doc === null) return h(Message, null, "Reading where the course stands…");
+  if (doc.error) return h(Message, { error: true }, doc.error);
+  if (!doc.run) return h(Message, null, "This workspace has no course run yet.");
+  return h(
+    "div",
+    { className: "pp-today" },
+    h(Now, { now: doc.now, run: doc.run, onOpen: props.onOpen }),
+    h(Waiting, { items: doc.waiting, onOpen: props.onOpen }),
+    h(Pulse, { pulse: doc.pulse, onOpen: props.onOpen })
+  );
+}
+
 // client/materials.js
 function WidgetFrame(props) {
   const url = scoped(
@@ -11975,6 +12216,9 @@ var defaultCourseMode = (start, end) => {
   return start && end && today >= start && today <= end ? "teaching" : "planning";
 };
 var COURSE_VIEWS = [
+  // First: where the course stands, what waits on the professor, and how the
+  // class and the roads out are doing — each a link into another place.
+  { id: "today", label: "Today", hint: "This week, what is waiting on you, and how the class and the syncs stand" },
   { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
   // The class by concept: what used to be the right column's Progress tab.
@@ -12124,7 +12368,32 @@ function CourseMode(props) {
     setSub("settings", "integrations");
     setView("settings");
   };
+  const openFromToday = (request2) => {
+    if (!request2) return;
+    if (request2.grade) {
+      if (props.onGrade) props.onGrade(request2.grade, request2.label);
+    } else if (request2.scans) {
+      if (props.onOpenScans) props.onOpenScans(request2.scans);
+    } else if (request2.view && known(request2.view, COURSE_VIEWS)) {
+      if (VIEW_SUBS[request2.view] && known(request2.sub, VIEW_SUBS[request2.view])) setSub(request2.view, request2.sub);
+      setView(request2.view);
+    } else if (request2.mode && known(request2.mode, COURSE_MODES)) {
+      chooseMode(request2.mode);
+    }
+  };
   const viewBody = () => {
+    if (view === "today") {
+      return h(
+        "div",
+        { className: "pp-cviewpad" },
+        h(Today, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          revision: everything + "." + syncsVersion + "." + filesVersion,
+          onOpen: openFromToday
+        })
+      );
+    }
     if (view === "files") {
       return h(
         "div",
@@ -12815,6 +13084,7 @@ function Icon2(props) {
   );
 }
 var ICONS2 = {
+  today: ["M12 4v2", "M12 18v2", "M4 12h2", "M18 12h2", "M6.3 6.3l1.4 1.4", "M16.3 16.3l1.4 1.4", "M6.3 17.7l1.4-1.4", "M16.3 7.7l1.4-1.4", "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"],
   weeks: ["M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z", "M4 10h16", "M8 3v4", "M16 3v4"],
   tasks: ["M9 6h11", "M9 12h11", "M9 18h11", "M4 6l1 1 2-2", "M4 12l1 1 2-2", "M4 18l1 1 2-2"],
   students: ["M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M3 20a6 6 0 0 1 12 0", "M16 4.5a3.5 3.5 0 0 1 0 6.5", "M18 14.5a6 6 0 0 1 3 5.5"],
@@ -12831,6 +13101,7 @@ var ICONS2 = {
   held: ["M7 3.5h7l4 4v12a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 19.5v-14.5A1.5 1.5 0 0 1 7 3.5z", "M14 3.5v4h4", "M12 11v4", "M12 18h.01"]
 };
 var PLACES = [
+  { id: "today", label: "Today", hint: "This week, what is waiting on you, and how the class and the syncs stand", request: { view: "today" } },
   { id: "weeks", label: "Weeks", hint: "The term, week by week — what is planned and what is missing", request: { mode: "planning" } },
   { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out", request: { view: "tasks" } },
   { id: "students", label: "Students", hint: "The class list, by subgroup", request: { view: "students" } },
@@ -12861,12 +13132,12 @@ var ago = (updatedAt, now) => {
   return days < 14 ? days + "d" : Math.floor(days / 7) + "w";
 };
 var DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-var MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var navDate = (iso) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
   if (!match) return null;
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-  return DAYS[date.getDay()] + " " + date.getDate() + " " + MONTHS2[date.getMonth()];
+  return DAYS[date.getDay()] + " " + date.getDate() + " " + MONTHS3[date.getMonth()];
 };
 var shortTitle = (title) => {
   const text = String(title || "");
@@ -12906,7 +13177,7 @@ function useNavigatorData(sessionId) {
   }, [sessionId, revision]);
   return state.value;
 }
-function Row(props) {
+function Row2(props) {
   return h(
     "button",
     {
@@ -12958,7 +13229,7 @@ function CourseBlock(props) {
       "div",
       { className: "pp-nav-menu", role: "menu", onMouseLeave: () => setOpen(false) },
       props.workspaces.map(
-        (workspace) => h(Row, {
+        (workspace) => h(Row2, {
           key: workspace.workspaceId,
           icon: "course",
           label: workspace.title || workspace.path,
@@ -13030,7 +13301,7 @@ function HeldPapers(props) {
     null,
     h("div", { className: "pp-nav-label" }, h("span", null, "Held papers")),
     props.piles.map(
-      (pile) => h(Row, {
+      (pile) => h(Row2, {
         key: pile.assessment_id,
         icon: "held",
         label: shortTitle(pile.title),
@@ -13060,7 +13331,7 @@ function Chats(props) {
       )
     ),
     shown.map(
-      (session) => h(Row, {
+      (session) => h(Row2, {
         key: session.id,
         label: session.blank ? "New chat" : session.displayTitle,
         hint: session.blank ? "New chat" : session.displayTitle,
@@ -13070,7 +13341,7 @@ function Chats(props) {
         onClick: () => props.onOpen(session.id)
       })
     ),
-    props.sessions.length > shown.length ? h(Row, { label: "All " + props.sessions.length + " chats", onClick: () => setAll(true) }) : null,
+    props.sessions.length > shown.length ? h(Row2, { label: "All " + props.sessions.length + " chats", onClick: () => setAll(true) }) : null,
     !props.sessions.length ? h("div", { className: "pp-nav-quiet" }, "No chats in this course yet") : null
   );
 }
@@ -13178,7 +13449,7 @@ function CourseNavigator(props) {
       run2 ? h("div", { className: "pp-nav-label" }, h("span", null, "Course")) : null,
       run2 ? PLACES.map((entry) => {
         const badge = badgeOf(entry.id);
-        return h(Row, {
+        return h(Row2, {
           key: entry.id,
           icon: entry.id,
           label: entry.label,
@@ -13199,14 +13470,14 @@ function CourseNavigator(props) {
     h(
       "div",
       { className: "pp-nav-foot" },
-      run2 ? h(Row, {
+      run2 ? h(Row2, {
         icon: SETTINGS.id,
         label: SETTINGS.label,
         hint: SETTINGS.hint,
         current: isShown(shown, SETTINGS),
         onClick: () => place(SETTINGS.request)
       }) : null,
-      h(Row, {
+      h(Row2, {
         icon: "folders",
         label: "Folders and search",
         hint: "The harness's own list: every folder, search, rename, archive",
@@ -16020,6 +16291,14 @@ function ProfessorPane(props) {
     props.sessionId,
     options.map((option) => option.runId)
   );
+  const landed = React.useRef(null);
+  React.useEffect(() => {
+    if (current === null || landed.current === props.sessionId) return;
+    landed.current = props.sessionId;
+    if (courseModeRef.current || placeRequest) return;
+    const chat = props.chatTitle ? props.chatTitle() : null;
+    if (chat && chat.blank) openPlace({ view: "today" });
+  }, [props.sessionId, current ? current.runId : null]);
   React.useEffect(() => {
     setNames(true);
   }, [current ? current.runId : null]);
@@ -16208,6 +16487,8 @@ function ProfessorPane(props) {
       // For Files: a pile in the Scans window, the batch in the recordings dialog.
       onOpenScans: (assessment) => setScansPile(assessment),
       onRecordings: () => setBatch(true),
+      // For Today: marks waiting on one assessment, in the Grade view.
+      onGrade: (assessment, label) => setGrading({ assessment, label: label || assessment }),
       // For Students, Gradebook and Tasks: the pane's own identity choice, and what the
       // Unpublished view needs to send — the same props its tab gets.
       names,

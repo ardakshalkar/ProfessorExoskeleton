@@ -115,6 +115,7 @@ function Icon(props) {
 }
 
 const ICONS = {
+  today: ["M12 4v2", "M12 18v2", "M4 12h2", "M18 12h2", "M6.3 6.3l1.4 1.4", "M16.3 16.3l1.4 1.4", "M6.3 17.7l1.4-1.4", "M16.3 7.7l1.4-1.4", "M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"],
   weeks: ["M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v12a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z", "M4 10h16", "M8 3v4", "M16 3v4"],
   tasks: ["M9 6h11", "M9 12h11", "M9 18h11", "M4 6l1 1 2-2", "M4 12l1 1 2-2", "M4 18l1 1 2-2"],
   students: ["M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z", "M3 20a6 6 0 0 1 12 0", "M16 4.5a3.5 3.5 0 0 1 0 6.5", "M18 14.5a6 6 0 0 1 3 5.5"],
@@ -138,6 +139,7 @@ const ICONS = {
  * Teaching is what *This week* opens. The rest are course mode's own views.
  */
 const PLACES = [
+  { id: "today", label: "Today", hint: "This week, what is waiting on you, and how the class and the syncs stand", request: { view: "today" } },
   { id: "weeks", label: "Weeks", hint: "The term, week by week — what is planned and what is missing", request: { mode: "planning" } },
   { id: "tasks", label: "Tasks", hint: "What is waiting for you, what is ready, what has not gone out", request: { view: "tasks" } },
   { id: "students", label: "Students", hint: "The class list, by subgroup", request: { view: "students" } },

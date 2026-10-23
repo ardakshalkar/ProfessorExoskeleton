@@ -1987,13 +1987,25 @@ is worth building.
 > `ainar sync`. The Concepts grid is private, follows Names / Pseudonyms, and
 > never reaches a page a student sees.
 
-- [ ] **HOME-1** The `today` document: one host read that assembles what the
+- [x] **HOME-1** The `today` document: one host read that assembles what the
       navigator, `action_inbox`, `week-status`, the syncs document and
       `class_progress` totals already carry. It picks fields and computes no
-      new figure, as `/api/navigator` does. `M` · depends: —
-- [ ] **HOME-2** Today as the landing: the centre opens on it, not on the
-      empty chat page; the chat's field stays at its foot. Escape from any
-      place returns to it. `M` · depends: HOME-1
+      new figure, as `/api/navigator` does. Done 2026-10-23:
+      `server/today.js` behind `GET /api/today` — Now (the navigator's week,
+      next due, the phase from the run's dates), Waiting (week gaps this week
+      and next, suggested marks, held papers, unsure sync rows, Google
+      reconnect, drafts by collection, open integrity cases, class signals —
+      one urgency order), Pulse (concepts under Evidence's 60%, concepts with
+      no evidence, the last hand-in, one sync chip per service). Each band
+      fails alone. `M` · depends: —
+- [x] **HOME-2** Today as the landing: the centre opens on it, not on the
+      empty chat page; the chat's field stays at its foot. Done 2026-10-23:
+      `client/today.js` as course mode's first view and the navigator's first
+      place; a chat with nothing asked in it opens on Today once per session
+      (`pane.js`), a chat with messages stays a chat. Every row and tile opens
+      its place — Grade and Scans over course mode, the rest as views.
+      Escape still closes course mode rather than returning to Today. `M` ·
+      depends: HOME-1
 - [ ] **HOME-3** The phase, computed from the run's dates and records, never
       stored: *before term* (Now is a readiness list — T1, T4, T7),
       *teaching* (this week), *closing* (the close checklist, EXM's Close at
@@ -2043,8 +2055,10 @@ is worth building.
       HOME-11, UI-1
 - [ ] **HOME-13** The navigator: *Tasks* becomes *Waiting* and opens HOME-4's
       list in full; Course settings stays at the foot. `S` · depends: HOME-4
-- [ ] **HOME-14** `decision` Is Today a place in the navigator beside Weeks,
-      or what course mode opens on when no place is asked for? · depends: —
+- [x] **HOME-14** `decision` Is Today a place in the navigator beside Weeks,
+      or what course mode opens on when no place is asked for? Decided
+      2026-10-23: both a place (first, above Weeks) and the landing of an
+      empty chat; course mode's own default reading is unchanged. · depends: —
 
 ---
 

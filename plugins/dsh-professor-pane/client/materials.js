@@ -13,6 +13,7 @@ import { Files } from "./files.js";
 import { ConnectionsMenu } from "./connections-menu.js";
 import { Integrations } from "./integrations.js";
 import { Preferences } from "./preferences.js";
+import { Today } from "./today.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, DRAFT_MODES, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS } from "./tabs.js";
 
@@ -359,6 +360,9 @@ const defaultCourseMode = (start, end) => {
  * their buttons are off while previewing one of the readings.
  */
 const COURSE_VIEWS = [
+  // First: where the course stands, what waits on the professor, and how the
+  // class and the roads out are doing — each a link into another place.
+  { id: "today", label: "Today", hint: "This week, what is waiting on you, and how the class and the syncs stand" },
   { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
   // The class by concept: what used to be the right column's Progress tab.
@@ -575,7 +579,37 @@ export function CourseMode(props) {
     setView("settings");
   };
 
+  /**
+   * A press on Today: a reading, a view, or a window over course mode. The
+   * request shapes are the navigator's, plus `{ grade }` and `{ scans }`.
+   */
+  const openFromToday = (request) => {
+    if (!request) return;
+    if (request.grade) {
+      if (props.onGrade) props.onGrade(request.grade, request.label);
+    } else if (request.scans) {
+      if (props.onOpenScans) props.onOpenScans(request.scans);
+    } else if (request.view && known(request.view, COURSE_VIEWS)) {
+      if (VIEW_SUBS[request.view] && known(request.sub, VIEW_SUBS[request.view])) setSub(request.view, request.sub);
+      setView(request.view);
+    } else if (request.mode && known(request.mode, COURSE_MODES)) {
+      chooseMode(request.mode);
+    }
+  };
+
   const viewBody = () => {
+    if (view === "today") {
+      return h(
+        "div",
+        { className: "pp-cviewpad" },
+        h(Today, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          revision: everything + "." + syncsVersion + "." + filesVersion,
+          onOpen: openFromToday,
+        }),
+      );
+    }
     if (view === "files") {
       return h(
         "div",

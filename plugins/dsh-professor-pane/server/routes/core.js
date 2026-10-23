@@ -9,6 +9,7 @@ import { submissionsDir } from "@ainar/core/src/scans.ts";
 import { sendJson } from "../http.js";
 import { recentDocument } from "../inspector.js";
 import { navigatorDocument } from "../navigator.js";
+import { todayDocument } from "../today.js";
 import { unpublishedDocument } from "../unpublished.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "../upload.js";
 import { loadedRun, revisionDocument, runsDocument } from "../workspace.js";
@@ -35,6 +36,14 @@ export const routes = [
     handle(c) {
       const { res, url, runId, workspace, root } = c;
       return sendJson(res, 200, navigatorDocument(workspace, root, runId, url.searchParams.get("week")));
+    },
+  },
+  // Today, the landing: Now, Waiting and Pulse. See server/today.js.
+  {
+    paths: ["/api/today"],
+    handle(c) {
+      const { res, runId, workspace, root } = c;
+      return sendJson(res, 200, todayDocument(workspace, root, runId));
     },
   },
   // The right column's recent changes and draft count; see server/inspector.js.
