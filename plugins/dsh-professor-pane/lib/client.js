@@ -697,6 +697,22 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 /* The chat's text field at the foot of an open place (CourseComposer in materials.js). */
 .pp-composer{flex:none;display:flex;align-items:flex-end;gap:8px;margin:8px 16px 12px;padding:8px 8px 8px 14px;border:1px solid var(--dsw-alias-border-l2,#dadce0);border-radius:16px;background:var(--dsw-alias-bg-l1,#fff);box-shadow:0 2px 10px rgba(0,0,0,.06)}
 .pp-composer:focus-within{border-color:#2f8a4e}
+/* The command field's suggestions, over the field (HOME-12). */
+.pp-composer{position:relative}
+.pp-cmdlist{position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:5;display:flex;flex-direction:column;padding:4px;
+  border-radius:12px;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);
+  box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.pp-cmd{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font:inherit;font-size:12.5px;text-align:left;
+  border:0;background:none;cursor:pointer;color:inherit}
+.pp-cmd:hover,.pp-cmd-lit{background:var(--dsw-alias-fill-secondary,#f1f1f4)}
+.pp-cmdkind{flex:none;width:76px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cmdlabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-cmdout{flex:none;color:#b4342a;font-size:11px}
+.pp-cmdhint{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cmd kbd{flex:none;font:inherit;font-size:10px;padding:0 5px;border-radius:4px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);color:var(--dsw-alias-label-secondary,#555)}
+.pp-cmdfoot{padding:4px 8px 2px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-composer textarea{flex:1;min-width:0;border:0;outline:0;resize:none;background:transparent;color:inherit;font:inherit;font-size:13.5px;line-height:1.45;padding:5px 0;max-height:33vh}
 .pp-composersend{flex:none;width:30px;height:30px;border-radius:50%;border:0;background:#2f8a4e;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
 .pp-composersend:disabled{opacity:.35;cursor:default}
@@ -10208,7 +10224,7 @@ function CourseView(props) {
       return /* @__PURE__ */ h(Fragment2, null, strip, /* @__PURE__ */ h(
         Teaching,
         {
-          key: runId,
+          key: runId + "|" + (answer.focus || ""),
           data,
           evidence: answer.evidence,
           status: answer.status,
@@ -12504,6 +12520,103 @@ function ConceptsGrid(props) {
   );
 }
 
+// shared/actions.js
+var ACTIONS = [
+  // ---- the course and the term
+  { id: "T1", label: "Set up a course", words: "onboard new course start setup", do: { fill: "/onboard-course " } },
+  { id: "T2", label: "Connect Canvas, Google, GitHub", words: "integrations connect canvas google github telegram token address", do: { open: { view: "settings", sub: "integrations" } } },
+  { id: "T4", label: "Build the concept map", words: "propose concepts map prerequisites", do: { fill: "/propose-concepts {run} " } },
+  { id: "T5", label: "Plan the term", words: "planning weeks plan term schedule calendar move topic", do: { open: { mode: "planning" } } },
+  { id: "T6", label: "Grading policy", words: "policy weights blocks grading scheme reweight", do: { open: { view: "gradebook", sub: "policy" } } },
+  { id: "T6b", label: "Propose a grading policy change", words: "grading proposal reweight drop assignment", do: { fill: "/grading-proposal {run} " } },
+  { id: "T7", label: "Check outcomes against assessments", words: "syllabus review alignment outcomes", do: { fill: "/syllabus-review {run} " } },
+  { id: "T8", label: "Publish", words: "publish course page site announcement repository brief", do: { press: "publish" }, outward: true },
+  { id: "T10", label: "Reflect on the term", words: "reflection retrospective post-mortem end of term", do: { fill: "/course-reflection {run} " } },
+  // ---- the week
+  { id: "W1", label: "This week", words: "teaching current week now today class", do: { open: { mode: "teaching" } } },
+  { id: "W2", label: "Weeks with gaps", words: "gaps missing deck deadline room planning", do: { open: { mode: "planning" } } },
+  { id: "W3", label: "Draft materials", words: "make materials slides deck handout lecture lab", do: { fill: "/make-materials {run} " } },
+  { id: "W4", label: "Read and accept drafts", words: "drafts accept approve ready", do: { open: { view: "tasks", sub: "ready" } } },
+  { id: "W7", label: "Prepare the lesson", words: "prepare lesson brief next class revisit", do: { fill: "/prepare-lesson {run} " } },
+  { id: "W8", label: "Announce to students", words: "announce telegram post message channel", do: { fill: "/publish-telegram {run} " }, outward: true },
+  { id: "W9", label: "All weeks", words: "term all weeks overview", do: { open: { mode: "term" } } },
+  // ---- assessments
+  { id: "E1", label: "Design an assessment", words: "design assignment quiz exam homework project write", do: { fill: "/design-assessment {run} " } },
+  { id: "E2", label: "Import an exam already given", words: "import existing exam paper record", do: { fill: "/import-assessment {run} " } },
+  { id: "E4", label: "Upload scans", words: "upload scans papers pdf recordings exam paper key", do: { press: "upload" } },
+  { id: "E4b", label: "Grade scanned exams", words: "grade scans paper handwritten", do: { fill: "/grade-scans {run} " } },
+  { id: "E5", label: "Scans and recordings", words: "files scans piles held papers recordings audio", do: { open: { view: "files" } } },
+  { id: "E8", label: "Grade a whole class", words: "grade batch submissions everyone", do: { fill: "/grade-batch {run} " } },
+  { id: "E9", label: "Decide marks", words: "marks decide suggested grade review pending", do: { open: { view: "tasks", sub: "tasks" } } },
+  { id: "E11", label: "Send marks to Canvas", words: "release marks canvas send grades to canvas", do: { open: { view: "gradebook", sub: "canvas" } }, outward: true },
+  { id: "E12", label: "Gradebook", words: "gradebook marks grid scores results", do: { open: { view: "gradebook", sub: "marks" } } },
+  { id: "E13", label: "Assessments", words: "assessments list weights due", do: { open: { view: "materials", sub: "assessments" } } },
+  // ---- students
+  { id: "P1", label: "Students", words: "class list roster students subgroup", do: { open: { view: "students" } } },
+  { id: "P3", label: "Write a student report", words: "student report feedback progress", do: { fill: "/student-report {run} " } },
+  // ---- concepts
+  { id: "C1", label: "Concepts", words: "concepts grid class by concept coverage", do: { open: { view: "concepts" } } },
+  { id: "C4", label: "Why a concept is not landing", words: "find gaps struggling difficulty why", do: { fill: "/find-gaps {run} " } },
+  { id: "C6", label: "How the class is doing", words: "evidence progress how is the class doing week by week", do: { open: { mode: "evidence" } } },
+  { id: "C7", label: "Course dashboard", words: "dashboard visualise marks results", do: { fill: "/course-dashboard {run} " } },
+  // ---- integrations
+  { id: "I3", label: "Sync all", words: "sync canvas sheet in step differences sync all", do: { open: { view: "syncs" } } },
+  { id: "I4", label: "Resolve unsure matches", words: "names to confirm unsure matches sheet", do: { open: { view: "syncs" } } },
+  { id: "I5", label: "Re-import students from Canvas", words: "sync roster reimport class list canvas", do: { fill: "/sync-roster {run} " } },
+  { id: "I6", label: "Accounts", words: "accounts reconnect sign in google token credentials", do: { open: { view: "settings", sub: "accounts" } } },
+  { id: "I7", label: "Preferences", words: "preferences settings assumptions", do: { open: { view: "settings", sub: "preferences" } } },
+  // ---- overview
+  { id: "O0", label: "Today", words: "today home landing", do: { open: { view: "today" } } },
+  { id: "O1", label: "What is waiting on me", words: "waiting inbox todo tasks pending snooze", do: { open: { view: "tasks", sub: "waiting" } } },
+  { id: "O3", label: "Status across all courses", words: "course status all courses database", do: { fill: "/course-status " } },
+  { id: "O4", label: "Slides", words: "slides decks lectures", do: { open: { view: "materials", sub: "slides" } } },
+  { id: "O5", label: "Exams", words: "exams papers keys variants", do: { open: { view: "materials", sub: "exams" } } }
+];
+var norm = (text) => String(text || "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^\p{L}\p{N}/]+/gu, " ").trim();
+var score = (query, label, extra) => {
+  const q = norm(query);
+  if (!q) return { score: 0, exact: false };
+  const name = norm(label);
+  if (q === name) return { score: 100, exact: true };
+  const words = (name + " " + norm(extra)).split(" ");
+  const typed = q.split(" ");
+  if (!typed.every((part) => words.some((word) => word.startsWith(part)))) return { score: 0, exact: false };
+  const inLabel = typed.filter((part) => name.split(" ").some((word) => word.startsWith(part))).length;
+  return { score: 10 + inLabel * 5 + (name.startsWith(q) ? 20 : 0) - name.length / 50, exact: false };
+};
+var matchCommand = (query, index, limit = 7) => {
+  const q = norm(query);
+  if (!q || q.length < 2) return [];
+  const found = [];
+  const add = (entry, result) => {
+    if (result.score > 0) found.push(Object.assign({}, entry, { score: result.score, exact: result.exact }));
+  };
+  for (const action of ACTIONS) {
+    add({ key: "a:" + action.id, label: action.label, hint: action.do.fill ? action.do.fill.trim().split(" ")[0] : action.outward ? "students see it" : null, kind: "action", do: action.do, outward: Boolean(action.outward) }, score(q, action.label, action.words));
+  }
+  const idx = index || {};
+  const weekAsked = /^(?:week|wk|w)\s*(\d{1,2})$/.exec(q);
+  for (const week of idx.weeks || []) {
+    const label = "Week " + week.week;
+    const result = weekAsked && Number(weekAsked[1]) === week.week ? { score: 100, exact: true } : score(q, label + " " + (week.title || ""), "");
+    add({ key: "w:" + week.week, label: label + (week.title ? " · " + week.title : ""), hint: "teaching", kind: "week", do: { open: { mode: "teaching", week: week.week } } }, result);
+  }
+  for (const student of idx.students || []) {
+    const name = student.name || student.id;
+    const result = norm(q) === norm(name) || norm(q) === norm(student.id) ? { score: 100, exact: true } : score(q, name, student.id);
+    add({ key: "s:" + student.id, label: name, hint: "their concepts", kind: "student", do: { open: { view: "concepts", student: student.id } } }, result);
+  }
+  for (const assessment of idx.assessments || []) {
+    const result = score(q, assessment.title, assessment.id);
+    add({ key: "e:" + assessment.id, label: assessment.title, hint: "grade", kind: "assessment", do: { open: { grade: assessment.id, label: assessment.title } } }, result);
+  }
+  for (const concept of idx.concepts || []) {
+    const result = score(q, concept.title, concept.id);
+    add({ key: "c:" + concept.id, label: concept.title, hint: "the class on it", kind: "concept", do: { open: { view: "concepts", concept: concept.id } } }, result);
+  }
+  return found.sort((a, b) => b.score - a.score).slice(0, limit);
+};
+
 // client/sync-view.js
 var plural6 = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
 var post2 = (path, runId, sessionId, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
@@ -13312,6 +13425,7 @@ function CourseMode(props) {
   const taskSub = subOf("tasks");
   const doorOf = (entry) => entry && entry.view === "concepts" && (entry.student || entry.concept || entry.week) ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n } : null;
   const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
+  const doorCount = React.useRef(0);
   React.useEffect(() => {
     const door = doorOf(request);
     if (door) setConceptsFocus(door);
@@ -13414,10 +13528,18 @@ function CourseMode(props) {
       if (props.onOpenScans) props.onOpenScans(request2.scans);
     } else if (request2.view && known(request2.view, COURSE_VIEWS)) {
       if (VIEW_SUBS[request2.view] && known(request2.sub, VIEW_SUBS[request2.view])) setSub(request2.view, request2.sub);
+      const door = doorOf(Object.assign({}, request2, { n: "here-" + (doorCount.current += 1) }));
+      if (door) setConceptsFocus(door);
       setView(request2.view);
     } else if (request2.mode && known(request2.mode, COURSE_MODES)) {
+      if (request2.mode === "teaching" && Number.isInteger(request2.week)) stepped.current = request2.week;
       chooseMode(request2.mode);
     }
+  };
+  const runCommand = (action) => {
+    if (action.open) openFromToday(action.open);
+    else if (action.press === "publish" && props.onPublish) props.onPublish();
+    else if (action.press === "upload" && props.onUpload) props.onUpload();
   };
   const viewBody = () => {
     if (view === "today") {
@@ -13836,6 +13958,10 @@ function CourseMode(props) {
             draft: props.draft,
             place: placeTitle,
             runId: props.runId,
+            sessionId: props.sessionId,
+            names: props.names,
+            revision: everything,
+            onCommand: runCommand,
             onSend: (text) => {
               props.ask(text);
               setChat(true);
@@ -13897,9 +14023,30 @@ function useChatState(source, shown, sessionId) {
   React.useEffect(() => setDone(false), [sessionId]);
   return live === "idle" && done ? "done" : live;
 }
+var CMD_KIND = { action: "Do", week: "Week", student: "Student", assessment: "Assessment", concept: "Concept" };
 function CourseComposer(props) {
   const [text, setText] = React.useState("");
+  const [lit, setLit] = React.useState(-1);
   const box = React.useRef(null);
+  const index = useJson(
+    scoped(
+      BASE + "/api/command-index?run=" + encodeURIComponent(props.runId || "") + (props.names ? "&names=1" : "") + "&r=" + encodeURIComponent(String(props.revision || 0)),
+      props.sessionId
+    )
+  );
+  const known = React.useRef(null);
+  if (index.phase === "ready" && index.value && !index.value.error) known.current = index.value;
+  const matches = props.onCommand && !text.trim().startsWith("/") ? matchCommand(text, known.current) : [];
+  React.useEffect(() => setLit(-1), [text]);
+  const choose = (entry) => {
+    if (entry.do.fill) {
+      setText(entry.do.fill.replace("{run}", props.runId || ""));
+      if (box.current) box.current.focus();
+      return;
+    }
+    setText("");
+    props.onCommand(entry.do);
+  };
   React.useEffect(() => {
     if (props.focus && box.current) box.current.focus();
   }, [props.focus]);
@@ -13932,20 +14079,68 @@ function CourseComposer(props) {
         send2();
       }
     },
+    matches.length ? h(
+      "div",
+      { className: "pp-cmdlist", role: "listbox", "aria-label": "Go to" },
+      matches.map(
+        (entry, i) => h(
+          "button",
+          {
+            type: "button",
+            key: entry.key,
+            role: "option",
+            "aria-selected": i === lit,
+            className: "pp-cmd" + (i === lit ? " pp-cmd-lit" : ""),
+            // Chosen on press, before the field loses focus.
+            onMouseDown: (event) => {
+              event.preventDefault();
+              choose(entry);
+            }
+          },
+          h("span", { className: "pp-cmdkind" }, CMD_KIND[entry.kind] || entry.kind),
+          h("span", { className: "pp-cmdlabel" }, entry.label),
+          entry.outward ? h("span", { className: "pp-cmdout", title: "Students see the result; it still asks before anything goes" }, "↗") : null,
+          entry.hint ? h("span", { className: "pp-cmdhint" }, entry.hint) : null,
+          entry.exact && lit < 0 && i === 0 ? h("kbd", null, "Enter") : null
+        )
+      ),
+      h(
+        "div",
+        { className: "pp-cmdfoot" },
+        matches[0].exact ? "Enter opens the first · ↑↓ to choose · Shift+Enter for a new line" : "↑↓ to choose · Enter asks the assistant"
+      )
+    ) : null,
     h("textarea", {
       ref: box,
       rows: 1,
       value: text,
-      placeholder: "Ask the assistant about " + props.place + " — or tell it what to change",
-      "aria-label": "Message the session",
+      placeholder: "Ask the assistant about " + props.place + " — or type a place, a week, a student…",
+      "aria-label": "Message the session, or go to a place",
       onChange: (event) => setText(event.target.value),
       onKeyDown: (event) => {
+        if (matches.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+          event.preventDefault();
+          const step = event.key === "ArrowDown" ? 1 : -1;
+          setLit((value) => {
+            const next = value + step;
+            if (next >= matches.length) return -1;
+            if (next < -1) return matches.length - 1;
+            return next;
+          });
+          return;
+        }
+        if (event.key === "Escape" && lit >= 0) {
+          setLit(-1);
+          return;
+        }
         if (event.key === "Escape" && text) {
           setText("");
           return;
         }
         if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
           event.preventDefault();
+          if (lit >= 0 && matches[lit]) return choose(matches[lit]);
+          if (matches.length && matches[0].exact) return choose(matches[0]);
           send2();
         }
       }
@@ -15151,7 +15346,7 @@ function GradeBoard(props) {
     return out;
   })();
   const label = (value) => Number.isInteger(value) ? String(value) : String(value).replace(/\.5$/, "½").replace(/^0½$/, "½");
-  const levelOf = (score) => item.criterion ? item.criterion.levels.find((level) => level.score === score) : null;
+  const levelOf = (score2) => item.criterion ? item.criterion.levels.find((level) => level.score === score2) : null;
   const guidance = item.marking_guidance ? h("details", { className: "pp-gguide" }, h("summary", null, "Marking guidance"), h("div", null, item.marking_guidance)) : null;
   const question = h(
     "div",
@@ -15333,8 +15528,8 @@ function GradeBoard(props) {
     );
   }
   if (itemState === "draft") {
-    const levels = item.criterion && item.criterion.levels.length ? item.criterion.levels : scale.slice().reverse().map((score) => ({ score, label: null, description: "" }));
-    const placedAt = (score) => item.groups.filter((group) => group.score === score);
+    const levels = item.criterion && item.criterion.levels.length ? item.criterion.levels : scale.slice().reverse().map((score2) => ({ score: score2, label: null, description: "" }));
+    const placedAt = (score2) => item.groups.filter((group) => group.score === score2);
     const unplaced = item.groups.filter((group) => group.score == null || !levels.some((level) => level.score === group.score));
     const groupChip = (group) => {
       const open2 = openGroups[item.item_id + "|" + group.index];
@@ -15620,7 +15815,7 @@ function GradeBoard(props) {
       );
     })
   );
-  const levelsNow = item.criterion && item.criterion.levels.length ? item.criterion.levels : scale.slice().reverse().map((score) => ({ score, label: null, description: "" }));
+  const levelsNow = item.criterion && item.criterion.levels.length ? item.criterion.levels : scale.slice().reverse().map((score2) => ({ score: score2, label: null, description: "" }));
   const others = item.proposals.filter((proposal) => proposal.id !== item.chosen);
   const nextRev = "rev-" + (doc.proposals.filter((proposal) => /^rev-\d+$/.test(proposal.id)).length + 1);
   const rethinkPrompt = (text) => "/import-assessment " + props.assessmentId + " " + props.runId + " — rethink the rubric for " + qName + " (" + item.item_id + ") as `" + nextRev + "`: " + text.trim();
@@ -17261,10 +17456,10 @@ function ProfessorPane(props) {
         const run2 = currentRunRef.current;
         if (!run2 || !id.test(String(data.assessment)) || !id.test(String(data.student)) || !id.test(String(data.criterion))) return;
         if (!["confirmed", "partly", "not_confirmed", "clear"].includes(data.outcome)) return;
-        const score = typeof data.score === "number" && Number.isFinite(data.score) ? "&score=" + data.score : "";
+        const score2 = typeof data.score === "number" && Number.isFinite(data.score) ? "&score=" + data.score : "";
         fetch(
           scoped(
-            BASE + "/api/defence/mark?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&criterion=" + encodeURIComponent(data.criterion) + "&outcome=" + encodeURIComponent(data.outcome) + score,
+            BASE + "/api/defence/mark?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&criterion=" + encodeURIComponent(data.criterion) + "&outcome=" + encodeURIComponent(data.outcome) + score2,
             props.sessionId
           ),
           { method: "POST" }

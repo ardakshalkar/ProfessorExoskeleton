@@ -103,6 +103,29 @@ export const conceptsGrid = (workspace, runId, { names = false, drafts = false }
   };
 };
 
+/**
+ * What the command field can find by name in a run: its weeks, students,
+ * assessments and concepts (BACKLOG E37 HOME-12). Small and flat; names
+ * only when the pane shows names, as everywhere else.
+ */
+export const commandIndex = (workspace, runId, { names = false } = {}) => {
+  const outline = viewPayload(workspace, "course_outline", runId, undefined, false).payload;
+  const { bundle } = loadedRun(workspace, runId);
+  const people = names ? rosterPeople() : null;
+  const weeks = [];
+  const concepts = new Map();
+  for (const week of outline.weeks || []) {
+    weeks.push({ week: week.week, title: (week.modules || []).map((module) => module.title).join(" · ") || null });
+    for (const module of week.modules || []) for (const concept of module.concepts || []) concepts.set(concept.id, concept.title || concept.id);
+  }
+  return {
+    weeks,
+    students: enrolledIn(bundle, runId).map((entry) => ({ id: entry.student_id, name: nameOf(people, entry.student_id) })),
+    assessments: assessmentsOf(bundle, runId).map((entry) => ({ id: entry.assessment_id, title: entry.title || entry.assessment_id })),
+    concepts: [...concepts].map(([id, title]) => ({ id, title })),
+  };
+};
+
 /** A criterion's words, from the rubric each assessment carries; its id when there are none. */
 const criterionTitles = (bundle, runId) => {
   const titles = new Map();

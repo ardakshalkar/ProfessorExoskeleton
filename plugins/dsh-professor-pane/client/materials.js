@@ -14,6 +14,7 @@ import { ConnectionsMenu } from "./connections-menu.js";
 import { Integrations } from "./integrations.js";
 import { Preferences } from "./preferences.js";
 import { ConceptsGrid } from "./concepts.js";
+import { matchCommand } from "../shared/actions.js";
 import { SyncView } from "./sync-view.js";
 import { Today, WaitingPlace } from "./today.js";
 import { h, React, ReactDOM } from "./react.js";
@@ -468,6 +469,7 @@ export function CourseMode(props) {
       ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n }
       : null;
   const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
+  const doorCount = React.useRef(0);
   React.useEffect(() => {
     const door = doorOf(request);
     if (door) setConceptsFocus(door);
@@ -625,10 +627,23 @@ export function CourseMode(props) {
       if (props.onOpenScans) props.onOpenScans(request.scans);
     } else if (request.view && known(request.view, COURSE_VIEWS)) {
       if (VIEW_SUBS[request.view] && known(request.sub, VIEW_SUBS[request.view])) setSub(request.view, request.sub);
+      // A door into the Concepts grid from inside course mode — the command
+      // field's student or concept — numbered like the pane's own.
+      const door = doorOf(Object.assign({}, request, { n: "here-" + (doorCount.current += 1) }));
+      if (door) setConceptsFocus(door);
       setView(request.view);
     } else if (request.mode && known(request.mode, COURSE_MODES)) {
+      // Teaching on a week named by the command field ("week 7").
+      if (request.mode === "teaching" && Number.isInteger(request.week)) stepped.current = request.week;
       chooseMode(request.mode);
     }
+  };
+  // The command field's choice (shared/actions.js): a place, or one of the
+  // header's windows. A skill it fills into the field itself.
+  const runCommand = (action) => {
+    if (action.open) openFromToday(action.open);
+    else if (action.press === "publish" && props.onPublish) props.onPublish();
+    else if (action.press === "upload" && props.onUpload) props.onUpload();
   };
 
   const viewBody = () => {
@@ -1118,6 +1133,10 @@ export function CourseMode(props) {
               draft: props.draft,
               place: placeTitle,
               runId: props.runId,
+              sessionId: props.sessionId,
+              names: props.names,
+              revision: everything,
+              onCommand: runCommand,
               onSend: (text) => {
                 props.ask(text);
                 setChat(true);
@@ -1204,10 +1223,42 @@ function useChatState(source, shown, sessionId) {
  * asked from — the place and the run — so the session does not have to be
  * told which course and which view "this" meant. Enter sends, Shift+Enter is
  * a new line.
+ *
+ * It is also the command field (BACKLOG E37 HOME-12). As the professor types,
+ * it offers what the action catalogue (shared/actions.js) and the run's own
+ * weeks, students, assessments and concepts match. ↑ ↓ and a click choose one;
+ * Enter opens a match only when what was typed names it exactly ("week 7",
+ * "sync all", a student's full name), and otherwise asks the assistant as it
+ * always did — a question that mentions week 7 is still a question. A skill
+ * is put into the field to be finished, never sent.
  */
+/** What each kind of suggestion is called in the command field. */
+const CMD_KIND = { action: "Do", week: "Week", student: "Student", assessment: "Assessment", concept: "Concept" };
+
 function CourseComposer(props) {
   const [text, setText] = React.useState("");
+  const [lit, setLit] = React.useState(-1);
   const box = React.useRef(null);
+  const index = useJson(
+    scoped(
+      BASE + "/api/command-index?run=" + encodeURIComponent(props.runId || "") + (props.names ? "&names=1" : "") + "&r=" + encodeURIComponent(String(props.revision || 0)),
+      props.sessionId,
+    ),
+  );
+  const known = React.useRef(null);
+  if (index.phase === "ready" && index.value && !index.value.error) known.current = index.value;
+  // A filled skill ("/prepare-lesson …") is being finished, not looked for.
+  const matches = props.onCommand && !text.trim().startsWith("/") ? matchCommand(text, known.current) : [];
+  React.useEffect(() => setLit(-1), [text]);
+  const choose = (entry) => {
+    if (entry.do.fill) {
+      setText(entry.do.fill.replace("{run}", props.runId || ""));
+      if (box.current) box.current.focus();
+      return;
+    }
+    setText("");
+    props.onCommand(entry.do);
+  };
   React.useEffect(() => {
     if (props.focus && box.current) box.current.focus();
   }, [props.focus]);
@@ -1243,20 +1294,71 @@ function CourseComposer(props) {
         send();
       },
     },
+    matches.length
+      ? h(
+          "div",
+          { className: "pp-cmdlist", role: "listbox", "aria-label": "Go to" },
+          matches.map((entry, i) =>
+            h(
+              "button",
+              {
+                type: "button",
+                key: entry.key,
+                role: "option",
+                "aria-selected": i === lit,
+                className: "pp-cmd" + (i === lit ? " pp-cmd-lit" : ""),
+                // Chosen on press, before the field loses focus.
+                onMouseDown: (event) => {
+                  event.preventDefault();
+                  choose(entry);
+                },
+              },
+              h("span", { className: "pp-cmdkind" }, CMD_KIND[entry.kind] || entry.kind),
+              h("span", { className: "pp-cmdlabel" }, entry.label),
+              entry.outward ? h("span", { className: "pp-cmdout", title: "Students see the result; it still asks before anything goes" }, "↗") : null,
+              entry.hint ? h("span", { className: "pp-cmdhint" }, entry.hint) : null,
+              entry.exact && lit < 0 && i === 0 ? h("kbd", null, "Enter") : null,
+            ),
+          ),
+          h(
+            "div",
+            { className: "pp-cmdfoot" },
+            matches[0].exact ? "Enter opens the first · ↑↓ to choose · Shift+Enter for a new line" : "↑↓ to choose · Enter asks the assistant",
+          ),
+        )
+      : null,
     h("textarea", {
       ref: box,
       rows: 1,
       value: text,
-      placeholder: "Ask the assistant about " + props.place + " — or tell it what to change",
-      "aria-label": "Message the session",
+      placeholder: "Ask the assistant about " + props.place + " — or type a place, a week, a student…",
+      "aria-label": "Message the session, or go to a place",
       onChange: (event) => setText(event.target.value),
       onKeyDown: (event) => {
+        if (matches.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+          event.preventDefault();
+          // Through none (-1) and each suggestion, round again at either end.
+          const step = event.key === "ArrowDown" ? 1 : -1;
+          setLit((value) => {
+            const next = value + step;
+            if (next >= matches.length) return -1;
+            if (next < -1) return matches.length - 1;
+            return next;
+          });
+          return;
+        }
+        if (event.key === "Escape" && lit >= 0) {
+          setLit(-1);
+          return;
+        }
         if (event.key === "Escape" && text) {
           setText("");
           return;
         }
         if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
           event.preventDefault();
+          if (lit >= 0 && matches[lit]) return choose(matches[lit]);
+          if (matches.length && matches[0].exact) return choose(matches[0]);
           send();
         }
       },

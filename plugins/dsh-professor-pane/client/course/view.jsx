@@ -153,7 +153,10 @@ export function CourseView(props) {
         <Fragment>
           {strip}
           <Teaching
-            key={runId}
+            // Remounted when a different week is asked for ("week 7" in the
+            // command field): Teaching reads its week once. A step inside it
+            // does not change `focus`, so stepping keeps its place.
+            key={runId + "|" + (answer.focus || "")}
             data={data}
             evidence={answer.evidence}
             status={answer.status}

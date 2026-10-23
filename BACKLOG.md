@@ -2084,16 +2084,30 @@ is worth building.
 - [ ] **HOME-10** The Pulse band: concepts under the threshold, concepts with
       no evidence, the hand-in rate of the last thing due, and the sync strip
       — each a count that opens its place. `S` · depends: HOME-6, HOME-8
-- [ ] **HOME-11** The action catalogue as data: PROFESSOR-JOURNEY §9's table
+- [x] **HOME-11** The action catalogue as data: PROFESSOR-JOURNEY §9's table
       as a file in the harness — id, the words a professor would type, the
       home it opens, whether it is outward. Today and the command field read
       it, so an action's home is declared once. WF-2's stage `action` points
-      into it. `S` · depends: —
-- [ ] **HOME-12** The command field: the foot field matches the catalogue and
+      into it. Done 2026-10-23: `shared/actions.js` — 42 actions by §9 id,
+      each `{ open: request }`, `{ fill: "/skill {run} " }` or `{ press:
+      publish | upload }`, `outward` marked; and `matchCommand`, tested in
+      `test/actions.test.mjs`. Left out of §9: T3 (first roster import is
+      the CLI's), T9 (no close yet), the per-item ones that are rows rather
+      than places. `S` · depends: —
+- [x] **HOME-12** The command field: the foot field matches the catalogue and
       the run's objects ("sync canvas", "week 7", a student, "release quiz
       3") as the professor types, Enter opens the match; no match goes to the
-      session carrying the place as the context packet. `M` · depends:
-      HOME-11, UI-1
+      session carrying the place as the context packet. Done 2026-10-23, with
+      one change from the line above: **Enter opens a match only when what
+      was typed names it exactly** ("week 7", "sync all", a full name);
+      otherwise Enter asks the assistant as before, so a question that
+      mentions a week is not hijacked. ↑ ↓ and a click choose any
+      suggestion. Objects come from `/api/command-index` (weeks, students —
+      names in Names mode only — assessments, concepts): a week opens
+      Teaching on it, a student or concept the Concepts grid on them, an
+      assessment its Grade view. A skill is filled into the field, never
+      sent. The packet is still the place's words (UI-1 is open). `M` ·
+      depends: HOME-11, UI-1
 - [x] **HOME-13** The navigator: *Tasks* becomes *Waiting* and opens HOME-4's
       list in full; Course settings stays at the foot. Done 2026-10-23:
       Waiting · **Everything** (kind filters, snooze, the snoozed listed with

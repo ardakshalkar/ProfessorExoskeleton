@@ -662,6 +662,22 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 /* The chat's text field at the foot of an open place (CourseComposer in materials.js). */
 .pp-composer{flex:none;display:flex;align-items:flex-end;gap:8px;margin:8px 16px 12px;padding:8px 8px 8px 14px;border:1px solid var(--dsw-alias-border-l2,#dadce0);border-radius:16px;background:var(--dsw-alias-bg-l1,#fff);box-shadow:0 2px 10px rgba(0,0,0,.06)}
 .pp-composer:focus-within{border-color:#2f8a4e}
+/* The command field's suggestions, over the field (HOME-12). */
+.pp-composer{position:relative}
+.pp-cmdlist{position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:5;display:flex;flex-direction:column;padding:4px;
+  border-radius:12px;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);
+  box-shadow:0 8px 24px rgba(0,0,0,.12)}
+.pp-cmd{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font:inherit;font-size:12.5px;text-align:left;
+  border:0;background:none;cursor:pointer;color:inherit}
+.pp-cmd:hover,.pp-cmd-lit{background:var(--dsw-alias-fill-secondary,#f1f1f4)}
+.pp-cmdkind{flex:none;width:76px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cmdlabel{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-cmdout{flex:none;color:#b4342a;font-size:11px}
+.pp-cmdhint{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cmd kbd{flex:none;font:inherit;font-size:10px;padding:0 5px;border-radius:4px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);color:var(--dsw-alias-label-secondary,#555)}
+.pp-cmdfoot{padding:4px 8px 2px;font-size:10.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-composer textarea{flex:1;min-width:0;border:0;outline:0;resize:none;background:transparent;color:inherit;font:inherit;font-size:13.5px;line-height:1.45;padding:5px 0;max-height:33vh}
 .pp-composersend{flex:none;width:30px;height:30px;border-radius:50%;border:0;background:#2f8a4e;color:#fff;font-size:16px;font-weight:600;cursor:pointer}
 .pp-composersend:disabled{opacity:.35;cursor:default}

@@ -10,7 +10,7 @@ import { readBody, sendJson } from "../http.js";
 import { recentDocument } from "../inspector.js";
 import { navigatorDocument } from "../navigator.js";
 import { todayDocument } from "../today.js";
-import { cellEvidence, conceptsGrid } from "../concepts-grid.js";
+import { cellEvidence, commandIndex, conceptsGrid } from "../concepts-grid.js";
 import { setSnooze } from "../snooze.js";
 import { unpublishedDocument } from "../unpublished.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "../upload.js";
@@ -46,6 +46,20 @@ export const routes = [
     handle(c) {
       const { res, runId, workspace, root } = c;
       return sendJson(res, 200, todayDocument(workspace, root, runId));
+    },
+  },
+  // What the command field can find by name: weeks, students, assessments,
+  // concepts. Names only when asked for. See server/concepts-grid.js.
+  {
+    paths: ["/api/command-index"],
+    handle(c) {
+      const { res, url, runId, workspace } = c;
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      try {
+        return sendJson(res, 200, commandIndex(workspace, runId, { names: url.searchParams.get("names") === "1" }));
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
     },
   },
   // Snooze a waiting item until a day, or wake it: `{ item, until }` with
