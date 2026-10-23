@@ -1669,7 +1669,7 @@ is worth building.
       needs; the envelope and `preference_profile` are not done), and
       `sqlgen.ts`/`schema.sql`, which stay hand-written by design.
 
-## E34 · Long work in the background, and pages that open at once — no `FUTURE.md` section yet
+## E34 · Long work in the background and queued, and pages that open at once — no `FUTURE.md` section yet
 
 > **Rank: before the next exam pile.** Proposed 2026-10-22. Reading a pile of
 > scans (`scans read` + `scans record`) and transcribing recorded defences
@@ -1682,7 +1682,9 @@ is worth building.
 > reload or a second tab forgets that anything is running. What actually
 > keeps two writers apart today lives only in that client state; the server
 > holds no lock. Separately, pages in the pane are slow to appear after a
-> click, cause not yet measured.
+> click, cause not yet measured. Added 2026-10-22: work that conflicts waits
+> in a queue rather than being refused, and the runner accepts only known
+> kinds of job from the pane (JOB-8 – JOB-11).
 
 - [ ] **JOB-1** What is secured, written down. One table: every pane action
       that writes the private folder or the run's records, what it rewrites
@@ -1732,6 +1734,224 @@ is worth building.
       fetch a page's reads in parallel; move anything that calls out
       (`lms check`) behind the page, not in front of it. Target: a page
       shows something within 300 ms of the click. `M` · depends: JOB-6
+- [ ] **JOB-8** Queued, not refused. A press that conflicts with a running job
+      (JOB-1's lock keys) joins that key's queue instead of being turned away:
+      *Apply placements — waiting for Reading (Quiz 1)*. Jobs on one key run
+      one after another in the order pressed; jobs on different keys run side
+      by side up to a cap (default 2 CLI children, so two piles do not fight
+      for the machine or the model's rate limit). The queue is in the job
+      page and the navigator: waiting, running, done, with cancel on a
+      waiting job and on a running one. Replaces JOB-2's "refused" for
+      everything except a press of the very job that is already queued,
+      which is a no-op. `M` · depends: JOB-2
+- [ ] **JOB-9** The queue survives. Waiting jobs are written to
+      `~/.ainar/jobs/` with the running ones (JOB-5), so a restart resumes
+      the queue in order rather than dropping it; a job whose inputs changed
+      while it waited (the plan it would apply was rewritten) is held with
+      the reason in words, not run on stale data. `S` · depends: JOB-5, JOB-8
+- [ ] **JOB-10** Secured: only known work, only from the pane. The runner
+      takes a job *kind* from a fixed table (`scans-read`, `scans-record`,
+      `defence-transcribe`, `sync-tick`, …) with checked arguments, never a
+      command line, so nothing a page, a file or the assistant writes can
+      start an arbitrary process. `POST /api/jobs` needs the pane's per-start
+      token and a same-origin request; a job runs with the harness's own
+      sandbox roots (see the DSH note on fixed roots) and writes only under
+      its run's folders. Kinds that send anything students see (Canvas push,
+      publish, Telegram) are not queueable at all — they stay the professor's
+      press, as BGS-7 holds for background sync. Every job's start, finish,
+      cancel and who pressed it go to `records/events.yaml`. A test fails if
+      an unlisted kind or a send kind is accepted. `M` · depends: JOB-2
+- [ ] **JOB-11** One runner for everything long. Background sync's tick
+      (BGS-2/BGS-3) and E18's scheduled digest enqueue into this runner as
+      ordinary jobs instead of keeping a scheduler and a lock of their own,
+      so a scheduled tick and a professor's press on the same run wait for
+      each other. `S` · depends: JOB-8, BGS-2
+
+## E35 · Exam grading as one designed process, upload to close — no `FUTURE.md` section yet
+
+> **Rank: after E34, before the next exam pile.** Proposed 2026-10-22. Every
+> piece of grading an exam exists (E28, E29, integrity cases, exam reports,
+> the Canvas push), but the process they make up is written down nowhere. The
+> Scans view's seven-stage strip — identify, match, read, rubric, grade,
+> approve, canvas — is a hardcoded array (`stagesOf`, `server/scans.js:160`)
+> with a `switch` for the headline (`nowOf`, `:266`). Importing the questions,
+> checking reads, moderation, reports, feedback and integrity sit outside it,
+> and the assistant learns the order from prose in three skills
+> (`import-assessment`, `grade-scans`, `grade-batch`).
+>
+> **The process, as proposed.** Nine stages, each with an owner, what it
+> reads, what it leaves behind, and what counts as done:
+>
+> | Stage | Who | Done when |
+> |---|---|---|
+> | 1 Intake | professor uploads; assistant names the assessment and variants | the pile is filed under an assessment the professor confirmed |
+> | 2 Paper | assistant (`/import-assessment`) | items and key exist, accepted |
+> | 3 Split & match | pane; professor at the Match desk | every paper is placed or set aside |
+> | 4 Read | pane job (E34) | every placed paper has a transcript |
+> | 5 Check reads | professor, low-confidence answers only | no answer below the threshold is unconfirmed |
+> | 6 Rubric | assistant proposes (GRA-11); professor picks | each question has an accepted rubric or is points-only |
+> | 7 Mark | professor, by question, over the assistant's groups | every answer has a `professor_decision` |
+> | 8 Moderate | professor (a second marker once E20 exists) | the sample is reviewed, borderlines looked at |
+> | 9 Release | pane, previewed | gradebook, Canvas, reports and feedback sent, or held on purpose |
+>
+> Integrity is a **side lane**, open from any stage, never a step in the line:
+> opening a case holds that one student's mark and nothing else. **Close**
+> after release feeds item analysis to E24's question bank and notes to
+> `/course-reflection`.
+>
+> **Going back is part of the design.** A misread corrected at stage 5 after
+> marking, or a rubric changed at stage 7, marks every later result that
+> depended on it as stale, and the strip shows the earliest stale stage — it
+> does not pretend the line only runs forward. GRA-13 already does this for
+> rubric changes inside one view.
+>
+> **The press stays honest under bulk.** Review of AI output is weaker than it
+> looks: expert reviewers accept wrongly harsh decisions more readily when told
+> an AI made them, and errors are missed more when many answers are reviewed at
+> once (both under Sources in WF-1). "Accept all" stays (decided 2026-10-02),
+> but stage 8 is where that is paid for.
+
+- [x] **EXM-1** The process written out: the table above as a page in `docs/`,
+      every stage with its CLI command, pane route, skill, records read and
+      written, and done-rule, taken from what the code does today. Corrections
+      to the table come from writing it. Done 2026-10-22:
+      [`docs/EXAM-GRADING.md`](docs/EXAM-GRADING.md). It corrects three
+      things: Mark is one stage (the strip's Grade and Approve finish on the
+      same press); Paper must gate Read (Read passes with zero expected
+      answers); "done" must mean released — the strip ends on a clean Canvas
+      ledger whatever reports, feedback or open integrity cases say. `S` ·
+      depends: —
+- [ ] **EXM-2** Stage 5, Check reads: a queue of the answers `scans read` was
+      least sure of, sorted by confidence, each card with the crop (GRA-6) and
+      the text, confirm or fix (GRA-7). The strip does not reach Rubric until
+      the queue is empty or the professor skips it on purpose. `M` · depends:
+      GRA-6, GRA-7
+- [ ] **EXM-3** Stage 8, Moderate. A sample drawn by the pane — the top and
+      bottom of each question's spread, every paper within a point of a grade
+      boundary, every group accepted in bulk — shown **without** the
+      assistant's suggestion first; the professor marks, then sees the
+      suggestion and where they disagree. Recorded as the moderation of that
+      assessment, with the disagreement rate. `M` · depends: GRA-8
+- [ ] **EXM-4** A harsh-mark check before release: every answer the
+      professor scored below the assistant's group suggestion *and* below the
+      group's mean is listed once, since that is the error reviewers miss
+      most. `S` · depends: EXM-3
+- [ ] **EXM-5** Stale stages: a change upstream (transcript, rubric, key,
+      variant) marks dependent decisions stale, and the strip and the Grade
+      view say which and how many. Re-mark in one press, as GRA-13 does for
+      rubrics. `M` · depends: WF-3
+- [ ] **EXM-6** Release as one previewed stage: gradebook diff, Canvas plan,
+      reports and feedback drafts (GRA-9) side by side, sent together or
+      each held. Folds in GRA-8. `M` · depends: GRA-8, GRA-9
+- [ ] **EXM-7** Close: per-item difficulty and discrimination to E24, the
+      moderation numbers and the rubric changes to a dated note
+      `/course-reflection` reads. `S` · depends: EXM-3, E24
+- [ ] **EXM-8** `decision` Which stages a course may turn off (Check reads on
+      an all-choice quiz, Moderate on a 5% quiz), and whether moderation can
+      ever be skipped on a final exam. · depends: EXM-1
+- [ ] **EXM-9** Re-expressed in E36: exam grading is the first process the
+      definition carries, and the Scans strip is drawn from it. `M` ·
+      depends: WF-3
+
+## E36 · Every process as data, drawn by one UI and read by the assistant — no `FUTURE.md` section yet
+
+> **Rank: research first, then E35 as the first case.** Proposed 2026-10-22.
+> The pane runs at least nine multi-step processes — exam grading, oral
+> defence, homework forks, roster and Canvas syncs, publish, term planning,
+> materials, onboarding, course readiness — and none shares machinery: the
+> Scans strip is one hardcoded array, the defence desk keeps a local `phase`,
+> readiness is a checklist, the rest are a button and a route. Each new
+> process means a new strip, a new "what's next" headline, and another
+> paragraph of order inside a skill for the assistant to follow.
+>
+> **What the research says, short.** WF-1 writes it out with sources.
+>
+> - *Fixed flow or case.* BPMN models predictable work as a flowchart; CMMN
+>   models knowledge work as a **case** — a case file, tasks that become
+>   available when their conditions hold, and discretionary tasks the worker
+>   chooses at run time. Teaching is the second kind: the professor decides
+>   the order more often than the process does. So the model is a case file
+>   (the run's records) plus stages that *become available*, not a line
+>   that forces the next box.
+> - *State is derived, not stored.* Statecharts (XState) are the clean way
+>   to drive a stepper UI, but storing "current step" beside the records
+>   would make a second truth. The stage is computed from the records, as
+>   `stagesOf` does and as "approval is a field" decided for drafts.
+> - *Long waits on a person.* Durable-execution engines (Temporal; LangGraph's
+>   `interrupt`; Cloudflare Workflows' approvals) pause a run until a human
+>   answers and survive restarts. Here the wait is already durable — it is
+>   the files — so only the long machine steps need a runner, which is E34.
+>   No engine is adopted.
+> - *Where the human goes.* Put a checkpoint where the cost of an error is
+>   higher than the cost of a person; route by confidence so only the unsure
+>   cases are reviewed; review in groups with bulk actions; record what the
+>   AI proposed, what the person changed, and who pressed. E28 already
+>   does all four for marks; the definition makes them a property of every
+>   process.
+> - *AI-drawn interfaces.* Generative-UI specs (A2UI, carried over AG-UI)
+>   let an agent describe a view in JSON that the app renders from its own
+>   component catalog, validated before it is drawn. The safe half of that
+>   applies here: the assistant may *propose* a process or a view as data
+>   against a schema; it never writes pane code or HTML.
+>
+> **The line does not move.** A process definition says who acts at each
+> stage. It never makes an assistant stage write a `professor_decision`, and
+> it never runs an outward step (Canvas, Telegram, a report) without the
+> professor's press. The definitions live in the harness, not in a course
+> workspace.
+
+- [x] **WF-1** Research note in `docs/`: BPMN vs CMMN and case management,
+      statecharts for UI flows, durable execution and human waits (Temporal,
+      LangGraph interrupts, Cloudflare Workflows), human-in-the-loop review
+      patterns and approval fatigue, automation bias in AI-assisted grading,
+      university marking and moderation practice (blind vs open second
+      marking, check marking, sample moderation), and generative-UI specs
+      (A2UI/AG-UI). Each ends with what it means for this harness. Sources
+      cited. Done 2026-10-22: [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) —
+      a case, not a flowchart; state computed, never stored; no workflow
+      engine; bulk acceptance owes a blind sample. `S` · depends: —
+- [ ] **WF-2** The schema: a process is YAML in the harness
+      (`ainar-node/processes/<id>.yaml`) with stages, each giving `actor`
+      (`pane` | `assistant` | `professor`), `available_when` and `done_when`
+      as predicates over the run's records and private folder, `action` (a
+      CLI command for the pane, a `/skill` prompt for the session, a view to
+      open for the professor), `gate` (needs a press), `outward` (leaves the
+      machine), `optional`, and what makes a later stage stale. Side lanes
+      and discretionary stages are first-class. A JSON Schema validates it.
+      `M` · depends: WF-1
+- [ ] **WF-3** The engine: one function `processStatus(run, process, scope)`
+      returning each stage's state (unavailable, available, running, waiting
+      on whom, done, stale) and the one headline "now" — the general form of
+      `stagesOf` and `nowOf`. Golden test: on the CSS-4007 Quiz 1 run it
+      gives the same strip `stagesOf` gives today. `M` · depends: WF-2
+- [ ] **WF-4** One strip component in the pane, drawn from WF-3, used by the
+      Scans view first and then by any process: stages, the "now" card with
+      its action, side lanes, stale markers, and where a running job (E34)
+      is. `M` · depends: WF-3, JOB-2
+- [ ] **WF-5** The assistant reads it: an MCP tool `process_status` on the
+      course model, so a skill asks "where is this assessment and what is
+      mine to do" instead of carrying the order in prose. The skills keep
+      the judgement and lose the sequence. `S` · depends: WF-3
+- [ ] **WF-6** Every stage waiting on the professor, across every process
+      and run, feeds one list — the same list as E15's to-do and
+      `/action-inbox`, and E18's notices. `M` · depends: WF-3, E15
+- [ ] **WF-7** Port the others one at a time, each a definition plus a
+      golden test, retiring its ad-hoc state: oral defence, homework forks,
+      publish, roster sync, term planning, onboarding, readiness. Stop when
+      one does not fit, and change the schema rather than special-casing.
+      `L` · depends: WF-4
+- [ ] **WF-8** Per-course settings, not per-course files: a course turns
+      optional stages on or off (EXM-8's answer, double marking once E20
+      exists) from the pane. The professor never edits YAML. `S` · depends:
+      WF-7
+- [ ] **WF-9** The assistant drafts a process: told "for the project I want
+      a proposal, a check-in, a demo and peer review", it writes a definition
+      against WF-2's schema, validated before it is shown, drawn as a strip
+      for the professor to accept. Generate, validate, then draw — never
+      code. `M` · depends: WF-7
+- [ ] **WF-10** `decision` Whether a process definition belongs to the
+      harness only, or a course may carry its own once WF-9 exists. · depends:
+      WF-9
 
 ---
 
@@ -1764,6 +1984,11 @@ one-place edit per collection. Then MOD-1 now that LNG-1 and LNG-2 have run
 (LNG-6, the UTC date bug, is small and can go first). MOD-2 and
 MOD-4 are large and wait for the request that needs them (a second LMS; a
 command that cannot be found in `bin/ainar.ts`).
+
+**Processes (E35, E36):** EXM-1 and WF-1 are both `S` and can run before any
+code — together they settle whether E36's schema is worth building or E35 is
+better done in the Scans view alone. If it is: WF-2 → WF-3 (golden on Quiz 1)
+→ EXM-9, then the other processes one by one.
 
 **Deliberately not now:** INT-6, INT-7, INT-9, EVA-3, GRD-4, MAT-5, DEP-2.
 Each waits on a real user asking for it. If one is started anyway, the question
