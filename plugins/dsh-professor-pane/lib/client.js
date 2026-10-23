@@ -680,6 +680,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-conn-warn .pp-connstate{color:#a5561f}
 .pp-conn-bad .pp-connstate{color:#b4342a}
 .pp-connline{margin:4px 0 0 30px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-conncontact{margin-top:2px;overflow-wrap:anywhere}
+.pp-conn-warn .pp-conncontact,.pp-conn-bad .pp-conncontact{color:var(--dsw-alias-label-secondary,#4a4a4a)}
 .pp-connsync{margin:8px 0 0 30px}
 .pp-connsync .pp-synccard{margin-top:2px}
 .pp-coursebody .pp-frame{background:transparent}
@@ -4885,7 +4887,13 @@ function SyncCard(props) {
       h(
         "div",
         { className: "pp-syncouthead" },
-        h("span", null, result.error ? "Could not run" : result.action === "run" ? "Done" : "Preview — nothing was changed"),
+        // A failure the CLI printed arrives as `ok: false` with its words in
+        // `output`, not as `error`: it is still not Done.
+        h(
+          "span",
+          null,
+          result.error || !result.ok ? result.action === "run" ? "Could not run" : "Could not preview" : result.action === "run" ? "Done" : "Preview — nothing was changed"
+        ),
         h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: () => setResult(null) }, "×")
       ),
       h("pre", null, result.error || result.output || "(nothing printed)")
@@ -11753,7 +11761,22 @@ var connectionsOf = (data, roads, checks) => {
       saved ? { id: "transcription", name: "Transcription", tone: "ok", state: "key saved", line: (what || "A provider") + ", for recorded defences.", fix: null, syncs: [] } : { id: "transcription", name: "Transcription", tone: "bad", state: "no key", line: "No key is saved for " + (what || "the provider") + ".", fix: "setup", syncs: [] }
     );
   }
+  const contacts = data.contacts || {};
+  for (const row of out) {
+    const contact = contacts[row.id];
+    if (!contact) continue;
+    row.contact = contact;
+    const failedLast = contact.failed && (!contact.worked || contact.failed > contact.worked);
+    if (failedLast && row.tone === "ok") Object.assign(row, { tone: "warn", state: "last try failed" });
+  }
   return out;
+};
+var contactLine = (contact) => {
+  if (!contact || !contact.worked && !contact.failed) return null;
+  const worked = contact.worked ? "Worked " + when(contact.worked) : "Never worked from this computer";
+  if (!contact.failed) return worked + ".";
+  const failed = "failed " + when(contact.failed);
+  return contact.worked && contact.worked > contact.failed ? worked + " · last " + failed + "." : "Last try " + failed + (contact.said ? ": " + contact.said : "") + ". " + worked + ".";
 };
 var worstOf = (rows) => rows.reduce((worst, row) => !worst || RANK[row.tone] > RANK[worst.tone] ? row : worst, null);
 function ConnectionsMenu(props) {
@@ -11826,6 +11849,14 @@ function ConnectionsMenu(props) {
           h("button", { type: "button", className: "pp-segbtn", title: "Its card on Integrations", onClick: () => go(row.id) }, "Open")
         ),
         h("p", { className: "pp-connline" }, row.line),
+        contactLine(row.contact) ? h(
+          "p",
+          {
+            className: "pp-connline pp-conncontact",
+            title: [row.contact.worked ? "Worked " + new Date(row.contact.worked).toLocaleString() : null, row.contact.failed ? "Failed " + new Date(row.contact.failed).toLocaleString() : null].filter(Boolean).join("\n")
+          },
+          contactLine(row.contact)
+        ) : null,
         row.syncs.map(
           (sync) => h(
             "div",

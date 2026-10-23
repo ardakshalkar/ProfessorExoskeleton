@@ -10,6 +10,7 @@ import { join, relative, resolve, sep } from "node:path";
 
 import { assessmentsOf, enrollmentsOf, groupsOf, runById } from "@ainar/core/src/bundle.ts";
 
+import { loadContacts } from "@ainar/core/src/connections/contacts.ts";
 import { REFRESH_TOKEN_ENV } from "@ainar/core/src/connections/google.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 
@@ -337,8 +338,43 @@ export const integrationsAnswer = async (workspace, root, runId, credentials, ex
     google: googleStatus(document.registry, refs),
     github: githubStatus(document.registry, refs),
     integrations: integrationsFor(document, refs),
+    contacts: contactsByService(document),
     ...extra,
   };
+};
+
+/** Which service a host is, besides Canvas, whose host the run names. */
+const SERVICE_HOSTS = [
+  ["sheets", (host) => host === "googleapis.com" || host.endsWith(".googleapis.com")],
+  ["telegram", (host) => host === "api.telegram.org"],
+  ["github", (host) => host === "api.github.com" || host === "github.com"],
+];
+
+const hostOf = (address) => {
+  try {
+    return new URL(/^[a-z]+:\/\//i.test(address) ? address : "https://" + address).host;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * When each service last answered and last failed, by service: the hosts in
+ * `~/.ainar/contacts.json` that the transport writes (connections/contacts.ts)
+ * folded together — Google is three hosts, and the newest of each is the
+ * answer. A service no request has reached yet is absent.
+ */
+export const contactsByService = (document) => {
+  const canvas = document.canvas && document.canvas.host ? hostOf(document.canvas.host) : null;
+  const out = {};
+  for (const [host, contact] of Object.entries(loadContacts())) {
+    const service = host === canvas ? "canvas" : (SERVICE_HOSTS.find(([, matches]) => matches(host)) || [])[0];
+    if (!service || !contact) continue;
+    const entry = out[service] || (out[service] = { worked: null, failed: null, said: null });
+    if (contact.worked && (!entry.worked || contact.worked > entry.worked)) entry.worked = contact.worked;
+    if (contact.failed && (!entry.failed || contact.failed > entry.failed)) Object.assign(entry, { failed: contact.failed, said: contact.said });
+  }
+  return out;
 };
 
 /** The variable a GitHub connection names when it names none. */

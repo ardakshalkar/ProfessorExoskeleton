@@ -140,7 +140,33 @@ export const connectionsOf = (data, roads, checks) => {
         : { id: "transcription", name: "Transcription", tone: "bad", state: "no key", line: "No key is saved for " + (what || "the provider") + ".", fix: "setup", syncs: [] },
     );
   }
+
+  // When each service last answered and last did not. A failure newer than
+  // the last success outranks "up to date": a sheet compared an hour ago says
+  // nothing about the run that just could not reach Google.
+  const contacts = data.contacts || {};
+  for (const row of out) {
+    const contact = contacts[row.id];
+    if (!contact) continue;
+    row.contact = contact;
+    const failedLast = contact.failed && (!contact.worked || contact.failed > contact.worked);
+    if (failedLast && row.tone === "ok") Object.assign(row, { tone: "warn", state: "last try failed" });
+  }
   return out;
+};
+
+/**
+ * "Worked today 15:58 · failed today 16:04" — the newer first — with why it
+ * failed when that is the newer one. Null for a service nothing has reached.
+ */
+export const contactLine = (contact) => {
+  if (!contact || (!contact.worked && !contact.failed)) return null;
+  const worked = contact.worked ? "Worked " + when(contact.worked) : "Never worked from this computer";
+  if (!contact.failed) return worked + ".";
+  const failed = "failed " + when(contact.failed);
+  return contact.worked && contact.worked > contact.failed
+    ? worked + " · last " + failed + "."
+    : "Last try " + failed + (contact.said ? ": " + contact.said : "") + ". " + worked + ".";
 };
 
 /** The worst of the services, for the header's words. */
@@ -239,6 +265,18 @@ export function ConnectionsMenu(props) {
           h("button", { type: "button", className: "pp-segbtn", title: "Its card on Integrations", onClick: () => go(row.id) }, "Open"),
         ),
         h("p", { className: "pp-connline" }, row.line),
+        contactLine(row.contact)
+          ? h(
+              "p",
+              {
+                className: "pp-connline pp-conncontact",
+                title: [row.contact.worked ? "Worked " + new Date(row.contact.worked).toLocaleString() : null, row.contact.failed ? "Failed " + new Date(row.contact.failed).toLocaleString() : null]
+                  .filter(Boolean)
+                  .join("\n"),
+              },
+              contactLine(row.contact),
+            )
+          : null,
         row.syncs.map((sync) =>
           h(
             "div",

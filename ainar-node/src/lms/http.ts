@@ -21,6 +21,8 @@
  * which requests are made, or when, or what is sent.
  */
 
+import { noteContact } from "../connections/contacts.ts";
+
 export const USER_AGENT = "ainar-course-workspace";
 
 /** `<https://host/api/v1/x?page=2>; rel="next"` — the only rel we follow. */
@@ -67,6 +69,33 @@ export interface Transport {
   ): Promise<Response>;
 }
 
+/**
+ * Why a request never happened, in words. Node's `fetch` says only "fetch
+ * failed" and keeps the reason in `cause`: a name that did not resolve, a
+ * connection refused or cut, a timeout.
+ */
+const UNREACHABLE: Record<string, string> = {
+  ENOTFOUND: "the name did not resolve (no internet, or DNS is down)",
+  EAI_AGAIN: "the name did not resolve (no internet, or DNS is down)",
+  ECONNREFUSED: "the connection was refused",
+  ECONNRESET: "the connection was cut",
+  ETIMEDOUT: "the connection timed out",
+  UND_ERR_CONNECT_TIMEOUT: "the connection timed out",
+  UND_ERR_SOCKET: "the connection was cut",
+  CERT_HAS_EXPIRED: "its certificate could not be checked",
+  UNABLE_TO_VERIFY_LEAF_SIGNATURE: "its certificate could not be checked (a proxy in between?)",
+  SELF_SIGNED_CERT_IN_CHAIN: "its certificate could not be checked (a proxy in between?)",
+};
+
+const unreachableWhy = (error: unknown, timeout: number): string => {
+  const failure = error as Error & { cause?: { code?: string; message?: string } };
+  if (failure?.name === "AbortError") return `no answer within ${Math.round(timeout / 1000)} seconds`;
+  const code = failure?.cause?.code ?? "";
+  if (UNREACHABLE[code]) return `${UNREACHABLE[code]} (${code})`;
+  const detail = failure?.cause?.message;
+  return detail ? `${failure.message} (${detail})` : String(failure?.message ?? error);
+};
+
 /** The real one. Platform `fetch`, and it does not retry by itself. */
 export class FetchTransport implements Transport {
   timeout: number;
@@ -93,7 +122,9 @@ export class FetchTransport implements Transport {
     } catch (error) {
       // A refusal from the far end is a result and arrives below; this branch is
       // "the request never happened", which is a different thing to report.
-      throw new TransportError(`could not reach ${url}: ${(error as Error).message}`);
+      const said = `could not reach ${url}: ${unreachableWhy(error, this.timeout)}`;
+      noteContact(url, null, said);
+      throw new TransportError(said);
     } finally {
       clearTimeout(timer);
     }
@@ -102,6 +133,7 @@ export class FetchTransport implements Transport {
     response.headers.forEach((value, key) => {
       collected[key] = value;
     });
+    noteContact(url, response.status, `${new URL(url).host} answered ${response.status}`);
     return { status: response.status, body: await response.text(), headers: collected };
   }
 }

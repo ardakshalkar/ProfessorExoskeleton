@@ -503,7 +503,19 @@ export function SyncCard(props) {
           h(
             "div",
             { className: "pp-syncouthead" },
-            h("span", null, result.error ? "Could not run" : result.action === "run" ? "Done" : "Preview — nothing was changed"),
+            // A failure the CLI printed arrives as `ok: false` with its words in
+            // `output`, not as `error`: it is still not Done.
+            h(
+              "span",
+              null,
+              result.error || !result.ok
+                ? result.action === "run"
+                  ? "Could not run"
+                  : "Could not preview"
+                : result.action === "run"
+                  ? "Done"
+                  : "Preview — nothing was changed",
+            ),
             h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: () => setResult(null) }, "×"),
           ),
           h("pre", null, result.error || result.output || "(nothing printed)"),

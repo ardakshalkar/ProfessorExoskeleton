@@ -645,6 +645,8 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-conn-warn .pp-connstate{color:#a5561f}
 .pp-conn-bad .pp-connstate{color:#b4342a}
 .pp-connline{margin:4px 0 0 30px;font-size:11.5px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-conncontact{margin-top:2px;overflow-wrap:anywhere}
+.pp-conn-warn .pp-conncontact,.pp-conn-bad .pp-conncontact{color:var(--dsw-alias-label-secondary,#4a4a4a)}
 .pp-connsync{margin:8px 0 0 30px}
 .pp-connsync .pp-synccard{margin-top:2px}
 .pp-coursebody .pp-frame{background:transparent}
