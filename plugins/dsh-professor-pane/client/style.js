@@ -658,7 +658,7 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-composersend:disabled{opacity:.35;cursor:default}
 /* The run picker's look, at a header's size: one control among the buttons. */
 .pp-coursehead .pp-modaltitle{flex:none;max-width:240px;margin-right:6px}
-.pp-coursehead label{display:inline-flex;gap:5px;align-items:center;font-size:11px;
+.pp-coursehead label,.pp-cviewbar label{display:inline-flex;gap:5px;align-items:center;font-size:11px;
   color:var(--dsw-alias-label-secondary,#555);cursor:pointer}
 /* The publish dialog's body. Unlike the material modal there is no frame to
    fill, so the plan scrolls and the controls stay put above it. */

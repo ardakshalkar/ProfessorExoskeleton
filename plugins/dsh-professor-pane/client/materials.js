@@ -788,6 +788,35 @@ export function CourseMode(props) {
   const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
 
   const placeName = viewEntry ? viewEntry.label : navigator ? "Weeks" : props.title;
+  // The title says which part of the place is open, as the composer did
+  // alone before: "Weeks · Teaching", "Materials · Slides", and Today's date
+  // (docs/RIBBONS.md R9).
+  const subLabel = view
+    ? VIEW_SUBS[view]
+      ? (VIEW_SUBS[view].find((entry) => entry.id === subOf(view)) || { label: null }).label
+      : view === "today"
+        ? new Date().toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })
+        : null
+    : (COURSE_MODES.find((entry) => entry.id === mode) || { label: null }).label;
+  const placeTitle = subLabel ? placeName + " · " + subLabel : placeName;
+  // The readings of the weeks and Preview as student are Weeks' own, drawn
+  // in its place bar under the header; without the navigator (the stock
+  // browser in the seat) the header is the only row, and they stay in it.
+  const readings = COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false));
+  // Not on Teaching, Evidence or a course-wide view: a student is never
+  // shown class figures or names, so there is nothing to preview.
+  const previewSwitch = private_
+    ? null
+    : h(
+        "label",
+        { title: "The record alone, with no hole drawn — what ainar page publishes", key: "preview" },
+        h("input", {
+          type: "checkbox",
+          checked: student,
+          onChange: (event) => setStudent(event.target.checked),
+        }),
+        "Preview as student",
+      );
   const setChat = props.setChat || (() => {});
   const chatState = useChatState(props.chatState, Boolean(props.chat), props.sessionId);
   return ReactDOM.createPortal(
@@ -817,16 +846,14 @@ export function CourseMode(props) {
           { className: "pp-modalhead pp-coursehead" },
           // The place, not the course: the course is named in the navigator
           // beside it and in the column, and here it only crowded the row.
-          h("div", { className: "pp-modaltitle", title: props.title }, placeName),
+          h("div", { className: "pp-modaltitle", title: props.title }, placeTitle),
           // The middle of the row is the one part that gives way: on a narrow
           // window it scrolls sideways, so the controls on the right — the
           // connections, Publish, Chat and × — never wrap under the title.
           h(
             "div",
             { className: "pp-headmid" },
-            // The readings of the weeks. Under a place they are the way back to
-            // the weeks, so they stay, unpressed.
-            COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
+            navigator ? null : readings,
             navigator ? null : h("span", { className: "pp-segsep", "aria-hidden": "true" }),
             navigator ? null : COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
             h("span", { className: "pp-segspacer" }),
@@ -844,20 +871,7 @@ export function CourseMode(props) {
                 entry.label,
               ),
             ),
-            // Not on Teaching, Evidence or a course-wide view: a student is
-            // never shown class figures or names, so there is nothing to preview.
-            private_
-              ? null
-              : h(
-                  "label",
-                  { title: "The record alone, with no hole drawn — what ainar page publishes" },
-                  h("input", {
-                    type: "checkbox",
-                    checked: student,
-                    onChange: (event) => setStudent(event.target.checked),
-                  }),
-                  "Preview as student",
-                ),
+            navigator ? null : previewSwitch,
           ),
           // The pane's header, which this veil covers. Publish opens its own
           // window on top, so course mode is still here when it closes.
@@ -941,6 +955,19 @@ export function CourseMode(props) {
         h(
           "div",
           { className: "pp-coursebody" },
+          // Weeks' place bar: its four readings on the left, Preview as
+          // student on the right — the same row Materials and Tasks have for
+          // their sub-views (docs/RIBBONS.md R3, R7). A course-wide view is
+          // drawn over it, with its own.
+          navigator
+            ? h(
+                "div",
+                { className: "pp-cviewbar" },
+                readings,
+                h("span", { className: "pp-segspacer" }),
+                previewSwitch,
+              )
+            : null,
           // The weeks, drawn here by React from the course data
           // (client/course/): a refresh re-renders in place, and a Planning
           // drop moves its bar before the write is made.
@@ -1003,7 +1030,7 @@ export function CourseMode(props) {
               key: props.sessionId,
               focus: Boolean(props.compose),
               draft: props.draft,
-              place: placeName + (view === null ? " · " + (COURSE_MODES.find((entry) => entry.id === mode) || { label: mode }).label : ""),
+              place: placeTitle,
               runId: props.runId,
               onSend: (text) => {
                 props.ask(text);

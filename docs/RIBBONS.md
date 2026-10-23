@@ -126,7 +126,7 @@ Per place:
 
 | Place | Place bar · left | Place bar · right |
 | --- | --- | --- |
-| Today | — | — (the date and week go in the title: *Today · Thu 23 Oct · week 8*) |
+| Today | — | — (the date and week go in the title: *Today · Fri 23 Oct · week 8*) |
 | Weeks | Planning · Teaching · Evidence · All weeks | Drafts · n, Preview as student |
 | Tasks → Waiting (HOME-13) | Pending · Ready · Checklist · Unpublished | Drafts · n, Names |
 | Students | — | Names |
@@ -155,8 +155,14 @@ should not wait for the rest.
    switch sit in a middle group that scrolls sideways (thin scrollbar) when
    the window is narrow, so the header is one 43 px row at 1440, 1280 and
    1100 px, with Chat and × always in place.
-3. **R3 + R7 + R9** — Weeks' readings into its place bar; title carries the
-   sub-view.
+3. ~~**R3 + R7 + R9** — Weeks' readings into its place bar; title carries the
+   sub-view.~~ **Done 2026-10-23.** Weeks has a place bar — Planning ·
+   Teaching · Evidence · All weeks, and Preview as student at its right end,
+   so hiding it on Teaching moves nothing. The header is the same six
+   controls on every place. The title reads *Weeks · Teaching*, *Materials
+   · Slides*, *Course settings · Integrations*, *Today · Fri, Oct 23*, and
+   the composer says the same. Without the navigator (the stock browser in
+   the seat) the readings stay in the header, the only row there is.
 4. **R4** — drafts as one counted switch, on its five places only.
 5. **R6** — Gradebook's and Course settings' sub-views into the place bar.
 6. **R8, R10** — Publish styled as outward; × and Escape return to Today.
