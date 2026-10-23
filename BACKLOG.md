@@ -1955,6 +1955,99 @@ is worth building.
 
 ---
 
+## E37 · Today: the landing, and every action with one home — no `FUTURE.md` section yet
+
+> **Rank: high — it is the first screen.** Proposed 2026-10-23 from
+> [`docs/PROFESSOR-JOURNEY.md`](docs/PROFESSOR-JOURNEY.md) §10–§11, which
+> lists the portal's ~50 actions and where each should start. The centre opens
+> on a chat's empty page; the professor's three questions on arrival — *where
+> are we, what is waiting on me, what goes out next* — are spread between the
+> navigator and places they have to open.
+>
+> **The shape.** Sorted by what triggers them, the actions fall into four
+> kinds: the calendar (~20%), something waiting (~30%), curiosity (~30%),
+> rare setup (~20%). So the landing is **Today**, three bands and nothing
+> else:
+>
+> - **Now** — this week, today's meetings, the next thing due or going out;
+>   its content changes with the phase of the term.
+> - **Waiting** — one list across every kind, ordered by urgency, with snooze.
+> - **Pulse** — counts that open a place: concepts below threshold, concepts
+>   with no evidence, the hand-in rate, and the **sync strip**.
+>
+> Every action has exactly one home — a week, an assessment, a student, the
+> concepts, or Course settings. Today never hosts an action; it surfaces one,
+> as a link into its home, when its trigger fires. The chat's field at the
+> foot of every place becomes a **command field**: it matches actions and
+> objects first and hands anything else to the assistant with the place as
+> context.
+>
+> **The line does not move.** Today and Pulse only read. Nothing outward runs
+> without the professor's press after a preview; the sync rules stay in
+> `ainar sync`. The Concepts grid is private, follows Names / Pseudonyms, and
+> never reaches a page a student sees.
+
+- [ ] **HOME-1** The `today` document: one host read that assembles what the
+      navigator, `action_inbox`, `week-status`, the syncs document and
+      `class_progress` totals already carry. It picks fields and computes no
+      new figure, as `/api/navigator` does. `M` · depends: —
+- [ ] **HOME-2** Today as the landing: the centre opens on it, not on the
+      empty chat page; the chat's field stays at its foot. Escape from any
+      place returns to it. `M` · depends: HOME-1
+- [ ] **HOME-3** The phase, computed from the run's dates and records, never
+      stored: *before term* (Now is a readiness list — T1, T4, T7),
+      *teaching* (this week), *closing* (the close checklist, EXM's Close at
+      run level), *after* (reflection). `S` · depends: HOME-1
+- [ ] **HOME-4** Waiting as one list across kinds — marks suggested, papers
+      held, drafts, states marked `needs_review`, unsure sync rows, expired
+      accounts — in one urgency order: overdue → due today → blocks students
+      → blocks the assistant → the rest. An item leaves when the records say
+      it is done. Until WF-6 / TODO-6 exist it merges today's sources; then it
+      reads them. `M` · depends: HOME-1
+- [ ] **HOME-5** Snooze: "not until <date>" on a waiting item, kept with the
+      run's private state, not on the record. Not TODO-10's postpone, which
+      moves a date students see. `S` · depends: HOME-4
+- [ ] **HOME-6** The sync strip: one chip per service (Canvas, Sheets,
+      GitHub, Telegram) — last run, direction, waiting count, an expired
+      warning — from `server/syncs.js`. **Sync all** opens one preview of
+      every road, grouped by service and direction, then one Send for
+      everything outward, through `ainar sync … --confirm`. BGS-4 makes
+      "last run" true without a press. `M` · depends: HOME-1
+- [ ] **HOME-7** Sync out of settings: Course settings keeps connect,
+      reconnect and which roads exist; Preview / Run / the waiting rows move
+      to the view the strip opens. Course mode's header line opens the same
+      view. `S` · depends: HOME-6
+- [ ] **HOME-8** The Concepts grid as the Concepts place: concepts down,
+      students across, coloured by the six `concept_state` values, the
+      evidence count in each cell, a row for `concepts_with_no_evidence`,
+      filters by subgroup, week, state and low evidence. A cell opens the
+      items and marks behind it. Check first that `class_progress` carries
+      per-student cells; if not, extend it in `progress.ts`, not in the view.
+      `M` · depends: —
+- [ ] **HOME-9** Three doors into the grid: a student's column from Students
+      (replacing `/student-dashboard` as the only way to see one student's
+      concepts), a concept's row from a week's concept chip, and Evidence's
+      week. `S` · depends: HOME-8
+- [ ] **HOME-10** The Pulse band: concepts under the threshold, concepts with
+      no evidence, the hand-in rate of the last thing due, and the sync strip
+      — each a count that opens its place. `S` · depends: HOME-6, HOME-8
+- [ ] **HOME-11** The action catalogue as data: PROFESSOR-JOURNEY §9's table
+      as a file in the harness — id, the words a professor would type, the
+      home it opens, whether it is outward. Today and the command field read
+      it, so an action's home is declared once. WF-2's stage `action` points
+      into it. `S` · depends: —
+- [ ] **HOME-12** The command field: the foot field matches the catalogue and
+      the run's objects ("sync canvas", "week 7", a student, "release quiz
+      3") as the professor types, Enter opens the match; no match goes to the
+      session carrying the place as the context packet. `M` · depends:
+      HOME-11, UI-1
+- [ ] **HOME-13** The navigator: *Tasks* becomes *Waiting* and opens HOME-4's
+      list in full; Course settings stays at the foot. `S` · depends: HOME-4
+- [ ] **HOME-14** `decision` Is Today a place in the navigator beside Weeks,
+      or what course mode opens on when no place is asked for? · depends: —
+
+---
+
 ## Suggested order
 
 Four decisions and five tasks are worth doing before anything else on this page.
@@ -1989,6 +2082,10 @@ command that cannot be found in `bin/ainar.ts`).
 code — together they settle whether E36's schema is worth building or E35 is
 better done in the Scans view alone. If it is: WF-2 → WF-3 (golden on Quiz 1)
 → EXM-9, then the other processes one by one.
+
+**The landing (E37):** HOME-14 first (an hour), then HOME-1 → HOME-2 → HOME-6
+and HOME-8 — each worth having if the rest never lands. HOME-4 grows into
+WF-6 rather than competing with it.
 
 **Deliberately not now:** INT-6, INT-7, INT-9, EVA-3, GRD-4, MAT-5, DEP-2.
 Each waits on a real user asking for it. If one is started anyway, the question
