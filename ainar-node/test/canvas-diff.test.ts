@@ -207,6 +207,33 @@ test("class list: Canvas is the source — new people come in, people only here 
   );
 });
 
+test("class list: who left Canvas is noted by Sync all once, and who came back is brought in", () => {
+  const found = rosterDifferences({
+    matches: [{ group: "ENG-8", canvasId: "1", student: "STUDENT-BACK01", how: "linked", institutionalId: "1", user: {} }],
+    enrolled: new Map([
+      ["STUDENT-BACK01", "ENG-8"],
+      ["STUDENT-GONE01", "ENG-8"],
+      ["STUDENT-GONE02", "ENG-8"],
+    ]),
+    groups: ["ENG-8"],
+    missingSince: new Map([
+      ["STUDENT-BACK01", "2026-10-20"],
+      ["STUDENT-GONE02", "2026-10-21"],
+    ]),
+  });
+  assert.deepEqual(
+    found.map((entry) => [entry.student_id, entry.direction, entry.reason]),
+    [
+      ["STUDENT-BACK01", "pull", "back in Canvas; missing since 2026-10-20"],
+      ["STUDENT-GONE01", "held", "enrolled here, not in the Canvas course"],
+      ["STUDENT-GONE02", "held", "enrolled here, not in the Canvas course since 2026-10-21"],
+    ],
+  );
+  const plan = syncAllPlan(found);
+  assert.deepEqual(plan.take.map((entry) => entry.student_id), ["STUDENT-BACK01"]);
+  assert.deepEqual(plan.absent.map((entry) => entry.student_id), ["STUDENT-GONE01"], "one already noted is not noted again");
+});
+
 test("Sync all applies only the one-sided differences, batched per assessment and course", () => {
   const grades = gradeDifferences({
     assessmentId: "ASSESSMENT-Q3",

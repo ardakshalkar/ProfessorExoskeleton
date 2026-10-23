@@ -21,7 +21,7 @@ import {
   windowPanel,
 } from "./assessment-window.js";
 import { BASE } from "./http.js";
-import { escapeText } from "./markdown.js";
+import { escapeAttribute, escapeText } from "./markdown.js";
 import { extensionOfKey, SHOWABLE } from "./materials.js";
 import { documentPage, stamp, VIEW_SCRIPT } from "./page.js";
 import { loadedRun, rosterPath, rosterPeople } from "./workspace.js";
@@ -1341,6 +1341,11 @@ export const studentsDocument = (
     // The grade sheet's note about this person, kept beside their name in the
     // roster and shown only with it: it is about them, not about their work.
     const flag = named && person.sheet_flags && typeof person.sheet_flags[runId] === "string" ? person.sheet_flags[runId] : "";
+    // What the last roster sync found in Canvas: a pseudonym's fact, not a
+    // name's, so it shows on every row. Gone from Canvas is a chip by the name;
+    // back again is only the sentence, in the detail.
+    const lms = entry.lms && typeof entry.lms.note === "string" ? entry.lms : null;
+    const gone = lms && lms.in_course === false;
     const low = pace !== null && pace < PASS;
 
     /*
@@ -1372,6 +1377,7 @@ export const studentsDocument = (
         (entry.role && entry.role !== "student" ? " · " + escapeText(entry.role) : "") +
         (named ? '<code class="pid">' + escapeText(id) + "</code>" : "") +
         "</p>" +
+        (lms ? '<p class="dim">' + escapeText(lms.note) + "</p>" : "") +
         (standing ? standingBlock(id, standing) : "") +
         workPanel(entry, standing) +
         "</div>";
@@ -1404,10 +1410,11 @@ export const studentsDocument = (
       '"><span class="nm">' +
       escapeText(named || id) +
       (flag ? ' <span class="todo" title="Noted in the grade sheet">' + escapeText(flag) + "</span>" : "") +
+      (gone && !dimmed ? ' <span class="todo" title="' + escapeAttribute(lms.note) + '">not in Canvas</span>' : "") +
       "</span>" +
       '<span class="gr" title="' + escapeText(label(entry)) + '">' + escapeText(shortGroup(label(entry))) + "</span>" +
       (dimmed
-        ? '<span class="rest"><span class="todo">' + escapeText(entry.status ?? "inactive") + "</span></span>"
+        ? '<span class="rest"><span class="todo"' + (lms ? ' title="' + escapeAttribute(lms.note) + '"' : "") + ">" + escapeText(entry.status ?? "inactive") + "</span></span>"
         : bar +
           '<span class="pc' + (low ? " low" : "") + '">' + (pace !== null ? number(pace) : '<span class="dim">—</span>') + "</span>" +
           '<span class="ms">' +

@@ -20,6 +20,38 @@
       ],
       "title": "EnrollmentStatus",
       "type": "string"
+    },
+    "LmsPresence": {
+      "additionalProperties": false,
+      "description": "Whether the LMS course still lists this person, as the last roster sync found it. since is the day it was first seen: the day they went missing, or the day they came back. note is the sentence shown beside their name.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "in_course": {
+          "title": "In Course",
+          "type": "boolean"
+        },
+        "since": {
+          "format": "date",
+          "title": "Since",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "in_course",
+        "since",
+        "note"
+      ],
+      "title": "LmsPresence",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -66,6 +98,18 @@
       "default": null,
       "description": "Lab or seminar group label.",
       "title": "Group"
+    },
+    "lms": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LmsPresence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the last roster sync found in the LMS course: missing since a day, or back on one."
     }
   },
   "required": [

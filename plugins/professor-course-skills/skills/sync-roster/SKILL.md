@@ -40,8 +40,13 @@ Read the summary and tell the professor, in this order:
    added. Each is settled by the professor with `--link`.
 5. **`newly enrolled`** — who will be added.
 6. **`absent, left active`** — on the roster, not in any Canvas course read.
-   Usually a student who has not been added to Canvas yet, or has left. Name
-   the count and leave them; dropping is the professor's call.
+   Usually a student who has not been added to Canvas yet, or has been removed
+   from it. Name the count and leave them; dropping is the professor's call.
+7. **`newly not in Canvas`** and **`back in Canvas`** — the real run writes a
+   dated note on each of these enrollments (`lms:`), which the Students tab
+   shows beside the name: "Not in Canvas since …", or "Back in Canvas on …;
+   missing since …". Only the first sync to see a removal writes it, so the
+   date is when it was first seen. Name who is newly missing and who came back.
 
 Then, when the professor says go:
 
@@ -58,7 +63,7 @@ an error there is worth reading out whole.
 | --- | --- |
 | `--group G` | Only one subgroup's Canvas course. Absence is then judged only within G. |
 | `--link CANVAS_ID=STUDENT-X` | The professor has said who a `left out` or `check` student is. Repeat it for several. The link is kept, so it is said once. |
-| `--drop-absent` | Only when the professor asks for it in this turn: marks `absent` students `status: dropped`. Nothing is ever deleted. |
+| `--drop-absent` | Only when the professor asks for it in this turn: marks `absent` students `status: dropped`, with a note saying since when they were missing from Canvas. Nothing is ever deleted. |
 | `--connection NAME` | A second Canvas. Normally the registry's default is right. |
 
 ## When it refuses

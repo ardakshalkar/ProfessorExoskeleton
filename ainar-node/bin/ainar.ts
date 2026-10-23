@@ -676,7 +676,9 @@ const HELP = `ainar — the AINAR course model CLI
   or their name (the scans matcher); a close spelling is listed to check, an
   ambiguous one is left out until --link settles it, and the rest are new.
   Known students keep the roster's names, and nobody is marked dropped unless
-  --drop-absent says so.
+  --drop-absent says so. A student Canvas no longer lists is noted on their
+  enrollment instead (\`lms: in_course: false\`, the day, a sentence), once; one
+  who comes back is noted back with that day.
 
   --group narrows gradebook, class-progress and inbox to one subgroup, and
   the term plan to the meetings that subgroup attends — an activity with no
@@ -4440,7 +4442,11 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         resolvedRun: string,
         store: RosterStore,
         result: ImportResult,
-        { groups, markDropped }: { groups: string[]; markDropped: boolean },
+        {
+          groups,
+          markDropped,
+          presence = null,
+        }: { groups: string[]; markDropped: boolean; presence?: { source: string; today: string } | null },
       ): void => {
         out(`  ${result.added.length} new to the roster, ${result.known.length} already known`);
         for (const note of result.skipped) out(`  skipped ${note}`);
@@ -4464,7 +4470,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         const mine = onDisk.filter((entry) => entry.course_version_id === resolvedRun);
         const others = onDisk.filter((entry) => entry.course_version_id !== resolvedRun);
 
-        const merged = reconcileEnrollments(mine, result.enrollments, { groups, markDropped });
+        const merged = reconcileEnrollments(mine, result.enrollments, { groups, markDropped, presence });
 
         const say = (label: string, ids: string[]): void => {
           if (!ids.length) return;
@@ -4484,6 +4490,12 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         // dropping them, and saying so is how they find out the scope was
         // wrong before it becomes a grade nobody counted.
         say("absent, left active", merged.held);
+        // Written on each of them as `lms`, which the Students tab shows by
+        // their name: a removal from Canvas is no longer only this line.
+        if (presence) {
+          say(`newly not in ${presence.source}`, merged.missing);
+          say(`back in ${presence.source}`, merged.back);
+        }
 
         if (args.includes("--dry-run")) {
           out("\ndry run — nothing written");
@@ -4633,6 +4645,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           // Only the sections read can speak for who is absent from them.
           groups: sections.map((section) => section.group).filter((label): label is string => !!label),
           markDropped: args.includes("--drop-absent"),
+          presence: { source: "Canvas", today: today() },
         });
         break;
       }

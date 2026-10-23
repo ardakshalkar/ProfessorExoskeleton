@@ -546,7 +546,9 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       role: e.role,
       status: e.status,
       student_group: e.group,
-      extensions: e.extensions,
+      // The table has no column for what the last roster sync found in the
+      // LMS; it travels in `extensions` rather than being lost.
+      extensions: e.lms ? { ...e.extensions, lms: e.lms } : e.extensions,
     })),
   );
   script.rows(

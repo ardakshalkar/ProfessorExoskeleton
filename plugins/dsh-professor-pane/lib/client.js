@@ -4966,9 +4966,10 @@ function SyncAll(props) {
   const send2 = preview.send;
   const take = preview.take;
   const held = preview.held;
+  const absent = preview.absent || [];
   const marks = send2.filter((entry) => entry.kind === "grades");
   const fields = send2.filter((entry) => entry.kind === "assignments");
-  const nothing = !send2.length && !take.length;
+  const nothing = !send2.length && !take.length && !absent.length;
   const go = () => {
     setPhase("sending");
     post("/api/canvas/sync-all", props.runId, props.sessionId, {
@@ -5020,6 +5021,13 @@ function SyncAll(props) {
     marks.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(marks.length, "mark")), h("ul", null, byAssessment(marks))) : null,
     fields.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(fields.length, "definition field")), h("ul", null, byAssessment(fields))) : null,
     take.length ? h("b", null, "Into the class list: " + plural(take.length, "student") + " Canvas has and this run does not") : null,
+    absent.length ? h(
+      "span",
+      null,
+      h("b", null, "Not in Canvas any more: " + plural(absent.length, "student")),
+      " — each is noted with today's date and stays in the class until you drop them.",
+      absent.length <= 8 ? h("ul", null, absent.map((entry) => h("li", { key: entry.key }, subject(entry)))) : null
+    ) : null,
     send2.length ? h(
       "button",
       { type: "button", className: "pp-morebtn", style: { marginLeft: 0 }, onClick: () => setOpen(!open2) },
@@ -5048,7 +5056,11 @@ function SyncAll(props) {
       nothing ? null : h(
         "button",
         { type: "button", className: "pp-segbtn pp-danger", disabled: phase !== "idle", onClick: go },
-        phase === "sending" ? "Syncing…" : [send2.length ? "Send " + send2.length + " to Canvas" : null, take.length ? "bring in " + take.length : null].filter(Boolean).join(" and ")
+        phase === "sending" ? "Syncing…" : [
+          send2.length ? "Send " + send2.length + " to Canvas" : null,
+          take.length ? "bring in " + take.length : null,
+          absent.length ? "note " + absent.length + " not in Canvas" : null
+        ].filter(Boolean).join(" and ")
       ),
       h("button", { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: props.onClose }, "Cancel")
     )

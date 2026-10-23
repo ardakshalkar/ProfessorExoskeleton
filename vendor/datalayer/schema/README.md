@@ -77,6 +77,15 @@ about an afternoon and has not been done.
   before `Intervention` and `integrity_cases` after `interventions`. A bundle
   payload leaves `integrity_cases` out when it is empty, so a course without a
   case serialises exactly as before.
+- **2026-10-23 — Canvas presence.** `Enrollment.lms` (`LmsPresence`:
+  `in_course`, `since`, `note`): what the last `roster sync` found in the LMS
+  course. A student Canvas no longer lists is noted `in_course: false` on the
+  day it is first seen, and stays active unless the professor drops them; one
+  who comes back is noted `in_course: true` with the day. Optional: an
+  enrollment no sync has seen missing is unchanged. Inserted as text — the
+  definition before `Module` in the bundle and after `EnrollmentStatus` in
+  `enrollment`, `lms` after `group` in both. The SQL table has no column for
+  it; `sqlgen` carries it in `extensions.lms`.
 
 ## Conventions
 

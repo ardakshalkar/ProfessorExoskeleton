@@ -118,6 +118,20 @@ export const CourseVersion = entity({
   syncs: z.array(Sync).optional(),
 });
 
+/**
+ * Whether the LMS course still lists this person, as the last roster sync
+ * found it. Canvas removes students — withdrawn, moved to another shell, or
+ * deleted by mistake — and a sync does not drop them on its own, so without
+ * this a removal left no trace at all. `since` is the day it was first seen:
+ * the day they went missing, or the day they came back. `note` is the sentence
+ * the pane shows beside their name. Absent, no sync has seen them missing.
+ */
+export const LmsPresence = entity({
+  in_course: z.boolean(),
+  since: plainDate(),
+  note: z.string(),
+});
+
 export const Enrollment = entity({
   enrollment_id: EnrollmentId,
   course_version_id: CourseVersionId,
@@ -125,6 +139,7 @@ export const Enrollment = entity({
   role: EnrollmentRole.default("student"),
   status: EnrollmentStatus.default("active"),
   group: z.string().nullish(),
+  lms: LmsPresence.nullish(),
 });
 
 export const Resource = entity({

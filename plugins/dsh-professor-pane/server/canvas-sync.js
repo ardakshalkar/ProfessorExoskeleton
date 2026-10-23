@@ -67,6 +67,7 @@ const previewOf = (value, names) => {
     send: named(plan.send, names),
     take: named(plan.take, names),
     held: named(plan.held, names),
+    absent: named(plan.absent, names),
     batches: plan.batches,
   };
 };
@@ -88,7 +89,10 @@ export const canvasSyncAll = async (root, runId, body) => {
   if (!last || last.running) return { error: "Preview again: the check behind the preview is not there any more." };
   if (Date.now() - Date.parse(last.at) > PREVIEW_MS) return { error: "The preview is more than 15 minutes old. Preview again." };
   const wanted = new Set(Array.isArray(body.keys) ? body.keys.map(String) : []);
-  if (!wanted.size) return { error: "Nothing was chosen to send." };
+  // Students Canvas no longer lists are noted whatever was chosen: the note
+  // drops nobody, so it needs no choosing.
+  const absent = syncAllPlan(last.value.differences).absent;
+  if (!wanted.size && !absent.length) return { error: "Nothing was chosen to send." };
   const plan = syncAllPlan(last.value.differences.filter((entry) => wanted.has(entry.key)));
 
   const results = [];
@@ -109,14 +113,17 @@ export const canvasSyncAll = async (root, runId, body) => {
     });
   }
   // The class list comes in as `roster sync` brings it, which is every
-  // newcomer Canvas has: the preview listed them all.
-  if (plan.take.length) {
+  // newcomer Canvas has, and every student back in it after a removal: the
+  // preview listed them all. It also runs for a student Canvas no longer
+  // lists — nobody is dropped, but each gets a dated note on their
+  // enrollment that they are not in Canvas.
+  if (plan.take.length || absent.length) {
     const result = await runScans(["roster", "sync", "--run", runId], root);
     results.push({
       kind: "roster",
       assessment: null,
       group: null,
-      count: plan.take.length,
+      count: plan.take.length + absent.length,
       ok: result.ok,
       command: result.command,
       output: result.output || result.error || "",

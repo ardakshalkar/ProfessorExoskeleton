@@ -2346,7 +2346,15 @@ const runCheck = async (args: LmsArgs, bundle: CourseBundle, root: string, deps:
           .filter((entry: any) => entry.status === "active" && ROSTER_ROLES.has(entry.role ?? "student"))
           .map((entry: any) => [String(entry.student_id), String(entry.group ?? "")]),
       );
-      differences.push(...rosterDifferences({ matches, enrolled: active, groups: sections.map((section) => section.group) }));
+      // The day a sync first found each of them missing, for the held row's reason.
+      const missingSince = new Map<string, string>(
+        enrollments
+          .filter((entry: any) => entry.lms && entry.lms.in_course === false)
+          .map((entry: any) => [String(entry.student_id), String(entry.lms.since)]),
+      );
+      differences.push(
+        ...rosterDifferences({ matches, enrolled: active, groups: sections.map((section) => section.group), missingSince }),
+      );
       roster.ok = true;
     } catch (error) {
       roster.error = String((error as Error).message ?? error).trim();

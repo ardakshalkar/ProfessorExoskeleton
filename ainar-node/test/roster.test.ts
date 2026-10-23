@@ -356,6 +356,72 @@ test("a group moves when the export says so, and survives an export with no grou
   assert.equal(silent.enrollments[0]!.group, "CS-01", "a missing column is not an erasure");
 });
 
+// --------------------------------------------------------------------------
+// A Canvas sync notes who is gone from Canvas and who came back
+// --------------------------------------------------------------------------
+
+const canvas = (today: string) => ({ markDropped: false, presence: { source: "Canvas", today } });
+
+test("a student Canvas no longer lists is noted once, on the day it is first seen, and stays active", () => {
+  const before = [enrollment({ student_id: "STUDENT-AAAAAA" }), enrollment({ student_id: "STUDENT-BBBBBB" })];
+  const first = reconcileEnrollments(before, incoming("STUDENT-AAAAAA"), canvas("2026-10-23"));
+  assert.deepEqual(first.missing, ["STUDENT-BBBBBB"]);
+  assert.equal(first.enrollments[1]!.status, "active");
+  assert.deepEqual(first.enrollments[1]!.lms, {
+    in_course: false,
+    since: "2026-10-23",
+    note: "Not in Canvas since 2026-10-23; still active here until you drop them.",
+  });
+  assert.equal(first.enrollments[0]!.lms, undefined, "someone Canvas still lists gets no note");
+
+  const later = reconcileEnrollments(first.enrollments, incoming("STUDENT-AAAAAA"), canvas("2026-10-30"));
+  assert.deepEqual(later.missing, [], "already noted");
+  assert.equal(later.enrollments[1]!.lms!.since, "2026-10-23", "the date is when it was first seen");
+});
+
+test("a student back in Canvas has the note turned round, with both days", () => {
+  const before = [
+    enrollment({ student_id: "STUDENT-BBBBBB", lms: { in_course: false, since: "2026-10-23", note: "…" } }),
+  ];
+  const result = reconcileEnrollments(before, incoming("STUDENT-BBBBBB"), canvas("2026-10-30"));
+  assert.deepEqual(result.back, ["STUDENT-BBBBBB"]);
+  assert.deepEqual(result.enrollments[0]!.lms, {
+    in_course: true,
+    since: "2026-10-30",
+    note: "Back in Canvas on 2026-10-30; missing since 2026-10-23.",
+  });
+  const again = reconcileEnrollments(result.enrollments, incoming("STUDENT-BBBBBB"), canvas("2026-11-06"));
+  assert.deepEqual(again.back, [], "back is said once");
+  assert.equal(again.enrollments[0]!.lms!.since, "2026-10-30");
+});
+
+test("dropping a student gone from Canvas keeps the day they went missing", () => {
+  const before = [
+    enrollment({ student_id: "STUDENT-BBBBBB", lms: { in_course: false, since: "2026-10-23", note: "…" } }),
+  ];
+  const result = reconcileEnrollments(before, [], { markDropped: true, presence: { source: "Canvas", today: "2026-10-30" } });
+  assert.equal(result.enrollments[0]!.status, "dropped");
+  assert.equal(result.enrollments[0]!.lms!.note, "Removed from Canvas: missing since 2026-10-23, marked dropped on 2026-10-30.");
+
+  const back = reconcileEnrollments(result.enrollments, incoming("STUDENT-BBBBBB"), canvas("2026-11-02"));
+  assert.equal(back.enrollments[0]!.status, "active");
+  assert.equal(back.enrollments[0]!.lms!.note, "Back in Canvas on 2026-11-02; missing since 2026-10-23; active again.");
+});
+
+test("a subgroup's sync notes only that subgroup, and a registrar's file notes nobody", () => {
+  const before = [
+    enrollment({ student_id: "STUDENT-BBBBBB", group: "CS-01" }),
+    enrollment({ student_id: "STUDENT-CCCCCC", group: "CS-02" }),
+  ];
+  const scoped = reconcileEnrollments(before, [], { groups: ["CS-01"], ...canvas("2026-10-23") });
+  assert.deepEqual(scoped.missing, ["STUDENT-BBBBBB"]);
+  assert.equal(scoped.enrollments[1]!.lms, undefined, "CS-02's course was not read");
+
+  const file = reconcileEnrollments(before, [], { markDropped: false });
+  assert.deepEqual(file.missing, []);
+  assert.ok(file.enrollments.every((entry) => entry.lms === undefined));
+});
+
 test("reconciling does not mutate what it was handed", () => {
   const before = [enrollment({ student_id: "STUDENT-BBBBBB" })];
   reconcileEnrollments(before, []);

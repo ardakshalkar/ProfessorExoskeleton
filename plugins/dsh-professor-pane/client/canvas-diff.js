@@ -180,9 +180,12 @@ function SyncAll(props) {
   const send = preview.send;
   const take = preview.take;
   const held = preview.held;
+  // In this run, gone from Canvas, not noted yet. Sync all notes them and
+  // drops nobody. Older harnesses send no list.
+  const absent = preview.absent || [];
   const marks = send.filter((entry) => entry.kind === "grades");
   const fields = send.filter((entry) => entry.kind === "assignments");
-  const nothing = !send.length && !take.length;
+  const nothing = !send.length && !take.length && !absent.length;
 
   const go = () => {
     setPhase("sending");
@@ -245,6 +248,15 @@ function SyncAll(props) {
       ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(fields.length, "definition field")), h("ul", null, byAssessment(fields)))
       : null,
     take.length ? h("b", null, "Into the class list: " + plural(take.length, "student") + " Canvas has and this run does not") : null,
+    absent.length
+      ? h(
+          "span",
+          null,
+          h("b", null, "Not in Canvas any more: " + plural(absent.length, "student")),
+          " — each is noted with today's date and stays in the class until you drop them.",
+          absent.length <= 8 ? h("ul", null, absent.map((entry) => h("li", { key: entry.key }, subject(entry)))) : null,
+        )
+      : null,
     send.length
       ? h(
           "button",
@@ -285,7 +297,11 @@ function SyncAll(props) {
             { type: "button", className: "pp-segbtn pp-danger", disabled: phase !== "idle", onClick: go },
             phase === "sending"
               ? "Syncing…"
-              : [send.length ? "Send " + send.length + " to Canvas" : null, take.length ? "bring in " + take.length : null]
+              : [
+                  send.length ? "Send " + send.length + " to Canvas" : null,
+                  take.length ? "bring in " + take.length : null,
+                  absent.length ? "note " + absent.length + " not in Canvas" : null,
+                ]
                   .filter(Boolean)
                   .join(" and "),
           ),

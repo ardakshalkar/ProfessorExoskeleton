@@ -292,6 +292,8 @@ export const rosterDifferences = (input: {
   enrolled: Map<string, string>;
   /** The subgroups whose Canvas course was read; null for a run that is one course. */
   groups: (string | null)[];
+  /** Student → the day a roster sync first found them missing (`Enrollment.lms`). */
+  missingSince?: Map<string, string>;
 }): Difference[] => {
   const found: Difference[] = [];
   const base = (fields: Partial<Difference> & { key: string; direction: Direction }): Difference => ({
@@ -350,6 +352,20 @@ export const rosterDifferences = (input: {
           reason: `in ${match.group}'s Canvas course, ${here ? `in ${here}` : "in no subgroup"} here`,
         }),
       );
+    } else if (input.missingSince?.has(match.student)) {
+      // Noted missing by an earlier sync and listed again: the note is turned
+      // round by the next `roster sync`, which is what taking this does.
+      found.push(
+        base({
+          key: rosterKey(match.group, match.student),
+          direction: "pull",
+          group: match.group,
+          student_id: match.student,
+          ours: "not in Canvas",
+          theirs: match.group ?? "enrolled",
+          reason: `back in Canvas; missing since ${input.missingSince.get(match.student)}`,
+        }),
+      );
     }
   }
   const read = new Set(input.groups.map((group) => group ?? ""));
@@ -357,6 +373,7 @@ export const rosterDifferences = (input: {
     if (placed.has(student)) continue;
     // Only a course that was read can say who is missing from it.
     if (!read.has(group) && !read.has("")) continue;
+    const since = input.missingSince?.get(student);
     found.push(
       base({
         key: rosterKey(group || null, student),
@@ -364,7 +381,10 @@ export const rosterDifferences = (input: {
         group: group || null,
         student_id: student,
         ours: group || "enrolled",
-        reason: "enrolled here, not in the Canvas course",
+        // The day it was noted, as last synced. Without one, no sync has
+        // written it on the student yet: Sync all does.
+        base: since ?? null,
+        reason: since ? `enrolled here, not in the Canvas course since ${since}` : "enrolled here, not in the Canvas course",
       }),
     );
   }
@@ -390,6 +410,8 @@ export const syncAllPlan = (differences: Difference[]) => {
   const send = differences.filter((entry) => entry.direction === "push" && entry.kind !== "roster");
   const take = differences.filter((entry) => entry.direction === "pull" && entry.kind === "roster");
   const held = differences.filter((entry) => !send.includes(entry) && !take.includes(entry));
+  /** In this run, not in Canvas, and not yet noted on the student: a sync writes the note, and drops nobody. */
+  const absent = held.filter((entry) => entry.kind === "roster" && entry.student_id && entry.base === null);
   /** The pushes, one command each: an assessment in one Canvas course. */
   const batches = new Map<string, { kind: DiffKind; assessment_id: string; group: string | null; students: string[]; fields: string[] }>();
   for (const entry of send) {
@@ -399,5 +421,5 @@ export const syncAllPlan = (differences: Difference[]) => {
     if (entry.field) batch.fields.push(entry.field);
     batches.set(id, batch);
   }
-  return { send, take, held, batches: [...batches.values()] };
+  return { send, take, held, absent, batches: [...batches.values()] };
 };

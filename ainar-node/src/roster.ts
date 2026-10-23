@@ -391,6 +391,8 @@ export interface Enrollment {
   role: string;
   status: string;
   group?: string;
+  /** What the last roster sync found in the LMS course (`model/delivery.ts` `LmsPresence`). */
+  lms?: { in_course: boolean; since: string; note: string };
 }
 
 export interface ImportResult {
@@ -514,6 +516,12 @@ export interface ReconcileOptions {
   groups?: readonly string[] | null;
   /** false carries absent students over untouched instead of dropping them. */
   markDropped?: boolean;
+  /**
+   * The export is an LMS course list (`roster sync`), so absence and return
+   * are written on each student as `lms`: the day it was seen, and a sentence
+   * saying so. A registrar's file says nothing about the LMS; it has none.
+   */
+  presence?: { source: string; today: string } | null;
 }
 
 export interface ReconcileResult {
@@ -526,6 +534,10 @@ export interface ReconcileResult {
   returned: string[];
   /** Active, absent from the export, and deliberately left active anyway. */
   held: string[];
+  /** With `presence`: seen missing from the LMS course for the first time in this sync. */
+  missing: string[];
+  /** With `presence`: missing at an earlier sync, listed again now. */
+  back: string[];
 }
 
 /**
@@ -567,12 +579,15 @@ export const reconcileEnrollments = (
 
   const byStudent = new Map(incoming.map((enrollment) => [enrollment.student_id, enrollment]));
   const matched = new Set<string>();
+  const presence = options.presence ?? null;
   const result: ReconcileResult = {
     enrollments: [],
     arrived: [],
     dropped: [],
     returned: [],
     held: [],
+    missing: [],
+    back: [],
   };
 
   for (const current of existing) {
@@ -587,9 +602,24 @@ export const reconcileEnrollments = (
       if (match.group !== undefined) merged.group = match.group;
       // Back on the list. Only `dropped` is reversed: `completed` is a student
       // who finished, and an export listing them again does not undo that.
-      if (current.status === "dropped") {
+      const wasDropped = current.status === "dropped";
+      if (wasDropped) {
         merged.status = "active";
         result.returned.push(current.student_id);
+      }
+      // A student an earlier sync found missing keeps the fact, turned round:
+      // removed and put back is worth knowing when a mark went missing between.
+      if (presence && (current.lms?.in_course === false || wasDropped)) {
+        const gone = current.lms?.in_course === false ? current.lms.since : null;
+        merged.lms = {
+          in_course: true,
+          since: presence.today,
+          note:
+            `Back in ${presence.source} on ${presence.today}` +
+            (gone ? `; missing since ${gone}` : "") +
+            (wasDropped ? "; active again." : "."),
+        };
+        result.back.push(current.student_id);
       }
       result.enrollments.push(merged);
       continue;
@@ -597,11 +627,32 @@ export const reconcileEnrollments = (
 
     const speaksFor = IMPORTED_ROLES.has(current.role) && current.status === "active";
     const inScope = scope === null || scope.has((current.group ?? "").trim());
+    // The day they were first seen missing: an earlier sync's, or today's.
+    const gone = current.lms?.in_course === false ? current.lms.since : presence?.today;
     if (speaksFor && markDropped && inScope) {
-      result.enrollments.push({ ...current, status: "dropped" });
+      const dropped: Enrollment = { ...current, status: "dropped" };
+      if (presence) {
+        dropped.lms = {
+          in_course: false,
+          since: gone!,
+          note: `Removed from ${presence.source}: missing since ${gone}, marked dropped on ${presence.today}.`,
+        };
+      }
+      result.enrollments.push(dropped);
       result.dropped.push(current.student_id);
     } else {
-      result.enrollments.push({ ...current });
+      const kept: Enrollment = { ...current };
+      // Noted once, on the day it is first seen; a later sync that still finds
+      // them missing leaves the note and its date as they were.
+      if (presence && speaksFor && inScope && current.lms?.in_course !== false) {
+        kept.lms = {
+          in_course: false,
+          since: presence.today,
+          note: `Not in ${presence.source} since ${presence.today}; still active here until you drop them.`,
+        };
+        result.missing.push(current.student_id);
+      }
+      result.enrollments.push(kept);
       if (speaksFor) result.held.push(current.student_id);
     }
   }
