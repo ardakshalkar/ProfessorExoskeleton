@@ -12,7 +12,7 @@
 
 import { h, Fragment } from "../react.js";
 import { conceptsOf, pct, REVISIT_BELOW, shortDate, titleOf } from "../../shared/course-words.js";
-import { AskButton, Dash, Icon, StatusLine, twoDigits, WorkChip } from "./parts.jsx";
+import { AskButton, Dash, Icon, press, StatusLine, twoDigits, WorkChip } from "./parts.jsx";
 import { rowsOf } from "./term.jsx";
 
 function SignalLine(props) {
@@ -118,6 +118,14 @@ export function Evidence(props) {
                   </li>
                 );
               })}
+              {conceptsOf(w).some(has) ? (
+                <li>
+                  {/* The week's concepts, student by student (BACKLOG HOME-9). */}
+                  <button type="button" className="chip" onClick={() => press.concepts({ week: w.week })}>
+                    By student
+                  </button>
+                </li>
+              ) : null}
             </ul>
           ) : (
             <Dash />

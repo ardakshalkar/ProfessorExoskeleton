@@ -667,6 +667,16 @@ export function ProfessorPane(props) {
       }
       // The Students tab's "Sync from sheet": the Syncs view, where the sheet
       // is read directly or brought in as a downloaded file.
+      // A door into the Concepts grid (BACKLOG HOME-9): a student from the
+      // class list, a concept from a week's chip, a week from Evidence.
+      if (data.kind === "concepts") {
+        const door = { view: "concepts" };
+        if (/^STUDENT-[A-Z0-9]+$/.test(String(data.student || ""))) door.student = data.student;
+        if (/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.concept || ""))) door.concept = data.concept;
+        if (Number.isInteger(data.week) && data.week > 0) door.week = data.week;
+        openPlace(door);
+        return;
+      }
       if (data.kind === "syncs") {
         focusCard("sheets");
         return;

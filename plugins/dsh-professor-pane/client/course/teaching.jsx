@@ -12,7 +12,7 @@
 
 import { h, Fragment, React } from "../react.js";
 import { conceptsOf, MEETING_ICON, pct, promptFor, REVISIT_BELOW, shortDate, titleOf } from "../../shared/course-words.js";
-import { AskButton, Icon, MaterialChips, StatusLine, WorkChip } from "./parts.jsx";
+import { AskButton, ConceptChip, Icon, MaterialChips, StatusLine, WorkChip } from "./parts.jsx";
 import { EditButton, ModuleTitles } from "./edit.jsx";
 
 function WorkLine(props) {
@@ -138,9 +138,7 @@ function Focus(props) {
         <div className="concepts">
           <Icon name="concept" />
           {conceptsOf(w).map((c) => (
-            <span className="chip concept" key={c.id}>
-              {c.title || c.id}
-            </span>
+            <ConceptChip key={c.id} concept={c} />
           ))}
         </div>
       ) : null}

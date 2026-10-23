@@ -10,6 +10,7 @@ import { sendJson } from "../http.js";
 import { recentDocument } from "../inspector.js";
 import { navigatorDocument } from "../navigator.js";
 import { todayDocument } from "../today.js";
+import { cellEvidence, conceptsGrid } from "../concepts-grid.js";
 import { unpublishedDocument } from "../unpublished.js";
 import { checkUpload, receiveFile, storeUpload, uploadFolder } from "../upload.js";
 import { loadedRun, revisionDocument, runsDocument } from "../workspace.js";
@@ -44,6 +45,29 @@ export const routes = [
     handle(c) {
       const { res, runId, workspace, root } = c;
       return sendJson(res, 200, todayDocument(workspace, root, runId));
+    },
+  },
+  // The Concepts place: concept × student, and the evidence behind a cell.
+  // Names only when asked for, as the class list; see server/concepts-grid.js.
+  {
+    paths: ["/api/concepts-grid", "/api/concepts-grid/cell"],
+    handle(c) {
+      const { res, url, runId, workspace } = c;
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      const drafts = url.searchParams.get("drafts") === "1";
+      try {
+        if (url.pathname.endsWith("/cell")) {
+          const student = String(url.searchParams.get("student") || "");
+          const concept = String(url.searchParams.get("concept") || "");
+          if (!/^STUDENT-[A-Z0-9]+$/.test(student) || !/^[A-Z0-9][A-Z0-9-]*$/.test(concept)) {
+            return sendJson(res, 200, { error: "Which student and which concept?" });
+          }
+          return sendJson(res, 200, cellEvidence(workspace, runId, student, concept, { drafts }));
+        }
+        return sendJson(res, 200, conceptsGrid(workspace, runId, { names: url.searchParams.get("names") === "1", drafts }));
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
     },
   },
   // The right column's recent changes and draft count; see server/inspector.js.

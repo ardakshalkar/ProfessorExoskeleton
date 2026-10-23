@@ -1376,6 +1376,8 @@ export const studentsDocument = (
         summaryOf(id, standing) +
         (entry.role && entry.role !== "student" ? " · " + escapeText(entry.role) : "") +
         (named ? '<code class="pid">' + escapeText(id) + "</code>" : "") +
+        // Every concept for this student, in course mode's Concepts grid.
+        ' <button type="button" class="chip" data-concepts="' + escapeAttribute(id) + '" title="Every concept, with the evidence for each">Concepts</button>' +
         "</p>" +
         (lms ? '<p class="dim">' + escapeText(lms.note) + "</p>" : "") +
         (standing ? standingBlock(id, standing) : "") +
@@ -2104,6 +2106,8 @@ export const studentsDocument = (
     "parent.postMessage({source:'professor-pane',kind:'ask',prompt:q},'*');return;}" +
     "var s=e.target.closest&&e.target.closest('button[data-syncs]');" +
     "if(s){parent.postMessage({source:'professor-pane',kind:'syncs'},'*');return;}" +
+    "var cg=e.target.closest&&e.target.closest('button[data-concepts]');" +
+    "if(cg){parent.postMessage({source:'professor-pane',kind:'concepts',student:cg.getAttribute('data-concepts')},'*');return;}" +
     // Save a fork: their own (the button carries it), the one picked from
     // the list, or a pasted link — in that order.
     "var f=e.target.closest&&e.target.closest('button[data-fork]');" +

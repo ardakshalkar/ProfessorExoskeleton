@@ -9,7 +9,7 @@
 
 import { h, Fragment } from "../react.js";
 import { datesPrompt, hasBrief, MEETING_ICON, promptFor, shortDate, tierOf } from "../../shared/course-words.js";
-import { AskButton, Dash, GapChip, Icon, MaterialChips, press, StatusLine, twoDigits, WorkChip } from "./parts.jsx";
+import { AskButton, ConceptChip, Dash, GapChip, Icon, MaterialChips, press, StatusLine, twoDigits, WorkChip } from "./parts.jsx";
 import { EditButton, ModuleTitles } from "./edit.jsx";
 
 /** A week nobody has planned and nothing meets in: a candidate for a band. */
@@ -96,7 +96,7 @@ function WeekRow(props) {
   const module = (w.modules || [])[0];
   const title = (w.modules || []).map((m) => m.title).join(" · ");
 
-  const concepts = (w.modules || []).flatMap((m) => (m.concepts || []).map((c) => c.title || c.id));
+  const concepts = (w.modules || []).flatMap((m) => m.concepts || []);
 
   // Lecture: each meeting with its own materials, the deck first.
   const lecture = (w.meetings || []).map((m) => {
@@ -186,9 +186,7 @@ function WeekRow(props) {
         <div className="concepts">
           <Icon name="concept" />
           {concepts.map((c, i) => (
-            <span className="chip concept" key={c + i}>
-              {c}
-            </span>
+            <ConceptChip key={c.id + i} concept={c} student={student} />
           ))}
         </div>
       ) : null}

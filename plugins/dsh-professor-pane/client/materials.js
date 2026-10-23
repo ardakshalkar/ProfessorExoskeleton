@@ -13,6 +13,7 @@ import { Files } from "./files.js";
 import { ConnectionsMenu } from "./connections-menu.js";
 import { Integrations } from "./integrations.js";
 import { Preferences } from "./preferences.js";
+import { ConceptsGrid } from "./concepts.js";
 import { SyncView } from "./sync-view.js";
 import { Today } from "./today.js";
 import { h, React, ReactDOM } from "./react.js";
@@ -456,6 +457,18 @@ export function CourseMode(props) {
     }
   }, [request ? request.n : null]);
   const taskSub = subOf("tasks");
+  // A door into the Concepts grid: a request for it that names a student, a
+  // concept or a week (HOME-9). Numbered like the request, so the same door
+  // pressed twice still lands.
+  const doorOf = (entry) =>
+    entry && entry.view === "concepts" && (entry.student || entry.concept || entry.week)
+      ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n }
+      : null;
+  const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
+  React.useEffect(() => {
+    const door = doorOf(request);
+    if (door) setConceptsFocus(door);
+  }, [request ? request.n : null]);
   // What is on screen, said to the pane (the inspector's focus) and to the
   // navigator (which marks the place as current); null once closed.
   const onShown = props.onShown;
@@ -684,15 +697,22 @@ export function CourseMode(props) {
       );
     }
     if (view === "concepts") {
-      return h(WidgetFrame, {
-        key: "progress|" + props.dark + "|" + props.drafts,
-        revision: everything,
-        view: "progress",
+      return h(ConceptsGrid, {
+        key: props.runId,
         runId: props.runId,
         sessionId: props.sessionId,
-        dark: props.dark,
+        names: props.names,
         drafts: props.drafts,
-        title: "Concepts",
+        revision: everything,
+        focus: conceptsFocus,
+        // A question from the grid starts a turn and brings the chat in
+        // beside it, as the composer does.
+        ask: props.ask
+          ? (text) => {
+              props.ask(text);
+              setChat(true);
+            }
+          : null,
       });
     }
     if (view === "materials") {
@@ -798,6 +818,8 @@ export function CourseMode(props) {
     // The Gradebook names students (its marks, Last changes); without the
     // switch here a projected Gradebook could not be covered in place.
     view === "gradebook" ||
+    // The Concepts grid is a column per student.
+    view === "concepts" ||
     (view === "settings" && subOf("settings") === "integrations") ||
     (view === "tasks" && taskSub !== "unpublished");
   // With the navigator in the sidebar the places are chosen there, and this

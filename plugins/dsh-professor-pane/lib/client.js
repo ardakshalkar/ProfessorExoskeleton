@@ -1237,6 +1237,64 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-syncall{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:9px;
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);font-size:12px}
 .pp-syncall ul{margin:0;padding-left:18px}
+/* Course mode · Concepts (concepts.js): concept × student, one hue in five
+   steps, darker is stronger — readable in print and without colour vision. */
+.pp-cg{display:flex;flex-direction:column;gap:8px;min-height:0;flex:1;font-size:12px;padding:12px 14px 0}
+.pp-cg-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pp-cg-shows{display:inline-flex;gap:4px}
+.pp-cg-select{width:auto;margin:0;max-width:260px}
+.pp-cg-find{font:inherit;font-size:11.5px;padding:3px 8px;border-radius:6px;min-width:160px;color:inherit;
+  background:var(--dsw-alias-bg-l1,#fff);border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cg-legend{display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--dsw-alias-label-secondary,#555)}
+.pp-cg-legend span{display:inline-flex;align-items:center;gap:5px}
+.pp-cg-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr);gap:10px;padding-bottom:12px}
+.pp-cg-withpanel{grid-template-columns:minmax(0,1fr) 300px}
+.pp-cg-scroll{min-height:0;overflow:auto;border:1px solid var(--dsw-alias-border-l2,#e3e3e6);border-radius:10px}
+.pp-cg-table{border-collapse:separate;border-spacing:0}
+.pp-cg-table td{padding:1px;text-align:center}
+.pp-cg-table td.pp-cg-lit,.pp-cg-litrow td{background:rgba(47,111,214,.08)}
+.pp-cg-corner,.pp-cg-colhead{position:sticky;top:0;z-index:2;background:var(--dsw-alias-bg-l1,#fff)}
+.pp-cg-corner{left:0;z-index:3;min-width:220px;padding:6px 8px;font-size:10.5px;font-weight:500;text-align:left;
+  color:var(--dsw-alias-label-tertiary,#6b6b6b);border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cg-colhead{padding:0;border-bottom:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cg-colhead button{writing-mode:vertical-rl;transform:rotate(180deg);font:inherit;font-size:9.5px;padding:4px 0;width:18px;
+  border:0;background:none;cursor:pointer;color:var(--dsw-alias-label-secondary,#555)}
+.pp-cg-colhead.pp-cg-lit button{color:#2f6fd6;font-weight:700}
+.pp-cg-rowhead{position:sticky;left:0;z-index:1;background:var(--dsw-alias-bg-l1,#fff);padding:0;text-align:left;
+  border-right:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
+.pp-cg-litrow .pp-cg-rowhead{background:rgba(47,111,214,.08)}
+.pp-cg-rowhead button{display:flex;align-items:baseline;gap:6px;width:220px;padding:2px 8px;font:inherit;text-align:left;
+  border:0;background:none;cursor:pointer;color:inherit}
+.pp-cg-ctitle{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-cg-rowhead small{flex:none;font-size:10px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cg-rowhead small.pp-cg-low{color:#a15c00;font-weight:600}
+.pp-cg-cell{position:relative;display:inline-block;width:16px;height:16px;padding:0;border-radius:3px;
+  border:1px solid transparent;cursor:pointer;vertical-align:middle}
+i.pp-cg-cell{cursor:default;flex:none}
+.pp-cg-b0{background:#1d4f91}.pp-cg-b1{background:#3f76b8}.pp-cg-b2{background:#7fa6d6}
+.pp-cg-b3{background:#bcd0ea}.pp-cg-b4{background:#e7eef8;border-color:#bcd0ea}
+.pp-cg-none{background:transparent;border:1px dashed var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-cg-thin{opacity:.45}
+.pp-cg-sel{outline:2px solid #a15c00;outline-offset:1px}
+.pp-cg-state{position:absolute;right:2px;top:2px;width:5px;height:5px;border-radius:50%;background:#a15c00;border:1px solid #fff}
+.pp-cg-panel{position:relative;min-height:0;overflow:auto;padding:10px 12px;border-radius:10px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-cg-panelclose{position:absolute;right:6px;top:6px}
+.pp-cg-ptitle{display:flex;flex-direction:column;gap:1px;margin:0 20px 4px 0}
+.pp-cg-ptitle b{font-size:13px}
+.pp-cg-ptitle span{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cg-panel .pp-as{margin:0 0 8px}
+.pp-cg-sub{margin:10px 0 4px;font-weight:600}
+.pp-cg-ev,.pp-cg-list{margin:0 0 10px;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.pp-cg-ev li{display:grid;grid-template-columns:1fr auto;gap:0 8px;padding:5px 0;border-top:1px solid var(--dsw-alias-border-l2,#ececef)}
+.pp-cg-ev li small{grid-column:1;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cg-ev li b{grid-column:2;grid-row:1}
+.pp-cg-list li{display:flex;align-items:center;gap:6px}
+.pp-cg-list li .pp-linkbtn{margin:0;text-align:left;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-cg-list li small{flex:none;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-cg-spread{display:flex;flex-direction:column;gap:3px;margin-bottom:6px}
+.pp-cg-spreadrow{display:flex;align-items:center;gap:6px}
+.pp-cg-spreadrow b{margin-left:auto}
 /* Course mode · Sync: Sync all on top, grouped by which way data runs. */
 .pp-syncview{display:flex;flex-direction:column;gap:12px;font-size:12px}
 .pp-syncallx{display:flex;flex-direction:column;gap:8px}
@@ -5916,7 +5974,7 @@ function CanvasMarks(props) {
   const partial = finished && unplaced ? inCanvas + " of " + (inCanvas + unplaced) + " in Canvas" : null;
   const at = phase === "planning" || !plan ? 0 : phase === "sending" ? 1 : confirmed && sentFailed ? 2 : finished ? partial ? 2 : 3 : 1;
   const headline = c.ready === 0 ? "No whole marks to send yet." : phase === "planning" ? "Checking what Canvas has for these " + c.ready + " marks…" : phase === "sending" ? "Sending to Canvas — keep this open until it finishes." : confirmed ? null : previewed ? planned ? planned + " of " + c.ready + " marks are not in Canvas yet" + (inCanvas ? "; " + inCanvas + " already are." : ".") + unplacedWords : unrecorded ? "Canvas already has these " + unrecorded + " marks — sending confirms them here; students see no change." + unplacedWords : unplaced ? "Canvas has " + inCanvas + " of " + (inCanvas + unplaced) + " marks." + unplacedWords : "Canvas has every mark (" + inCanvas + ")." : toSend === 0 ? "Canvas has every mark (" + c.ready + ")." : toSend + " of " + c.ready + " marks are not in Canvas.";
-  const pct2 = progress && progress.total ? Math.round(100 * progress.done / progress.total) : 0;
+  const pct3 = progress && progress.total ? Math.round(100 * progress.done / progress.total) : 0;
   const forward = c.ready === 0 || confirmed ? null : phase === "planning" ? h("button", { type: "button", className: "pp-primary", disabled: true, "aria-busy": "true" }, "Checking Canvas…") : phase === "sending" ? h(
     "button",
     {
@@ -5924,7 +5982,7 @@ function CanvasMarks(props) {
       className: "pp-primary pp-danger pp-btn-progress",
       disabled: true,
       "aria-busy": "true",
-      style: { "--pp-progress": pct2 + "%" }
+      style: { "--pp-progress": pct3 + "%" }
     },
     "Sending… " + (progress && progress.total > 1 ? "course " + Math.min(progress.done + 1, progress.total) + " of " + progress.total : "")
   ) : sendable ? h(
@@ -7968,7 +8026,7 @@ function CourseIntegrations(props) {
     setFilter((current) => ({ id, tick: current.tick + 1 }));
     scrollTo("pp-card-canvas");
   };
-  const plural7 = (count, one, many) => count + " " + (count === 1 ? one : many);
+  const plural8 = (count, one, many) => count + " " + (count === 1 ? one : many);
   const migrate = () => {
     setMigrating("working");
     fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
@@ -7985,21 +8043,21 @@ function CourseIntegrations(props) {
       key: "waiting",
       service: "sheets",
       mark: "GS",
-      text: plural7(waiting2, "name", "names") + " from the grade sheet to confirm",
+      text: plural8(waiting2, "name", "names") + " from the grade sheet to confirm",
       go: props.onOpenSync || (() => scrollTo("pp-card-sheets"))
     } : null,
     reachable && counts.unlinked.length ? {
       key: "unlinked",
       service: "canvas",
       mark: "Cv",
-      text: plural7(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
+      text: plural8(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
       go: () => show("unlinked")
     } : null,
     counts.toSend.length ? {
       key: "marks",
       service: "canvas",
       mark: "Cv",
-      text: "Canvas is missing marks for " + plural7(counts.toSend.length, "assessment", "assessments"),
+      text: "Canvas is missing marks for " + plural8(counts.toSend.length, "assessment", "assessments"),
       go: () => show("marks")
     } : null
   ].filter(Boolean);
@@ -8107,7 +8165,7 @@ function CourseIntegrations(props) {
       h(
         "span",
         { className: "pp-as" },
-        (implied === syncs.length ? "All " : implied + " of ") + plural7(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
+        (implied === syncs.length ? "All " : implied + " of ") + plural8(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
       ),
       h(
         "button",
@@ -8396,8 +8454,24 @@ var press = {
   scans: (assessment) => send({ kind: "scans", assessment }),
   upload: (assessment, label) => send({ kind: "upload", assessment, label }),
   desk: (assessment, student) => send({ kind: "defence-desk", assessment, student }),
-  publish: (assessment, label, target) => send({ kind: "publish", assessment, label, target })
+  publish: (assessment, label, target) => send({ kind: "publish", assessment, label, target }),
+  // The Concepts grid on one concept's row, or one week's concepts.
+  concepts: (door) => send(Object.assign({ kind: "concepts" }, door))
 };
+function ConceptChip(props) {
+  const c = props.concept;
+  if (props.student) return /* @__PURE__ */ h("span", { className: "chip concept" }, c.title || c.id);
+  return /* @__PURE__ */ h(
+    "button",
+    {
+      type: "button",
+      className: "chip concept",
+      title: "How the class stands on " + (c.title || c.id) + ", student by student",
+      onClick: () => press.concepts({ concept: c.id })
+    },
+    c.title || c.id
+  );
+}
 function ViewLink(props) {
   const { view, format, papers, children, ...rest } = props;
   const onClick = (event) => {
@@ -8893,7 +8967,7 @@ function WeekRow(props) {
   const misdated = new Set(has("misdated") && has("misdated").ids || []);
   const module2 = (w.modules || [])[0];
   const title = (w.modules || []).map((m) => m.title).join(" · ");
-  const concepts = (w.modules || []).flatMap((m) => (m.concepts || []).map((c) => c.title || c.id));
+  const concepts = (w.modules || []).flatMap((m) => m.concepts || []);
   const lecture = (w.meetings || []).map((m) => {
     const resources = [...m.resources || []].sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
     return /* @__PURE__ */ h("div", { className: "meeting", key: m.activity_id }, /* @__PURE__ */ h("span", { className: "chip meet" + (m.draft ? " draft" : ""), title: m.title || "" }, /* @__PURE__ */ h("span", { className: "k mono" }, shortDate(m.on) || "no date"), /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), misdated.has(m.activity_id) ? /* @__PURE__ */ h(GapChip, { kind: "misdated", tier, prompt: promptFor("misdated", w, run2, m.activity_id), title: has("misdated").note }) : null, resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
@@ -8938,7 +9012,7 @@ function WeekRow(props) {
       prompt: "For week " + w.week + " of " + run2.id + " (" + module2.module_id + "), what should I teach and what should I revisit first?",
       label: "Prepare"
     }
-  ) : null), concepts.length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), concepts.map((c, i) => /* @__PURE__ */ h("span", { className: "chip concept", key: c + i }, c))) : null, /* @__PURE__ */ h("div", { className: "cell", "data-col": "Lecture" }, lecture, deckGap ? /* @__PURE__ */ h(GapChip, { kind: "deck", tier, prompt: promptFor("deck", w, run2), title: deckGap.note }) : null, lecture.length ? null : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Graded work" }, graded.length ? graded : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Outcomes" }, outcomeIds.length ? outcomeIds.map((id) => {
+  ) : null), concepts.length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), concepts.map((c, i) => /* @__PURE__ */ h(ConceptChip, { key: c.id + i, concept: c, student }))) : null, /* @__PURE__ */ h("div", { className: "cell", "data-col": "Lecture" }, lecture, deckGap ? /* @__PURE__ */ h(GapChip, { kind: "deck", tier, prompt: promptFor("deck", w, run2), title: deckGap.note }) : null, lecture.length ? null : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Graded work" }, graded.length ? graded : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Outcomes" }, outcomeIds.length ? outcomeIds.map((id) => {
     const how = taught.has(id) && assessed.has(id) ? "taught · assessed" : assessed.has(id) ? "assessed" : "taught";
     return /* @__PURE__ */ h("span", { key: id, className: "chip lo" + (assessed.has(id) ? " hit" : ""), title: (taught.get(id) || titles.get(id) || id) + " — " + how }, /* @__PURE__ */ h(Icon, { name: "outcome" }), id, /* @__PURE__ */ h("span", { className: "k" }, how));
   }) : /* @__PURE__ */ h(Dash, null)));
@@ -9035,7 +9109,7 @@ function Evidence(props) {
       const x = concepts[c.id];
       const low = has(c) && x.class_mean < REVISIT_BELOW;
       return /* @__PURE__ */ h("li", { key: c.id, className: low ? "flagged" : "" }, /* @__PURE__ */ h(Icon, { name: "concept" }), /* @__PURE__ */ h("span", null, c.title || c.id), /* @__PURE__ */ h("small", null, has(c) ? "class " + pct(x.class_mean) + " · " + (x.coverage || "") + " observed" + (low ? " · revisit" : "") : "not assessed yet"));
-    })) : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Signals" }, here.length ? /* @__PURE__ */ h("ul", { className: "facts" }, here.map((s, i) => /* @__PURE__ */ h(SignalLine, { key: i, signal: s }))) : /* @__PURE__ */ h(Dash, null)));
+    }), conceptsOf(w).some(has) ? /* @__PURE__ */ h("li", null, /* @__PURE__ */ h("button", { type: "button", className: "chip", onClick: () => press.concepts({ week: w.week }) }, "By student")) : null) : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Signals" }, here.length ? /* @__PURE__ */ h("ul", { className: "facts" }, here.map((s, i) => /* @__PURE__ */ h(SignalLine, { key: i, signal: s }))) : /* @__PURE__ */ h(Dash, null)));
   };
   return /* @__PURE__ */ h("div", { className: "mode evidence" }, /* @__PURE__ */ h("div", { className: "stepper" }, /* @__PURE__ */ h("b", null, current ? "Week " + current + " of " + weeks.length : weeks.length + " weeks"), /* @__PURE__ */ h("span", { className: "private" }, "Private — class figures from approved evidence only")), loose.length ? /* @__PURE__ */ h("div", { className: "side" }, /* @__PURE__ */ h("small", null, "Open signals not tied to a week"), /* @__PURE__ */ h("ul", { className: "facts" }, loose.map((s, i) => /* @__PURE__ */ h(SignalLine, { key: i, signal: s })))) : null, /* @__PURE__ */ h("div", { className: "grid" }, /* @__PURE__ */ h("div", { className: "th" }, "Due that week"), /* @__PURE__ */ h("div", { className: "th" }, "Concepts taught"), /* @__PURE__ */ h("div", { className: "th" }, "Signals"), rowsOf(weeks, (w) => !measured(w)).map((row) => {
     if (!row.band) return /* @__PURE__ */ h(Fragment2, { key: row.week.week }, weekRow(row.week));
@@ -10013,7 +10087,7 @@ function Focus(props) {
   );
   const module2 = (w.modules || [])[0];
   const prepare = "For week " + w.week + " of " + run2.id + (module2 ? " (" + module2.module_id + ")" : "") + ", what should I teach and what should I revisit first?" + (revisit.length ? " The class is weakest on " + revisit.map((r) => r.c.title || r.c.id).join(" and ") + "." : "");
-  return /* @__PURE__ */ h("div", { className: "focus" }, /* @__PURE__ */ h("small", null, w.week === current ? "This week" : "Week " + w.week, " · ", shortDate(w.starts_on), " – ", shortDate(w.ends_on)), /* @__PURE__ */ h("h2", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), conceptsOf(w).length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), conceptsOf(w).map((c) => /* @__PURE__ */ h("span", { className: "chip concept", key: c.id }, c.title || c.id))) : null, meetings.length ? /* @__PURE__ */ h("ul", { className: "facts big" }, meetings.map((m) => {
+  return /* @__PURE__ */ h("div", { className: "focus" }, /* @__PURE__ */ h("small", null, w.week === current ? "This week" : "Week " + w.week, " · ", shortDate(w.starts_on), " – ", shortDate(w.ends_on)), /* @__PURE__ */ h("h2", null, titleOf(w) ? /* @__PURE__ */ h(ModuleTitles, { modules: w.modules }) : "No topic yet"), conceptsOf(w).length ? /* @__PURE__ */ h("div", { className: "concepts" }, /* @__PURE__ */ h(Icon, { name: "concept" }), conceptsOf(w).map((c) => /* @__PURE__ */ h(ConceptChip, { key: c.id, concept: c }))) : null, meetings.length ? /* @__PURE__ */ h("ul", { className: "facts big" }, meetings.map((m) => {
     const resources = [...m.resources || []].sort((a, b) => (a.kind === "slides" ? 0 : 1) - (b.kind === "slides" ? 0 : 1));
     return /* @__PURE__ */ h("li", { key: m.activity_id }, /* @__PURE__ */ h(Icon, { name: MEETING_ICON[m.type] || "lecture" }), /* @__PURE__ */ h("span", null, shortDate(m.on) || "no date", " · ", [m.type, m.location].filter(Boolean).join(" · ")), /* @__PURE__ */ h(EditButton, { kind: "activity", id: m.activity_id, title: "Change this meeting: its title, room, description" }), resources.map((r, i) => /* @__PURE__ */ h(MaterialChips, { key: (r.resource_id || r.title) + i, resource: r })));
   })) : /* @__PURE__ */ h("p", { className: "calm" }, "No meeting this week."), misdated ? misdated.ids.map((id) => {
@@ -10360,15 +10434,15 @@ function ChangeLine(props) {
       )
     );
   }
-  const who = event.name || event.student;
+  const who2 = event.name || event.student;
   return h(
     "li",
     { className: "pp-gbline" },
-    h("span", { className: "pp-avatar", "aria-hidden": "true" }, initials(who)),
+    h("span", { className: "pp-avatar", "aria-hidden": "true" }, initials(who2)),
     h(
       "div",
       { className: "pp-gbwhat" },
-      h("div", null, h("b", null, who), " · " + event.title, stamp),
+      h("div", null, h("b", null, who2), " · " + event.title, stamp),
       h(
         "div",
         { className: "pp-as" },
@@ -11598,8 +11672,8 @@ var connectionsOf = (data, roads, checks) => {
     const readsLive = google.connected || sheetSyncs.some((sync) => sync.canReadLive);
     const changed = found.filter((check) => check.state === "changed");
     const waiting2 = waitingOf("sheets");
-    const who = google.account ? " for " + google.account : "";
-    const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural4(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
+    const who2 = google.account ? " for " + google.account : "";
+    const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who2 + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural4(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
       tone: "warn",
       state: "changed in Google",
       line: "The sheet changed" + (changed[0].modified ? " " + when(changed[0].modified) : "") + " since the last sync.",
@@ -12005,8 +12079,419 @@ function Preferences(props) {
   );
 }
 
+// client/concepts.js
+var pct2 = (value) => value === null || value === void 0 ? "—" : Math.round(value * 100) + "%";
+var plural5 = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
+var STATE_WORDS = {
+  not_observed: "not observed",
+  introduced: "introduced",
+  developing: "developing",
+  demonstrated: "demonstrated",
+  consistently_demonstrated: "consistently demonstrated",
+  needs_review: "needs review"
+};
+var bandOf = (bands, value) => {
+  if (value === null || value === void 0) return null;
+  const index = bands.findIndex((band) => value >= band[0]);
+  return index < 0 ? bands.length - 1 : index;
+};
+var who = (student) => student.name || student.id;
+var shortOf = (student) => student.name ? student.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase() : student.id.slice(-4);
+function Cell(props) {
+  const cell = props.cell;
+  const band = bandOf(props.bands, cell[0]);
+  const thin = cell[1] === 1;
+  return h(
+    "button",
+    {
+      type: "button",
+      className: "pp-cg-cell" + (band === null ? " pp-cg-none" : " pp-cg-b" + band) + (thin ? " pp-cg-thin" : "") + (props.selected ? " pp-cg-sel" : "") + (props.lit ? " pp-cg-lit" : ""),
+      title: who(props.student) + " · " + props.concept.title + "\n" + (cell[1] ? pct2(cell[0]) + " on " + plural5(cell[1], "piece") + " of evidence" : "no evidence") + (cell[2] ? "\nrecorded: " + (STATE_WORDS[cell[2]] || cell[2]) : ""),
+      onClick: props.onClick
+    },
+    cell[2] ? h("i", { className: "pp-cg-state", "aria-hidden": "true" }) : null
+  );
+}
+function CellPanel(props) {
+  const url = scoped(
+    BASE + "/api/concepts-grid/cell?run=" + encodeURIComponent(props.runId || "") + "&student=" + encodeURIComponent(props.student.id) + "&concept=" + encodeURIComponent(props.concept.id) + (props.drafts ? "&drafts=1" : ""),
+    props.sessionId
+  );
+  const state = useJson(url);
+  const answer = state.phase === "ready" ? state.value : null;
+  return h(
+    React.Fragment,
+    null,
+    h("p", { className: "pp-cg-ptitle" }, h("b", null, who(props.student)), h("span", null, props.concept.title)),
+    h(
+      "p",
+      { className: "pp-as" },
+      props.cell[1] ? pct2(props.cell[0]) + " on " + plural5(props.cell[1], "piece") + " of evidence" : "No evidence for this concept yet.",
+      props.cell[2] ? " · recorded: " + (STATE_WORDS[props.cell[2]] || props.cell[2]) : ""
+    ),
+    !answer ? h("p", { className: "pp-as" }, "Reading the evidence…") : answer.error ? h("p", { className: "pp-saveerr" }, answer.error) : answer.items.length ? h(
+      "ul",
+      { className: "pp-cg-ev" },
+      answer.items.map(
+        (item) => h(
+          "li",
+          { key: item.id },
+          h("span", null, item.assessment || item.source || "—"),
+          item.criterion ? h("small", null, item.criterion) : null,
+          h(
+            "b",
+            null,
+            item.score !== null && item.maximum !== null ? item.score + " / " + item.maximum : pct2(item.proportion)
+          )
+        )
+      )
+    ) : null,
+    h(
+      "div",
+      { className: "pp-dacts" },
+      h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onStudent() }, "All of " + (props.student.name ? props.student.name.split(/\s+/)[0] : "this student") + "'s concepts"),
+      h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onConcept() }, "The class on this concept")
+    )
+  );
+}
+function ConceptPanel(props) {
+  const concept = props.concept;
+  const students = props.students;
+  const counts = props.bands.map(() => 0);
+  let none = 0;
+  const under = [];
+  concept.cells.forEach((cell, i) => {
+    if (!props.shown[i]) return;
+    const band = bandOf(props.bands, cell[0]);
+    if (band === null) none += 1;
+    else counts[band] += 1;
+    if (cell[0] !== null && cell[0] < props.threshold) under.push({ student: students[i], value: cell[0], evidence: cell[1] });
+  });
+  under.sort((a, b) => a.value - b.value);
+  const run2 = props.runId;
+  return h(
+    React.Fragment,
+    null,
+    h("p", { className: "pp-cg-ptitle" }, h("b", null, concept.title), h("span", null, concept.week ? "Week " + concept.week : "Not on a week")),
+    h("p", { className: "pp-as" }, "Class " + pct2(concept.class_mean) + " · " + concept.covered + " of " + concept.cells.length + " observed"),
+    h(
+      "div",
+      { className: "pp-cg-spread" },
+      props.bands.map(
+        (band, i) => h("span", { key: band[1], className: "pp-cg-spreadrow" }, h("i", { className: "pp-cg-cell pp-cg-b" + i }), band[1], h("b", null, String(counts[i])))
+      ),
+      h("span", { className: "pp-cg-spreadrow" }, h("i", { className: "pp-cg-cell pp-cg-none" }), "no evidence", h("b", null, String(none)))
+    ),
+    under.length ? h(
+      React.Fragment,
+      null,
+      h("p", { className: "pp-cg-sub" }, plural5(under.length, "student") + " under " + pct2(props.threshold)),
+      h(
+        "ul",
+        { className: "pp-cg-list" },
+        under.slice(0, 40).map(
+          (row) => h(
+            "li",
+            { key: row.student.id },
+            h("button", { type: "button", className: "pp-linkbtn", onClick: () => props.onStudent(row.student.id) }, who(row.student)),
+            h("small", null, pct2(row.value) + " · " + plural5(row.evidence, "piece"))
+          )
+        )
+      )
+    ) : null,
+    props.ask ? h(
+      "div",
+      { className: "pp-dacts" },
+      h(
+        "button",
+        {
+          type: "button",
+          className: "pp-segbtn",
+          title: "Ask the assistant to read the evidence and the prerequisites",
+          onClick: () => props.ask(
+            "/find-gaps " + run2 + " — why is " + concept.title + " (" + concept.id + ") not landing? Class mean " + pct2(concept.class_mean) + ", " + concept.covered + " of " + concept.cells.length + " students observed, " + under.length + " under " + pct2(props.threshold) + "."
+          )
+        },
+        "Ask why"
+      ),
+      h(
+        "button",
+        {
+          type: "button",
+          className: "pp-segbtn",
+          title: "Ask the assistant how to revisit it in the next lesson",
+          onClick: () => props.ask("/prepare-lesson " + run2 + " — plan how to revisit " + concept.title + " (" + concept.id + ") in the next session.")
+        },
+        "Plan a revisit"
+      )
+    ) : null
+  );
+}
+function StudentPanel(props) {
+  const index = props.index;
+  const student = props.students[index];
+  const rows = props.concepts.map((concept) => ({ concept, cell: concept.cells[index] })).sort((a, b) => (a.cell[0] === null ? 2 : a.cell[0]) - (b.cell[0] === null ? 2 : b.cell[0]));
+  const seen = rows.filter((row) => row.cell[1]).length;
+  return h(
+    React.Fragment,
+    null,
+    h("p", { className: "pp-cg-ptitle" }, h("b", null, who(student)), h("span", null, student.group || "")),
+    student.name ? h("p", { className: "pp-as" }, h("code", null, student.id)) : null,
+    h("p", { className: "pp-as" }, seen + " of " + rows.length + " concepts with evidence"),
+    h(
+      "ul",
+      { className: "pp-cg-list" },
+      rows.map(
+        (row) => h(
+          "li",
+          { key: row.concept.id },
+          h("i", { className: "pp-cg-cell " + (bandOf(props.bands, row.cell[0]) === null ? "pp-cg-none" : "pp-cg-b" + bandOf(props.bands, row.cell[0])) + (row.cell[1] === 1 ? " pp-cg-thin" : "") }),
+          h("button", { type: "button", className: "pp-linkbtn", onClick: () => props.onConcept(row.concept.id) }, row.concept.title),
+          h("small", null, row.cell[1] ? pct2(row.cell[0]) + " · " + row.cell[1] : "—")
+        )
+      )
+    ),
+    props.ask ? h(
+      "div",
+      { className: "pp-dacts" },
+      h(
+        "button",
+        {
+          type: "button",
+          className: "pp-segbtn",
+          title: "Ask the assistant for an evidence-based report on this student",
+          onClick: () => props.ask("/student-report " + props.runId + " " + student.id)
+        },
+        "Write a report"
+      )
+    ) : null
+  );
+}
+function ConceptsGrid(props) {
+  const url = scoped(
+    BASE + "/api/concepts-grid?run=" + encodeURIComponent(props.runId || "") + (props.names ? "&names=1" : "") + (props.drafts ? "&drafts=1" : "") + "&r=" + encodeURIComponent(String(props.revision || 0)),
+    props.sessionId
+  );
+  const state = useJson(url);
+  const kept = React.useRef(null);
+  if (state.phase === "ready" && state.value && !state.value.error) kept.current = state.value;
+  const [group, setGroup] = React.useState("");
+  const [week, setWeek] = React.useState("");
+  const [show, setShow] = React.useState("all");
+  const [find, setFind] = React.useState("");
+  const [picked, setPicked] = React.useState(null);
+  const rowRefs = React.useRef(/* @__PURE__ */ new Map());
+  const focus = props.focus || null;
+  React.useEffect(() => {
+    if (!focus) return;
+    if (focus.week) {
+      setWeek(String(focus.week));
+      setShow("all");
+    }
+    if (focus.concept) setPicked({ concept: focus.concept });
+    else if (focus.student) setPicked({ student: focus.student });
+  }, [focus ? focus.n : null]);
+  React.useEffect(() => {
+    const id = picked && (picked.concept || picked.cell && picked.cell[0]);
+    const row = id ? rowRefs.current.get(id) : null;
+    if (row) row.scrollIntoView({ block: "nearest" });
+  }, [picked, kept.current]);
+  const doc = kept.current;
+  if (state.phase === "ready" && state.value && state.value.error && !doc) return h(Message, { error: true }, state.value.error);
+  if (!doc) return h(Message, null, "Reading the evidence for every concept and student…");
+  const needle = find.trim().toLowerCase();
+  const shownStudent = doc.students.map(
+    (student) => (!group || student.group === group) && (!needle || (who(student) + " " + student.id).toLowerCase().includes(needle))
+  );
+  const order = doc.students.map((student, index) => ({ student, index })).filter((entry) => shownStudent[entry.index]).sort((a, b) => a.student.group.localeCompare(b.student.group) || who(a.student).localeCompare(who(b.student)));
+  const rows = doc.concepts.filter(
+    (concept) => (!week || String(concept.week) === week) && (show === "all" || show === "revisit" && concept.class_mean !== null && concept.class_mean < doc.threshold || show === "untested" && !concept.covered)
+  );
+  const revisitCount = doc.concepts.filter((concept) => concept.class_mean !== null && concept.class_mean < doc.threshold).length;
+  const studentIndex = picked && picked.student ? doc.students.findIndex((student) => student.id === picked.student) : -1;
+  const pickedConcept = picked && picked.concept ? doc.concepts.find((concept) => concept.id === picked.concept) : null;
+  const pickedCell = picked && picked.cell ? { concept: doc.concepts.find((c) => c.id === picked.cell[0]), index: doc.students.findIndex((s) => s.id === picked.cell[1]) } : null;
+  const litStudent = studentIndex >= 0 ? studentIndex : pickedCell ? pickedCell.index : -1;
+  const litConcept = pickedConcept ? pickedConcept.id : pickedCell && pickedCell.concept ? pickedCell.concept.id : null;
+  const panel = () => {
+    if (pickedCell && pickedCell.concept && pickedCell.index >= 0) {
+      return h(CellPanel, {
+        key: picked.cell.join("|"),
+        runId: props.runId,
+        sessionId: props.sessionId,
+        drafts: props.drafts,
+        student: doc.students[pickedCell.index],
+        concept: pickedCell.concept,
+        cell: pickedCell.concept.cells[pickedCell.index],
+        onStudent: () => setPicked({ student: picked.cell[1] }),
+        onConcept: () => setPicked({ concept: picked.cell[0] })
+      });
+    }
+    if (pickedConcept) {
+      return h(ConceptPanel, {
+        concept: pickedConcept,
+        students: doc.students,
+        shown: shownStudent,
+        bands: doc.bands,
+        threshold: doc.threshold,
+        runId: props.runId,
+        ask: props.ask,
+        onStudent: (id) => setPicked({ student: id })
+      });
+    }
+    if (studentIndex >= 0) {
+      return h(StudentPanel, {
+        index: studentIndex,
+        students: doc.students,
+        concepts: rows,
+        bands: doc.bands,
+        runId: props.runId,
+        ask: props.ask,
+        onConcept: (id) => setPicked({ concept: id })
+      });
+    }
+    return null;
+  };
+  const side = panel();
+  return h(
+    "div",
+    { className: "pp-cg" },
+    h(
+      "div",
+      { className: "pp-cg-tools" },
+      h(
+        "span",
+        { className: "pp-cg-shows" },
+        [
+          ["all", "All " + doc.concepts.length],
+          ["revisit", "To revisit " + revisitCount],
+          ["untested", "Not assessed " + doc.totals.no_evidence]
+        ].map(
+          (entry) => h("button", { key: entry[0], type: "button", className: "pp-segbtn", "aria-pressed": show === entry[0], onClick: () => setShow(entry[0]) }, entry[1])
+        )
+      ),
+      h(
+        "select",
+        { className: "pp-runs pp-cg-select", value: week, "aria-label": "Week", onChange: (event) => setWeek(event.target.value) },
+        h("option", { value: "" }, "Every week"),
+        doc.weeks.map((entry) => h("option", { key: entry.week, value: String(entry.week) }, "Week " + entry.week + " · " + entry.title))
+      ),
+      doc.groups.length > 1 ? h(
+        "select",
+        { className: "pp-runs pp-cg-select", value: group, "aria-label": "Subgroup", onChange: (event) => setGroup(event.target.value) },
+        h("option", { value: "" }, "Every subgroup"),
+        doc.groups.map((entry) => h("option", { key: entry, value: entry }, entry))
+      ) : null,
+      h("input", {
+        type: "search",
+        className: "pp-cg-find",
+        placeholder: "Find a student",
+        "aria-label": "Find a student",
+        value: find,
+        onChange: (event) => setFind(event.target.value)
+      })
+    ),
+    h(
+      "div",
+      { className: "pp-cg-legend" },
+      doc.bands.map((band, i) => h("span", { key: band[1] }, h("i", { className: "pp-cg-cell pp-cg-b" + i }), band[1] + " ≥" + pct2(band[0]))),
+      h("span", null, h("i", { className: "pp-cg-cell pp-cg-b2 pp-cg-thin" }), "pale: one piece of evidence"),
+      h("span", null, h("i", { className: "pp-cg-cell pp-cg-none" }), "no evidence"),
+      h("span", null, h("i", { className: "pp-cg-cell pp-cg-b1" }, h("i", { className: "pp-cg-state" })), "a state is recorded"),
+      doc.totals.recorded_states ? null : h("span", { className: "pp-as" }, "No concept states are recorded yet — the colours are the evidence's means.")
+    ),
+    h(
+      "div",
+      { className: "pp-cg-body" + (side ? " pp-cg-withpanel" : "") },
+      h(
+        "div",
+        { className: "pp-cg-scroll" },
+        rows.length && order.length ? h(
+          "table",
+          { className: "pp-cg-table" },
+          h(
+            "thead",
+            null,
+            h(
+              "tr",
+              null,
+              h("th", { className: "pp-cg-corner" }, plural5(rows.length, "concept") + " · " + plural5(order.length, "student")),
+              order.map(
+                (entry) => h(
+                  "th",
+                  { key: entry.student.id, className: "pp-cg-colhead" + (entry.index === litStudent ? " pp-cg-lit" : "") },
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      title: who(entry.student) + (entry.student.group ? " · " + entry.student.group : ""),
+                      onClick: () => setPicked({ student: entry.student.id })
+                    },
+                    shortOf(entry.student)
+                  )
+                )
+              )
+            )
+          ),
+          h(
+            "tbody",
+            null,
+            rows.map(
+              (concept) => h(
+                "tr",
+                {
+                  key: concept.id,
+                  className: concept.id === litConcept ? "pp-cg-litrow" : "",
+                  ref: (node) => {
+                    if (node) rowRefs.current.set(concept.id, node);
+                    else rowRefs.current.delete(concept.id);
+                  }
+                },
+                h(
+                  "th",
+                  { className: "pp-cg-rowhead" },
+                  h(
+                    "button",
+                    { type: "button", title: concept.id, onClick: () => setPicked({ concept: concept.id }) },
+                    h("span", { className: "pp-cg-ctitle" }, concept.title),
+                    h(
+                      "small",
+                      { className: concept.class_mean !== null && concept.class_mean < doc.threshold ? "pp-cg-low" : "" },
+                      (concept.week ? "W" + concept.week + " · " : "") + (concept.covered ? pct2(concept.class_mean) : "not assessed")
+                    )
+                  )
+                ),
+                order.map(
+                  (entry) => h(
+                    "td",
+                    { key: entry.student.id, className: entry.index === litStudent ? "pp-cg-lit" : "" },
+                    h(Cell, {
+                      cell: concept.cells[entry.index],
+                      student: entry.student,
+                      concept,
+                      bands: doc.bands,
+                      selected: Boolean(picked && picked.cell && picked.cell[0] === concept.id && picked.cell[1] === entry.student.id),
+                      onClick: () => setPicked({ cell: [concept.id, entry.student.id] })
+                    })
+                  )
+                )
+              )
+            )
+          )
+        ) : h(Message, null, order.length ? "No concept matches these filters." : "No student matches these filters.")
+      ),
+      side ? h(
+        "aside",
+        { className: "pp-cg-panel" },
+        h("button", { type: "button", className: "pp-close pp-cg-panelclose", "aria-label": "Close", onClick: () => setPicked(null) }, "×"),
+        side
+      ) : null
+    )
+  );
+}
+
 // client/sync-view.js
-var plural5 = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
+var plural6 = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
 var post2 = (path, runId, sessionId, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -12021,9 +12506,9 @@ var byAssessment = (rows) => {
   return [...counts].map(([title, n]) => title + ": " + n).join(" · ");
 };
 var sheetLine = (sheet2) => sheet2.moves ? [
-  sheet2.added ? plural5(sheet2.added, "mark") + " added" : null,
-  sheet2.changed ? plural5(sheet2.changed, "mark") + " changed" : null,
-  sheet2.removed ? plural5(sheet2.removed, "mark") + " taken back" : null
+  sheet2.added ? plural6(sheet2.added, "mark") + " added" : null,
+  sheet2.changed ? plural6(sheet2.changed, "mark") + " changed" : null,
+  sheet2.removed ? plural6(sheet2.removed, "mark") + " taken back" : null
 ].filter(Boolean).join(", ") : "nothing new";
 function SyncAllPreview(props) {
   const preview = props.preview;
@@ -12047,7 +12532,7 @@ function SyncAllPreview(props) {
   const label = [
     send2.length ? "send " + send2.length + " to Canvas" : null,
     take.length || absent.length ? "update the class list" : null,
-    moving.length ? "bring in " + plural5(moving.length, "sheet") : null
+    moving.length ? "bring in " + plural6(moving.length, "sheet") : null
   ].filter(Boolean).join(", ");
   return h(
     "div",
@@ -12061,8 +12546,8 @@ function SyncAllPreview(props) {
       h(
         "ul",
         null,
-        take.length ? h("li", null, "Class list: " + plural5(take.length, "student") + " Canvas has and this run does not") : null,
-        absent.length ? h("li", null, "Class list: " + plural5(absent.length, "student") + " no longer in Canvas — noted, nobody dropped") : null,
+        take.length ? h("li", null, "Class list: " + plural6(take.length, "student") + " Canvas has and this run does not") : null,
+        absent.length ? h("li", null, "Class list: " + plural6(absent.length, "student") + " no longer in Canvas — noted, nobody dropped") : null,
         sheets.map(
           (sheet2) => h(
             "li",
@@ -12083,7 +12568,7 @@ function SyncAllPreview(props) {
         "ul",
         null,
         marks.length ? h("li", null, "Canvas marks: " + marks.length + " (" + byAssessment(marks) + ")") : null,
-        fields.length ? h("li", null, "Canvas definitions: " + plural5(fields.length, "field") + " (" + byAssessment(fields) + ")") : null,
+        fields.length ? h("li", null, "Canvas definitions: " + plural6(fields.length, "field") + " (" + byAssessment(fields) + ")") : null,
         !send2.length ? h("li", { className: "pp-as" }, "nothing") : null
       )
     ),
@@ -12094,8 +12579,8 @@ function SyncAllPreview(props) {
       h(
         "ul",
         null,
-        held.length ? h("li", null, plural5(held.length, "Canvas difference") + " — conflicts and what Canvas changed; settle them below") : null,
-        sheetHeld ? h("li", null, plural5(sheetHeld, "sheet row") + " the sync was not sure of; confirm them below") : null,
+        held.length ? h("li", null, plural6(held.length, "Canvas difference") + " — conflicts and what Canvas changed; settle them below") : null,
+        sheetHeld ? h("li", null, plural6(sheetHeld, "sheet row") + " the sync was not sure of; confirm them below") : null,
         preview.canvas && preview.canvas.error ? h("li", { className: "pp-saveerr" }, "Canvas: " + preview.canvas.error) : null,
         failed.map(
           (sheet2) => h("li", { key: sheet2.id, className: "pp-saveerr" }, "Grade sheet " + sheet2.id + ": " + sheet2.error)
@@ -12181,7 +12666,7 @@ function SyncView(props) {
           h(
             "span",
             { className: "pp-intwhat" },
-            [canvasOn ? "Canvas" : null, sheets.length ? plural5(sheets.length, "grade sheet") : null].filter(Boolean).join(" and ") || "No road here moves with Sync all"
+            [canvasOn ? "Canvas" : null, sheets.length ? plural6(sheets.length, "grade sheet") : null].filter(Boolean).join(" and ") || "No road here moves with Sync all"
           )
         ),
         h("span", { className: "pp-segspacer" }),
@@ -12269,7 +12754,7 @@ function SyncView(props) {
 }
 
 // client/today.js
-var plural6 = (n, one, many) => n + " " + (n === 1 ? one : many);
+var plural7 = (n, one, many) => n + " " + (n === 1 ? one : many);
 var MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var day = (iso) => {
   const found = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
@@ -12358,7 +12843,7 @@ function Now(props) {
         "div",
         { className: "pp-tnowacts" },
         h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "teaching" }) }, "Open this week"),
-        now.gaps ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "planning" }) }, plural6(now.gaps, "week has gaps", "weeks have gaps")) : null
+        now.gaps ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "planning" }) }, plural7(now.gaps, "week has gaps", "weeks have gaps")) : null
       )
     )
   );
@@ -12431,7 +12916,7 @@ function Pulse(props) {
             type: "button",
             key: chip.service,
             className: "pp-tsync" + (chip.waiting || chip.reconnect ? " pp-tsync-wait" : ""),
-            title: plural6(chip.roads, "road", "roads") + (chip.last ? " · last ran " + day(chip.last) : " · never run"),
+            title: plural7(chip.roads, "road", "roads") + (chip.last ? " · last ran " + day(chip.last) : " · never run"),
             // A refused sign-in is fixed in settings; everything else is syncing.
             onClick: () => props.onOpen(chip.reconnect ? { view: "settings", sub: "integrations" } : { view: "syncs" })
           },
@@ -12657,6 +13142,12 @@ function CourseMode(props) {
     }
   }, [request ? request.n : null]);
   const taskSub = subOf("tasks");
+  const doorOf = (entry) => entry && entry.view === "concepts" && (entry.student || entry.concept || entry.week) ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n } : null;
+  const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
+  React.useEffect(() => {
+    const door = doorOf(request);
+    if (door) setConceptsFocus(door);
+  }, [request ? request.n : null]);
   const onShown = props.onShown;
   React.useEffect(() => {
     const place = { mode, view };
@@ -12827,15 +13318,20 @@ function CourseMode(props) {
       );
     }
     if (view === "concepts") {
-      return h(WidgetFrame, {
-        key: "progress|" + props.dark + "|" + props.drafts,
-        revision: everything,
-        view: "progress",
+      return h(ConceptsGrid, {
+        key: props.runId,
         runId: props.runId,
         sessionId: props.sessionId,
-        dark: props.dark,
+        names: props.names,
         drafts: props.drafts,
-        title: "Concepts"
+        revision: everything,
+        focus: conceptsFocus,
+        // A question from the grid starts a turn and brings the chat in
+        // beside it, as the composer does.
+        ask: props.ask ? (text) => {
+          props.ask(text);
+          setChat(true);
+        } : null
       });
     }
     if (view === "materials") {
@@ -12935,7 +13431,8 @@ function CourseMode(props) {
   );
   const named = view === "students" || view === "syncs" || // The Gradebook names students (its marks, Last changes); without the
   // switch here a projected Gradebook could not be covered in place.
-  view === "gradebook" || view === "settings" && subOf("settings") === "integrations" || view === "tasks" && taskSub !== "unpublished";
+  view === "gradebook" || // The Concepts grid is a column per student.
+  view === "concepts" || view === "settings" && subOf("settings") === "integrations" || view === "tasks" && taskSub !== "unpublished";
   const navigator2 = left > 0;
   const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
   const placeName = viewEntry ? viewEntry.label : navigator2 ? "Weeks" : props.title;
@@ -14462,7 +14959,7 @@ function GradeBoard(props) {
     );
   }
   const item = doc.items[Math.min(at, doc.items.length - 1)];
-  const who = (student) => doc.names && doc.people[student] ? doc.people[student] + " · " + student : student;
+  const who2 = (student) => doc.names && doc.people[student] ? doc.people[student] + " · " + student : student;
   const pageUrl = (answer) => url("/api/grade/page") + "&student=" + encodeURIComponent(answer.student) + "&page=" + encodeURIComponent(answer.page || 1) + (doc.names ? "&names=1" : "");
   const max = item.maximum_score;
   const scale = item.criterion && item.criterion.levels.length ? item.criterion.levels.map((level) => level.score).sort((a, b) => a - b) : (() => {
@@ -14648,7 +15145,7 @@ function GradeBoard(props) {
         proposed ? compare() : null,
         !proposed ? [
           h("div", { className: "pp-reviewsec", key: "sec" }, "The answers", h("span", null, item.counts.answers - item.counts.unread - item.counts.blank + " written · " + item.counts.blank + " blank · " + item.counts.unread + " not read yet")),
-          item.answers.filter((answer) => !answer.unread && !answer.blank).map((answer) => h("div", { className: "pp-gplain", key: answer.student }, h("div", { className: "pp-gwho" }, who(answer.student)), answerText(answer)))
+          item.answers.filter((answer) => !answer.unread && !answer.blank).map((answer) => h("div", { className: "pp-gplain", key: answer.student }, h("div", { className: "pp-gwho" }, who2(answer.student)), answerText(answer)))
         ] : null
       )
     );
@@ -14816,7 +15313,7 @@ function GradeBoard(props) {
       h(
         "div",
         { className: "pp-gbody" },
-        h("div", { className: "pp-gwho" }, who(answer.student), answer.page ? h("span", null, " · p." + answer.page) : null),
+        h("div", { className: "pp-gwho" }, who2(answer.student), answer.page ? h("span", null, " · p." + answer.page) : null),
         answerText(answer),
         answer.confidence && answer.confidence !== "high" || answer.note ? h(
           "div",
@@ -15053,7 +15550,7 @@ function GradeBoard(props) {
     { className: "pp-gside" },
     showRubric ? rubricPanel : null,
     shown && doc.pages ? [
-      h("div", { className: "pp-gwho", key: "who" }, who(shown.student) + " · page " + (shown.page || 1) + " · press the page to enlarge"),
+      h("div", { className: "pp-gwho", key: "who" }, who2(shown.student) + " · page " + (shown.page || 1) + " · press the page to enlarge"),
       h("img", {
         key: "page",
         src: pageUrl(shown),
@@ -15258,7 +15755,7 @@ function ScansTab(props) {
       "No scanned pile for " + props.runId + " yet. Upload the scans; the assistant works out which assessment they are and files them, and they appear here."
     );
   }
-  const who = (id, name) => name ? name + " · " + id : id;
+  const who2 = (id, name) => name ? name + " · " + id : id;
   const cropUrl = (paper) => query("/api/scans/crop").replace(/assessment=[^&]*/, "") + "&assessment=" + encodeURIComponent(assessmentId) + "&file=" + encodeURIComponent(paper.file) + "&pages=" + encodeURIComponent(paper.pages);
   doc.papers.forEach((paper) => {
     paper.also = paper.also || [];
@@ -15326,7 +15823,7 @@ function ScansTab(props) {
         type: "button",
         className: "pp-rankrow" + (entry.student === paper.resolved ? " pp-rankrow-now" : ""),
         disabled: off,
-        title: "Place pp. " + paper.pages + " on " + who(entry.student, entry.name) + (index < 9 ? " — key " + (index + 1) : ""),
+        title: "Place pp. " + paper.pages + " on " + who2(entry.student, entry.name) + (index < 9 ? " — key " + (index + 1) : ""),
         onClick: () => place(paper, { student: entry.student })
       },
       h("span", { className: "pp-ranknum" }, index < 9 ? String(index + 1) : ""),
@@ -15364,7 +15861,7 @@ function ScansTab(props) {
       h(
         "div",
         { className: "pp-cardmeta" },
-        paper.lane === "check" ? (paper.match === "partial" ? "Placed on one word of the name: " : "Placed on a close spelling: ") + who(paper.resolved, paper.resolved_name) : paper.problem || "Not placed yet"
+        paper.lane === "check" ? (paper.match === "partial" ? "Placed on one word of the name: " : "Placed on a close spelling: ") + who2(paper.resolved, paper.resolved_name) : paper.problem || "Not placed yet"
       ),
       names && doc.crops && paper.clash.length ? sideBySide(paper) : null,
       paper.lane === "check" ? h(
@@ -15412,7 +15909,7 @@ function ScansTab(props) {
                 key: entry.student,
                 className: "pp-segbtn",
                 disabled: off,
-                title: "Place pp. " + paper.pages + " on " + who(entry.student, entry.name),
+                title: "Place pp. " + paper.pages + " on " + who2(entry.student, entry.name),
                 onClick: () => place(paper, { student: entry.student })
               },
               entry.name || entry.student
@@ -15771,7 +16268,7 @@ function ScansTab(props) {
             (paper) => h(
               "li",
               { key: paper.file + paper.pages },
-              "pp. " + paper.pages + " → " + who(paper.resolved, paper.resolved_name) + (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : paper.match === "partial" ? " (one word)" : "")
+              "pp. " + paper.pages + " → " + who2(paper.resolved, paper.resolved_name) + (paper.pinned ? " (confirmed)" : paper.match === "words" ? " (by its words)" : paper.match === "partial" ? " (one word)" : "")
             )
           ),
           skipped.map((paper) => h("li", { key: paper.file + paper.pages }, "pp. " + paper.pages + " — " + paper.skip))
@@ -16668,6 +17165,14 @@ function ProfessorPane(props) {
           assessment: data.assessment,
           label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment
         });
+        return;
+      }
+      if (data.kind === "concepts") {
+        const door = { view: "concepts" };
+        if (/^STUDENT-[A-Z0-9]+$/.test(String(data.student || ""))) door.student = data.student;
+        if (/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.concept || ""))) door.concept = data.concept;
+        if (Number.isInteger(data.week) && data.week > 0) door.week = data.week;
+        openPlace(door);
         return;
       }
       if (data.kind === "syncs") {

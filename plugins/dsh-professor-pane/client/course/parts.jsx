@@ -34,7 +34,29 @@ export const press = {
   upload: (assessment, label) => send({ kind: "upload", assessment, label }),
   desk: (assessment, student) => send({ kind: "defence-desk", assessment, student }),
   publish: (assessment, label, target) => send({ kind: "publish", assessment, label, target }),
+  // The Concepts grid on one concept's row, or one week's concepts.
+  concepts: (door) => send(Object.assign({ kind: "concepts" }, door)),
 };
+
+/**
+ * A concept on a week card. A press opens the Concepts grid on its row — the
+ * class on that concept, student by student (BACKLOG HOME-9). In the student
+ * preview it is only a word: the grid is private.
+ */
+export function ConceptChip(props) {
+  const c = props.concept;
+  if (props.student) return <span className="chip concept">{c.title || c.id}</span>;
+  return (
+    <button
+      type="button"
+      className="chip concept"
+      title={"How the class stands on " + (c.title || c.id) + ", student by student"}
+      onClick={() => press.concepts({ concept: c.id })}
+    >
+      {c.title || c.id}
+    </button>
+  );
+}
 
 /**
  * A link the harness opens over itself when it can paint it. A plain click is

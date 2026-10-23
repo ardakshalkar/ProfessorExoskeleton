@@ -2045,17 +2045,34 @@ is worth building.
       without a Sync view to point at (`onOpenSync` absent) they draw their
       syncs as before. The GitHub card keeps its per-homework push — a
       publication, not a sync. `S` · depends: HOME-6
-- [ ] **HOME-8** The Concepts grid as the Concepts place: concepts down,
+- [x] **HOME-8** The Concepts grid as the Concepts place: concepts down,
       students across, coloured by the six `concept_state` values, the
       evidence count in each cell, a row for `concepts_with_no_evidence`,
       filters by subgroup, week, state and low evidence. A cell opens the
       items and marks behind it. Check first that `class_progress` carries
       per-student cells; if not, extend it in `progress.ts`, not in the view.
+      Done 2026-10-23: `class_progress` already carried them, so nothing in
+      the model changed. `server/concepts-grid.js` (`/api/concepts-grid`,
+      `/cell`) adds the teaching week, the subgroup and — in Names mode — the
+      name; `client/concepts.js` draws it. On CSS-4007 no `concept_state` is
+      recorded (0 of 5,427 cells), so the colour is the evidence's mean in
+      the dashboard's five bands, a dot marks a recorded state, pale is one
+      piece of evidence, dashed is none. Filters: All / To revisit (under
+      60%) / Not assessed, week, subgroup, find a student. A cell opens each
+      piece of evidence — assessment, criterion, score; a row opens the
+      class's spread and who is under the line, with *Ask why*
+      (`/find-gaps`) and *Plan a revisit* (`/prepare-lesson`); a column opens
+      the student's concepts, weakest first, with *Write a report*
+      (`/student-report`). Names / Pseudonyms and the drafts switch apply.
       `M` · depends: —
-- [ ] **HOME-9** Three doors into the grid: a student's column from Students
+- [x] **HOME-9** Three doors into the grid: a student's column from Students
       (replacing `/student-dashboard` as the only way to see one student's
       concepts), a concept's row from a week's concept chip, and Evidence's
-      week. `S` · depends: HOME-8
+      week. Done 2026-10-23: *Concepts* in a student's opened row on
+      Students; every concept chip on Teaching and All weeks (a word only
+      under Preview as student); *By student* under a week's concepts in
+      Evidence. All three are one message, `kind: "concepts"`. `S` ·
+      depends: HOME-8
 - [ ] **HOME-10** The Pulse band: concepts under the threshold, concepts with
       no evidence, the hand-in rate of the last thing due, and the sync strip
       — each a count that opens its place. `S` · depends: HOME-6, HOME-8
