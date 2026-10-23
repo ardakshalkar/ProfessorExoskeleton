@@ -188,6 +188,7 @@ export function Integrations(props) {
       onSynced,
       onRefresh: refresh,
       onWrite: props.onWrite,
+      onOpenSync: props.onOpenSync,
     }),
   );
 }
@@ -269,7 +270,7 @@ function CourseIntegrations(props) {
           service: "sheets",
           mark: "GS",
           text: plural(waiting, "name", "names") + " from the grade sheet to confirm",
-          go: () => scrollTo("pp-card-sheets"),
+          go: props.onOpenSync || (() => scrollTo("pp-card-sheets")),
         }
       : null,
     reachable && counts.unlinked.length
@@ -297,6 +298,9 @@ function CourseIntegrations(props) {
     sessionId: props.sessionId,
     names: props.names,
     onSaved: props.onSaved,
+    // Where syncing lives when course mode has a Sync view; without it the
+    // cards keep their syncs, as before.
+    onOpenSync: props.onOpenSync,
   };
 
   return h(

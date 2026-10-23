@@ -124,6 +124,7 @@ const ICONS = {
   materials: ["M7 3.5h7l4 4v12a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 19.5v-14.5A1.5 1.5 0 0 1 7 3.5z", "M14 3.5v4h4", "M9 13h6", "M9 17h6"],
   settings: ["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"],
   files: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"],
+  sync: ["M4 10a8 8 0 0 1 14-4.5L20 8", "M20 4v4h-4", "M20 14a8 8 0 0 1-14 4.5L4 16", "M4 20v-4h4"],
   plug: ["M9 7V3", "M15 7V3", "M7 7h10v4a5 5 0 0 1-10 0z", "M12 16v5"],
   folders: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z", "M10.5 14.5a2 2 0 1 0 0-.01", "M12 15.5l2 2"],
   plus: ["M12 5v14", "M5 12h14"],
@@ -147,6 +148,7 @@ const PLACES = [
   { id: "concepts", label: "Concepts", hint: "The class, by concept", request: { view: "concepts" } },
   { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, the student's outline", request: { view: "materials" } },
   { id: "files", label: "Files", hint: "Scans and recordings: where they are, each pile", request: { view: "files" } },
+  { id: "sync", label: "Sync", hint: "Canvas and the grade sheets: Sync all, what differs, names to confirm", request: { view: "syncs" } },
 ];
 
 /** The foot's place: opened twice a term, so kept out of the list above. */

@@ -2019,16 +2019,31 @@ is worth building.
 - [ ] **HOME-5** Snooze: "not until <date>" on a waiting item, kept with the
       run's private state, not on the record. Not TODO-10's postpone, which
       moves a date students see. `S` · depends: HOME-4
-- [ ] **HOME-6** The sync strip: one chip per service (Canvas, Sheets,
+- [x] **HOME-6** The sync strip: one chip per service (Canvas, Sheets,
       GitHub, Telegram) — last run, direction, waiting count, an expired
       warning — from `server/syncs.js`. **Sync all** opens one preview of
       every road, grouped by service and direction, then one Send for
       everything outward, through `ainar sync … --confirm`. BGS-4 makes
-      "last run" true without a press. `M` · depends: HOME-1
-- [ ] **HOME-7** Sync out of settings: Course settings keeps connect,
+      "last run" true without a press. Done 2026-10-23: the strip is on
+      Today (HOME-1). `server/sync-all.js` behind `POST /api/sync-all` asks
+      Canvas (`canvasSyncAll`'s fresh check) and every grade sheet (`sync plan
+      --json`, the downloaded copy when Google cannot be read) at once, and
+      answers *comes in* / *goes out — students see it* / *left for you* /
+      *not in Sync all*; one Send does the previewed Canvas rows and the
+      sheets that move. Starter repositories, announcements and hand-ins
+      stay per item and are named as such. The preview was run on CSS-4007
+      (9 s); **the Send has not been pressed** — it would send 107 marks.
+      `M` · depends: HOME-1
+- [x] **HOME-7** Sync out of settings: Course settings keeps connect,
       reconnect and which roads exist; Preview / Run / the waiting rows move
       to the view the strip opens. Course mode's header line opens the same
-      view. `S` · depends: HOME-6
+      view. Done 2026-10-23: course mode's **Sync** view (also a navigator
+      place) holds Sync all, Canvas differences (without their own Sync all),
+      the class list, each grade sheet's Preview / Run and the names to
+      confirm. The Canvas and Sheets cards say where it went and link there;
+      without a Sync view to point at (`onOpenSync` absent) they draw their
+      syncs as before. The GitHub card keeps its per-homework push — a
+      publication, not a sync. `S` · depends: HOME-6
 - [ ] **HOME-8** The Concepts grid as the Concepts place: concepts down,
       students across, coloured by the six `concept_state` values, the
       evidence count in each cell, a row for `concepts_with_no_evidence`,

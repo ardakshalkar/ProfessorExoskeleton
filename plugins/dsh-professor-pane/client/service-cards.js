@@ -17,6 +17,8 @@ import { useSheetCheck } from "./marks.js";
 import { h, React } from "./react.js";
 import { SyncCard, WaitingList, when } from "./syncs.js";
 
+const plural = (count, one) => count + " " + one + (count === 1 ? "" : "s");
+
 /** `7 Oct`, for a row that has room for a date and nothing else. */
 const dayOf = (iso) => {
   if (!iso) return null;
@@ -89,7 +91,17 @@ export function SheetsCard(props) {
     "section",
     { className: "pp-ccard", id: "pp-card-sheets" },
     h(CardHead, { service: "sheets", mark: "GS", name: "Google Sheets", subtitle, chip }),
-    syncs.map((sync) =>
+    // Bringing a sheet in, and the names it could not place, are in course
+    // mode's Sync; the card keeps the sign-in and which sheet.
+    props.onOpenSync && syncs.length
+      ? h(
+          "p",
+          { className: "pp-as" },
+          plural(syncs.length, "grade sheet") + (waiting.length ? " · " + waiting.length + " names to confirm" : "") + " — synced from Sync.",
+          h("button", { type: "button", className: "pp-linkbtn", onClick: props.onOpenSync }, "Open Sync"),
+        )
+      : null,
+    props.onOpenSync ? null : syncs.map((sync) =>
       h(
         "div",
         { className: "pp-csub", key: sync.id },
@@ -105,7 +117,7 @@ export function SheetsCard(props) {
         }),
       ),
     ),
-    h(WaitingList, {
+    props.onOpenSync ? null : h(WaitingList, {
       rows: waiting,
       students: props.syncs ? props.syncs.students : [],
       names: props.syncs ? props.syncs.names : false,

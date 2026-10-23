@@ -1183,6 +1183,13 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-syncall{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:9px;
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);font-size:12px}
 .pp-syncall ul{margin:0;padding-left:18px}
+/* Course mode · Sync: Sync all on top, grouped by which way data runs. */
+.pp-syncview{display:flex;flex-direction:column;gap:12px;font-size:12px}
+.pp-syncallx{display:flex;flex-direction:column;gap:8px}
+.pp-sxgroup{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border-radius:9px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-sxgroup ul{margin:0;padding-left:18px}
+.pp-sxout{border-color:rgba(180,52,42,.35);background:rgba(180,52,42,.04)}
 .pp-waitwhy{flex:1 1 160px;min-width:0}
 .pp-syncsection .pp-waitlist{gap:0}
 .pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}

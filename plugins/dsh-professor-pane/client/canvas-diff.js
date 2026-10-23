@@ -443,17 +443,20 @@ export function CanvasDifferences(props) {
         { type: "button", className: "pp-segbtn", "aria-expanded": open, disabled: !summary.total, onClick: () => setOpen(!open) },
         open ? "Hide details" : "Details",
       ),
-      h(
-        "button",
-        {
-          type: "button",
-          className: "pp-segbtn",
-          disabled: running || syncing === "asking" || Boolean(syncing && syncing.preview),
-          title: "Ask Canvas again and show what Sync all would send and bring in. Nothing is sent until you press Send.",
-          onClick: preview,
-        },
-        syncing === "asking" ? "Asking Canvas…" : "Sync all…",
-      ),
+      // In the Sync view, Sync all is the one above every road.
+      props.noSyncAll
+        ? null
+        : h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              disabled: running || syncing === "asking" || Boolean(syncing && syncing.preview),
+              title: "Ask Canvas again and show what Sync all would send and bring in. Nothing is sent until you press Send.",
+              onClick: preview,
+            },
+            syncing === "asking" ? "Asking Canvas…" : "Sync all…",
+          ),
     ),
     syncing && syncing.error ? h("p", { className: "pp-saveerr" }, syncing.error) : null,
     syncing && syncing.preview

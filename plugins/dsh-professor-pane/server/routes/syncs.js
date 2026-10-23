@@ -12,6 +12,7 @@ import {
   syncsDocument,
   UPLOAD_LIMIT as SHEET_UPLOAD_LIMIT,
 } from "../syncs.js";
+import { syncAll } from "../sync-all.js";
 
 export const routes = [
   // The Syncs view: every road to a service outside the run, and the
@@ -68,6 +69,27 @@ export const routes = [
             return sendJson(res, 200, { error: "The request body is not JSON." });
           }
           return sendJson(res, 200, await runSyncAction(workspace, root, runId, body ?? {}));
+        })
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    },
+  },
+  // Sync all across Canvas and the grade sheets: a preview, then one Send.
+  // POST both ways — the preview asks Canvas and Google. See server/sync-all.js.
+  {
+    paths: ["/api/sync-all"],
+    handle(c) {
+      const { req, res, runId, workspace, root } = c;
+      if (req.method !== "POST") return sendJson(res, 405, { error: "Sync all is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return readBody(req)
+        .then(async (raw) => {
+          let body;
+          try {
+            body = JSON.parse(raw || "{}");
+          } catch {
+            return sendJson(res, 200, { error: "The request body is not JSON." });
+          }
+          return sendJson(res, 200, await syncAll(workspace, root, runId, body ?? {}));
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     },

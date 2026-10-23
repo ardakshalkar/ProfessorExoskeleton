@@ -13,6 +13,7 @@ import { Files } from "./files.js";
 import { ConnectionsMenu } from "./connections-menu.js";
 import { Integrations } from "./integrations.js";
 import { Preferences } from "./preferences.js";
+import { SyncView } from "./sync-view.js";
 import { Today } from "./today.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, DRAFT_MODES, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS } from "./tabs.js";
@@ -374,6 +375,9 @@ const COURSE_VIEWS = [
   // The private material itself — scanned papers, recorded answers — which
   // lives outside the course folder, so has no other place to be seen whole.
   { id: "files", label: "Files", hint: "Scans and audio: where they are stored, how much there is, each pile" },
+  // Bringing Canvas and the grade sheets into step: an operation done weekly,
+  // so not behind Course settings, which keeps the setting up.
+  { id: "syncs", label: "Sync", hint: "Canvas and the grade sheets: Sync all, what differs, and names to confirm" },
   // Last: not the course but its roads out — Canvas, the sheet, the
   // repositories — and what the skills assume. Opened twice a term.
   { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume" },
@@ -610,6 +614,24 @@ export function CourseMode(props) {
         }),
       );
     }
+    if (view === "syncs") {
+      return h(
+        "div",
+        { className: "pp-cviewpad" },
+        h(SyncView, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          names: props.names,
+          revision: syncsVersion,
+          onWrite: (tags) => props.wrote(tags || ["syncs"]),
+          onOpenSettings: () => {
+            setSub("settings", "integrations");
+            setView("settings");
+          },
+          key: props.runId,
+        }),
+      );
+    }
     if (view === "files") {
       return h(
         "div",
@@ -639,6 +661,7 @@ export function CourseMode(props) {
               names: props.names,
               ask: props.ask,
               focus: jump || props.integrationsFocus,
+              onOpenSync: () => setView("syncs"),
               key: props.runId,
             }),
       );
@@ -750,7 +773,11 @@ export function CourseMode(props) {
       entry.label,
     );
   // The views that name people follow the pane's Names / Pseudonyms choice.
-  const named = view === "students" || (view === "settings" && subOf("settings") === "integrations") || (view === "tasks" && taskSub !== "unpublished");
+  const named =
+    view === "students" ||
+    view === "syncs" ||
+    (view === "settings" && subOf("settings") === "integrations") ||
+    (view === "tasks" && taskSub !== "unpublished");
   // With the navigator in the sidebar the places are chosen there, and this
   // header keeps only the readings of the weeks. Without it — the stock
   // browser in the seat, nothing measured — the row is the only way in.
@@ -846,9 +873,10 @@ export function CourseMode(props) {
                 {
                   type: "button",
                   className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting ? " pp-wiring-waiting" : ""),
-                  title: preview ? "Private — not shown while previewing as a student" : "Open Integrations",
+                  title: preview ? "Private — not shown while previewing as a student" : waiting ? "Open Sync" : "Open Integrations",
                   disabled: preview,
                   onClick: () => {
+                    if (waiting) return setView("syncs");
                     setSub("settings", "integrations");
                     setView("settings");
                   },

@@ -201,6 +201,7 @@ function Pulse(props) {
           "div",
           { className: "pp-tsyncs" },
           h("span", { className: "pp-ttilehead" }, "In step"),
+          h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ view: "syncs" }) }, "Sync all…"),
           pulse.syncs.map((chip) =>
             h(
               "button",
@@ -209,7 +210,8 @@ function Pulse(props) {
                 key: chip.service,
                 className: "pp-tsync" + (chip.waiting || chip.reconnect ? " pp-tsync-wait" : ""),
                 title: plural(chip.roads, "road", "roads") + (chip.last ? " · last ran " + day(chip.last) : " · never run"),
-                onClick: () => props.onOpen({ view: "settings", sub: "integrations" }),
+                // A refused sign-in is fixed in settings; everything else is syncing.
+                onClick: () => props.onOpen(chip.reconnect ? { view: "settings", sub: "integrations" } : { view: "syncs" }),
               },
               h("i", { "aria-hidden": "true" }),
               chip.label,

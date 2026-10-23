@@ -406,6 +406,8 @@ export const runSyncAction = async (workspace, root, runId, body) => {
   if (action === "run" && confirm) args.push("--confirm");
   // Names by default, as the CLI prints them; codes when the pane shows pseudonyms.
   if (isMarksSheet(sync) && body.names === false) args.push("--codes");
+  // Sync all reads a sheet's plan as data rather than as lines to show.
+  if (isMarksSheet(sync) && body.json === true) args.push("--json");
   return withReconnect(await runScans(args, root));
 };
 

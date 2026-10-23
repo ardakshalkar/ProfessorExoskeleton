@@ -94,7 +94,7 @@ const postSync = (runId, sessionId, body) =>
  * hand-ins — as a line with Preview and Run. Nothing it does reaches students,
  * so Run needs no preview first; a sync that does is not drawn here.
  */
-function CanvasRead(props) {
+export function CanvasRead(props) {
   const [busy, setBusy] = React.useState(null);
   const [result, setResult] = React.useState(null);
   const sync = props.sync;
@@ -1062,11 +1062,19 @@ export function CanvasCard(props) {
       h("span", { className: "pp-chip pp-chip-" + chip.tone }, chip.text),
     ),
     setup,
-    // How far this run and Canvas have drifted apart, and Sync all.
-    reachable
-      ? h(CanvasDifferences, { runId: props.runId, sessionId: props.sessionId, names: props.names, onWrite: props.onWrite })
-      : null,
-    reachable && rosterSync
+    // How far this run and Canvas have drifted apart, Sync all and the class
+    // list are an operation, not a setting: they are in course mode's Sync.
+    reachable && props.onOpenSync
+      ? h(
+          "p",
+          { className: "pp-as" },
+          "Differences with Canvas, Sync all and the class list are in Sync.",
+          h("button", { type: "button", className: "pp-linkbtn", onClick: props.onOpenSync }, "Open Sync"),
+        )
+      : reachable
+        ? h(CanvasDifferences, { runId: props.runId, sessionId: props.sessionId, names: props.names, onWrite: props.onWrite })
+        : null,
+    reachable && rosterSync && !props.onOpenSync
       ? h(CanvasRead, {
           sync: rosterSync,
           label: "Class list",

@@ -1218,6 +1218,13 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-syncall{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:9px;
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);font-size:12px}
 .pp-syncall ul{margin:0;padding-left:18px}
+/* Course mode · Sync: Sync all on top, grouped by which way data runs. */
+.pp-syncview{display:flex;flex-direction:column;gap:12px;font-size:12px}
+.pp-syncallx{display:flex;flex-direction:column;gap:8px}
+.pp-sxgroup{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border-radius:9px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
+.pp-sxgroup ul{margin:0;padding-left:18px}
+.pp-sxout{border-color:rgba(180,52,42,.35);background:rgba(180,52,42,.04)}
 .pp-waitwhy{flex:1 1 160px;min-width:0}
 .pp-syncsection .pp-waitlist{gap:0}
 .pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}
@@ -5042,7 +5049,7 @@ function SyncAll(props) {
       h("div", { className: "pp-dacts" }, h("button", { type: "button", className: "pp-segbtn", onClick: props.onClose }, "Close"))
     );
   }
-  const byAssessment = (rows) => {
+  const byAssessment2 = (rows) => {
     const counts = /* @__PURE__ */ new Map();
     for (const entry of rows) {
       const title = entry.title || entry.assessment_id;
@@ -5065,8 +5072,8 @@ function SyncAll(props) {
     { className: "pp-syncall" },
     h("span", { className: "pp-as" }, "Asked Canvas " + when(props.checkedAt) + ". Nothing has been sent yet."),
     nothing ? h("span", null, "Nothing one-sided to apply.") : null,
-    marks.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(marks.length, "mark")), h("ul", null, byAssessment(marks))) : null,
-    fields.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(fields.length, "definition field")), h("ul", null, byAssessment(fields))) : null,
+    marks.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(marks.length, "mark")), h("ul", null, byAssessment2(marks))) : null,
+    fields.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(fields.length, "definition field")), h("ul", null, byAssessment2(fields))) : null,
     take.length ? h("b", null, "Into the class list: " + plural(take.length, "student") + " Canvas has and this run does not") : null,
     absent.length ? h(
       "span",
@@ -5219,7 +5226,8 @@ function CanvasDifferences(props) {
         { type: "button", className: "pp-segbtn", "aria-expanded": open2, disabled: !summary.total, onClick: () => setOpen(!open2) },
         open2 ? "Hide details" : "Details"
       ),
-      h(
+      // In the Sync view, Sync all is the one above every road.
+      props.noSyncAll ? null : h(
         "button",
         {
           type: "button",
@@ -7210,9 +7218,15 @@ function CanvasCard(props) {
       h("span", { className: "pp-chip pp-chip-" + chip.tone }, chip.text)
     ),
     setup,
-    // How far this run and Canvas have drifted apart, and Sync all.
-    reachable ? h(CanvasDifferences, { runId: props.runId, sessionId: props.sessionId, names: props.names, onWrite: props.onWrite }) : null,
-    reachable && rosterSync ? h(CanvasRead, {
+    // How far this run and Canvas have drifted apart, Sync all and the class
+    // list are an operation, not a setting: they are in course mode's Sync.
+    reachable && props.onOpenSync ? h(
+      "p",
+      { className: "pp-as" },
+      "Differences with Canvas, Sync all and the class list are in Sync.",
+      h("button", { type: "button", className: "pp-linkbtn", onClick: props.onOpenSync }, "Open Sync")
+    ) : reachable ? h(CanvasDifferences, { runId: props.runId, sessionId: props.sessionId, names: props.names, onWrite: props.onWrite }) : null,
+    reachable && rosterSync && !props.onOpenSync ? h(CanvasRead, {
       sync: rosterSync,
       label: "Class list",
       runId: props.runId,
@@ -7556,6 +7570,7 @@ function Accounts(props) {
 }
 
 // client/service-cards.js
+var plural2 = (count, one) => count + " " + one + (count === 1 ? "" : "s");
 var dayOf = (iso) => {
   if (!iso) return null;
   const at = new Date(iso);
@@ -7595,7 +7610,15 @@ function SheetsCard(props) {
     "section",
     { className: "pp-ccard", id: "pp-card-sheets" },
     h(CardHead, { service: "sheets", mark: "GS", name: "Google Sheets", subtitle, chip }),
-    syncs.map(
+    // Bringing a sheet in, and the names it could not place, are in course
+    // mode's Sync; the card keeps the sign-in and which sheet.
+    props.onOpenSync && syncs.length ? h(
+      "p",
+      { className: "pp-as" },
+      plural2(syncs.length, "grade sheet") + (waiting2.length ? " · " + waiting2.length + " names to confirm" : "") + " — synced from Sync.",
+      h("button", { type: "button", className: "pp-linkbtn", onClick: props.onOpenSync }, "Open Sync")
+    ) : null,
+    props.onOpenSync ? null : syncs.map(
       (sync) => h(
         "div",
         { className: "pp-csub", key: sync.id },
@@ -7611,7 +7634,7 @@ function SheetsCard(props) {
         })
       )
     ),
-    h(WaitingList, {
+    props.onOpenSync ? null : h(WaitingList, {
       rows: waiting2,
       students: props.syncs ? props.syncs.students : [],
       names: props.syncs ? props.syncs.names : false,
@@ -7844,7 +7867,8 @@ function Integrations(props) {
       onSaved,
       onSynced,
       onRefresh: refresh2,
-      onWrite: props.onWrite
+      onWrite: props.onWrite,
+      onOpenSync: props.onOpenSync
     })
   );
 }
@@ -7877,7 +7901,7 @@ function CourseIntegrations(props) {
     setFilter((current) => ({ id, tick: current.tick + 1 }));
     scrollTo("pp-card-canvas");
   };
-  const plural5 = (count, one, many) => count + " " + (count === 1 ? one : many);
+  const plural7 = (count, one, many) => count + " " + (count === 1 ? one : many);
   const migrate = () => {
     setMigrating("working");
     fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
@@ -7894,21 +7918,21 @@ function CourseIntegrations(props) {
       key: "waiting",
       service: "sheets",
       mark: "GS",
-      text: plural5(waiting2, "name", "names") + " from the grade sheet to confirm",
-      go: () => scrollTo("pp-card-sheets")
+      text: plural7(waiting2, "name", "names") + " from the grade sheet to confirm",
+      go: props.onOpenSync || (() => scrollTo("pp-card-sheets"))
     } : null,
     reachable && counts.unlinked.length ? {
       key: "unlinked",
       service: "canvas",
       mark: "Cv",
-      text: plural5(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
+      text: plural7(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
       go: () => show("unlinked")
     } : null,
     counts.toSend.length ? {
       key: "marks",
       service: "canvas",
       mark: "Cv",
-      text: "Canvas is missing marks for " + plural5(counts.toSend.length, "assessment", "assessments"),
+      text: "Canvas is missing marks for " + plural7(counts.toSend.length, "assessment", "assessments"),
       go: () => show("marks")
     } : null
   ].filter(Boolean);
@@ -7916,7 +7940,10 @@ function CourseIntegrations(props) {
     runId: props.runId,
     sessionId: props.sessionId,
     names: props.names,
-    onSaved: props.onSaved
+    onSaved: props.onSaved,
+    // Where syncing lives when course mode has a Sync view; without it the
+    // cards keep their syncs, as before.
+    onOpenSync: props.onOpenSync
   };
   return h(
     "div",
@@ -8013,7 +8040,7 @@ function CourseIntegrations(props) {
       h(
         "span",
         { className: "pp-as" },
-        (implied === syncs.length ? "All " : implied + " of ") + plural5(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
+        (implied === syncs.length ? "All " : implied + " of ") + plural7(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
       ),
       h(
         "button",
@@ -9534,7 +9561,7 @@ function Planning(props) {
       })
     );
   };
-  const post2 = (path, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId), sessionId), {
+  const post3 = (path, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId), sessionId), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
@@ -9543,7 +9570,7 @@ function Planning(props) {
     const p = pending;
     const o = dates[p.id];
     setPending(Object.assign({}, p, { saving: true }));
-    post2("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at }).then((result) => {
+    post3("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at }).then((result) => {
       if (result.error) {
         setDates((d) => {
           const next = Object.assign({}, d);
@@ -9590,7 +9617,7 @@ function Planning(props) {
     const moves = [{ module: p.id, week: p.to, meetings: stamps(p.id, p.meetings) }];
     if (p.other && p.swap) moves.push({ module: p.other, week: p.from, meetings: stamps(p.other, p.otherMeetings) });
     setPending(Object.assign({}, p, { saving: true }));
-    post2("/api/plan/topic", { moves }).then((result) => {
+    post3("/api/plan/topic", { moves }).then((result) => {
       const ids = [p.id, p.other].filter(Boolean);
       if (result.error) {
         setTopicWeeks((tw) => {
@@ -11231,7 +11258,7 @@ var size = (bytes) => {
   return (value >= 10 || unit === 0 ? Math.round(value) : Math.round(value * 10) / 10) + " " + units[unit];
 };
 var minutes = (seconds) => seconds ? Math.max(1, Math.round(seconds / 60)) + " min" : "—";
-var plural2 = (n, one, many) => n + " " + (n === 1 ? one : many);
+var plural3 = (n, one, many) => n + " " + (n === 1 ? one : many);
 var WHOSE_MOVE = { you: "Your move", assistant: "Assistant", done: "Done" };
 function PileProgress(props) {
   const standing = props.standing;
@@ -11323,14 +11350,14 @@ function Files(props) {
           "div",
           { className: "pp-filetile" },
           h("span", { className: "pp-filetilehead" }, "Scans"),
-          h("b", null, plural2(doc.totals.scans.files, "PDF", "PDFs")),
+          h("b", null, plural3(doc.totals.scans.files, "PDF", "PDFs")),
           h("span", { className: "pp-as" }, size(doc.totals.scans.bytes))
         ),
         h(
           "div",
           { className: "pp-filetile" },
           h("span", { className: "pp-filetilehead" }, "Audio"),
-          h("b", null, doc.totals.audio.takes ? plural2(doc.totals.audio.takes, "recording", "recordings") : "None yet"),
+          h("b", null, doc.totals.audio.takes ? plural3(doc.totals.audio.takes, "recording", "recordings") : "None yet"),
           h(
             "span",
             { className: "pp-as" },
@@ -11344,7 +11371,7 @@ function Files(props) {
           h(
             "b",
             null,
-            [doc.unfiled.count ? plural2(doc.unfiled.count, "scan", "scans") : null, doc.recordings.count ? plural2(doc.recordings.count, "recording", "recordings") : null].filter(Boolean).join(" · ")
+            [doc.unfiled.count ? plural3(doc.unfiled.count, "scan", "scans") : null, doc.recordings.count ? plural3(doc.recordings.count, "recording", "recordings") : null].filter(Boolean).join(" · ")
           ),
           h("span", { className: "pp-as" }, "uploaded, not yet given to an assessment or a student")
         ) : null
@@ -11457,7 +11484,7 @@ function Files(props) {
       doc.papers.count ? h(
         "p",
         { className: "pp-as" },
-        "Also stored: " + plural2(doc.papers.count, "question paper or answer key", "question papers and answer keys") + " (" + size(doc.papers.bytes) + ")."
+        "Also stored: " + plural3(doc.papers.count, "question paper or answer key", "question papers and answer keys") + " (" + size(doc.papers.bytes) + ")."
       ) : null
     )
   );
@@ -11466,7 +11493,7 @@ function Files(props) {
 // client/connections-menu.js
 var MARK = { canvas: "Cv", sheets: "GS", github: "GH", telegram: "Tg", moodle: "Md", transcription: "Tr" };
 var RANK = { bad: 3, warn: 2, ok: 1 };
-var plural3 = (count, one, many) => count + " " + (count === 1 ? one : many);
+var plural4 = (count, one, many) => count + " " + (count === 1 ? one : many);
 var connectionsOf = (data, roads, checks) => {
   if (!data) return [];
   const rows = data.integrations || [];
@@ -11492,7 +11519,7 @@ var connectionsOf = (data, roads, checks) => {
       state.state = "connected";
       state.line = (data.canvas && data.canvas.host ? data.canvas.host : "Canvas") + " · every step recorded.";
     }
-    if (waiting2 && state.tone === "ok") Object.assign(state, { tone: "warn", state: plural3(waiting2, "row", "rows") + " to confirm" });
+    if (waiting2 && state.tone === "ok") Object.assign(state, { tone: "warn", state: plural4(waiting2, "row", "rows") + " to confirm" });
     out.push(Object.assign({ id: "canvas", name: "Canvas", syncs: syncsOf("canvas") }, state));
   }
   const sheetSyncs = syncsOf("sheets");
@@ -11504,7 +11531,7 @@ var connectionsOf = (data, roads, checks) => {
     const changed = found.filter((check) => check.state === "changed");
     const waiting2 = waitingOf("sheets");
     const who = google.account ? " for " + google.account : "";
-    const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural3(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
+    const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural4(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
       tone: "warn",
       state: "changed in Google",
       line: "The sheet changed" + (changed[0].modified ? " " + when(changed[0].modified) : "") + " since the last sync.",
@@ -11652,7 +11679,7 @@ function ConnectionsMenu(props) {
       rows.map(
         (row) => h("span", { className: "pp-conndot pp-conn-" + row.tone, key: row.id, title: row.name + ": " + row.state }, MARK[row.id] || row.id.slice(0, 2))
       ),
-      h("span", { className: "pp-connlabel" }, [label, props.waiting && worst.tone === "ok" ? plural3(props.waiting, "row", "rows") + " waiting" : null].filter(Boolean).join(" · ")),
+      h("span", { className: "pp-connlabel" }, [label, props.waiting && worst.tone === "ok" ? plural4(props.waiting, "row", "rows") + " waiting" : null].filter(Boolean).join(" · ")),
       h("span", { className: "pp-connchev", "aria-hidden": "true" }, open2 ? "▴" : "▾")
     ),
     open2 ? ReactDOM.createPortal(panel, document.body) : null
@@ -11905,8 +11932,271 @@ function Preferences(props) {
   );
 }
 
+// client/sync-view.js
+var plural5 = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
+var post2 = (path, runId, sessionId, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(body)
+}).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) }));
+var byAssessment = (rows) => {
+  const counts = /* @__PURE__ */ new Map();
+  for (const entry of rows) {
+    const title = entry.title || entry.assessment_id;
+    counts.set(title, (counts.get(title) || 0) + 1);
+  }
+  return [...counts].map(([title, n]) => title + ": " + n).join(" · ");
+};
+var sheetLine = (sheet2) => sheet2.moves ? [
+  sheet2.added ? plural5(sheet2.added, "mark") + " added" : null,
+  sheet2.changed ? plural5(sheet2.changed, "mark") + " changed" : null,
+  sheet2.removed ? plural5(sheet2.removed, "mark") + " taken back" : null
+].filter(Boolean).join(", ") : "nothing new";
+function SyncAllPreview(props) {
+  const preview = props.preview;
+  const canvas = preview.canvas && !preview.canvas.error ? preview.canvas : null;
+  const send2 = canvas ? canvas.send : [];
+  const take = canvas ? canvas.take : [];
+  const absent = canvas ? canvas.absent || [] : [];
+  const held = canvas ? canvas.held : [];
+  const marks = send2.filter((entry) => entry.kind === "grades");
+  const fields = send2.filter((entry) => entry.kind === "assignments");
+  const sheets = preview.sheets.filter((sheet2) => sheet2.ok);
+  const moving = sheets.filter((sheet2) => sheet2.moves > 0);
+  const failed = preview.sheets.filter((sheet2) => !sheet2.ok);
+  const sheetHeld = sheets.reduce((sum, sheet2) => sum + (sheet2.held || 0), 0);
+  const nothing = !send2.length && !take.length && !absent.length && !moving.length;
+  const go = () => props.onSend({
+    canvas: send2.concat(take).map((entry) => entry.key),
+    sheets: moving.map((sheet2) => sheet2.id),
+    from: Object.fromEntries(moving.filter((sheet2) => sheet2.from).map((sheet2) => [sheet2.id, sheet2.from]))
+  });
+  const label = [
+    send2.length ? "send " + send2.length + " to Canvas" : null,
+    take.length || absent.length ? "update the class list" : null,
+    moving.length ? "bring in " + plural5(moving.length, "sheet") : null
+  ].filter(Boolean).join(", ");
+  return h(
+    "div",
+    { className: "pp-syncallx" },
+    h("span", { className: "pp-as" }, "Asked " + when(preview.previewedAt) + ". Nothing has been sent or saved yet."),
+    // What comes in: changes the run's own records; nobody outside sees it.
+    h(
+      "div",
+      { className: "pp-sxgroup" },
+      h("b", null, "Comes in"),
+      h(
+        "ul",
+        null,
+        take.length ? h("li", null, "Class list: " + plural5(take.length, "student") + " Canvas has and this run does not") : null,
+        absent.length ? h("li", null, "Class list: " + plural5(absent.length, "student") + " no longer in Canvas — noted, nobody dropped") : null,
+        sheets.map(
+          (sheet2) => h(
+            "li",
+            { key: sheet2.id },
+            "Grade sheet " + sheet2.id + ": " + sheetLine(sheet2),
+            sheet2.from === "export" ? h("span", { className: "pp-as" }, " (from the downloaded copy)") : null
+          )
+        ),
+        !take.length && !absent.length && !sheets.length ? h("li", { className: "pp-as" }, "nothing") : null
+      )
+    ),
+    // What goes out: students see it.
+    h(
+      "div",
+      { className: "pp-sxgroup" + (send2.length ? " pp-sxout" : "") },
+      h("b", null, "Goes out — students see it"),
+      h(
+        "ul",
+        null,
+        marks.length ? h("li", null, "Canvas marks: " + marks.length + " (" + byAssessment(marks) + ")") : null,
+        fields.length ? h("li", null, "Canvas definitions: " + plural5(fields.length, "field") + " (" + byAssessment(fields) + ")") : null,
+        !send2.length ? h("li", { className: "pp-as" }, "nothing") : null
+      )
+    ),
+    held.length || sheetHeld || failed.length || preview.canvas && preview.canvas.error ? h(
+      "div",
+      { className: "pp-sxgroup" },
+      h("b", null, "Left for you"),
+      h(
+        "ul",
+        null,
+        held.length ? h("li", null, plural5(held.length, "Canvas difference") + " — conflicts and what Canvas changed; settle them below") : null,
+        sheetHeld ? h("li", null, plural5(sheetHeld, "sheet row") + " the sync was not sure of; confirm them below") : null,
+        preview.canvas && preview.canvas.error ? h("li", { className: "pp-saveerr" }, "Canvas: " + preview.canvas.error) : null,
+        failed.map(
+          (sheet2) => h("li", { key: sheet2.id, className: "pp-saveerr" }, "Grade sheet " + sheet2.id + ": " + sheet2.error)
+        )
+      )
+    ) : null,
+    preview.elsewhere.length ? h(
+      "p",
+      { className: "pp-as" },
+      "Not in Sync all: " + preview.elsewhere.map((road) => road.why).filter((why, i, all) => all.indexOf(why) === i).join(" ")
+    ) : null,
+    h(
+      "div",
+      { className: "pp-dacts" },
+      nothing ? h("span", { className: "pp-as" }, "Everything Sync all moves is already in step.") : h(
+        "button",
+        { type: "button", className: "pp-segbtn pp-danger", disabled: props.sending, onClick: go },
+        props.sending ? "Syncing…" : "Sync: " + label
+      ),
+      h("button", { type: "button", className: "pp-segbtn", disabled: props.sending, onClick: props.onClose }, nothing ? "Close" : "Cancel")
+    )
+  );
+}
+function SyncView(props) {
+  const [tick, setTick] = React.useState(0);
+  const revision = String(props.revision || 0) + "." + tick;
+  const syncs = useJson(
+    scoped(
+      BASE + "/api/syncs?run=" + encodeURIComponent(props.runId || "") + (props.names ? "&names=1" : "") + "&r=" + encodeURIComponent(revision),
+      props.sessionId
+    )
+  );
+  const checks = useSheetCheck(props.runId, props.sessionId, revision);
+  const kept = React.useRef(null);
+  if (syncs.phase === "ready" && syncs.value && !syncs.value.error) kept.current = syncs.value;
+  const [phase, setPhase] = React.useState("idle");
+  const [preview, setPreview] = React.useState(null);
+  const [results, setResults] = React.useState(null);
+  const done = (tags) => {
+    setTick((value) => value + 1);
+    if (props.onWrite) props.onWrite(tags);
+  };
+  const ask = () => {
+    setPhase("asking");
+    setResults(null);
+    post2("/api/sync-all", props.runId, props.sessionId, { confirm: false, names: Boolean(props.names) }).then((body) => {
+      setPhase("idle");
+      setPreview(body);
+      done(["syncs"]);
+    });
+  };
+  const send2 = (chosen) => {
+    setPhase("sending");
+    post2("/api/sync-all", props.runId, props.sessionId, Object.assign({ confirm: true, names: Boolean(props.names) }, chosen)).then((body) => {
+      setPhase("idle");
+      setPreview(null);
+      setResults(body);
+      done(["syncs", "marks", "integrations", "canvas", "records"]);
+    });
+  };
+  const doc = kept.current;
+  if (syncs.phase === "ready" && syncs.value && syncs.value.error && !doc) return h(Message, { error: true }, syncs.value.error);
+  if (!doc) return h(Message, null, "Reading this run's roads…");
+  const canvasOn = doc.syncs.some((sync) => sync.service === "canvas" && sync.enabled);
+  const roster = doc.syncs.find((sync) => sync.service === "canvas" && sync.stream === "roster" && sync.enabled) || null;
+  const sheets = doc.syncs.filter((sync) => sync.service === "sheets" && sync.stream === "marks" && sync.enabled);
+  const sheetIds = new Set(sheets.map((sync) => sync.id));
+  const waiting2 = doc.waiting.filter((row) => sheetIds.has(row.sync));
+  const checkOf = (sync) => checks && checks.checks ? checks.checks.find((entry) => entry.sync === sync.id) : null;
+  return h(
+    "div",
+    { className: "pp-syncview" },
+    h(
+      "section",
+      { className: "pp-ccard" },
+      h(
+        "div",
+        { className: "pp-chead" },
+        h(
+          "span",
+          { className: "pp-cname" },
+          "Sync all",
+          h(
+            "span",
+            { className: "pp-intwhat" },
+            [canvasOn ? "Canvas" : null, sheets.length ? plural5(sheets.length, "grade sheet") : null].filter(Boolean).join(" and ") || "No road here moves with Sync all"
+          )
+        ),
+        h("span", { className: "pp-segspacer" }),
+        h(
+          "button",
+          {
+            type: "button",
+            className: "pp-segbtn",
+            disabled: phase !== "idle" || Boolean(preview) || !canvasOn && !sheets.length,
+            title: "Ask Canvas and every grade sheet what would move. Nothing is sent until you press Sync.",
+            onClick: ask
+          },
+          phase === "asking" ? "Asking Canvas and the sheets…" : "Preview all…"
+        )
+      ),
+      preview && preview.error ? h("p", { className: "pp-saveerr" }, preview.error) : null,
+      preview && !preview.error ? h(SyncAllPreview, { preview, sending: phase === "sending", onSend: send2, onClose: () => setPreview(null) }) : null,
+      results ? h(
+        "div",
+        { className: "pp-syncallx" },
+        results.error ? h("pre", { className: "pp-approveout pp-approveerr" }, results.error) : results.results.map(
+          (entry, index) => h(
+            "pre",
+            { className: "pp-approveout" + (entry.ok ? "" : " pp-approveerr"), key: index },
+            (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + "\n" + entry.output
+          )
+        ),
+        h("div", { className: "pp-dacts" }, h("button", { type: "button", className: "pp-segbtn", onClick: () => setResults(null) }, "Close"))
+      ) : null
+    ),
+    canvasOn ? h(
+      "section",
+      { className: "pp-ccard" },
+      h("div", { className: "pp-chead" }, h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"), h("span", { className: "pp-cname" }, "Canvas")),
+      h(CanvasDifferences, {
+        runId: props.runId,
+        sessionId: props.sessionId,
+        names: props.names,
+        noSyncAll: true,
+        onWrite: () => done(["canvas", "marks"])
+      }),
+      // The class list alone, for a professor who wants only that.
+      roster ? h(CanvasRead, {
+        sync: roster,
+        label: "Class list",
+        runId: props.runId,
+        sessionId: props.sessionId,
+        names: props.names,
+        onWrite: () => done(["syncs", "records"])
+      }) : null
+    ) : null,
+    sheets.map(
+      (sync) => h(
+        "section",
+        { className: "pp-ccard", key: sync.id },
+        h(
+          "div",
+          { className: "pp-chead" },
+          h("span", { className: "pp-svc pp-svc-sheets", "aria-hidden": "true" }, "GS"),
+          h("span", { className: "pp-cname" }, sync.label, h("span", { className: "pp-intwhat" }, sync.id))
+        ),
+        h(SyncCard, { sync, bare: true, check: checkOf(sync), runId: props.runId, sessionId: props.sessionId, names: props.names, onDone: () => done(["syncs", "marks"]) })
+      )
+    ),
+    waiting2.length ? h(
+      "section",
+      { className: "pp-ccard" },
+      h("div", { className: "pp-chead" }, h("span", { className: "pp-cname" }, "Names to confirm", h("span", { className: "pp-intwhat" }, "rows a sheet could not place surely"))),
+      h(WaitingList, {
+        rows: waiting2,
+        students: doc.students,
+        names: doc.names,
+        runId: props.runId,
+        sessionId: props.sessionId,
+        onDone: () => done(["syncs", "marks"])
+      })
+    ) : null,
+    h(
+      "p",
+      { className: "pp-as" },
+      "Addresses, tokens, which course and which sheet are in Course settings. ",
+      props.onOpenSettings ? h("button", { type: "button", className: "pp-linkbtn", onClick: props.onOpenSettings }, "Open Course settings") : null
+    )
+  );
+}
+
 // client/today.js
-var plural4 = (n, one, many) => n + " " + (n === 1 ? one : many);
+var plural6 = (n, one, many) => n + " " + (n === 1 ? one : many);
 var MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var day = (iso) => {
   const found = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
@@ -11995,7 +12285,7 @@ function Now(props) {
         "div",
         { className: "pp-tnowacts" },
         h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "teaching" }) }, "Open this week"),
-        now.gaps ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "planning" }) }, plural4(now.gaps, "week has gaps", "weeks have gaps")) : null
+        now.gaps ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "planning" }) }, plural6(now.gaps, "week has gaps", "weeks have gaps")) : null
       )
     )
   );
@@ -12060,6 +12350,7 @@ function Pulse(props) {
       "div",
       { className: "pp-tsyncs" },
       h("span", { className: "pp-ttilehead" }, "In step"),
+      h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ view: "syncs" }) }, "Sync all…"),
       pulse.syncs.map(
         (chip) => h(
           "button",
@@ -12067,8 +12358,9 @@ function Pulse(props) {
             type: "button",
             key: chip.service,
             className: "pp-tsync" + (chip.waiting || chip.reconnect ? " pp-tsync-wait" : ""),
-            title: plural4(chip.roads, "road", "roads") + (chip.last ? " · last ran " + day(chip.last) : " · never run"),
-            onClick: () => props.onOpen({ view: "settings", sub: "integrations" })
+            title: plural6(chip.roads, "road", "roads") + (chip.last ? " · last ran " + day(chip.last) : " · never run"),
+            // A refused sign-in is fixed in settings; everything else is syncing.
+            onClick: () => props.onOpen(chip.reconnect ? { view: "settings", sub: "integrations" } : { view: "syncs" })
           },
           h("i", { "aria-hidden": "true" }),
           chip.label,
@@ -12230,6 +12522,9 @@ var COURSE_VIEWS = [
   // The private material itself — scanned papers, recorded answers — which
   // lives outside the course folder, so has no other place to be seen whole.
   { id: "files", label: "Files", hint: "Scans and audio: where they are stored, how much there is, each pile" },
+  // Bringing Canvas and the grade sheets into step: an operation done weekly,
+  // so not behind Course settings, which keeps the setting up.
+  { id: "syncs", label: "Sync", hint: "Canvas and the grade sheets: Sync all, what differs, and names to confirm" },
   // Last: not the course but its roads out — Canvas, the sheet, the
   // repositories — and what the skills assume. Opened twice a term.
   { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume" }
@@ -12394,6 +12689,24 @@ function CourseMode(props) {
         })
       );
     }
+    if (view === "syncs") {
+      return h(
+        "div",
+        { className: "pp-cviewpad" },
+        h(SyncView, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          names: props.names,
+          revision: syncsVersion,
+          onWrite: (tags) => props.wrote(tags || ["syncs"]),
+          onOpenSettings: () => {
+            setSub("settings", "integrations");
+            setView("settings");
+          },
+          key: props.runId
+        })
+      );
+    }
     if (view === "files") {
       return h(
         "div",
@@ -12421,6 +12734,7 @@ function CourseMode(props) {
           names: props.names,
           ask: props.ask,
           focus: jump || props.integrationsFocus,
+          onOpenSync: () => setView("syncs"),
           key: props.runId
         })
       );
@@ -12530,7 +12844,7 @@ function CourseMode(props) {
     },
     entry.label
   );
-  const named = view === "students" || view === "settings" && subOf("settings") === "integrations" || view === "tasks" && taskSub !== "unpublished";
+  const named = view === "students" || view === "syncs" || view === "settings" && subOf("settings") === "integrations" || view === "tasks" && taskSub !== "unpublished";
   const navigator2 = left > 0;
   const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
   const placeName = viewEntry ? viewEntry.label : navigator2 ? "Weeks" : props.title;
@@ -12615,9 +12929,10 @@ function CourseMode(props) {
               {
                 type: "button",
                 className: "pp-wiring pp-wiring-" + (canvasLine ? canvasLine.state : "ready") + (waiting2 ? " pp-wiring-waiting" : ""),
-                title: preview ? "Private — not shown while previewing as a student" : "Open Integrations",
+                title: preview ? "Private — not shown while previewing as a student" : waiting2 ? "Open Sync" : "Open Integrations",
                 disabled: preview,
                 onClick: () => {
+                  if (waiting2) return setView("syncs");
                   setSub("settings", "integrations");
                   setView("settings");
                 }
@@ -13093,6 +13408,7 @@ var ICONS2 = {
   materials: ["M7 3.5h7l4 4v12a1.5 1.5 0 0 1-1.5 1.5h-9.5A1.5 1.5 0 0 1 5.5 19.5v-14.5A1.5 1.5 0 0 1 7 3.5z", "M14 3.5v4h4", "M9 13h6", "M9 17h6"],
   settings: ["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z", "M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"],
   files: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"],
+  sync: ["M4 10a8 8 0 0 1 14-4.5L20 8", "M20 4v4h-4", "M20 14a8 8 0 0 1-14 4.5L4 16", "M4 20v-4h4"],
   plug: ["M9 7V3", "M15 7V3", "M7 7h10v4a5 5 0 0 1-10 0z", "M12 16v5"],
   folders: ["M4 7.5A1.5 1.5 0 0 1 5.5 6H10l2 2h6.5A1.5 1.5 0 0 1 20 9.5v8a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z", "M10.5 14.5a2 2 0 1 0 0-.01", "M12 15.5l2 2"],
   plus: ["M12 5v14", "M5 12h14"],
@@ -13108,7 +13424,8 @@ var PLACES = [
   { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment", request: { view: "gradebook" } },
   { id: "concepts", label: "Concepts", hint: "The class, by concept", request: { view: "concepts" } },
   { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, the student's outline", request: { view: "materials" } },
-  { id: "files", label: "Files", hint: "Scans and recordings: where they are, each pile", request: { view: "files" } }
+  { id: "files", label: "Files", hint: "Scans and recordings: where they are, each pile", request: { view: "files" } },
+  { id: "sync", label: "Sync", hint: "Canvas and the grade sheets: Sync all, what differs, names to confirm", request: { view: "syncs" } }
 ];
 var SETTINGS = { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume", request: { view: "settings" } };
 function useShownPlace() {
@@ -13944,7 +14261,7 @@ function GradeBoard(props) {
     const node = document.querySelector(".pp-gcard.pp-focus");
     if (node && document.activeElement && document.activeElement.tagName !== "INPUT") node.focus({ preventScroll: false });
   }, [focus, at, tick, state.phase]);
-  const post2 = (path, body, label2) => {
+  const post3 = (path, body, label2) => {
     if (busy) return;
     setBusy(label2);
     setSaid(null);
@@ -14107,7 +14424,7 @@ function GradeBoard(props) {
                 className: mine ? "pp-segbtn" : "pp-primary",
                 disabled: Boolean(busy) || item.counts.decided > 0,
                 title: item.counts.decided ? qName + " already has marks decided against its rubric" : "Write this as " + qName + "'s rubric, as a draft to review",
-                onClick: () => post2("/api/grade/choose", { proposal: proposal.id, item: item.item_id }, "choose")
+                onClick: () => post3("/api/grade/choose", { proposal: proposal.id, item: item.item_id }, "choose")
               },
               busy === "choose" ? "Writing…" : mine ? "Use again for " + qName : "Use for " + qName
             ),
@@ -14117,7 +14434,7 @@ function GradeBoard(props) {
                 type: "button",
                 className: "pp-segbtn",
                 disabled: Boolean(busy) || doc.items.some((entry) => entry.counts.decided > 0),
-                onClick: () => post2("/api/grade/choose", { proposal: proposal.id }, "choose")
+                onClick: () => post3("/api/grade/choose", { proposal: proposal.id }, "choose")
               },
               "Use for every question"
             ) : null
@@ -14140,7 +14457,7 @@ function GradeBoard(props) {
           type: "button",
           className: "pp-primary",
           disabled: Boolean(busy) || rest.some((entry) => entry.counts.decided > 0),
-          onClick: () => post2("/api/grade/choose", { proposal: same.id, items: rest.map((entry) => entry.item_id) }, "choose")
+          onClick: () => post3("/api/grade/choose", { proposal: same.id, items: rest.map((entry) => entry.item_id) }, "choose")
         },
         busy === "choose" ? "Writing…" : "Use “" + same.title + "” for " + without.join(", ")
       ) : null,
@@ -14203,7 +14520,7 @@ function GradeBoard(props) {
                 className: "pp-segbtn",
                 disabled: Boolean(busy),
                 title: "One criterion per question, worth its marks, accepted now — then 0…" + label(max) + " buttons on every answer",
-                onClick: () => post2("/api/grade/points-only", {}, "points")
+                onClick: () => post3("/api/grade/points-only", {}, "points")
               },
               busy === "points" ? "Writing…" : "Grade by points only"
             ) : null
@@ -14246,7 +14563,7 @@ function GradeBoard(props) {
               "aria-label": "Move this group to a level",
               value: group.score == null ? "" : String(group.score),
               disabled: Boolean(busy),
-              onChange: (event) => post2(
+              onChange: (event) => post3(
                 "/api/grade/move",
                 { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) },
                 "move"
@@ -14310,14 +14627,14 @@ function GradeBoard(props) {
             key: "accept",
             className: "pp-primary",
             disabled: Boolean(busy) || without.length > 0,
-            onClick: () => post2("/api/grade/accept-rubric", {}, "accept")
+            onClick: () => post3("/api/grade/accept-rubric", {}, "accept")
           },
           busy === "accept" ? "Accepting…" : "Accept rubric"
         )
       ]
     );
   }
-  const decide = (list, via, labelText) => post2(
+  const decide = (list, via, labelText) => post3(
     "/api/grade/decide",
     {
       via,
@@ -14536,7 +14853,7 @@ function GradeBoard(props) {
                 "aria-label": "Move " + group.label + " to another mark",
                 value: group.score == null ? "" : String(group.score),
                 disabled: Boolean(busy),
-                onChange: (event) => post2("/api/grade/move", { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) }, "move")
+                onChange: (event) => post3("/api/grade/move", { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) }, "move")
               },
               h("option", { value: "" }, "no mark"),
               levelsNow.map((option) => h("option", { value: String(option.score), key: option.score }, "→ " + label(option.score)))
@@ -14570,7 +14887,7 @@ function GradeBoard(props) {
               className: "pp-primary",
               disabled: Boolean(busy),
               title: "Write it as " + qName + "'s rubric, accepted. Marks already given stay; any it disagrees with are flagged.",
-              onClick: () => post2("/api/grade/choose", { proposal: proposal.id, item: item.item_id, keepMarks: true, accept: true }, "revise")
+              onClick: () => post3("/api/grade/choose", { proposal: proposal.id, item: item.item_id, keepMarks: true, accept: true }, "revise")
             },
             busy === "revise" ? "Applying…" : "Use this"
           ),
@@ -14758,7 +15075,7 @@ function ScansTab(props) {
   }, [props.runId, pile, names, props.revision, tick]);
   const doc = state.value;
   const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
-  const post2 = (path, body, label, done) => {
+  const post3 = (path, body, label, done) => {
     if (blocked) return;
     setBusy(label);
     setSaid(null);
@@ -15079,7 +15396,7 @@ function ScansTab(props) {
     const ok = window.confirm(
       "Confirm all " + papers.length + " weak matches? Each paper stays on the student it was matched to, and is marked as confirmed by you."
     );
-    if (ok) post2("/api/scans/assign", { papers }, "confirm-all");
+    if (ok) post3("/api/scans/assign", { papers }, "confirm-all");
   };
   const now = doc.now || { step: doc.next || null, index: 0, total: doc.stages.length, title: "", body: "", whose: "you", action: null };
   const shown = openStep || now.step || "canvas";
@@ -15103,7 +15420,7 @@ function ScansTab(props) {
       className: primary ? "pp-primary" : "pp-segbtn",
       disabled: blocked,
       title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
-      onClick: () => post2("/api/scans/read", {}, "read")
+      onClick: () => post3("/api/scans/read", {}, "read")
     },
     busy === "read" ? "Reading… a few minutes for a class" : "Read and record the answers"
   );
@@ -15350,7 +15667,7 @@ function ScansTab(props) {
               className: "pp-segbtn",
               disabled: blocked,
               title: "Run `scans apply` again — after editing plan.yaml by hand, say",
-              onClick: () => post2("/api/scans/apply", {}, "apply")
+              onClick: () => post3("/api/scans/apply", {}, "apply")
             },
             busy === "apply" ? "Applying…" : "Re-apply the plan"
           )
@@ -15404,7 +15721,7 @@ function ScansTab(props) {
       cropUrl,
       busy: busy === "review",
       onClose: () => setReviewing(false),
-      onSubmit: (papers) => post2("/api/scans/assign", { papers }, "review", () => setReviewing(false))
+      onSubmit: (papers) => post3("/api/scans/assign", { papers }, "review", () => setReviewing(false))
     }) : null
   );
 }
@@ -16027,7 +16344,7 @@ function ProfessorPane(props) {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run2 = currentRunRef.current;
         if (!run2 || !id.test(String(data.assessment))) return;
-        const post2 = (what, body2) => fetch(
+        const post3 = (what, body2) => fetch(
           scoped(BASE + "/api/reports/" + what + "?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
           { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) }
         ).then((response) => response.json());
@@ -16037,7 +16354,7 @@ function ProfessorPane(props) {
           write(["grading"]);
         };
         if (data.kind === "reports-make") {
-          post2("make", {}).then((result) => {
+          post3("make", {}).then((result) => {
             if (!result.ok) window.alert(said(result).split("\n").slice(-3).join(" ") || "the reports were not made");
             done();
           }).catch((error) => {
@@ -16046,7 +16363,7 @@ function ProfessorPane(props) {
           });
           return;
         }
-        post2("send", { confirm: false }).then((plan) => {
+        post3("send", { confirm: false }).then((plan) => {
           if (!plan.ok) {
             window.alert(said(plan).split("\n").slice(-3).join(" ") || "the send could not be planned");
             done();
@@ -16063,7 +16380,7 @@ function ProfessorPane(props) {
             done();
             return null;
           }
-          return post2("send", { confirm: true }).then((result) => {
+          return post3("send", { confirm: true }).then((result) => {
             window.alert(said(result).split("\n").slice(-3).join("\n") || (result.ok ? "sent" : "not sent"));
             done();
           });

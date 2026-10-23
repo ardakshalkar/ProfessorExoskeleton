@@ -141,7 +141,7 @@ const waitingItems = ({ outline, inbox, held, syncs }) => {
         detail: plural(n, "row", "rows") + " the sync was not sure of",
         count: n,
         urgency: "blocks_assistant",
-        open: { view: "settings", sub: "integrations" },
+        open: { view: "syncs" },
       });
     }
     if ((syncs.syncs || []).some((entry) => entry.reconnect)) {
