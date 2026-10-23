@@ -776,6 +776,9 @@ export function CourseMode(props) {
   const named =
     view === "students" ||
     view === "syncs" ||
+    // The Gradebook names students (its marks, Last changes); without the
+    // switch here a projected Gradebook could not be covered in place.
+    view === "gradebook" ||
     (view === "settings" && subOf("settings") === "integrations") ||
     (view === "tasks" && taskSub !== "unpublished");
   // With the navigator in the sidebar the places are chosen there, and this
@@ -815,45 +818,54 @@ export function CourseMode(props) {
           // The place, not the course: the course is named in the navigator
           // beside it and in the column, and here it only crowded the row.
           h("div", { className: "pp-modaltitle", title: props.title }, placeName),
-          // The readings of the weeks. Under a place they are the way back to
-          // the weeks, so they stay, unpressed.
-          COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
-          navigator ? null : h("span", { className: "pp-segsep", "aria-hidden": "true" }),
-          navigator ? null : COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
-          h("span", { className: "pp-segspacer" }),
-          DRAFT_MODES.map((entry) =>
-            h(
-              "button",
-              {
-                type: "button",
-                className: "pp-segbtn",
-                "aria-pressed": props.drafts === entry.drafts,
-                title: entry.hint,
-                onClick: () => props.setDrafts(entry.drafts),
-                key: entry.label,
-              },
-              entry.label,
-            ),
-          ),
-          // Not on Teaching, Evidence or a course-wide view: a student is
-          // never shown class figures or names, so there is nothing to preview.
-          private_
-            ? null
-            : h(
-                "label",
-                { title: "The record alone, with no hole drawn — what ainar page publishes" },
-                h("input", {
-                  type: "checkbox",
-                  checked: student,
-                  onChange: (event) => setStudent(event.target.checked),
-                }),
-                "Preview as student",
+          // The middle of the row is the one part that gives way: on a narrow
+          // window it scrolls sideways, so the controls on the right — the
+          // connections, Publish, Chat and × — never wrap under the title.
+          h(
+            "div",
+            { className: "pp-headmid" },
+            // The readings of the weeks. Under a place they are the way back to
+            // the weeks, so they stay, unpressed.
+            COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
+            navigator ? null : h("span", { className: "pp-segsep", "aria-hidden": "true" }),
+            navigator ? null : COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
+            h("span", { className: "pp-segspacer" }),
+            DRAFT_MODES.map((entry) =>
+              h(
+                "button",
+                {
+                  type: "button",
+                  className: "pp-segbtn",
+                  "aria-pressed": props.drafts === entry.drafts,
+                  title: entry.hint,
+                  onClick: () => props.setDrafts(entry.drafts),
+                  key: entry.label,
+                },
+                entry.label,
               ),
-          // The pane's header, which this veil covers. Publish and Upload
-          // open their own windows on top, so course mode is still here when
-          // they close. The connections button says how each service stands
-          // and holds their syncs; with none to show (no payload yet), the
-          // old Canvas line stands in.
+            ),
+            // Not on Teaching, Evidence or a course-wide view: a student is
+            // never shown class figures or names, so there is nothing to preview.
+            private_
+              ? null
+              : h(
+                  "label",
+                  { title: "The record alone, with no hole drawn — what ainar page publishes" },
+                  h("input", {
+                    type: "checkbox",
+                    checked: student,
+                    onChange: (event) => setStudent(event.target.checked),
+                  }),
+                  "Preview as student",
+                ),
+          ),
+          // The pane's header, which this veil covers. Publish opens its own
+          // window on top, so course mode is still here when it closes.
+          // Upload is not here: it is on Files and on an assessment's scans
+          // slot, where the files are about something (docs/RIBBONS.md R1).
+          // The connections are a mark per service, coloured by how each
+          // stands, and hold their syncs; with none to show (no payload yet),
+          // the old Canvas line stands in.
           shown.current.data
             ? h(ConnectionsMenu, {
                 data: shown.current.data,
@@ -893,11 +905,6 @@ export function CourseMode(props) {
             "button",
             { type: "button", className: "pp-publishbtn", title: "Publish the course page, an announcement, a repository or a Canvas brief", onClick: props.onPublish },
             "Publish",
-          ),
-          h(
-            "button",
-            { type: "button", className: "pp-publishbtn", title: "Scanned papers, an exam paper and its key, or recorded defences", onClick: props.onUpload },
-            "Upload",
           ),
           // The conversation beside the place: a press on a hole starts a
           // turn there, and this is how to look at it again or put it away.

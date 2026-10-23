@@ -639,7 +639,17 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-connsync{margin:8px 0 0 30px}
 .pp-connsync .pp-synccard{margin-top:2px}
 .pp-coursebody .pp-frame{background:transparent}
-.pp-coursehead{flex-wrap:wrap}
+/* One row, always: the title and the right-hand controls keep their size,
+   and the readings and the drafts switch between them scroll sideways on a
+   narrow window rather than pushing Chat and × onto a second line. */
+.pp-coursehead{flex-wrap:nowrap}
+.pp-headmid{flex:1;min-width:0;display:flex;align-items:center;gap:10px;overflow-x:auto;scrollbar-width:thin}
+.pp-headmid::-webkit-scrollbar{height:4px}
+.pp-headmid::-webkit-scrollbar-thumb{border-radius:2px;background:var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-headmid > *{flex:none}
+.pp-headmid > .pp-segspacer{flex:1 0 8px}
+.pp-connwait{min-width:16px;padding:0 4px;border-radius:8px;font-size:10px;font-weight:600;line-height:16px;
+  text-align:center;color:#fff;background:#a5561f}
 /* The chat's text field at the foot of an open place (CourseComposer in materials.js). */
 .pp-composer{flex:none;display:flex;align-items:flex-end;gap:8px;margin:8px 16px 12px;padding:8px 8px 8px 14px;border:1px solid var(--dsw-alias-border-l2,#dadce0);border-radius:16px;background:var(--dsw-alias-bg-l1,#fff);box-shadow:0 2px 10px rgba(0,0,0,.06)}
 .pp-composer:focus-within{border-color:#2f8a4e}

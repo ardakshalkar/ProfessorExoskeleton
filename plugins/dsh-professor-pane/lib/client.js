@@ -674,7 +674,17 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-connsync{margin:8px 0 0 30px}
 .pp-connsync .pp-synccard{margin-top:2px}
 .pp-coursebody .pp-frame{background:transparent}
-.pp-coursehead{flex-wrap:wrap}
+/* One row, always: the title and the right-hand controls keep their size,
+   and the readings and the drafts switch between them scroll sideways on a
+   narrow window rather than pushing Chat and × onto a second line. */
+.pp-coursehead{flex-wrap:nowrap}
+.pp-headmid{flex:1;min-width:0;display:flex;align-items:center;gap:10px;overflow-x:auto;scrollbar-width:thin}
+.pp-headmid::-webkit-scrollbar{height:4px}
+.pp-headmid::-webkit-scrollbar-thumb{border-radius:2px;background:var(--dsw-alias-border-l3,#cfcfd6)}
+.pp-headmid > *{flex:none}
+.pp-headmid > .pp-segspacer{flex:1 0 8px}
+.pp-connwait{min-width:16px;padding:0 4px;border-radius:8px;font-size:10px;font-weight:600;line-height:16px;
+  text-align:center;color:#fff;background:#a5561f}
 /* The chat's text field at the foot of an open place (CourseComposer in materials.js). */
 .pp-composer{flex:none;display:flex;align-items:flex-end;gap:8px;margin:8px 16px 12px;padding:8px 8px 8px 14px;border:1px solid var(--dsw-alias-border-l2,#dadce0);border-radius:16px;background:var(--dsw-alias-bg-l1,#fff);box-shadow:0 2px 10px rgba(0,0,0,.06)}
 .pp-composer:focus-within{border-color:#2f8a4e}
@@ -11673,13 +11683,18 @@ function ConnectionsMenu(props) {
         className: "pp-connbtn pp-conn-" + worst.tone + (props.waiting ? " pp-wiring-waiting" : ""),
         "aria-expanded": open2,
         disabled: props.disabled,
-        title: props.disabled ? "Private — not shown while previewing as a student" : "Each connection, and its syncs",
+        // The words are the tooltip, not the header: how each service stands
+        // is said on Today and in Sync, and in the header it was the widest
+        // control on every screen (docs/RIBBONS.md R5). The marks keep their
+        // colour, so a service in trouble still shows here.
+        title: props.disabled ? "Private — not shown while previewing as a student" : [label, props.waiting ? plural4(props.waiting, "row", "rows") + " waiting" : null, "press for each connection and its syncs"].filter(Boolean).join(" · "),
+        "aria-label": "Connections: " + label,
         onClick: () => setOpen(!open2)
       },
       rows.map(
         (row) => h("span", { className: "pp-conndot pp-conn-" + row.tone, key: row.id, title: row.name + ": " + row.state }, MARK[row.id] || row.id.slice(0, 2))
       ),
-      h("span", { className: "pp-connlabel" }, [label, props.waiting && worst.tone === "ok" ? plural4(props.waiting, "row", "rows") + " waiting" : null].filter(Boolean).join(" · ")),
+      props.waiting ? h("span", { className: "pp-connwait", title: plural4(props.waiting, "row", "rows") + " waiting" }, String(props.waiting)) : null,
       h("span", { className: "pp-connchev", "aria-hidden": "true" }, open2 ? "▴" : "▾")
     ),
     open2 ? ReactDOM.createPortal(panel, document.body) : null
@@ -12844,7 +12859,9 @@ function CourseMode(props) {
     },
     entry.label
   );
-  const named = view === "students" || view === "syncs" || view === "settings" && subOf("settings") === "integrations" || view === "tasks" && taskSub !== "unpublished";
+  const named = view === "students" || view === "syncs" || // The Gradebook names students (its marks, Last changes); without the
+  // switch here a projected Gradebook could not be covered in place.
+  view === "gradebook" || view === "settings" && subOf("settings") === "integrations" || view === "tasks" && taskSub !== "unpublished";
   const navigator2 = left > 0;
   const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
   const placeName = viewEntry ? viewEntry.label : navigator2 ? "Weeks" : props.title;
@@ -12876,43 +12893,52 @@ function CourseMode(props) {
             // The place, not the course: the course is named in the navigator
             // beside it and in the column, and here it only crowded the row.
             h("div", { className: "pp-modaltitle", title: props.title }, placeName),
-            // The readings of the weeks. Under a place they are the way back to
-            // the weeks, so they stay, unpressed.
-            COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
-            navigator2 ? null : h("span", { className: "pp-segsep", "aria-hidden": "true" }),
-            navigator2 ? null : COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
-            h("span", { className: "pp-segspacer" }),
-            DRAFT_MODES.map(
-              (entry) => h(
-                "button",
-                {
-                  type: "button",
-                  className: "pp-segbtn",
-                  "aria-pressed": props.drafts === entry.drafts,
-                  title: entry.hint,
-                  onClick: () => props.setDrafts(entry.drafts),
-                  key: entry.label
-                },
-                entry.label
+            // The middle of the row is the one part that gives way: on a narrow
+            // window it scrolls sideways, so the controls on the right — the
+            // connections, Publish, Chat and × — never wrap under the title.
+            h(
+              "div",
+              { className: "pp-headmid" },
+              // The readings of the weeks. Under a place they are the way back to
+              // the weeks, so they stay, unpressed.
+              COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false)),
+              navigator2 ? null : h("span", { className: "pp-segsep", "aria-hidden": "true" }),
+              navigator2 ? null : COURSE_VIEWS.map((entry) => segment(entry, view === entry.id, () => setView(entry.id), preview)),
+              h("span", { className: "pp-segspacer" }),
+              DRAFT_MODES.map(
+                (entry) => h(
+                  "button",
+                  {
+                    type: "button",
+                    className: "pp-segbtn",
+                    "aria-pressed": props.drafts === entry.drafts,
+                    title: entry.hint,
+                    onClick: () => props.setDrafts(entry.drafts),
+                    key: entry.label
+                  },
+                  entry.label
+                )
+              ),
+              // Not on Teaching, Evidence or a course-wide view: a student is
+              // never shown class figures or names, so there is nothing to preview.
+              private_ ? null : h(
+                "label",
+                { title: "The record alone, with no hole drawn — what ainar page publishes" },
+                h("input", {
+                  type: "checkbox",
+                  checked: student,
+                  onChange: (event) => setStudent(event.target.checked)
+                }),
+                "Preview as student"
               )
             ),
-            // Not on Teaching, Evidence or a course-wide view: a student is
-            // never shown class figures or names, so there is nothing to preview.
-            private_ ? null : h(
-              "label",
-              { title: "The record alone, with no hole drawn — what ainar page publishes" },
-              h("input", {
-                type: "checkbox",
-                checked: student,
-                onChange: (event) => setStudent(event.target.checked)
-              }),
-              "Preview as student"
-            ),
-            // The pane's header, which this veil covers. Publish and Upload
-            // open their own windows on top, so course mode is still here when
-            // they close. The connections button says how each service stands
-            // and holds their syncs; with none to show (no payload yet), the
-            // old Canvas line stands in.
+            // The pane's header, which this veil covers. Publish opens its own
+            // window on top, so course mode is still here when it closes.
+            // Upload is not here: it is on Files and on an assessment's scans
+            // slot, where the files are about something (docs/RIBBONS.md R1).
+            // The connections are a mark per service, coloured by how each
+            // stands, and hold their syncs; with none to show (no payload yet),
+            // the old Canvas line stands in.
             shown.current.data ? h(ConnectionsMenu, {
               data: shown.current.data,
               roads: shown.current.roads,
@@ -12946,11 +12972,6 @@ function CourseMode(props) {
               "button",
               { type: "button", className: "pp-publishbtn", title: "Publish the course page, an announcement, a repository or a Canvas brief", onClick: props.onPublish },
               "Publish"
-            ),
-            h(
-              "button",
-              { type: "button", className: "pp-publishbtn", title: "Scanned papers, an exam paper and its key, or recorded defences", onClick: props.onUpload },
-              "Upload"
             ),
             // The conversation beside the place: a press on a hole starts a
             // turn there, and this is how to look at it again or put it away.

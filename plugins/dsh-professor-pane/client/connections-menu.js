@@ -270,13 +270,22 @@ export function ConnectionsMenu(props) {
         className: "pp-connbtn pp-conn-" + worst.tone + (props.waiting ? " pp-wiring-waiting" : ""),
         "aria-expanded": open,
         disabled: props.disabled,
-        title: props.disabled ? "Private — not shown while previewing as a student" : "Each connection, and its syncs",
+        // The words are the tooltip, not the header: how each service stands
+        // is said on Today and in Sync, and in the header it was the widest
+        // control on every screen (docs/RIBBONS.md R5). The marks keep their
+        // colour, so a service in trouble still shows here.
+        title: props.disabled
+          ? "Private — not shown while previewing as a student"
+          : [label, props.waiting ? plural(props.waiting, "row", "rows") + " waiting" : null, "press for each connection and its syncs"]
+              .filter(Boolean)
+              .join(" · "),
+        "aria-label": "Connections: " + label,
         onClick: () => setOpen(!open),
       },
       rows.map((row) =>
         h("span", { className: "pp-conndot pp-conn-" + row.tone, key: row.id, title: row.name + ": " + row.state }, MARK[row.id] || row.id.slice(0, 2)),
       ),
-      h("span", { className: "pp-connlabel" }, [label, props.waiting && worst.tone === "ok" ? plural(props.waiting, "row", "rows") + " waiting" : null].filter(Boolean).join(" · ")),
+      props.waiting ? h("span", { className: "pp-connwait", title: plural(props.waiting, "row", "rows") + " waiting" }, String(props.waiting)) : null,
       h("span", { className: "pp-connchev", "aria-hidden": "true" }, open ? "▴" : "▾"),
     ),
     open ? ReactDOM.createPortal(panel, document.body) : null,
