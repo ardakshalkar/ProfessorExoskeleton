@@ -106,26 +106,34 @@ export function GradebookPanes(props) {
     if (props.onWrite) props.onWrite();
   };
   const key = props.revision + "|" + revision;
+  // `only`: one of the two, as course mode's Gradebook draws them — each its
+  // own part in the place bar ("changes" or "policy"). Without it, both side
+  // by side, as before.
+  const only = props.only || null;
   return h(
     "div",
     { className: "pp-gbwrap" },
     h(
     "div",
-    { className: "pp-gbpanes" },
-    h(LastChanges, {
-      runId: props.runId,
-      sessionId: props.sessionId,
-      names: props.names,
-      revision: key,
-      onRestore: (proposal, at) => setEditing({ start: proposal, label: "Restoring the policy as it was before " + (when(at) || "that change") }),
-    }),
-    h(PolicyCard, {
-      runId: props.runId,
-      sessionId: props.sessionId,
-      revision: key,
-      onEdit: () => setEditing({ start: null, label: null }),
-      onWrite: bump,
-    }),
+    { className: "pp-gbpanes" + (only ? " pp-gbpanes-one" : "") },
+    only === "policy"
+      ? null
+      : h(LastChanges, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          names: props.names,
+          revision: key,
+          onRestore: (proposal, at) => setEditing({ start: proposal, label: "Restoring the policy as it was before " + (when(at) || "that change") }),
+        }),
+    only === "changes"
+      ? null
+      : h(PolicyCard, {
+          runId: props.runId,
+          sessionId: props.sessionId,
+          revision: key,
+          onEdit: () => setEditing({ start: null, label: null }),
+          onWrite: bump,
+        }),
     ),
     editing
       ? h(PolicyEditor, {

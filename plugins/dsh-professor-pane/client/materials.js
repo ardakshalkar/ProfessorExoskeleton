@@ -382,8 +382,19 @@ const VIEW_SUBS = {
     { id: "grading", label: "Grading policy" },
     { id: "outline", label: "Student's outline" },
   ],
+  // The Gradebook's four parts, which were stacked in one long page
+  // (docs/RIBBONS.md R6). Last changes keeps its own All · Grades · Sheet ·
+  // Policy: those filter that one list.
+  gradebook: [
+    { id: "marks", label: "Marks" },
+    { id: "canvas", label: "To Canvas" },
+    { id: "policy", label: "Policy" },
+    { id: "changes", label: "Last changes" },
+  ],
+  // Accounts was a button inside Integrations; it is the third part here.
   settings: [
     { id: "integrations", label: "Integrations" },
+    { id: "accounts", label: "Accounts" },
     { id: "preferences", label: "Preferences" },
   ],
 };
@@ -654,6 +665,9 @@ export function CourseMode(props) {
               ask: props.ask,
               focus: jump || props.integrationsFocus,
               onOpenSync: () => setView("syncs"),
+              // Integrations or Accounts, as the place bar chose.
+              placed: true,
+              subView: subOf("settings") === "accounts" ? "accounts" : "course",
               key: props.runId,
             }),
       );
@@ -696,36 +710,38 @@ export function CourseMode(props) {
       });
     }
     if (view === "gradebook") {
-      return h(
-        React.Fragment,
-        null,
-        h(GradebookStatus, {
+      const part = subOf("gradebook");
+      if (part === "canvas") {
+        return h(GradebookStatus, {
           runId: props.runId,
           sessionId: props.sessionId,
           revision: marksVersion,
           names: props.names,
           ask: props.ask,
           onWrite: () => props.wrote(["grading"]),
-        }),
-        h(GradebookPanes, {
+        });
+      }
+      if (part === "policy" || part === "changes") {
+        return h(GradebookPanes, {
+          only: part,
           runId: props.runId,
           sessionId: props.sessionId,
           revision: gradingVersion,
           names: props.names,
           ask: props.ask,
           onWrite: () => props.wrote(["grading"]),
-        }),
-        h(WidgetFrame, {
-          key: "gradebook|" + props.dark + "|" + props.drafts,
-          revision: everything,
-          view: "gradebook",
-          runId: props.runId,
-          sessionId: props.sessionId,
-          dark: props.dark,
-          drafts: props.drafts,
-          title: "Gradebook",
-        }),
-      );
+        });
+      }
+      return h(WidgetFrame, {
+        key: "gradebook|" + props.dark + "|" + props.drafts,
+        revision: everything,
+        view: "gradebook",
+        runId: props.runId,
+        sessionId: props.sessionId,
+        dark: props.dark,
+        drafts: props.drafts,
+        title: "Gradebook",
+      });
     }
     if (taskSub === "unpublished") {
       return h(Unpublished, {
@@ -800,7 +816,9 @@ export function CourseMode(props) {
     view === null ||
     view === "concepts" ||
     view === "materials" ||
-    view === "gradebook" ||
+    // The marks grid; the Canvas status, the policy and its history read
+    // the same either way.
+    (view === "gradebook" && subOf("gradebook") === "marks") ||
     // Pending, whose id is `tasks`: the inbox, over the half the switch picks.
     (view === "tasks" && taskSub === "tasks");
   // The readings of the weeks and Preview as student are Weeks' own, drawn

@@ -58,8 +58,13 @@ export function Integrations(props) {
   // over the fetch for the reason `Preferences` prefers it: the form should
   // redraw from disk rather than from its own memory of what was ticked.
   const [fresh, setFresh] = React.useState(null);
-  // Accounts, in place of This course. Opened by its button in the header.
-  const [accounts, setAccounts] = React.useState(props.subView === "accounts");
+  // Accounts, in place of This course. Opened by its button in the header —
+  // or, with `placed`, chosen in course mode's place bar beside Integrations
+  // and Preferences, and then this draws no header of its own
+  // (docs/RIBBONS.md R6).
+  const placed = props.placed === true;
+  const [ownAccounts, setAccounts] = React.useState(props.subView === "accounts");
+  const accounts = placed ? props.subView === "accounts" : ownAccounts;
   // Bumped after a sync press, so its card's chips and the waiting rows are
   // read again even where nothing passes `onWrite`.
   const [tick, setTick] = React.useState(0);
@@ -132,7 +137,9 @@ export function Integrations(props) {
   // is the machine's and is opened twice a term, so it does not get a
   // segment of its own beside the course it is not about.
 
-  const head = h(
+  const head = placed
+    ? null
+    : h(
     "div",
     { className: "pp-ihead" },
     accounts

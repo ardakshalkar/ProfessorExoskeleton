@@ -1255,6 +1255,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-gbwrap{flex:0 0 auto;margin:10px 14px 0;container-type:inline-size;min-height:0}
 .pp-gbpanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:10px;height:min(46vh,520px)}
 .pp-gbpanes > .pp-gbpane{margin:0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+/* One pane alone, as a part of course mode's Gradebook: the page is its height. */
+.pp-gbpanes.pp-gbpanes-one{grid-template-columns:minmax(0,1fr);height:auto;max-width:880px}
+.pp-gbpanes.pp-gbpanes-one > .pp-gbpane{overflow:visible;max-height:none}
 @container (max-width:680px){.pp-gbpanes{grid-template-columns:minmax(0,1fr);height:auto}
   .pp-gbpanes > .pp-gbpane{max-height:300px}}
 .pp-gbpanebody{flex:1;min-height:0;overflow:auto;padding:6px 12px 8px}
@@ -7839,7 +7842,9 @@ function Integrations(props) {
   );
   const state = useJson(url);
   const [fresh, setFresh] = React.useState(null);
-  const [accounts, setAccounts] = React.useState(props.subView === "accounts");
+  const placed2 = props.placed === true;
+  const [ownAccounts, setAccounts] = React.useState(props.subView === "accounts");
+  const accounts = placed2 ? props.subView === "accounts" : ownAccounts;
   const [tick, setTick] = React.useState(0);
   const unpublished = useUnpublished(props.runId, props.sessionId, props.revision || 0);
   const syncs = useJson(
@@ -7875,7 +7880,7 @@ function Integrations(props) {
     if (!body.error) setFresh(body);
     setTick((value) => value + 1);
   }).catch(() => null);
-  const head = h(
+  const head = placed2 ? null : h(
     "div",
     { className: "pp-ihead" },
     accounts ? h("button", { type: "button", className: "pp-segbtn", onClick: () => setAccounts(false) }, "← This course") : h("span", { className: "pp-ihtitle" }, "This course"),
@@ -10193,20 +10198,21 @@ function GradebookPanes(props) {
     if (props.onWrite) props.onWrite();
   };
   const key = props.revision + "|" + revision;
+  const only = props.only || null;
   return h(
     "div",
     { className: "pp-gbwrap" },
     h(
       "div",
-      { className: "pp-gbpanes" },
-      h(LastChanges, {
+      { className: "pp-gbpanes" + (only ? " pp-gbpanes-one" : "") },
+      only === "policy" ? null : h(LastChanges, {
         runId: props.runId,
         sessionId: props.sessionId,
         names: props.names,
         revision: key,
         onRestore: (proposal, at) => setEditing({ start: proposal, label: "Restoring the policy as it was before " + (when(at) || "that change") })
       }),
-      h(PolicyCard, {
+      only === "changes" ? null : h(PolicyCard, {
         runId: props.runId,
         sessionId: props.sessionId,
         revision: key,
@@ -12590,8 +12596,19 @@ var VIEW_SUBS = {
     { id: "grading", label: "Grading policy" },
     { id: "outline", label: "Student's outline" }
   ],
+  // The Gradebook's four parts, which were stacked in one long page
+  // (docs/RIBBONS.md R6). Last changes keeps its own All · Grades · Sheet ·
+  // Policy: those filter that one list.
+  gradebook: [
+    { id: "marks", label: "Marks" },
+    { id: "canvas", label: "To Canvas" },
+    { id: "policy", label: "Policy" },
+    { id: "changes", label: "Last changes" }
+  ],
+  // Accounts was a button inside Integrations; it is the third part here.
   settings: [
     { id: "integrations", label: "Integrations" },
+    { id: "accounts", label: "Accounts" },
     { id: "preferences", label: "Preferences" }
   ]
 };
@@ -12790,6 +12807,9 @@ function CourseMode(props) {
           ask: props.ask,
           focus: jump || props.integrationsFocus,
           onOpenSync: () => setView("syncs"),
+          // Integrations or Accounts, as the place bar chose.
+          placed: true,
+          subView: subOf("settings") === "accounts" ? "accounts" : "course",
           key: props.runId
         })
       );
@@ -12832,36 +12852,38 @@ function CourseMode(props) {
       });
     }
     if (view === "gradebook") {
-      return h(
-        React.Fragment,
-        null,
-        h(GradebookStatus, {
+      const part = subOf("gradebook");
+      if (part === "canvas") {
+        return h(GradebookStatus, {
           runId: props.runId,
           sessionId: props.sessionId,
           revision: marksVersion,
           names: props.names,
           ask: props.ask,
           onWrite: () => props.wrote(["grading"])
-        }),
-        h(GradebookPanes, {
+        });
+      }
+      if (part === "policy" || part === "changes") {
+        return h(GradebookPanes, {
+          only: part,
           runId: props.runId,
           sessionId: props.sessionId,
           revision: gradingVersion,
           names: props.names,
           ask: props.ask,
           onWrite: () => props.wrote(["grading"])
-        }),
-        h(WidgetFrame, {
-          key: "gradebook|" + props.dark + "|" + props.drafts,
-          revision: everything,
-          view: "gradebook",
-          runId: props.runId,
-          sessionId: props.sessionId,
-          dark: props.dark,
-          drafts: props.drafts,
-          title: "Gradebook"
-        })
-      );
+        });
+      }
+      return h(WidgetFrame, {
+        key: "gradebook|" + props.dark + "|" + props.drafts,
+        revision: everything,
+        view: "gradebook",
+        runId: props.runId,
+        sessionId: props.sessionId,
+        dark: props.dark,
+        drafts: props.drafts,
+        title: "Gradebook"
+      });
     }
     if (taskSub === "unpublished") {
       return h(Unpublished, {
@@ -12907,7 +12929,9 @@ function CourseMode(props) {
   const placeName = viewEntry ? viewEntry.label : navigator2 ? "Weeks" : props.title;
   const subLabel = view ? VIEW_SUBS[view] ? (VIEW_SUBS[view].find((entry) => entry.id === subOf(view)) || { label: null }).label : view === "today" ? (/* @__PURE__ */ new Date()).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) : null : (COURSE_MODES.find((entry) => entry.id === mode) || { label: null }).label;
   const placeTitle = subLabel ? placeName + " · " + subLabel : placeName;
-  const draftsApply = view === null || view === "concepts" || view === "materials" || view === "gradebook" || // Pending, whose id is `tasks`: the inbox, over the half the switch picks.
+  const draftsApply = view === null || view === "concepts" || view === "materials" || // The marks grid; the Canvas status, the policy and its history read
+  // the same either way.
+  view === "gradebook" && subOf("gradebook") === "marks" || // Pending, whose id is `tasks`: the inbox, over the half the switch picks.
   view === "tasks" && taskSub === "tasks";
   const readings = COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false));
   const previewSwitch = private_ ? null : h(

@@ -1220,6 +1220,9 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 .pp-gbwrap{flex:0 0 auto;margin:10px 14px 0;container-type:inline-size;min-height:0}
 .pp-gbpanes{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:10px;height:min(46vh,520px)}
 .pp-gbpanes > .pp-gbpane{margin:0;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+/* One pane alone, as a part of course mode's Gradebook: the page is its height. */
+.pp-gbpanes.pp-gbpanes-one{grid-template-columns:minmax(0,1fr);height:auto;max-width:880px}
+.pp-gbpanes.pp-gbpanes-one > .pp-gbpane{overflow:visible;max-height:none}
 @container (max-width:680px){.pp-gbpanes{grid-template-columns:minmax(0,1fr);height:auto}
   .pp-gbpanes > .pp-gbpane{max-height:300px}}
 .pp-gbpanebody{flex:1;min-height:0;overflow:auto;padding:6px 12px 8px}

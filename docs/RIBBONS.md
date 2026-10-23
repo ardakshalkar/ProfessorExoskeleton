@@ -25,7 +25,7 @@ The place bar, under it, differs by place:
 | Weeks | — (its readings are in the header) | readings, drafts, Preview as student | — |
 | Tasks | Pending · Ready · Checklist · Unpublished · Names | drafts, Names | readings ×4 |
 | Students | Names | Names | readings ×4, Record / + drafts |
-| Gradebook | — (its own tabs sit inside the body: Last changes · All · Grades · Sheet · Policy) | drafts, **names (no toggle shown)** | readings ×4 |
+| Gradebook | — (four parts stacked in one page: the Canvas marking status, Last changes — with its own All · Grades · Sheet · Policy filter — the grading policy, and the marks grid) | drafts, **names (no toggle shown)** | readings ×4 |
 | Concepts | — | drafts | readings ×4 |
 | Materials | Assessments · Slides · Exams · Grading policy · Student's outline | drafts | readings ×4 |
 | Files | — | — | readings ×4, Record / + drafts |
@@ -71,8 +71,9 @@ and the Sync place say how each service stands; the chip is the third place
 to say it, and the widest control in the header. *Severity: medium.*
 
 **R6 · The place bar is not one pattern.** Weeks' sub-views are in the
-header; Gradebook's are inside the body as a second tab row; Course
-settings' Accounts is a button inside Integrations; Tasks, Materials and
+header; Gradebook's four parts are stacked in one long page, with a filter
+row inside one of them that looks like tabs; Course settings' Accounts is a
+button inside Integrations; Tasks, Materials and
 Settings use the place bar. Students and Sync have a place bar holding only
 the Names switch, right-aligned. A professor cannot learn where "the other
 views of this place" are. *Severity: medium.*
@@ -130,7 +131,7 @@ Per place:
 | Weeks | Planning · Teaching · Evidence · All weeks | Drafts · n, Preview as student |
 | Tasks → Waiting (HOME-13) | Pending · Ready · Checklist · Unpublished | Drafts · n, Names |
 | Students | — | Names |
-| Gradebook | Grades · Sheet · Policy · Last changes (out of the body) | Drafts · n, **Names** |
+| Gradebook | Marks · To Canvas · Policy · Last changes (the stacked parts, one at a time) | Drafts · n (Marks only), **Names** |
 | Concepts | By concept · By student · By week (HOME-8/9) | **Names** |
 | Materials | Assessments · Slides · Exams · Grading policy · Student's outline | Drafts · n |
 | Files | — | — |
@@ -176,5 +177,13 @@ should not wait for the rest.
    Grading policy took the switch but never said which half they showed, so
    drafts appeared there with no banner. They now send the header the
    banner reads.
-5. **R6** — Gradebook's and Course settings' sub-views into the place bar.
+5. ~~**R6** — Gradebook's and Course settings' sub-views into the place bar.~~
+   **Done 2026-10-23.** Correction to this review: *All · Grades · Sheet ·
+   Policy* were never Gradebook tabs — they filter the Last changes list,
+   and stay with it. What the Gradebook had was four parts stacked in one
+   page; they are now its place bar — **Marks · To Canvas · Policy · Last
+   changes** — one at a time, Marks first, the drafts switch on Marks only
+   (`GradebookPanes` takes `only`). Course settings' bar is **Integrations ·
+   Accounts · Preferences**; Integrations draws no header of its own there
+   (`placed`), and keeps its Accounts button where it is drawn alone.
 6. **R8, R10** — Publish styled as outward; × and Escape return to Today.
