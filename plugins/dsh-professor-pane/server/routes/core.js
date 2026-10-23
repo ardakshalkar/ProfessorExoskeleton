@@ -44,8 +44,8 @@ export const routes = [
   {
     paths: ["/api/today"],
     handle(c) {
-      const { res, runId, workspace, root } = c;
-      return sendJson(res, 200, todayDocument(workspace, root, runId));
+      const { res, url, runId, workspace, root } = c;
+      return sendJson(res, 200, todayDocument(workspace, root, runId, url.searchParams.get("phase")));
     },
   },
   // What the command field can find by name: weeks, students, assessments,

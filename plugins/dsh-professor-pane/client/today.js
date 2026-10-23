@@ -33,11 +33,11 @@ const URGENCY_WORD = {
 const PHASE_WORD = { before: "Before the term", teaching: "Teaching", after: "After the term" };
 
 /** `/api/today` for one run, re-read whenever the course or a sync moves. */
-function useToday(runId, sessionId, revision) {
+function useToday(runId, sessionId, revision, phase) {
   const [state, setState] = React.useState({ phase: "loading", value: null });
   React.useEffect(() => {
     let live = true;
-    fetch(scoped(BASE + "/api/today?run=" + encodeURIComponent(runId || "") + "&r=" + revision, sessionId), {
+    fetch(scoped(BASE + "/api/today?run=" + encodeURIComponent(runId || "") + "&r=" + revision + (phase ? "&phase=" + phase : ""), sessionId), {
       headers: { accept: "application/json" },
     })
       .then((response) => response.json())
@@ -46,7 +46,7 @@ function useToday(runId, sessionId, revision) {
     return () => {
       live = false;
     };
-  }, [runId, sessionId, revision]);
+  }, [runId, sessionId, revision, phase]);
   return state;
 }
 
@@ -71,8 +71,66 @@ function Row(props) {
   );
 }
 
+/**
+ * Now before and after the term (BACKLOG E37 HOME-3): the phase's own list,
+ * each line done (✓), still open (with where it is fixed), or the
+ * professor's to do and never ticked by the pane (·).
+ */
+function PhaseList(props) {
+  const now = props.now;
+  const list = now.checklist;
+  const open = list.filter((item) => item.done === false).length;
+  const go = (item) => {
+    if (!item.do) return;
+    if (item.do.fill) props.onFill(item.do.fill.replace("{run}", props.run.run_id));
+    else if (item.do.open) props.onOpen(item.do.open);
+  };
+  return h(
+    Band,
+    { title: "Now" },
+    h(
+      "div",
+      { className: "pp-tnow" },
+      h(
+        "div",
+        { className: "pp-tnowhead" },
+        h("b", null, now.phase === "before" ? "Before the term" : "After the term"),
+        h(
+          "span",
+          null,
+          now.phase === "before"
+            ? (props.run.start_date ? "starts " + day(props.run.start_date) + " · " : "") + (open ? plural(open, "thing", "things") + " missing" : "ready to start")
+            : (props.run.end_date ? "ended " + day(props.run.end_date) + " · " : "") + (open ? plural(open, "thing", "things") + " before it can be closed" : "ready to close"),
+        ),
+        now.previewing ? h("span", { className: "pp-ttag" }, "preview — the term is under way") : null,
+      ),
+      h(
+        "ul",
+        { className: "pp-tcheck" },
+        list.map((item) =>
+          h(
+            "li",
+            { key: item.id, className: item.done === true ? "pp-tdone" : item.done === false ? "pp-topen" : "pp-tyours" },
+            h("span", { className: "pp-tmark", "aria-label": item.done === true ? "done" : item.done === false ? "not done" : "yours to do" }, item.done === true ? "✓" : item.done === false ? "○" : "·"),
+            h("span", { className: "pp-tchecktext" }, h("span", null, item.label), item.detail ? h("small", null, item.detail) : null),
+            item.outward && item.done === false ? h("span", { className: "pp-cmdout", title: "Students see the result" }, "↗") : null,
+            item.do && item.done !== true
+              ? h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", onClick: () => go(item) },
+                  item.do.fill ? "Ask the assistant…" : "Open",
+                )
+              : null,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 function Now(props) {
   const now = props.now;
+  if (now.checklist && now.checklist.length) return h(PhaseList, props);
   const week = now.week;
   return h(
     Band,
@@ -415,7 +473,10 @@ function Pulse(props) {
 
 /** Course mode · Today. */
 export function Today(props) {
-  const state = useToday(props.runId, props.sessionId, props.revision);
+  // `?today-phase=before` (or `after`) on the page's address shows that
+  // phase's Now before it comes, marked as a preview.
+  const asked = /[?&]today-phase=(before|after|teaching)\b/.exec(window.location.search || "");
+  const state = useToday(props.runId, props.sessionId, props.revision, asked ? asked[1] : null);
   // The last answer stays on screen while the next one loads.
   const shown = React.useRef(null);
   if (state.phase === "ready") shown.current = state.value;
@@ -426,7 +487,7 @@ export function Today(props) {
   return h(
     "div",
     { className: "pp-today" },
-    h(Now, { now: doc.now, run: doc.run, onOpen: props.onOpen }),
+    h(Now, { now: doc.now, run: doc.run, onOpen: props.onOpen, onFill: props.onFill || (() => {}) }),
     h(Waiting, { items: doc.waiting, snoozed: doc.snoozed || [], onOpen: props.onOpen, onOpenWaiting: () => props.onOpen({ view: "tasks", sub: "waiting" }) }),
     h(Pulse, { pulse: doc.pulse, onOpen: props.onOpen }),
   );

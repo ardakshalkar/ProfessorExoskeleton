@@ -780,6 +780,17 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-tsync-wait i{background:#a15c00}
 .pp-tsync:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
 .pp-tsnoozed{margin:6px 0 0}
+/* Now before and after the term: the phase's checklist (HOME-3). */
+.pp-tcheck{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
+.pp-tcheck li{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--dsw-alias-border-l2,#ececef)}
+.pp-tcheck li:first-child{border-top:0}
+.pp-tmark{flex:none;width:18px;text-align:center;font-weight:700}
+.pp-tdone .pp-tmark{color:#2e7d4f}
+.pp-topen .pp-tmark{color:#a15c00}
+.pp-tyours .pp-tmark{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-tdone .pp-tchecktext{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-tchecktext{flex:1;min-width:0;display:flex;flex-direction:column}
+.pp-tchecktext small{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 /* Waiting · Everything: Today's row with a snooze beside it. */
 .pp-waiting{max-width:880px}
 .pp-wrow{display:flex;align-items:center;gap:8px;padding-right:10px;background:var(--dsw-alias-bg-l1,#fff);

@@ -815,6 +815,17 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-tsync-wait i{background:#a15c00}
 .pp-tsync:hover{background:var(--dsw-alias-fill-secondary,#f7f7f9)}
 .pp-tsnoozed{margin:6px 0 0}
+/* Now before and after the term: the phase's checklist (HOME-3). */
+.pp-tcheck{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
+.pp-tcheck li{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid var(--dsw-alias-border-l2,#ececef)}
+.pp-tcheck li:first-child{border-top:0}
+.pp-tmark{flex:none;width:18px;text-align:center;font-weight:700}
+.pp-tdone .pp-tmark{color:#2e7d4f}
+.pp-topen .pp-tmark{color:#a15c00}
+.pp-tyours .pp-tmark{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-tdone .pp-tchecktext{color:var(--dsw-alias-label-tertiary,#6b6b6b)}
+.pp-tchecktext{flex:1;min-width:0;display:flex;flex-direction:column}
+.pp-tchecktext small{font-size:11px;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 /* Waiting · Everything: Today's row with a snooze beside it. */
 .pp-waiting{max-width:880px}
 .pp-wrow{display:flex;align-items:center;gap:8px;padding-right:10px;background:var(--dsw-alias-bg-l1,#fff);
@@ -12895,17 +12906,17 @@ var URGENCY_WORD = {
   later: null
 };
 var PHASE_WORD = { before: "Before the term", teaching: "Teaching", after: "After the term" };
-function useToday(runId, sessionId, revision) {
+function useToday(runId, sessionId, revision, phase) {
   const [state, setState] = React.useState({ phase: "loading", value: null });
   React.useEffect(() => {
     let live = true;
-    fetch(scoped(BASE + "/api/today?run=" + encodeURIComponent(runId || "") + "&r=" + revision, sessionId), {
+    fetch(scoped(BASE + "/api/today?run=" + encodeURIComponent(runId || "") + "&r=" + revision + (phase ? "&phase=" + phase : ""), sessionId), {
       headers: { accept: "application/json" }
     }).then((response) => response.json()).then((value) => live && setState({ phase: "ready", value })).catch((error) => live && setState({ phase: "ready", value: { error: String(error) } }));
     return () => {
       live = false;
     };
-  }, [runId, sessionId, revision]);
+  }, [runId, sessionId, revision, phase]);
   return state;
 }
 function Band(props) {
@@ -12925,8 +12936,56 @@ function Row(props) {
     h("span", { className: "pp-tgo", "aria-hidden": "true" }, "›")
   );
 }
+function PhaseList(props) {
+  const now = props.now;
+  const list = now.checklist;
+  const open2 = list.filter((item) => item.done === false).length;
+  const go = (item) => {
+    if (!item.do) return;
+    if (item.do.fill) props.onFill(item.do.fill.replace("{run}", props.run.run_id));
+    else if (item.do.open) props.onOpen(item.do.open);
+  };
+  return h(
+    Band,
+    { title: "Now" },
+    h(
+      "div",
+      { className: "pp-tnow" },
+      h(
+        "div",
+        { className: "pp-tnowhead" },
+        h("b", null, now.phase === "before" ? "Before the term" : "After the term"),
+        h(
+          "span",
+          null,
+          now.phase === "before" ? (props.run.start_date ? "starts " + day(props.run.start_date) + " · " : "") + (open2 ? plural7(open2, "thing", "things") + " missing" : "ready to start") : (props.run.end_date ? "ended " + day(props.run.end_date) + " · " : "") + (open2 ? plural7(open2, "thing", "things") + " before it can be closed" : "ready to close")
+        ),
+        now.previewing ? h("span", { className: "pp-ttag" }, "preview — the term is under way") : null
+      ),
+      h(
+        "ul",
+        { className: "pp-tcheck" },
+        list.map(
+          (item) => h(
+            "li",
+            { key: item.id, className: item.done === true ? "pp-tdone" : item.done === false ? "pp-topen" : "pp-tyours" },
+            h("span", { className: "pp-tmark", "aria-label": item.done === true ? "done" : item.done === false ? "not done" : "yours to do" }, item.done === true ? "✓" : item.done === false ? "○" : "·"),
+            h("span", { className: "pp-tchecktext" }, h("span", null, item.label), item.detail ? h("small", null, item.detail) : null),
+            item.outward && item.done === false ? h("span", { className: "pp-cmdout", title: "Students see the result" }, "↗") : null,
+            item.do && item.done !== true ? h(
+              "button",
+              { type: "button", className: "pp-segbtn", onClick: () => go(item) },
+              item.do.fill ? "Ask the assistant…" : "Open"
+            ) : null
+          )
+        )
+      )
+    )
+  );
+}
 function Now(props) {
   const now = props.now;
+  if (now.checklist && now.checklist.length) return h(PhaseList, props);
   const week = now.week;
   return h(
     Band,
@@ -13211,7 +13270,8 @@ function Pulse(props) {
   );
 }
 function Today(props) {
-  const state = useToday(props.runId, props.sessionId, props.revision);
+  const asked = /[?&]today-phase=(before|after|teaching)\b/.exec(window.location.search || "");
+  const state = useToday(props.runId, props.sessionId, props.revision, asked ? asked[1] : null);
   const shown = React.useRef(null);
   if (state.phase === "ready") shown.current = state.value;
   const doc = shown.current;
@@ -13221,7 +13281,8 @@ function Today(props) {
   return h(
     "div",
     { className: "pp-today" },
-    h(Now, { now: doc.now, run: doc.run, onOpen: props.onOpen }),
+    h(Now, { now: doc.now, run: doc.run, onOpen: props.onOpen, onFill: props.onFill || (() => {
+    }) }),
     h(Waiting, { items: doc.waiting, snoozed: doc.snoozed || [], onOpen: props.onOpen, onOpenWaiting: () => props.onOpen({ view: "tasks", sub: "waiting" }) }),
     h(Pulse, { pulse: doc.pulse, onOpen: props.onOpen })
   );
@@ -13426,6 +13487,7 @@ function CourseMode(props) {
   const doorOf = (entry) => entry && entry.view === "concepts" && (entry.student || entry.concept || entry.week) ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n } : null;
   const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
   const doorCount = React.useRef(0);
+  const [fill, setFill] = React.useState(null);
   React.useEffect(() => {
     const door = doorOf(request);
     if (door) setConceptsFocus(door);
@@ -13550,7 +13612,10 @@ function CourseMode(props) {
           runId: props.runId,
           sessionId: props.sessionId,
           revision: everything + "." + syncsVersion + "." + filesVersion,
-          onOpen: openFromToday
+          onOpen: openFromToday,
+          // A line of the phase's list that is the assistant's: its skill
+          // goes into the field to be finished, as the command field does.
+          onFill: (text) => setFill({ text: text.trimEnd(), n: "fill-" + (doorCount.current += 1) })
         })
       );
     }
@@ -13955,7 +14020,7 @@ function CourseMode(props) {
           props.chat || !props.ask ? null : h(CourseComposer, {
             key: props.sessionId,
             focus: Boolean(props.compose),
-            draft: props.draft,
+            draft: fill || props.draft,
             place: placeTitle,
             runId: props.runId,
             sessionId: props.sessionId,

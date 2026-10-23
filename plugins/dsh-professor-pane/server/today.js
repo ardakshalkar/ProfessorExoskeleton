@@ -21,6 +21,7 @@
  * cost the professor the week.
  */
 
+import { enrolledIn } from "@ainar/core/src/bundle.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 
 import { navigatorDocument } from "./navigator.js";
@@ -338,6 +339,57 @@ const syncStrip = (syncs) => {
 };
 
 /**
+ * Before the term, Now is what is still missing before it can start
+ * (BACKLOG E37 HOME-3; PROFESSOR-JOURNEY §2): each line a fact the records
+ * already hold, done or not, and where it is fixed. Counted by the outline
+ * and the enrollments, not here.
+ */
+export const readinessOf = ({ outline, enrolled, syncs }) => {
+  const gaps = (outline && outline.totals && outline.totals.gaps) || {};
+  const weeks = (outline && outline.weeks) || [];
+  const first = weeks.find((week) => week.meetings && week.meetings.length) || null;
+  const firstDeck = first ? !(first.gaps || []).some((gap) => gap.kind === "deck") : false;
+  const outcomes = (outline && outline.outcomes) || [];
+  // The concepts the term's topics teach: the outline has no list of its own.
+  const concepts = [...new Set(weeks.flatMap((week) => (week.modules || []).flatMap((module) => (module.concepts || []).map((concept) => concept.id))))];
+  const canvas = Boolean(syncs && !syncs.error && (syncs.syncs || []).some((sync) => sync.service === "canvas" && sync.enabled));
+  const weekWord = (n) => plural(n, "week", "weeks");
+  return [
+    { id: "outcomes", label: "Learning outcomes stated", done: outcomes.length > 0, detail: outcomes.length ? plural(outcomes.length, "outcome", "outcomes") : "none yet", do: { fill: "/onboard-course " } },
+    { id: "concepts", label: "Concept map built", done: concepts.length > 0, detail: concepts.length ? plural(concepts.length, "concept", "concepts") : "none yet", do: { fill: "/propose-concepts {run} " } },
+    { id: "topics", label: "Every week has a topic", done: !gaps.module, detail: gaps.module ? weekWord(gaps.module) + " without one" : null, do: { open: { mode: "planning" } } },
+    { id: "deadlines", label: "Every assessment has a deadline", done: !gaps.deadline, detail: gaps.deadline ? weekWord(gaps.deadline) + " with work undated" : null, do: { open: { mode: "planning" } } },
+    { id: "weights", label: "Every assessment counts in the grade", done: !gaps.weight, detail: gaps.weight ? weekWord(gaps.weight) + " with work unweighted" : null, do: { open: { view: "gradebook", sub: "policy" } } },
+    { id: "first-deck", label: "Week 1 has its slides", done: firstDeck, detail: first ? null : "no meeting is planned yet", do: { fill: "/make-materials {run} week 1 " } },
+    { id: "roster", label: "Class list imported", done: enrolled > 0, detail: enrolled ? plural(enrolled, "student", "students") : "nobody enrolled yet", do: { open: { view: "students" } } },
+    { id: "canvas", label: "Canvas connected", done: canvas, detail: canvas ? null : "no Canvas road on this run", do: { open: { view: "settings", sub: "integrations" } } },
+  ];
+};
+
+/**
+ * After the term, Now is what must be true before it is closed: every mark
+ * decided and sent, nothing held, nothing open. The last two are the
+ * professor's to do, never checked off by the pane: the reflection
+ * (`/course-reflection`) and archiving the run (`bin/ainar archive-run`).
+ */
+export const closingOf = ({ inbox, unpublished, held }) => {
+  const pending = (inbox && inbox.pending_evaluations && inbox.pending_evaluations.total) || 0;
+  const unsent = ((unpublished && unpublished.marks) || []).reduce((sum, entry) => sum + (entry.canvas.unsent || 0) + (entry.canvas.changed || 0), 0);
+  const cases = ((inbox && inbox.open_integrity_cases) || []).length;
+  const papers = (held || []).reduce((sum, pile) => sum + pile.held, 0);
+  const drafts = ((inbox && inbox.drafts_awaiting_approval) || []).length;
+  return [
+    { id: "decided", label: "Every mark decided", done: !pending, detail: pending ? plural(pending, "suggestion", "suggestions") + " waiting" : null, do: { open: { view: "tasks", sub: "tasks" } } },
+    { id: "sent", label: "Marks sent to Canvas", done: !unsent, detail: unsent ? plural(unsent, "mark", "marks") + " Canvas does not have" : null, do: { open: { view: "gradebook", sub: "canvas" } }, outward: true },
+    { id: "integrity", label: "Integrity cases settled", done: !cases, detail: cases ? plural(cases, "case", "cases") + " open" : null, do: { open: { view: "students" } } },
+    { id: "papers", label: "Every scanned paper placed", done: !papers, detail: papers ? plural(papers, "paper", "papers") + " on nobody" : null, do: { open: { view: "files" } } },
+    { id: "drafts", label: "Drafts accepted or dropped", done: !drafts, detail: drafts ? plural(drafts, "draft", "drafts") + " left" : null, do: { open: { view: "tasks", sub: "ready" } } },
+    { id: "reflect", label: "Reflect on the term", done: null, detail: "what worked, what to change next year", do: { fill: "/course-reflection {run} " } },
+    { id: "archive", label: "Archive the run", done: null, detail: "bin/ainar archive-run moves the term's files to archive/", do: null },
+  ];
+};
+
+/**
  * Where the term is: `before`, `teaching` or `after`, from the run's own
  * dates against the inbox's today (the machine's, when there is no inbox).
  * Computed every time, never stored — WORKFLOWS.md §2.
@@ -356,8 +408,10 @@ const phaseOf = (run, inbox) => {
  * @param workspace - the course workspace the session stands in.
  * @param root - its folder.
  * @param askedRun - `?run=`, when the pane already knows which.
+ * @param askedPhase - `?phase=before|after`, to look at the other phases'
+ *   Now before they come; the document says so (`now.previewing`).
  */
-export const todayDocument = (workspace, root, askedRun) => {
+export const todayDocument = (workspace, root, askedRun, askedPhase = null) => {
   const nav = navigatorDocument(workspace, root, askedRun);
   if (!nav.run) return { run: null };
   const runId = nav.run.run_id;
@@ -379,10 +433,22 @@ export const todayDocument = (workspace, root, askedRun) => {
   const later = all.filter((item) => snoozed[item.id]).map((item) => Object.assign({}, item, { until: snoozed[item.id] }));
 
   const readiness = inbox && inbox.readiness ? inbox.readiness : null;
+  const real = phaseOf(nav.run, inbox);
+  const phase = askedPhase === "before" || askedPhase === "after" || askedPhase === "teaching" ? askedPhase : real;
+  const enrolled = safely(() => enrolledIn(loadedRun(workspace, runId).bundle, runId).length, 0);
   return {
     run: nav.run,
     now: {
-      phase: phaseOf(nav.run, inbox),
+      phase,
+      previewing: phase !== real,
+      // The phase's own list: what is missing before the term, what must be
+      // true to close it after. Teaching has the week instead.
+      checklist:
+        phase === "before"
+          ? readinessOf({ outline, enrolled, syncs })
+          : phase === "after"
+            ? closingOf({ inbox, unpublished, held: nav.held })
+            : null,
       week: nav.week,
       next_due: nav.next_due,
       // Before the term, Now is what to build next.

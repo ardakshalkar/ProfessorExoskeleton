@@ -470,6 +470,8 @@ export function CourseMode(props) {
       : null;
   const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
   const doorCount = React.useRef(0);
+  // Words a press on the page puts into the field at its foot, unsent.
+  const [fill, setFill] = React.useState(null);
   React.useEffect(() => {
     const door = doorOf(request);
     if (door) setConceptsFocus(door);
@@ -656,6 +658,9 @@ export function CourseMode(props) {
           sessionId: props.sessionId,
           revision: everything + "." + syncsVersion + "." + filesVersion,
           onOpen: openFromToday,
+          // A line of the phase's list that is the assistant's: its skill
+          // goes into the field to be finished, as the command field does.
+          onFill: (text) => setFill({ text: text.trimEnd(), n: "fill-" + (doorCount.current += 1) }),
         }),
       );
     }
@@ -1130,7 +1135,7 @@ export function CourseMode(props) {
           : h(CourseComposer, {
               key: props.sessionId,
               focus: Boolean(props.compose),
-              draft: props.draft,
+              draft: fill || props.draft,
               place: placeTitle,
               runId: props.runId,
               sessionId: props.sessionId,

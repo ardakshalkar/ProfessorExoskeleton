@@ -2007,10 +2007,19 @@ is worth building.
       Since RIBBONS R10 (2026-10-23), × and Escape return to Today from any
       other place and close course mode only from Today. `M` · depends:
       HOME-1
-- [ ] **HOME-3** The phase, computed from the run's dates and records, never
+- [x] **HOME-3** The phase, computed from the run's dates and records, never
       stored: *before term* (Now is a readiness list — T1, T4, T7),
       *teaching* (this week), *closing* (the close checklist, EXM's Close at
-      run level), *after* (reflection). `S` · depends: HOME-1
+      run level), *after* (reflection). Done 2026-10-23, with *closing* and
+      *after* as one phase: after the end date Now is the close checklist,
+      with reflection and archiving as its last two lines. `readinessOf`
+      (outcomes, concept map, every week a topic, every assessment dated and
+      weighted, week 1's slides, class list, Canvas) and `closingOf` (every
+      mark decided, marks in Canvas, integrity settled, papers placed,
+      drafts settled; reflect; archive) in `server/today.js`, tested in
+      `test/today-phase.test.mjs`. Each open line opens its place or fills
+      its skill into the field. `?today-phase=before|after` on the page's
+      address previews either, marked as a preview. `S` · depends: HOME-1
 - [x] **HOME-4** Waiting as one list across kinds — marks suggested, papers
       held, drafts, states marked `needs_review`, unsure sync rows, expired
       accounts — in one urgency order: overdue → due today → blocks students
@@ -2081,9 +2090,17 @@ is worth building.
       under Preview as student); *By student* under a week's concepts in
       Evidence. All three are one message, `kind: "concepts"`. `S` ·
       depends: HOME-8
-- [ ] **HOME-10** The Pulse band: concepts under the threshold, concepts with
+- [x] **HOME-10** The Pulse band: concepts under the threshold, concepts with
       no evidence, the hand-in rate of the last thing due, and the sync strip
-      — each a count that opens its place. `S` · depends: HOME-6, HOME-8
+      — each a count that opens its place. Done 2026-10-23, with HOME-1:
+      *Concepts to revisit* and *Not assessed yet* open Concepts, *Last
+      hand-in* opens the Gradebook, the sync chips and *Sync all…* open Sync
+      (a refused sign-in opens settings). `S` · depends: HOME-6, HOME-8
+- **E37 is done** (2026-10-23), all fourteen items. What it left open for
+  others: UI-1's context packet (the command field still sends the place's
+  words), WF-6 (Waiting reads its sources directly until the process engine
+  exists), and BGS-4 (a sync's "last run" is only as fresh as the last
+  press).
 - [x] **HOME-11** The action catalogue as data: PROFESSOR-JOURNEY §9's table
       as a file in the harness — id, the words a professor would type, the
       home it opens, whether it is outward. Today and the command field read
