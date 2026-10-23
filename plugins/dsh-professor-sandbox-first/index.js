@@ -30,6 +30,17 @@
  *
  * The record lives in memory and dies with the process, which is the point: a
  * refusal before a restart says nothing about the sandbox after it.
+ *
+ * One kind of escalation is denied even after a refusal, and in the background
+ * too: a shell command that runs `ainar scans file|plan|names|apply`. Those
+ * steps have the `scan_pile` tool (plugins/dsh-professor-scan-steps), which
+ * runs them in the harness process with no approval at all. The system prompt
+ * says to use it, and on 2026-10-22 the model ran all four in pwsh anyway:
+ * each was refused with EPERM, its escalated retry was let through by the rule
+ * above, and the professor answered four approval cards that need not have
+ * existed (session-704e6afd, turn 11). The plain run is still allowed, since
+ * the sandbox refuses it on its own; only the request for full access is
+ * turned back, with the tool to use instead.
  */
 
 /** The row id this plugin answers to. */
@@ -81,12 +92,35 @@ const DENIAL =
   "conversation may be from a previous harness process and do not count. If the sandbox refuses it now, " +
   "retry the same call with sandbox_permissions and the request will reach the professor.";
 
+/**
+ * A shell command that runs one of the scan steps `scan_pile` covers: the CLI
+ * by path or through a variable (`& $A scans plan …`), so the step is matched
+ * and `ainar` only has to appear somewhere in the command.
+ */
+const SCAN_STEP = /\bscans\s+(file|plan|names|apply)\b/i;
+
+/** The scan step an escalated call would run in the shell, or null. */
+function scanStepOf(exec) {
+  const command = exec.arguments.command;
+  if (typeof command !== "string" || !/ainar/i.test(command)) return null;
+  return SCAN_STEP.exec(command)?.[1].toLowerCase() ?? null;
+}
+
+const scanDenial = (step) =>
+  `Not run, and no approval was asked: \`scans ${step}\` writes ~/.ainar/submissions, and the scan_pile tool ` +
+  `runs it in the harness process, which can write there without an approval. Call scan_pile with ` +
+  `step: "${step}" (and run, assessment, and the step's own arguments) instead of the shell. Run each step ` +
+  "on its own, not chained with other commands.";
+
 export function apply(ctx) {
   /** session id → keys of calls that were refused while confined. */
   const refusals = new Map();
 
   ctx.on("tools/pre-execute", (exec, next) => {
-    if (!escalates(exec) || exec.arguments.run_in_background === true) return next();
+    if (!escalates(exec)) return next();
+    const step = scanStepOf(exec);
+    if (step) return Promise.resolve({ kind: "deny", reason: scanDenial(step) });
+    if (exec.arguments.run_in_background === true) return next();
     if (refusals.get(sessionOf(exec))?.has(callKey(exec.name, exec.arguments))) return next();
     return Promise.resolve({ kind: "deny", reason: DENIAL });
     // First in the waterfall, so no later gate raises an approval card for a call this one denies.

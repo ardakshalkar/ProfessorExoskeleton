@@ -99,6 +99,38 @@ test("a fresh process remembers nothing", async () => {
   assert.equal((await mount().gate(escalated("Get-Date"))).kind, "deny");
 });
 
+const A = 'C:\\Users\\A\\Development\\ProfessorExosceletonDHSPlugin\\bin\\ainar.cmd';
+
+for (const [step, command] of [
+  ["file", `& "${A}" scans file CSS-4007-2026-FALL scan-0880c27eec.pdf --assessment ASSESSMENT-QUIZ-03 --root .`],
+  ["plan", `$d="C:\\x\\_inbox"; New-Item -ItemType File -Force -Path "$d\\.probe"; & "${A}" scans plan CSS-4007-2026-FALL --assessment ASSESSMENT-QUIZ-03 --root .`],
+  ["names", `$A="${A}"; & $A scans names CSS-4007-2026-FALL --assessment ASSESSMENT-QUIZ-03 --root . *> $log`],
+  ["apply", `& "${A}" scans apply CSS-4007-2026-FALL --assessment ASSESSMENT-QUIZ-03 --root .`],
+]) {
+  test(`an escalated \`scans ${step}\` is sent to scan_pile even after a refusal (2026-10-22)`, async () => {
+    const { gate, result } = mount();
+    result(plain(command), { isError: false, value: { exitCode: 1, sandbox: { mode: "workspace-write", denied: false } } });
+    const decision = await gate(escalated(command));
+    assert.equal(decision.kind, "deny");
+    assert.match(decision.reason, new RegExp(`scan_pile[\\s\\S]*step: "${step}"`));
+  });
+}
+
+test("an escalated scan step in the background is sent to scan_pile too", async () => {
+  const { gate } = mount();
+  const call = escalated(`& "${A}" scans names RUN --assessment ASSESSMENT-QUIZ-03`);
+  call.arguments.run_in_background = true;
+  assert.equal((await gate(call)).kind, "deny");
+});
+
+test("the plain scan step still runs, and the steps scan_pile lacks still escalate", async () => {
+  const { gate, result, allowed } = mount();
+  assert.equal(await gate(plain(`& "${A}" scans plan RUN --assessment X`)), allowed);
+  const read = `& "${A}" scans read RUN --assessment ASSESSMENT-QUIZ-03 --root .`;
+  result(plain(read), { isError: true, content: [] });
+  assert.equal(await gate(escalated(read)), allowed);
+});
+
 test("background jobs are left to stock behaviour", async () => {
   const { gate, allowed } = mount();
   const call = escalated("long job");
