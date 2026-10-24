@@ -82,6 +82,10 @@ import { loadedRun } from "./workspace.js";
  * A function rather than a value, so the class list reads these files only for
  * submissions that carry a link. A submissions folder that cannot be resolved
  * reads as nothing prepared — the class list must still draw.
+ *
+ * Kept per hand-in for the life of the reader, which is one render: the class
+ * list asks about the same hand-in from four places (recording, verdict,
+ * repository, questions), and each ask was three file reads.
  */
 export const defenceReader = (root, runId) => {
   let submissions = null;
@@ -91,7 +95,8 @@ export const defenceReader = (root, runId) => {
   } catch {
     submissions = null;
   }
-  return (assessmentId, studentId) => {
+  const read = new Map();
+  const readOnce = (assessmentId, studentId) => {
     if (submissions === null) return { pin: null, questions: null, recorded: null };
     const place = defencePlace(submissions, root, runId, assessmentId, studentId);
     try {
@@ -99,6 +104,11 @@ export const defenceReader = (root, runId) => {
     } catch {
       return { pin: null, questions: null, recorded: null };
     }
+  };
+  return (assessmentId, studentId) => {
+    const key = assessmentId + "\u0000" + studentId;
+    if (!read.has(key)) read.set(key, readOnce(assessmentId, studentId));
+    return read.get(key);
   };
 };
 

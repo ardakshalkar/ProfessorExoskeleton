@@ -467,6 +467,26 @@ export const studentsDocument = (
   const itemById = new Map((bundle.items ?? []).map((item) => [item.item_id, item]));
   const documentById = new Map((bundle.documents ?? []).map((row) => [row.document_id, row]));
 
+  /*
+   * Markup every student's drawer would otherwise repeat, drawn once.
+   *
+   * The integrity opener, the regrade box, a homework's fork list and an
+   * assessment's rubric check are the same for every student but for the two
+   * ids in their attributes — and drawn into every hidden drawer they were
+   * half of an 8.6 MB page for one class of eighty. Each is now a `<template>`
+   * at the foot of the page, with `%%A%%` and `%%S%%` where the assessment and
+   * the student go, and the drawer fills a student's placeholders as it opens
+   * them (`fill` in `drawerScript`). Nothing is fetched: the frame may not.
+   */
+  const templates = new Map();
+  const templateId = (key, build) => {
+    if (!templates.has(key)) templates.set(key, { id: "tp" + templates.size, html: build() });
+    return templates.get(key).id;
+  };
+  const placeholder = (key, build, assessmentId, studentId) =>
+    '<div data-tpl="' + templateId(key, build) + '" data-a="' + escapeAttribute(assessmentId) +
+    '" data-s="' + escapeAttribute(studentId) + '"></div>';
+
   /**
    * One file a student handed in, as a link or as the reason there is not one.
    *
@@ -790,84 +810,77 @@ export const studentsDocument = (
    */
   // A mark to two places: rubric points come in quarters, which `number` rounds away.
   const points = (value) => String(Math.round(value * 100) / 100);
-  const rubricCheck = (submission, assessment) => {
-    const rubric = assessment.rubric ?? rubricsById.get(assessment.rubric_id ?? "");
-    const criteria = rubric && Array.isArray(rubric.criteria) ? rubric.criteria : [];
-    if (!criteria.length) return "";
-    let checked = 0;
-    const rows = criteria
+  /*
+   * The cards are the rubric's, the same on every hand-in, so they are a
+   * template per rubric; what is this hand-in's — each criterion's mark, the
+   * word pressed, the written mark it replaced, the *Partly* hint — rides on
+   * the `<details>` as `data-rcv`, one entry per criterion in the rubric's
+   * order, and the drawer sets it on the cards as it fills them.
+   */
+  const rubricCards = (criteria) =>
+    criteria
       .map((criterion) => {
-        const evaluation = evaluationOf.get(submission.submission_id + " " + criterion.criterion_id);
-        const decision =
-          evaluation && ["approved", "overridden"].includes(evaluation.status) ? evaluation.professor_decision : null;
-        const fromDefence = Boolean(decision && evaluation.extensions?.decided_via === "defence");
-        const word = fromDefence ? decision.defence : null;
-        if (word) checked += 1;
-        const history = Array.isArray(evaluation?.extensions?.history) ? evaluation.extensions.history : [];
-        const written = fromDefence
-          ? [...history].reverse().find((entry) => entry && entry.via !== "defence")
-          : decision;
-        const writtenScore = written && written.score != null ? Number(written.score) : null;
         const attrs =
-          ' data-criterion="' +
-          escapeText(criterion.criterion_id) +
-          '" data-assessment="' +
-          escapeText(submission.assessment_id) +
-          '" data-student="' +
-          escapeText(submission.student_id) +
-          '"';
-        const press = (outcome, text) => {
-          const on = word === outcome;
-          return (
-            '<button type="button" class="chip" data-check="' +
-            (on ? "clear" : outcome) +
-            '"' +
-            attrs +
-            ' aria-pressed="' +
-            String(on) +
-            '"' +
-            (on ? ' title="Press again to restore the written mark"' : "") +
-            ">" +
-            escapeText(text) +
-            "</button>"
-          );
-        };
+          ' data-criterion="' + escapeText(criterion.criterion_id) + '" data-assessment="%%A%%" data-student="%%S%%"';
+        const press = (outcome, text) =>
+          '<button type="button" class="chip" data-check="' + outcome + '"' + attrs + ' aria-pressed="false">' +
+          escapeText(text) + "</button>";
         const maximum = Number(criterion.maximum_score);
         // A card per criterion: its name and mark on one line, the three
         // words joined underneath with the points for *Partly* at their end.
         return (
-          '<div class="crit' + (word ? " done" : "") + '"><div class="cth"><span class="ctt">' +
+          '<div class="crit"><div class="cth"><span class="ctt">' +
           escapeText(String(criterion.title ?? criterion.criterion_id)) +
-          '</span><span class="ctm">' +
-          (decision ? "<b>" + escapeText(points(Number(decision.score))) + "</b>" : '<span class="dim">—</span>') +
-          '<span class="dim"> / ' + escapeText(points(maximum)) + "</span>" +
-          (fromDefence && writtenScore != null && writtenScore !== Number(decision.score)
-            ? ' <span class="dim">was ' + escapeText(points(writtenScore)) + "</span>"
-            : "") +
+          '</span><span class="ctm"><span class="cms"></span>' +
+          '<span class="dim"> / ' + escapeText(points(maximum)) + '</span><span class="dim cwas"></span>' +
           '</span></div><div class="seg"><span class="segg">' +
           press("confirmed", "Confirmed") +
           press("partly", "Partly") +
           press("not_confirmed", "Not confirmed") +
           '</span><input class="dcs" type="number" min="0" max="' +
           escapeText(String(maximum)) +
-          '" step="0.25" aria-label="Points for Partly" title="Points for Partly — empty halves the written mark" placeholder="' +
-          escapeText(writtenScore != null ? points(Math.round((writtenScore / 2) * 100) / 100) : "pts") +
-          '"' +
+          '" step="0.25" aria-label="Points for Partly" title="Points for Partly — empty halves the written mark" placeholder="pts"' +
           attrs +
           "></div></div>"
         );
       })
       .join("");
+  const rubricCheck = (submission, assessment) => {
+    const rubric = assessment.rubric ?? rubricsById.get(assessment.rubric_id ?? "");
+    const criteria = rubric && Array.isArray(rubric.criteria) ? rubric.criteria : [];
+    if (!criteria.length) return "";
+    let checked = 0;
+    // [mark, word, written mark it replaced, Partly hint] per criterion.
+    const values = criteria.map((criterion) => {
+      const evaluation = evaluationOf.get(submission.submission_id + " " + criterion.criterion_id);
+      const decision =
+        evaluation && ["approved", "overridden"].includes(evaluation.status) ? evaluation.professor_decision : null;
+      const fromDefence = Boolean(decision && evaluation.extensions?.decided_via === "defence");
+      const word = fromDefence ? decision.defence : null;
+      if (word) checked += 1;
+      const history = Array.isArray(evaluation?.extensions?.history) ? evaluation.extensions.history : [];
+      const written = fromDefence
+        ? [...history].reverse().find((entry) => entry && entry.via !== "defence")
+        : decision;
+      const writtenScore = written && written.score != null ? Number(written.score) : null;
+      return [
+        decision ? points(Number(decision.score)) : null,
+        word ?? null,
+        fromDefence && writtenScore != null && writtenScore !== Number(decision.score) ? points(writtenScore) : null,
+        writtenScore != null ? points(Math.round((writtenScore / 2) * 100) / 100) : null,
+      ];
+    });
+    const id = templateId("rubric|" + (rubric.rubric_id ?? assessment.assessment_id), () => rubricCards(criteria));
     return (
-      '<details class="dc rubric"><summary>Check against the rubric <span class="dim">' +
+      '<details class="dc rubric" data-rc="' + id + '" data-a="' + escapeAttribute(submission.assessment_id) +
+      '" data-s="' + escapeAttribute(submission.student_id) + '" data-rcv="' + escapeAttribute(JSON.stringify(values)) +
+      '"><summary>Check against the rubric <span class="dim">' +
       escapeText(String(checked)) +
       " of " +
       escapeText(String(criteria.length)) +
       " checked</span>" +
       '<span class="cbar" aria-hidden="true"><span style="width:' + Math.round((checked / criteria.length) * 100) + '%"></span></span>' +
-      "</summary>" +
-      rows +
-      "</details>"
+      "</summary></details>"
     );
   };
 
@@ -983,18 +996,19 @@ export const studentsDocument = (
     const option = (fork) =>
       '<option value="' + escapeText(fork.url) + '">' + escapeText(fork.repo) +
       (fork.pushed_at ? " · pushed " + escapeText(stamp(fork.pushed_at)) : "") + "</option>";
+    // Nobody's fork is in `unclaimed`, so the list is the same for every
+    // student: one template per homework, poured into the select as the
+    // drawer opens it, the likely ones split off into their own group there.
     const likely = unclaimed.filter(looksLike);
-    const others = unclaimed.filter((fork) => !looksLike(fork));
     // Eighty forks in one select is a scroll, not a choice: past a dozen the
     // list gets a box that narrows it as the professor types.
     const narrow =
       unclaimed.length > 12 ? '<input class="fkq" type="search" placeholder="Filter forks" aria-label="Filter forks"> ' : "";
     return (
-      '<span class="fp">' + narrow + '<select class="fks" aria-label="Their fork"><option value="">Pick their fork…</option>' +
-      (likely.length
-        ? '<optgroup label="Looks like their name">' + likely.map(option).join("") + "</optgroup>" +
-          '<optgroup label="Every other fork">' + others.map(option).join("") + "</optgroup>"
-        : others.map(option).join("")) +
+      '<span class="fp">' + narrow + '<select class="fks" aria-label="Their fork" data-fko="' +
+      templateId("forks|" + assessmentId, () => unclaimed.map(option).join("")) + '"' +
+      (likely.length ? ' data-likely="' + escapeAttribute(likely.map((fork) => fork.url).join(" ")) + '"' : "") +
+      '><option value="">Pick their fork…</option>' +
       '<option value="paste">Paste a link…</option></select> ' +
       input(false) + " " + save(true) + again + "</span>"
     );
@@ -1027,16 +1041,22 @@ export const studentsDocument = (
   };
 
   const regradeBlock = (submission) =>
-    '<details class="dc regrade"><summary>Regrade the whole paper</summary>' +
-    '<div class="rgb"><textarea data-note="the professor\'s note on how: " rows="3" ' +
-    'placeholder="How to regrade it — e.g. accept answers in either notation; be stricter on Q4; read page 3 again"></textarea>' +
-    '<button type="button" class="chip act" data-ask="' +
-    escapeText(
-      "/grade-submission " + submission.assessment_id + " " + runId + " " + submission.student_id +
-        " — regrade the whole paper, every question afresh, as new suggestions beside the current marks",
-    ) +
-    '">Ask to regrade</button>' +
-    '<p class="dim">New marks arrive as suggestions; the current ones stay until you accept the new ones in Grade.</p></div></details>';
+    placeholder(
+      "regrade",
+      () =>
+        '<details class="dc regrade"><summary>Regrade the whole paper</summary>' +
+        '<div class="rgb"><textarea data-note="the professor\'s note on how: " rows="3" ' +
+        'placeholder="How to regrade it — e.g. accept answers in either notation; be stricter on Q4; read page 3 again"></textarea>' +
+        '<button type="button" class="chip act" data-ask="' +
+        escapeText(
+          "/grade-submission %%A%% " + runId + " %%S%%" +
+            " — regrade the whole paper, every question afresh, as new suggestions beside the current marks",
+        ) +
+        '">Ask to regrade</button>' +
+        '<p class="dim">New marks arrive as suggestions; the current ones stay until you accept the new ones in Grade.</p></div></details>',
+      submission.assessment_id,
+      submission.student_id,
+    );
 
   /*
    * An academic-integrity case on one student's assessment: each case's state,
@@ -1067,19 +1087,23 @@ export const studentsDocument = (
       "Shared answers with another student",
       "Someone else did the work or sat the exam",
     ];
-    const submission = { assessment_id: assessmentId, student_id: studentId };
     const mine = runCases.filter(
       (entry) => entry.student_id === studentId && (entry.assessments ?? []).includes(assessmentId),
     );
     const open = mine.some((entry) => (entry.state ?? "open") === "open");
     const opener = open
       ? ""
-      : '<details class="dc integrity"><summary>Open an integrity case</summary>' +
-        '<div class="rgb">' + presetChips(OPEN_REASONS) + '<textarea data-ic-note rows="3" maxlength="2000" ' +
-        'placeholder="What you saw — private, never sent to the student"></textarea>' +
-        '<button type="button" class="chip act" data-ic-open="' + escapeText(submission.assessment_id) +
-        '" data-student="' + escapeText(submission.student_id) + '">Open a case</button>' +
-        '<p class="dim">The mark is held, and kept off the curve, until you decide the case in the exam window’s Integrity tab.</p></div></details>';
+      : placeholder(
+          "integrity",
+          () =>
+            '<details class="dc integrity"><summary>Open an integrity case</summary>' +
+            '<div class="rgb">' + presetChips(OPEN_REASONS) + '<textarea data-ic-note rows="3" maxlength="2000" ' +
+            'placeholder="What you saw — private, never sent to the student"></textarea>' +
+            '<button type="button" class="chip act" data-ic-open="%%A%%" data-student="%%S%%">Open a case</button>' +
+            '<p class="dim">The mark is held, and kept off the curve, until you decide the case in the exam window’s Integrity tab.</p></div></details>',
+          assessmentId,
+          studentId,
+        );
     if (!mine.length) return opener;
     return part(
       "Integrity",
@@ -1410,6 +1434,8 @@ export const studentsDocument = (
       (standing && standing.floor !== null ? standing.floor : 999) +
       '" data-attn="' +
       (!dimmed && attentionOf(id, standing) ? "1" : "0") +
+      '" data-gone="' +
+      (gone ? "1" : "0") +
       '"><div class="sr' +
       (dimmed ? " gone" : "") +
       '"' +
@@ -1695,6 +1721,9 @@ export const studentsDocument = (
     const id = String(entry.student_id ?? "");
     return attentionOf(id, weighted.length ? standingOf(id) : null);
   }).length;
+  // Who the last roster sync did not find in Canvas, on either list: the
+  // toggle only appears once a sync has said so about somebody.
+  const outOfCanvas = enrolled.filter((entry) => entry.lms && entry.lms.in_course === false).length;
   const filterBar =
     '<div class="chips tools">' +
     '<input type="search" class="find" placeholder="Find a student" aria-label="Find a student">' +
@@ -1704,6 +1733,12 @@ export const studentsDocument = (
         PASS +
         ' at this pace">Needs attention <span class="dim">' +
         attention +
+        "</span></button>"
+      : "") +
+    (outOfCanvas
+      ? '<button type="button" class="chip" data-hide-gone aria-pressed="false" title="Hide students the last roster sync did not find in Canvas">' +
+        'Hide not in Canvas <span class="dim">' +
+        outOfCanvas +
         "</span></button>"
       : "") +
     '<span class="shown dim"></span>' +
@@ -1735,17 +1770,20 @@ export const studentsDocument = (
     "var only=document.querySelector('.chip[data-attn-only]');" +
     "var find=document.querySelector('.find');var shown=document.querySelector('.shown');" +
     "var box=document.getElementById('list');var gone=document.querySelector('section[data-departed]');" +
-    "var want='*',attn=false,q='';" +
+    "var hideBtn=document.querySelector('.chip[data-hide-gone]');" +
+    // Remembered per viewer: whoever hid them once wants them hidden next time.
+    "var want='*',attn=false,q='',hide=false;try{hide=!!hideBtn&&localStorage.getItem('ainar.students.hideGone')==='1';}catch(e){}" +
     "function apply(){" +
     "chips.forEach(function(c){c.setAttribute('aria-pressed',String(c.dataset.filter===want));});" +
     "if(only)only.setAttribute('aria-pressed',String(attn));" +
+    "if(hideBtn)hideBtn.setAttribute('aria-pressed',String(hide));" +
     "var all=0,seen=0;" +
     "[].forEach.call(box.querySelectorAll('.st'),function(r){all++;" +
-    "var off=(want!=='*'&&r.dataset.group!==want)||(attn&&r.dataset.attn!=='1')||(q&&r.dataset.find.indexOf(q)<0);" +
+    "var off=(want!=='*'&&r.dataset.group!==want)||(attn&&r.dataset.attn!=='1')||(hide&&r.dataset.gone==='1')||(q&&r.dataset.find.indexOf(q)<0);" +
     "r.hidden=off;if(!off)seen++;});" +
     "if(shown)shown.textContent=seen===all?'':seen+' of '+all;" +
     "if(gone){var left=0;[].forEach.call(gone.querySelectorAll('.st'),function(r){" +
-    "var off=attn||(want!=='*'&&r.dataset.group!==want)||(q&&r.dataset.find.indexOf(q)<0);r.hidden=off;if(!off)left++;});" +
+    "var off=attn||(hide&&r.dataset.gone==='1')||(want!=='*'&&r.dataset.group!==want)||(q&&r.dataset.find.indexOf(q)<0);r.hidden=off;if(!off)left++;});" +
     "gone.hidden=left===0;}}" +
     "function order(by){" +
     "sorts.forEach(function(c){c.setAttribute('aria-pressed',String(c.dataset.sort===by));});" +
@@ -1757,6 +1795,7 @@ export const studentsDocument = (
     "list.forEach(function(r){box.appendChild(r);});}" +
     "chips.forEach(function(c){c.addEventListener('click',function(){want=c.dataset.filter;apply();});});" +
     "if(only)only.addEventListener('click',function(){attn=!attn;apply();});" +
+    "if(hideBtn){hideBtn.addEventListener('click',function(){hide=!hide;try{localStorage.setItem('ainar.students.hideGone',hide?'1':'0');}catch(e){}apply();});if(hide)apply();}" +
     "if(find)find.addEventListener('input',function(){q=find.value.trim().toLowerCase();apply();});" +
     "sorts.forEach(function(c){c.addEventListener('click',function(){order(c.dataset.sort);});});" +
     "})();</script>";
@@ -1819,9 +1858,26 @@ export const studentsDocument = (
     "cells[i].scrollIntoView({block:'nearest',inline:'nearest'});}" +
     "function park(){if(!cur)return;all('.it.on',cur.d).forEach(function(x){x.classList.remove('on');});" +
     "cur.d.hidden=true;cur.st.appendChild(cur.d);cur.st.querySelector('.sr').setAttribute('aria-expanded','false');unlight();cur=null;}" +
+    // The shared markup poured into one student's detail, once: see `templates`.
+    "function esc(v){return String(v==null?'':v).replace(/[&<>\"']/g,function(c){return '&#'+c.charCodeAt(0)+';';});}" +
+    "function tpl(id,a,s){var t=document.getElementById(id);return t?t.innerHTML.split('%%A%%').join(esc(a)).split('%%S%%').join(esc(s)):'';}" +
+    "function fill(d){" +
+    "all('[data-tpl]',d).forEach(function(x){x.insertAdjacentHTML('afterend',tpl(x.getAttribute('data-tpl'),x.getAttribute('data-a'),x.getAttribute('data-s')));x.remove();});" +
+    "all('select[data-fko]',d).forEach(function(s){var t=document.getElementById(s.getAttribute('data-fko'));s.removeAttribute('data-fko');if(!t)return;" +
+    "var f=t.content.cloneNode(true),lk=(s.getAttribute('data-likely')||'').split(' ').filter(Boolean),last=s.querySelector('option[value=paste]');" +
+    "if(!lk.length){s.insertBefore(f,last);return;}" +
+    "var g1=document.createElement('optgroup'),g2=document.createElement('optgroup');g1.label='Looks like their name';g2.label='Every other fork';" +
+    "[].slice.call(f.children).forEach(function(o){(lk.indexOf(o.value)>=0?g1:g2).appendChild(o);});s.insertBefore(g1,last);s.insertBefore(g2,last);});" +
+    "all('details[data-rc]',d).forEach(function(r){var id=r.getAttribute('data-rc');r.removeAttribute('data-rc');" +
+    "r.insertAdjacentHTML('beforeend',tpl(id,r.getAttribute('data-a'),r.getAttribute('data-s')));var v=[];try{v=JSON.parse(r.getAttribute('data-rcv')||'[]');}catch(e){}" +
+    "all('.crit',r).forEach(function(c,i){var x=v[i]||[];" +
+    "c.querySelector('.cms').innerHTML=x[0]!=null?'<b>'+esc(x[0])+'</b>':'<span class=\"dim\">\\u2014</span>';" +
+    "if(x[2]!=null)c.querySelector('.cwas').textContent=' was '+x[2];if(x[3]!=null)c.querySelector('input.dcs').placeholder=x[3];" +
+    "if(x[1]){c.classList.add('done');all('[data-check]',c).forEach(function(b){if(b.getAttribute('data-check')!==x[1])return;" +
+    "b.setAttribute('data-check','clear');b.setAttribute('aria-pressed','true');b.title='Press again to restore the written mark';});}});});}" +
     "function show(st,a){" +
     "if(!cur||cur.st!==st){park();var d=st.querySelector('.detail');if(!d)return;" +
-    "body.appendChild(d);d.hidden=false;cur={st:st,d:d,a:null};st.querySelector('.sr').setAttribute('aria-expanded','true');}" +
+    "fill(d);body.appendChild(d);d.hidden=false;cur={st:st,d:d,a:null};st.querySelector('.sr').setAttribute('aria-expanded','true');}" +
     "var line=a?lineOf(cur.d,a):null;if(!line)a=null;" +
     "all('.it.on',cur.d).forEach(function(x){x.classList.remove('on');});cur.a=a;dw.classList.toggle('one',!!line);" +
     "document.body.classList.toggle('dwone',!!line);" +
@@ -2152,9 +2208,14 @@ export const studentsDocument = (
     "assessment:b.getAttribute('data-defence'),student:b.getAttribute('data-student')},'*');" +
     "});})();</script>";
 
+  // Every shared piece the rows above asked for, once (see `templates`).
+  const templateHtml = [...templates.values()]
+    .map((entry) => '<template id="' + entry.id + '">' + entry.html + "</template>")
+    .join("");
+
   return documentPage(
     workStyle + "<style>" + assessmentWindowStyle + "</style>" + (sv ? sv.style : "") + header + (sv ? sv.section : "") + filterBar + list + legend + departed + drawer + assessmentWindow +
-      filterScript + drawerScript + defenceScript + assessmentWindowScript + presetScript + (sv ? sv.script : "") + VIEW_SCRIPT,
+      templateHtml + filterScript + drawerScript + defenceScript + assessmentWindowScript + presetScript + (sv ? sv.script : "") + VIEW_SCRIPT,
     dark,
   );
 };

@@ -74,12 +74,13 @@ const movedSincePublished = (bundle, runId, root, ledger) => {
  */
 export const unpublishedDocument = ({ bundle, runId, root, ledger }) => {
   const run = runById(bundle).get(runId) ?? {};
-  const book = gradebookPayload(approvedView(bundle), runId, {});
+  const approved = approvedView(bundle);
+  const book = gradebookPayload(approved, runId, {});
   const records = new Map(bundle.assessments.map((entry) => [entry.assessment_id, entry]));
 
   const assessments = (book.assessments ?? []).map((entry) => {
     const summary = entry.summary ?? {};
-    const canvas = canvasMarks({ bundle, runId, assessmentId: entry.assessment_id, ledger });
+    const canvas = canvasMarks({ bundle, runId, assessmentId: entry.assessment_id, ledger, approved });
     return {
       id: entry.assessment_id,
       title: entry.title ?? entry.assessment_id,

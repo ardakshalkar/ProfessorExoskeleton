@@ -131,9 +131,13 @@ const laneOf = (paper) => {
  * Read from the sync ledger in `~/.ainar/sync/`, which `lms push --target
  * canvas-api` writes only after Canvas reports the job done — so drawing the
  * tab never asks Canvas anything, and "sent" means landed, not attempted.
+ *
+ * `approved` is `approvedView(bundle)` when the caller already has it: the
+ * view deep-copies the whole course, and a caller asking once per pile paid
+ * for that copy once per pile.
  */
-export const canvasMarks = ({ bundle, runId, assessmentId, ledger }) => {
-  const rows = gradeRows(approvedView(bundle), runId, { assessmentId }).get(assessmentId) ?? [];
+export const canvasMarks = ({ bundle, runId, assessmentId, ledger, approved = null }) => {
+  const rows = gradeRows(approved ?? approvedView(bundle), runId, { assessmentId }).get(assessmentId) ?? [];
   const ready = rows.filter(exportable);
   const sent = ledger.prepared("canvas-api", assessmentId);
   // The ledger holds what Canvas was sent, on Canvas's scale — which the
@@ -364,7 +368,7 @@ const STEP_IDS = ["identify", "match", "read", "rubric", "grade", "approve", "ca
  * Everything about one pile that its row and its steps need, without the
  * per-paper detail only the chosen pile shows.
  */
-const standingOf = ({ bundle, runId, submissions, assessment, enrolled, ledger }) => {
+const standingOf = ({ bundle, runId, submissions, assessment, enrolled, ledger, approved }) => {
   const id = assessment.assessment_id;
   const place = scanPlace(submissions, runId, id);
   const plan = readPlan(place);
@@ -384,7 +388,7 @@ const standingOf = ({ bundle, runId, submissions, assessment, enrolled, ledger }
   const rubricId = assessment.rubric_id ?? assessment.rubric?.rubric_id ?? null;
   const rubric = rubricId ? (bundle.rubrics ?? []).find((entry) => entry.rubric_id === rubricId) ?? assessment.rubric ?? null : null;
   const low = status.placed.reduce((sum, student) => sum + lowConfidence(place, student), 0);
-  const canvas = canvasMarks({ bundle, runId, assessmentId: id, ledger });
+  const canvas = canvasMarks({ bundle, runId, assessmentId: id, ledger, approved });
   const { stages, next, counts } = stagesOf({ papers: lanes, status, assessment, rubric, expected, responses, evaluations, low, canvas });
   const lane = (name) => lanes.filter((entry) => entry.lane === name).length;
   // How many pages each placed student's paper has: their `scan.pdf` is those
@@ -460,10 +464,12 @@ export const scanPiles = ({ bundle, runId, submissions, ledger }) => {
   // it: the dropdown this replaced hid that Quiz 1 had 61 marks unsent while
   // Quiz 2 was on screen.
   const found = pilesOf(submissions, runId, assessments);
+  // One copy of the approved course for every pile's Canvas count.
+  const approved = found.length ? approvedView(bundle) : null;
   const standings = new Map(
     found.map((pile) => [
       pile.id,
-      standingOf({ bundle, runId, submissions, assessment: assessments.find((entry) => entry.assessment_id === pile.id), enrolled, ledger }),
+      standingOf({ bundle, runId, submissions, assessment: assessments.find((entry) => entry.assessment_id === pile.id), enrolled, ledger, approved }),
     ]),
   );
   const piles = found.map((pile) => {
