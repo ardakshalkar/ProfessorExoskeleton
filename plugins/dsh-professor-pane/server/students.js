@@ -1420,9 +1420,9 @@ export const studentsDocument = (
       escapeText(named || id) +
       (flag ? ' <span class="todo" title="Noted in the grade sheet">' + escapeText(flag) + "</span>" : "") +
       (gone && !dimmed ? ' <span class="todo" title="' + escapeAttribute(lms.note) + '">not in Canvas</span>' : "") +
+      (sv && !dimmed ? sv.chipFor(id) : "") +
       "</span>" +
       '<span class="gr" title="' + escapeText(label(entry)) + '">' + escapeText(shortGroup(label(entry))) + "</span>" +
-      (sv && !dimmed ? sv.chipFor(id) : "") +
       (dimmed
         ? '<span class="rest"><span class="todo"' + (lms ? ' title="' + escapeAttribute(lms.note) + '"' : "") + ">" + escapeText(entry.status ?? "inactive") + "</span></span>"
         : bar +
