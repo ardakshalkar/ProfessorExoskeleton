@@ -2216,12 +2216,21 @@ is worth building.
       least two other assessments sharing its concepts, and is out of line at
       30+ points after ties. In `ainar standing`; on CSS-4007, 6 of 348 marks.
       `M` · depends: STN-2
-- [ ] **STN-10** Shared answers on paper exams: pairs of students whose
+- [x] **STN-10** Shared answers on paper exams: pairs of students whose
       recorded item responses agree more than chance, weighted by shared
       *wrong* answers (a rare wrong answer in common says far more than a
       common right one), and pairs that recur across several exams. Read from
       `item_responses` (`scans answers`); a pair is a draft signal beside the
-      two papers, never a case. `M` · depends: STN-2
+      two papers, never a case. `M` · depends: STN-2. Done 2026-10-24 as
+      `ainar shared-answers`, derived like the rest of E38 — the draft signal
+      waits for STN-6, when the professor acts. Choice items by the rarity of
+      the shared option, a wrong one ten times a right one. Written answers —
+      all of CSS-4007's so far — by the rare 4-word phrases two students
+      share, leaving out the question's own wording and phrases that are
+      mostly numbers; doubled where both are known to have lost marks. A pair
+      is unusual past Tukey's far fence over the pairs sharing anything, and
+      never below a 10-word run nobody else wrote. On CSS-4007: 18 pairs over
+      four exams, about 1% of those compared; none recurs yet.
 
 ---
 

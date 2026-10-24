@@ -158,6 +158,10 @@ export const ACTIONS: readonly ActionPolicy[] = [
   ].map((name) => policy(name, LOCAL_FILE)),
 
   policy("find-image", LOCAL_LOOKUP),
+  policy("shared-answers", {
+    ...LOCAL_FILE,
+    reason: "It quotes what students wrote on their papers; it is read on this machine, by the professor.",
+  }),
 
   // Scanned papers carry names and handwriting, so the files never leave the
   // private folder on this machine: local, and never a backend's to hold.

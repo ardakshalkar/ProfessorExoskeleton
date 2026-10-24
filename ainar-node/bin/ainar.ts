@@ -186,6 +186,7 @@ import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } fro
 import { setCurve } from "../src/curve.ts";
 import { setMissingWork } from "../src/missing-work.ts";
 import { setSetting, settingOf, standingProfile, type SettingName } from "../src/standing.ts";
+import { sharedAnswers } from "../src/shared-answers.ts";
 import { casesOf, decideCase, describeCase, integrityDir, openCase } from "../src/integrity.ts";
 import { examReport, reportPlace, reportsDir, writeExamReports } from "../src/exam-report.ts";
 import {
@@ -472,6 +473,10 @@ const HELP = `ainar — the AINAR course model CLI
                            class (supervised) against at home (unsupervised),
                            and marks out of line with the same student's other
                            work on the same concepts
+  shared-answers RUN [--assessment A] [--json]
+                           pairs whose recorded exam answers share far more
+                           rare wording, or rare wrong choices, than the class;
+                           and pairs that do so on more than one exam
   assessment setting RUN (A… | --type T) (supervised | unsupervised | --clear)
                            record whether the work was done under supervision;
                            with none recorded, type and delivery decide where
@@ -1498,6 +1503,41 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         }
       }
       for (const note of profile.notes) out(`\n${note}`);
+      break;
+    }
+    case "shared-answers": {
+      // Pairs sharing rare answers on exams (src/shared-answers.ts). Derived, never written.
+      const runId = rest[0];
+      if (!runId) {
+        console.error("usage: shared-answers RUN [--assessment A] [--json]");
+        process.exit(2);
+      }
+      const found = sharedAnswers(forRun(runId), runId, { assessmentId: flag("assessment") ?? null });
+      if (args.includes("--json")) {
+        out(found);
+        break;
+      }
+      out(`${runId} shared answers — pairs far above the class on rare wording or rare wrong choices`);
+      for (const exam of found.exams) {
+        out(
+          `\n${exam.assessment_id}  ${exam.setting ?? "setting unknown"}  ${exam.answered} answered, ` +
+            `${exam.pairs_compared} pairs compared, unusual from ${exam.fence}: ${exam.unusual.length}`,
+        );
+        for (const pair of exam.unusual) {
+          out(`  ${pair.students.join(" & ")}  ${pair.score}  (${pair.items.length} of ${pair.common} common item(s))`);
+          for (const item of pair.items) {
+            out(`      ${item.item_id}  ${item.weight}${item.both_wrong ? "  both lost marks" : ""}`);
+            for (const text of item.shared) out(`        "${text}"`);
+          }
+        }
+      }
+      out(
+        found.recurring.length
+          ? `\nUnusual on more than one exam:\n${found.recurring.map((r) => `  ${r.students.join(" & ")}  ${r.exams.join(", ")}`).join("\n")}`
+          : "\nNo pair is unusual on more than one exam.",
+      );
+      out("Shared wording from a slide or handout both learned looks the same; read the two papers before anything else.");
+      for (const note of found.notes) out(`\n${note}`);
       break;
     }
     case "assessment": {
