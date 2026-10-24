@@ -17378,6 +17378,21 @@ function ProfessorPane(props) {
         ).then(() => write(["defence"])).catch(() => write(["defence"]));
         return;
       }
+      if (data.kind === "setting") {
+        const id = /^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/;
+        const run2 = currentRunRef.current;
+        const ids = Array.isArray(data.assessments) ? data.assessments.map(String) : [];
+        if (!run2 || !ids.length || !ids.every((a) => id.test(a))) return;
+        if (!["supervised", "unsupervised"].includes(data.setting)) return;
+        fetch(
+          scoped(
+            BASE + "/api/assessment/setting?run=" + encodeURIComponent(run2) + "&assessments=" + encodeURIComponent(ids.join(",")) + "&setting=" + encodeURIComponent(data.setting),
+            props.sessionId
+          ),
+          { method: "POST" }
+        ).then(() => write(["assessments"])).catch(() => write(["assessments"]));
+        return;
+      }
       if (data.kind === "curve") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run2 = currentRunRef.current;

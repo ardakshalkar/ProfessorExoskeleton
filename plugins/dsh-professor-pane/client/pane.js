@@ -323,6 +323,28 @@ export function ProfessorPane(props) {
           .catch(() => write(["defence"]));
         return;
       }
+      // *In class* / *At home* on the Students place: whether these
+      // assessments were supervised (`ainar assessment setting`); the redraw
+      // moves them onto a side.
+      if (data.kind === "setting") {
+        const id = /^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/;
+        const run = currentRunRef.current;
+        const ids = Array.isArray(data.assessments) ? data.assessments.map(String) : [];
+        if (!run || !ids.length || !ids.every((a) => id.test(a))) return;
+        if (!["supervised", "unsupervised"].includes(data.setting)) return;
+        fetch(
+          scoped(
+            BASE + "/api/assessment/setting?run=" + encodeURIComponent(run) +
+              "&assessments=" + encodeURIComponent(ids.join(",")) +
+              "&setting=" + encodeURIComponent(data.setting),
+            props.sessionId,
+          ),
+          { method: "POST" },
+        )
+          .then(() => write(["assessments"]))
+          .catch(() => write(["assessments"]));
+        return;
+      }
       // *Apply curve* / *Take the curve off* in the exam window: the server
       // runs `ainar curve`. The redraw closes the window, so it is reopened
       // as a placement's is; a refusal is said here, the frame has no place.

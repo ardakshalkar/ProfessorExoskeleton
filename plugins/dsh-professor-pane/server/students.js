@@ -24,6 +24,7 @@ import { BASE } from "./http.js";
 import { escapeAttribute, escapeText } from "./markdown.js";
 import { extensionOfKey, SHOWABLE } from "./materials.js";
 import { documentPage, stamp, VIEW_SCRIPT } from "./page.js";
+import { standingView } from "./standing-view.js";
 import { loadedRun, rosterPath, rosterPeople } from "./workspace.js";
 
 export const studentsDocument = (
@@ -48,6 +49,11 @@ export const studentsDocument = (
   // GitHub column, read whether or not names are on: they only pick a
   // student's fork out of the list, and are never drawn on their own.
   const recorded = recordedLogins(withNames ? people : rosterPeople());
+  // In class and at home (E38): a section above the list, a chip on the row,
+  // a block in the drawer. Null until somebody has a mark.
+  const sv = standingView(bundle, runId, {
+    nameOf: (id) => (people && typeof people[id]?.name === "string" && people[id].name.trim() ? people[id].name.trim() : id),
+  });
 
   const issueItems = issues && Array.isArray(issues.items) ? issues.items : [];
   const refused = issueItems.filter(
@@ -1381,6 +1387,7 @@ export const studentsDocument = (
         "</p>" +
         (lms ? '<p class="dim">' + escapeText(lms.note) + "</p>" : "") +
         (standing ? standingBlock(id, standing) : "") +
+        (sv ? sv.detailFor(id) : "") +
         workPanel(entry, standing) +
         "</div>";
 
@@ -1415,6 +1422,7 @@ export const studentsDocument = (
       (gone && !dimmed ? ' <span class="todo" title="' + escapeAttribute(lms.note) + '">not in Canvas</span>' : "") +
       "</span>" +
       '<span class="gr" title="' + escapeText(label(entry)) + '">' + escapeText(shortGroup(label(entry))) + "</span>" +
+      (sv && !dimmed ? sv.chipFor(id) : "") +
       (dimmed
         ? '<span class="rest"><span class="todo"' + (lms ? ' title="' + escapeAttribute(lms.note) + '"' : "") + ">" + escapeText(entry.status ?? "inactive") + "</span></span>"
         : bar +
@@ -2145,8 +2153,8 @@ export const studentsDocument = (
     "});})();</script>";
 
   return documentPage(
-    workStyle + "<style>" + assessmentWindowStyle + "</style>" + header + filterBar + list + legend + departed + drawer + assessmentWindow +
-      filterScript + drawerScript + defenceScript + assessmentWindowScript + presetScript + VIEW_SCRIPT,
+    workStyle + "<style>" + assessmentWindowStyle + "</style>" + (sv ? sv.style : "") + header + (sv ? sv.section : "") + filterBar + list + legend + departed + drawer + assessmentWindow +
+      filterScript + drawerScript + defenceScript + assessmentWindowScript + presetScript + (sv ? sv.script : "") + VIEW_SCRIPT,
     dark,
   );
 };

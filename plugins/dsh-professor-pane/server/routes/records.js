@@ -3,8 +3,11 @@
  * server/record-fields.js for which items and fields, and why those.
  */
 
+import { setSetting } from "@ainar/core/src/standing.ts";
+
 import { readBody, sendJson } from "../http.js";
 import { readRecord, writeRecordFields } from "../record-fields.js";
+import { loadedRun } from "../workspace.js";
 
 export const routes = [
   /**
@@ -32,6 +35,31 @@ export const routes = [
           return sendJson(res, 200, writeRecordFields(workspace, root, runId, body));
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    },
+  },
+  /**
+   * POST `?assessments=A,B&setting=supervised|unsupervised` — whether those
+   * assessments were done under supervision: the Students place's *In class*
+   * and *At home*. The professor's fact, like a due date; it moves no mark.
+   */
+  {
+    paths: ["/api/assessment/setting"],
+    handle(c) {
+      const { req, res, url, runId, workspace, root } = c;
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      const ids = (url.searchParams.get("assessments") ?? "").split(",").filter(Boolean);
+      const setting = url.searchParams.get("setting") ?? "";
+      if (!ids.length || !ids.every((id) => /^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(id))) {
+        return sendJson(res, 200, { error: "Assessment ids, please." });
+      }
+      if (setting !== "supervised" && setting !== "unsupervised") return sendJson(res, 200, { error: "supervised or unsupervised." });
+      try {
+        const { bundle } = loadedRun(workspace, runId);
+        return sendJson(res, 200, { ok: true, written: setSetting({ root, bundle, runId, assessmentIds: ids, setting }) });
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
     },
   },
 ];

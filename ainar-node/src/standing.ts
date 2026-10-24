@@ -48,6 +48,8 @@ export type SettingName = z.infer<typeof Setting>;
 export const MIN_CLASS = 5;
 /** Assessments needed on each side before the two are compared. */
 export const MIN_SIDE = 2;
+/** A gap this wide, after ties, is "stronger at home" or "stronger in class" on a screen. */
+export const GAP_AT = 20;
 
 /**
  * Where the work arrives, when that alone says whether anyone watched it. An

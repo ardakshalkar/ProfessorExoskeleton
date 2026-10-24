@@ -2181,12 +2181,20 @@ is worth building.
       struggling, stronger at home, stronger in class, rising, falling,
       uneven — each with its one-sentence reason; thresholds per course in the
       run's preferences. `M` · depends: STN-2
-- [ ] **STN-4** The pane: a scatter of supervised against unsupervised
+- [x] **STN-4** The pane: a scatter of supervised against unsupervised
       standing with the diagonal band, each student's trajectory across the
       term, movement between groups midterm to midterm, and a chip on the
       student row only when they sit outside the band. Asks "was this
       supervised?" the first time an assessment of unknown setting is graded.
-      `M` · depends: STN-3
+      `M` · depends: STN-3. Done 2026-10-24 ahead of STN-3, on the Students
+      place (`server/standing-view.js`): *In class and at home* above the
+      list — the scatter coloured by side (`GAP_AT` 20 points after ties),
+      who is stronger at home or in class, marks out of line (STN-9), pairs
+      sharing answers (STN-10) — and the question for assessments of unknown
+      setting, one answer per kind, written by `/api/assessment/setting`. On
+      a row, a chip for the gap, for marks out of line, and for a pair that
+      recurs; in the drawer the trajectory and the lines behind each chip.
+      Left for STN-3: the groups, and movement between them.
 - [ ] **STN-5** Concept disagreement: on the concepts grid, a cell marked
       where the concept's supervised and unsupervised evidence disagree.
       `S` · depends: STN-2, HOME-8
