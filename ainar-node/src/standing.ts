@@ -9,6 +9,13 @@
  * makes a percentile a range, and a gap is only what is left once both ranges
  * have had their room (`percentileIn`).
  *
+ * The gap trusts the supervised side, and a student who copies on exams
+ * inflates both. So each mark is also set against the same student's other
+ * work on the concepts it shares with it, whatever the setting (STN-9): per
+ * concept, their percentile among the class on the criteria tagged with it,
+ * here against everywhere else. A mark far from that is *out of line*, above
+ * or below, and says nothing about why.
+ *
  * The profile is derived on every read and never stored, so it cannot go
  * stale; a signal is written only when the professor acts on what it shows.
  * It reads the gradebook's rows and keeps its refusals, and adds three of its
@@ -34,7 +41,7 @@ import { COLLECTIONS } from "./loader.ts";
 import { Setting } from "./model/common.ts";
 import { editRecords } from "./record-edit.ts";
 
-export const STANDING_VERSION = "standing/2026.10.1";
+export const STANDING_VERSION = "standing/2026.10.2";
 export type SettingName = z.infer<typeof Setting>;
 
 /** Fewer marked papers than this, and a percentile says more about chance than the student. */
@@ -164,6 +171,50 @@ const percentileIn = (scores: readonly number[], score: number): { low: number; 
 const mean = (values: readonly number[]): number | null =>
   values.length ? roundHalfEven(values.reduce((sum, v) => sum + v, 0) / values.length, 1) : null;
 
+interface Range {
+  low: number;
+  mid: number;
+  high: number;
+}
+
+/** How far `a` sits above `b` once both ranges have had their room: 0 where they overlap, negative below. */
+const apart = (a: { low: number; high: number }, b: { low: number; high: number }): number =>
+  a.low > b.high ? roundHalfEven(a.low - b.high, 1) : b.low > a.high ? -roundHalfEven(b.low - a.high, 1) : 0;
+
+const meanRange = (ranges: readonly Range[]): Range => ({
+  low: mean(ranges.map((r) => r.low)) as number,
+  mid: mean(ranges.map((r) => r.mid)) as number,
+  high: mean(ranges.map((r) => r.high)) as number,
+});
+
+/**
+ * A mark this far from the same student's other work on the same concepts,
+ * in percentile points after ties, is *out of line* (STN-9).
+ */
+export const OUT_OF_LINE = 30;
+/** Other assessments on the same concepts needed before a mark is held against them. */
+export const MIN_AGAINST = 2;
+
+/**
+ * One assessment's mark set against the same student's other work on the
+ * concepts it shares with them, whatever their setting — so a student copying
+ * on exams, who has no in-class/at-home gap, still stands out where an exam
+ * is strong on concepts every homework of theirs is weak on.
+ */
+export interface OutOfLine {
+  assessment_id: string;
+  setting: SettingName | null;
+  /** The concepts this mark shares with the other work. */
+  concepts: string[];
+  /** The student's percentile on those concepts here, and on the other work. */
+  here: Range;
+  there: Range;
+  /** Positive: this mark stands above their other work on the concepts; negative, below. */
+  distance: number;
+  /** The other assessments it was set against. */
+  against: string[];
+}
+
 export interface StandingEntry {
   assessment_id: string;
   setting: SettingName | null;
@@ -199,6 +250,10 @@ export interface StudentStanding {
   gap: number | null;
   /** Rows with a mark that were not counted, and why — so a short profile explains itself. */
   left_out: { assessment_id: string; why: string }[];
+  /** Marks with enough other work on their concepts to be set against it. */
+  checked: number;
+  /** Those of them at least `OUT_OF_LINE` from it, by date. */
+  out_of_line: OutOfLine[];
 }
 
 export interface AssessmentStanding {
@@ -220,6 +275,8 @@ export interface StandingProfile {
   course_version_id: string;
   min_class: number;
   min_side: number;
+  out_of_line_at: number;
+  min_against: number;
   assessments: AssessmentStanding[];
   students: StudentStanding[];
   /** Assessments with marks whose setting nobody has said, and nothing settles. */
@@ -251,6 +308,8 @@ export const standingProfile = (
         unsupervised: { standing: null, low: null, high: null, count: 0 },
         gap: null,
         left_out: [],
+        checked: 0,
+        out_of_line: [],
       };
       byStudent.set(id, found);
     }
@@ -259,6 +318,11 @@ export const standingProfile = (
 
   const assessments: AssessmentStanding[] = [];
   const unknown: string[] = [];
+  const rubrics = allRubrics(b);
+  /** student → assessment → concept → where they sit among the class on that concept there. */
+  const onConcept = new Map<string, Map<string, Map<string, Range>>>();
+  const settingById = new Map<string, SettingName | null>();
+  const atById = new Map<string, string | null>();
   for (const assessment of assessmentsOf(b, courseVersionId)) {
     const rows = rowsByAssessment.get(assessment.assessment_id) ?? [];
     const found = settingOf(assessment);
@@ -280,8 +344,40 @@ export const standingProfile = (
       counted: enough,
     });
     if (measured && scores.length && found.setting === null) unknown.push(assessment.assessment_id);
+    settingById.set(assessment.assessment_id, found.setting);
+    atById.set(assessment.assessment_id, at);
     for (const row of rows) student(row.student_id);
     if (!enough) continue;
+
+    // Each concept's share of this paper: the criteria tagged with it, summed.
+    // The criterion scores are the gradebook's own — a decision, or approved
+    // items — so this reads nothing the total did not.
+    const tags = new Map<string, string[]>(
+      ((assessment.rubric_id ? rubrics.get(assessment.rubric_id)?.criteria : null) ?? []).map((c: any) => [c.criterion_id, c.concepts ?? []]),
+    );
+    const byConcept = new Map<string, Map<string, { score: number; maximum: number }>>();
+    for (const row of counted) {
+      for (const criterion of row.criteria) {
+        if (criterion.score === null || !criterion.maximum) continue;
+        for (const concept of tags.get(criterion.criterion_id) ?? []) {
+          const students = byConcept.get(concept) ?? new Map();
+          const sum = students.get(row.student_id) ?? { score: 0, maximum: 0 };
+          students.set(row.student_id, { score: sum.score + criterion.score, maximum: sum.maximum + criterion.maximum });
+          byConcept.set(concept, students);
+        }
+      }
+    }
+    for (const [concept, students] of byConcept) {
+      if (students.size < MIN_CLASS) continue;
+      const fractions = [...students.values()].map((s) => s.score / s.maximum);
+      for (const [id, s] of students) {
+        const mine = onConcept.get(id) ?? new Map<string, Map<string, Range>>();
+        const here = mine.get(assessment.assessment_id) ?? new Map<string, Range>();
+        here.set(concept, percentileIn(fractions, s.score / s.maximum));
+        mine.set(assessment.assessment_id, here);
+        onConcept.set(id, mine);
+      }
+    }
     for (const row of rows) {
       const why = whyNot(row);
       if (why !== null) {
@@ -316,15 +412,45 @@ export const standingProfile = (
       };
     }
     if (s.supervised.count >= MIN_SIDE && s.unsupervised.count >= MIN_SIDE) {
-      const home = s.unsupervised as { low: number; high: number };
-      const watched = s.supervised as { low: number; high: number };
-      s.gap =
-        home.low > watched.high
-          ? roundHalfEven(home.low - watched.high, 1)
-          : watched.low > home.high
-            ? -roundHalfEven(watched.low - home.high, 1)
-            : 0;
+      s.gap = apart(s.unsupervised as { low: number; high: number }, s.supervised as { low: number; high: number });
     }
+
+    // STN-9: each mark against the same student's other work on its concepts.
+    const mine = onConcept.get(s.student_id) ?? new Map<string, Map<string, Range>>();
+    for (const [assessmentId, concepts] of mine) {
+      const here: Range[] = [];
+      const there: Range[] = [];
+      const shared: string[] = [];
+      const against = new Set<string>();
+      for (const [concept, range] of concepts) {
+        const elsewhere = [...mine].filter(([other, on]) => other !== assessmentId && on.has(concept));
+        if (!elsewhere.length) continue;
+        shared.push(concept);
+        here.push(range);
+        there.push(meanRange(elsewhere.map(([, on]) => on.get(concept)!)));
+        for (const [other] of elsewhere) against.add(other);
+      }
+      if (against.size < MIN_AGAINST) continue;
+      s.checked += 1;
+      const mark = meanRange(here);
+      const rest = meanRange(there);
+      const distance = apart(mark, rest);
+      if (Math.abs(distance) < OUT_OF_LINE) continue;
+      s.out_of_line.push({
+        assessment_id: assessmentId,
+        setting: settingById.get(assessmentId) ?? null,
+        concepts: shared.sort(),
+        here: mark,
+        there: rest,
+        distance,
+        against: [...against].sort(),
+      });
+    }
+    s.out_of_line.sort(
+      (a, c) =>
+        (atById.get(a.assessment_id) ?? "￿").localeCompare(atById.get(c.assessment_id) ?? "￿") ||
+        a.assessment_id.localeCompare(c.assessment_id),
+    );
   }
 
   const notes: string[] = [];
@@ -342,6 +468,8 @@ export const standingProfile = (
     course_version_id: courseVersionId,
     min_class: MIN_CLASS,
     min_side: MIN_SIDE,
+    out_of_line_at: OUT_OF_LINE,
+    min_against: MIN_AGAINST,
     assessments,
     students: [...byStudent.values()].sort((a, c) => a.student_id.localeCompare(c.student_id)),
     unknown_setting: unknown,

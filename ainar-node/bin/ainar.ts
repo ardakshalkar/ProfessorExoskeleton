@@ -468,8 +468,10 @@ const HELP = `ainar — the AINAR course model CLI
   student RUN STUDENT
   class-progress RUN [--group G]
   standing RUN [--student S] [--group G] [--json]
-                           each student's class percentile per assessment, and
-                           in class (supervised) against at home (unsupervised)
+                           each student's class percentile per assessment, in
+                           class (supervised) against at home (unsupervised),
+                           and marks out of line with the same student's other
+                           work on the same concepts
   assessment setting RUN (A… | --type T) (supervised | unsupervised | --clear)
                            record whether the work was done under supervision;
                            with none recorded, type and delivery decide where
@@ -1460,16 +1462,39 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             `  ${a.marked} marked${a.counted ? "" : a.marked ? ", too few to rank" : ""}`,
         );
       }
+      const signed = (n: number) => (n > 0 ? "+" : "") + n;
+      const lineOf = (o: { assessment_id: string; setting: string | null; distance: number; here: { mid: number }; there: { mid: number }; concepts: string[]; against: string[] }) =>
+        `${o.assessment_id} (${o.setting ?? "unknown"})  ${signed(o.distance)}: percentile ${o.here.mid} here, ${o.there.mid} ` +
+        `on the same ${o.concepts.length} concept(s) in ${o.against.length} other assessment(s)`;
       out("");
-      out("  student            in class     at home      gap");
+      out("  student            in class     at home      gap      out of line");
       for (const s of students) {
         out(
           `  ${s.student_id.padEnd(18)} ${side(s.supervised).padEnd(12)} ${side(s.unsupervised).padEnd(12)} ` +
-            (s.gap === null ? "—" : (s.gap > 0 ? "+" : "") + s.gap),
+            `${(s.gap === null ? "—" : signed(s.gap)).padEnd(8)} ${s.checked ? `${s.out_of_line.length} of ${s.checked}` : "—"}`,
         );
         if (only) {
           for (const e of s.entries) out(`      ${(e.at ?? "undated").slice(0, 10)}  ${e.assessment_id}  ${e.setting ?? "unknown"}  ${e.low === e.high ? `${e.percentile}th` : `${e.low}–${e.high}th (tied)`}  (${e.percent}%)`);
           for (const l of s.left_out) out(`      left out: ${l.assessment_id} — ${l.why}`);
+          for (const o of s.out_of_line) out(`      out of line: ${lineOf(o)}`);
+          for (const o of s.out_of_line) out(`        concepts: ${o.concepts.join(", ")}; against ${o.against.join(", ")}`);
+        }
+      }
+      // Every mark out of line with the same student's other work on its concepts (STN-9), the widest first.
+      const marks = students
+        .flatMap((s) => s.out_of_line.map((o) => ({ student_id: s.student_id, ...o })))
+        .sort((a, c) => Math.abs(c.distance) - Math.abs(a.distance));
+      if (!only) {
+        out("");
+        out(
+          marks.length
+            ? `Out of line with the same student's other work on the same concepts (${profile.out_of_line_at}+ percentile points after ties):`
+            : `No mark is ${profile.out_of_line_at}+ percentile points from the same student's other work on its concepts.`,
+        );
+        for (const m of marks) out(`  ${m.student_id}  ${lineOf(m)}`);
+        const repeated = students.filter((s) => s.out_of_line.filter((o) => o.distance > 0).length >= 2);
+        if (repeated.length) {
+          out(`  above their other work on two or more assessments: ${repeated.map((s) => s.student_id).join(", ")}`);
         }
       }
       for (const note of profile.notes) out(`\n${note}`);

@@ -2170,10 +2170,10 @@ is worth building.
 > concepts, whatever the setting (STN-9), with paper exams checked directly
 > for pairs who share answers (STN-10).
 
-- [ ] **STN-1** `Assessment.setting: supervised | unsupervised`, its default
+- [x] **STN-1** `Assessment.setting: supervised | unsupervised`, its default
       from type and delivery (`settingOf`), and `ainar assessment setting`
       to record it, one assessment or a whole type at a time. `S` · depends: —
-- [ ] **STN-2** The standing profile: per student, each graded assessment's
+- [x] **STN-2** The standing profile: per student, each graded assessment's
       class percentile with its setting, concepts and date; the supervised and
       unsupervised standings and the gap between them; `ainar standing RUN
       [--student S] [--json]`. Pseudonyms only. `M` · depends: STN-1
@@ -2203,14 +2203,19 @@ is worth building.
 - [ ] **STN-8** The session reads it: `standing` in the MCP tools beside
       `student` and `class_progress`, so `/find-gaps` and `/student-report`
       can say *why* a student moved. `S` · depends: STN-2
-- [ ] **STN-9** Concept-aligned consistency: for each concept, the student's
+- [x] **STN-9** Concept-aligned consistency: for each concept, the student's
       percentile on the items and criteria tagged with it, assessment by
       assessment; a mark is *out of line* when it stands far from the same
       student's other evidence on those concepts — a midterm strong where every
       homework on its concepts is weak, or the reverse. Item-level where items
       carry concepts, criterion-level where only the rubric does. Repeated
       across several assessments, it is the pattern a student copying on exams
-      leaves, which the setting gap cannot see. `M` · depends: STN-2
+      leaves, which the setting gap cannot see. Done 2026-10-24 at criterion
+      level (item responses carry no approved scores yet): per concept, the
+      percentile on the criteria tagged with it; a mark is set against at
+      least two other assessments sharing its concepts, and is out of line at
+      30+ points after ties. In `ainar standing`; on CSS-4007, 6 of 348 marks.
+      `M` · depends: STN-2
 - [ ] **STN-10** Shared answers on paper exams: pairs of students whose
       recorded item responses agree more than chance, weighted by shared
       *wrong* answers (a rare wrong answer in common says far more than a

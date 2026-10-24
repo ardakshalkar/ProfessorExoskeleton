@@ -26,7 +26,10 @@ const STUDENTS = ["STUDENT-S1", "STUDENT-S2", "STUDENT-S3", "STUDENT-S4", "STUDE
  * assessment out of 10 on one criterion, `marks[id][i]` the decided score of
  * `STUDENTS[i]`, `null` for nothing handed in.
  */
-const course = (assessments: { id: string; type: string; setting?: string; delivery?: string; due: string }[], marks: Record<string, (number | null)[]>) => {
+const course = (
+  assessments: { id: string; type: string; setting?: string; delivery?: string; due: string; concepts?: string[] }[],
+  marks: Record<string, (number | null)[]>,
+) => {
   const b: any = structuredClone(sample);
   b.enrollments = STUDENTS.map((student_id, i) => ({
     enrollment_id: `ENR-T${i}`,
@@ -47,7 +50,7 @@ const course = (assessments: { id: string; type: string; setting?: string; deliv
     rubric_id: `RUBRIC-${a.id}`,
     rubric: {
       rubric_id: `RUBRIC-${a.id}`,
-      criteria: [{ criterion_id: `CRIT-${a.id}`, rubric_id: `RUBRIC-${a.id}`, title: "All", maximum_score: 10, concepts: [`CONCEPT-${a.id}`] }],
+      criteria: [{ criterion_id: `CRIT-${a.id}`, rubric_id: `RUBRIC-${a.id}`, title: "All", maximum_score: 10, concepts: a.concepts ?? [`CONCEPT-${a.id}`] }],
     },
   }));
   b.submissions = [];
@@ -174,6 +177,48 @@ test("a quiz of unknown setting sits on neither side, and the profile says how t
   assert.equal(of(p, "STUDENT-S1").supervised.count, 0);
   assert.ok(p.notes.some((n) => n.includes("ainar assessment setting")));
   assert.deepEqual(p.assessments.find((a) => a.assessment_id === "Q-1")!.concepts, ["CONCEPT-Q-1"]);
+});
+
+const SHARED = TWO_EACH.map((a) => ({ ...a, concepts: ["CONCEPT-A"] }));
+const REVERSED_ON_Q2 = {
+  "Q-1": [6, 5, 4, 3, 2, 1],
+  "Q-2": [1, 2, 3, 4, 5, 6],
+  "H-1": [6, 5, 4, 3, 2, 1],
+  "H-2": [6, 5, 4, 3, 2, 1],
+};
+
+test("a mark far above the student's other work on the same concepts is out of line, whatever its setting", () => {
+  const p = standingProfile(course(SHARED, REVERSED_ON_Q2), RUN);
+  const s6 = of(p, "STUDENT-S6");
+  assert.equal(s6.checked, 4);
+  assert.equal(s6.out_of_line.length, 1);
+  const [mark] = s6.out_of_line;
+  assert.equal(mark.assessment_id, "Q-2");
+  assert.equal(mark.setting, "supervised");
+  assert.ok(mark.distance >= 30);
+  assert.deepEqual(mark.concepts, ["CONCEPT-A"]);
+  assert.deepEqual(mark.against, ["H-1", "H-2", "Q-1"]);
+  // And the reverse is out of line too, below.
+  assert.ok(of(p, "STUDENT-S1").out_of_line[0].distance <= -30);
+  // A student in the middle everywhere is not.
+  assert.deepEqual(of(p, "STUDENT-S4").out_of_line, []);
+});
+
+test("a mark is only set against work that shares its concepts, and enough of it", () => {
+  // Nothing shared: each assessment on a concept of its own.
+  const apart = standingProfile(course(TWO_EACH, REVERSED_ON_Q2), RUN);
+  for (const s of apart.students) assert.equal(s.checked, 0);
+  // One other assessment on the concept is not enough to hold a mark against.
+  const two = SHARED.filter((a) => a.id === "Q-1" || a.id === "Q-2");
+  for (const s of standingProfile(course(two, REVERSED_ON_Q2), RUN).students) assert.equal(s.checked, 0);
+});
+
+test("ties at full marks on the other work give a mark room before it is out of line", () => {
+  const p = standingProfile(
+    course(SHARED, { "Q-1": [6, 5, 4, 3, 2, 1], "Q-2": [1, 2, 3, 4, 5, 6], "H-1": [10, 10, 10, 10, 10, 10], "H-2": [10, 10, 10, 10, 10, 10] }),
+    RUN,
+  );
+  assert.deepEqual(of(p, "STUDENT-S6").out_of_line, []);
 });
 
 test("setSetting records, leaves an unchanged one alone, clears, and refuses another run's assessment", () => {
