@@ -2163,6 +2163,13 @@ is worth building.
 > own signal and would fake a gap); marks an integrity case holds or voids are
 > left out; a gap needs at least two assessments on each side.
 
+> **No side is trusted by default** (2026-10-24). Copying happens on exams
+> too, and a student who copies on several of them inflates both sides and
+> shows no gap. So the in-class/at-home gap is one lens, and the sharper one
+> is by concept: each mark against the same student's other work on the same
+> concepts, whatever the setting (STN-9), with paper exams checked directly
+> for pairs who share answers (STN-10).
+
 - [ ] **STN-1** `Assessment.setting: supervised | unsupervised`, its default
       from type and delivery (`settingOf`), and `ainar assessment setting`
       to record it, one assessment or a whole type at a time. `S` · depends: —
@@ -2196,6 +2203,20 @@ is worth building.
 - [ ] **STN-8** The session reads it: `standing` in the MCP tools beside
       `student` and `class_progress`, so `/find-gaps` and `/student-report`
       can say *why* a student moved. `S` · depends: STN-2
+- [ ] **STN-9** Concept-aligned consistency: for each concept, the student's
+      percentile on the items and criteria tagged with it, assessment by
+      assessment; a mark is *out of line* when it stands far from the same
+      student's other evidence on those concepts — a midterm strong where every
+      homework on its concepts is weak, or the reverse. Item-level where items
+      carry concepts, criterion-level where only the rubric does. Repeated
+      across several assessments, it is the pattern a student copying on exams
+      leaves, which the setting gap cannot see. `M` · depends: STN-2
+- [ ] **STN-10** Shared answers on paper exams: pairs of students whose
+      recorded item responses agree more than chance, weighted by shared
+      *wrong* answers (a rare wrong answer in common says far more than a
+      common right one), and pairs that recur across several exams. Read from
+      `item_responses` (`scans answers`); a pair is a draft signal beside the
+      two papers, never a case. `M` · depends: STN-2
 
 ---
 
