@@ -704,6 +704,23 @@
       "default": null,
       "description": "This assessment's own rule for work not handed in once it is due; absent, the run's grading_scheme.missing_work.",
       "title": "Missing Work"
+    },
+    "setting": {
+      "anyOf": [
+        {
+          "enum": [
+            "supervised",
+            "unsupervised"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Whether the work was done under supervision (a paper in class, an oral defence) or not (homework, an online quiz); absent, inferred from type and delivery where they settle it.",
+      "title": "Setting"
     }
   },
   "required": [

@@ -142,6 +142,7 @@ export const ACTIONS: readonly ActionPolicy[] = [
     "extract-evidence",
     "roll-up",
     "class-progress",
+    "standing",
     "action-inbox-data",
     "syllabus",
     "alignment-report",

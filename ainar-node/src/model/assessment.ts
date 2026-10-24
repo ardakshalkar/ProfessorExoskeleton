@@ -44,6 +44,7 @@ import {
   IntegrityState,
   MissingWork,
   SignalId,
+  Setting,
   UserId,
   Weight,
   CognitiveLevel,
@@ -164,6 +165,8 @@ export const Assessment = entity({
   rubric: Rubric.nullish(),
   submission_type: z.array(SubmissionFormat).default([]),
   delivery: DeliveryChannel.nullish(),
+  /** Sat under supervision or not; absent, inferred where type and delivery settle it (`settingOf`). */
+  setting: Setting.nullish(),
   instructions_document_id: DocumentId.nullish(),
   settings: z.record(z.string(), z.unknown()).default({}),
   design: AssessmentDesign.nullish(),

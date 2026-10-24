@@ -16,3 +16,7 @@ gain `ScoreCurve` and `Assessment.curve`, matching ainar-node/src/model/assessme
 Fork, 2026-10-22: assessment.schema.json, course_version.schema.json and
 course-bundle.schema.json gain `missing_work` (blank | zero) on Assessment and
 GradingScheme, matching ainar-node/src/model/common.ts `MissingWork`.
+
+Fork, 2026-10-24 (STN-1): assessment.schema.json and course-bundle.schema.json
+gain `Assessment.setting` (supervised | unsupervised), matching
+ainar-node/src/model/common.ts `Setting`.

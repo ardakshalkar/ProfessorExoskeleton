@@ -86,6 +86,14 @@ about an afternoon and has not been done.
   definition before `Module` in the bundle and after `EnrollmentStatus` in
   `enrollment`, `lms` after `group` in both. The SQL table has no column for
   it; `sqlgen` carries it in `extensions.lms`.
+- **2026-10-24 — supervised or not.** `Assessment.setting` (`supervised |
+  unsupervised`): whether the work was done where someone could see it — a
+  paper in class, an oral defence — or not: homework, a quiz taken online.
+  The professor's fact. Absent, `ainar-node/src/standing.ts` infers it from
+  `type` and `delivery` where those settle it (an exam, homework) and leaves it
+  unknown where they do not (a quiz with no delivery). Inserted as text after
+  `missing_work`, in `assessment` and the bundle. The SQL table has no column
+  for it; `sqlgen` carries it in `extensions.setting`.
 
 ## Conventions
 

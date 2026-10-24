@@ -2137,6 +2137,68 @@ is worth building.
 
 ---
 
+## E38 · How each student performs, in class and at home — no `FUTURE.md` section yet
+
+> **Rank: high.** Proposed 2026-10-24. A student whose midterm and quizzes
+> disagree with their homework is worth noticing for three readers, and each
+> may see only their own part: the **professor** groups students by how they
+> perform and watches them move; the **student** is encouraged against their
+> own past, never against the class; and the professor alone sees the gap
+> that *may* be outside help, with the evidence beside it and the existing
+> defence and integrity flows as the only doors. The system never accuses.
+>
+> **One calculation, three views.** Each graded assessment becomes the
+> student's class percentile, tagged with the assessment's **setting**
+> (supervised or not), its concepts and its date: the *standing profile*.
+> Raw marks are never compared — a hard midterm is hard for everyone.
+> It is derived, never stored, so it cannot go stale; a `StudentSignal` is
+> written only when the professor acts on what it shows.
+>
+> **General, not this course's.** Whether a quiz was sat in class or online
+> in Canvas is the professor's fact per assessment, defaulted from type and
+> delivery and asked where it cannot be: an exam is supervised, homework is
+> not, a quiz is whatever its delivery says, or unknown until set.
+>
+> **Guards.** Work not handed in is left out of standing (it already has its
+> own signal and would fake a gap); marks an integrity case holds or voids are
+> left out; a gap needs at least two assessments on each side.
+
+- [ ] **STN-1** `Assessment.setting: supervised | unsupervised`, its default
+      from type and delivery (`settingOf`), and `ainar assessment setting`
+      to record it, one assessment or a whole type at a time. `S` · depends: —
+- [ ] **STN-2** The standing profile: per student, each graded assessment's
+      class percentile with its setting, concepts and date; the supervised and
+      unsupervised standings and the gap between them; `ainar standing RUN
+      [--student S] [--json]`. Pseudonyms only. `M` · depends: STN-1
+- [ ] **STN-3** Professor groups by readable rules — steady strong, steady
+      struggling, stronger at home, stronger in class, rising, falling,
+      uneven — each with its one-sentence reason; thresholds per course in the
+      run's preferences. `M` · depends: STN-2
+- [ ] **STN-4** The pane: a scatter of supervised against unsupervised
+      standing with the diagonal band, each student's trajectory across the
+      term, movement between groups midterm to midterm, and a chip on the
+      student row only when they sit outside the band. Asks "was this
+      supervised?" the first time an assessment of unknown setting is graded.
+      `M` · depends: STN-3
+- [ ] **STN-5** Concept disagreement: on the concepts grid, a cell marked
+      where the concept's supervised and unsupervised evidence disagree.
+      `S` · depends: STN-2, HOME-8
+- [ ] **STN-6** *Stronger at home*, for the professor only: the gap beside
+      what corroborates it (fork similarity ITG-1, hand-in timing, a defence
+      outcome), and the doors that exist — draft defence questions on that
+      work, open an integrity case. Acting writes a draft `StudentSignal`
+      `performance_divergence`. Nothing of it reaches any student-facing view.
+      `M` · depends: STN-3
+- [ ] **STN-7** The student's view: strengths first, progress against their
+      own earlier work, one next step tied to a concept; no percentiles, no
+      class comparison, never the at-home gap. A draft the professor approves,
+      sent with E21. `M` · depends: STN-2, E21
+- [ ] **STN-8** The session reads it: `standing` in the MCP tools beside
+      `student` and `class_progress`, so `/find-gaps` and `/student-report`
+      can say *why* a student moved. `S` · depends: STN-2
+
+---
+
 ## Suggested order
 
 Four decisions and five tasks are worth doing before anything else on this page.

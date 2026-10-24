@@ -185,6 +185,7 @@ import { importMaterial } from "../src/materials-import.ts";
 import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
 import { setCurve } from "../src/curve.ts";
 import { setMissingWork } from "../src/missing-work.ts";
+import { setSetting, settingOf, standingProfile, type SettingName } from "../src/standing.ts";
 import { casesOf, decideCase, describeCase, integrityDir, openCase } from "../src/integrity.ts";
 import { examReport, reportPlace, reportsDir, writeExamReports } from "../src/exam-report.ts";
 import {
@@ -466,6 +467,13 @@ const HELP = `ainar — the AINAR course model CLI
   rubric ASSESSMENT
   student RUN STUDENT
   class-progress RUN [--group G]
+  standing RUN [--student S] [--group G] [--json]
+                           each student's class percentile per assessment, and
+                           in class (supervised) against at home (unsupervised)
+  assessment setting RUN (A… | --type T) (supervised | unsupervised | --clear)
+                           record whether the work was done under supervision;
+                           with none recorded, type and delivery decide where
+                           they can (an exam, homework) and a quiz stays unknown
   inbox RUN [--date D] [--group G]
   calibration RUN
   blueprint RUN
@@ -1425,6 +1433,86 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
     case "class-progress":
       out(dashboardPayload(forRun(rest[0]!), rest[0]!, { groups: runGroups(rest[0]!) }));
       break;
+    case "standing": {
+      // In class against at home, by percentile (src/standing.ts). Derived, never written.
+      const runId = rest[0];
+      if (!runId) {
+        console.error("usage: standing RUN [--student S] [--group G] [--json]");
+        process.exit(2);
+      }
+      const profile = standingProfile(forRun(runId), runId, { groups: runGroups(runId) });
+      const only = flag("student");
+      const students = only ? profile.students.filter((s) => s.student_id === only) : profile.students;
+      if (only && !students.length) {
+        console.error(`${only} has no row in ${runId}`);
+        process.exit(1);
+      }
+      if (args.includes("--json")) {
+        out({ ...profile, students });
+        break;
+      }
+      const side = (s: { standing: number | null; count: number }) =>
+        s.standing === null ? "—" : `${s.standing} (${s.count})`;
+      out(`${runId} standing — class percentile; in class = supervised, at home = unsupervised`);
+      for (const a of profile.assessments) {
+        out(
+          `  ${a.assessment_id}  ${a.setting ?? "unknown"}${a.setting_source === "inferred" ? ` (${a.setting_reason})` : ""}` +
+            `  ${a.marked} marked${a.counted ? "" : a.marked ? ", too few to rank" : ""}`,
+        );
+      }
+      out("");
+      out("  student            in class     at home      gap");
+      for (const s of students) {
+        out(
+          `  ${s.student_id.padEnd(18)} ${side(s.supervised).padEnd(12)} ${side(s.unsupervised).padEnd(12)} ` +
+            (s.gap === null ? "—" : (s.gap > 0 ? "+" : "") + s.gap),
+        );
+        if (only) {
+          for (const e of s.entries) out(`      ${(e.at ?? "undated").slice(0, 10)}  ${e.assessment_id}  ${e.setting ?? "unknown"}  ${e.low === e.high ? `${e.percentile}th` : `${e.low}–${e.high}th (tied)`}  (${e.percent}%)`);
+          for (const l of s.left_out) out(`      left out: ${l.assessment_id} — ${l.why}`);
+        }
+      }
+      for (const note of profile.notes) out(`\n${note}`);
+      break;
+    }
+    case "assessment": {
+      // The professor's facts about an assessment that move no mark (src/standing.ts).
+      const usage = "usage: assessment setting RUN (A… | --type T) (supervised | unsupervised | --clear)";
+      if (rest[0] !== "setting" || !rest[1]) {
+        console.error(usage);
+        process.exit(2);
+      }
+      const runId = rest[1];
+      const bundle = forRun(runId);
+      const clear = args.includes("--clear");
+      const words = rest.slice(2);
+      const setting = clear ? null : (words.at(-1) as string | undefined);
+      if (!clear && setting !== "supervised" && setting !== "unsupervised") {
+        console.error(usage);
+        process.exit(2);
+      }
+      const type = flag("type");
+      const ids = type
+        ? assessmentsOf(bundle, runId).filter((a: any) => a.type === type).map((a: any) => a.assessment_id as string)
+        : clear ? words : words.slice(0, -1);
+      if (!ids.length) {
+        console.error(type ? `no ${type} in ${runId}` : usage);
+        process.exit(2);
+      }
+      try {
+        const written = setSetting({ root, bundle, runId, assessmentIds: ids, setting: (setting ?? null) as SettingName | null });
+        for (const path of written) out(`wrote ${relative(root, path)}`);
+        const after = forRun(runId);
+        for (const id of ids) {
+          const found = settingOf(assessmentsOf(after, runId).find((a: any) => a.assessment_id === id));
+          out(`${id}: ${found.setting ?? "unknown"}${found.source === "inferred" ? ` (inferred: ${found.reason})` : found.source === null ? ` (${found.reason})` : ""}`);
+        }
+      } catch (error) {
+        console.error(`not written: ${String((error as Error).message)}`);
+        process.exit(1);
+      }
+      break;
+    }
     case "inbox":
       out(inboxPayload(forRun(rest[0]!), rest[0]!, onDate(rest[0]!), { groups: runGroups(rest[0]!) }));
       break;

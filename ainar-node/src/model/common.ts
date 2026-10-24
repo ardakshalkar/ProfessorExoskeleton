@@ -145,6 +145,13 @@ export const DeliveryChannel = z.enum([
   "canvas_upload", "github_repo", "paper_exam", "oral_defense", "presentation",
   "instructor_collected", "other",
 ]);
+/**
+ * Whether the work was done where someone could see it: a paper sat in class,
+ * an oral defence — or at home, a Canvas quiz taken anywhere. The professor's
+ * fact about an assessment; `src/standing.ts` reads it, and infers it from type
+ * and delivery only where those settle it.
+ */
+export const Setting = z.enum(["supervised", "unsupervised"]);
 export const SubmissionStatus = z.enum([
   "missing", "draft", "submitted", "late", "resubmitted", "withdrawn",
 ]);

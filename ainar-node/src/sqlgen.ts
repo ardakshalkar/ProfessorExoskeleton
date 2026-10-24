@@ -646,7 +646,8 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       design: jsonb(a.design),
       // Only when there is one, for the reason `url` is: the golden import predates it.
       ...(a.curve ? { curve: jsonb(a.curve) } : {}),
-      extensions: a.extensions,
+      // No column for `setting`; carried in `extensions.setting`, as `Enrollment.lms` is.
+      extensions: a.setting ? { ...(a.extensions ?? {}), setting: a.setting } : a.extensions,
     })),
   );
   script.rows(
