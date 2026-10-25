@@ -28,7 +28,9 @@
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { approvedView } from "@ainar/core/src/approval.ts";
 import { assessmentsOf, runById } from "@ainar/core/src/bundle.ts";
+import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { COLLECTIONS } from "@ainar/core/src/loader.ts";
 import { editRecords, setRecordFields } from "@ainar/core/src/record-edit.ts";
 import {
@@ -45,6 +47,7 @@ import { gradeChanges, realChanges } from "@ainar/core/src/grade-changes.ts";
 import { dropProposals, proposalsOf } from "@ainar/core/src/grading-proposals.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 
+import { schemeFacts } from "./grading-view.js";
 import { editRunRecord } from "./run-record.js";
 import { marksActivity } from "./syncs.js";
 import { loadedRun, rosterPeople } from "./workspace.js";
@@ -69,11 +72,35 @@ const AINAR_CLI = join(fileURLToPath(new URL("../../../bin/", import.meta.url)),
 const proposeCommand = (root, runId) =>
   (process.platform === "win32" ? "& " : "") + `"${AINAR_CLI}" grading propose ${runId} --root "${root}" --file FILE --request "WORDS" --note "WHY"`;
 
+/** The ids of the run's assessments with at least one mark decided, as the gradebook counts them. */
+const markedIds = (bundle, runId) =>
+  new Set(
+    (gradebookPayload(approvedView(bundle), runId, {}).assessments ?? [])
+      .filter((entry) => (entry.summary?.graded ?? 0) > 0 || (entry.summary?.partially_graded ?? 0) > 0)
+      .map((entry) => entry.assessment_id),
+  );
+
 export const gradingPolicy = (workspace, runId, root = null) => {
   const { bundle } = loadedRun(workspace, runId);
   const doc = policyDocument(bundle, runId);
   const sent = sentCounts(bundle, runId);
-  doc.assessments = doc.assessments.map((entry) => ({ ...entry, sent: sent.get(entry.assessment_id) ?? 0 }));
+  const marked = markedIds(bundle, runId);
+  doc.assessments = doc.assessments.map((entry) => ({ ...entry, sent: sent.get(entry.assessment_id) ?? 0, marked: marked.has(entry.assessment_id) }));
+  // What the card says about each block beyond its weight — kinds of work,
+  // dates, marks in, Canvas groups — and the written policy and the run's
+  // facts, which were Materials · Grading policy's until the two merged.
+  const run = runById(bundle).get(runId) ?? {};
+  doc.blocks = schemeFacts({ run, assessments: assessmentsOf(bundle, runId), graded: marked });
+  const extensions = run.extensions ?? {};
+  doc.written_policy = extensions.grading_policy ?? null;
+  doc.facts = [
+    ["Term", run.term],
+    ["Dates", run.start_date && run.end_date ? run.start_date + " → " + run.end_date : null],
+    ["Status", run.status],
+    ["Timezone", run.timezone],
+    ["Planned weeks", (extensions.schedule ?? {}).weeks],
+    ["LMS target", (extensions.lms ?? {}).target],
+  ].map(([label, value]) => ({ label, value: value ?? null }));
   // The assistant's proposals, newest last, each marked stale when the policy
   // moved since it was made (grading-proposals.ts).
   doc.proposals = proposalsOf(bundle, runId).map((entry) => ({ ...entry, stale: entry.base !== doc.base }));

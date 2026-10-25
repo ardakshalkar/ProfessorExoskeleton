@@ -415,7 +415,7 @@ function PolicyCard(props) {
             },
           })
         : null,
-      h(PolicyTree, { policy: doc.policy, assessments: doc.assessments, groups: doc.canvas_groups }),
+      h(PolicyTree, { policy: doc.policy, assessments: doc.assessments, groups: doc.canvas_groups, blocks: doc.blocks || null }),
       doc.description ? h("p", { className: "pp-as pp-gbdesc" }, doc.description) : null,
       doc.issues.length
         ? h(
@@ -424,9 +424,42 @@ function PolicyCard(props) {
             doc.issues.map((issue, i) => h("li", { key: i, className: issue.level === "error" ? "pp-gbissue-err" : "" }, (issue.location ? issue.location + ": " : "") + issue.message)),
           )
         : h("div", { className: "pp-as pp-gbok" }, "✓ Adds up: the validator has nothing to say about the policy."),
+      h(PolicyReference, { written: doc.written_policy, facts: doc.facts || [] }),
     ),
   );
 }
+
+/**
+ * The written policy and the run's facts, folded at the foot: what the
+ * syllabus says in words, and the term it applies to. Reference, read rarely,
+ * so closed — it came over from the Materials page the card replaced.
+ */
+function PolicyReference(props) {
+  return h(
+    "details",
+    { className: "pp-gbblock pp-gbref" },
+    h("summary", null, h("span", { className: "pp-gbbtitle" }, "Written policy and the run")),
+    h("p", { className: "pp-as pp-gbdesc" }, props.written || "No written policy recorded (the run's extensions.grading_policy)."),
+    h(
+      "dl",
+      { className: "pp-gbfacts" },
+      props.facts.map((fact) =>
+        h(React.Fragment, { key: fact.label }, h("dt", null, fact.label), h("dd", { className: fact.value == null ? "pp-as" : "" }, fact.value == null ? "not recorded" : String(fact.value))),
+      ),
+    ),
+  );
+}
+
+/** "09.21": a due date's month and day, as the block rows say it. */
+const gpDay = (iso) => (iso ? String(iso).slice(5, 10).replace("-", ".") : null);
+
+/** A block's Canvas groups in words: null with no Canvas, else mapped or the courses missing. */
+const gpCanvas = (canvas) => {
+  if (!canvas) return null;
+  if (!canvas.missing.length) return { ok: true, text: canvas.courses.length > 1 ? "Canvas ✓ " + canvas.courses.length + " courses" : "Canvas ✓" };
+  const named = canvas.missing.filter(Boolean);
+  return { ok: false, text: named.length ? "no Canvas group in " + named.join(", ") : "no Canvas group" };
+};
 
 function UnlockForm(props) {
   const [typed, setTyped] = React.useState("");
@@ -467,9 +500,16 @@ function UnlockForm(props) {
   );
 }
 
-/** The policy as a tree of blocks with a bar each, and the assessments inside them. */
+/**
+ * The policy as a tree of blocks with a bar each, and the assessments inside
+ * them. `blocks`, when the server sent it, adds per block the kinds of work
+ * (the bar's split and a line each), the dates it spans, how many of its
+ * assessments have marks and its Canvas groups per course; without it the
+ * tree is drawn as before, from the policy alone.
+ */
 function PolicyTree(props) {
   const policy = props.policy;
+  const facts = (id) => (props.blocks && props.blocks[id]) || null;
   const titles = new Map((props.assessments || []).map((a) => [a.assessment_id, a]));
   const members = (componentId) =>
     Object.entries(policy.assignments)
@@ -495,9 +535,26 @@ function PolicyTree(props) {
     h(
       "div",
       { className: "pp-gbbar", role: "img", "aria-label": top.map((c) => c.title + " " + gpPct(c.weight)).join(", ") },
-      top.map((c, i) =>
-        h("span", { key: c.component_id, className: "pp-gbseg pp-gbseg" + (i % 6), style: { flexGrow: Math.max(Number(c.weight) || 0, 0.0001) }, title: c.title + " " + gpPct(c.weight) }, c.title + " " + gpPct(c.weight)),
-      ),
+      top.map((c, i) => {
+        // Each segment split by the kinds of work inside it, each a lighter
+        // shade of the block's colour; what no assessment fills yet striped.
+        const parts = facts(c.component_id) ? facts(c.component_id).parts : [];
+        const filled = parts.reduce((sum, part) => sum + part.weight, 0);
+        const gap = Number(c.weight) - filled;
+        return h(
+          "span",
+          { key: c.component_id, className: "pp-gbseg pp-gbseg" + (i % 6), style: { flexGrow: Math.max(Number(c.weight) || 0, 0.0001) }, title: c.title + " " + gpPct(c.weight) },
+          parts.length
+            ? h(
+                "span",
+                { className: "pp-gbparts", "aria-hidden": "true" },
+                parts.map((part, j) => h("i", { key: part.type, style: { flexGrow: part.weight, background: "rgba(255,255,255," + Math.min(j * 0.18, 0.6) + ")" }, title: part.many + " " + gpPct(part.weight) })),
+                gap > 0.001 ? h("i", { className: "pp-gbpart-empty", style: { flexGrow: gap }, title: "not assigned yet " + gpPct(gap) }) : null,
+              )
+            : null,
+          h("span", { className: "pp-gbseglabel" }, c.title + " " + gpPct(c.weight)),
+        );
+      }),
     ),
     gpClose(topSum, 1) ? null : h("div", { className: "pp-behind" }, "The top-level blocks add up to " + gpPct(topSum) + ", not 100%."),
     gpTree(policy.components).map((entry) => {
@@ -506,6 +563,13 @@ function PolicyTree(props) {
       const list = members(c.component_id);
       const hasChildren = policy.components.some((x) => x.parent === c.component_id);
       const ok = gpClose(filled, Number(c.weight));
+      const known = facts(c.component_id);
+      // Per course when the server said; the list of mapped groups otherwise.
+      const canvas = known
+        ? gpCanvas(known.canvas)
+        : props.groups && props.groups.indexOf(c.component_id) !== -1
+          ? { ok: true, text: "Canvas ✓" }
+          : null;
       return h(
         "details",
         { key: c.component_id, className: "pp-gbblock", style: { marginLeft: entry.depth * 14 + "px" }, open: entry.depth === 0 && list.length <= 6 },
@@ -514,13 +578,24 @@ function PolicyTree(props) {
           null,
           h("span", { className: "pp-tag" }, c.component_id),
           h("span", { className: "pp-gbbtitle" }, c.title),
+          known && known.from ? h("span", { className: "pp-as", title: "The due dates it spans" }, gpDay(known.from) + (known.to !== known.from ? "–" + gpDay(known.to) : "")) : null,
+          known && known.total ? h("span", { className: "pp-as", title: "Assessments in this block with at least one mark decided" }, known.marked + "/" + known.total + " marked") : null,
           h("span", { className: "pp-gbbw" }, gpPct(c.weight)),
           c.points ? h("span", { className: "pp-chip" }, "out of " + c.points) : null,
-          props.groups && props.groups.indexOf(c.component_id) !== -1 ? h("span", { className: "pp-chip pp-chip-quiet", title: "Has a Canvas assignment group" }, "Canvas ✓") : null,
+          canvas ? h("span", { className: "pp-chip " + (canvas.ok ? "pp-chip-quiet" : "pp-chip-warn"), title: "The block's Canvas assignment group" }, canvas.text) : null,
           list.length || hasChildren
             ? h("span", { className: ok ? "pp-gbsum pp-gbsum-ok" : "pp-gbsum pp-gbsum-off", title: "What is inside adds up to " + gpPct(filled) }, ok ? "✓" : gpPct(filled) + " inside")
             : h("span", { className: "pp-gbsum pp-gbsum-off" }, "empty"),
         ),
+        known && known.kinds.length > 1
+          ? h(
+              "div",
+              { className: "pp-gbkinds" },
+              known.kinds.map((kind) =>
+                h("span", { key: kind.type, className: "pp-chip pp-chip-quiet" }, kind.label + " · " + gpPct(kind.weight) + (kind.each !== null ? " (" + gpPct(kind.each) + " each)" : "")),
+              ),
+            )
+          : null,
         h(MemberList, { members: list }),
       );
     }),
@@ -538,6 +613,8 @@ function MemberList(props) {
         "li",
         { key: m.id },
         h("span", { className: "pp-titletext" }, m.record ? m.record.title : m.id),
+        m.record && m.record.due_at ? h("span", { className: "pp-as" }, gpDay(m.record.due_at)) : null,
+        m.record && m.record.marked ? h("span", { className: "pp-gbmarked", title: "At least one mark decided" }, "✓") : null,
         m.record && m.record.draft ? h("span", { className: "pp-chip pp-chip-warn" }, "draft") : null,
         m.record && m.record.sent ? h("span", { className: "pp-chip pp-chip-quiet", title: m.record.sent + " marks in Canvas" }, "Canvas " + m.record.sent) : null,
         h("span", { className: "pp-gbmw" }, gpPct(m.weight)),

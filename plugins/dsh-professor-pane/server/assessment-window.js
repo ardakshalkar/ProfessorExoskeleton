@@ -11,6 +11,7 @@
  */
 
 import { escapeAttribute, escapeText } from "./markdown.js";
+import { isDecided } from "../shared/marks.js";
 
 const round = (value) => String(Math.round(value * 10) / 10);
 
@@ -84,7 +85,6 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
       : [];
 
   const studentOf = new Map(submissions.map((entry) => [entry.submission_id, String(entry.student_id ?? "")]));
-  const isDecided = (entry) => entry.professor_decision && ["approved", "overridden"].includes(entry.status);
   const questions = criteria.map((criterion) => {
     const mine = evaluations.filter((entry) => entry.criterion_id === criterion.criterion_id);
     const decided = mine.filter(isDecided);

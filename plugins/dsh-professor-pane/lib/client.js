@@ -916,6 +916,14 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 /* A downloaded sheet is dropped on its card; the outline says where it lands. */
 .pp-synccard-drop{border:1px dashed #1e7e38;background:rgba(30,142,62,.06)}
 .pp-synchint{margin:0;font-size:11px;line-height:1.45;color:var(--dsw-alias-label-secondary,#555)}
+/* A sheet column with marks the sync does not read, and what to read it as. */
+.pp-syncnews{display:flex;flex-direction:column;gap:6px}
+.pp-syncnew{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 8px;border-radius:8px;
+  background:rgba(214,130,32,.09);border:1px solid rgba(214,130,32,.3)}
+.pp-syncnewt{flex:1 1 180px;min-width:0;font-size:11.5px;font-weight:600;color:#b4600f}
+.pp-syncnewd{font-weight:400}
+.pp-syncnew select{flex:1 1 160px;min-width:0;font:inherit;font-size:11.5px;padding:4px 6px;border-radius:7px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);color:inherit}
 .pp-syncout{border-radius:9px;overflow:hidden;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-syncout-err{border-color:rgba(180,52,42,.45)}
 .pp-syncouthead{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 4px 10px;font-size:11px;font-weight:600;
@@ -1396,6 +1404,16 @@ i.pp-cg-cell{cursor:default;flex:none}
 .pp-gbseg{flex-basis:0;min-width:0;display:flex;align-items:center;justify-content:center;padding:0 4px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
 .pp-gbseg + .pp-gbseg{border-left:2px solid var(--dsw-alias-bg-l1,#fff)}
+.pp-gbbar > .pp-gbseg{position:relative}
+.pp-gbparts{position:absolute;inset:0;display:flex;gap:1px}
+.pp-gbparts > i{flex-basis:0;min-width:0}
+.pp-gbparts > i + i{box-shadow:inset 1px 0 0 rgba(255,255,255,.55)}
+.pp-gbparts > .pp-gbpart-empty{background:repeating-linear-gradient(45deg,transparent 0 4px,rgba(255,255,255,.45) 4px 8px)}
+.pp-gbseglabel{position:relative;overflow:hidden;text-overflow:ellipsis}
+.pp-gbkinds{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 4px 14px}
+.pp-gbmarked{color:#2f6b3c;font-weight:600}
+.pp-gbfacts{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:4px 0 8px 14px;font-size:11px}
+.pp-gbfacts dt{color:var(--dsw-alias-label-tertiary,#8a8a8f)}.pp-gbfacts dd{margin:0}
 .pp-gbseg0{background:#2f6fd6}.pp-gbseg1{background:#2f8a4e}.pp-gbseg2{background:#b4600f}
 .pp-gbseg3{background:#7a4cc2}.pp-gbseg4{background:#0f8a8a}.pp-gbseg5{background:#b4342a}
 .pp-gbblock{border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.05))}
@@ -1858,12 +1876,8 @@ function scoped(path, sessionId) {
 }
 var SUBVIEWS = {
   tasks: [
-    { id: "tasks", label: "Pending" },
     { id: "ready", label: "Ready" },
-    { id: "checklist", label: "Checklist" },
-    // Last: not work to do on the course but what has not left it yet —
-    // marks Canvas does not have, materials changed since publishing.
-    { id: "unpublished", label: "Unpublished" }
+    { id: "checklist", label: "Checklist" }
   ]
 };
 var IDENTITY_MODES = [
@@ -4644,6 +4658,37 @@ function SheetPreview(props) {
     )
   );
 }
+function UnmappedColumn(props) {
+  const column = props.column;
+  const [picked, setPicked] = React.useState(column.proposed || "");
+  return h(
+    "div",
+    { className: "pp-syncnew" },
+    h(
+      "span",
+      { className: "pp-syncnewt", title: column.why },
+      "New column " + columnLetter(column.column) + " “" + column.header + "”",
+      h("span", { className: "pp-syncnewd" }, " · " + column.marked + (column.marked === 1 ? " mark" : " marks") + " not read")
+    ),
+    h(
+      "select",
+      { value: picked, disabled: props.busy, onChange: (event) => setPicked(event.target.value) },
+      h("option", { value: "" }, "Read it as…"),
+      (props.choices || []).map((entry) => h("option", { value: entry.id, key: entry.id }, entry.title))
+    ),
+    h(
+      "button",
+      {
+        type: "button",
+        className: "pp-syncbtn pp-syncbtn-run",
+        disabled: props.busy || !picked,
+        title: picked ? "From now on this sync reads the column as " + picked : "Choose the assessment first",
+        onClick: () => props.onMap(column.header, picked)
+      },
+      props.busy ? "Saving…" : "Read it"
+    )
+  );
+}
 var syncPost = (runId, sessionId, path, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
   method: "POST",
   headers: { "content-type": "application/json" },
@@ -4681,6 +4726,17 @@ function SyncCard(props) {
       setPreviewed(action === "plan" && !answer.error && Boolean(answer.ok));
       done();
     });
+  };
+  const map = (header, picked2) => {
+    setBusy("map:" + header);
+    syncPost(props.runId, props.sessionId, "/api/syncs/action", { action: "map", sync: sync.id, header, assessment: picked2 }).then(
+      (answer) => {
+        setBusy(null);
+        setResult(Object.assign({ action: "map" }, answer));
+        setPreviewed(false);
+        done();
+      }
+    );
   };
   const takeCopy = (file) => {
     if (!file) return;
@@ -4881,6 +4937,19 @@ function SyncCard(props) {
       { className: "pp-synchint" },
       "No Google login on this computer: download the sheet" + (sync.download.tabHint ? " (from its “" + sync.download.tabHint + "” tab: File → Download → CSV)" : "") + ", then drop the file on this card. Nothing is written before a preview."
     ) : null,
+    !props.assessment && (sync.unmapped || []).length ? h(
+      "div",
+      { className: "pp-syncnews" },
+      sync.unmapped.map(
+        (column) => h(UnmappedColumn, {
+          key: column.header,
+          column,
+          choices: sync.mapChoices,
+          busy: busy === "map:" + column.header,
+          onMap: map
+        })
+      )
+    ) : null,
     result ? h(
       "div",
       { className: "pp-syncout" + (result.error || !result.ok ? " pp-syncout-err" : "") },
@@ -4892,7 +4961,7 @@ function SyncCard(props) {
         h(
           "span",
           null,
-          result.error || !result.ok ? result.action === "run" ? "Could not run" : "Could not preview" : result.action === "run" ? "Done" : "Preview — nothing was changed"
+          result.error || !result.ok ? result.action === "run" ? "Could not run" : result.action === "map" ? "Could not map the column" : "Could not preview" : result.action === "run" ? "Done" : result.action === "map" ? "Column mapped — Preview or Run brings its marks in" : "Preview — nothing was changed"
         ),
         h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: () => setResult(null) }, "×")
       ),
@@ -6192,27 +6261,28 @@ var TitleWithTag = (props) => {
     h("span", { className: "pp-titletext" }, parts.rest)
   );
 };
-function GradebookStatus(props) {
+function MarksForCanvas(props) {
   const state = useUnpublished(props.runId, props.sessionId, props.revision);
   const [check, recheck] = useCanvasCheck(props.runId, props.sessionId);
   const [open2, setOpen] = React.useState(null);
-  if (state.phase === "loading" || !state.value || state.value.error) return null;
-  const rows = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0).sort(dueOrder);
-  if (!rows.length) return null;
+  if (state.phase === "loading" || !state.value) return null;
+  if (state.value.error) return h(Message, { error: true }, state.value.error);
   const edited = editedIn(check);
   const unplaced = unplacedIn(check);
-  const said = new Map(rows.map((entry) => [entry.id, markState(entry, unplaced.get(entry.id) || 0)]));
+  const handed = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0);
+  const said = new Map(handed.map((entry) => [entry.id, markState(entry, unplaced.get(entry.id) || 0)]));
+  const rows = handed.sort((a, b) => (said.get(b.id).behind ? 1 : 0) - (said.get(a.id).behind ? 1 : 0) || dueOrder(a, b));
+  if (!rows.length) return h("p", { className: "pp-as" }, "Nothing handed in yet, so no marks for Canvas.");
   const waiting2 = rows.reduce((n, entry) => n + said.get(entry.id).waiting, 0);
   const answer = check.value || {};
   const checking = check.phase === "running" || check.phase === "loading";
   const unreachable = !checking && (answer.error || answer.state === "ready" && !answer.value);
   return h(
     "div",
-    { className: "pp-bookcard pp-bookstatus" + (open2 ? " pp-bookstatus-open" : "") },
+    { className: "pp-bookstatus" + (open2 ? " pp-bookstatus-open" : "") },
     h(
       "div",
       { className: "pp-cardhead" },
-      h("b", null, "Marking"),
       h(
         "span",
         { className: waiting2 ? "pp-chip pp-chip-warn" : "pp-chip pp-chip-ok" },
@@ -6267,6 +6337,12 @@ function GradebookStatus(props) {
             "span",
             { className: "pp-bookcanvas" },
             state2.canvas ? h("span", { className: "pp-chip " + (state2.behind ? "pp-chip-warn" : "pp-chip-ok") }, state2.canvas) : null,
+            // Marks with nowhere to go yet: no Canvas assignment bound for them.
+            state2.behind && entry.binding && (entry.binding.state === "none" || entry.binding.state === "some") ? h(
+              "span",
+              { className: "pp-chip pp-chip-warn", title: "Send… offers to link one already in Canvas, or to create it." },
+              entry.binding.state === "none" ? "no Canvas assignment yet" : "no Canvas assignment in " + entry.binding.missing.join(", ")
+            ) : null,
             // Nowhere to send these: the student is not in the Canvas course.
             state2.stuck ? h(
               "span",
@@ -6528,58 +6604,16 @@ function RecentMarks(props) {
     })
   );
 }
-function Unpublished(props) {
+function PublishedChanges(props) {
   const state = useUnpublished(props.runId, props.sessionId, props.revision);
-  const [open2, setOpen] = React.useState(null);
-  if (state.phase === "loading") return h(Message, null, "Reading what has gone out…");
+  if (state.phase === "loading" || !state.value || state.value.error) return null;
   const doc = state.value;
-  if (doc.error) return h(Message, { error: true }, doc.error);
-  const nothing = !doc.marks.length && !doc.drafts.length && !doc.moved.length;
+  if (!doc.drafts.length && !doc.moved.length) return null;
   const section = (title, rows) => rows.length ? h(React.Fragment, null, h("p", { className: "pp-factgroup" }, title), rows) : null;
   return h(
-    "div",
-    { className: "pp-scroll" },
-    h(
-      "p",
-      { className: "pp-as" },
-      "Read from this machine: the gradebook, what Canvas confirmed receiving, and what was last published. Canvas is not asked, so an edit made there by hand does not show."
-    ),
-    nothing ? h(Message, null, "Everything decided here is out: no marks waiting for Canvas, no drafts held back, no material changed since it was published.") : null,
-    section(
-      "Marks not in Canvas",
-      doc.marks.sort(dueOrder).map((entry) => {
-        const said = markState(entry);
-        const binding = entry.binding.state === "none" ? "no Canvas assignment yet" : entry.binding.state === "some" ? "no Canvas assignment in " + entry.binding.missing.join(", ") : null;
-        return h(
-          "div",
-          { key: entry.id },
-          h(
-            "div",
-            { className: "pp-approverow" },
-            h("b", null, entry.title),
-            h("span", null, said.canvas),
-            binding ? h("span", { className: "pp-behind" }, binding) : null,
-            h(
-              "button",
-              { type: "button", className: "pp-segbtn", onClick: () => setOpen(open2 === entry.id ? null : entry.id) },
-              open2 === entry.id ? "Close" : "Send…"
-            )
-          ),
-          open2 === entry.id ? h(CanvasMarks, {
-            key: entry.id,
-            runId: props.runId,
-            sessionId: props.sessionId,
-            assessmentId: entry.id,
-            title: entry.title,
-            ask: props.ask,
-            names: props.names,
-            canvas: entry.canvas,
-            autoPreview: true,
-            onSent: props.onWrite
-          }) : null
-        );
-      })
-    ),
+    "section",
+    { className: "pp-ccard" },
+    h("div", { className: "pp-chead" }, h("span", { className: "pp-cname" }, "Published materials", h("span", { className: "pp-intwhat" }, "what changed since it went out"))),
     section(
       "Changed since published",
       doc.moved.map(
@@ -8107,7 +8141,9 @@ function CourseIntegrations(props) {
       service: "canvas",
       mark: "Cv",
       text: "Canvas is missing marks for " + plural8(counts.toSend.length, "assessment", "assessments"),
-      go: () => show("marks")
+      // Sync's Marks for Canvas, where course mode has it; the card's own
+      // filter only without one.
+      go: props.onOpenSync || (() => show("marks"))
     } : null
   ].filter(Boolean);
   const card = {
@@ -10575,16 +10611,39 @@ function PolicyCard(props) {
           props.onWrite();
         }
       }) : null,
-      h(PolicyTree, { policy: doc.policy, assessments: doc.assessments, groups: doc.canvas_groups }),
+      h(PolicyTree, { policy: doc.policy, assessments: doc.assessments, groups: doc.canvas_groups, blocks: doc.blocks || null }),
       doc.description ? h("p", { className: "pp-as pp-gbdesc" }, doc.description) : null,
       doc.issues.length ? h(
         "ul",
         { className: "pp-gbissues" },
         doc.issues.map((issue, i) => h("li", { key: i, className: issue.level === "error" ? "pp-gbissue-err" : "" }, (issue.location ? issue.location + ": " : "") + issue.message))
-      ) : h("div", { className: "pp-as pp-gbok" }, "✓ Adds up: the validator has nothing to say about the policy.")
+      ) : h("div", { className: "pp-as pp-gbok" }, "✓ Adds up: the validator has nothing to say about the policy."),
+      h(PolicyReference, { written: doc.written_policy, facts: doc.facts || [] })
     )
   );
 }
+function PolicyReference(props) {
+  return h(
+    "details",
+    { className: "pp-gbblock pp-gbref" },
+    h("summary", null, h("span", { className: "pp-gbbtitle" }, "Written policy and the run")),
+    h("p", { className: "pp-as pp-gbdesc" }, props.written || "No written policy recorded (the run's extensions.grading_policy)."),
+    h(
+      "dl",
+      { className: "pp-gbfacts" },
+      props.facts.map(
+        (fact) => h(React.Fragment, { key: fact.label }, h("dt", null, fact.label), h("dd", { className: fact.value == null ? "pp-as" : "" }, fact.value == null ? "not recorded" : String(fact.value)))
+      )
+    )
+  );
+}
+var gpDay = (iso) => iso ? String(iso).slice(5, 10).replace("-", ".") : null;
+var gpCanvas = (canvas) => {
+  if (!canvas) return null;
+  if (!canvas.missing.length) return { ok: true, text: canvas.courses.length > 1 ? "Canvas ✓ " + canvas.courses.length + " courses" : "Canvas ✓" };
+  const named = canvas.missing.filter(Boolean);
+  return { ok: false, text: named.length ? "no Canvas group in " + named.join(", ") : "no Canvas group" };
+};
 function UnlockForm(props) {
   const [typed, setTyped] = React.useState("");
   const [note, setNote] = React.useState("");
@@ -10625,6 +10684,7 @@ function UnlockForm(props) {
 }
 function PolicyTree(props) {
   const policy = props.policy;
+  const facts = (id) => props.blocks && props.blocks[id] || null;
   const titles = new Map((props.assessments || []).map((a) => [a.assessment_id, a]));
   const members = (componentId) => Object.entries(policy.assignments).filter((entry) => (entry[1].component || null) === componentId).map((entry) => ({ id: entry[0], weight: entry[1].weight, record: titles.get(entry[0]) }));
   const top = policy.components.filter((c) => !c.parent);
@@ -10645,9 +10705,22 @@ function PolicyTree(props) {
     h(
       "div",
       { className: "pp-gbbar", role: "img", "aria-label": top.map((c) => c.title + " " + gpPct(c.weight)).join(", ") },
-      top.map(
-        (c, i) => h("span", { key: c.component_id, className: "pp-gbseg pp-gbseg" + i % 6, style: { flexGrow: Math.max(Number(c.weight) || 0, 1e-4) }, title: c.title + " " + gpPct(c.weight) }, c.title + " " + gpPct(c.weight))
-      )
+      top.map((c, i) => {
+        const parts = facts(c.component_id) ? facts(c.component_id).parts : [];
+        const filled = parts.reduce((sum, part) => sum + part.weight, 0);
+        const gap = Number(c.weight) - filled;
+        return h(
+          "span",
+          { key: c.component_id, className: "pp-gbseg pp-gbseg" + i % 6, style: { flexGrow: Math.max(Number(c.weight) || 0, 1e-4) }, title: c.title + " " + gpPct(c.weight) },
+          parts.length ? h(
+            "span",
+            { className: "pp-gbparts", "aria-hidden": "true" },
+            parts.map((part, j) => h("i", { key: part.type, style: { flexGrow: part.weight, background: "rgba(255,255,255," + Math.min(j * 0.18, 0.6) + ")" }, title: part.many + " " + gpPct(part.weight) })),
+            gap > 1e-3 ? h("i", { className: "pp-gbpart-empty", style: { flexGrow: gap }, title: "not assigned yet " + gpPct(gap) }) : null
+          ) : null,
+          h("span", { className: "pp-gbseglabel" }, c.title + " " + gpPct(c.weight))
+        );
+      })
     ),
     gpClose(topSum, 1) ? null : h("div", { className: "pp-behind" }, "The top-level blocks add up to " + gpPct(topSum) + ", not 100%."),
     gpTree(policy.components).map((entry) => {
@@ -10656,6 +10729,8 @@ function PolicyTree(props) {
       const list = members(c.component_id);
       const hasChildren = policy.components.some((x) => x.parent === c.component_id);
       const ok = gpClose(filled, Number(c.weight));
+      const known = facts(c.component_id);
+      const canvas = known ? gpCanvas(known.canvas) : props.groups && props.groups.indexOf(c.component_id) !== -1 ? { ok: true, text: "Canvas ✓" } : null;
       return h(
         "details",
         { key: c.component_id, className: "pp-gbblock", style: { marginLeft: entry.depth * 14 + "px" }, open: entry.depth === 0 && list.length <= 6 },
@@ -10664,11 +10739,20 @@ function PolicyTree(props) {
           null,
           h("span", { className: "pp-tag" }, c.component_id),
           h("span", { className: "pp-gbbtitle" }, c.title),
+          known && known.from ? h("span", { className: "pp-as", title: "The due dates it spans" }, gpDay(known.from) + (known.to !== known.from ? "–" + gpDay(known.to) : "")) : null,
+          known && known.total ? h("span", { className: "pp-as", title: "Assessments in this block with at least one mark decided" }, known.marked + "/" + known.total + " marked") : null,
           h("span", { className: "pp-gbbw" }, gpPct(c.weight)),
           c.points ? h("span", { className: "pp-chip" }, "out of " + c.points) : null,
-          props.groups && props.groups.indexOf(c.component_id) !== -1 ? h("span", { className: "pp-chip pp-chip-quiet", title: "Has a Canvas assignment group" }, "Canvas ✓") : null,
+          canvas ? h("span", { className: "pp-chip " + (canvas.ok ? "pp-chip-quiet" : "pp-chip-warn"), title: "The block's Canvas assignment group" }, canvas.text) : null,
           list.length || hasChildren ? h("span", { className: ok ? "pp-gbsum pp-gbsum-ok" : "pp-gbsum pp-gbsum-off", title: "What is inside adds up to " + gpPct(filled) }, ok ? "✓" : gpPct(filled) + " inside") : h("span", { className: "pp-gbsum pp-gbsum-off" }, "empty")
         ),
+        known && known.kinds.length > 1 ? h(
+          "div",
+          { className: "pp-gbkinds" },
+          known.kinds.map(
+            (kind) => h("span", { key: kind.type, className: "pp-chip pp-chip-quiet" }, kind.label + " · " + gpPct(kind.weight) + (kind.each !== null ? " (" + gpPct(kind.each) + " each)" : ""))
+          )
+        ) : null,
         h(MemberList, { members: list })
       );
     }),
@@ -10685,6 +10769,8 @@ function MemberList(props) {
         "li",
         { key: m.id },
         h("span", { className: "pp-titletext" }, m.record ? m.record.title : m.id),
+        m.record && m.record.due_at ? h("span", { className: "pp-as" }, gpDay(m.record.due_at)) : null,
+        m.record && m.record.marked ? h("span", { className: "pp-gbmarked", title: "At least one mark decided" }, "✓") : null,
         m.record && m.record.draft ? h("span", { className: "pp-chip pp-chip-warn" }, "draft") : null,
         m.record && m.record.sent ? h("span", { className: "pp-chip pp-chip-quiet", title: m.record.sent + " marks in Canvas" }, "Canvas " + m.record.sent) : null,
         h("span", { className: "pp-gbmw" }, gpPct(m.weight))
@@ -12589,8 +12675,8 @@ var ACTIONS = [
   { id: "E4b", label: "Grade scanned exams", words: "grade scans paper handwritten", do: { fill: "/grade-scans {run} " } },
   { id: "E5", label: "Scans and recordings", words: "files scans piles held papers recordings audio", do: { open: { view: "files" } } },
   { id: "E8", label: "Grade a whole class", words: "grade batch submissions everyone", do: { fill: "/grade-batch {run} " } },
-  { id: "E9", label: "Decide marks", words: "marks decide suggested grade review pending", do: { open: { view: "tasks", sub: "tasks" } } },
-  { id: "E11", label: "Send marks to Canvas", words: "release marks canvas send grades to canvas", do: { open: { view: "gradebook", sub: "canvas" } }, outward: true },
+  { id: "E9", label: "Decide marks", words: "marks decide suggested grade review pending", do: { open: { view: "tasks", sub: "waiting", kind: "marks" } } },
+  { id: "E11", label: "Send marks to Canvas", words: "release marks canvas send grades to canvas", do: { open: { view: "syncs", focus: "marks" } }, outward: true },
   { id: "E12", label: "Gradebook", words: "gradebook marks grid scores results", do: { open: { view: "gradebook", sub: "marks" } } },
   { id: "E13", label: "Assessments", words: "assessments list weights due", do: { open: { view: "materials", sub: "assessments" } } },
   // ---- students
@@ -12785,6 +12871,10 @@ function SyncView(props) {
   const checks = useSheetCheck(props.runId, props.sessionId, revision);
   const kept = React.useRef(null);
   if (syncs.phase === "ready" && syncs.value && !syncs.value.error) kept.current = syncs.value;
+  const marksRef = React.useRef(null);
+  React.useEffect(() => {
+    if (props.focus && props.focus.section === "marks" && marksRef.current) marksRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [props.focus ? props.focus.n : null, Boolean(kept.current)]);
   const [phase, setPhase] = React.useState("idle");
   const [preview, setPreview] = React.useState(null);
   const [results, setResults] = React.useState(null);
@@ -12866,10 +12956,25 @@ function SyncView(props) {
         h("div", { className: "pp-dacts" }, h("button", { type: "button", className: "pp-segbtn", onClick: () => setResults(null) }, "Close"))
       ) : null
     ),
+    // What Canvas lacks, per assessment, with its send: one assessment at a
+    // time, beside Sync all, which sends them all.
+    canvasOn ? h(
+      "section",
+      { className: "pp-ccard", ref: marksRef },
+      h("div", { className: "pp-chead" }, h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"), h("span", { className: "pp-cname" }, "Marks for Canvas")),
+      h(MarksForCanvas, {
+        runId: props.runId,
+        sessionId: props.sessionId,
+        revision: props.marksRevision,
+        names: props.names,
+        ask: props.ask,
+        onWrite: () => done(["grading", "canvas", "marks"])
+      })
+    ) : null,
     canvasOn ? h(
       "section",
       { className: "pp-ccard" },
-      h("div", { className: "pp-chead" }, h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"), h("span", { className: "pp-cname" }, "Canvas")),
+      h("div", { className: "pp-chead" }, h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"), h("span", { className: "pp-cname" }, "Canvas", h("span", { className: "pp-intwhat" }, "what differs"))),
       h(CanvasDifferences, {
         runId: props.runId,
         sessionId: props.sessionId,
@@ -12913,6 +13018,7 @@ function SyncView(props) {
         onDone: () => done(["syncs", "marks"])
       })
     ) : null,
+    h(PublishedChanges, { runId: props.runId, sessionId: props.sessionId, revision: props.marksRevision, openPublish: props.openPublish }),
     h(
       "p",
       { className: "pp-as" },
@@ -13177,7 +13283,11 @@ function WaitingPlace(props) {
   const state = useToday(props.runId, props.sessionId, String(props.revision) + "." + tick);
   const shown = React.useRef(null);
   if (state.phase === "ready") shown.current = state.value;
-  const [kind, setKind] = React.useState(null);
+  const wordOf = (asked) => asked && asked.kind ? KIND_WORD[asked.kind] || asked.kind : null;
+  const [kind, setKind] = React.useState(() => wordOf(props.kind));
+  React.useEffect(() => {
+    if (props.kind) setKind(wordOf(props.kind));
+  }, [props.kind ? props.kind.n : null]);
   const [failed, setFailed] = React.useState(null);
   const doc = shown.current;
   if (doc === null) return h(Message, null, "Reading what is waiting…");
@@ -13191,7 +13301,7 @@ function WaitingPlace(props) {
     setFailed(answer.error || null);
     setTick((value) => value + 1);
   });
-  const kinds = [...new Set(doc.waiting.concat(doc.snoozed || []).map((item) => KIND_WORD[item.kind] || item.kind))];
+  const kinds = [...new Set(doc.waiting.concat(doc.snoozed || []).map((item) => KIND_WORD[item.kind] || item.kind).concat(kind ? [kind] : []))];
   const match = (item) => !kind || (KIND_WORD[item.kind] || item.kind) === kind;
   const items = doc.waiting.filter(match);
   const later = (doc.snoozed || []).filter(match);
@@ -13319,6 +13429,26 @@ function Today(props) {
   );
 }
 
+// shared/places.js
+var VIEW_ALIASES = {
+  integrations: { view: "settings", sub: "integrations" },
+  preferences: { view: "settings", sub: "preferences" }
+};
+var SUB_ALIASES = {
+  "materials/grading": { view: "gradebook", sub: "policy" },
+  "gradebook/canvas": { view: "syncs", focus: "marks" },
+  "tasks/unpublished": { view: "syncs", focus: "marks" },
+  "tasks/tasks": { view: "tasks", sub: "waiting", kind: "marks" }
+};
+var resolveRequest = (request) => {
+  if (!request) return request;
+  const viewed = VIEW_ALIASES[request.view] ? { ...request, ...VIEW_ALIASES[request.view], sub: request.sub || VIEW_ALIASES[request.view].sub } : request;
+  const folded = SUB_ALIASES[viewed.view + "/" + viewed.sub];
+  if (!folded) return viewed;
+  const { sub: _old, ...rest } = viewed;
+  return { ...rest, ...folded };
+};
+
 // client/materials.js
 function WidgetFrame(props) {
   const url = scoped(
@@ -13430,22 +13560,22 @@ var COURSE_VIEWS = [
   // class and the roads out are doing — each a link into another place.
   { id: "today", label: "Today", hint: "This week, what is waiting on you, and how the class and the syncs stand" },
   { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
-  { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
+  { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, the grading policy, and what changed" },
   // The class by concept: what used to be the right column's Progress tab.
   { id: "concepts", label: "Concepts", hint: "The class, by concept — what has been shown and what has not" },
   // Waiting (was Tasks): everything waiting on the professor in one list
   // first, then the four lists it is drawn from (BACKLOG E37 HOME-13). The id
   // stays `tasks`, which every jump into it already names.
-  { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze — and what is ready and what has not gone out" },
+  { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze — and what is ready to approve" },
   // What the course has got, by kind rather than by week: the right
   // column's old Course outline sub-views, the student's outline last.
-  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, and the outline a student reads" },
+  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, and the outline a student reads" },
   // The private material itself — scanned papers, recorded answers — which
   // lives outside the course folder, so has no other place to be seen whole.
   { id: "files", label: "Files", hint: "Scans and audio: where they are stored, how much there is, each pile" },
   // Bringing Canvas and the grade sheets into step: an operation done weekly,
   // so not behind Course settings, which keeps the setting up.
-  { id: "syncs", label: "Sync", hint: "Canvas and the grade sheets: Sync all, what differs, and names to confirm" },
+  { id: "syncs", label: "Sync", hint: "Canvas and the grade sheets: Sync all, marks Canvas lacks, what differs, names to confirm, what changed since publishing" },
   // Last: not the course but its roads out — Canvas, the sheet, the
   // repositories — and what the skills assume. Opened twice a term.
   { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume" }
@@ -13456,15 +13586,16 @@ var VIEW_SUBS = {
     { id: "assessments", label: "Assessments" },
     { id: "slides", label: "Slides" },
     { id: "exams", label: "Exams" },
-    { id: "grading", label: "Grading policy" },
+    // The grading policy was a part here too, drawn a second time beside the
+    // Gradebook's Policy; one place now (shared/places.js).
     { id: "outline", label: "Student's outline" }
   ],
-  // The Gradebook's four parts, which were stacked in one long page
+  // The Gradebook's parts, which were stacked in one long page
   // (docs/RIBBONS.md R6). Last changes keeps its own All · Grades · Sheet ·
-  // Policy: those filter that one list.
+  // Policy: those filter that one list. To Canvas was a part too, until
+  // Sync became the one place for what Canvas lacks (shared/places.js).
   gradebook: [
     { id: "marks", label: "Marks" },
-    { id: "canvas", label: "To Canvas" },
     { id: "policy", label: "Policy" },
     { id: "changes", label: "Last changes" }
   ],
@@ -13474,14 +13605,6 @@ var VIEW_SUBS = {
     { id: "accounts", label: "Accounts" },
     { id: "preferences", label: "Preferences" }
   ]
-};
-var VIEW_ALIASES = {
-  integrations: { view: "settings", sub: "integrations" },
-  preferences: { view: "settings", sub: "preferences" }
-};
-var resolveRequest = (request) => {
-  if (!request || !VIEW_ALIASES[request.view]) return request;
-  return { ...request, ...VIEW_ALIASES[request.view], sub: request.sub || VIEW_ALIASES[request.view].sub };
 };
 var CONNECTION_STATE = { ready: "connected", partial: "partly set up", absent: "not set up" };
 function CourseMode(props) {
@@ -13517,11 +13640,14 @@ function CourseMode(props) {
   const taskSub = subOf("tasks");
   const doorOf = (entry) => entry && entry.view === "concepts" && (entry.student || entry.concept || entry.week) ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n } : null;
   const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
+  const aimOf = (entry) => entry && (entry.focus || entry.kind) ? { section: entry.focus || null, kind: entry.kind || null, n: entry.n } : null;
+  const [aim, setAim] = React.useState(() => aimOf(request));
   const doorCount = React.useRef(0);
   const [fill, setFill] = React.useState(null);
   React.useEffect(() => {
     const door = doorOf(request);
     if (door) setConceptsFocus(door);
+    setAim(aimOf(request));
   }, [request ? request.n : null]);
   const onShown = props.onShown;
   React.useEffect(() => {
@@ -13613,7 +13739,8 @@ function CourseMode(props) {
     setSub("settings", "integrations");
     setView("settings");
   };
-  const openFromToday = (request2) => {
+  const openFromToday = (asked) => {
+    const request2 = resolveRequest(asked);
     if (!request2) return;
     if (request2.grade) {
       if (props.onGrade) props.onGrade(request2.grade, request2.label);
@@ -13621,8 +13748,10 @@ function CourseMode(props) {
       if (props.onOpenScans) props.onOpenScans(request2.scans);
     } else if (request2.view && known(request2.view, COURSE_VIEWS)) {
       if (VIEW_SUBS[request2.view] && known(request2.sub, VIEW_SUBS[request2.view])) setSub(request2.view, request2.sub);
-      const door = doorOf(Object.assign({}, request2, { n: "here-" + (doorCount.current += 1) }));
+      const numbered = Object.assign({}, request2, { n: "here-" + (doorCount.current += 1) });
+      const door = doorOf(numbered);
       if (door) setConceptsFocus(door);
+      setAim(aimOf(numbered));
       setView(request2.view);
     } else if (request2.mode && known(request2.mode, COURSE_MODES)) {
       if (request2.mode === "teaching" && Number.isInteger(request2.week)) stepped.current = request2.week;
@@ -13659,6 +13788,12 @@ function CourseMode(props) {
           sessionId: props.sessionId,
           names: props.names,
           revision: syncsVersion,
+          // Marks for Canvas and Published materials read `/api/unpublished`,
+          // which follows the marks, not the roads.
+          marksRevision: marksVersion,
+          focus: aim,
+          ask: props.ask,
+          openPublish: props.openPublish,
           onWrite: (tags) => props.wrote(tags || ["syncs"]),
           onOpenSettings: () => {
             setSub("settings", "integrations");
@@ -13747,16 +13882,6 @@ function CourseMode(props) {
     }
     if (view === "gradebook") {
       const part = subOf("gradebook");
-      if (part === "canvas") {
-        return h(GradebookStatus, {
-          runId: props.runId,
-          sessionId: props.sessionId,
-          revision: marksVersion,
-          names: props.names,
-          ask: props.ask,
-          onWrite: () => props.wrote(["grading"])
-        });
-      }
       if (part === "policy" || part === "changes") {
         return h(GradebookPanes, {
           only: part,
@@ -13787,20 +13912,11 @@ function CourseMode(props) {
           runId: props.runId,
           sessionId: props.sessionId,
           revision: everything + "." + syncsVersion + "." + filesVersion,
-          onOpen: openFromToday
+          onOpen: openFromToday,
+          // The kind an old link to Pending meant: the marks waiting.
+          kind: aim && aim.kind ? aim : null
         })
       );
-    }
-    if (taskSub === "unpublished") {
-      return h(Unpublished, {
-        runId: props.runId,
-        sessionId: props.sessionId,
-        revision: marksVersion,
-        onWrite: () => props.wrote(["integrations", "grading"]),
-        openPublish: props.openPublish,
-        ask: props.ask,
-        names: props.names
-      });
     }
     return h(WidgetFrame, {
       key: taskSub + "|" + props.names + "|" + props.dark + "|" + props.drafts,
@@ -13831,16 +13947,14 @@ function CourseMode(props) {
   // switch here a projected Gradebook could not be covered in place.
   view === "gradebook" || // The Concepts grid is a column per student.
   view === "concepts" || view === "settings" && subOf("settings") === "integrations" || // Everything names nobody; the lists it is drawn from do.
-  view === "tasks" && taskSub !== "unpublished" && taskSub !== "waiting";
+  view === "tasks" && taskSub !== "waiting";
   const navigator2 = left > 0;
   const viewEntry = view ? COURSE_VIEWS.find((entry) => entry.id === view) || null : null;
   const placeName = viewEntry ? viewEntry.label : navigator2 ? "Weeks" : props.title;
   const subLabel = view ? VIEW_SUBS[view] ? (VIEW_SUBS[view].find((entry) => entry.id === subOf(view)) || { label: null }).label : view === "today" ? (/* @__PURE__ */ new Date()).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) : null : (COURSE_MODES.find((entry) => entry.id === mode) || { label: null }).label;
   const placeTitle = subLabel ? placeName + " · " + subLabel : placeName;
-  const draftsApply = view === null || view === "concepts" || view === "materials" || // The marks grid; the Canvas status, the policy and its history read
-  // the same either way.
-  view === "gradebook" && subOf("gradebook") === "marks" || // Pending, whose id is `tasks`: the inbox, over the half the switch picks.
-  view === "tasks" && taskSub === "tasks";
+  const draftsApply = view === null || view === "concepts" || view === "materials" || // The marks grid; the policy and its history read the same either way.
+  view === "gradebook" && subOf("gradebook") === "marks";
   const readings = COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false));
   const previewSwitch = private_ ? null : h(
     "label",
@@ -14510,11 +14624,11 @@ var PLACES = [
   // Tasks, renamed: it opens on everything waiting, in one list (HOME-13).
   { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze", request: { view: "tasks", sub: "waiting" } },
   { id: "students", label: "Students", hint: "The class list, by subgroup", request: { view: "students" } },
-  { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment", request: { view: "gradebook" } },
+  { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and the grading policy", request: { view: "gradebook" } },
   { id: "concepts", label: "Concepts", hint: "The class, by concept", request: { view: "concepts" } },
-  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, the student's outline", request: { view: "materials" } },
+  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the student's outline", request: { view: "materials" } },
   { id: "files", label: "Files", hint: "Scans and recordings: where they are, each pile", request: { view: "files" } },
-  { id: "sync", label: "Sync", hint: "Canvas and the grade sheets: Sync all, what differs, names to confirm", request: { view: "syncs" } }
+  { id: "sync", label: "Sync", hint: "Canvas and the grade sheets: Sync all, marks Canvas lacks, what differs, names to confirm", request: { view: "syncs" } }
 ];
 var SETTINGS = { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume", request: { view: "settings" } };
 function useShownPlace() {
@@ -14966,14 +15080,14 @@ function Inspector(props) {
   const gaps = nav && !nav.error ? nav.gaps || 0 : 0;
   const draftKinds = recent && !recent.error ? recent.drafts_by || [] : [];
   const waiting2 = [
-    pending ? { text: pending + (pending === 1 ? " mark waits" : " marks wait") + " for your decision", place: { view: "tasks" } } : null,
+    pending ? { text: pending + (pending === 1 ? " mark waits" : " marks wait") + " for your decision", place: { view: "tasks", sub: "waiting", kind: "marks" } } : null,
     // Drafts by kind, the three largest: what is a draft matters more than how many.
     ...draftKinds.slice(0, 3).map((kind) => ({
       text: kind.count + " " + kind.collection.replace(/[-_]/g, " ") + " still " + (kind.count === 1 ? "a draft" : "drafts"),
       place: { view: "tasks", sub: "ready" }
     })),
     gaps ? { text: gaps + (gaps === 1 ? " week has" : " weeks have") + " something missing", place: { mode: "planning" } } : null,
-    signals ? { text: signals + (signals === 1 ? " open signal" : " open signals"), place: { view: "tasks" } } : null
+    signals ? { text: signals + (signals === 1 ? " open signal" : " open signals"), place: { view: "tasks", sub: "waiting", kind: "signals" } } : null
   ].filter(Boolean);
   const changes = recent && !recent.error ? recent.recent : [];
   return h(
@@ -17664,7 +17778,7 @@ function ProfessorPane(props) {
         return;
       }
       if (data.kind === "syncs") {
-        focusCard("sheets");
+        openPlace({ view: "syncs" });
         return;
       }
       if (data.kind === "publish") {
@@ -17918,8 +18032,8 @@ function ProfessorPane(props) {
       onRecordings: () => setBatch(true),
       // For Today: marks waiting on one assessment, in the Grade view.
       onGrade: (assessment, label) => setGrading({ assessment, label: label || assessment }),
-      // For Students, Gradebook and Tasks: the pane's own identity choice, and what the
-      // Unpublished view needs to send — the same props its tab gets.
+      // For Students, Gradebook, Tasks and Sync: the pane's own identity choice, and what
+      // Sync's Marks for Canvas needs to send.
       names,
       setNames,
       ask: props.ask,

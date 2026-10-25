@@ -46,8 +46,8 @@ export const ACTIONS = [
   { id: "E4b", label: "Grade scanned exams", words: "grade scans paper handwritten", do: { fill: "/grade-scans {run} " } },
   { id: "E5", label: "Scans and recordings", words: "files scans piles held papers recordings audio", do: { open: { view: "files" } } },
   { id: "E8", label: "Grade a whole class", words: "grade batch submissions everyone", do: { fill: "/grade-batch {run} " } },
-  { id: "E9", label: "Decide marks", words: "marks decide suggested grade review pending", do: { open: { view: "tasks", sub: "tasks" } } },
-  { id: "E11", label: "Send marks to Canvas", words: "release marks canvas send grades to canvas", do: { open: { view: "gradebook", sub: "canvas" } }, outward: true },
+  { id: "E9", label: "Decide marks", words: "marks decide suggested grade review pending", do: { open: { view: "tasks", sub: "waiting", kind: "marks" } } },
+  { id: "E11", label: "Send marks to Canvas", words: "release marks canvas send grades to canvas", do: { open: { view: "syncs", focus: "marks" } }, outward: true },
   { id: "E12", label: "Gradebook", words: "gradebook marks grid scores results", do: { open: { view: "gradebook", sub: "marks" } } },
   { id: "E13", label: "Assessments", words: "assessments list weights due", do: { open: { view: "materials", sub: "assessments" } } },
 

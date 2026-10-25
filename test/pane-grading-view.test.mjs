@@ -1,5 +1,6 @@
 /**
- * The grading policy drawn from the run's scheme: plugins/dsh-professor-pane/server/grading-view.js
+ * What the Gradebook's policy card says about each block beyond its weight:
+ * plugins/dsh-professor-pane/server/grading-view.js
  *
  *     node --test test/pane-grading-view.test.mjs
  */
@@ -7,7 +8,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { schemeHtml } from "../plugins/dsh-professor-pane/server/grading-view.js";
+import { schemeFacts } from "../plugins/dsh-professor-pane/server/grading-view.js";
 
 const run = (extra = {}) => ({
   grading_scheme: {
@@ -33,41 +34,50 @@ const assessments = [
   { assessment_id: "ASSESSMENT-STRAY", title: "Stray essay", type: "assignment", weight: 0.2 },
 ];
 
-test("no scheme, no drawing — the flat list stays the view", () => {
-  assert.equal(schemeHtml({ run: {}, assessments }), null);
+const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} ≈ ${expected}`);
+
+test("no scheme, no facts — the card draws the flat weights", () => {
+  assert.equal(schemeFacts({ run: {}, assessments }), null);
 });
 
-test("each block says what is in it, grouped by kind, and whether it adds up", () => {
-  const html = schemeHtml({ run: run(), assessments, graded: new Set(["ASSESSMENT-QUIZ-01"]) });
-  assert.match(html, /Quizzes ×3 · 4%.*1\.33% each/);
-  assert.match(html, /Homework ×4 · 16%.*4% each/);
-  assert.match(html, /adds up to 30% ✓/, "ВСК1: 4 + 16 + 10");
-  assert.match(html, /adds up to 10% of 30%/, "ВСК2 holds only Midterm 2 here");
-  assert.match(html, /1 of 8 with marks/);
-  assert.match(html, /Quiz 1 <span class="dim">09\.21<\/span> ✓/);
+test("each block says what kinds of work are in it, with the per-item share when even", () => {
+  const blocks = schemeFacts({ run: run(), assessments });
+  const kinds = Object.fromEntries(blocks.VSK1.kinds.map((kind) => [kind.type, kind]));
+  assert.equal(kinds.quiz.label, "Quizzes ×3");
+  close(kinds.quiz.weight, 0.04);
+  close(kinds.quiz.each, 0.04 / 3);
+  assert.equal(kinds.assignment.label, "Homework ×4");
+  close(kinds.assignment.each, 0.04);
+  assert.equal(blocks.VSK2.kinds[0].label, "Midterm 2", "one item goes by its own title");
+  assert.equal(blocks.VSK2.kinds[0].each, null);
+  assert.deepEqual(blocks.VSK1.kinds.map((kind) => kind.type), ["assignment", "exam", "quiz"], "biggest share first");
+});
+
+test("dates spanned and marks in, per block", () => {
+  const blocks = schemeFacts({ run: run(), assessments, graded: new Set(["ASSESSMENT-QUIZ-01"]) });
+  assert.equal(blocks.VSK1.from, "2026-09-21T09:00:00+05:00");
+  assert.equal(blocks.VSK1.to, "2026-09-23T09:00:00+05:00");
+  assert.equal(blocks.VSK1.marked, 1);
+  assert.equal(blocks.VSK1.total, 8);
+  assert.equal(blocks.FINAL.from, null, "no dates yet");
 });
 
 test("Canvas mapping is said per block, and the course missing it is named", () => {
-  const html = schemeHtml({ run: run(), assessments });
-  assert.match(html, /Canvas group mapped in all 2 courses/);
-  assert.match(html, /Canvas group not mapped in B/);
-  assert.match(html, /Canvas group not mapped in A, B/);
+  const blocks = schemeFacts({ run: run(), assessments });
+  assert.deepEqual(blocks.VSK1.canvas, { courses: ["A", "B"], missing: [] });
+  assert.deepEqual(blocks.VSK2.canvas.missing, ["B"]);
+  assert.deepEqual(blocks.FINAL.canvas.missing, ["A", "B"]);
+  assert.equal(schemeFacts({ run: { ...run(), extensions: {} }, assessments }).VSK1.canvas, null, "no Canvas, no question");
 });
 
-test("what counts in no block is drawn, not hidden", () => {
-  const html = schemeHtml({ run: run(), assessments });
-  assert.match(html, /In no block/);
-  assert.match(html, /Stray essay/);
-});
-
-test("a nested block is drawn inside its parent", () => {
+test("a nested block's members count in its parent's bar", () => {
   const nested = run();
   nested.grading_scheme.components.push({ component_id: "HW1-BLOCK", title: "ВСК1 homework", weight: 0.16, parent: "VSK1" });
-  const html = schemeHtml({
+  const blocks = schemeFacts({
     run: nested,
     assessments: assessments.map((a) => (a.type === "assignment" && a.component === "VSK1" ? { ...a, component: "HW1-BLOCK" } : a)),
   });
-  assert.match(html, /ВСК1 homework/);
-  assert.match(html, /margin-left:14px/);
-  assert.match(html, /adds up to 30% ✓/, "the parent counts its child's weight");
+  assert.ok(!blocks.VSK1.kinds.some((kind) => kind.type === "assignment"), "the parent's own members only");
+  assert.ok(blocks.VSK1.parts.some((part) => part.type === "assignment"), "the bar counts the child's");
+  assert.equal(blocks["HW1-BLOCK"].total, 4);
 });

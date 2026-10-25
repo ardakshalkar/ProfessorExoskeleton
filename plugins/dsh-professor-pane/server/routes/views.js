@@ -10,7 +10,6 @@ import { courseModeDocument } from "../course-mode.js";
 import {
   assessmentsDocument,
   examsDocument,
-  gradingDocument,
   slidesDocument,
 } from "../course-views.js";
 import { defenceReader, forksReader } from "../defence-desk.js";
@@ -131,33 +130,15 @@ export const routes = [
     },
   },
   {
-    views: ["grading","ready"],
+    // `ready` does not take the drafts toggle: it lists the drafts whatever
+    // the toggle says — that IS the drafted half, and a "Record" setting that
+    // emptied it would be answering a question nobody asked. (`grading`, the
+    // policy page that shared this route, is the Gradebook's Policy now.)
+    views: ["ready"],
     handle(c) {
-      const { res, url, runId, view, workspace, root } = c;
+      const { res, url, runId, workspace, root } = c;
       if (!runId) return sendErrorPage(res, "No run chosen.");
-      const dark = url.searchParams.get("dark") === "1";
-      // `grading` honours the drafts toggle, because a drafted assessment
-      // carries a weight and changes the scheme. `ready` does not take it:
-      // it lists the drafts whatever the toggle says — that IS the drafted
-      // half, and a "Record" setting that emptied it would be answering a
-      // question nobody asked.
-      const withDrafts = url.searchParams.get("drafts") === "1";
-      if (view === "grading") res.setHeader("x-professor-pane-drafts", withDrafts ? "merged" : "record-only");
-      return send(
-        res,
-        200,
-        "text/html; charset=utf-8",
-        view === "grading"
-          ? gradingDocument(
-              workspace,
-              root,
-              runId,
-              dark,
-              withDrafts,
-              url.searchParams.get("date"),
-            )
-          : readyDocument(workspace, root, runId, dark),
-      );
+      return send(res, 200, "text/html; charset=utf-8", readyDocument(workspace, root, runId, url.searchParams.get("dark") === "1"));
     },
   },
   // Course mode: the term plan as a page, over the harness. The outline
@@ -279,7 +260,9 @@ export const routes = [
           ),
         );
       }
-      return send(res, 200, "text/html; charset=utf-8", widgetDocument(widget, data, dark));
+      // The gradebook's picked assessment gets a way into the Grade window,
+      // where its marks are decided; the widget itself only reads them.
+      return send(res, 200, "text/html; charset=utf-8", widgetDocument(widget, data, dark, { grade: view === "gradebook" }));
     },
   },
 ];

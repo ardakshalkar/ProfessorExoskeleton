@@ -100,14 +100,14 @@ export function Inspector(props) {
   const gaps = nav && !nav.error ? nav.gaps || 0 : 0;
   const draftKinds = recent && !recent.error ? recent.drafts_by || [] : [];
   const waiting = [
-    pending ? { text: pending + (pending === 1 ? " mark waits" : " marks wait") + " for your decision", place: { view: "tasks" } } : null,
+    pending ? { text: pending + (pending === 1 ? " mark waits" : " marks wait") + " for your decision", place: { view: "tasks", sub: "waiting", kind: "marks" } } : null,
     // Drafts by kind, the three largest: what is a draft matters more than how many.
     ...draftKinds.slice(0, 3).map((kind) => ({
       text: kind.count + " " + kind.collection.replace(/[-_]/g, " ") + " still " + (kind.count === 1 ? "a draft" : "drafts"),
       place: { view: "tasks", sub: "ready" },
     })),
     gaps ? { text: gaps + (gaps === 1 ? " week has" : " weeks have") + " something missing", place: { mode: "planning" } } : null,
-    signals ? { text: signals + (signals === 1 ? " open signal" : " open signals"), place: { view: "tasks" } } : null,
+    signals ? { text: signals + (signals === 1 ? " open signal" : " open signals"), place: { view: "tasks", sub: "waiting", kind: "signals" } } : null,
   ].filter(Boolean);
 
   const changes = recent && !recent.error ? recent.recent : [];

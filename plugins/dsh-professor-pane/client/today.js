@@ -318,13 +318,20 @@ function WaitingRow(props) {
  * day (HOME-5). The same document as Today's band — `/api/today` — so the
  * two cannot disagree; here it is whole, filterable by kind, and the snoozed
  * are listed with the day each comes back.
+ *
+ * `props.kind` — `{ kind, n }` — opens it filtered: the marks waiting, for a
+ * link that used to open Pending, whose list this one already holds.
  */
 export function WaitingPlace(props) {
   const [tick, setTick] = React.useState(0);
   const state = useToday(props.runId, props.sessionId, String(props.revision) + "." + tick);
   const shown = React.useRef(null);
   if (state.phase === "ready") shown.current = state.value;
-  const [kind, setKind] = React.useState(null);
+  const wordOf = (asked) => (asked && asked.kind ? KIND_WORD[asked.kind] || asked.kind : null);
+  const [kind, setKind] = React.useState(() => wordOf(props.kind));
+  React.useEffect(() => {
+    if (props.kind) setKind(wordOf(props.kind));
+  }, [props.kind ? props.kind.n : null]);
   const [failed, setFailed] = React.useState(null);
   const doc = shown.current;
   if (doc === null) return h(Message, null, "Reading what is waiting…");
@@ -344,7 +351,9 @@ export function WaitingPlace(props) {
         setTick((value) => value + 1);
       });
 
-  const kinds = [...new Set(doc.waiting.concat(doc.snoozed || []).map((item) => KIND_WORD[item.kind] || item.kind))];
+  // The kind a link opened it on stays a pressed button even when nothing of
+  // it is left, so "nothing of this kind" says which kind.
+  const kinds = [...new Set(doc.waiting.concat(doc.snoozed || []).map((item) => KIND_WORD[item.kind] || item.kind).concat(kind ? [kind] : []))];
   const match = (item) => !kind || (KIND_WORD[item.kind] || item.kind) === kind;
   const items = doc.waiting.filter(match);
   const later = (doc.snoozed || []).filter(match);

@@ -26,6 +26,7 @@ import { extensionOfKey, SHOWABLE } from "./materials.js";
 import { documentPage, stamp, VIEW_SCRIPT } from "./page.js";
 import { standingView } from "./standing-view.js";
 import { loadedRun, rosterPath, rosterPeople } from "./workspace.js";
+import { decisionOf } from "../shared/marks.js";
 
 export const studentsDocument = (
   workspace,
@@ -853,8 +854,7 @@ export const studentsDocument = (
     // [mark, word, written mark it replaced, Partly hint] per criterion.
     const values = criteria.map((criterion) => {
       const evaluation = evaluationOf.get(submission.submission_id + " " + criterion.criterion_id);
-      const decision =
-        evaluation && ["approved", "overridden"].includes(evaluation.status) ? evaluation.professor_decision : null;
+      const decision = decisionOf(evaluation);
       const fromDefence = Boolean(decision && evaluation.extensions?.decided_via === "defence");
       const word = fromDefence ? decision.defence : null;
       if (word) checked += 1;
@@ -1053,7 +1053,10 @@ export const studentsDocument = (
             " — regrade the whole paper, every question afresh, as new suggestions beside the current marks",
         ) +
         '">Ask to regrade</button>' +
-        '<p class="dim">New marks arrive as suggestions; the current ones stay until you accept the new ones in Grade.</p></div></details>',
+        '<p class="dim">New marks arrive as suggestions; the current ones stay until you accept the new ones in Grade.</p></div></details>' +
+        // Where this paper's marks are decided, one press away rather than a
+        // sentence: the Grade window on the assessment (client/pane.js `grade`).
+        '<button type="button" class="chip" data-grade-open="%%A%%" title="Decide this assessment\'s marks">Open in Grade →</button>',
       submission.assessment_id,
       submission.student_id,
     );
@@ -2168,6 +2171,8 @@ export const studentsDocument = (
     "var q=k.getAttribute('data-ask'),nt=k.parentNode.querySelector('textarea[data-note]');" +
     "if(nt&&nt.value.trim()){q+='; '+nt.getAttribute('data-note')+nt.value.trim();nt.disabled=true;}" +
     "parent.postMessage({source:'professor-pane',kind:'ask',prompt:q},'*');return;}" +
+    "var go=e.target.closest&&e.target.closest('button[data-grade-open]');" +
+    "if(go){parent.postMessage({source:'professor-pane',kind:'grade',assessment:go.getAttribute('data-grade-open')},'*');return;}" +
     "var s=e.target.closest&&e.target.closest('button[data-syncs]');" +
     "if(s){parent.postMessage({source:'professor-pane',kind:'syncs'},'*');return;}" +
     "var cg=e.target.closest&&e.target.closest('button[data-concepts]');" +

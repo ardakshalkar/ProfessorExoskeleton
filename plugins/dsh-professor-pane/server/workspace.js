@@ -30,8 +30,8 @@ import {
  * Not the tab list — `client/tabs.js` owns that, and most tabs are no longer in
  * here. Each entry names a tool in `dsh-ainar-course-model`'s manifest, which
  * is keyed by tool. Everything else the pane draws has no widget behind it:
- * the class list, the Checklist, the assessment, slide and exam tables and the
- * grading policy are assembled in this file, while Preferences and
+ * the class list, the Checklist and the assessment, slide and exam tables are
+ * assembled in this file, while Preferences and
  * Integrations are drawn by the browser half from `/api/preferences` and
  * `/api/integrations` — those two have forms, and a form cannot live in the
  * sandboxed frame the served documents go into.
@@ -55,7 +55,7 @@ export const VIEWS = {
  * `new Workspace(root)` per request, which built a new store, which started
  * with an empty map — so every view re-parsed every course from disk, and a
  * single render of the Course outline tab paid for it more than once, because
- * `gradingDocument` and friends ask for a payload AND call `findRun`.
+ * `examsDocument` and friends ask for a payload AND call `findRun`.
  *
  * Caching the STORE rather than the `Workspace` is what keeps `origin`
  * honest: it is only ever used to word the advice in a "no workspace" error,

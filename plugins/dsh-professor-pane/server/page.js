@@ -37,7 +37,41 @@ import { escapeText } from "./markdown.js";
 export const CHAT_MARK_CSS =
   '[data-ask]::after,[data-defence]::after{content:"\\2726";margin-left:.35em;font-size:.85em;opacity:.75}';
 
-export const widgetDocument = (widget, data, dark) => {
+/**
+ * The Grade window from the gradebook widget, which only reads marks.
+ *
+ * A mark is decided in one place, the Grade window. The gradebook widget is
+ * vendored and served unchanged to the chat clients, which have no Grade
+ * window, so it is not edited: this script, added only to the pane's copy,
+ * puts one button after its assessment tabs that opens the Grade window on
+ * the assessment picked — the same `grade` message an assessment chip on the
+ * weeks sends (client/pane.js). The widget redraws on every pick, so the
+ * button is put back after each redraw.
+ */
+const GRADE_BRIDGE = `<script>
+(function () {
+  var place = function () {
+    var tabs = document.querySelector('.tabs');
+    if (!tabs || (tabs.nextElementSibling && tabs.nextElementSibling.hasAttribute('data-grade-open'))) return;
+    var picked = tabs.querySelector('[data-pick][aria-pressed="true"]') || tabs.querySelector('[data-pick]');
+    if (!picked) return;
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('data-grade-open', '');
+    button.textContent = 'Grade this assessment \\u2192';
+    button.title = 'Open the Grade window: decide the suggested marks for ' + picked.textContent;
+    button.style.margin = '6px 0 2px';
+    button.onclick = function () {
+      parent.postMessage({ source: 'professor-pane', kind: 'grade', assessment: picked.getAttribute('data-pick'), label: picked.textContent }, '*');
+    };
+    tabs.insertAdjacentElement('afterend', button);
+  };
+  new MutationObserver(place).observe(document.documentElement, { childList: true, subtree: true });
+  document.addEventListener('DOMContentLoaded', place);
+})();
+</script>`;
+
+export const widgetDocument = (widget, data, dark, options = {}) => {
   const shim = `<script>
 window.openai = {
   toolOutput: ${embed(data)},
@@ -89,6 +123,7 @@ window.openai = {
     "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
     "<style>html,body{margin:0;padding:12px 14px 32px}" + CHAT_MARK_CSS + "</style>" +
     shim +
+    (options.grade ? GRADE_BRIDGE : "") +
     widget.html() +
     scheme
   );

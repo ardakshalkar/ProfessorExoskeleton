@@ -18,7 +18,7 @@
 import { CanvasRead } from "./canvas-card.js";
 import { CanvasDifferences } from "./canvas-diff.js";
 import { Message, useJson } from "./common.js";
-import { useSheetCheck } from "./marks.js";
+import { MarksForCanvas, PublishedChanges, useSheetCheck } from "./marks.js";
 import { h, React } from "./react.js";
 import { SyncCard, WaitingList, when } from "./syncs.js";
 import { BASE, scoped } from "./tabs.js";
@@ -164,7 +164,13 @@ function SyncAllPreview(props) {
   );
 }
 
-/** Course mode · Sync. */
+/**
+ * Course mode · Sync: every road out, and what has not gone down one — Sync
+ * all, the marks Canvas lacks, what differs in Canvas, the grade sheets, the
+ * names to confirm, and the materials changed since publishing. `focus:
+ * "marks"` (a link that used to open Gradebook · To Canvas or Waiting ·
+ * Unpublished) brings Marks for Canvas into view.
+ */
 export function SyncView(props) {
   const [tick, setTick] = React.useState(0);
   const revision = String(props.revision || 0) + "." + tick;
@@ -177,6 +183,12 @@ export function SyncView(props) {
   const checks = useSheetCheck(props.runId, props.sessionId, revision);
   const kept = React.useRef(null);
   if (syncs.phase === "ready" && syncs.value && !syncs.value.error) kept.current = syncs.value;
+  // Scrolled to once the page is drawn, and again when the same link is
+  // followed twice (the focus is numbered like the request it came with).
+  const marksRef = React.useRef(null);
+  React.useEffect(() => {
+    if (props.focus && props.focus.section === "marks" && marksRef.current) marksRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [props.focus ? props.focus.n : null, Boolean(kept.current)]);
   const [phase, setPhase] = React.useState("idle");
   const [preview, setPreview] = React.useState(null);
   const [results, setResults] = React.useState(null);
@@ -270,11 +282,28 @@ export function SyncView(props) {
           )
         : null,
     ),
+    // What Canvas lacks, per assessment, with its send: one assessment at a
+    // time, beside Sync all, which sends them all.
+    canvasOn
+      ? h(
+          "section",
+          { className: "pp-ccard", ref: marksRef },
+          h("div", { className: "pp-chead" }, h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"), h("span", { className: "pp-cname" }, "Marks for Canvas")),
+          h(MarksForCanvas, {
+            runId: props.runId,
+            sessionId: props.sessionId,
+            revision: props.marksRevision,
+            names: props.names,
+            ask: props.ask,
+            onWrite: () => done(["grading", "canvas", "marks"]),
+          }),
+        )
+      : null,
     canvasOn
       ? h(
           "section",
           { className: "pp-ccard" },
-          h("div", { className: "pp-chead" }, h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"), h("span", { className: "pp-cname" }, "Canvas")),
+          h("div", { className: "pp-chead" }, h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"), h("span", { className: "pp-cname" }, "Canvas", h("span", { className: "pp-intwhat" }, "what differs"))),
           h(CanvasDifferences, {
             runId: props.runId,
             sessionId: props.sessionId,
@@ -323,6 +352,7 @@ export function SyncView(props) {
           }),
         )
       : null,
+    h(PublishedChanges, { runId: props.runId, sessionId: props.sessionId, revision: props.marksRevision, openPublish: props.openPublish }),
     h(
       "p",
       { className: "pp-as" },

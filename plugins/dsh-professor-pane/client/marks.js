@@ -799,36 +799,40 @@ export const TitleWithTag = (props) => {
 };
 
 /**
- * Above Progress · Gradebook: per assessment, how far its marking has got
- * and how much of it Canvas has. The gradebook widget is shared with the
- * chat clients and knows nothing of Canvas, so this line is the pane's.
+ * Sync · Marks for Canvas: per assessment, how far its marking has got and
+ * how much of it Canvas has, with the send under each row. The one place
+ * that answers "what does Canvas not have" — until 2026-10-24 it was drawn
+ * twice more, as Gradebook · To Canvas and Waiting · Unpublished.
+ *
  * Only assessments something was handed in for — a strip of twenty rows
- * saying "nothing handed in" would bury the two that matter.
+ * saying "nothing handed in" would bury the two that matter — the ones
+ * Canvas is behind on first, then by due date.
  */
-export function GradebookStatus(props) {
+export function MarksForCanvas(props) {
   // A finished check of Canvas bumps the `canvas` tag, which the marks
   // revision follows: it notes in the ledger what Canvas holds.
   const state = useUnpublished(props.runId, props.sessionId, props.revision);
   const [check, recheck] = useCanvasCheck(props.runId, props.sessionId);
   // The one assessment whose Canvas send is open under its row.
   const [open, setOpen] = React.useState(null);
-  if (state.phase === "loading" || !state.value || state.value.error) return null;
-  const rows = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0).sort(dueOrder);
-  if (!rows.length) return null;
+  if (state.phase === "loading" || !state.value) return null;
+  if (state.value.error) return h(Message, { error: true }, state.value.error);
   const edited = editedIn(check);
   const unplaced = unplacedIn(check);
-  const said = new Map(rows.map((entry) => [entry.id, markState(entry, unplaced.get(entry.id) || 0)]));
+  const handed = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0);
+  const said = new Map(handed.map((entry) => [entry.id, markState(entry, unplaced.get(entry.id) || 0)]));
+  const rows = handed.sort((a, b) => (said.get(b.id).behind ? 1 : 0) - (said.get(a.id).behind ? 1 : 0) || dueOrder(a, b));
+  if (!rows.length) return h("p", { className: "pp-as" }, "Nothing handed in yet, so no marks for Canvas.");
   const waiting = rows.reduce((n, entry) => n + said.get(entry.id).waiting, 0);
   const answer = check.value || {};
   const checking = check.phase === "running" || check.phase === "loading";
   const unreachable = !checking && (answer.error || (answer.state === "ready" && !answer.value));
   return h(
     "div",
-    { className: "pp-bookcard pp-bookstatus" + (open ? " pp-bookstatus-open" : "") },
+    { className: "pp-bookstatus" + (open ? " pp-bookstatus-open" : "") },
     h(
       "div",
       { className: "pp-cardhead" },
-      h("b", null, "Marking"),
       h(
         "span",
         { className: waiting ? "pp-chip pp-chip-warn" : "pp-chip pp-chip-ok" },
@@ -891,6 +895,14 @@ export function GradebookStatus(props) {
           "span",
           { className: "pp-bookcanvas" },
           state.canvas ? h("span", { className: "pp-chip " + (state.behind ? "pp-chip-warn" : "pp-chip-ok") }, state.canvas) : null,
+          // Marks with nowhere to go yet: no Canvas assignment bound for them.
+          state.behind && entry.binding && (entry.binding.state === "none" || entry.binding.state === "some")
+            ? h(
+                "span",
+                { className: "pp-chip pp-chip-warn", title: "Send… offers to link one already in Canvas, or to create it." },
+                entry.binding.state === "none" ? "no Canvas assignment yet" : "no Canvas assignment in " + entry.binding.missing.join(", "),
+              )
+            : null,
           // Nowhere to send these: the student is not in the Canvas course.
           state.stuck
             ? h(
@@ -1233,71 +1245,23 @@ export function RecentMarks(props) {
 }
 
 /**
- * Tasks · Unpublished: everything the course holds that has not gone out.
- * Each line carries the press that sends it — the marks as the Scans tab
- * sends them, a moved material through the Publish dialog — except a
- * draft, which only the professor's edit to its record can accept.
+ * Sync · Published materials: materials that moved after they went out,
+ * each with the press that sends it again, and the drafts a publication
+ * leaves out, which only the professor's edit to the record can accept.
+ * Was the second half of Waiting · Unpublished, whose marks half is
+ * `MarksForCanvas` above. Nothing drawn when there is nothing to say.
  */
-export function Unpublished(props) {
+export function PublishedChanges(props) {
   const state = useUnpublished(props.runId, props.sessionId, props.revision);
-  const [open, setOpen] = React.useState(null);
-  if (state.phase === "loading") return h(Message, null, "Reading what has gone out…");
+  if (state.phase === "loading" || !state.value || state.value.error) return null;
   const doc = state.value;
-  if (doc.error) return h(Message, { error: true }, doc.error);
-  const nothing = !doc.marks.length && !doc.drafts.length && !doc.moved.length;
+  if (!doc.drafts.length && !doc.moved.length) return null;
   const section = (title, rows) => (rows.length ? h(React.Fragment, null, h("p", { className: "pp-factgroup" }, title), rows) : null);
 
   return h(
-    "div",
-    { className: "pp-scroll" },
-    h(
-      "p",
-      { className: "pp-as" },
-      "Read from this machine: the gradebook, what Canvas confirmed receiving, and what was last published. Canvas is not asked, so an edit made there by hand does not show.",
-    ),
-    nothing ? h(Message, null, "Everything decided here is out: no marks waiting for Canvas, no drafts held back, no material changed since it was published.") : null,
-    section(
-      "Marks not in Canvas",
-      doc.marks.sort(dueOrder).map((entry) => {
-        const said = markState(entry);
-        const binding =
-          entry.binding.state === "none"
-            ? "no Canvas assignment yet"
-            : entry.binding.state === "some"
-              ? "no Canvas assignment in " + entry.binding.missing.join(", ")
-              : null;
-        return h(
-          "div",
-          { key: entry.id },
-          h(
-            "div",
-            { className: "pp-approverow" },
-            h("b", null, entry.title),
-            h("span", null, said.canvas),
-            binding ? h("span", { className: "pp-behind" }, binding) : null,
-            h(
-              "button",
-              { type: "button", className: "pp-segbtn", onClick: () => setOpen(open === entry.id ? null : entry.id) },
-              open === entry.id ? "Close" : "Send…",
-            ),
-          ),
-          open === entry.id
-            ? h(CanvasMarks, {
-                key: entry.id,
-                runId: props.runId,
-                sessionId: props.sessionId,
-                assessmentId: entry.id,
-                title: entry.title,
-                ask: props.ask,
-                names: props.names,
-                canvas: entry.canvas,
-                autoPreview: true,
-                onSent: props.onWrite,
-              })
-            : null,
-        );
-      }),
-    ),
+    "section",
+    { className: "pp-ccard" },
+    h("div", { className: "pp-chead" }, h("span", { className: "pp-cname" }, "Published materials", h("span", { className: "pp-intwhat" }, "what changed since it went out"))),
     section(
       "Changed since published",
       doc.moved.map((entry) =>

@@ -1,16 +1,13 @@
 /**
- * The course tables the pane assembles itself: the grading policy, and the
- * assessment, slide and exam lists.
+ * The course tables the pane assembles itself: the assessment, slide and
+ * exam lists. The grading policy is the Gradebook's (grading-writes.js).
  */
 
 import { approvedView } from "@ainar/core/src/approval.ts";
-import { runById } from "@ainar/core/src/bundle.ts";
-import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
 
-import { schemeHtml, schemeStyle } from "./grading-view.js";
 import { escapeAttribute, escapeText } from "./markdown.js";
 import { withMaterialLinks } from "./materials.js";
-import { documentPage, rows, titleWithId, todoOr, VIEW_SCRIPT } from "./page.js";
+import { documentPage, rows, titleWithId, VIEW_SCRIPT } from "./page.js";
 import { viewPayload } from "./workspace.js";
 
 /**
@@ -82,113 +79,6 @@ const publishButton = (assessment) => {
     (recorded ? "update…" : "publish…") +
     "</button>"
   );
-};
-
-/**
- * The grading policy half of the Course outline tab.
- *
- * The arithmetic is NOT done here. `course_outline` already carries a `grading`
- * section — `total_weight`, which assessments carry no weight, whether the
- * scheme is complete, and a sentence when it is not — and this draws that.
- *
- * The first version of this function did the sum itself and got it wrong in the
- * way the model exists to prevent: `weight` is a FRACTION of one, so a perfectly
- * good scheme of 0.15 + 0.15 + 0.2 + 0.5 was rendered as "Total 1% — not 100"
- * and would have sent a professor to fix a course that was already correct.
- * Reading the model's own number cannot drift from what the Week-by-week view
- * beside it reports, which is the whole reason the pane is built this way.
- *
- * What is assembled here is only what no tool answers: the run's own
- * `extensions` — the written policy, the LMS target, the planned week count —
- * which are records of decisions rather than computations over them.
- */
-export const gradingDocument = (workspace, root, runId, dark, withDrafts, on) => {
-  const data = viewPayload(workspace, "course_outline", runId, on, withDrafts).payload;
-
-  const bundle = workspace.findRun(runId);
-  const run = runById(bundle).get(runId) ?? {};
-  const extensions = run.extensions ?? {};
-  const grading = data.grading ?? {};
-  const assessments = Array.isArray(data.assessments) ? data.assessments : [];
-
-  // `total_weight` is a fraction of one; the model reports it to a person as a
-  // percentage, and so does this.
-  const asPercent = (fraction) =>
-    typeof fraction === "number" ? Math.round(fraction * 1000) / 10 + "%" : "—";
-
-  const policy =
-    "<section><h2>Grading policy</h2><p>" +
-    todoOr(extensions.grading_policy) +
-    "</p></section>";
-
-  const schedule = extensions.schedule ?? {};
-  const facts =
-    "<section><h2>The run</h2>" +
-    [
-      ["Term", run.term],
-      ["Dates", run.start_date && run.end_date ? run.start_date + " → " + run.end_date : null],
-      ["Status", run.status],
-      ["Timezone", run.timezone],
-      ["Planned weeks", schedule.weeks],
-      ["LMS target", (extensions.lms ?? {}).target],
-    ]
-      .map(
-        ([label, value]) =>
-          '<div class="row"><span class="k">' +
-          escapeText(label) +
-          '</span><span class="v">' +
-          todoOr(value) +
-          "</span></div>",
-      )
-      .join("") +
-    "</section>";
-
-  const weights =
-    "<section><h2>Weights</h2>" +
-    (assessments.length === 0
-      ? '<p class="empty">No assessment belongs to this run, so nothing carries a weight ' +
-        "and there is no scheme to check. Drafting one is <code>/design-assessment</code>.</p>"
-      : assessments
-          .map(
-            (row) =>
-              '<div class="row"><span class="k">' +
-              titleWithId(row) +
-              '</span><span class="v">' +
-              (row.weight === null || row.weight === undefined
-                ? '<span class="todo">no weight</span>'
-                : asPercent(row.weight)) +
-              "</span></div>",
-          )
-          .join("") +
-        '<div class="row"><span class="k"><strong>Total</strong></span><span class="v">' +
-        (grading.complete === true
-          ? asPercent(grading.total_weight)
-          : '<span class="todo">' + asPercent(grading.total_weight) + "</span>") +
-        "</span></div>") +
-    "</section>";
-
-  // The model's own sentence about what is wrong, rather than one invented
-  // here. It names the assessments at fault, which a total cannot.
-  const note = grading.note
-    ? '<section><p class="empty">' + escapeText(grading.note) + "</p></section>"
-    : "";
-
-  // A run with a grading scheme is drawn as the blocks it is built from — see
-  // server/grading-view.js — and the written policy follows as the reference.
-  // Without one, the flat list of weights is still the whole truth.
-  if (run.grading_scheme?.components?.length) {
-    const shown = withDrafts ? bundle : approvedView(bundle);
-    const ours = (shown.assessments ?? []).filter((a) => a.course_version_id === runId);
-    const graded = new Set(
-      (gradebookPayload(approvedView(bundle), runId, {}).assessments ?? [])
-        .filter((a) => (a.summary?.graded ?? 0) > 0 || (a.summary?.partially_graded ?? 0) > 0)
-        .map((a) => a.assessment_id),
-    );
-    const scheme = schemeHtml({ run, assessments: ours, graded });
-    return documentPage(schemeStyle(dark) + scheme + note + policy + facts, dark);
-  }
-
-  return documentPage(policy + facts + weights + note, dark);
 };
 
 /**

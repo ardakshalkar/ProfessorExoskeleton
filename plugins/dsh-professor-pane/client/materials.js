@@ -8,7 +8,6 @@ import { AREAS, useVersion } from "./data.js";
 import { CourseView } from "./course/view.jsx";
 import { courseModeEscape } from "./course-escape.js";
 import { GradebookPanes } from "./gradebook.js";
-import { GradebookStatus, Unpublished } from "./marks.js";
 import { Files } from "./files.js";
 import { ConnectionsMenu } from "./connections-menu.js";
 import { Integrations } from "./integrations.js";
@@ -19,6 +18,7 @@ import { SyncView } from "./sync-view.js";
 import { Today, WaitingPlace } from "./today.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS } from "./tabs.js";
+import { resolveRequest } from "../shared/places.js";
 
 /**
  * A widget document in an iframe, delivered as `srcdoc` rather than `src`.
@@ -353,22 +353,22 @@ const COURSE_VIEWS = [
   // class and the roads out are doing — each a link into another place.
   { id: "today", label: "Today", hint: "This week, what is waiting on you, and how the class and the syncs stand" },
   { id: "students", label: "Students", hint: "The class list, by subgroup — names and marks, so private" },
-  { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and how much of it Canvas has" },
+  { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, the grading policy, and what changed" },
   // The class by concept: what used to be the right column's Progress tab.
   { id: "concepts", label: "Concepts", hint: "The class, by concept — what has been shown and what has not" },
   // Waiting (was Tasks): everything waiting on the professor in one list
   // first, then the four lists it is drawn from (BACKLOG E37 HOME-13). The id
   // stays `tasks`, which every jump into it already names.
-  { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze — and what is ready and what has not gone out" },
+  { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze — and what is ready to approve" },
   // What the course has got, by kind rather than by week: the right
   // column's old Course outline sub-views, the student's outline last.
-  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, and the outline a student reads" },
+  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, and the outline a student reads" },
   // The private material itself — scanned papers, recorded answers — which
   // lives outside the course folder, so has no other place to be seen whole.
   { id: "files", label: "Files", hint: "Scans and audio: where they are stored, how much there is, each pile" },
   // Bringing Canvas and the grade sheets into step: an operation done weekly,
   // so not behind Course settings, which keeps the setting up.
-  { id: "syncs", label: "Sync", hint: "Canvas and the grade sheets: Sync all, what differs, and names to confirm" },
+  { id: "syncs", label: "Sync", hint: "Canvas and the grade sheets: Sync all, marks Canvas lacks, what differs, names to confirm, what changed since publishing" },
   // Last: not the course but its roads out — Canvas, the sheet, the
   // repositories — and what the skills assume. Opened twice a term.
   { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume" },
@@ -384,15 +384,16 @@ const VIEW_SUBS = {
     { id: "assessments", label: "Assessments" },
     { id: "slides", label: "Slides" },
     { id: "exams", label: "Exams" },
-    { id: "grading", label: "Grading policy" },
+    // The grading policy was a part here too, drawn a second time beside the
+    // Gradebook's Policy; one place now (shared/places.js).
     { id: "outline", label: "Student's outline" },
   ],
-  // The Gradebook's four parts, which were stacked in one long page
+  // The Gradebook's parts, which were stacked in one long page
   // (docs/RIBBONS.md R6). Last changes keeps its own All · Grades · Sheet ·
-  // Policy: those filter that one list.
+  // Policy: those filter that one list. To Canvas was a part too, until
+  // Sync became the one place for what Canvas lacks (shared/places.js).
   gradebook: [
     { id: "marks", label: "Marks" },
-    { id: "canvas", label: "To Canvas" },
     { id: "policy", label: "Policy" },
     { id: "changes", label: "Last changes" },
   ],
@@ -402,18 +403,6 @@ const VIEW_SUBS = {
     { id: "accounts", label: "Accounts" },
     { id: "preferences", label: "Preferences" },
   ],
-};
-
-/** Older names a request may still use: the Integrations view became Course settings. */
-const VIEW_ALIASES = {
-  integrations: { view: "settings", sub: "integrations" },
-  preferences: { view: "settings", sub: "preferences" },
-};
-
-/** A request with its view resolved through `VIEW_ALIASES`. */
-const resolveRequest = (request) => {
-  if (!request || !VIEW_ALIASES[request.view]) return request;
-  return { ...request, ...VIEW_ALIASES[request.view], sub: request.sub || VIEW_ALIASES[request.view].sub };
 };
 
 /** The Status view's words for a connection, as the Integrations tab says them. */
@@ -469,12 +458,18 @@ export function CourseMode(props) {
       ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n }
       : null;
   const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
+  // Where in a place a request points: a section of Sync to bring into view,
+  // or the kind Waiting · Everything is filtered to — what the folded parts'
+  // old links meant (shared/places.js). Numbered like the request.
+  const aimOf = (entry) => (entry && (entry.focus || entry.kind) ? { section: entry.focus || null, kind: entry.kind || null, n: entry.n } : null);
+  const [aim, setAim] = React.useState(() => aimOf(request));
   const doorCount = React.useRef(0);
   // Words a press on the page puts into the field at its foot, unsent.
   const [fill, setFill] = React.useState(null);
   React.useEffect(() => {
     const door = doorOf(request);
     if (door) setConceptsFocus(door);
+    setAim(aimOf(request));
   }, [request ? request.n : null]);
   // What is on screen, said to the pane (the inspector's focus) and to the
   // navigator (which marks the place as current); null once closed.
@@ -621,7 +616,8 @@ export function CourseMode(props) {
    * A press on Today: a reading, a view, or a window over course mode. The
    * request shapes are the navigator's, plus `{ grade }` and `{ scans }`.
    */
-  const openFromToday = (request) => {
+  const openFromToday = (asked) => {
+    const request = resolveRequest(asked);
     if (!request) return;
     if (request.grade) {
       if (props.onGrade) props.onGrade(request.grade, request.label);
@@ -631,8 +627,10 @@ export function CourseMode(props) {
       if (VIEW_SUBS[request.view] && known(request.sub, VIEW_SUBS[request.view])) setSub(request.view, request.sub);
       // A door into the Concepts grid from inside course mode — the command
       // field's student or concept — numbered like the pane's own.
-      const door = doorOf(Object.assign({}, request, { n: "here-" + (doorCount.current += 1) }));
+      const numbered = Object.assign({}, request, { n: "here-" + (doorCount.current += 1) });
+      const door = doorOf(numbered);
       if (door) setConceptsFocus(door);
+      setAim(aimOf(numbered));
       setView(request.view);
     } else if (request.mode && known(request.mode, COURSE_MODES)) {
       // Teaching on a week named by the command field ("week 7").
@@ -673,6 +671,12 @@ export function CourseMode(props) {
           sessionId: props.sessionId,
           names: props.names,
           revision: syncsVersion,
+          // Marks for Canvas and Published materials read `/api/unpublished`,
+          // which follows the marks, not the roads.
+          marksRevision: marksVersion,
+          focus: aim,
+          ask: props.ask,
+          openPublish: props.openPublish,
           onWrite: (tags) => props.wrote(tags || ["syncs"]),
           onOpenSettings: () => {
             setSub("settings", "integrations");
@@ -765,16 +769,6 @@ export function CourseMode(props) {
     }
     if (view === "gradebook") {
       const part = subOf("gradebook");
-      if (part === "canvas") {
-        return h(GradebookStatus, {
-          runId: props.runId,
-          sessionId: props.sessionId,
-          revision: marksVersion,
-          names: props.names,
-          ask: props.ask,
-          onWrite: () => props.wrote(["grading"]),
-        });
-      }
       if (part === "policy" || part === "changes") {
         return h(GradebookPanes, {
           only: part,
@@ -806,20 +800,12 @@ export function CourseMode(props) {
           sessionId: props.sessionId,
           revision: everything + "." + syncsVersion + "." + filesVersion,
           onOpen: openFromToday,
+          // The kind an old link to Pending meant: the marks waiting.
+          kind: aim && aim.kind ? aim : null,
         }),
       );
     }
-    if (taskSub === "unpublished") {
-      return h(Unpublished, {
-        runId: props.runId,
-        sessionId: props.sessionId,
-        revision: marksVersion,
-        onWrite: () => props.wrote(["integrations", "grading"]),
-        openPublish: props.openPublish,
-        ask: props.ask,
-        names: props.names,
-      });
-    }
+    // Ready and Checklist: the drafted half and what nobody has started.
     return h(WidgetFrame, {
       key: taskSub + "|" + props.names + "|" + props.dark + "|" + props.drafts,
       revision: everything,
@@ -857,7 +843,7 @@ export function CourseMode(props) {
     view === "concepts" ||
     (view === "settings" && subOf("settings") === "integrations") ||
     // Everything names nobody; the lists it is drawn from do.
-    (view === "tasks" && taskSub !== "unpublished" && taskSub !== "waiting");
+    (view === "tasks" && taskSub !== "waiting");
   // With the navigator in the sidebar the places are chosen there, and this
   // header keeps only the readings of the weeks. Without it — the stock
   // browser in the seat, nothing measured — the row is the only way in.
@@ -878,18 +864,15 @@ export function CourseMode(props) {
   const placeTitle = subLabel ? placeName + " · " + subLabel : placeName;
   // Where the drafts switch changes what is drawn: the weeks, and the views
   // computed over the course model. Today, Students, Files, Sync and Course
-  // settings read the same either way, and so do Tasks' Ready and Checklist,
-  // which are about the drafted half whatever the switch says (see
+  // settings read the same either way, and so does all of Waiting: Ready and
+  // Checklist are about the drafted half whatever the switch says (see
   // server/routes/views.js) — so the switch is not on them.
   const draftsApply =
     view === null ||
     view === "concepts" ||
     view === "materials" ||
-    // The marks grid; the Canvas status, the policy and its history read
-    // the same either way.
-    (view === "gradebook" && subOf("gradebook") === "marks") ||
-    // Pending, whose id is `tasks`: the inbox, over the half the switch picks.
-    (view === "tasks" && taskSub === "tasks");
+    // The marks grid; the policy and its history read the same either way.
+    (view === "gradebook" && subOf("gradebook") === "marks");
   // The readings of the weeks and Preview as student are Weeks' own, drawn
   // in its place bar under the header; without the navigator (the stock
   // browser in the seat) the header is the only row, and they stay in it.

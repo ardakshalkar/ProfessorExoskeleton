@@ -145,11 +145,11 @@ const PLACES = [
   // Tasks, renamed: it opens on everything waiting, in one list (HOME-13).
   { id: "tasks", label: "Waiting", hint: "Everything waiting on you, in one order, with snooze", request: { view: "tasks", sub: "waiting" } },
   { id: "students", label: "Students", hint: "The class list, by subgroup", request: { view: "students" } },
-  { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment", request: { view: "gradebook" } },
+  { id: "gradebook", label: "Gradebook", hint: "Every mark by assessment, and the grading policy", request: { view: "gradebook" } },
   { id: "concepts", label: "Concepts", hint: "The class, by concept", request: { view: "concepts" } },
-  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the grading policy, the student's outline", request: { view: "materials" } },
+  { id: "materials", label: "Materials", hint: "Assessments, slides, exams, the student's outline", request: { view: "materials" } },
   { id: "files", label: "Files", hint: "Scans and recordings: where they are, each pile", request: { view: "files" } },
-  { id: "sync", label: "Sync", hint: "Canvas and the grade sheets: Sync all, what differs, names to confirm", request: { view: "syncs" } },
+  { id: "sync", label: "Sync", hint: "Canvas and the grade sheets: Sync all, marks Canvas lacks, what differs, names to confirm", request: { view: "syncs" } },
 ];
 
 /** The foot's place: opened twice a term, so kept out of the list above. */

@@ -687,8 +687,6 @@ export function ProfessorPane(props) {
         });
         return;
       }
-      // The Students tab's "Sync from sheet": the Syncs view, where the sheet
-      // is read directly or brought in as a downloaded file.
       // A door into the Concepts grid (BACKLOG HOME-9): a student from the
       // class list, a concept from a week's chip, a week from Evidence.
       if (data.kind === "concepts") {
@@ -699,8 +697,10 @@ export function ProfessorPane(props) {
         openPlace(door);
         return;
       }
+      // The Students tab's "Sync from sheet": Sync, where the sheets are run;
+      // setting one up is a link from there to Course settings.
       if (data.kind === "syncs") {
-        focusCard("sheets");
+        openPlace({ view: "syncs" });
         return;
       }
       if (data.kind === "publish") {
@@ -1052,8 +1052,8 @@ export function ProfessorPane(props) {
           onRecordings: () => setBatch(true),
           // For Today: marks waiting on one assessment, in the Grade view.
           onGrade: (assessment, label) => setGrading({ assessment, label: label || assessment }),
-          // For Students, Gradebook and Tasks: the pane's own identity choice, and what the
-          // Unpublished view needs to send — the same props its tab gets.
+          // For Students, Gradebook, Tasks and Sync: the pane's own identity choice, and what
+          // Sync's Marks for Canvas needs to send.
           names: names,
           setNames: setNames,
           ask: props.ask,

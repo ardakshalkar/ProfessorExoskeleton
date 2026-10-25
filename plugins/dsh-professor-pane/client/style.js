@@ -881,6 +881,14 @@ a.pp-syncbtn,label.pp-syncbtn{text-decoration:none}
 /* A downloaded sheet is dropped on its card; the outline says where it lands. */
 .pp-synccard-drop{border:1px dashed #1e7e38;background:rgba(30,142,62,.06)}
 .pp-synchint{margin:0;font-size:11px;line-height:1.45;color:var(--dsw-alias-label-secondary,#555)}
+/* A sheet column with marks the sync does not read, and what to read it as. */
+.pp-syncnews{display:flex;flex-direction:column;gap:6px}
+.pp-syncnew{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 8px;border-radius:8px;
+  background:rgba(214,130,32,.09);border:1px solid rgba(214,130,32,.3)}
+.pp-syncnewt{flex:1 1 180px;min-width:0;font-size:11.5px;font-weight:600;color:#b4600f}
+.pp-syncnewd{font-weight:400}
+.pp-syncnew select{flex:1 1 160px;min-width:0;font:inherit;font-size:11.5px;padding:4px 6px;border-radius:7px;
+  border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff);color:inherit}
 .pp-syncout{border-radius:9px;overflow:hidden;border:1px solid var(--dsw-alias-border-l2,#e3e3e6)}
 .pp-syncout-err{border-color:rgba(180,52,42,.45)}
 .pp-syncouthead{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 4px 10px;font-size:11px;font-weight:600;
@@ -1361,6 +1369,16 @@ i.pp-cg-cell{cursor:default;flex:none}
 .pp-gbseg{flex-basis:0;min-width:0;display:flex;align-items:center;justify-content:center;padding:0 4px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff}
 .pp-gbseg + .pp-gbseg{border-left:2px solid var(--dsw-alias-bg-l1,#fff)}
+.pp-gbbar > .pp-gbseg{position:relative}
+.pp-gbparts{position:absolute;inset:0;display:flex;gap:1px}
+.pp-gbparts > i{flex-basis:0;min-width:0}
+.pp-gbparts > i + i{box-shadow:inset 1px 0 0 rgba(255,255,255,.55)}
+.pp-gbparts > .pp-gbpart-empty{background:repeating-linear-gradient(45deg,transparent 0 4px,rgba(255,255,255,.45) 4px 8px)}
+.pp-gbseglabel{position:relative;overflow:hidden;text-overflow:ellipsis}
+.pp-gbkinds{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 4px 14px}
+.pp-gbmarked{color:#2f6b3c;font-weight:600}
+.pp-gbfacts{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:4px 0 8px 14px;font-size:11px}
+.pp-gbfacts dt{color:var(--dsw-alias-label-tertiary,#8a8a8f)}.pp-gbfacts dd{margin:0}
 .pp-gbseg0{background:#2f6fd6}.pp-gbseg1{background:#2f8a4e}.pp-gbseg2{background:#b4600f}
 .pp-gbseg3{background:#7a4cc2}.pp-gbseg4{background:#0f8a8a}.pp-gbseg5{background:#b4342a}
 .pp-gbblock{border-top:1px solid var(--dsw-alias-border-l3,rgba(0,0,0,.05))}

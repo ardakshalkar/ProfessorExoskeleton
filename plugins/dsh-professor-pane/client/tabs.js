@@ -32,20 +32,18 @@ export function scoped(path, sessionId) {
  * Until 2026-10-16 this table, and the TABS beside it, were the right
  * column's button bar. The column is an inspector now (client/inspector.js)
  * and its places live in course mode; Tasks is the one table course mode
- * reads from here, since the Unpublished view keys off its last entry.
+ * reads from here.
  *
- * Pending, then Ready, then Checklist: the order is how close a thing is to
- * being finished. Pending is work awaiting the professor's judgement, Ready
- * is work awaiting their approval, and Checklist is what nobody has started.
+ * Ready, then Checklist: the order is how close a thing is to being
+ * finished. Ready is work awaiting the professor's approval, Checklist is
+ * what nobody has started. Pending (marks awaiting judgement) and
+ * Unpublished (what has not gone out) were here until 2026-10-24: the first
+ * is Everything's marks, each opening the Grade window; the second is Sync.
  */
 export const SUBVIEWS = {
   tasks: [
-    { id: "tasks", label: "Pending" },
     { id: "ready", label: "Ready" },
     { id: "checklist", label: "Checklist" },
-    // Last: not work to do on the course but what has not left it yet —
-    // marks Canvas does not have, materials changed since publishing.
-    { id: "unpublished", label: "Unpublished" },
   ],
 };
 

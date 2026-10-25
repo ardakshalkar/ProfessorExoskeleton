@@ -295,7 +295,9 @@ function CourseIntegrations(props) {
           service: "canvas",
           mark: "Cv",
           text: "Canvas is missing marks for " + plural(counts.toSend.length, "assessment", "assessments"),
-          go: () => show("marks"),
+          // Sync's Marks for Canvas, where course mode has it; the card's own
+          // filter only without one.
+          go: props.onOpenSync || (() => show("marks")),
         }
       : null,
   ].filter(Boolean);

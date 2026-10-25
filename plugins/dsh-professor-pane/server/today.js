@@ -222,7 +222,7 @@ const waitingItems = ({ outline, inbox, held, syncs, unpublished, progress }) =>
       detail: plural(unsentTotal, "mark", "marks") + " across " + plural(unsent.length, "assessment", "assessments") + " that Canvas does not have",
       count: unsentTotal,
       urgency: "blocks_students",
-      open: { view: "gradebook", sub: "canvas" },
+      open: { view: "syncs", focus: "marks" },
     });
   }
 
@@ -238,7 +238,7 @@ const waitingItems = ({ outline, inbox, held, syncs, unpublished, progress }) =>
       title: action.title || action.type,
       detail: due ? (due < asOf ? "was due " : "due ") + due : action.type,
       urgency: due && due < asOf ? "overdue" : due && due <= weekAhead(asOf) ? "this_week" : "later",
-      open: { view: "tasks", sub: "tasks" },
+      open: { view: "tasks", sub: "waiting", kind: "action" },
     });
   }
 
@@ -379,8 +379,8 @@ export const closingOf = ({ inbox, unpublished, held }) => {
   const papers = (held || []).reduce((sum, pile) => sum + pile.held, 0);
   const drafts = ((inbox && inbox.drafts_awaiting_approval) || []).length;
   return [
-    { id: "decided", label: "Every mark decided", done: !pending, detail: pending ? plural(pending, "suggestion", "suggestions") + " waiting" : null, do: { open: { view: "tasks", sub: "tasks" } } },
-    { id: "sent", label: "Marks sent to Canvas", done: !unsent, detail: unsent ? plural(unsent, "mark", "marks") + " Canvas does not have" : null, do: { open: { view: "gradebook", sub: "canvas" } }, outward: true },
+    { id: "decided", label: "Every mark decided", done: !pending, detail: pending ? plural(pending, "suggestion", "suggestions") + " waiting" : null, do: { open: { view: "tasks", sub: "waiting", kind: "marks" } } },
+    { id: "sent", label: "Marks sent to Canvas", done: !unsent, detail: unsent ? plural(unsent, "mark", "marks") + " Canvas does not have" : null, do: { open: { view: "syncs", focus: "marks" } }, outward: true },
     { id: "integrity", label: "Integrity cases settled", done: !cases, detail: cases ? plural(cases, "case", "cases") + " open" : null, do: { open: { view: "students" } } },
     { id: "papers", label: "Every scanned paper placed", done: !papers, detail: papers ? plural(papers, "paper", "papers") + " on nobody" : null, do: { open: { view: "files" } } },
     { id: "drafts", label: "Drafts accepted or dropped", done: !drafts, detail: drafts ? plural(drafts, "draft", "drafts") + " left" : null, do: { open: { view: "tasks", sub: "ready" } } },
