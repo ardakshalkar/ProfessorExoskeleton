@@ -4918,7 +4918,8 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         console.error(
           "usage: sync list RUN | show RUN SYNC | plan RUN SYNC [flags] | run RUN SYNC [--confirm] | check RUN [SYNC]\n" +
             "       sync review RUN [SYNC] | confirm RUN SYNC (--all | --line N | --name X) [--to NAME]\n" +
-            '       sync link RUN SYNC "Name as written=Name in class list" [--unlink] | migrate RUN [--dry-run]',
+            '       sync link RUN SYNC "Name as written=Name in class list" [--unlink] | migrate RUN [--dry-run]\n' +
+            '       sync map RUN SYNC "Header=ASSESSMENT-…"',
         );
         process.exit(1);
       }

@@ -30,6 +30,7 @@ import {
   saveSheetConfig,
   sheetLayout,
   sheetRows,
+  unmappedColumns,
 } from "../grade-sheet.ts";
 import { Ledger, type MarkChange } from "../lms/ledger.ts";
 import { SheetsClient, a1, columnLetter, loadCredentials, spreadsheetIdOf } from "../lms/sheets.ts";
@@ -37,7 +38,7 @@ import { decidedAt, removeRecords, writeRecords } from "../records-write.ts";
 import { RosterStore, loadSalt, parseDelimited, sniffDelimiter } from "../roster.ts";
 import { LinkTable, anchorLinkKey } from "./links.ts";
 import type { MatchStep } from "./match.ts";
-import type { RunSync } from "./registry.ts";
+import { type RunSync, writeSyncs } from "./registry.ts";
 
 /** The sheet settings a sync describes, with the older file's pins carried along. */
 export const sheetConfigFromSync = (sync: RunSync, legacy: SheetConfig | null): SheetConfig => {
@@ -239,6 +240,7 @@ export const runMarksSync = async (options: {
   const enrolled = new Set(enrolledIn(bundle, runId).map((entry) => entry.student_id as string));
   const stamp = decidedAt(run?.timezone);
   const rows = sheetRows(grid, config, anchors);
+  const layout = sheetLayout(grid, config, anchors);
   const plan = planSync({
     rows,
     config,
@@ -257,12 +259,15 @@ export const runMarksSync = async (options: {
     conflict: sync.conflict,
     base: ledger.synced(sync.sync_id),
     anchors: Boolean(sync.anchors && live),
-    rowContext: rowContextFor(grid, sheetLayout(grid, config, anchors), {
+    rowContext: rowContextFor(grid, layout, {
       sheet: config.url,
       tab: live ? live.tab : config.tab,
       gid: live ? live.sheetId : null,
     }),
   });
+  plan.unmapped = unmappedColumns(grid, config, layout, bundle, runId);
+  // Kept on a plan too: a preview is usually how a new column is first seen.
+  ledger.recordUnmapped(sync.sync_id, plan.unmapped, stamp);
 
   // The class list's names in place of codes, unless asked for codes — the
   // reader decides "is Sapashev Arthur Sapashev Artur?", not "…STUDENT-VFWID7?".
@@ -274,8 +279,10 @@ export const runMarksSync = async (options: {
   report(plan, rows, options.dryRun, sync, (line) => out(typeof line === "string" ? named(line) : line), options.json === true, runId, changes);
   const result: MarksRun = { plan, rows: rows.length, dryRun: options.dryRun, wrote: { cells: 0, anchors: 0 }, changes };
   if (options.dryRun) {
-    // The rows it could not place, kept for review now — nothing else.
+    // The rows it could not place, kept for review now, and the columns it
+    // does not read — nothing else.
     links.saveQueue(sync.sync_id);
+    ledger.save();
     return result;
   }
 
@@ -288,7 +295,6 @@ export const runMarksSync = async (options: {
   if (flagged || githubs.changed) store.save();
 
   if (live && plan.writeBack.length) {
-    const layout = sheetLayout(grid, config, anchors);
     result.wrote.cells = await live.client.writeCells(
       live.id,
       plan.writeBack.map((cell) => ({ range: a1(live!.tab, `${columnLetter(layout.columns[cell.column]!)}${cell.line}`), value: cell.word })),
@@ -328,6 +334,55 @@ export const runMarksSync = async (options: {
     if (result.wrote.anchors) out(`  anchored ${result.wrote.anchors} row(s) and column(s)`);
   }
   return result;
+};
+
+/**
+ * Read one more column of the sheet as an assessment (`ainar sync map`).
+ *
+ * Written where the sync's settings are: the run's `syncs:` for a written
+ * sync, `~/.ainar/sheets/RUN.json` for one those older settings imply. Only
+ * the settings change; the marks come in on the next plan or run.
+ */
+export const mapSheetColumn = (options: {
+  bundle: any;
+  runId: string;
+  root: string;
+  sync: RunSync;
+  header: string;
+  assessmentId: string;
+  sheetsDirectory?: string;
+  syncDirectory?: string | null;
+}): { wrote: string; replaced: string | null } => {
+  const { bundle, runId, sync } = options;
+  const header = options.header.trim();
+  const assessmentId = options.assessmentId.trim();
+  if (sync.service !== "sheets" || sync.stream !== "marks") throw new Error(`${sync.sync_id} is not a grade sheet; only those map columns`);
+  if (!header) throw new Error("name the column by its header, as the sheet writes it");
+  const assessment = (bundle.assessments as any[]).find(
+    (entry) => entry.course_version_id === runId && entry.assessment_id === assessmentId,
+  );
+  if (!assessment) throw new Error(`${runId} has no ${assessmentId}`);
+  const legacy = loadSheetConfig(runId, options.sheetsDirectory);
+  const columns = { ...sheetConfigFromSync(sync, legacy).columns };
+  // One assessment, one column: two would each write its marks over the other's.
+  const other = Object.entries(columns).find(([column, id]) => id === assessmentId && column !== header);
+  if (other) throw new Error(`${assessmentId} is already read from the column "${other[0]}" — unmap that one first`);
+  const replaced = columns[header] && columns[header] !== assessmentId ? columns[header]! : null;
+  columns[header] = assessmentId;
+
+  let wrote: string;
+  if (sync.implied && legacy) {
+    wrote = saveSheetConfig({ ...legacy, columns }, options.sheetsDirectory);
+  } else {
+    const course = (bundle.course as { course_id: string }).course_id;
+    const { implied: _implied, from: _from, ...spec } = sync;
+    const result = writeSyncs(options.root, course, runId, [{ ...spec, map: { ...(sync.map as object), columns } } as RunSync]);
+    wrote = result.written.join(", ");
+  }
+  const ledger = Ledger.load(runId, options.syncDirectory);
+  ledger.forgetUnmapped(sync.sync_id, header);
+  ledger.save();
+  return { wrote, replaced };
 };
 
 /**
@@ -402,6 +457,15 @@ const report = (
     out(
       `  ${plan.queued} waiting for you — confirm them under "Waiting for you" in the pane's Syncs view, ` +
         `or with \`ainar sync review ${runId} ${sync.sync_id}\``,
+    );
+  }
+  for (const column of plan.unmapped) {
+    out(
+      `  new    column ${columnLetter(column.column)} "${column.header}" has ${column.marked} mark(s) this sync does not read — ` +
+        (column.proposed
+          ? `looks like ${column.proposed} (${column.why}); ` +
+            `map it with \`ainar sync map ${runId} ${sync.sync_id} "${column.header}=${column.proposed}"\``
+          : `${column.why}; map it with \`ainar sync map ${runId} ${sync.sync_id} "${column.header}=ASSESSMENT-…"\``),
     );
   }
   if (plan.kept.length) {

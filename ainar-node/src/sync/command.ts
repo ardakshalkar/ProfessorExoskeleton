@@ -9,6 +9,7 @@
  *     ainar sync review  RUN [SYNC]                  matches waiting for a person
  *     ainar sync confirm RUN SYNC (--all | --line N | --name "X") [--to STUDENT-X]
  *     ainar sync link    RUN SYNC "Name as written=STUDENT-X" [--unlink]
+ *     ainar sync map     RUN SYNC "Header=ASSESSMENT-X"   read one more column of a grade sheet
  *     ainar sync migrate RUN [--dry-run]             write the implied syncs out as syncs:
  *
  * A marks sheet runs here. Every other road already has a command that does
@@ -26,7 +27,7 @@ import { RosterStore } from "../roster.ts";
 import { nameKey } from "../scans.ts";
 import { LinkTable, nameLinkKey } from "./links.ts";
 import { type RunSync, findSync, syncsOf, writeSyncs, writtenForm } from "./registry.ts";
-import { runMarksSync } from "./sheet-marks.ts";
+import { mapSheetColumn, runMarksSync } from "./sheet-marks.ts";
 import { checkSheet } from "./sheet-watch.ts";
 
 export interface SyncArgs {
@@ -356,6 +357,28 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
       return 0;
     }
 
+    case "map": {
+      // One more column of a grade sheet, read as an assessment. The settings
+      // only: the marks under it come in on the next plan or run.
+      const sync = findSync(bundle, runId, need(args.sync, "map"));
+      const pairs = args.extra;
+      if (!pairs.length) throw new Error('usage: sync map RUN SYNC "Header=ASSESSMENT-…"');
+      for (const pair of pairs) {
+        const at = pair.lastIndexOf("=");
+        if (at <= 0) throw new Error(`'${pair}' is not "Header=ASSESSMENT-…"`);
+        const header = pair.slice(0, at).trim();
+        const assessmentId = pair.slice(at + 1).trim();
+        if (args.dryRun) {
+          out(`  would read "${header}" as ${assessmentId}`);
+          continue;
+        }
+        const { wrote, replaced } = mapSheetColumn({ bundle, runId, root, sync, header, assessmentId, syncDirectory: null });
+        out(`  "${header}" → ${assessmentId}${replaced ? ` (was ${replaced})` : ""}   saved ${wrote}`);
+      }
+      if (!args.dryRun) out(`Run \`ainar sync plan ${runId} ${sync.sync_id}\` to see the marks it brings.`);
+      return 0;
+    }
+
     case "migrate": {
       const implied = syncsOf(bundle, runId).filter((sync) => sync.implied);
       if (!implied.length) {
@@ -378,7 +401,7 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
 
     default:
       throw new Error(
-        `unknown sync subcommand '${args.subcommand}'. It is one of: list, show, plan, run, check, review, confirm, link, migrate`,
+        `unknown sync subcommand '${args.subcommand}'. It is one of: list, show, plan, run, check, review, confirm, link, map, migrate`,
       );
   }
 };

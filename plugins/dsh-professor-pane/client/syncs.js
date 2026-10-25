@@ -180,6 +180,44 @@ function SheetPreview(props) {
   );
 }
 
+/**
+ * A column the sheet has and the sync does not read, with marks under it: the
+ * next homework, added to the sheet after the sync was set up. The assessment
+ * it most likely is comes chosen; *Read it* maps it (`ainar sync map`), and
+ * the marks come in on the next Preview or Run.
+ */
+function UnmappedColumn(props) {
+  const column = props.column;
+  const [picked, setPicked] = React.useState(column.proposed || "");
+  return h(
+    "div",
+    { className: "pp-syncnew" },
+    h(
+      "span",
+      { className: "pp-syncnewt", title: column.why },
+      "New column " + columnLetter(column.column) + " “" + column.header + "”",
+      h("span", { className: "pp-syncnewd" }, " · " + column.marked + (column.marked === 1 ? " mark" : " marks") + " not read"),
+    ),
+    h(
+      "select",
+      { value: picked, disabled: props.busy, onChange: (event) => setPicked(event.target.value) },
+      h("option", { value: "" }, "Read it as…"),
+      (props.choices || []).map((entry) => h("option", { value: entry.id, key: entry.id }, entry.title)),
+    ),
+    h(
+      "button",
+      {
+        type: "button",
+        className: "pp-syncbtn pp-syncbtn-run",
+        disabled: props.busy || !picked,
+        title: picked ? "From now on this sync reads the column as " + picked : "Choose the assessment first",
+        onClick: () => props.onMap(column.header, picked),
+      },
+      props.busy ? "Saving…" : "Read it",
+    ),
+  );
+}
+
 /** A press to one of the sync routes, answered with the CLI's own words. */
 const syncPost = (runId, sessionId, path, body) =>
   fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
@@ -240,6 +278,18 @@ export function SyncCard(props) {
       setPreviewed(action === "plan" && !answer.error && Boolean(answer.ok));
       done();
     });
+  };
+
+  const map = (header, picked) => {
+    setBusy("map:" + header);
+    syncPost(props.runId, props.sessionId, "/api/syncs/action", { action: "map", sync: sync.id, header, assessment: picked }).then(
+      (answer) => {
+        setBusy(null);
+        setResult(Object.assign({ action: "map" }, answer));
+        setPreviewed(false);
+        done();
+      },
+    );
   };
 
   // A downloaded sheet, dropped on the card or chosen with the button. The host
@@ -496,6 +546,21 @@ export function SyncCard(props) {
             ", then drop the file on this card. Nothing is written before a preview.",
         )
       : null,
+    !props.assessment && (sync.unmapped || []).length
+      ? h(
+          "div",
+          { className: "pp-syncnews" },
+          sync.unmapped.map((column) =>
+            h(UnmappedColumn, {
+              key: column.header,
+              column,
+              choices: sync.mapChoices,
+              busy: busy === "map:" + column.header,
+              onMap: map,
+            }),
+          ),
+        )
+      : null,
     result
       ? h(
           "div",
@@ -511,10 +576,14 @@ export function SyncCard(props) {
               result.error || !result.ok
                 ? result.action === "run"
                   ? "Could not run"
-                  : "Could not preview"
+                  : result.action === "map"
+                    ? "Could not map the column"
+                    : "Could not preview"
                 : result.action === "run"
                   ? "Done"
-                  : "Preview — nothing was changed",
+                  : result.action === "map"
+                    ? "Column mapped — Preview or Run brings its marks in"
+                    : "Preview — nothing was changed",
             ),
             h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: () => setResult(null) }, "×"),
           ),

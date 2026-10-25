@@ -94,6 +94,15 @@ export interface SyncEvent {
   modified?: string | null;
 }
 
+/** A sheet column with marks that its sync does not read (`grade-sheet.ts`'s UnmappedColumn). */
+export interface UnmappedColumnNote {
+  header: string;
+  column: number;
+  marked: number;
+  proposed: string | null;
+  why: string;
+}
+
 const HEADER_NOTE =
   "One course run's state outside this workspace: gradebook values prepared by " +
   "`ainar lms push`, the Notion content last seen by `ainar notion pull`, and " +
@@ -209,6 +218,12 @@ export class Ledger {
   runs: Record<string, string> = {};
   /** Version 7: each sheet sync's last runs and what they changed, newest first. */
   history: Record<string, SyncEvent[]> = {};
+  /**
+   * Each sheet sync's columns with marks that it does not read, as its last
+   * plan or run found them — for the pane's card to offer mapping. Replaced on
+   * every read of the sheet; absent once there are none.
+   */
+  unmapped: Record<string, { at: string; columns: UnmappedColumnNote[] }> = {};
 
   constructor(path: string) {
     this.path = path;
@@ -231,7 +246,27 @@ export class Ledger {
     ledger.syncs = payload.syncs ?? {};
     ledger.runs = payload.runs ?? {};
     ledger.history = payload.history ?? {};
+    ledger.unmapped = payload.unmapped ?? {};
     return ledger;
+  }
+
+  /** Note the columns a read of the sheet found and does not read; none forgets them. */
+  recordUnmapped(syncId: string, columns: UnmappedColumnNote[], at: string): void {
+    if (columns.length) this.unmapped[syncId] = { at, columns };
+    else delete this.unmapped[syncId];
+  }
+
+  /** One sync's unread columns as last found, or none. */
+  unmappedOf(syncId: string): UnmappedColumnNote[] {
+    return [...(this.unmapped[syncId]?.columns ?? [])];
+  }
+
+  /** Forget one column once it is mapped, until the next read says otherwise. */
+  forgetUnmapped(syncId: string, header: string): void {
+    const entry = this.unmapped[syncId];
+    if (!entry) return;
+    entry.columns = entry.columns.filter((column) => column.header !== header);
+    if (!entry.columns.length) delete this.unmapped[syncId];
   }
 
   /** Note what one run brought in, newest first, keeping the last `HISTORY_KEPT`. */
@@ -389,6 +424,7 @@ export class Ledger {
       syncs: this.syncs,
       runs: this.runs,
       history: this.history,
+      unmapped: this.unmapped,
     };
     writeFileSync(this.path, sortedJson(payload) + "\n", { encoding: "utf-8" });
     try {

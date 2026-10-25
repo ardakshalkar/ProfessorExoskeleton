@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import { evaluationId } from "../src/grade-board.ts";
-import { defaultMarks, type SheetConfig, planSync, rowContextFor, sheetLayout, sheetRows } from "../src/grade-sheet.ts";
+import { defaultMarks, type SheetConfig, planSync, rowContextFor, sheetLayout, sheetRows, unmappedColumns } from "../src/grade-sheet.ts";
+import { pulledSubmissionId } from "../src/lms/pull.ts";
 import { HISTORY_KEPT, Ledger } from "../src/lms/ledger.ts";
 import { Sync } from "../src/model/sync.ts";
 import { RosterStore } from "../src/roster.ts";
@@ -15,7 +16,7 @@ import { LinkTable, nameLinkKey } from "../src/sync/links.ts";
 import { matchRow } from "../src/sync/match.ts";
 import { decide, reconcile } from "../src/sync/reconcile.ts";
 import { impliedSyncs, syncsOf, writtenForm } from "../src/sync/registry.ts";
-import { runMarksSync } from "../src/sync/sheet-marks.ts";
+import { mapSheetColumn, runMarksSync } from "../src/sync/sheet-marks.ts";
 import { checkSheet } from "../src/sync/sheet-watch.ts";
 import { validate } from "../src/validate.ts";
 
@@ -647,4 +648,112 @@ test("the gradebook copy with no assessment named previews and pushes the whole 
   assert.deepEqual(calls[0], ["lms", "push", RUN, "--target", "sheets-api", "--sheet", "1XyZ", "--all"]);
   await runSync(args({ subcommand: "plan", sync: "gradebook-copy", passthrough: ["--assessment", "ASSESSMENT-HW1"] }), runBundle(run), "/nowhere", deps);
   assert.deepEqual(calls[1], ["lms", "plan", RUN, "--target", "sheets-api", "--sheet", "1XyZ", "--assessment", "ASSESSMENT-HW1"]);
+});
+
+// --------------------------------------------------------------------------
+// A column the settings do not read
+// --------------------------------------------------------------------------
+
+const rubricOf = (id: string) => ({ rubric_id: `RUBRIC-${id}`, criteria: [{ criterion_id: `CRIT-${id}-A`, maximum_score: 4 }] });
+const homework = [
+  { assessment_id: "ASSESSMENT-HW1", course_version_id: RUN, type: "assignment", title: "HW1", rubric: rubricOf("HW1") },
+  { assessment_id: "ASSESSMENT-HW-04", course_version_id: RUN, type: "assignment", title: "HW 4 — Agents", rubric: rubricOf("HW4") },
+  { assessment_id: "ASSESSMENT-QUIZ-04", course_version_id: RUN, type: "quiz", title: "Quiz 4", rubric: rubricOf("Q4") },
+];
+
+test("a column with marks the settings do not read is found and its homework proposed by number", () => {
+  const grid = [
+    ["Homework marks"],
+    ["Name", "1Task", "4Task", "Comment", "Extra"],
+    ["Nurlanova Aigerim", "T", "LT", "late again", ""],
+    ["Ostanin Artem", "LT", "t", "", "?"],
+  ];
+  const course = { assessments: homework };
+  const found = unmappedColumns(grid, config, sheetLayout(grid, config), course, RUN);
+  // A comment or a column of anything but mark words is not a homework.
+  assert.deepEqual(found.map((column) => [column.header, column.column, column.marked, column.proposed]), [["4Task", 2, 2, "ASSESSMENT-HW-04"]]);
+  // The quiz numbered 4 is not proposed: the sheet holds homework.
+  assert.match(found[0]!.why, /HW 4 — Agents/);
+
+  // Two columns that both look like HW4: neither is proposed.
+  const twice = [["Name", "1Task", "4Task", "Task 4"], ["Nurlanova Aigerim", "T", "T", "LT"]];
+  const both = unmappedColumns(twice, config, sheetLayout(twice, config), course, RUN);
+  assert.deepEqual(both.map((column) => column.proposed), [null, null]);
+  assert.match(both[0]!.why, /both look like ASSESSMENT-HW-04/);
+});
+
+test("a sync reports a new column, remembers it for the pane, and once mapped brings its marks onto the in-person defence", async () => {
+  const root = temp();
+  const rosterDir = temp();
+  const syncDir = temp();
+  const sheetsDir = temp();
+  writeFileSync(join(rosterDir, "people.json"), JSON.stringify({ version: 1, people: store().people }));
+  // The older settings file, as the real course has it: only 1Task is read.
+  writeFileSync(join(sheetsDir, `${RUN}.json`), JSON.stringify({ run: RUN, url: "1AbC", name_column: "Name", columns: { "1Task": "ASSESSMENT-HW1" }, marks: defaultMarks(), students: {} }));
+  const course = runBundle({});
+  course.versions[0].instructors = ["USER-1"];
+  course.enrollments = [...enrolled].map((student) => ({ course_version_id: RUN, student_id: student, role: "student", status: "active" }));
+  course.assessments = homework;
+  // Audio defence on HW4 with nothing handed in left a submission with no marks.
+  course.submissions = [
+    { submission_id: pulledSubmissionId("STUDENT-CCCCCC", "ASSESSMENT-HW-04"), assessment_id: "ASSESSMENT-HW-04", student_id: "STUDENT-CCCCCC", status: "submitted", extensions: { source: "fork" } },
+  ];
+  const sync = () => syncsOf(course, RUN, { sheetsDir }).find((entry) => entry.sync_id === "hw-sheet")!;
+  const sheet = new FakeSheets([["Name", "1Task", "4Task"], ["Nurlanova Aigerim", "T", "LT"]]);
+  const lines: string[] = [];
+  const common = {
+    bundle: course,
+    runId: RUN,
+    root,
+    rosterDirectory: rosterDir,
+    linksDirectory: temp(),
+    syncDirectory: syncDir,
+    sheetsDirectory: sheetsDir,
+    out: (line: unknown) => lines.push(String(line)),
+    client: sheet as any,
+    dryRun: true,
+  };
+
+  const before = await runMarksSync({ ...common, sync: sync() });
+  assert.equal(before.plan.submissions.some((entry: any) => entry.assessment_id === "ASSESSMENT-HW-04"), false);
+  assert.ok(lines.some((line) => /new {4}column C "4Task" has 1 mark\(s\).*looks like ASSESSMENT-HW-04/.test(line)));
+  // Kept from a preview, for the pane's card.
+  assert.equal(Ledger.load(RUN, syncDir).unmappedOf("hw-sheet")[0]!.proposed, "ASSESSMENT-HW-04");
+
+  // Another column already reads HW1: it cannot be read twice.
+  assert.throws(
+    () => mapSheetColumn({ bundle: course, runId: RUN, root, sync: sync(), header: "4Task", assessmentId: "ASSESSMENT-HW1", sheetsDirectory: sheetsDir, syncDirectory: syncDir }),
+    /already read from the column "1Task"/,
+  );
+  mapSheetColumn({ bundle: course, runId: RUN, root, sync: sync(), header: "4Task", assessmentId: "ASSESSMENT-HW-04", sheetsDirectory: sheetsDir, syncDirectory: syncDir });
+  assert.deepEqual(JSON.parse(readFileSync(join(sheetsDir, `${RUN}.json`), "utf-8")).columns, { "1Task": "ASSESSMENT-HW1", "4Task": "ASSESSMENT-HW-04" });
+  assert.deepEqual(Ledger.load(RUN, syncDir).unmappedOf("hw-sheet"), []);
+
+  // The next read brings the mark onto the defence's own submission, not a second one.
+  const after = await runMarksSync({ ...common, sync: sync() });
+  const hw4 = after.plan.submissions.filter((entry: any) => entry.assessment_id === "ASSESSMENT-HW-04");
+  assert.deepEqual(hw4.map((entry: any) => [entry.submission_id, entry.extensions.mark]), [["SUB-CCCCCC-HW-04", "LT"]]);
+  assert.deepEqual(after.plan.problems, []);
+  assert.equal(after.plan.unmapped.length, 0);
+  assert.equal((after.plan.evaluations.find((entry: any) => entry.criterion_id === "CRIT-HW4-A") as any).professor_decision.score, 3.2);
+});
+
+test("sync map on a written sync writes the column into version.yaml", async () => {
+  const root = temp();
+  const dir = join(root, "courses", "CSS-1");
+  mkdirSync(dir, { recursive: true });
+  const written = Sync.parse({ sync_id: "hw", service: "sheets", role: "source", stream: "marks", map: { columns: { "1Task": "ASSESSMENT-HW1" } } });
+  writeFileSync(
+    join(dir, "version.yaml"),
+    `# the one live run\ncourse_version_id: ${RUN}\ncourse_id: CSS-1\nterm: 2026-FALL\nstart_date: 2026-09-01\nend_date: 2026-12-20\n` +
+      `syncs:\n  - sync_id: hw\n    service: sheets\n    role: source\n    stream: marks\n    map:\n      columns:\n        1Task: ASSESSMENT-HW1\n`,
+  );
+  const course = runBundle({ syncs: [written] });
+  course.assessments = homework;
+  const lines: string[] = [];
+  await runSync(args({ subcommand: "map", sync: "hw", extra: ["4Task=ASSESSMENT-HW-04"] }), course, root, { out: (line: unknown) => lines.push(String(line)) });
+  const text = readFileSync(join(dir, "version.yaml"), "utf-8");
+  assert.match(text, /# the one live run/);
+  assert.deepEqual(parse(text).syncs[0].map.columns, { "1Task": "ASSESSMENT-HW1", "4Task": "ASSESSMENT-HW-04" });
+  assert.ok(lines.some((line) => /"4Task" → ASSESSMENT-HW-04/.test(line)));
 });

@@ -279,6 +279,89 @@ export const sheetRows = (grid: string[][], config: SheetConfig, anchors?: Sheet
   return rows;
 };
 
+/**
+ * A column the sheet has and the settings do not read, with marks under it.
+ *
+ * The settings name the columns a sync reads, and a column added to the sheet
+ * later — the next homework — was passed over without a word. Now every sync
+ * says so, and proposes which assessment it is; mapping it stays the
+ * professor's press (`ainar sync map`, or the pane's card).
+ */
+export interface UnmappedColumn {
+  header: string;
+  /** 0-based; the sheet's letter is drawn from it. */
+  column: number;
+  /** Cells under it that hold a mark word this sheet knows. */
+  marked: number;
+  /** The assessment it most likely is, or null when no single one fits. */
+  proposed: string | null;
+  /** How the proposal was reached, or why there is none, for a person. */
+  why: string;
+}
+
+/** The number an assessment is called by: HW3 → 3, "Homework 4 — RAG" → 4. */
+const numberOf = (assessment: any): number | null => {
+  const fromTitle = /^\D{0,16}?(\d+)/.exec(String(assessment.title ?? ""));
+  const fromId = /(\d+)$/.exec(String(assessment.assessment_id ?? ""));
+  const found = fromTitle ?? fromId;
+  return found ? Number(found[1]) : null;
+};
+
+export const unmappedColumns = (
+  grid: string[][],
+  config: SheetConfig,
+  layout: SheetLayout,
+  bundle: any,
+  runId: string,
+): UnmappedColumn[] => {
+  const header = (grid[layout.headerRow] ?? []).map(clean);
+  const used = new Set([layout.name, layout.flag, layout.github, ...Object.values(layout.columns)]);
+  const marks = new Set(Object.keys(config.marks).map((word) => word.toUpperCase()));
+  const assessments = (bundle.assessments as any[]).filter((entry) => entry.course_version_id === runId);
+  const mapped = new Set(Object.values(config.columns));
+  // The kind the sheet already holds — homework, as a rule — so a "4" is the
+  // fourth homework, not the fourth quiz.
+  const kinds = new Set(assessments.filter((entry) => mapped.has(entry.assessment_id)).map((entry) => entry.type));
+  const open = assessments.filter((entry) => !mapped.has(entry.assessment_id) && (!kinds.size || kinds.has(entry.type)));
+  const kindWord = kinds.size === 1 ? `${[...kinds][0]}s` : "assessments";
+
+  const found: UnmappedColumn[] = [];
+  header.forEach((text, column) => {
+    if (!text || used.has(column)) return;
+    let marked = 0;
+    for (const row of grid.slice(layout.headerRow + 1)) if (marks.has(clean(row[column]).toUpperCase())) marked += 1;
+    if (!marked) return;
+    const number = /(\d+)/.exec(text);
+    let proposed: string | null = null;
+    let why: string;
+    if (!number) {
+      why = `"${text}" carries no number to match an assessment by`;
+    } else {
+      const fits = open.filter((entry) => numberOf(entry) === Number(number[1]));
+      if (fits.length === 1) {
+        proposed = fits[0]!.assessment_id as string;
+        why = `numbered ${number[1]}, as ${fits[0]!.title ?? proposed} is, among the ${kindWord} not read yet`;
+      } else {
+        why = fits.length
+          ? `${fits.length} ${kindWord} not read yet are numbered ${number[1]}`
+          : `no ${kindWord.replace(/s$/, "")} not read yet is numbered ${number[1]}`;
+      }
+    }
+    found.push({ header: text, column, marked, proposed, why });
+  });
+  // Two columns that look like one assessment: neither is proposed, since
+  // only the professor can say which of them it is.
+  for (const entry of found) {
+    const twins = found.filter((other) => other.proposed && other.proposed === entry.proposed);
+    if (twins.length < 2) continue;
+    for (const twin of twins) {
+      twin.why = `${twins.map((other) => `"${other.header}"`).join(" and ")} both look like ${twin.proposed}`;
+      twin.proposed = null;
+    }
+  }
+  return found;
+};
+
 // --------------------------------------------------------------------------
 // Planning a sync
 // --------------------------------------------------------------------------
@@ -315,6 +398,8 @@ export interface SyncPlan {
   anchor: { line: number; student: string }[];
   /** `student|assessment` → the mark as synced, for the ledger's base. Null forgets it. */
   synced: Record<string, string | null>;
+  /** Columns with marks that the settings do not read; filled where the grid is at hand. */
+  unmapped: UnmappedColumn[];
 }
 
 const round = (value: number): number => Math.round(value * 100) / 100;
@@ -360,6 +445,7 @@ export const planSync = (options: {
     writeBack: [],
     anchor: [],
     synced: {},
+    unmapped: [],
   };
 
   const marks = new Map(Object.entries(config.marks).map(([word, mark]) => [word.toUpperCase(), mark]));

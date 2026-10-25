@@ -235,6 +235,7 @@ export const syncsDocument = (workspace, runId, { names = false } = {}) => {
   const exported = existsSync(csv) ? statSync(csv).mtime.toISOString() : null;
   const ledger = Ledger.load(runId);
   const sheetSettings = loadSheetConfig(runId);
+  const titles = new Map(assessmentsOf(bundle, runId).map((entry) => [entry.assessment_id, entry.title || entry.assessment_id]));
 
   const rows = syncs.map((sync) => ({
     id: sync.sync_id,
@@ -262,6 +263,19 @@ export const syncsDocument = (workspace, runId, { names = false } = {}) => {
     waiting: links.queued(sync.sync_id).length,
     lastSynced: lastSyncedOf(sync, ledger, sheetSettings),
     lastEvent: isMarksSheet(sync) ? lastEventOf(ledger, sync) : null,
+    // Columns with marks the sync does not read, as its last read of the
+    // sheet found them, each with the assessment it most likely is.
+    unmapped: isMarksSheet(sync)
+      ? ledger.unmappedOf(sync.sync_id).map((column) =>
+          Object.assign({}, column, { title: column.proposed ? titles.get(column.proposed) || column.proposed : null }),
+        )
+      : [],
+    // What such a column can be read as: every assessment no column is read as yet.
+    mapChoices: isMarksSheet(sync)
+      ? assessmentsOf(bundle, runId)
+          .filter((entry) => !Object.values((sync.map && sync.map.columns) || {}).includes(entry.assessment_id))
+          .map((entry) => ({ id: entry.assessment_id, title: entry.title || entry.assessment_id }))
+      : [],
   }));
 
   const waiting = [];
@@ -377,6 +391,21 @@ export const runSyncAction = async (workspace, root, runId, body) => {
       args.push("--to", String(body.to));
     }
     return runScans(args, root);
+  }
+
+  // A column the sheet has and the sync does not read, read from now on as
+  // the assessment the professor chose. Only a column the last read found.
+  if (action === "map") {
+    if (!isMarksSheet(sync)) return { error: "Only a grade sheet you keep maps columns." };
+    const header = String(body.header || "");
+    if (!Ledger.load(runId).unmappedOf(syncId).some((column) => column.header === header)) {
+      return { error: `The sheet's last read found no column "${header}" to map.` };
+    }
+    const assessment = String(body.assessment || "");
+    if (!ID.test(assessment) || !assessmentsOf(bundle, runId).some((entry) => entry.assessment_id === assessment)) {
+      return { error: "Choose the assessment first." };
+    }
+    return runScans(["sync", "map", runId, syncId, header + "=" + assessment], root);
   }
 
   if (action !== "plan" && action !== "run") return { error: `${action} is not something this can do.` };

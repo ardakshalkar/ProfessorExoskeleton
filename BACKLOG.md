@@ -2240,6 +2240,83 @@ is worth building.
       never below a 10-word run nobody else wrote. On CSS-4007: 18 pairs over
       four exams, about 1% of those compared; none recurs yet.
 
+## E39 · What the rules cannot settle, the assistant settles once — no `FUTURE.md` section yet
+
+> **Rank: medium.** Proposed 2026-10-24, from the grade sheet's new HW4
+> column. Since then a sync reports a column with marks that it does not read
+> and proposes its assessment by the number in the header (`unmappedColumns`,
+> `ainar sync map`). The number rule stops at the cases a person reads at a
+> glance: `Task 4 (agents)` beside `Quiz 4`, two columns that both look like
+> HW4, a header with no number (`RAG lab`), a column that is a retake of HW2.
+> Today each of those waits for the professor. They should go to the
+> assistant, and the assistant's answer should be applied without anyone
+> pressing anything when it is sure.
+>
+> **Rules first, the assistant only for the rest.** The deterministic step
+> runs every time and settles most cases for nothing. The assistant sees only
+> what it left open, and the professor sees only what the assistant could not
+> settle either.
+>
+> **On the session's model, as a skill.** The ambiguous cases go to the open
+> session as one `/skill …` turn, never a provider call from the harness. The
+> pane and the CLI do the deterministic work and write the answer.
+>
+> **Token-efficient by construction.**
+> - One turn per sync, with every open case in it, never one turn per column.
+> - A small packet, not the sheet: per column, the header, its letter, the
+>   neighbouring headers, how many cells hold each mark word, and the dates or
+>   notes in the header row. Per candidate assessment: id, title, type, due
+>   date, maximum. No student names, no rows.
+> - Answers come back as structured data: `{header, assessment | null,
+>   confidence, reason}`. The reason is one line, not prose.
+>
+> **Never asked twice.** Every answer — the assistant's or the professor's —
+> is kept per sync under a key made of the header and the candidate set it
+> was chosen from. The same column with the same candidates is never sent
+> again, on this sync or on the next. A professor's answer beats the
+> assistant's, and *not an assessment* is an answer too (a "Comment" column of
+> words that happen to be T). The key changes only when the question does: a
+> new assessment appears, or the header is renamed.
+>
+> **Automatic, and undoable.** A sure answer is mapped at once, says so on the
+> sync's card ("4Task → HW 4, mapped by the assistant", with Undo), and is
+> logged with the reason. An unsure one is a proposal the professor accepts,
+> with the reason beside it. Mapping only changes which column is read: the
+> marks under it still come in through the sync's normal preview and run, and
+> a cell that already has a grade from somewhere else is still never
+> overwritten.
+
+- [ ] **AMB-1** The decision store: per sync, `key → {assessment | none,
+      by: rules | assistant | professor, confidence, reason, at}`, with the key
+      the header plus a hash of the sorted candidate ids. Read before any
+      question is asked; the professor's answer wins. Private, beside the
+      ledger. `S` · depends: —
+- [ ] **AMB-2** The packet and the answer: `ainar sync ambiguous RUN SYNC
+      --json` prints the open cases only (after rules and AMB-1), in the
+      compact form above; `ainar sync decide RUN SYNC --from answers.json`
+      validates each answer against the candidates and writes it to AMB-1.
+      An answer naming an assessment outside the candidates is refused.
+      `S` · depends: AMB-1
+- [ ] **AMB-3** The skill `/map-sheet-columns`: reads the packet, answers in
+      the JSON shape, with one line of reason per column; no other output. A
+      golden set from the CSS-4007 sheet (`4Task`, a renamed header, a comment
+      column, two HW4 lookalikes) to measure it on. `S` · depends: AMB-2
+- [ ] **AMB-4** Asked by itself: after a preview or run that leaves open
+      cases, the pane sends the one turn to the open session (once per new key,
+      never on a repeat), applies sure answers through `sync map`, and shows
+      them on the card with Undo. Undo writes the professor's *no* into AMB-1,
+      so the assistant is not asked again. Through the E34 queue once it
+      exists. `M` · depends: AMB-3, E34
+- [ ] **AMB-5** The same pattern for the other questions the rules leave
+      open: a held name in a sync (`unsure: hold`) before it reaches *Waiting
+      for you*, a scan cover the matcher could not place, a Canvas assignment
+      with no assessment. Each gets its packet and answer shape, sharing
+      AMB-1's store. `M` · depends: AMB-4
+- [ ] **AMB-6** What it cost: tokens per turn and turns per sync, counted
+      with TOK-1, and the share of cases settled by rules, by memory, by the
+      assistant and by the professor. If memory is not settling most cases by
+      the second sync, the key is wrong. `S` · depends: AMB-4, TOK-1
+
 ---
 
 ## Suggested order
