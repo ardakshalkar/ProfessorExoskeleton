@@ -1333,6 +1333,8 @@ i.pp-cg-cell{cursor:default;flex:none}
 .pp-sxheld .pp-sxheld>summary{font-size:11.5px}
 .pp-sxheld .pp-drow{margin-left:14px}
 .pp-sxheld>.pp-linkbtn{margin:2px 0 4px 14px}
+.pp-sxheld>summary .pp-sxsendone{margin-left:8px;padding:1px 8px;font-size:11px;vertical-align:baseline}
+.pp-sxsent{margin:0;padding:6px 10px;border-radius:9px;background:rgba(46,140,80,.1);color:#25693f;font-size:12px}
 .pp-waitwhy{flex:1 1 160px;min-width:0}
 .pp-syncsection .pp-waitlist{gap:0}
 .pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}

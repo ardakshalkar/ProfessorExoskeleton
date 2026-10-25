@@ -1368,6 +1368,8 @@ i.pp-cg-cell{cursor:default;flex:none}
 .pp-sxheld .pp-sxheld>summary{font-size:11.5px}
 .pp-sxheld .pp-drow{margin-left:14px}
 .pp-sxheld>.pp-linkbtn{margin:2px 0 4px 14px}
+.pp-sxheld>summary .pp-sxsendone{margin-left:8px;padding:1px 8px;font-size:11px;vertical-align:baseline}
+.pp-sxsent{margin:0;padding:6px 10px;border-radius:9px;background:rgba(46,140,80,.1);color:#25693f;font-size:12px}
 .pp-waitwhy{flex:1 1 160px;min-width:0}
 .pp-syncsection .pp-waitlist{gap:0}
 .pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}
@@ -4610,13 +4612,26 @@ function RoadResults(props) {
 }
 function RoadFlow(props) {
   const road = useRoad(props);
+  const [part, setPart] = React.useState(null);
   const asking = road.phase === "asking";
   const sending = road.phase === "sending";
-  const ask = () => road.ask().then((body2) => {
+  const reask = () => road.ask().then((body2) => {
     if (props.onPreviewed) props.onPreviewed(body2);
   });
+  const ask = () => {
+    setPart(null);
+    return reask();
+  };
   const send2 = (keys2) => road.send(keys2).then((body2) => {
+    setPart(null);
     if (props.onSent) props.onSent(body2);
+  });
+  const sendPart = (keys2, label) => road.send(keys2).then((body2) => {
+    const went = !body2.error && !body2.again && !(body2.results || []).some((entry) => !entry.ok);
+    setPart(went ? label : null);
+    const again = went ? reask() : null;
+    if (props.onSent) props.onSent(body2);
+    return again;
   });
   const button = h(
     "button",
@@ -4634,12 +4649,13 @@ function RoadFlow(props) {
   const body = preview ? preview.error ? h("p", { className: "pp-saveerr" }, preview.error) : h(
     "div",
     { className: props.className || "pp-syncallx" },
-    props.describe(preview),
+    part ? h("p", { className: "pp-sxsent" }, "✓ Sent " + part + ". What is left is below, checked again.") : null,
+    props.describe(preview, { sendPart, busy: road.phase !== "idle" }),
     h(
       "div",
       { className: "pp-dacts" },
       keys ? h("button", { type: "button", className: "pp-segbtn pp-danger", disabled: sending, onClick: () => send2(keys) }, sending ? "Syncing…" : props.sendLabel(preview)) : h("span", { className: "pp-as" }, props.nothing || "Nothing to send."),
-      h("button", { type: "button", className: "pp-segbtn", disabled: sending, onClick: road.close }, keys ? "Cancel" : "Close")
+      h("button", { type: "button", className: "pp-segbtn", disabled: sending, onClick: () => (setPart(null), road.close()) }, keys ? "Cancel" : "Close")
     )
   ) : road.results ? h(RoadResults, { results: road.results, className: props.className, busy: asking, onAgain: ask, onClose: road.close }) : null;
   return props.frame ? props.frame(button, body) : h(React.Fragment, null, button, body);
@@ -12921,17 +12937,19 @@ var byAssessment = (rows) => {
   }
   return [...groups].map(([title, entries]) => ({ title, short: shortTitle(title), entries })).sort((a, b) => a.short.localeCompare(b.short, void 0, { numeric: true }));
 };
-var assessmentLine = (group, noun) => {
-  const fresh = group.entries.filter((entry) => entry.theirs === null || entry.theirs === "").length;
-  const replace = group.entries.length - fresh;
-  const split = fresh && replace ? " (" + fresh + " new in Canvas, " + replace + " replace what Canvas shows)" : replace ? " (each replaces what Canvas shows)" : "";
-  return h("li", { key: group.title, title: group.title }, h("b", null, group.short), " — " + plural7(group.entries.length, noun) + split);
+var sendSplit = (entries) => {
+  const fresh = entries.filter((entry) => entry.theirs === null || entry.theirs === "").length;
+  const replace = entries.length - fresh;
+  return fresh && replace ? " (" + fresh + " new in Canvas, " + replace + " replace what Canvas shows)" : replace ? " (each replaces what Canvas shows)" : "";
 };
 var HELD_WHY = {
   conflict: "changed on both sides — you choose which to keep",
   pull: "changed in Canvas since the last sync — Sync all does not copy Canvas's changes over yours",
-  held: "with nothing ready here to send yet (not accepted, or taken back)"
+  held: "with nothing ready here to send yet (not accepted, or taken back)",
+  unplaced: "on the class list, not matched between here and Canvas"
 };
+var heldKind = (entry) => entry.kind === "roster" && entry.direction === "held" ? "unplaced" : entry.direction;
+var rowNoun = (entries) => entries.every((entry) => entry.kind === "grades") ? ["mark"] : entries.every((entry) => entry.kind === "roster") ? ["person", "people"] : ["item"];
 var ROWS_AT_FIRST3 = 12;
 var OPEN_UNDER = 15;
 var heldWho = (entry) => entry.kind === "assignments" ? "Setting: " + String(entry.field || "").replace(/_/g, " ") : entry.name || entry.student_id || entry.theirs || "—";
@@ -12943,32 +12961,38 @@ var heldValue = (value) => {
   }
   return text;
 };
-function HeldGroup(props) {
+var sentValues = (entry) => "Canvas " + (entry.theirs === null || entry.theirs === "" ? "empty" : heldValue(entry.theirs)) + " → " + heldValue(entry.ours);
+var heldValues = (entry) => entry.kind === "roster" ? null : "here " + heldValue(entry.ours) + " · Canvas " + heldValue(entry.theirs);
+function RowGroup(props) {
   const [all, setAll] = React.useState(false);
-  const rows = all ? props.group.entries : props.group.entries.slice(0, ROWS_AT_FIRST3);
-  const more = props.group.entries.length - rows.length;
+  const entries = props.group.entries;
+  const rows = all ? entries : entries.slice(0, ROWS_AT_FIRST3);
+  const more = entries.length - rows.length;
+  const noun = entries.every((entry) => entry.kind !== "assignments" && entry.student_id) ? ["student"] : rowNoun(entries);
   return h(
     "details",
     { className: "pp-sxheld", open: props.open },
-    h("summary", { title: props.group.title }, h("b", null, props.group.short), " — " + plural7(props.group.entries.length, props.noun)),
-    rows.map(
-      (entry) => h(
+    h(
+      "summary",
+      { title: props.group.title },
+      h("b", null, props.group.short),
+      " — " + plural7(entries.length, noun[0], noun[1]) + (props.extra || ""),
+      props.action || null
+    ),
+    rows.map((entry) => {
+      const values = props.values(entry);
+      return h(
         "div",
         { className: "pp-drow", key: entry.key },
-        h(
-          "div",
-          { className: "pp-drowline" },
-          h("span", { className: "pp-drowwho" }, heldWho(entry)),
-          entry.kind === "roster" ? null : h("span", { className: "pp-dvals" }, "here " + heldValue(entry.ours) + " · Canvas " + heldValue(entry.theirs))
-        ),
+        h("div", { className: "pp-drowline" }, h("span", { className: "pp-drowwho" }, heldWho(entry)), values ? h("span", { className: "pp-dvals" }, values) : null),
         entry.reason ? h("span", { className: "pp-dwhy" }, entry.reason) : null
-      )
-    ),
+      );
+    }),
     more ? h("button", { type: "button", className: "pp-linkbtn", onClick: () => setAll(true) }, "Show " + more + " more") : null
   );
 }
 function HeldKind(props) {
-  const noun = props.entries.every((entry) => entry.kind === "grades") ? "mark" : "item";
+  const noun = rowNoun(props.entries);
   const groups = byAssessment(props.entries);
   return h(
     "details",
@@ -12976,19 +13000,31 @@ function HeldKind(props) {
     h(
       "summary",
       null,
-      h("b", null, plural7(props.entries.length, noun)),
-      " " + HELD_WHY[props.direction],
-      h("span", { className: "pp-as" }, " · " + groups.map((group) => group.short + " " + group.entries.length).join(", "))
+      h("b", null, plural7(props.entries.length, noun[0], noun[1])),
+      " " + HELD_WHY[props.kind],
+      groups.length > 1 ? h("span", { className: "pp-as" }, " · " + groups.map((group) => group.short + " " + group.entries.length).join(", ")) : null
     ),
     h(
       "div",
       { className: "pp-sxheldbody" },
-      groups.map(
-        (group) => h(HeldGroup, { key: group.title, group, noun: group.entries.every((entry) => entry.student_id) ? "student" : "item", open: props.open || groups.length === 1 })
-      )
+      groups.map((group) => h(RowGroup, { key: group.title, group, values: heldValues, open: props.open || groups.length === 1 }))
     )
   );
 }
+var sendNowButton = (group, tools) => tools && tools.sendPart ? h(
+  "button",
+  {
+    type: "button",
+    className: "pp-segbtn pp-danger pp-sxsendone",
+    disabled: tools.busy,
+    title: "Send " + group.title + " to Canvas now, without the rest. Students will see it.",
+    onClick: (event) => {
+      event.preventDefault();
+      tools.sendPart({ canvas: group.entries.map((entry) => entry.key) }, group.short + " (" + plural7(group.entries.length, "mark") + ")");
+    }
+  },
+  "Send now"
+) : null;
 var partsOf = (preview) => {
   const canvasRoad = roadIn(preview, "canvas");
   const canvas = canvasRoad && canvasRoad.ok ? canvasRoad.preview : null;
@@ -13028,11 +13064,10 @@ var sendAllLabel = (preview) => {
 function SyncAllPreview(props) {
   const preview = props.preview;
   const { send: send2, take, absent, held, sheets, failed, canvasError } = partsOf(preview);
-  const marks = send2.filter((entry) => entry.kind === "grades");
-  const fields = send2.filter((entry) => entry.kind === "assignments");
   const sheetHeld = sheets.reduce((sum, sheet2) => sum + (sheet2.held || 0), 0);
   const left = held.filter((entry) => !absent.includes(entry));
-  const leftBy = ["conflict", "pull", "held"].map((direction) => ({ direction, entries: left.filter((entry) => entry.direction === direction) }));
+  const leftBy = ["conflict", "pull", "held", "unplaced"].map((kind) => ({ kind, entries: left.filter((entry) => heldKind(entry) === kind) }));
+  const sendGroups = byAssessment(send2);
   return h(
     React.Fragment,
     null,
@@ -13062,21 +13097,30 @@ function SyncAllPreview(props) {
     h(
       "div",
       { className: "pp-sxgroup" + (send2.length ? " pp-sxout" : "") },
-      h("div", null, h("b", null, send2.length ? "To Canvas: " + sendNoun(send2) : "To Canvas"), h("span", { className: "pp-as" }, " — students will see these")),
       h(
-        "ul",
+        "div",
         null,
-        byAssessment(marks).map((group) => assessmentLine(group, "student")),
-        fields.length ? h("li", null, "Assessment settings (title, due date, points…): ", byAssessment(fields).map((group) => group.short + " " + plural7(group.entries.length, "field")).join(", ")) : null,
-        !send2.length ? h("li", { className: "pp-as" }, "nothing") : null
-      )
+        h("b", null, send2.length ? "To Canvas: " + sendNoun(send2) : "To Canvas"),
+        h("span", { className: "pp-as" }, send2.length ? " — students will see these; open a line to see whose, or send one now" : " — students will see these")
+      ),
+      sendGroups.map(
+        (group) => h(RowGroup, {
+          key: group.title,
+          group,
+          values: sentValues,
+          extra: sendSplit(group.entries.filter((entry) => entry.kind === "grades")),
+          action: sendNowButton(group, props.tools),
+          open: send2.length < OPEN_UNDER
+        })
+      ),
+      !send2.length ? h("span", { className: "pp-as" }, "nothing") : null
     ),
     left.length || sheetHeld || failed.length || canvasError ? h(
       "div",
       { className: "pp-sxgroup" },
       h("div", null, h("b", null, "Not included — needs your decision"), left.length ? h("span", { className: "pp-as" }, " — open a line to see whose") : null),
       leftBy.map(
-        (kind) => kind.entries.length ? h(HeldKind, { key: kind.direction, direction: kind.direction, entries: kind.entries, open: left.length < OPEN_UNDER }) : null
+        (kind) => kind.entries.length ? h(HeldKind, { key: kind.kind, kind: kind.kind, entries: kind.entries, open: left.length < OPEN_UNDER }) : null
       ),
       h(
         "ul",
@@ -13137,7 +13181,7 @@ function SyncView(props) {
       asking: "Asking Canvas and the sheets…",
       title: "Ask Canvas and every grade sheet what would move. Nothing is sent until you press Sync.",
       disabled: !canvasOn && !sheets.length,
-      describe: (preview) => h(SyncAllPreview, { preview }),
+      describe: (preview, tools) => h(SyncAllPreview, { preview, tools }),
       choose: chooseAll,
       sendLabel: sendAllLabel,
       nothing: "Everything Sync all moves is already in step.",
