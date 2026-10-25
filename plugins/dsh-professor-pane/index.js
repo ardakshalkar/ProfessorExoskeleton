@@ -74,9 +74,9 @@
  * `PROFESSOR_PANE_RELOAD=0` turns all of it off and imports the router once.
  */
 
-import { watch } from "node:fs";
+import { statSync, watch } from "node:fs";
 import * as nodeModule from "node:module";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // The prefix is fixed for the life of the process, whatever generation of
@@ -196,11 +196,34 @@ const routerSource = (logger, onLoad = () => {}) => {
       }, 150);
       timer.unref?.();
     };
+    // On Windows a recursive watch also fires when a file is only read and
+    // NTFS records the access time (once an hour per file, where last-access
+    // updates are on). Every `ainar` a sync spawns reads the core's sources, so
+    // a Sync all preview used to reload the server and lose itself before its
+    // Send ("There is no preview to send from", 2026-10-25). A reload is for a
+    // file whose content time moved, or that appeared or went.
+    const started = Date.now();
+    const seen = new Map(); // path -> mtimeMs, null once gone
+    const mtimeOf = (path) => {
+      try {
+        return statSync(path).mtimeMs;
+      } catch {
+        return null;
+      }
+    };
+    const changed = (path) => {
+      const now = mtimeOf(path);
+      const before = seen.has(path) ? seen.get(path) : undefined;
+      seen.set(path, now);
+      // First event for a file: compare with when the watch began.
+      if (before === undefined) return now === null || now > started;
+      return now !== before;
+    };
     const watchers = [];
     for (const root of roots) {
       try {
         const watcher = watch(root, { recursive: true }, (_event, file) => {
-          if (file && /\.(m?js|ts)$/.test(String(file))) bump();
+          if (file && /\.(m?js|ts)$/.test(String(file)) && changed(join(root, String(file)))) bump();
         });
         watcher.unref?.();
         watchers.push(watcher);
