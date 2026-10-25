@@ -685,6 +685,16 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-composersend:disabled{opacity:.35;cursor:default}
 /* The run picker's look, at a header's size: one control among the buttons. */
 .pp-coursehead .pp-modaltitle{flex:none;max-width:240px;margin-right:6px}
+/* The trail: course › place › part › window. The steps up are links that
+   give way first; where the professor is keeps its width. */
+.pp-coursehead .pp-crumbs{display:flex;align-items:baseline;gap:5px;max-width:min(52%,560px)}
+.pp-crumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+a.pp-crumb{flex:0 1 auto;font-weight:500;color:var(--dsw-alias-label-secondary,#55555c);text-decoration:none}
+a.pp-crumb:hover{color:inherit;text-decoration:underline}
+.pp-crumb-here{flex:0 0 auto;max-width:60%}
+.pp-crumbsep{flex:none;color:var(--dsw-alias-label-tertiary,#8a8a8f);font-weight:400}
+/* The navigator's places are links now (a URL each); they look as before. */
+a.pp-nav-row,a.pp-nav-icon{text-decoration:none;color:inherit;cursor:pointer}
 .pp-coursehead label,.pp-cviewbar label{display:inline-flex;gap:5px;align-items:center;font-size:11px;
   color:var(--dsw-alias-label-secondary,#555);cursor:pointer}
 /* The publish dialog's body. Unlike the material modal there is no frame to

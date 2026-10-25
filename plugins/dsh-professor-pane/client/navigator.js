@@ -34,6 +34,7 @@
 import { h, React } from "./react.js";
 import { BASE, PLACE_SHOWN_EVENT, scoped } from "./tabs.js";
 import { AREAS, useVersion, useWorkspaceWatch } from "./data.js";
+import { placeToHash } from "../shared/route.js";
 
 // ------------------------------------------------------------- the request
 
@@ -170,7 +171,7 @@ function useShownPlace() {
 }
 
 const isShown = (shown, entry) =>
-  shown !== null && (entry.request.view ? shown.view === entry.request.view : shown.view === null);
+  shown !== null && (entry.request.view ? shown.view === entry.request.view : !shown.view);
 
 // ---------------------------------------------------------------- reading
 
@@ -260,16 +261,32 @@ function useNavigatorData(sessionId) {
 
 // ------------------------------------------------------------------ parts
 
+/**
+ * A press that is also a link when it opens a place (`href`, shared/route.js):
+ * a plain click does what it always did, through `onClick`; Ctrl, ⌘, Shift
+ * or the middle button leave it to the browser, which opens the place in a
+ * new tab on the same chat, and the address can be copied.
+ */
+const linkOrButton = (props, attributes) =>
+  props.href
+    ? Object.assign(attributes, {
+        href: props.href,
+        onClick: (event) => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          props.onClick();
+        },
+      })
+    : Object.assign(attributes, { type: "button", onClick: props.onClick });
+
 function Row(props) {
   return h(
-    "button",
-    {
-      type: "button",
+    props.href ? "a" : "button",
+    linkOrButton(props, {
       className: "pp-nav-row",
       title: props.hint,
       "aria-current": props.current ? "true" : undefined,
-      onClick: props.onClick,
-    },
+    }),
     props.icon ? h(Icon, { d: ICONS[props.icon] }) : null,
     props.dot ? h("span", { className: "pp-nav-dot", title: "Working" }) : null,
     h("span", { className: "pp-nav-text" }, props.label),
@@ -405,6 +422,7 @@ function HeldPapers(props) {
         hint: pile.title + " — " + pile.held + (pile.held === 1 ? " scanned paper is" : " scanned papers are") + " placed on nobody yet. Say who in Scans.",
         badge: String(pile.held),
         badgeHint: pile.held + " not placed on a student",
+        href: placeToHash({ view: "files", scans: pile.assessment_id }),
         onClick: () => props.onOpen(pile.assessment_id),
       }),
     ),
@@ -510,7 +528,9 @@ export function CourseNavigator(props) {
   // message (`compose`) — the chat comes in beside once there is a turn.
   const carry = (fresh) => {
     if (shown === null) return;
-    carryPlace({ mode: shown.mode, view: shown.view, chat: !fresh, compose: Boolean(fresh), run: run ? run.run_id : null });
+    // The whole place as course mode reported it — its part, week, door —
+    // so the new chat's pane opens where this one was, as the URL says.
+    carryPlace(Object.assign({}, shown, { chat: !fresh, compose: Boolean(fresh), run: run ? run.run_id : null }));
   };
   const openChat = (sessionId) => {
     if (sessionId !== current) carry(false);
@@ -546,16 +566,17 @@ export function CourseNavigator(props) {
       ),
       PLACES.map((entry) =>
         h(
-          "button",
-          {
-            type: "button",
-            key: entry.id,
-            className: "pp-nav-icon",
-            title: entry.label,
-            "aria-label": entry.label,
-            "aria-current": isShown(shown, entry) ? "true" : undefined,
-            onClick: () => place(entry.request),
-          },
+          "a",
+          linkOrButton(
+            { href: placeToHash(entry.request), onClick: () => place(entry.request) },
+            {
+              key: entry.id,
+              className: "pp-nav-icon",
+              title: entry.label,
+              "aria-label": entry.label,
+              "aria-current": isShown(shown, entry) ? "true" : undefined,
+            },
+          ),
           h(Icon, { d: ICONS[entry.id], size: 18 }),
           badgeOf(entry.id).badge ? h("span", { className: "pp-nav-pip", "aria-hidden": "true" }) : null,
         ),
@@ -611,6 +632,7 @@ export function CourseNavigator(props) {
               current: isShown(shown, entry),
               badge: badge.badge,
               badgeHint: badge.hint,
+              href: placeToHash(entry.request),
               onClick: () => place(entry.request),
             });
           })
@@ -633,6 +655,7 @@ export function CourseNavigator(props) {
             label: SETTINGS.label,
             hint: SETTINGS.hint,
             current: isShown(shown, SETTINGS),
+            href: placeToHash(SETTINGS.request),
             onClick: () => place(SETTINGS.request),
           })
         : null,

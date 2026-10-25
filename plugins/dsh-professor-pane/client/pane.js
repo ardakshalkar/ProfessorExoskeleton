@@ -13,6 +13,8 @@ import { carryPlace, deliverCarried, PLACE_EVENT, takePendingPlace } from "./nav
 import { enqueuePlacement, onPlacements, placementsNow, placementsWaiting } from "./scans-queue.js";
 import { PublishModal } from "./publish.js";
 import { h, React } from "./react.js";
+import { usePlaceUrl, withoutWindows } from "./route-sync.js";
+import { hashToPlace } from "../shared/route.js";
 import { GradeBoard } from "./grade-board.js";
 import { ScansModal } from "./scans.js";
 import { BASE, scoped } from "./tabs.js";
@@ -171,6 +173,39 @@ export function ProfessorPane(props) {
   const [scansPile, setScansPile] = React.useState(null);
   // The step Scans opens on, or null for the pile's current one.
   const [scansStep, setScansStep] = React.useState(null);
+  // The place and those three windows as the URL's hash (client/route-sync.js):
+  // a place can be linked, reloaded, and stepped through with Back and Forward.
+  const reportPlace = usePlaceUrl({
+    open: courseMode,
+    windows: {
+      grade: grading ? grading.assessment : null,
+      scans: scansPile,
+      desk: desk && desk.student ? { assessment: desk.assessment, student: desk.student } : null,
+    },
+    apply: (place, same) => {
+      if (!place) {
+        setCourseMode(false);
+        setPlaceRequest(null);
+        setChatBeside(false);
+        setGrading(null);
+        setScansPile(null);
+        setScansStep(null);
+        setDesk(null);
+        return;
+      }
+      if (!same || !courseModeRef.current) openPlace(withoutWindows(place));
+      setGrading((open) => (!place.grade ? null : open && open.assessment === place.grade ? open : { assessment: place.grade, label: place.grade }));
+      setScansPile(place.scans || null);
+      if (!place.scans) setScansStep(null);
+      setDesk((open) =>
+        !place.desk || !place.desk.student
+          ? null
+          : open && open.assessment === place.desk.assessment && open.student === place.desk.student
+            ? open
+            : { assessment: place.desk.assessment, student: place.desk.student },
+      );
+    },
+  });
   // The Students view's exam window as it last said — `{ panel, scroll }` or
   // null — and when a placement last came back: its redraws reopen it.
   const examWindow = React.useRef(null);
@@ -787,7 +822,9 @@ export function ProfessorPane(props) {
   React.useEffect(() => {
     if (current === null || landed.current === props.sessionId) return;
     landed.current = props.sessionId;
-    if (courseModeRef.current || placeRequest) return;
+    // A place in the URL is where the professor asked to be (a link, a
+    // reload): it wins over the landing too.
+    if (courseModeRef.current || placeRequest || hashToPlace(window.location.hash)) return;
     const chat = props.chatTitle ? props.chatTitle() : null;
     if (chat && chat.blank) openPlace({ view: "today" });
   }, [props.sessionId, current ? current.runId : null]);
@@ -1038,6 +1075,9 @@ export function ProfessorPane(props) {
           start: current.start,
           end: current.end,
           request: placeRequest,
+          onShown: reportPlace,
+          // The window over the place, as the last crumb of the trail.
+          windowTitle: grading ? "Grade · " + grading.label : scansPile ? "Scans · " + scansPile : desk ? "Defence desk" : null,
           sessionId: props.sessionId,
           dark: dark,
           drafts: drafts,

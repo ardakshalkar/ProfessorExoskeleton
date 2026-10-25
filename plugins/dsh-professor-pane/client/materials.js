@@ -19,6 +19,8 @@ import { Today, WaitingPlace } from "./today.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, IDENTITY_MODES, PLACE_SHOWN_EVENT, scoped, SUBVIEWS } from "./tabs.js";
 import { resolveRequest } from "../shared/places.js";
+import { placeToHash } from "../shared/route.js";
+import { followLink } from "./route-sync.js";
 
 /**
  * A widget document in an iframe, delivered as `srcdoc` rather than `src`.
@@ -461,33 +463,66 @@ export function CourseMode(props) {
   // Where in a place a request points: a section of Sync to bring into view,
   // or the kind Waiting · Everything is filtered to — what the folded parts'
   // old links meant (shared/places.js). Numbered like the request.
-  const aimOf = (entry) => (entry && (entry.focus || entry.kind) ? { section: entry.focus || null, kind: entry.kind || null, n: entry.n } : null);
+  const aimOf = (entry) =>
+    entry && (entry.focus || entry.kind) ? { view: entry.view || null, section: entry.focus || null, kind: entry.kind || null, n: entry.n } : null;
   const [aim, setAim] = React.useState(() => aimOf(request));
   const doorCount = React.useRef(0);
   // Words a press on the page puts into the field at its foot, unsent.
   const [fill, setFill] = React.useState(null);
   React.useEffect(() => {
+    if (!request) return;
     const door = doorOf(request);
-    if (door) setConceptsFocus(door);
+    // Concepts asked for with no door is the whole grid, not the last door.
+    if (door || request.view === "concepts") setConceptsFocus(door);
     setAim(aimOf(request));
   }, [request ? request.n : null]);
-  // What is on screen, said to the pane (the inspector's focus) and to the
-  // navigator (which marks the place as current); null once closed.
-  const onShown = props.onShown;
+  // The week Teaching was last stepped to. The page steps without a round
+  // trip and reports each step; it is held in a ref so a step redraws
+  // nothing, and copied into `week` only when Teaching is drawn again — on
+  // coming back to it, or when the record or the drafts toggle changes. A
+  // request may name one (a link to `#/weeks/teaching?week=7`).
+  const askedWeek = (entry) => (entry && entry.mode === "teaching" && Number.isInteger(entry.week) ? entry.week : null);
+  const stepped = React.useRef(askedWeek(request));
+  const [week, setWeek] = React.useState(() => askedWeek(request));
   React.useEffect(() => {
-    const place = { mode: mode, view: view };
-    if (onShown) onShown(place);
+    const asked = askedWeek(request);
+    if (asked !== null) {
+      stepped.current = asked;
+      setWeek(asked);
+    }
+  }, [request ? request.n : null]);
+  // What is on screen, said to the pane (the inspector's focus and the URL,
+  // client/route-sync.js) and to the navigator (which marks the place as
+  // current); null once closed. The whole place: the part, the week Teaching
+  // is on, the Concepts door, and where in Sync or Waiting a link pointed.
+  const onShown = props.onShown;
+  const placeNow = (stepTo) => {
+    const place = view ? { view: view } : { mode: mode };
+    if (view && VIEW_SUBS[view]) place.sub = subOf(view);
+    if (!view && mode === "teaching") {
+      const at = stepTo !== undefined ? stepTo : stepped.current;
+      if (Number.isInteger(at)) place.week = at;
+    }
+    if (view === "concepts" && conceptsFocus) {
+      for (const key of ["student", "concept", "week"]) if (conceptsFocus[key]) place[key] = conceptsFocus[key];
+    }
+    if (aim && aim.view === view) {
+      if (aim.section) place.focus = aim.section;
+      if (aim.kind) place.kind = aim.kind;
+    }
+    return place;
+  };
+  const announce = (place, how) => {
+    if (onShown) onShown(place, how);
     window.dispatchEvent(new CustomEvent(PLACE_SHOWN_EVENT, { detail: place }));
-  }, [mode, view]);
+  };
+  React.useEffect(() => {
+    announce(placeNow());
+  }, [mode, view, subs, conceptsFocus, aim]);
   React.useEffect(
     () => () => window.dispatchEvent(new CustomEvent(PLACE_SHOWN_EVENT, { detail: null })),
     [],
-  );  // The week Teaching was last stepped to. The page steps without a round
-  // trip and reports each step; it is held in a ref so a step redraws
-  // nothing, and copied into `week` only when Teaching is drawn again — on
-  // coming back to it, or when the record or the drafts toggle changes.
-  const stepped = React.useRef(null);
-  const [week, setWeek] = React.useState(null);
+  );
   React.useEffect(() => {
     setWeek(stepped.current);
   }, [everything, props.drafts]);
@@ -629,7 +664,7 @@ export function CourseMode(props) {
       // field's student or concept — numbered like the pane's own.
       const numbered = Object.assign({}, request, { n: "here-" + (doorCount.current += 1) });
       const door = doorOf(numbered);
-      if (door) setConceptsFocus(door);
+      if (door || request.view === "concepts") setConceptsFocus(door);
       setAim(aimOf(numbered));
       setView(request.view);
     } else if (request.mode && known(request.mode, COURSE_MODES)) {
@@ -801,7 +836,10 @@ export function CourseMode(props) {
           revision: everything + "." + syncsVersion + "." + filesVersion,
           onOpen: openFromToday,
           // The kind an old link to Pending meant: the marks waiting.
-          kind: aim && aim.kind ? aim : null,
+          kind: aim && aim.kind && aim.view === "tasks" ? aim : null,
+          // A filter pressed on the page is where the professor now is: the
+          // URL follows it (`?kind=marks`), and All clears it.
+          onKind: (kind) => setAim(kind ? { view: "tasks", section: null, kind: kind, n: "kind-" + (doorCount.current += 1) } : null),
         }),
       );
     }
@@ -862,6 +900,20 @@ export function CourseMode(props) {
         : null
     : (COURSE_MODES.find((entry) => entry.id === mode) || { label: null }).label;
   const placeTitle = subLabel ? placeName + " · " + subLabel : placeName;
+  // The same place as a trail, each step up a link (shared/route.js names
+  // them): the course, which is Today; the place; its part; and the window
+  // open over it, which is where the professor is.
+  const crumbs = [{ label: props.title, hash: placeToHash({ view: "today" }) }];
+  if (view === "today") {
+    crumbs.push({ label: placeTitle, hash: null });
+  } else if (view) {
+    crumbs.push({ label: placeName, hash: placeToHash({ view: view }) });
+    if (VIEW_SUBS[view]) crumbs.push({ label: subLabel, hash: placeToHash({ view: view, sub: subOf(view) }) });
+  } else {
+    crumbs.push({ label: "Weeks", hash: placeToHash({ mode: "planning" }) });
+    if (subLabel) crumbs.push({ label: subLabel, hash: placeToHash({ mode: mode }) });
+  }
+  if (props.windowTitle) crumbs.push({ label: props.windowTitle, hash: null });
   // Where the drafts switch changes what is drawn: the weeks, and the views
   // computed over the course model. Today, Students, Files, Sync and Course
   // settings read the same either way, and so does all of Waiting: Ready and
@@ -920,7 +972,20 @@ export function CourseMode(props) {
           { className: "pp-modalhead pp-coursehead" },
           // The place, not the course: the course is named in the navigator
           // beside it and in the column, and here it only crowded the row.
-          h("div", { className: "pp-modaltitle", title: props.title }, placeTitle),
+          h(
+            "nav",
+            { className: "pp-modaltitle pp-crumbs", "aria-label": "Where you are" },
+            crumbs.map((crumb, i) =>
+              h(
+                React.Fragment,
+                { key: i },
+                i ? h("span", { className: "pp-crumbsep", "aria-hidden": "true" }, "›") : null,
+                crumb.hash && i < crumbs.length - 1
+                  ? h("a", { className: "pp-crumb", href: crumb.hash, title: crumb.label, onClick: (event) => followLink(event, crumb.hash) }, crumb.label)
+                  : h("span", { className: "pp-crumb pp-crumb-here", "aria-current": "page", title: crumb.label }, crumb.label),
+              ),
+            ),
+          ),
           // The middle of the row is the one part that gives way: on a narrow
           // window it scrolls sideways, so the controls on the right — the
           // connections, Publish, Chat and × — never wrap under the title.
@@ -1073,6 +1138,9 @@ export function CourseMode(props) {
             fresh: props.startChat ?(text) => props.startChat({ mode: mode, draft: text }) : null,
             onStep: (n) => {
               stepped.current = n;
+              // A step is said without a redraw; the URL takes it in place
+              // rather than as a new entry, so Back skips the weeks stepped.
+              if (mode === "teaching" && !view) announce(placeNow(n), "step");
             },
           }),
           // The weeks stay mounted under a course-wide view, so coming back

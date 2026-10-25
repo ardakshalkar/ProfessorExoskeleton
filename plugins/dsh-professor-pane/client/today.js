@@ -328,10 +328,15 @@ export function WaitingPlace(props) {
   const shown = React.useRef(null);
   if (state.phase === "ready") shown.current = state.value;
   const wordOf = (asked) => (asked && asked.kind ? KIND_WORD[asked.kind] || asked.kind : null);
-  const [kind, setKind] = React.useState(() => wordOf(props.kind));
+  const [kind, setKindHere] = React.useState(() => wordOf(props.kind));
   React.useEffect(() => {
-    if (props.kind) setKind(wordOf(props.kind));
+    if (props.kind) setKindHere(wordOf(props.kind));
   }, [props.kind ? props.kind.n : null]);
+  // A press here says which kind, as an id, so the place can carry it.
+  const setKind = (word) => {
+    setKindHere(word);
+    if (props.onKind) props.onKind(word ? Object.keys(KIND_WORD).find((id) => KIND_WORD[id] === word) || word : null);
+  };
   const [failed, setFailed] = React.useState(null);
   const doc = shown.current;
   if (doc === null) return h(Message, null, "Reading what is waiting…");

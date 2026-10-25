@@ -720,6 +720,16 @@ button.pp-modallink:hover{color:var(--dsw-alias-label-primary,#1a1a1a)}
 .pp-composersend:disabled{opacity:.35;cursor:default}
 /* The run picker's look, at a header's size: one control among the buttons. */
 .pp-coursehead .pp-modaltitle{flex:none;max-width:240px;margin-right:6px}
+/* The trail: course › place › part › window. The steps up are links that
+   give way first; where the professor is keeps its width. */
+.pp-coursehead .pp-crumbs{display:flex;align-items:baseline;gap:5px;max-width:min(52%,560px)}
+.pp-crumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+a.pp-crumb{flex:0 1 auto;font-weight:500;color:var(--dsw-alias-label-secondary,#55555c);text-decoration:none}
+a.pp-crumb:hover{color:inherit;text-decoration:underline}
+.pp-crumb-here{flex:0 0 auto;max-width:60%}
+.pp-crumbsep{flex:none;color:var(--dsw-alias-label-tertiary,#8a8a8f);font-weight:400}
+/* The navigator's places are links now (a URL each); they look as before. */
+a.pp-nav-row,a.pp-nav-icon{text-decoration:none;color:inherit;cursor:pointer}
 .pp-coursehead label,.pp-cviewbar label{display:inline-flex;gap:5px;align-items:center;font-size:11px;
   color:var(--dsw-alias-label-secondary,#555);cursor:pointer}
 /* The publish dialog's body. Unlike the material modal there is no frame to
@@ -13396,10 +13406,14 @@ function WaitingPlace(props) {
   const shown = React.useRef(null);
   if (state.phase === "ready") shown.current = state.value;
   const wordOf = (asked) => asked && asked.kind ? KIND_WORD[asked.kind] || asked.kind : null;
-  const [kind, setKind] = React.useState(() => wordOf(props.kind));
+  const [kind, setKindHere] = React.useState(() => wordOf(props.kind));
   React.useEffect(() => {
-    if (props.kind) setKind(wordOf(props.kind));
+    if (props.kind) setKindHere(wordOf(props.kind));
   }, [props.kind ? props.kind.n : null]);
+  const setKind = (word) => {
+    setKindHere(word);
+    if (props.onKind) props.onKind(word ? Object.keys(KIND_WORD).find((id) => KIND_WORD[id] === word) || word : null);
+  };
   const [failed, setFailed] = React.useState(null);
   const doc = shown.current;
   if (doc === null) return h(Message, null, "Reading what is waiting…");
@@ -13559,6 +13573,163 @@ var resolveRequest = (request) => {
   if (!folded) return viewed;
   const { sub: _old, ...rest } = viewed;
   return { ...rest, ...folded };
+};
+
+// shared/route.js
+var ROUTES = {
+  today: { view: "today" },
+  weeks: { mode: true, parts: { planning: "planning", teaching: "teaching", evidence: "evidence", all: "term" } },
+  waiting: { view: "tasks", parts: { everything: "waiting", ready: "ready", checklist: "checklist" } },
+  students: { view: "students" },
+  gradebook: { view: "gradebook", parts: { marks: "marks", policy: "policy", changes: "changes" } },
+  concepts: { view: "concepts" },
+  materials: { view: "materials", parts: { assessments: "assessments", slides: "slides", exams: "exams", outline: "outline" } },
+  files: { view: "files" },
+  sync: { view: "syncs" },
+  settings: { view: "settings", parts: { integrations: "integrations", accounts: "accounts", preferences: "preferences" } }
+};
+var NAME_OF = Object.fromEntries(Object.entries(ROUTES).filter(([, r]) => r.view).map(([name, r]) => [r.view, name]));
+var ID = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$/;
+var FOCUS = /^[a-z]{1,20}$/;
+var KEYS = ["week", "student", "concept", "focus", "kind", "grade", "scans", "desk", "run"];
+var partName = (route, id) => route.parts ? Object.keys(route.parts).find((name) => route.parts[name] === id) || null : null;
+var placeToHash = (place) => {
+  if (!place || !place.view && !place.mode) return "";
+  let path;
+  if (!place.view) {
+    path = "weeks/" + (partName(ROUTES.weeks, place.mode) || "planning");
+  } else {
+    const name = NAME_OF[place.view];
+    if (!name) return "";
+    const route = ROUTES[name];
+    const part = route.parts ? partName(route, place.sub) || Object.keys(route.parts)[0] : null;
+    path = part ? name + "/" + part : name;
+  }
+  const query = [];
+  for (const key of KEYS) {
+    let value = place[key];
+    if (key === "desk" && value) value = value.assessment + (value.student ? ":" + value.student : "");
+    if (value === null || value === void 0 || value === "" || value === false) continue;
+    query.push(key + "=" + encodeURIComponent(String(value)));
+  }
+  return "#/" + path + (query.length ? "?" + query.join("&") : "");
+};
+var hashToPlace = (hash) => {
+  const match = /^#?\/([a-z]+)(?:\/([a-z]+))?(?:\?(.*))?$/.exec(String(hash || "").trim());
+  if (!match) return null;
+  const [, name, part, search] = match;
+  let place;
+  const route = ROUTES[name];
+  if (route && route.mode) {
+    place = { mode: part && route.parts[part] || "planning" };
+  } else {
+    const resolved = resolveRequest({ view: route ? route.view : name, sub: route && route.parts && route.parts[part] ? route.parts[part] : part || void 0 });
+    const home = ROUTES[NAME_OF[resolved.view]];
+    if (!home) return null;
+    place = Object.fromEntries(Object.entries(resolved).filter(([, value]) => value !== void 0));
+    if (home.parts && !Object.values(home.parts).includes(place.sub)) place.sub = Object.values(home.parts)[0];
+    if (!home.parts) delete place.sub;
+  }
+  for (const pair of String(search || "").split("&")) {
+    const at = pair.indexOf("=");
+    if (at < 1) continue;
+    const key = pair.slice(0, at);
+    let value;
+    try {
+      value = decodeURIComponent(pair.slice(at + 1));
+    } catch {
+      continue;
+    }
+    if (key === "week") {
+      const week = Number(value);
+      if (Number.isInteger(week) && week > 0 && week < 100) place.week = week;
+    } else if (key === "focus" || key === "kind") {
+      if (FOCUS.test(value)) place[key] = value;
+    } else if (key === "desk") {
+      const [assessment, student] = value.split(":");
+      if (ID.test(assessment || "") && (!student || ID.test(student))) place.desk = { assessment, student: student || null };
+    } else if (KEYS.includes(key) && ID.test(value)) {
+      place[key] = value;
+    }
+  }
+  return place;
+};
+
+// client/route-sync.js
+var ECHO_MS = 1500;
+var windowsOf = (place) => ({ grade: place.grade || null, scans: place.scans || null, desk: place.desk || null });
+var withoutWindows = (place) => {
+  const rest = Object.assign({}, place);
+  delete rest.grade;
+  delete rest.scans;
+  delete rest.desk;
+  return rest;
+};
+var urlWith = (hash) => window.location.pathname + window.location.search + (hash || "");
+function usePlaceUrl(props) {
+  const applyRef = React.useRef(props.apply);
+  applyRef.current = props.apply;
+  const appliedAt = React.useRef(0);
+  const [shown, setShown] = React.useState(null);
+  const shownRef = React.useRef(null);
+  shownRef.current = shown;
+  const windowsRef = React.useRef(props.windows);
+  windowsRef.current = props.windows;
+  const report = React.useCallback((place, how) => {
+    if (how === "step" && shownRef.current) {
+      shownRef.current.place = place;
+      const hash = placeToHash(Object.assign({}, place, windowsRef.current));
+      if (hash && hash !== window.location.hash) window.history.replaceState(window.history.state, "", urlWith(hash));
+      return;
+    }
+    setShown({ place });
+  }, []);
+  React.useEffect(() => {
+    if (!props.open) setShown(null);
+  }, [props.open]);
+  const target = !props.open ? "" : shown ? placeToHash(Object.assign({}, shown.place, props.windows)) : null;
+  React.useEffect(() => {
+    const take = () => {
+      appliedAt.current = Date.now();
+      const place = hashToPlace(window.location.hash);
+      const same = Boolean(place && shownRef.current && placeToHash(withoutWindows(place)) === placeToHash(shownRef.current.place));
+      applyRef.current(place, same);
+    };
+    if (hashToPlace(window.location.hash)) take();
+    window.addEventListener("popstate", take);
+    return () => window.removeEventListener("popstate", take);
+  }, []);
+  React.useEffect(() => {
+    if (target === null || target === window.location.hash || target === "" && !window.location.hash) return;
+    if (target === "" && Date.now() - appliedAt.current < ECHO_MS && hashToPlace(window.location.hash)) return;
+    const state = window.history.state && window.history.state.professorPane ? window.history.state.professorPane : null;
+    if (state && state.under === target) {
+      window.history.back();
+      return;
+    }
+    const echo = Date.now() - appliedAt.current < ECHO_MS;
+    const current = hashToPlace(window.location.hash);
+    const next = hashToPlace(target);
+    const samePlace = current && next && placeToHash(withoutWindows(current)) === placeToHash(withoutWindows(next));
+    const hasWindow = (place) => Object.values(windowsOf(place)).some(Boolean);
+    const under = samePlace && hasWindow(next) && !hasWindow(current) ? window.location.hash : null;
+    const closed = samePlace && hasWindow(current) && !hasWindow(next);
+    const stepped = current && next && current.mode === "teaching" && next.mode === "teaching" && placeToHash(Object.assign({}, current, { week: null })) === placeToHash(Object.assign({}, next, { week: null }));
+    const entry = { professorPane: { under } };
+    if (echo || closed || stepped) window.history.replaceState(entry, "", urlWith(target));
+    else window.history.pushState(entry, "", urlWith(target));
+  }, [target]);
+  return report;
+}
+var navigateTo = (hash) => {
+  if (!hash || hash === window.location.hash) return;
+  window.history.pushState({ professorPane: { under: null } }, "", urlWith(hash));
+  window.dispatchEvent(new PopStateEvent("popstate", { state: window.history.state }));
+};
+var followLink = (event, hash) => {
+  if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+  event.preventDefault();
+  navigateTo(hash);
 };
 
 // client/materials.js
@@ -13752,27 +13923,54 @@ function CourseMode(props) {
   const taskSub = subOf("tasks");
   const doorOf = (entry) => entry && entry.view === "concepts" && (entry.student || entry.concept || entry.week) ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n } : null;
   const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
-  const aimOf = (entry) => entry && (entry.focus || entry.kind) ? { section: entry.focus || null, kind: entry.kind || null, n: entry.n } : null;
+  const aimOf = (entry) => entry && (entry.focus || entry.kind) ? { view: entry.view || null, section: entry.focus || null, kind: entry.kind || null, n: entry.n } : null;
   const [aim, setAim] = React.useState(() => aimOf(request));
   const doorCount = React.useRef(0);
   const [fill, setFill] = React.useState(null);
   React.useEffect(() => {
+    if (!request) return;
     const door = doorOf(request);
-    if (door) setConceptsFocus(door);
+    if (door || request.view === "concepts") setConceptsFocus(door);
     setAim(aimOf(request));
   }, [request ? request.n : null]);
-  const onShown = props.onShown;
+  const askedWeek = (entry) => entry && entry.mode === "teaching" && Number.isInteger(entry.week) ? entry.week : null;
+  const stepped = React.useRef(askedWeek(request));
+  const [week, setWeek] = React.useState(() => askedWeek(request));
   React.useEffect(() => {
-    const place = { mode, view };
-    if (onShown) onShown(place);
+    const asked = askedWeek(request);
+    if (asked !== null) {
+      stepped.current = asked;
+      setWeek(asked);
+    }
+  }, [request ? request.n : null]);
+  const onShown = props.onShown;
+  const placeNow = (stepTo) => {
+    const place = view ? { view } : { mode };
+    if (view && VIEW_SUBS[view]) place.sub = subOf(view);
+    if (!view && mode === "teaching") {
+      const at = stepTo !== void 0 ? stepTo : stepped.current;
+      if (Number.isInteger(at)) place.week = at;
+    }
+    if (view === "concepts" && conceptsFocus) {
+      for (const key of ["student", "concept", "week"]) if (conceptsFocus[key]) place[key] = conceptsFocus[key];
+    }
+    if (aim && aim.view === view) {
+      if (aim.section) place.focus = aim.section;
+      if (aim.kind) place.kind = aim.kind;
+    }
+    return place;
+  };
+  const announce = (place, how) => {
+    if (onShown) onShown(place, how);
     window.dispatchEvent(new CustomEvent(PLACE_SHOWN_EVENT, { detail: place }));
-  }, [mode, view]);
+  };
+  React.useEffect(() => {
+    announce(placeNow());
+  }, [mode, view, subs, conceptsFocus, aim]);
   React.useEffect(
     () => () => window.dispatchEvent(new CustomEvent(PLACE_SHOWN_EVENT, { detail: null })),
     []
   );
-  const stepped = React.useRef(null);
-  const [week, setWeek] = React.useState(null);
   React.useEffect(() => {
     setWeek(stepped.current);
   }, [everything, props.drafts]);
@@ -13862,7 +14060,7 @@ function CourseMode(props) {
       if (VIEW_SUBS[request2.view] && known(request2.sub, VIEW_SUBS[request2.view])) setSub(request2.view, request2.sub);
       const numbered = Object.assign({}, request2, { n: "here-" + (doorCount.current += 1) });
       const door = doorOf(numbered);
-      if (door) setConceptsFocus(door);
+      if (door || request2.view === "concepts") setConceptsFocus(door);
       setAim(aimOf(numbered));
       setView(request2.view);
     } else if (request2.mode && known(request2.mode, COURSE_MODES)) {
@@ -14026,7 +14224,10 @@ function CourseMode(props) {
           revision: everything + "." + syncsVersion + "." + filesVersion,
           onOpen: openFromToday,
           // The kind an old link to Pending meant: the marks waiting.
-          kind: aim && aim.kind ? aim : null
+          kind: aim && aim.kind && aim.view === "tasks" ? aim : null,
+          // A filter pressed on the page is where the professor now is: the
+          // URL follows it (`?kind=marks`), and All clears it.
+          onKind: (kind) => setAim(kind ? { view: "tasks", section: null, kind, n: "kind-" + (doorCount.current += 1) } : null)
         })
       );
     }
@@ -14065,6 +14266,17 @@ function CourseMode(props) {
   const placeName = viewEntry ? viewEntry.label : navigator2 ? "Weeks" : props.title;
   const subLabel = view ? VIEW_SUBS[view] ? (VIEW_SUBS[view].find((entry) => entry.id === subOf(view)) || { label: null }).label : view === "today" ? (/* @__PURE__ */ new Date()).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) : null : (COURSE_MODES.find((entry) => entry.id === mode) || { label: null }).label;
   const placeTitle = subLabel ? placeName + " · " + subLabel : placeName;
+  const crumbs = [{ label: props.title, hash: placeToHash({ view: "today" }) }];
+  if (view === "today") {
+    crumbs.push({ label: placeTitle, hash: null });
+  } else if (view) {
+    crumbs.push({ label: placeName, hash: placeToHash({ view }) });
+    if (VIEW_SUBS[view]) crumbs.push({ label: subLabel, hash: placeToHash({ view, sub: subOf(view) }) });
+  } else {
+    crumbs.push({ label: "Weeks", hash: placeToHash({ mode: "planning" }) });
+    if (subLabel) crumbs.push({ label: subLabel, hash: placeToHash({ mode }) });
+  }
+  if (props.windowTitle) crumbs.push({ label: props.windowTitle, hash: null });
   const draftsApply = view === null || view === "concepts" || view === "materials" || // The marks grid; the policy and its history read the same either way.
   view === "gradebook" && subOf("gradebook") === "marks";
   const readings = COURSE_MODES.map((entry) => segment(entry, view === null && mode === entry.id, () => chooseMode(entry.id), false));
@@ -14105,7 +14317,18 @@ function CourseMode(props) {
             { className: "pp-modalhead pp-coursehead" },
             // The place, not the course: the course is named in the navigator
             // beside it and in the column, and here it only crowded the row.
-            h("div", { className: "pp-modaltitle", title: props.title }, placeTitle),
+            h(
+              "nav",
+              { className: "pp-modaltitle pp-crumbs", "aria-label": "Where you are" },
+              crumbs.map(
+                (crumb, i) => h(
+                  React.Fragment,
+                  { key: i },
+                  i ? h("span", { className: "pp-crumbsep", "aria-hidden": "true" }, "›") : null,
+                  crumb.hash && i < crumbs.length - 1 ? h("a", { className: "pp-crumb", href: crumb.hash, title: crumb.label, onClick: (event) => followLink(event, crumb.hash) }, crumb.label) : h("span", { className: "pp-crumb pp-crumb-here", "aria-current": "page", title: crumb.label }, crumb.label)
+                )
+              )
+            ),
             // The middle of the row is the one part that gives way: on a narrow
             // window it scrolls sideways, so the controls on the right — the
             // connections, Publish, Chat and × — never wrap under the title.
@@ -14240,6 +14463,7 @@ function CourseMode(props) {
               fresh: props.startChat ? (text) => props.startChat({ mode, draft: text }) : null,
               onStep: (n) => {
                 stepped.current = n;
+                if (mode === "teaching" && !view) announce(placeNow(n), "step");
               }
             }),
             // The weeks stay mounted under a course-wide view, so coming back
@@ -14752,7 +14976,7 @@ function useShownPlace() {
   }, []);
   return shown;
 }
-var isShown = (shown, entry) => shown !== null && (entry.request.view ? shown.view === entry.request.view : shown.view === null);
+var isShown = (shown, entry) => shown !== null && (entry.request.view ? shown.view === entry.request.view : !shown.view);
 var visibleSession = (session, current, archived) => session !== void 0 && session.origin !== "subagent" && !archived.has(session.id) && (!session.blank || session.id === current);
 var ago = (updatedAt, now) => {
   const minutes2 = Math.floor((now - updatedAt) / 6e4);
@@ -14809,16 +15033,22 @@ function useNavigatorData(sessionId) {
   }, [sessionId, revision]);
   return state.value;
 }
+var linkOrButton = (props, attributes) => props.href ? Object.assign(attributes, {
+  href: props.href,
+  onClick: (event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    props.onClick();
+  }
+}) : Object.assign(attributes, { type: "button", onClick: props.onClick });
 function Row2(props) {
   return h(
-    "button",
-    {
-      type: "button",
+    props.href ? "a" : "button",
+    linkOrButton(props, {
       className: "pp-nav-row",
       title: props.hint,
-      "aria-current": props.current ? "true" : void 0,
-      onClick: props.onClick
-    },
+      "aria-current": props.current ? "true" : void 0
+    }),
     props.icon ? h(Icon2, { d: ICONS2[props.icon] }) : null,
     props.dot ? h("span", { className: "pp-nav-dot", title: "Working" }) : null,
     h("span", { className: "pp-nav-text" }, props.label),
@@ -14940,6 +15170,7 @@ function HeldPapers(props) {
         hint: pile.title + " — " + pile.held + (pile.held === 1 ? " scanned paper is" : " scanned papers are") + " placed on nobody yet. Say who in Scans.",
         badge: String(pile.held),
         badgeHint: pile.held + " not placed on a student",
+        href: placeToHash({ view: "files", scans: pile.assessment_id }),
         onClick: () => props.onOpen(pile.assessment_id)
       })
     )
@@ -15006,7 +15237,7 @@ function CourseNavigator(props) {
   };
   const carry = (fresh) => {
     if (shown === null) return;
-    carryPlace({ mode: shown.mode, view: shown.view, chat: !fresh, compose: Boolean(fresh), run: run2 ? run2.run_id : null });
+    carryPlace(Object.assign({}, shown, { chat: !fresh, compose: Boolean(fresh), run: run2 ? run2.run_id : null }));
   };
   const openChat = (sessionId2) => {
     if (sessionId2 !== current) carry(false);
@@ -15034,16 +15265,17 @@ function CourseNavigator(props) {
       ),
       PLACES.map(
         (entry) => h(
-          "button",
-          {
-            type: "button",
-            key: entry.id,
-            className: "pp-nav-icon",
-            title: entry.label,
-            "aria-label": entry.label,
-            "aria-current": isShown(shown, entry) ? "true" : void 0,
-            onClick: () => place(entry.request)
-          },
+          "a",
+          linkOrButton(
+            { href: placeToHash(entry.request), onClick: () => place(entry.request) },
+            {
+              key: entry.id,
+              className: "pp-nav-icon",
+              title: entry.label,
+              "aria-label": entry.label,
+              "aria-current": isShown(shown, entry) ? "true" : void 0
+            }
+          ),
           h(Icon2, { d: ICONS2[entry.id], size: 18 }),
           badgeOf(entry.id).badge ? h("span", { className: "pp-nav-pip", "aria-hidden": "true" }) : null
         )
@@ -15089,6 +15321,7 @@ function CourseNavigator(props) {
           current: isShown(shown, entry),
           badge: badge.badge,
           badgeHint: badge.hint,
+          href: placeToHash(entry.request),
           onClick: () => place(entry.request)
         });
       }) : null,
@@ -15107,6 +15340,7 @@ function CourseNavigator(props) {
         label: SETTINGS.label,
         hint: SETTINGS.hint,
         current: isShown(shown, SETTINGS),
+        href: placeToHash(SETTINGS.request),
         onClick: () => place(SETTINGS.request)
       }) : null,
       h(Row2, {
@@ -15595,6 +15829,9 @@ function GradeBoard(props) {
     });
   };
   const doc = state.value;
+  if (doc && doc.assessment && doc.assessment.title && props.title === props.assessmentId) {
+    props = Object.assign({}, props, { title: doc.assessment.title });
+  }
   const shell = (title, body, foot) => ReactDOM.createPortal(
     h(
       "div",
@@ -17529,6 +17766,33 @@ function ProfessorPane(props) {
   const [grading, setGrading] = React.useState(null);
   const [scansPile, setScansPile] = React.useState(null);
   const [scansStep, setScansStep] = React.useState(null);
+  const reportPlace = usePlaceUrl({
+    open: courseMode,
+    windows: {
+      grade: grading ? grading.assessment : null,
+      scans: scansPile,
+      desk: desk && desk.student ? { assessment: desk.assessment, student: desk.student } : null
+    },
+    apply: (place, same) => {
+      if (!place) {
+        setCourseMode(false);
+        setPlaceRequest(null);
+        setChatBeside(false);
+        setGrading(null);
+        setScansPile(null);
+        setScansStep(null);
+        setDesk(null);
+        return;
+      }
+      if (!same || !courseModeRef.current) openPlace(withoutWindows(place));
+      setGrading((open2) => !place.grade ? null : open2 && open2.assessment === place.grade ? open2 : { assessment: place.grade, label: place.grade });
+      setScansPile(place.scans || null);
+      if (!place.scans) setScansStep(null);
+      setDesk(
+        (open2) => !place.desk || !place.desk.student ? null : open2 && open2.assessment === place.desk.assessment && open2.student === place.desk.student ? open2 : { assessment: place.desk.assessment, student: place.desk.student }
+      );
+    }
+  });
   const examWindow = React.useRef(null);
   const placedAt = React.useRef(0);
   React.useEffect(
@@ -17950,7 +18214,7 @@ function ProfessorPane(props) {
   React.useEffect(() => {
     if (current === null || landed.current === props.sessionId) return;
     landed.current = props.sessionId;
-    if (courseModeRef.current || placeRequest) return;
+    if (courseModeRef.current || placeRequest || hashToPlace(window.location.hash)) return;
     const chat = props.chatTitle ? props.chatTitle() : null;
     if (chat && chat.blank) openPlace({ view: "today" });
   }, [props.sessionId, current ? current.runId : null]);
@@ -18132,6 +18396,9 @@ function ProfessorPane(props) {
       start: current.start,
       end: current.end,
       request: placeRequest,
+      onShown: reportPlace,
+      // The window over the place, as the last crumb of the trail.
+      windowTitle: grading ? "Grade · " + grading.label : scansPile ? "Scans · " + scansPile : desk ? "Defence desk" : null,
       sessionId: props.sessionId,
       dark,
       drafts,

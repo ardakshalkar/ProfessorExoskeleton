@@ -128,6 +128,11 @@ export function GradeBoard(props) {
   };
 
   const doc = state.value;
+  // Opened from a link (`#/…?grade=ASSESSMENT-HW-06`), the window knows only
+  // the id; once the board is read, it has the assessment's own title.
+  if (doc && doc.assessment && doc.assessment.title && props.title === props.assessmentId) {
+    props = Object.assign({}, props, { title: doc.assessment.title });
+  }
   const shell = (title, body, foot) =>
     ReactDOM.createPortal(
       h(
