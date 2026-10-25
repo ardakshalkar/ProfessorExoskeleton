@@ -25,6 +25,15 @@ import { rosterPeople } from "./workspace.js";
 /** How old the previewed check may be when its Send is pressed. */
 const PREVIEW_MS = 15 * 60 * 1000;
 
+/**
+ * The check each run's last preview was made from, kept apart from the
+ * pane's running check: the watch (client/canvas-check.js) checks again every
+ * few minutes, and a Send pressed while that check ran used to be refused.
+ * Like every module cache here it is empty after a reload of server/, and the
+ * Send then answers `again: true` so the pane offers Preview again.
+ */
+const previewed = new Map(); // runId -> { at, value }
+
 const named = (differences, names) => {
   const people = names ? rosterPeople() : null;
   return differences.map((entry) =>
@@ -82,12 +91,14 @@ export const canvasSyncAll = async (root, runId, body) => {
     const state = await runCanvasCheck(root, runId);
     if (!state.value) return { error: state.error || "Canvas gave no answer." };
     if (!Array.isArray(state.value.differences)) return { error: "This check has no differences in it; restart the harness so it runs the new `lms check`." };
+    previewed.set(runId, { at: state.at, value: state.value });
     return { checkedAt: state.at, preview: previewOf(state.value, names) };
   }
 
-  const last = lastCanvasCheck(runId);
-  if (!last || last.running) return { error: "Preview again: the check behind the preview is not there any more." };
-  if (Date.now() - Date.parse(last.at) > PREVIEW_MS) return { error: "The preview is more than 15 minutes old. Preview again." };
+  const last = previewed.get(runId);
+  if (!last) return { error: "The pane's server reloaded since this preview, and its check went with it. Preview again.", again: true };
+  if (Date.now() - Date.parse(last.at) > PREVIEW_MS) return { error: "The preview is more than 15 minutes old. Preview again.", again: true };
+  previewed.delete(runId);
   const wanted = new Set(Array.isArray(body.keys) ? body.keys.map(String) : []);
   // Students Canvas no longer lists are noted whatever was chosen: the note
   // drops nobody, so it needs no choosing.

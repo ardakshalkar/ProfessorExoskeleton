@@ -212,7 +212,12 @@ function SyncAll(props) {
               (entry.ok ? "✓ " : "✗ ") + entry.command + "\n" + entry.output,
             ),
           ),
-      h("div", { className: "pp-dacts" }, h("button", { type: "button", className: "pp-segbtn", onClick: props.onClose }, "Close")),
+      h(
+        "div",
+        { className: "pp-dacts" },
+        result.again && props.onAgain ? h("button", { type: "button", className: "pp-segbtn", onClick: props.onAgain }, "Preview again") : null,
+        h("button", { type: "button", className: "pp-segbtn", onClick: props.onClose }, "Close"),
+      ),
     );
   }
 
@@ -461,11 +466,14 @@ export function CanvasDifferences(props) {
     syncing && syncing.error ? h("p", { className: "pp-saveerr" }, syncing.error) : null,
     syncing && syncing.preview
       ? h(SyncAll, {
+          // A new preview is a new SyncAll, so Preview again leaves the old result behind.
+          key: syncing.checkedAt,
           preview: syncing.preview,
           checkedAt: syncing.checkedAt,
           runId: props.runId,
           sessionId: props.sessionId,
           onChecked: (state) => noteCanvasCheck(props.runId, state, props.sessionId),
+          onAgain: preview,
           onClose: () => {
             setSyncing(null);
             reread();

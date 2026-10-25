@@ -278,7 +278,15 @@ export function SyncView(props) {
                     (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + "\n" + entry.output,
                   ),
                 ),
-            h("div", { className: "pp-dacts" }, h("button", { type: "button", className: "pp-segbtn", onClick: () => setResults(null) }, "Close")),
+            h(
+              "div",
+              { className: "pp-dacts" },
+              // A preview that went stale or was lost in a reload: ask again, one press.
+              results.results && results.results.some((entry) => entry.again)
+                ? h("button", { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: ask }, phase === "asking" ? "Asking…" : "Preview again")
+                : null,
+              h("button", { type: "button", className: "pp-segbtn", onClick: () => setResults(null) }, "Close"),
+            ),
           )
         : null,
     ),

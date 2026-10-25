@@ -5240,7 +5240,12 @@ function SyncAll(props) {
           (entry.ok ? "✓ " : "✗ ") + entry.command + "\n" + entry.output
         )
       ),
-      h("div", { className: "pp-dacts" }, h("button", { type: "button", className: "pp-segbtn", onClick: props.onClose }, "Close"))
+      h(
+        "div",
+        { className: "pp-dacts" },
+        result.again && props.onAgain ? h("button", { type: "button", className: "pp-segbtn", onClick: props.onAgain }, "Preview again") : null,
+        h("button", { type: "button", className: "pp-segbtn", onClick: props.onClose }, "Close")
+      )
     );
   }
   const byAssessment2 = (rows) => {
@@ -5435,11 +5440,14 @@ function CanvasDifferences(props) {
     ),
     syncing && syncing.error ? h("p", { className: "pp-saveerr" }, syncing.error) : null,
     syncing && syncing.preview ? h(SyncAll, {
+      // A new preview is a new SyncAll, so Preview again leaves the old result behind.
+      key: syncing.checkedAt,
       preview: syncing.preview,
       checkedAt: syncing.checkedAt,
       runId: props.runId,
       sessionId: props.sessionId,
       onChecked: (state) => noteCanvasCheck(props.runId, state, props.sessionId),
+      onAgain: preview,
       onClose: () => {
         setSyncing(null);
         reread();
@@ -12953,7 +12961,13 @@ function SyncView(props) {
             (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + "\n" + entry.output
           )
         ),
-        h("div", { className: "pp-dacts" }, h("button", { type: "button", className: "pp-segbtn", onClick: () => setResults(null) }, "Close"))
+        h(
+          "div",
+          { className: "pp-dacts" },
+          // A preview that went stale or was lost in a reload: ask again, one press.
+          results.results && results.results.some((entry) => entry.again) ? h("button", { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: ask }, phase === "asking" ? "Asking…" : "Preview again") : null,
+          h("button", { type: "button", className: "pp-segbtn", onClick: () => setResults(null) }, "Close")
+        )
       ) : null
     ),
     // What Canvas lacks, per assessment, with its send: one assessment at a

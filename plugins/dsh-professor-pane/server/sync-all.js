@@ -126,7 +126,7 @@ export const syncAll = async (workspace, root, runId, body) => {
   const keys = Array.isArray(body.canvas) ? body.canvas.map(String) : [];
   if (roads.canvas && keys.length) {
     const sent = await canvasSyncAll(root, runId, { confirm: true, keys, names });
-    if (sent.error) results.push({ road: "canvas", ok: false, output: sent.error });
+    if (sent.error) results.push({ road: "canvas", ok: false, output: sent.error, again: Boolean(sent.again) });
     else for (const entry of sent.results) results.push({ road: "canvas", ok: entry.ok, command: entry.command, output: entry.output });
   }
   const wanted = new Set(Array.isArray(body.sheets) ? body.sheets.map(String) : []);
