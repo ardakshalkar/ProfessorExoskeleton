@@ -17,13 +17,13 @@
  * question for that.
  */
 
-import { approvedView } from "@ainar/core/src/approval.ts";
 import { runById } from "@ainar/core/src/bundle.ts";
 import { fingerprints } from "@ainar/core/src/freshness.ts";
 import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { unpublishedDrafts } from "@ainar/core/src/publish.ts";
 
 import { canvasMarks } from "./scans.js";
+import { approvedOf } from "./workspace.js";
 
 const lms = (record) => {
   const found = record?.extensions?.lms;
@@ -74,7 +74,7 @@ const movedSincePublished = (bundle, runId, root, ledger) => {
  */
 export const unpublishedDocument = ({ bundle, runId, root, ledger }) => {
   const run = runById(bundle).get(runId) ?? {};
-  const approved = approvedView(bundle);
+  const approved = approvedOf(bundle);
   const book = gradebookPayload(approved, runId, {});
   const records = new Map(bundle.assessments.map((entry) => [entry.assessment_id, entry]));
 

@@ -110,8 +110,8 @@ export const routes = [
   {
     paths: ["/api/recent"],
     handle(c) {
-      const { res, root } = c;
-      return sendJson(res, 200, recentDocument(root));
+      const { res, workspace, root } = c;
+      return sendJson(res, 200, recentDocument(workspace, root));
     },
   },
   /**

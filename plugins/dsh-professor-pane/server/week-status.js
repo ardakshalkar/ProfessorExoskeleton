@@ -32,7 +32,7 @@ import { scanPlace } from "@ainar/core/src/scans.ts";
 import { STEP_PROMPTS } from "../shared/course-words.js";
 
 import { isRepoWork } from "./course-views.js";
-import { scanPiles } from "./scans.js";
+import { keptPrivate, keptScanPiles, privateFilesVersion } from "./scans.js";
 import { canvasBinding } from "./unpublished.js";
 
 const attempt = (read) => {
@@ -147,7 +147,24 @@ const scansOf = (pile, standing, runId, id) => ({
  */
 export const assessmentStatus = ({ bundle, runId, root, submissions, ledger, now = Date.now() }) => {
   const run = runById(bundle).get(runId) ?? {};
-  const found = submissions ? attempt(() => scanPiles({ bundle, runId, submissions, ledger })) : null;
+  // The piles, grade boards and defences read the private files, and cost a
+  // second on CSS-4007: kept per version of the course and of those files
+  // (server/scans.js). What depends on the clock is worked out every time.
+  const version = submissions ? privateFilesVersion({ submissions, root, runId, ledger }) : null;
+  const found = submissions ? attempt(() => keptScanPiles({ bundle, runId, submissions, root, ledger, version })) : null;
+  const read = submissions
+    ? keptPrivate(bundle, `status\0${runId}\0${submissions}\0${version}`, () => {
+        const each = new Map();
+        for (const assessment of bundle.assessments.filter((entry) => entry.course_version_id === runId)) {
+          const id = assessment.assessment_id;
+          each.set(id, {
+            grading: attempt(() => gradingOf(bundle, runId, id, submissions)),
+            defences: attempt(() => defencesOf(bundle, root, runId, id, submissions)),
+          });
+        }
+        return each;
+      })
+    : new Map();
   const piles = found?.piles ?? [];
   const status = {};
   for (const assessment of bundle.assessments.filter((entry) => entry.course_version_id === runId)) {
@@ -156,7 +173,7 @@ export const assessmentStatus = ({ bundle, runId, root, submissions, ledger, now
     const binding = attempt(() => canvasBinding(run, assessment));
     const pile = piles.find((entry) => entry.id === id);
     status[id] = {
-      grading: attempt(() => gradingOf(bundle, runId, id, submissions)),
+      grading: read.get(id)?.grading ?? null,
       // Publishing leaves a draft out, so a draft is offered no publish.
       canvas: !draft && binding && (binding.state === "none" || binding.state === "some") ? binding.state : null,
       repo: !draft && isRepoWork(assessment) && !assessment.extensions?.github?.template_repo,
@@ -166,7 +183,7 @@ export const assessmentStatus = ({ bundle, runId, root, submissions, ledger, now
           : onPaper(assessment) && weekCome(assessment, now)
             ? { none: true }
             : null,
-      defences: attempt(() => defencesOf(bundle, root, runId, id, submissions)),
+      defences: read.get(id)?.defences ?? null,
     };
   }
   return status;

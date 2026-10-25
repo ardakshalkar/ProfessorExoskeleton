@@ -20,11 +20,11 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
 
-import { approvedView } from "@ainar/core/src/approval.ts";
 import { assessmentsOf, enrolledIn, runById } from "@ainar/core/src/bundle.ts";
 import { exportable, gradeRows } from "@ainar/core/src/gradebook.ts";
 import { lmsScale, rescales, toLms } from "@ainar/core/src/lms-scale.ts";
@@ -42,6 +42,8 @@ import {
   scanSubmissionId,
   submissionsDir,
 } from "@ainar/core/src/scans.ts";
+
+import { approvedOf } from "./workspace.js";
 
 const ID = /^[A-Z0-9][A-Z0-9-]*$/;
 
@@ -132,12 +134,12 @@ const laneOf = (paper) => {
  * canvas-api` writes only after Canvas reports the job done — so drawing the
  * tab never asks Canvas anything, and "sent" means landed, not attempted.
  *
- * `approved` is `approvedView(bundle)` when the caller already has it: the
- * view deep-copies the whole course, and a caller asking once per pile paid
- * for that copy once per pile.
+ * `approved` is the accepted-only course when the caller already has it.
+ * Absent, `approvedOf` gives the copy kept for this version of the course,
+ * built once rather than once per pile.
  */
 export const canvasMarks = ({ bundle, runId, assessmentId, ledger, approved = null }) => {
-  const rows = gradeRows(approved ?? approvedView(bundle), runId, { assessmentId }).get(assessmentId) ?? [];
+  const rows = gradeRows(approved ?? approvedOf(bundle), runId, { assessmentId }).get(assessmentId) ?? [];
   const ready = rows.filter(exportable);
   const sent = ledger.prepared("canvas-api", assessmentId);
   // The ledger holds what Canvas was sent, on Canvas's scale — which the
@@ -435,15 +437,103 @@ export const scanStandings = (bundle, runId, root, rosterDirectory = null) => {
   try {
     const submissions = submissionsDir(null);
     refuseInsideRepo(submissions, root);
-    const { standings, enrolled } = scanPiles({ bundle, runId, submissions, ledger: Ledger.load(runId) });
-    if (rosterDirectory) {
-      const store = RosterStore.load(rosterDirectory);
-      for (const standing of standings.values()) standing.held = heldPapers(standing.plan, { store, enrolled });
-    }
-    return standings;
+    const { standings, enrolled } = keptScanPiles({ bundle, runId, submissions, root, ledger: Ledger.load(runId) });
+    if (!rosterDirectory) return standings;
+    // The kept standings are shared, so the held papers go on copies.
+    const store = RosterStore.load(rosterDirectory);
+    return new Map([...standings].map(([id, standing]) => [id, { ...standing, held: heldPapers(standing.plan, { store, enrolled }) }]));
   } catch {
     return new Map();
   }
+};
+
+/** Files whose bytes a standing reads; any other file counts by its name alone. */
+const READ_FILES = /\.(ya?ml|json)$/i;
+
+/**
+ * A fingerprint of the private files a run's pile standings, grade boards and
+ * defences read: everything under the run's folder in the private submissions
+ * directory, the drafted defence questions in `output/<RUN>/defence/`, and the
+ * sync ledger.
+ *
+ * Every file's name, so a placed `scan.pdf` or a new batch in `_inbox/` moves
+ * it; the size and mtime only of the YAML and JSON, the files those readers
+ * open (the plan, transcripts, `groups.yaml`, a defence session, the ledger).
+ * A scan's pixels are never read here, and statting a thousand crops for them
+ * would cost more than the walk. About 1,900 files on CSS-4007.
+ */
+export const privateFilesVersion = ({ submissions, root, runId, ledger }) => {
+  const hash = createHash("sha256");
+  const walk = (directory, depth) => {
+    if (depth > 8) return;
+    let entries;
+    try {
+      entries = readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of [...entries].sort((a, b) => (a.name < b.name ? -1 : 1))) {
+      const full = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        hash.update(`${full}/\0`);
+        walk(full, depth + 1);
+        continue;
+      }
+      let stamp = "";
+      if (READ_FILES.test(entry.name)) {
+        try {
+          const stats = statSync(full);
+          stamp = `${stats.mtimeMs}\0${stats.size}`;
+        } catch {
+          stamp = "unreadable";
+        }
+      }
+      hash.update(`${full}\0${stamp}\0`);
+    }
+  };
+  walk(join(submissions, runId), 0);
+  walk(join(root, "output", runId, "defence"), 0);
+  try {
+    const stats = statSync(ledger.path);
+    hash.update(`ledger\0${stats.mtimeMs}\0${stats.size}`);
+  } catch {
+    hash.update("ledger\0none");
+  }
+  return hash.digest("hex").slice(0, 16);
+};
+
+/**
+ * What a run's private files say, kept per version of the course AND of those
+ * files: the course version is the bundle object (see `approvedOf` in
+ * workspace.js), the files' is `privateFilesVersion`. A pile placed, a
+ * transcript read or a mark sent moves the fingerprint and the next call
+ * computes again; a course edit gives a new bundle and leaves the old entries
+ * to be collected with it.
+ *
+ * What is kept is shared between callers, who read it and do not write into it.
+ */
+const KEPT = new WeakMap();
+
+export const keptPrivate = (bundle, key, compute) => {
+  let found = KEPT.get(bundle);
+  if (!found) {
+    found = new Map();
+    KEPT.set(bundle, found);
+  }
+  if (!found.has(key)) {
+    // One version of the private files at a time: an older fingerprint is
+    // never asked for again.
+    const prefix = key.slice(0, key.lastIndexOf("\0"));
+    for (const old of found.keys()) if (old !== key && old.startsWith(prefix + "\0")) found.delete(old);
+    found.set(key, compute());
+  }
+  return found.get(key);
+};
+
+/** `scanPiles`, kept per version of the course and of the private files. */
+export const keptScanPiles = ({ bundle, runId, submissions, root, ledger, version = null }) => {
+  const files = version ?? privateFilesVersion({ submissions, root, runId, ledger });
+  return keptPrivate(bundle, `piles\0${runId}\0${submissions}\0${files}`, () => scanPiles({ bundle, runId, submissions, ledger }));
 };
 
 /**
@@ -465,7 +555,7 @@ export const scanPiles = ({ bundle, runId, submissions, ledger }) => {
   // Quiz 2 was on screen.
   const found = pilesOf(submissions, runId, assessments);
   // One copy of the approved course for every pile's Canvas count.
-  const approved = found.length ? approvedView(bundle) : null;
+  const approved = found.length ? approvedOf(bundle) : null;
   const standings = new Map(
     found.map((pile) => [
       pile.id,

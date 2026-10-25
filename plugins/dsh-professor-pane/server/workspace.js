@@ -156,6 +156,45 @@ export const payload = (workspace, tool, args) => {
 };
 
 /**
+ * What is computed from one course, kept until the course changes.
+ *
+ * The key is the loaded bundle itself, which is the course's version: the
+ * store hands back the same bundle object until something under the course
+ * moves (`YamlCourseStore`'s mtime stamp), and a database snapshot
+ * (`LoadedCourseStore`) hands back the same one until a new snapshot is
+ * loaded. A new version is a new object, so a stale entry is never looked up
+ * again, and the WeakMap lets it go with the bundle it was computed from.
+ * Nothing here decides freshness; the store does, as before.
+ *
+ * Why: one Today request built the accepted-only copy of the course
+ * (`approvedView`, a deep clone of every record, ~0.35 s on CSS-4007) three
+ * or four times, and the outline and the inbox twice each, and every request
+ * after it did it all again for a course that had not changed.
+ */
+const COMPUTED = new WeakMap();
+
+const computedOf = (bundle) => {
+  let found = COMPUTED.get(bundle);
+  if (!found) {
+    found = { approved: null, payloads: new Map() };
+    COMPUTED.set(bundle, found);
+  }
+  return found;
+};
+
+/**
+ * `approvedView(bundle)`, built once per version of the course.
+ *
+ * Shared: callers read it and must not write into it. `approvedView` used to
+ * hand each caller a fresh deep copy; the ones that use this one only read.
+ */
+export const approvedOf = (bundle) => {
+  const found = computedOf(bundle);
+  if (found.approved === null) found.approved = approvedView(bundle);
+  return found.approved;
+};
+
+/**
  * The four payloads, over the whole course or over what has been accepted.
  *
  * Since 2026-09-29 a draft is not a file somewhere else: an agent writes into
@@ -169,6 +208,11 @@ export const payload = (workspace, tool, args) => {
  *
  * `issues` is kept, empty, for the callers that still read it: there is no
  * draft directory to fail to load any more.
+ *
+ * Computed once per version of the course, run, half and reference date (see
+ * `approvedOf`), and handed out as a copy: the outline's callers write
+ * per-request links into it (`withMaterialLinks`), and copying a payload costs
+ * milliseconds where computing it cost a second.
  */
 export const viewPayload = (workspace, tool, runId, on, withDrafts) => {
   let bundle = null;
@@ -188,17 +232,24 @@ export const viewPayload = (workspace, tool, runId, on, withDrafts) => {
   }
   if (bundle === null) throw new ToolError(`no course run '${runId}' in this workspace`);
 
-  const shown = withDrafts ? bundle : approvedView(bundle);
+  const shown = withDrafts ? bundle : approvedOf(bundle);
   const date = referenceDate(shown, runId, on);
+  const key = `${tool}\0${runId}\0${withDrafts ? 1 : 0}\0${date}`;
+  const payloads = computedOf(bundle).payloads;
+  if (!payloads.has(key)) payloads.set(key, computePayload(tool, shown, runId, date));
+  return { payload: structuredClone(payloads.get(key)), issues: [] };
+};
+
+const computePayload = (tool, shown, runId, date) => {
   switch (tool) {
     case "course_outline":
-      return { payload: outlinePayload(shown, runId, date), issues: [] };
+      return outlinePayload(shown, runId, date);
     case "class_progress":
-      return { payload: dashboardPayload(shown, runId), issues: [] };
+      return dashboardPayload(shown, runId);
     case "gradebook":
-      return { payload: gradebookPayload(shown, runId, {}), issues: [] };
+      return gradebookPayload(shown, runId, {});
     case "action_inbox":
-      return { payload: inboxPayload(shown, runId, date), issues: [] };
+      return inboxPayload(shown, runId, date);
     default:
       throw new ToolError(`${tool} has no view over the accepted record`);
   }
