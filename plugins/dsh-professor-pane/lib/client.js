@@ -12878,11 +12878,21 @@ var ConfirmBar = (props) => h(
   ),
   h("button", { type: "button", className: "pp-segbtn", disabled: props.busy, onClick: props.onCancel }, "Cancel")
 );
+var namesIn = (preview) => {
+  const found = /* @__PURE__ */ new Map();
+  if (!preview) return found;
+  for (const entry of [].concat(preview.send || [], preview.take || [], preview.held || [], preview.absent || [])) {
+    if (entry.student_id && entry.name) found.set(entry.student_id, entry.name);
+  }
+  return found;
+};
+var withNamesIn = (text, names) => names.size ? String(text).replace(/STUDENT-[A-Z0-9]+/g, (id) => names.has(id) ? names.get(id) + " (" + id + ")" : id) : String(text);
 function SendOutcome(props) {
   const body = props.body;
+  const names = props.names || /* @__PURE__ */ new Map();
   const results = body.results || [];
   const failed = body.error || results.some((entry) => !entry.ok);
-  const lines = body.error ? [body.error] : results.map((entry) => (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + (entry.output ? "\n" + entry.output : ""));
+  const lines = body.error ? [body.error] : results.map((entry) => (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + (entry.output ? "\n" + withNamesIn(entry.output, names) : ""));
   return h(
     "div",
     { className: failed ? "pp-sxfailed" : "pp-sxsent" },
@@ -12956,8 +12966,9 @@ function CanvasPart(props) {
   const busy = flow.sending || checking;
   const sendNow = (keys, label, tags) => {
     setConfirming(null);
+    const names = namesIn(preview);
     flow.send(keys).then((body) => {
-      setOutcome({ body, label });
+      setOutcome({ body, label, names });
       props.onWrite(tags);
     });
   };
@@ -12994,7 +13005,7 @@ function CanvasPart(props) {
   return h(
     React.Fragment,
     null,
-    h("section", { className: "pp-ccard pp-sxtop" }, head, outcome ? h(SendOutcome, { body: outcome.body, label: outcome.label, onClose: () => setOutcome(null) }) : null),
+    h("section", { className: "pp-ccard pp-sxtop" }, head, outcome ? h(SendOutcome, { body: outcome.body, label: outcome.label, names: outcome.names, onClose: () => setOutcome(null) }) : null),
     // To Canvas: students see these.
     h(
       "section",

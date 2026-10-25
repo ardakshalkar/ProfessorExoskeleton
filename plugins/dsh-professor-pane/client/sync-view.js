@@ -202,12 +202,33 @@ const ConfirmBar = (props) =>
     h("button", { type: "button", className: "pp-segbtn", disabled: props.busy, onClick: props.onCancel }, "Cancel"),
   );
 
+/** Student id → name, from the check's rows, when the pane shows names. */
+const namesIn = (preview) => {
+  const found = new Map();
+  if (!preview) return found;
+  for (const entry of [].concat(preview.send || [], preview.take || [], preview.held || [], preview.absent || [])) {
+    if (entry.student_id && entry.name) found.set(entry.student_id, entry.name);
+  }
+  return found;
+};
+
+/**
+ * A command's output with each student id it prints given the name beside
+ * it, as the rows above show them: `ainar` itself only knows ids. The command
+ * line keeps the ids it ran with.
+ */
+const withNamesIn = (text, names) =>
+  names.size ? String(text).replace(/STUDENT-[A-Z0-9]+/g, (id) => (names.has(id) ? names.get(id) + " (" + id + ")" : id)) : String(text);
+
 /** What a send came to, in a line, with each command's own words a press away. */
 function SendOutcome(props) {
   const body = props.body;
+  const names = props.names || new Map();
   const results = body.results || [];
   const failed = body.error || results.some((entry) => !entry.ok);
-  const lines = body.error ? [body.error] : results.map((entry) => (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + (entry.output ? "\n" + entry.output : ""));
+  const lines = body.error
+    ? [body.error]
+    : results.map((entry) => (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + (entry.output ? "\n" + withNamesIn(entry.output, names) : ""));
   return h(
     "div",
     { className: failed ? "pp-sxfailed" : "pp-sxsent" },
@@ -298,8 +319,10 @@ function CanvasPart(props) {
 
   const sendNow = (keys, label, tags) => {
     setConfirming(null);
+    // Taken now: once sent, these rows leave the check the page shows next.
+    const names = namesIn(preview);
     flow.send(keys).then((body) => {
-      setOutcome({ body, label });
+      setOutcome({ body, label, names });
       props.onWrite(tags);
     });
   };
@@ -348,7 +371,7 @@ function CanvasPart(props) {
   return h(
     React.Fragment,
     null,
-    h("section", { className: "pp-ccard pp-sxtop" }, head, outcome ? h(SendOutcome, { body: outcome.body, label: outcome.label, onClose: () => setOutcome(null) }) : null),
+    h("section", { className: "pp-ccard pp-sxtop" }, head, outcome ? h(SendOutcome, { body: outcome.body, label: outcome.label, names: outcome.names, onClose: () => setOutcome(null) }) : null),
 
     // To Canvas: students see these.
     h(
