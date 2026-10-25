@@ -1363,6 +1363,11 @@ i.pp-cg-cell{cursor:default;flex:none}
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
 .pp-sxgroup ul{margin:0;padding-left:18px}
 .pp-sxout{border-color:rgba(180,52,42,.35);background:rgba(180,52,42,.04)}
+.pp-sxheld>summary{cursor:pointer;padding:2px 0}
+.pp-sxheldbody{display:flex;flex-direction:column;gap:2px;padding-left:16px}
+.pp-sxheld .pp-sxheld>summary{font-size:11.5px}
+.pp-sxheld .pp-drow{margin-left:14px}
+.pp-sxheld>.pp-linkbtn{margin:2px 0 4px 14px}
 .pp-waitwhy{flex:1 1 160px;min-width:0}
 .pp-syncsection .pp-waitlist{gap:0}
 .pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}
@@ -12903,14 +12908,87 @@ var matchCommand = (query, index, limit = 7) => {
 
 // client/sync-view.js
 var plural7 = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
-var byAssessment = (rows) => {
-  const counts = /* @__PURE__ */ new Map();
-  for (const entry of rows) {
-    const title = entry.title || entry.assessment_id;
-    counts.set(title, (counts.get(title) || 0) + 1);
-  }
-  return [...counts].map(([title, n]) => title + ": " + n).join(" · ");
+var shortTitle = (title) => {
+  const head = String(title).split(/\s+[-–—:]\s+/)[0];
+  return head.length <= 16 ? head : String(title);
 };
+var byAssessment = (rows) => {
+  const groups = /* @__PURE__ */ new Map();
+  for (const entry of rows) {
+    const title = entry.title || entry.assessment_id || (entry.kind === "roster" ? "Class list" : "Other");
+    if (!groups.has(title)) groups.set(title, []);
+    groups.get(title).push(entry);
+  }
+  return [...groups].map(([title, entries]) => ({ title, short: shortTitle(title), entries })).sort((a, b) => a.short.localeCompare(b.short, void 0, { numeric: true }));
+};
+var assessmentLine = (group, noun) => {
+  const fresh = group.entries.filter((entry) => entry.theirs === null || entry.theirs === "").length;
+  const replace = group.entries.length - fresh;
+  const split = fresh && replace ? " (" + fresh + " new in Canvas, " + replace + " replace what Canvas shows)" : replace ? " (each replaces what Canvas shows)" : "";
+  return h("li", { key: group.title, title: group.title }, h("b", null, group.short), " — " + plural7(group.entries.length, noun) + split);
+};
+var HELD_WHY = {
+  conflict: "changed on both sides — you choose which to keep",
+  pull: "changed in Canvas since the last sync — Sync all does not copy Canvas's changes over yours",
+  held: "with nothing ready here to send yet (not accepted, or taken back)"
+};
+var ROWS_AT_FIRST3 = 12;
+var OPEN_UNDER = 15;
+var heldWho = (entry) => entry.kind === "assignments" ? "Setting: " + String(entry.field || "").replace(/_/g, " ") : entry.name || entry.student_id || entry.theirs || "—";
+var heldValue = (value) => {
+  if (value === null || value === void 0 || value === "") return "—";
+  const text = String(value);
+  if (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(text) && !Number.isNaN(Date.parse(text))) {
+    return new Date(text).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  return text;
+};
+function HeldGroup(props) {
+  const [all, setAll] = React.useState(false);
+  const rows = all ? props.group.entries : props.group.entries.slice(0, ROWS_AT_FIRST3);
+  const more = props.group.entries.length - rows.length;
+  return h(
+    "details",
+    { className: "pp-sxheld", open: props.open },
+    h("summary", { title: props.group.title }, h("b", null, props.group.short), " — " + plural7(props.group.entries.length, props.noun)),
+    rows.map(
+      (entry) => h(
+        "div",
+        { className: "pp-drow", key: entry.key },
+        h(
+          "div",
+          { className: "pp-drowline" },
+          h("span", { className: "pp-drowwho" }, heldWho(entry)),
+          entry.kind === "roster" ? null : h("span", { className: "pp-dvals" }, "here " + heldValue(entry.ours) + " · Canvas " + heldValue(entry.theirs))
+        ),
+        entry.reason ? h("span", { className: "pp-dwhy" }, entry.reason) : null
+      )
+    ),
+    more ? h("button", { type: "button", className: "pp-linkbtn", onClick: () => setAll(true) }, "Show " + more + " more") : null
+  );
+}
+function HeldKind(props) {
+  const noun = props.entries.every((entry) => entry.kind === "grades") ? "mark" : "item";
+  const groups = byAssessment(props.entries);
+  return h(
+    "details",
+    { className: "pp-sxheld", open: props.open },
+    h(
+      "summary",
+      null,
+      h("b", null, plural7(props.entries.length, noun)),
+      " " + HELD_WHY[props.direction],
+      h("span", { className: "pp-as" }, " · " + groups.map((group) => group.short + " " + group.entries.length).join(", "))
+    ),
+    h(
+      "div",
+      { className: "pp-sxheldbody" },
+      groups.map(
+        (group) => h(HeldGroup, { key: group.title, group, noun: group.entries.every((entry) => entry.student_id) ? "student" : "item", open: props.open || groups.length === 1 })
+      )
+    )
+  );
+}
 var partsOf = (preview) => {
   const canvasRoad = roadIn(preview, "canvas");
   const canvas = canvasRoad && canvasRoad.ok ? canvasRoad.preview : null;
@@ -12934,10 +13012,15 @@ var chooseAll = (preview) => {
   for (const sheet2 of parts.moving) keys[sheet2.id] = [sheet2.id];
   return Object.keys(keys).length ? keys : null;
 };
+var sendNoun = (send2) => {
+  const marks = send2.filter((entry) => entry.kind === "grades").length;
+  const fields = send2.length - marks;
+  return [marks ? plural7(marks, "mark") : null, fields ? plural7(fields, "setting") : null].filter(Boolean).join(" and ");
+};
 var sendAllLabel = (preview) => {
   const parts = partsOf(preview);
   return "Sync: " + [
-    parts.send.length ? "send " + parts.send.length + " to Canvas" : null,
+    parts.send.length ? "send " + sendNoun(parts.send) + " to Canvas" : null,
     parts.take.length || parts.absent.length ? "update the class list" : null,
     parts.moving.length ? "bring in " + plural7(parts.moving.length, "sheet") : null
   ].filter(Boolean).join(", ");
@@ -12948,15 +13031,17 @@ function SyncAllPreview(props) {
   const marks = send2.filter((entry) => entry.kind === "grades");
   const fields = send2.filter((entry) => entry.kind === "assignments");
   const sheetHeld = sheets.reduce((sum, sheet2) => sum + (sheet2.held || 0), 0);
+  const left = held.filter((entry) => !absent.includes(entry));
+  const leftBy = ["conflict", "pull", "held"].map((direction) => ({ direction, entries: left.filter((entry) => entry.direction === direction) }));
   return h(
     React.Fragment,
     null,
-    h("span", { className: "pp-as" }, "Asked " + when(preview.previewedAt) + ". Nothing has been sent or saved yet."),
+    h("span", { className: "pp-as" }, "Checked " + when(preview.previewedAt) + ". Nothing has been sent or saved yet — this is what the button below would do."),
     // What comes in: changes the run's own records; nobody outside sees it.
     h(
       "div",
       { className: "pp-sxgroup" },
-      h("b", null, "Comes in"),
+      h("div", null, h("b", null, "Into your records"), h("span", { className: "pp-as" }, " — only you see these")),
       h(
         "ul",
         null,
@@ -12977,24 +13062,27 @@ function SyncAllPreview(props) {
     h(
       "div",
       { className: "pp-sxgroup" + (send2.length ? " pp-sxout" : "") },
-      h("b", null, "Goes out — students see it"),
+      h("div", null, h("b", null, send2.length ? "To Canvas: " + sendNoun(send2) : "To Canvas"), h("span", { className: "pp-as" }, " — students will see these")),
       h(
         "ul",
         null,
-        marks.length ? h("li", null, "Canvas marks: " + marks.length + " (" + byAssessment(marks) + ")") : null,
-        fields.length ? h("li", null, "Canvas definitions: " + plural7(fields.length, "field") + " (" + byAssessment(fields) + ")") : null,
+        byAssessment(marks).map((group) => assessmentLine(group, "student")),
+        fields.length ? h("li", null, "Assessment settings (title, due date, points…): ", byAssessment(fields).map((group) => group.short + " " + plural7(group.entries.length, "field")).join(", ")) : null,
         !send2.length ? h("li", { className: "pp-as" }, "nothing") : null
       )
     ),
-    held.length || sheetHeld || failed.length || canvasError ? h(
+    left.length || sheetHeld || failed.length || canvasError ? h(
       "div",
       { className: "pp-sxgroup" },
-      h("b", null, "Left for you"),
+      h("div", null, h("b", null, "Not included — needs your decision"), left.length ? h("span", { className: "pp-as" }, " — open a line to see whose") : null),
+      leftBy.map(
+        (kind) => kind.entries.length ? h(HeldKind, { key: kind.direction, direction: kind.direction, entries: kind.entries, open: left.length < OPEN_UNDER }) : null
+      ),
       h(
         "ul",
         null,
-        held.length ? h("li", null, plural7(held.length, "Canvas difference") + " — conflicts and what Canvas changed; settle them below") : null,
-        sheetHeld ? h("li", null, plural7(sheetHeld, "sheet row") + " the sync was not sure of; confirm them below") : null,
+        left.length ? h("li", { className: "pp-as" }, "Settle each one under “Canvas · what differs” below, with Keep AINAR or Keep Canvas.") : null,
+        sheetHeld ? h("li", null, plural7(sheetHeld, "grade-sheet row") + " could not be matched to a student for sure; confirm them under “Names to confirm” below") : null,
         canvasError ? h("li", { className: "pp-saveerr" }, "Canvas: " + canvasError) : null,
         failed.map(
           (sheet2) => h("li", { key: sheet2.id, className: "pp-saveerr" }, "Grade sheet " + sheet2.id + ": " + sheet2.error)
@@ -13004,7 +13092,7 @@ function SyncAllPreview(props) {
     preview.elsewhere.length ? h(
       "p",
       { className: "pp-as" },
-      "Not in Sync all: " + preview.elsewhere.map((road) => road.why).filter((why, i, all) => all.indexOf(why) === i).join(" ")
+      "Sync all does not do these: " + preview.elsewhere.map((road) => road.why).filter((why, i, all) => all.indexOf(why) === i).join(" ")
     ) : null
   );
 }
@@ -14995,7 +15083,7 @@ var navDate = (iso) => {
   const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
   return DAYS[date.getDay()] + " " + date.getDate() + " " + MONTHS3[date.getMonth()];
 };
-var shortTitle = (title) => {
+var shortTitle2 = (title) => {
   const text = String(title || "");
   const cut = text.split(/\s[-–—:]\s/)[0];
   return cut.length <= 28 ? cut : text.slice(0, 28) + "…";
@@ -15127,7 +15215,7 @@ function ThisWeek(props) {
       h(
         "button",
         { type: "button", className: "pp-nav-row pp-nav-line", key: "d" + lines.length, onClick: open2, title: work.title },
-        h("span", { className: "pp-nav-text" }, shortTitle(work.title) + " due"),
+        h("span", { className: "pp-nav-text" }, shortTitle2(work.title) + " due"),
         h("span", { className: "pp-nav-meta" }, navDate(work.due_on) || "no date")
       )
     );
@@ -15139,7 +15227,7 @@ function ThisWeek(props) {
         h(
           "button",
           { type: "button", className: "pp-nav-row pp-nav-line", key: "n" + lines.length, onClick: open2, title: work.title },
-          h("span", { className: "pp-nav-text" }, shortTitle(work.title)),
+          h("span", { className: "pp-nav-text" }, shortTitle2(work.title)),
           h("span", { className: "pp-nav-meta" }, navDate(work.due_on) || "no date")
         )
       );
@@ -15166,7 +15254,7 @@ function HeldPapers(props) {
       (pile) => h(Row2, {
         key: pile.assessment_id,
         icon: "held",
-        label: shortTitle(pile.title),
+        label: shortTitle2(pile.title),
         hint: pile.title + " — " + pile.held + (pile.held === 1 ? " scanned paper is" : " scanned papers are") + " placed on nobody yet. Say who in Scans.",
         badge: String(pile.held),
         badgeHint: pile.held + " not placed on a student",

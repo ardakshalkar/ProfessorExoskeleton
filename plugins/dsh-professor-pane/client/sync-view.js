@@ -26,15 +26,109 @@ import { BASE, scoped } from "./tabs.js";
 
 const plural = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
 
-/** One line per assessment: "HW4: 12", from rows that carry a title. */
-const byAssessment = (rows) => {
-  const counts = new Map();
-  for (const entry of rows) {
-    const title = entry.title || entry.assessment_id;
-    counts.set(title, (counts.get(title) || 0) + 1);
-  }
-  return [...counts].map(([title, n]) => title + ": " + n).join(" · ");
+/** "HW2 - A grant office that answers in JSON" reads as "HW2"; a title with no short head stays whole. */
+const shortTitle = (title) => {
+  const head = String(title).split(/\s+[-–—:]\s+/)[0];
+  return head.length <= 16 ? head : String(title);
 };
+
+/** Rows grouped by assessment, in the order the course names them: HW1 before HW2, Quiz 1 before Quiz 2. */
+const byAssessment = (rows) => {
+  const groups = new Map();
+  for (const entry of rows) {
+    const title = entry.title || entry.assessment_id || (entry.kind === "roster" ? "Class list" : "Other");
+    if (!groups.has(title)) groups.set(title, []);
+    groups.get(title).push(entry);
+  }
+  return [...groups]
+    .map(([title, entries]) => ({ title, short: shortTitle(title), entries }))
+    .sort((a, b) => a.short.localeCompare(b.short, undefined, { numeric: true }));
+};
+
+/** One assessment's line in the preview: "HW2 — 22 students (5 new in Canvas, 17 replace Canvas's mark)". */
+const assessmentLine = (group, noun) => {
+  const fresh = group.entries.filter((entry) => entry.theirs === null || entry.theirs === "").length;
+  const replace = group.entries.length - fresh;
+  const split = fresh && replace ? " (" + fresh + " new in Canvas, " + replace + " replace what Canvas shows)" : replace ? " (each replaces what Canvas shows)" : "";
+  return h("li", { key: group.title, title: group.title }, h("b", null, group.short), " — " + plural(group.entries.length, noun) + split);
+};
+
+/** Why Sync all left a Canvas difference, in the professor's words; one line per kind. */
+const HELD_WHY = {
+  conflict: "changed on both sides — you choose which to keep",
+  pull: "changed in Canvas since the last sync — Sync all does not copy Canvas's changes over yours",
+  held: "with nothing ready here to send yet (not accepted, or taken back)",
+};
+
+/** How many students an assessment shows before "Show N more", as on Canvas · what differs. */
+const ROWS_AT_FIRST = 12;
+
+/** Under this many, everything Sync all left opens at once; past it, the professor opens what they want to see. */
+const OPEN_UNDER = 15;
+
+/** Who one held row is about: the student's name when names are on, the definition's field, or the class-list entry. */
+const heldWho = (entry) =>
+  entry.kind === "assignments" ? "Setting: " + String(entry.field || "").replace(/_/g, " ") : entry.name || entry.student_id || entry.theirs || "—";
+
+/** A value as the row shows it: a Canvas date in the reader's own time. */
+const heldValue = (value) => {
+  if (value === null || value === undefined || value === "") return "—";
+  const text = String(value);
+  if (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(text) && !Number.isNaN(Date.parse(text))) {
+    return new Date(text).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  }
+  return text;
+};
+
+/** One assessment's held rows: a student per line with both values and why, the first dozen and then "Show N more". */
+function HeldGroup(props) {
+  const [all, setAll] = React.useState(false);
+  const rows = all ? props.group.entries : props.group.entries.slice(0, ROWS_AT_FIRST);
+  const more = props.group.entries.length - rows.length;
+  return h(
+    "details",
+    { className: "pp-sxheld", open: props.open },
+    h("summary", { title: props.group.title }, h("b", null, props.group.short), " — " + plural(props.group.entries.length, props.noun)),
+    rows.map((entry) =>
+      h(
+        "div",
+        { className: "pp-drow", key: entry.key },
+        h(
+          "div",
+          { className: "pp-drowline" },
+          h("span", { className: "pp-drowwho" }, heldWho(entry)),
+          entry.kind === "roster" ? null : h("span", { className: "pp-dvals" }, "here " + heldValue(entry.ours) + " · Canvas " + heldValue(entry.theirs)),
+        ),
+        entry.reason ? h("span", { className: "pp-dwhy" }, entry.reason) : null,
+      ),
+    ),
+    more ? h("button", { type: "button", className: "pp-linkbtn", onClick: () => setAll(true) }, "Show " + more + " more") : null,
+  );
+}
+
+/** One reason Sync all left rows behind, opening into the assessments and the students under it. */
+function HeldKind(props) {
+  const noun = props.entries.every((entry) => entry.kind === "grades") ? "mark" : "item";
+  const groups = byAssessment(props.entries);
+  return h(
+    "details",
+    { className: "pp-sxheld", open: props.open },
+    h(
+      "summary",
+      null,
+      h("b", null, plural(props.entries.length, noun)),
+      " " + HELD_WHY[props.direction],
+      h("span", { className: "pp-as" }, " · " + groups.map((group) => group.short + " " + group.entries.length).join(", ")),
+    ),
+    h(
+      "div",
+      { className: "pp-sxheldbody" },
+      groups.map((group) =>
+        h(HeldGroup, { key: group.title, group, noun: group.entries.every((entry) => entry.student_id) ? "student" : "item", open: props.open || groups.length === 1 }),
+      ),
+    ),
+  );
+}
 
 /** Sync all's preview, split by road: Canvas's, the sheets that read, and what failed. */
 const partsOf = (preview) => {
@@ -63,12 +157,19 @@ const chooseAll = (preview) => {
   return Object.keys(keys).length ? keys : null;
 };
 
+/** "141 marks", "3 settings", or "141 marks and 3 settings". */
+const sendNoun = (send) => {
+  const marks = send.filter((entry) => entry.kind === "grades").length;
+  const fields = send.length - marks;
+  return [marks ? plural(marks, "mark") : null, fields ? plural(fields, "setting") : null].filter(Boolean).join(" and ");
+};
+
 const sendAllLabel = (preview) => {
   const parts = partsOf(preview);
   return (
     "Sync: " +
     [
-      parts.send.length ? "send " + parts.send.length + " to Canvas" : null,
+      parts.send.length ? "send " + sendNoun(parts.send) + " to Canvas" : null,
       parts.take.length || parts.absent.length ? "update the class list" : null,
       parts.moving.length ? "bring in " + plural(parts.moving.length, "sheet") : null,
     ]
@@ -84,16 +185,19 @@ function SyncAllPreview(props) {
   const marks = send.filter((entry) => entry.kind === "grades");
   const fields = send.filter((entry) => entry.kind === "assignments");
   const sheetHeld = sheets.reduce((sum, sheet) => sum + (sheet.held || 0), 0);
+  // The class-list notes are already under "Comes in"; the rest are the professor's.
+  const left = held.filter((entry) => !absent.includes(entry));
+  const leftBy = ["conflict", "pull", "held"].map((direction) => ({ direction, entries: left.filter((entry) => entry.direction === direction) }));
 
   return h(
     React.Fragment,
     null,
-    h("span", { className: "pp-as" }, "Asked " + when(preview.previewedAt) + ". Nothing has been sent or saved yet."),
+    h("span", { className: "pp-as" }, "Checked " + when(preview.previewedAt) + ". Nothing has been sent or saved yet — this is what the button below would do."),
     // What comes in: changes the run's own records; nobody outside sees it.
     h(
       "div",
       { className: "pp-sxgroup" },
-      h("b", null, "Comes in"),
+      h("div", null, h("b", null, "Into your records"), h("span", { className: "pp-as" }, " — only you see these")),
       h(
         "ul",
         null,
@@ -114,25 +218,30 @@ function SyncAllPreview(props) {
     h(
       "div",
       { className: "pp-sxgroup" + (send.length ? " pp-sxout" : "") },
-      h("b", null, "Goes out — students see it"),
+      h("div", null, h("b", null, send.length ? "To Canvas: " + sendNoun(send) : "To Canvas"), h("span", { className: "pp-as" }, " — students will see these")),
       h(
         "ul",
         null,
-        marks.length ? h("li", null, "Canvas marks: " + marks.length + " (" + byAssessment(marks) + ")") : null,
-        fields.length ? h("li", null, "Canvas definitions: " + plural(fields.length, "field") + " (" + byAssessment(fields) + ")") : null,
+        byAssessment(marks).map((group) => assessmentLine(group, "student")),
+        fields.length
+          ? h("li", null, "Assessment settings (title, due date, points…): ", byAssessment(fields).map((group) => group.short + " " + plural(group.entries.length, "field")).join(", "))
+          : null,
         !send.length ? h("li", { className: "pp-as" }, "nothing") : null,
       ),
     ),
-    held.length || sheetHeld || failed.length || canvasError
+    left.length || sheetHeld || failed.length || canvasError
       ? h(
           "div",
           { className: "pp-sxgroup" },
-          h("b", null, "Left for you"),
+          h("div", null, h("b", null, "Not included — needs your decision"), left.length ? h("span", { className: "pp-as" }, " — open a line to see whose") : null),
+          leftBy.map((kind) =>
+            kind.entries.length ? h(HeldKind, { key: kind.direction, direction: kind.direction, entries: kind.entries, open: left.length < OPEN_UNDER }) : null,
+          ),
           h(
             "ul",
             null,
-            held.length ? h("li", null, plural(held.length, "Canvas difference") + " — conflicts and what Canvas changed; settle them below") : null,
-            sheetHeld ? h("li", null, plural(sheetHeld, "sheet row") + " the sync was not sure of; confirm them below") : null,
+            left.length ? h("li", { className: "pp-as" }, "Settle each one under “Canvas · what differs” below, with Keep AINAR or Keep Canvas.") : null,
+            sheetHeld ? h("li", null, plural(sheetHeld, "grade-sheet row") + " could not be matched to a student for sure; confirm them under “Names to confirm” below") : null,
             canvasError ? h("li", { className: "pp-saveerr" }, "Canvas: " + canvasError) : null,
             failed.map((sheet) =>
               h("li", { key: sheet.id, className: "pp-saveerr" }, "Grade sheet " + sheet.id + ": " + sheet.error),
@@ -144,7 +253,7 @@ function SyncAllPreview(props) {
       ? h(
           "p",
           { className: "pp-as" },
-          "Not in Sync all: " + preview.elsewhere.map((road) => road.why).filter((why, i, all) => all.indexOf(why) === i).join(" "),
+          "Sync all does not do these: " + preview.elsewhere.map((road) => road.why).filter((why, i, all) => all.indexOf(why) === i).join(" "),
         )
       : null,
   );

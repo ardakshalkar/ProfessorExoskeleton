@@ -1328,6 +1328,11 @@ i.pp-cg-cell{cursor:default;flex:none}
   border:1px solid var(--dsw-alias-border-l2,#e3e3e6);background:var(--dsw-alias-bg-l1,#fff)}
 .pp-sxgroup ul{margin:0;padding-left:18px}
 .pp-sxout{border-color:rgba(180,52,42,.35);background:rgba(180,52,42,.04)}
+.pp-sxheld>summary{cursor:pointer;padding:2px 0}
+.pp-sxheldbody{display:flex;flex-direction:column;gap:2px;padding-left:16px}
+.pp-sxheld .pp-sxheld>summary{font-size:11.5px}
+.pp-sxheld .pp-drow{margin-left:14px}
+.pp-sxheld>.pp-linkbtn{margin:2px 0 4px 14px}
 .pp-waitwhy{flex:1 1 160px;min-width:0}
 .pp-syncsection .pp-waitlist{gap:0}
 .pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}
