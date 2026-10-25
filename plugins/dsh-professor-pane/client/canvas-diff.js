@@ -81,7 +81,7 @@ const grouped = (rows) => {
 const ROWS_AT_FIRST = 12;
 
 /** One difference: the two values, which side moved, and — when it is the professor's — the two choices. */
-function DiffRow(props) {
+export function DiffRow(props) {
   const entry = props.entry;
   const [phase, setPhase] = React.useState("idle");
   const [preview, setPreview] = React.useState(null);
@@ -202,7 +202,10 @@ const canvasPreview = (answer) => {
 const chooseCanvas = (answer) => {
   const preview = canvasPreview(answer);
   if (!preview || (!preview.send.length && !preview.take.length && !(preview.absent || []).length)) return null;
-  return { canvas: preview.send.concat(preview.take).map((entry) => entry.key) };
+  const keys = preview.send.concat(preview.take).map((entry) => entry.key);
+  // The note on students Canvas no longer lists goes by a key of its own (server/canvas-sync.js).
+  if ((preview.absent || []).length && preview.absentKey) keys.push(preview.absentKey);
+  return { canvas: keys };
 };
 
 const canvasSendLabel = (answer) => {
@@ -436,6 +439,7 @@ export function CanvasDifferences(props) {
           sessionId: props.sessionId,
           names: props.names,
           roads: ["canvas"],
+          fresh: true,
           label: "Sync all…",
           asking: "Asking Canvas…",
           title: "Ask Canvas again and show what Sync all would send and bring in. Nothing is sent until you press Send.",

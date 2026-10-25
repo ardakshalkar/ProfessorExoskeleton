@@ -22,7 +22,7 @@
  *   send(ctx, snapshot, keys)  `{ results: [{ kind, ok, command, output }],
  *                              after? }`, or `{ error }`.
  *
- * `ctx` is `{ workspace, root, runId, names, from }`. Every write still spawns
+ * `ctx` is `{ workspace, root, runId, names, fresh, from }`. Every write still spawns
  * `ainar`, for `runPublish`'s reason; a road only says which commands, from
  * which snapshot.
  *
@@ -32,9 +32,10 @@
  *   send recalls it, so it sends what the professor read and not what a
  *   background check found since.
  * * Only the previewed keys. A key the preview did not offer is dropped.
- * * Fifteen minutes, one send. An older preview, or none (a reload of
- *   server/ empties it), answers `again: true`, and the pane offers Preview
- *   again.
+ * * Fifteen minutes, each key once. A preview may be sent from in parts (one
+ *   homework, then the next); a key already sent, an older preview, or none
+ *   (a reload of server/ empties it) answers `again: true`, and the pane
+ *   offers Check again.
  * * A road that writes only into the run (`live: false`) may be run in one
  *   press (`direct`): it is planned and sent at once, as Run always was.
  *
@@ -51,7 +52,7 @@
 import { syncsOf } from "@ainar/core/src/sync/registry.ts";
 
 import { canvasRoad } from "./canvas-sync.js";
-import { recall, remember } from "./previews.js";
+import { recall, remember, spend } from "./previews.js";
 import { isMarksSheet, sheetRoad } from "./syncs.js";
 import { loadedRun } from "./workspace.js";
 
@@ -84,6 +85,8 @@ const contextOf = (workspace, root, runId, body, road) => ({
   root,
   runId,
   names: body.names === true,
+  // Ask the far side again rather than use a check made a moment ago.
+  fresh: body.fresh === true,
   from: body.from && typeof body.from === "object" ? body.from[road.id] : body.from,
 });
 
@@ -162,8 +165,15 @@ export const sendOn = async ({ roads }, workspace, root, runId, body) => {
         }
       }
     }
+    const direct = body.direct === true && !road.live;
     const keys = (Array.isArray(chosen[road.id]) ? chosen[road.id] : []).map(String).filter((key) => last.keys.includes(key));
-    const sent = await road.send(ctx, last.snapshot, body.direct === true && !road.live ? last.keys : keys).catch((error) => ({ error: failure(error) }));
+    if (!direct && !keys.length) {
+      refused(road, "Those were sent already from this check. Check again.", true);
+      continue;
+    }
+    const sent = await road.send(ctx, last.snapshot, direct ? last.keys : keys).catch((error) => ({ error: failure(error) }));
+    // Each key goes once; what was not chosen can still go from the same check.
+    if (!direct) spend(runId, road.id, keys);
     if (sent.error) refused(road, sent.error);
     else for (const entry of sent.results) results.push(Object.assign({ road: road.id }, entry));
     if (sent.after) after[road.id] = sent.after;

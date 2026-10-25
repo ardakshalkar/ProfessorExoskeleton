@@ -21,7 +21,7 @@
 import { syncAllPlan, tallyDifferences } from "@ainar/core/src/lms/canvas-diff.ts";
 
 import { amendCanvasCheck, canvasCheckState, lastCanvasCheck, runCanvasCheck, runScans } from "./actions.js";
-import { recall, remember } from "./previews.js";
+import { PREVIEW_MS, forget, recall, remember } from "./previews.js";
 import { rosterPeople } from "./workspace.js";
 
 const named = (differences, names) => {
@@ -71,19 +71,37 @@ const previewOf = (value, names) => {
   };
 };
 
+/**
+ * The key that brings the class list in without naming a newcomer: the
+ * students Canvas no longer lists, noted on their enrollment (nobody is
+ * dropped). Offered when there are any; sent with the class list.
+ */
+export const ABSENT_KEY = "class-list|absent";
+
+/** How old a check may be and still be shown rather than asked again; a Send's own limit (server/previews.js). */
+const REUSE_MS = PREVIEW_MS;
+
 /** Canvas as a road: marks and definitions out, the class list in. */
 export const canvasRoad = {
   id: "canvas",
   service: "canvas",
   label: "Canvas",
   live: true,
-  /** A fresh check; the preview is what Sync all would apply of its differences. */
-  async plan({ root, runId, names }) {
-    const state = await runCanvasCheck(root, runId);
+  /**
+   * The preview is what Sync all would apply of the check's differences. The
+   * check is the one made in the last fifteen minutes — after a send, the
+   * send's own — unless `fresh` asks Canvas again.
+   */
+  async plan({ root, runId, names, fresh }) {
+    const recent = lastCanvasCheck(runId);
+    const reuse = !fresh && recent && !recent.running && Array.isArray(recent.value.differences) && Date.now() - Date.parse(recent.at) < REUSE_MS;
+    const state = reuse ? { at: recent.at, value: recent.value } : await runCanvasCheck(root, runId);
     if (!state.value) return { error: state.error || "Canvas gave no answer." };
     if (!Array.isArray(state.value.differences)) return { error: "This check has no differences in it; restart the harness so it runs the new `lms check`." };
-    const preview = Object.assign({ checkedAt: state.at }, previewOf(state.value, names));
-    return { preview, keys: preview.send.concat(preview.take).map((entry) => entry.key), snapshot: state.value };
+    const preview = Object.assign({ checkedAt: state.at, absentKey: ABSENT_KEY }, previewOf(state.value, names));
+    const keys = preview.send.concat(preview.take).map((entry) => entry.key);
+    if (preview.absent.length) keys.push(ABSENT_KEY);
+    return { preview, keys, snapshot: state.value };
   },
   send: (ctx, value, keys) => sendCanvas(ctx, value, keys),
 };
@@ -91,10 +109,11 @@ export const canvasRoad = {
 /** The previewed rows named in `keys`, sent; then Canvas asked again. */
 const sendCanvas = async ({ root, runId }, value, keys) => {
   const wanted = new Set(keys);
-  // Students Canvas no longer lists are noted whatever was chosen: the note
-  // drops nobody, so it needs no choosing.
-  const absent = syncAllPlan(value.differences).absent;
-  if (!wanted.size && !absent.length) return { error: "Nothing was chosen to send." };
+  // Students Canvas no longer lists are noted when the class list is brought
+  // in — its newcomers, or the key for the note alone — and not with a
+  // homework's marks.
+  const absent = wanted.has(ABSENT_KEY) ? syncAllPlan(value.differences).absent : [];
+  if (!wanted.size) return { error: "Nothing was chosen to send." };
   const plan = syncAllPlan(value.differences.filter((entry) => wanted.has(entry.key)));
 
   const results = [];
@@ -148,6 +167,7 @@ export const canvasResolve = async (root, runId, body) => {
   if (body.keep === "ainar" && body.confirm === true) {
     const got = recall(runId, "canvas-row:" + key);
     if (got.again) return { error: got.again, again: true };
+    forget(runId, "canvas-row:" + key);
     const entry = got.last.snapshot;
     const args =
       entry.kind === "grades"

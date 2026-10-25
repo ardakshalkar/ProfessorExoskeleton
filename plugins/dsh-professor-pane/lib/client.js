@@ -1369,7 +1369,19 @@ i.pp-cg-cell{cursor:default;flex:none}
 .pp-sxheld .pp-drow{margin-left:14px}
 .pp-sxheld>.pp-linkbtn{margin:2px 0 4px 14px}
 .pp-sxheld>summary .pp-sxsendone{margin-left:8px;padding:1px 8px;font-size:11px;vertical-align:baseline}
-.pp-sxsent{margin:0;padding:6px 10px;border-radius:9px;background:rgba(46,140,80,.1);color:#25693f;font-size:12px}
+.pp-sxhead{display:flex;align-items:center;gap:8px}
+.pp-sxcheck{font-weight:600}
+.pp-sxcheck .pp-as{font-weight:400}
+.pp-sxtitle{margin-bottom:4px}
+.pp-sxgroupline{display:flex;flex-direction:column}
+.pp-sxconfirm{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 6px 14px;padding:6px 8px;border-radius:8px;
+  background:rgba(180,52,42,.06);border:1px solid rgba(180,52,42,.25)}
+.pp-sxconfirm>span{flex:1 1 200px}
+.pp-sxfoot{margin-top:8px}
+.pp-sxsent,.pp-sxfailed{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding:6px 10px;border-radius:9px;font-size:12px}
+.pp-sxsent{background:rgba(46,140,80,.1);color:#25693f}
+.pp-sxfailed{background:rgba(180,52,42,.08);color:#8f2a22}
+.pp-sxsent .pp-linkbtn,.pp-sxfailed .pp-linkbtn{align-self:flex-start}
 .pp-waitwhy{flex:1 1 160px;min-width:0}
 .pp-syncsection .pp-waitlist{gap:0}
 .pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}
@@ -4612,26 +4624,13 @@ function RoadResults(props) {
 }
 function RoadFlow(props) {
   const road = useRoad(props);
-  const [part, setPart] = React.useState(null);
   const asking = road.phase === "asking";
   const sending = road.phase === "sending";
-  const reask = () => road.ask().then((body2) => {
+  const ask = () => road.ask(props.fresh ? { fresh: true } : void 0).then((body2) => {
     if (props.onPreviewed) props.onPreviewed(body2);
   });
-  const ask = () => {
-    setPart(null);
-    return reask();
-  };
   const send2 = (keys2) => road.send(keys2).then((body2) => {
-    setPart(null);
     if (props.onSent) props.onSent(body2);
-  });
-  const sendPart = (keys2, label) => road.send(keys2).then((body2) => {
-    const went = !body2.error && !body2.again && !(body2.results || []).some((entry) => !entry.ok);
-    setPart(went ? label : null);
-    const again = went ? reask() : null;
-    if (props.onSent) props.onSent(body2);
-    return again;
   });
   const button = h(
     "button",
@@ -4649,13 +4648,12 @@ function RoadFlow(props) {
   const body = preview ? preview.error ? h("p", { className: "pp-saveerr" }, preview.error) : h(
     "div",
     { className: props.className || "pp-syncallx" },
-    part ? h("p", { className: "pp-sxsent" }, "✓ Sent " + part + ". What is left is below, checked again.") : null,
-    props.describe(preview, { sendPart, busy: road.phase !== "idle" }),
+    props.describe(preview),
     h(
       "div",
       { className: "pp-dacts" },
       keys ? h("button", { type: "button", className: "pp-segbtn pp-danger", disabled: sending, onClick: () => send2(keys) }, sending ? "Syncing…" : props.sendLabel(preview)) : h("span", { className: "pp-as" }, props.nothing || "Nothing to send."),
-      h("button", { type: "button", className: "pp-segbtn", disabled: sending, onClick: () => (setPart(null), road.close()) }, keys ? "Cancel" : "Close")
+      h("button", { type: "button", className: "pp-segbtn", disabled: sending, onClick: road.close }, keys ? "Cancel" : "Close")
     )
   ) : road.results ? h(RoadResults, { results: road.results, className: props.className, busy: asking, onAgain: ask, onClose: road.close }) : null;
   return props.frame ? props.frame(button, body) : h(React.Fragment, null, button, body);
@@ -5424,7 +5422,9 @@ var canvasPreview = (answer) => {
 var chooseCanvas = (answer) => {
   const preview = canvasPreview(answer);
   if (!preview || !preview.send.length && !preview.take.length && !(preview.absent || []).length) return null;
-  return { canvas: preview.send.concat(preview.take).map((entry) => entry.key) };
+  const keys = preview.send.concat(preview.take).map((entry) => entry.key);
+  if ((preview.absent || []).length && preview.absentKey) keys.push(preview.absentKey);
+  return { canvas: keys };
 };
 var canvasSendLabel = (answer) => {
   const preview = canvasPreview(answer);
@@ -5605,6 +5605,7 @@ function CanvasDifferences(props) {
       sessionId: props.sessionId,
       names: props.names,
       roads: ["canvas"],
+      fresh: true,
       label: "Sync all…",
       asking: "Asking Canvas…",
       title: "Ask Canvas again and show what Sync all would send and bring in. Nothing is sent until you press Send.",
@@ -6391,40 +6392,6 @@ function useUnpublished(runId, sessionId, revision) {
   }, [runId, sessionId, revision]);
   return state;
 }
-var editedIn = (check) => {
-  const found = /* @__PURE__ */ new Map();
-  for (const entry of check && check.value && check.value.value && check.value.value.assessments || []) {
-    const edited = [];
-    for (const cell of entry.groups || []) for (const row of cell.edited || []) edited.push(Object.assign({ group: cell.group }, row));
-    found.set(entry.assessment_id, edited);
-  }
-  return found;
-};
-var unplacedIn = (check) => {
-  const found = /* @__PURE__ */ new Map();
-  for (const entry of check && check.value && check.value.value && check.value.value.assessments || []) {
-    found.set(entry.assessment_id, (entry.groups || []).reduce((n, cell) => n + ((cell.counts || {}).unmatched || 0), 0));
-  }
-  return found;
-};
-var markState = (entry, unplaced = 0) => {
-  const c = entry.canvas;
-  const marking = entry.submitted === 0 && entry.graded === 0 ? "nothing handed in" : entry.graded + " of " + entry.submitted + " graded" + (entry.partial ? " · " + entry.partial + " part-graded" : "");
-  const stuck = Math.min(unplaced, c.unsent);
-  const unsent = c.unsent - stuck;
-  let canvas = null;
-  if (c.ready > 0) {
-    canvas = unsent === 0 && c.changed === 0 ? (stuck ? c.ready - stuck + " of " + c.ready : "all " + c.ready) + " in Canvas" : [unsent ? unsent + " not in Canvas" : null, c.changed ? c.changed + " changed since sent" : null].filter(Boolean).join(" · ");
-  }
-  return {
-    marking,
-    canvas,
-    behind: unsent > 0 || c.changed > 0,
-    waiting: unsent + c.changed,
-    stuck: stuck ? stuck + " not in the Canvas course" : null
-  };
-};
-var dueOrder = (a, b) => String(a.due_at || "9999").localeCompare(String(b.due_at || "9999"));
 var titleParts = (title) => {
   const match = /^(\S{1,8}(?: \d{1,3})?)\s+[-–—:]\s+(.+)$/.exec(String(title || ""));
   return match ? { tag: match[1], rest: match[2] } : { tag: null, rest: String(title || "") };
@@ -6438,133 +6405,6 @@ var TitleWithTag = (props) => {
     h("span", { className: "pp-titletext" }, parts.rest)
   );
 };
-function MarksForCanvas(props) {
-  const state = useUnpublished(props.runId, props.sessionId, props.revision);
-  const [check, recheck] = useCanvasCheck(props.runId, props.sessionId);
-  const [open2, setOpen] = React.useState(null);
-  if (state.phase === "loading" || !state.value) return null;
-  if (state.value.error) return h(Message, { error: true }, state.value.error);
-  const edited = editedIn(check);
-  const unplaced = unplacedIn(check);
-  const handed = state.value.assessments.filter((entry) => entry.submitted > 0 || entry.graded > 0);
-  const said = new Map(handed.map((entry) => [entry.id, markState(entry, unplaced.get(entry.id) || 0)]));
-  const rows = handed.sort((a, b) => (said.get(b.id).behind ? 1 : 0) - (said.get(a.id).behind ? 1 : 0) || dueOrder(a, b));
-  if (!rows.length) return h("p", { className: "pp-as" }, "Nothing handed in yet, so no marks for Canvas.");
-  const waiting2 = rows.reduce((n, entry) => n + said.get(entry.id).waiting, 0);
-  const answer = check.value || {};
-  const checking = check.phase === "running" || check.phase === "loading";
-  const unreachable = !checking && (answer.error || answer.state === "ready" && !answer.value);
-  return h(
-    "div",
-    { className: "pp-bookstatus" + (open2 ? " pp-bookstatus-open" : "") },
-    h(
-      "div",
-      { className: "pp-cardhead" },
-      h(
-        "span",
-        { className: waiting2 ? "pp-chip pp-chip-warn" : "pp-chip pp-chip-ok" },
-        waiting2 ? waiting2 + " marks waiting for Canvas" : "Canvas has every mark"
-      ),
-      // Where the Canvas figures come from: a check under way, the last one,
-      // or this machine's record because Canvas could not be reached.
-      h(
-        "span",
-        { className: "pp-checkstate" + (unreachable ? " pp-checkstate-off" : ""), title: unreachable ? String(answer.error || "") : "" },
-        checking ? h("span", { className: "pp-checkspin", "aria-hidden": "true" }) : null,
-        checking ? "Checking Canvas…" : unreachable ? "Couldn't reach Canvas — this machine's record" : answer.at ? "Checked Canvas " + when(answer.at) : ""
-      ),
-      h(
-        "button",
-        {
-          type: "button",
-          className: "pp-segbtn pp-iconbtn",
-          disabled: checking,
-          "aria-busy": checking ? "true" : void 0,
-          "aria-label": "Check Canvas again",
-          title: "Check Canvas again",
-          onClick: recheck
-        },
-        checking ? "" : "↻"
-      )
-    ),
-    rows.map((entry) => {
-      const state2 = said.get(entry.id);
-      const of = Math.max(entry.submitted, entry.graded, 1);
-      const done = Math.min(100, 100 * entry.graded / of);
-      const part = Math.min(100 - done, 100 * (entry.partial || 0) / of);
-      return h(
-        React.Fragment,
-        { key: entry.id },
-        h(
-          "div",
-          { className: "pp-bookrow" + (open2 === entry.id ? " pp-bookrow-open" : "") },
-          h(TitleWithTag, { title: entry.title }),
-          h(
-            "span",
-            { className: "pp-bookprogress", title: state2.marking },
-            h(
-              "span",
-              { className: "pp-bar", "aria-hidden": "true" },
-              h("i", { className: "pp-bar-done", style: { width: done + "%" } }),
-              part ? h("i", { className: "pp-bar-part", style: { width: part + "%" } }) : null
-            ),
-            h("span", { className: "pp-booknum" }, entry.submitted === 0 && entry.graded === 0 ? "—" : entry.graded + "/" + entry.submitted)
-          ),
-          h(
-            "span",
-            { className: "pp-bookcanvas" },
-            state2.canvas ? h("span", { className: "pp-chip " + (state2.behind ? "pp-chip-warn" : "pp-chip-ok") }, state2.canvas) : null,
-            // Marks with nowhere to go yet: no Canvas assignment bound for them.
-            state2.behind && entry.binding && (entry.binding.state === "none" || entry.binding.state === "some") ? h(
-              "span",
-              { className: "pp-chip pp-chip-warn", title: "Send… offers to link one already in Canvas, or to create it." },
-              entry.binding.state === "none" ? "no Canvas assignment yet" : "no Canvas assignment in " + entry.binding.missing.join(", ")
-            ) : null,
-            // Nowhere to send these: the student is not in the Canvas course.
-            state2.stuck ? h(
-              "span",
-              {
-                className: "pp-chip",
-                title: "These students are not enrolled in the Canvas course, so their marks have nowhere to go. Add them in Canvas, then check again."
-              },
-              state2.stuck
-            ) : null,
-            // Someone changed these in Canvas itself; the check reports them and
-            // never adopts them. The preview under Send… shows whose.
-            (edited.get(entry.id) || []).length ? h(
-              "span",
-              {
-                className: "pp-chip pp-chip-live",
-                title: "Changed in Canvas, not here. Open Send… to see whose; a send would leave them alone."
-              },
-              edited.get(entry.id).length + " changed in Canvas"
-            ) : null,
-            state2.behind || open2 === entry.id ? h(
-              "button",
-              { type: "button", className: "pp-segbtn pp-sendbtn", "aria-expanded": open2 === entry.id, onClick: () => setOpen(open2 === entry.id ? null : entry.id) },
-              open2 === entry.id ? "Close" : "Send…"
-            ) : null
-          )
-        ),
-        open2 === entry.id ? h(
-          "div",
-          { className: "pp-bookdrawer" },
-          h(CanvasMarks, {
-            runId: props.runId,
-            sessionId: props.sessionId,
-            assessmentId: entry.id,
-            title: entry.title,
-            ask: props.ask,
-            names: props.names,
-            canvas: entry.canvas,
-            autoPreview: true,
-            onSent: props.onWrite
-          })
-        ) : null
-      );
-    })
-  );
-}
 function useMarksActivity(runId, sessionId, revision, names) {
   const [state, setState] = React.useState({ phase: "loading", value: null });
   React.useEffect(() => {
@@ -12942,9 +12782,14 @@ var sendSplit = (entries) => {
   const replace = entries.length - fresh;
   return fresh && replace ? " (" + fresh + " new in Canvas, " + replace + " replace what Canvas shows)" : replace ? " (each replaces what Canvas shows)" : "";
 };
+var sendNoun = (send2) => {
+  const marks = send2.filter((entry) => entry.kind === "grades").length;
+  const fields = send2.length - marks;
+  return [marks ? plural7(marks, "mark") : null, fields ? plural7(fields, "setting") : null].filter(Boolean).join(" and ");
+};
 var HELD_WHY = {
   conflict: "changed on both sides — you choose which to keep",
-  pull: "changed in Canvas since the last sync — Sync all does not copy Canvas's changes over yours",
+  pull: "changed in Canvas since the last sync — a send never copies Canvas's changes over yours",
   held: "with nothing ready here to send yet (not accepted, or taken back)",
   unplaced: "on the class list, not matched between here and Canvas"
 };
@@ -12952,8 +12797,8 @@ var heldKind = (entry) => entry.kind === "roster" && entry.direction === "held" 
 var rowNoun = (entries) => entries.every((entry) => entry.kind === "grades") ? ["mark"] : entries.every((entry) => entry.kind === "roster") ? ["person", "people"] : ["item"];
 var ROWS_AT_FIRST3 = 12;
 var OPEN_UNDER = 15;
-var heldWho = (entry) => entry.kind === "assignments" ? "Setting: " + String(entry.field || "").replace(/_/g, " ") : entry.name || entry.student_id || entry.theirs || "—";
-var heldValue = (value) => {
+var rowWho = (entry) => entry.kind === "assignments" ? "Setting: " + String(entry.field || "").replace(/_/g, " ") : entry.name || entry.student_id || entry.theirs || "—";
+var valueText2 = (value) => {
   if (value === null || value === void 0 || value === "") return "—";
   const text = String(value);
   if (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(text) && !Number.isNaN(Date.parse(text))) {
@@ -12961,8 +12806,23 @@ var heldValue = (value) => {
   }
   return text;
 };
-var sentValues = (entry) => "Canvas " + (entry.theirs === null || entry.theirs === "" ? "empty" : heldValue(entry.theirs)) + " → " + heldValue(entry.ours);
-var heldValues = (entry) => entry.kind === "roster" ? null : "here " + heldValue(entry.ours) + " · Canvas " + heldValue(entry.theirs);
+var SendRow = (props) => h(
+  "div",
+  { className: "pp-drow" },
+  h(
+    "div",
+    { className: "pp-drowline" },
+    h("span", { className: "pp-drowwho" }, rowWho(props.entry)),
+    h("span", { className: "pp-dvals" }, "Canvas " + (props.entry.theirs === null || props.entry.theirs === "" ? "empty" : valueText2(props.entry.theirs)) + " → " + valueText2(props.entry.ours))
+  ),
+  props.entry.reason ? h("span", { className: "pp-dwhy" }, props.entry.reason) : null
+);
+var PersonRow = (props) => h(
+  "div",
+  { className: "pp-drow" },
+  h("div", { className: "pp-drowline" }, h("span", { className: "pp-drowwho" }, rowWho(props.entry))),
+  props.entry.reason ? h("span", { className: "pp-dwhy" }, props.entry.reason) : null
+);
 function RowGroup(props) {
   const [all, setAll] = React.useState(false);
   const entries = props.group.entries;
@@ -12970,25 +12830,65 @@ function RowGroup(props) {
   const more = entries.length - rows.length;
   const noun = entries.every((entry) => entry.kind !== "assignments" && entry.student_id) ? ["student"] : rowNoun(entries);
   return h(
-    "details",
-    { className: "pp-sxheld", open: props.open },
+    "div",
+    { className: "pp-sxgroupline" },
     h(
-      "summary",
-      { title: props.group.title },
-      h("b", null, props.group.short),
-      " — " + plural7(entries.length, noun[0], noun[1]) + (props.extra || ""),
-      props.action || null
+      "details",
+      { className: "pp-sxheld", open: props.open },
+      h(
+        "summary",
+        { title: props.group.title },
+        h("b", null, props.group.short),
+        " — " + plural7(entries.length, noun[0], noun[1]) + (props.extra || ""),
+        props.action || null
+      ),
+      rows.map((entry) => h(React.Fragment, { key: entry.key }, props.row(entry))),
+      more ? h("button", { type: "button", className: "pp-linkbtn", onClick: () => setAll(true) }, "Show " + more + " more") : null
     ),
-    rows.map((entry) => {
-      const values = props.values(entry);
-      return h(
-        "div",
-        { className: "pp-drow", key: entry.key },
-        h("div", { className: "pp-drowline" }, h("span", { className: "pp-drowwho" }, heldWho(entry)), values ? h("span", { className: "pp-dvals" }, values) : null),
-        entry.reason ? h("span", { className: "pp-dwhy" }, entry.reason) : null
-      );
-    }),
-    more ? h("button", { type: "button", className: "pp-linkbtn", onClick: () => setAll(true) }, "Show " + more + " more") : null
+    props.under || null
+  );
+}
+function SendConfirm(props) {
+  const open2 = props.open;
+  if (!open2) {
+    return h(
+      "button",
+      {
+        type: "button",
+        className: "pp-segbtn " + (props.primary ? "pp-danger" : "pp-sxsendone"),
+        disabled: props.busy,
+        onClick: (event) => {
+          event.preventDefault();
+          props.onOpen();
+        }
+      },
+      props.label
+    );
+  }
+  return null;
+}
+var ConfirmBar = (props) => h(
+  "div",
+  { className: "pp-sxconfirm" },
+  h("span", null, props.what),
+  h(
+    "button",
+    { type: "button", className: "pp-segbtn pp-danger", disabled: props.busy, onClick: props.onSend },
+    props.busy ? "Sending…" : props.go
+  ),
+  h("button", { type: "button", className: "pp-segbtn", disabled: props.busy, onClick: props.onCancel }, "Cancel")
+);
+function SendOutcome(props) {
+  const body = props.body;
+  const results = body.results || [];
+  const failed = body.error || results.some((entry) => !entry.ok);
+  const lines = body.error ? [body.error] : results.map((entry) => (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + (entry.output ? "\n" + entry.output : ""));
+  return h(
+    "div",
+    { className: failed ? "pp-sxfailed" : "pp-sxsent" },
+    h("span", null, failed ? "Not everything went: " + (body.again ? "the check is gone or old — Check again, then send." : "see below.") : "✓ Sent " + props.label + "."),
+    lines.length ? h("details", { open: failed }, h("summary", null, "What ran"), h("pre", { className: "pp-approveout" + (failed ? " pp-approveerr" : "") }, lines.join("\n\n"))) : null,
+    h("button", { type: "button", className: "pp-linkbtn", onClick: props.onClose }, "Dismiss")
   );
 }
 function HeldKind(props) {
@@ -13007,136 +12907,240 @@ function HeldKind(props) {
     h(
       "div",
       { className: "pp-sxheldbody" },
-      groups.map((group) => h(RowGroup, { key: group.title, group, values: heldValues, open: props.open || groups.length === 1 }))
+      groups.map((group) => h(RowGroup, { key: group.title, group, row: props.row, open: props.open || groups.length === 1 }))
     )
   );
 }
-var sendNowButton = (group, tools) => tools && tools.sendPart ? h(
-  "button",
-  {
-    type: "button",
-    className: "pp-segbtn pp-danger pp-sxsendone",
-    disabled: tools.busy,
-    title: "Send " + group.title + " to Canvas now, without the rest. Students will see it.",
-    onClick: (event) => {
-      event.preventDefault();
-      tools.sendPart({ canvas: group.entries.map((entry) => entry.key) }, group.short + " (" + plural7(group.entries.length, "mark") + ")");
-    }
-  },
-  "Send now"
-) : null;
-var partsOf = (preview) => {
-  const canvasRoad = roadIn(preview, "canvas");
-  const canvas = canvasRoad && canvasRoad.ok ? canvasRoad.preview : null;
-  const sheetRoads = preview.roads.filter((road) => road.service === "sheets");
-  const sheets = sheetRoads.filter((road) => road.ok).map((road) => Object.assign({ id: road.id }, road.preview));
-  return {
-    canvasError: canvasRoad && !canvasRoad.ok ? canvasRoad.error : null,
-    send: canvas ? canvas.send : [],
-    take: canvas ? canvas.take : [],
-    absent: canvas ? canvas.absent || [] : [],
-    held: canvas ? canvas.held : [],
-    sheets,
-    moving: sheets.filter((sheet2) => sheet2.moves > 0),
-    failed: sheetRoads.filter((road) => !road.ok)
+function useCanvasPlan(props, check) {
+  const [plan, setPlan] = React.useState(null);
+  const [asking, setAsking] = React.useState(false);
+  const [sending, setSending] = React.useState(false);
+  const live = React.useRef(true);
+  React.useEffect(() => () => live.current = false, []);
+  const ask = React.useCallback(() => {
+    if (!props.enabled) return Promise.resolve(null);
+    setAsking(true);
+    return postRoads(props.runId, props.sessionId, { confirm: false, roads: ["canvas"], names: Boolean(props.names) }).then((body) => {
+      if (!live.current) return null;
+      setAsking(false);
+      setPlan(body);
+      return body;
+    });
+  }, [props.runId, props.sessionId, props.names, props.enabled]);
+  const landed = check.value && check.value.at;
+  React.useEffect(() => {
+    ask();
+  }, [ask, landed]);
+  const send2 = (keys) => {
+    setSending(true);
+    return postRoads(props.runId, props.sessionId, { confirm: true, keys: { canvas: keys }, names: Boolean(props.names) }).then((body) => {
+      if (!live.current) return body;
+      setSending(false);
+      if (body.after && body.after.canvas) noteCanvasCheck(props.runId, body.after.canvas, props.sessionId);
+      else ask();
+      return body;
+    });
   };
-};
-var chooseAll = (preview) => {
-  const parts = partsOf(preview);
-  const keys = {};
-  if (parts.send.length || parts.take.length || parts.absent.length) keys.canvas = parts.send.concat(parts.take).map((entry) => entry.key);
-  for (const sheet2 of parts.moving) keys[sheet2.id] = [sheet2.id];
-  return Object.keys(keys).length ? keys : null;
-};
-var sendNoun = (send2) => {
-  const marks = send2.filter((entry) => entry.kind === "grades").length;
-  const fields = send2.length - marks;
-  return [marks ? plural7(marks, "mark") : null, fields ? plural7(fields, "setting") : null].filter(Boolean).join(" and ");
-};
-var sendAllLabel = (preview) => {
-  const parts = partsOf(preview);
-  return "Sync: " + [
-    parts.send.length ? "send " + sendNoun(parts.send) + " to Canvas" : null,
-    parts.take.length || parts.absent.length ? "update the class list" : null,
-    parts.moving.length ? "bring in " + plural7(parts.moving.length, "sheet") : null
-  ].filter(Boolean).join(", ");
-};
-function SyncAllPreview(props) {
-  const preview = props.preview;
-  const { send: send2, take, absent, held, sheets, failed, canvasError } = partsOf(preview);
-  const sheetHeld = sheets.reduce((sum, sheet2) => sum + (sheet2.held || 0), 0);
-  const left = held.filter((entry) => !absent.includes(entry));
+  return { plan, asking, sending, ask, send: send2 };
+}
+function CanvasPart(props) {
+  const [check, recheck] = useCanvasCheck(props.runId, props.sessionId);
+  const flow = useCanvasPlan({ runId: props.runId, sessionId: props.sessionId, names: props.names, enabled: true }, check);
+  const [confirming, setConfirming] = React.useState(null);
+  const [outcome, setOutcome] = React.useState(null);
+  const unpublished = useUnpublished(props.runId, props.sessionId, props.marksRevision);
+  const [linking, setLinking] = React.useState(null);
+  const road = roadIn(flow.plan, "canvas");
+  const preview = road && road.ok ? road.preview : null;
+  const checking = check.phase === "running" || flow.asking && !preview;
+  const busy = flow.sending || checking;
+  const sendNow = (keys, label, tags) => {
+    setConfirming(null);
+    flow.send(keys).then((body) => {
+      setOutcome({ body, label });
+      props.onWrite(tags);
+    });
+  };
+  const send2 = preview ? preview.send : [];
+  const take = preview ? preview.take : [];
+  const absent = preview ? preview.absent || [] : [];
+  const left = preview ? preview.held.filter((entry) => !absent.some((gone) => gone.key === entry.key)) : [];
   const leftBy = ["conflict", "pull", "held", "unplaced"].map((kind) => ({ kind, entries: left.filter((entry) => heldKind(entry) === kind) }));
   const sendGroups = byAssessment(send2);
+  const unlinked = unpublished.value && Array.isArray(unpublished.value.assessments) ? unpublished.value.assessments.filter(
+    (entry) => entry.binding && (entry.binding.state === "none" || entry.binding.state === "some") && entry.canvas && entry.canvas.ready > 0
+  ) : [];
+  const head = h(
+    "div",
+    { className: "pp-sxhead" },
+    h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"),
+    h(
+      "span",
+      { className: "pp-sxcheck" },
+      checking ? "Checking Canvas…" : preview ? "Canvas checked " + when(preview.checkedAt) : road && !road.ok ? "Canvas could not be checked" : "Canvas not checked yet",
+      preview ? h("span", { className: "pp-as" }, " · nothing is sent until you press Send") : null
+    ),
+    h("span", { className: "pp-segspacer" }),
+    h("button", { type: "button", className: "pp-segbtn", disabled: busy, onClick: recheck }, checking ? "Checking…" : "Check again")
+  );
+  if (!preview) {
+    return h(
+      React.Fragment,
+      null,
+      h("section", { className: "pp-ccard" }, head, road && !road.ok ? h("p", { className: "pp-saveerr" }, road.error) : flow.plan && flow.plan.error ? h("p", { className: "pp-saveerr" }, flow.plan.error) : null)
+    );
+  }
+  const confirmFor = (id, keys, what, go, label, tags) => confirming === id ? h(ConfirmBar, { what, go, busy: flow.sending, onCancel: () => setConfirming(null), onSend: () => sendNow(keys, label, tags) }) : null;
   return h(
     React.Fragment,
     null,
-    h("span", { className: "pp-as" }, "Checked " + when(preview.previewedAt) + ". Nothing has been sent or saved yet — this is what the button below would do."),
-    // What comes in: changes the run's own records; nobody outside sees it.
+    h("section", { className: "pp-ccard pp-sxtop" }, head, outcome ? h(SendOutcome, { body: outcome.body, label: outcome.label, onClose: () => setOutcome(null) }) : null),
+    // To Canvas: students see these.
     h(
-      "div",
-      { className: "pp-sxgroup" },
-      h("div", null, h("b", null, "Into your records"), h("span", { className: "pp-as" }, " — only you see these")),
-      h(
-        "ul",
-        null,
-        take.length ? h("li", null, "Class list: " + plural7(take.length, "student") + " Canvas has and this run does not") : null,
-        absent.length ? h("li", null, "Class list: " + plural7(absent.length, "student") + " no longer in Canvas — noted, nobody dropped") : null,
-        sheets.map(
-          (sheet2) => h(
-            "li",
-            { key: sheet2.id },
-            "Grade sheet " + sheet2.id + ": " + sheetLine(sheet2),
-            sheet2.from === "export" ? h("span", { className: "pp-as" }, " (from the downloaded copy)") : null
-          )
-        ),
-        !take.length && !absent.length && !sheets.length ? h("li", { className: "pp-as" }, "nothing") : null
-      )
-    ),
-    // What goes out: students see it.
-    h(
-      "div",
-      { className: "pp-sxgroup" + (send2.length ? " pp-sxout" : "") },
+      "section",
+      { className: "pp-ccard" + (send2.length ? " pp-sxout" : ""), ref: props.marksRef },
       h(
         "div",
-        null,
+        { className: "pp-sxtitle" },
         h("b", null, send2.length ? "To Canvas: " + sendNoun(send2) : "To Canvas"),
-        h("span", { className: "pp-as" }, send2.length ? " — students will see these; open a line to see whose, or send one now" : " — students will see these")
+        h("span", { className: "pp-as" }, send2.length ? " — students will see these. Open a line to see whose." : " — nothing waiting; Canvas has every mark that is ready.")
       ),
-      sendGroups.map(
-        (group) => h(RowGroup, {
+      sendGroups.map((group) => {
+        const keys = group.entries.map((entry) => entry.key);
+        const count = sendNoun(group.entries);
+        return h(RowGroup, {
           key: group.title,
           group,
-          values: sentValues,
+          row: (entry) => h(SendRow, { entry }),
           extra: sendSplit(group.entries.filter((entry) => entry.kind === "grades")),
-          action: sendNowButton(group, props.tools),
+          action: h(SendConfirm, { label: "Send…", busy: busy || Boolean(confirming), open: confirming === group.title, onOpen: () => setConfirming(group.title) }),
+          under: confirmFor(group.title, keys, "Send " + count + " for " + group.short + " to Canvas? Students will see them.", "Send " + count, group.short + " (" + count + ")", ["canvas", "marks"]),
           open: send2.length < OPEN_UNDER
-        })
-      ),
-      !send2.length ? h("span", { className: "pp-as" }, "nothing") : null
+        });
+      }),
+      sendGroups.length > 1 ? h(
+        "div",
+        { className: "pp-dacts pp-sxfoot" },
+        confirming === "all" ? h(ConfirmBar, {
+          what: "Send all " + sendNoun(send2) + " to Canvas, " + plural7(sendGroups.length, "assessment") + "? Students will see them.",
+          go: "Send all " + send2.length,
+          busy: flow.sending,
+          onCancel: () => setConfirming(null),
+          onSend: () => sendNow(send2.map((entry) => entry.key), "all " + sendNoun(send2), ["canvas", "marks"])
+        }) : h(SendConfirm, { primary: true, label: "Send all " + send2.length + " to Canvas…", busy: busy || Boolean(confirming), open: false, onOpen: () => setConfirming("all") })
+      ) : null
     ),
-    left.length || sheetHeld || failed.length || canvasError ? h(
-      "div",
-      { className: "pp-sxgroup" },
-      h("div", null, h("b", null, "Not included — needs your decision"), left.length ? h("span", { className: "pp-as" }, " — open a line to see whose") : null),
-      leftBy.map(
-        (kind) => kind.entries.length ? h(HeldKind, { key: kind.kind, kind: kind.kind, entries: kind.entries, open: left.length < OPEN_UNDER }) : null
-      ),
-      h(
-        "ul",
+    // Into your records: only the professor sees these.
+    take.length || absent.length || props.roster ? h(
+      "section",
+      { className: "pp-ccard" },
+      h("div", { className: "pp-sxtitle" }, h("b", null, "Into your records: the class list"), h("span", { className: "pp-as" }, " — only you see these")),
+      take.length || absent.length ? h(
+        React.Fragment,
         null,
-        left.length ? h("li", { className: "pp-as" }, "Settle each one under “Canvas · what differs” below, with Keep AINAR or Keep Canvas.") : null,
-        sheetHeld ? h("li", null, plural7(sheetHeld, "grade-sheet row") + " could not be matched to a student for sure; confirm them under “Names to confirm” below") : null,
-        canvasError ? h("li", { className: "pp-saveerr" }, "Canvas: " + canvasError) : null,
-        failed.map(
-          (sheet2) => h("li", { key: sheet2.id, className: "pp-saveerr" }, "Grade sheet " + sheet2.id + ": " + sheet2.error)
+        take.length ? h(RowGroup, {
+          group: { title: "In Canvas, not in this run", short: "In Canvas, not in this run", entries: take },
+          row: (entry) => h(PersonRow, { entry }),
+          open: take.length < OPEN_UNDER
+        }) : null,
+        absent.length ? h(RowGroup, {
+          group: { title: "In this run, no longer in Canvas", short: "In this run, no longer in Canvas", entries: absent },
+          row: (entry) => h(PersonRow, { entry }),
+          extra: " — each gets a dated note; nobody is dropped",
+          open: absent.length < OPEN_UNDER
+        }) : null,
+        h(
+          "div",
+          { className: "pp-dacts" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              disabled: busy,
+              onClick: () => sendNow(
+                take.map((entry) => entry.key).concat(absent.length && preview.absentKey ? [preview.absentKey] : []),
+                "the class list",
+                ["syncs", "records", "canvas"]
+              )
+            },
+            "Bring in the class list"
+          )
         )
+      ) : h(
+        "span",
+        { className: "pp-as" },
+        "The class list matches Canvas" + (props.roster && props.roster.lastSynced ? " · last brought in " + when(props.roster.lastSynced) : "") + "."
       )
     ) : null,
-    preview.elsewhere.length ? h(
-      "p",
-      { className: "pp-as" },
-      "Sync all does not do these: " + preview.elsewhere.map((road) => road.why).filter((why, i, all) => all.indexOf(why) === i).join(" ")
+    // Needs your decision: what no send does by itself.
+    left.length || unlinked.length ? h(
+      "section",
+      { className: "pp-ccard" },
+      h("div", { className: "pp-sxtitle" }, h("b", null, "Needs your decision"), h("span", { className: "pp-as" }, " — not sent by any Send above; open a line to settle each")),
+      leftBy.map(
+        (kind) => kind.entries.length ? h(HeldKind, {
+          key: kind.kind,
+          kind: kind.kind,
+          entries: kind.entries,
+          open: left.length < OPEN_UNDER,
+          row: (entry) => entry.kind === "roster" ? h(PersonRow, { entry }) : h(DiffRow, {
+            entry,
+            runId: props.runId,
+            sessionId: props.sessionId,
+            names: props.names,
+            onSettled: () => {
+              flow.ask();
+              props.onWrite(["canvas", "marks"]);
+            }
+          })
+        }) : null
+      ),
+      unlinked.length ? h(
+        "details",
+        { className: "pp-sxheld", open: unlinked.length < 4 },
+        h("summary", null, h("b", null, plural7(unlinked.length, "assessment")), " with marks ready and no Canvas assignment to send them to"),
+        h(
+          "div",
+          { className: "pp-sxheldbody" },
+          unlinked.map(
+            (entry) => h(
+              "div",
+              { className: "pp-sxgroupline", key: entry.id },
+              h(
+                "div",
+                { className: "pp-drowline" },
+                h("span", { className: "pp-drowwho", title: entry.title }, h("b", null, shortTitle(entry.title))),
+                h(
+                  "span",
+                  { className: "pp-dwhy" },
+                  entry.binding.state === "none" ? "no Canvas assignment yet" : "none in " + (entry.binding.missing || []).join(", ")
+                ),
+                h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", onClick: () => setLinking(linking === entry.id ? null : entry.id) },
+                  linking === entry.id ? "Close" : "Link or create…"
+                )
+              ),
+              linking === entry.id ? h(
+                "div",
+                { className: "pp-bookdrawer" },
+                h(CanvasMarks, {
+                  runId: props.runId,
+                  sessionId: props.sessionId,
+                  assessmentId: entry.id,
+                  title: entry.title,
+                  ask: props.ask,
+                  names: props.names,
+                  canvas: entry.canvas,
+                  autoPreview: true,
+                  onSent: () => props.onWrite(["grading", "canvas", "marks"])
+                })
+              ) : null
+            )
+          )
+        )
+      ) : null
     ) : null
   );
 }
@@ -13172,80 +13176,17 @@ function SyncView(props) {
   return h(
     "div",
     { className: "pp-syncview" },
-    h(RoadFlow, {
+    canvasOn ? h(CanvasPart, {
       runId: props.runId,
       sessionId: props.sessionId,
       names: props.names,
-      roads: null,
-      label: "Preview all…",
-      asking: "Asking Canvas and the sheets…",
-      title: "Ask Canvas and every grade sheet what would move. Nothing is sent until you press Sync.",
-      disabled: !canvasOn && !sheets.length,
-      describe: (preview, tools) => h(SyncAllPreview, { preview, tools }),
-      choose: chooseAll,
-      sendLabel: sendAllLabel,
-      nothing: "Everything Sync all moves is already in step.",
-      // A sheet plan keeps the rows it could not place for review.
-      onPreviewed: () => done(["syncs"]),
-      onSent: () => done(["syncs", "marks", "integrations", "canvas", "records"]),
-      frame: (button, body) => h(
-        "section",
-        { className: "pp-ccard" },
-        h(
-          "div",
-          { className: "pp-chead" },
-          h(
-            "span",
-            { className: "pp-cname" },
-            "Sync all",
-            h(
-              "span",
-              { className: "pp-intwhat" },
-              [canvasOn ? "Canvas" : null, sheets.length ? plural7(sheets.length, "grade sheet") : null].filter(Boolean).join(" and ") || "No road here moves with Sync all"
-            )
-          ),
-          h("span", { className: "pp-segspacer" }),
-          button
-        ),
-        body
-      )
-    }),
-    // What Canvas lacks, per assessment, with its send: one assessment at a
-    // time, beside Sync all, which sends them all.
-    canvasOn ? h(
-      "section",
-      { className: "pp-ccard", ref: marksRef },
-      h("div", { className: "pp-chead" }, h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"), h("span", { className: "pp-cname" }, "Marks for Canvas")),
-      h(MarksForCanvas, {
-        runId: props.runId,
-        sessionId: props.sessionId,
-        revision: props.marksRevision,
-        names: props.names,
-        ask: props.ask,
-        onWrite: () => done(["grading", "canvas", "marks"])
-      })
-    ) : null,
-    canvasOn ? h(
-      "section",
-      { className: "pp-ccard" },
-      h("div", { className: "pp-chead" }, h("span", { className: "pp-svc pp-svc-canvas", "aria-hidden": "true" }, "Cv"), h("span", { className: "pp-cname" }, "Canvas", h("span", { className: "pp-intwhat" }, "what differs"))),
-      h(CanvasDifferences, {
-        runId: props.runId,
-        sessionId: props.sessionId,
-        names: props.names,
-        noSyncAll: true,
-        onWrite: () => done(["canvas", "marks"])
-      }),
-      // The class list alone, for a professor who wants only that.
-      roster ? h(CanvasRead, {
-        sync: roster,
-        label: "Class list",
-        runId: props.runId,
-        sessionId: props.sessionId,
-        names: props.names,
-        onWrite: () => done(["syncs", "records"])
-      }) : null
-    ) : null,
+      marksRevision: props.marksRevision,
+      roster,
+      ask: props.ask,
+      marksRef,
+      onWrite: done
+    }) : h("p", { className: "pp-as" }, "This run sends nothing to Canvas. Set Canvas up in Course settings to see what it lacks here."),
+    // Into your records: each grade sheet, with the names it could not place under it.
     sheets.map(
       (sync) => h(
         "section",
@@ -13254,24 +13195,19 @@ function SyncView(props) {
           "div",
           { className: "pp-chead" },
           h("span", { className: "pp-svc pp-svc-sheets", "aria-hidden": "true" }, "GS"),
-          h("span", { className: "pp-cname" }, sync.label, h("span", { className: "pp-intwhat" }, sync.id))
+          h("span", { className: "pp-cname" }, "Into your records: " + sync.label, h("span", { className: "pp-intwhat" }, sync.id))
         ),
-        h(SyncCard, { sync, bare: true, check: checkOf(sync), runId: props.runId, sessionId: props.sessionId, names: props.names, onDone: () => done(["syncs", "marks"]) })
+        h(SyncCard, { sync, bare: true, check: checkOf(sync), runId: props.runId, sessionId: props.sessionId, names: props.names, onDone: () => done(["syncs", "marks"]) }),
+        h(WaitingList, {
+          rows: waiting2.filter((row) => row.sync === sync.id),
+          students: doc.students,
+          names: doc.names,
+          runId: props.runId,
+          sessionId: props.sessionId,
+          onDone: () => done(["syncs", "marks"])
+        })
       )
     ),
-    waiting2.length ? h(
-      "section",
-      { className: "pp-ccard" },
-      h("div", { className: "pp-chead" }, h("span", { className: "pp-cname" }, "Names to confirm", h("span", { className: "pp-intwhat" }, "rows a sheet could not place surely"))),
-      h(WaitingList, {
-        rows: waiting2,
-        students: doc.students,
-        names: doc.names,
-        runId: props.runId,
-        sessionId: props.sessionId,
-        onDone: () => done(["syncs", "marks"])
-      })
-    ) : null,
     h(PublishedChanges, { runId: props.runId, sessionId: props.sessionId, revision: props.marksRevision, openPublish: props.openPublish }),
     h(
       "p",

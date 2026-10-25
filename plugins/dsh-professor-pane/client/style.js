@@ -1334,7 +1334,19 @@ i.pp-cg-cell{cursor:default;flex:none}
 .pp-sxheld .pp-drow{margin-left:14px}
 .pp-sxheld>.pp-linkbtn{margin:2px 0 4px 14px}
 .pp-sxheld>summary .pp-sxsendone{margin-left:8px;padding:1px 8px;font-size:11px;vertical-align:baseline}
-.pp-sxsent{margin:0;padding:6px 10px;border-radius:9px;background:rgba(46,140,80,.1);color:#25693f;font-size:12px}
+.pp-sxhead{display:flex;align-items:center;gap:8px}
+.pp-sxcheck{font-weight:600}
+.pp-sxcheck .pp-as{font-weight:400}
+.pp-sxtitle{margin-bottom:4px}
+.pp-sxgroupline{display:flex;flex-direction:column}
+.pp-sxconfirm{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:2px 0 6px 14px;padding:6px 8px;border-radius:8px;
+  background:rgba(180,52,42,.06);border:1px solid rgba(180,52,42,.25)}
+.pp-sxconfirm>span{flex:1 1 200px}
+.pp-sxfoot{margin-top:8px}
+.pp-sxsent,.pp-sxfailed{display:flex;flex-direction:column;gap:4px;margin-top:8px;padding:6px 10px;border-radius:9px;font-size:12px}
+.pp-sxsent{background:rgba(46,140,80,.1);color:#25693f}
+.pp-sxfailed{background:rgba(180,52,42,.08);color:#8f2a22}
+.pp-sxsent .pp-linkbtn,.pp-sxfailed .pp-linkbtn{align-self:flex-start}
 .pp-waitwhy{flex:1 1 160px;min-width:0}
 .pp-syncsection .pp-waitlist{gap:0}
 .pp-waitacts{display:flex;gap:4px;margin-left:auto;flex:none}

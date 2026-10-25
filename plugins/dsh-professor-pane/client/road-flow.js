@@ -4,7 +4,7 @@
  * card draw it from here, so the presses, their words and the retry are the
  * same wherever a road is. The rules behind it are server/roads.js's: a Send
  * goes from the preview the professor read, only what it offered, within
- * fifteen minutes, once; when it cannot, its answer carries `again`, and
+ * fifteen minutes, each row once; when it cannot, its answer carries `again`, and
  * here that is a Preview again button.
  *
  * `useRoad` is the state and the two requests, for a card that lays out its
@@ -98,40 +98,22 @@ export function RoadResults(props) {
  * The whole flow. Props: `runId`, `sessionId`, `names`, `roads`; the Preview
  * button's `label`, `asking` and `title`, and `disabled`; `describe(preview)`,
  * `choose(preview)` → `{ roadId: [keys] }` or null when nothing would go,
- * `sendLabel(preview)`; `describe` also gets `{ sendPart(keys, label), busy }`
- * for a send of part of the preview from inside it; `nothing` for the line
- * shown when nothing would;
+ * `sendLabel(preview)`; `fresh` to have the far side asked again rather than
+ * a recent check reused; `nothing` for the line shown when nothing would;
  * `frame(button, body)` to place the button (default: above the body);
  * `onPreviewed(body)` and `onSent(body)` after each answer.
  */
 export function RoadFlow(props) {
   const road = useRoad(props);
-  // What a send of part of the preview went out as ("HW2"), shown above the preview asked again after it.
-  const [part, setPart] = React.useState(null);
   const asking = road.phase === "asking";
   const sending = road.phase === "sending";
-  const reask = () =>
-    road.ask().then((body) => {
+  const ask = () =>
+    road.ask(props.fresh ? { fresh: true } : undefined).then((body) => {
       if (props.onPreviewed) props.onPreviewed(body);
     });
-  const ask = () => {
-    setPart(null);
-    return reask();
-  };
   const send = (keys) =>
     road.send(keys).then((body) => {
-      setPart(null);
       if (props.onSent) props.onSent(body);
-    });
-  // Part of the preview now: a preview serves one send, so the rest is asked
-  // again at once and stays a press away. A refusal stays on screen instead.
-  const sendPart = (keys, label) =>
-    road.send(keys).then((body) => {
-      const went = !body.error && !body.again && !(body.results || []).some((entry) => !entry.ok);
-      setPart(went ? label : null);
-      const again = went ? reask() : null;
-      if (props.onSent) props.onSent(body);
-      return again;
     });
 
   const button = h(
@@ -154,15 +136,14 @@ export function RoadFlow(props) {
       : h(
           "div",
           { className: props.className || "pp-syncallx" },
-          part ? h("p", { className: "pp-sxsent" }, "✓ Sent " + part + ". What is left is below, checked again.") : null,
-          props.describe(preview, { sendPart, busy: road.phase !== "idle" }),
+          props.describe(preview),
           h(
             "div",
             { className: "pp-dacts" },
             keys
               ? h("button", { type: "button", className: "pp-segbtn pp-danger", disabled: sending, onClick: () => send(keys) }, sending ? "Syncing…" : props.sendLabel(preview))
               : h("span", { className: "pp-as" }, props.nothing || "Nothing to send."),
-            h("button", { type: "button", className: "pp-segbtn", disabled: sending, onClick: () => (setPart(null), road.close()) }, keys ? "Cancel" : "Close"),
+            h("button", { type: "button", className: "pp-segbtn", disabled: sending, onClick: road.close }, keys ? "Cancel" : "Close"),
           ),
         )
     : road.results

@@ -1,6 +1,6 @@
 // The rules every road follows (server/roads.js, server/previews.js), with
-// roads made up here: two presses, only the previewed keys, one send per
-// preview, fifteen minutes, `again` when a send cannot go, and a road that
+// roads made up here: two presses, only the previewed keys, each key once
+// (a preview may go in parts), fifteen minutes, `again` when a send cannot go, and a road that
 // writes only into the run may run in one press.
 
 import { test } from "node:test";
@@ -51,7 +51,7 @@ test("a send goes from its preview, with only the keys the preview offered", asy
   assert.equal(road.plans, 1, "the send did not ask again");
 });
 
-test("a preview serves one send; the second is told to preview again", async () => {
+test("a preview is sent from in parts, each key once; a key sent already is told to check again", async () => {
   const runId = nextRun();
   const road = fakeRoad("canvas");
   await preview([road], runId);
@@ -59,14 +59,27 @@ test("a preview serves one send; the second is told to preview again", async () 
   const second = await send([road], runId, { keys: { canvas: ["a"] } });
   assert.equal(second.again, true);
   assert.equal(second.results[0].again, true);
-  assert.equal(road.sent.length, 1);
+  assert.match(second.results[0].output, /sent already/);
+  const third = await send([road], runId, { keys: { canvas: ["b"] } });
+  assert.equal(third.again, false);
+  assert.deepEqual(
+    road.sent.map((entry) => [entry.snapshot.at, entry.chosen]),
+    [
+      [1, ["a"]],
+      [1, ["b"]],
+    ],
+    "both parts went from the one preview",
+  );
+  assert.equal(road.plans, 1);
+  const spent = await send([road], runId, { keys: { canvas: ["b"] } });
+  assert.match(spent.results[0].output, /no check to send from/, "with every key sent the preview is gone");
 });
 
 test("no preview — as after a reload of server/ — answers again, and sends nothing", async () => {
   const road = fakeRoad("canvas");
   const sent = await send([road], nextRun(), { keys: { canvas: ["a"] } });
   assert.equal(sent.again, true);
-  assert.match(sent.results[0].output, /Preview again/);
+  assert.match(sent.results[0].output, /Check again/);
   assert.equal(road.sent.length, 0);
 });
 
