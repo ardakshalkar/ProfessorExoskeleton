@@ -76,7 +76,7 @@ export const VIEWS = {
  */
 const STORES = new Map();
 
-const storeFor = (root) => {
+export const storeFor = (root) => {
   const found = STORES.get(root);
   if (found) return found;
   const made = new YamlCourseStore(root);

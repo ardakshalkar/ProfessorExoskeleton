@@ -35,6 +35,9 @@ import { ToolError } from "@ainar/core/src/workspace.ts";
 
 import { BASE, sendErrorPage, sendJson } from "./http.js";
 import { resolveWorkspace, VIEWS } from "./workspace.js";
+
+// The first page's reads, done ahead by `index.js`; see server/prewarm.js.
+export { prewarm } from "./prewarm.js";
 import { routes as canvas } from "./routes/canvas.js";
 import { routes as core } from "./routes/core.js";
 import { routes as course } from "./routes/course.js";

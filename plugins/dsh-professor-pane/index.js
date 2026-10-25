@@ -63,7 +63,8 @@
  * hands that number down to everything it imports, ours and `@ainar/core`'s
  * TypeScript alike, but nothing under `node_modules`. A new number is therefore a
  * fresh copy of the whole graph. A watch on `server/` and on the core's `src/`
- * bumps the number on a save, and the next request imports the new graph.
+ * bumps the number on a save and imports the new graph at once, and the first
+ * page's reads are made ahead in it (server/prewarm.js), as they are at start.
  *
  * What a reload costs: the module-level caches under `server/` start empty
  * (they are caches — stores, revision hashes, a pending Google sign-in), and
@@ -133,7 +134,7 @@ const hookGenerations = () => {
  * always has. Only the first request after a save waits, for `latest()`; a
  * real request stream holds its body until a listener is attached.
  */
-const routerSource = (logger) => {
+const routerSource = (logger, onLoad = () => {}) => {
   // To dsh's log and to the terminal the harness runs in, where whoever saved
   // the file is looking: dsh's logger does not print there.
   const say = (level, text) => {
@@ -157,6 +158,7 @@ const routerSource = (logger) => {
         current = router;
         loading = null;
         say("info", `professor-pane: server reloaded (generation ${next})`);
+        onLoad(router);
         return router;
       },
       (error) => {
@@ -188,6 +190,9 @@ const routerSource = (logger) => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         wanted += 1;
+        // Loaded now rather than by the next request, so its caches can be
+        // warmed before the pane asks (`onLoad`).
+        latest();
       }, 150);
       timer.unref?.();
     };
@@ -260,9 +265,38 @@ export function apply(ctx) {
   }
 
   const services = { registry: ctx.workspaceRegistry, credentials, harness };
-  const source = routerSource(ctx.logger);
+
+  /*
+   * The first page's reads, made as soon as a generation of the routes is
+   * live, so the course is parsed and Today computed before the pane asks
+   * (server/prewarm.js). At start the sidebar may not have listed its
+   * workspaces yet, so an empty pass tries again a few times.
+   * `PROFESSOR_PANE_PREWARM=0` turns it off.
+   */
+  const PREWARM = process.env.PROFESSOR_PANE_PREWARM !== "0";
+  let warmTimer = null;
+  const warm = (router, tries = 5) => {
+    if (!PREWARM || typeof router.prewarm !== "function") return;
+    clearTimeout(warmTimer);
+    router.prewarm({ registry: ctx.workspaceRegistry }).then((done) => {
+      if (done.roots === 0 && tries > 1) {
+        warmTimer = setTimeout(() => warm(router, tries - 1), 2000);
+        warmTimer.unref?.();
+        return;
+      }
+      const text = `professor-pane: warmed ${done.roots} workspace(s) in ${done.ms} ms` + (done.failed ? `, ${done.failed} step(s) failed` : "");
+      ctx.logger?.info?.(text);
+      console.log(text);
+    });
+  };
+  const source = routerSource(ctx.logger, warm);
 
   ctx.effect(source.watchSources, "professor-pane: reload the server on a save");
+  ctx.effect(() => {
+    warmTimer = setTimeout(() => warm(firstRouter), 500);
+    warmTimer.unref?.();
+    return () => clearTimeout(warmTimer);
+  }, "professor-pane: warm the first page's reads");
   ctx.effect(
     () =>
       ctx.webServer.register({
