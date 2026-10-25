@@ -20,19 +20,11 @@ import { CanvasDifferences } from "./canvas-diff.js";
 import { Message, useJson } from "./common.js";
 import { MarksForCanvas, PublishedChanges, useSheetCheck } from "./marks.js";
 import { h, React } from "./react.js";
-import { SyncCard, WaitingList, when } from "./syncs.js";
+import { RoadFlow, roadIn } from "./road-flow.js";
+import { SyncCard, WaitingList, sheetLine, when } from "./syncs.js";
 import { BASE, scoped } from "./tabs.js";
 
 const plural = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
-
-const post = (path, runId, sessionId, body) =>
-  fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  })
-    .then((response) => response.json())
-    .catch((error) => ({ error: String((error && error.message) || error) }));
 
 /** One line per assessment: "HW4: 12", from rows that carry a title. */
 const byAssessment = (rows) => {
@@ -44,52 +36,58 @@ const byAssessment = (rows) => {
   return [...counts].map(([title, n]) => title + ": " + n).join(" · ");
 };
 
-/** A sheet's plan in one sentence. */
-const sheetLine = (sheet) =>
-  sheet.moves
-    ? [
-        sheet.added ? plural(sheet.added, "mark") + " added" : null,
-        sheet.changed ? plural(sheet.changed, "mark") + " changed" : null,
-        sheet.removed ? plural(sheet.removed, "mark") + " taken back" : null,
-      ]
-        .filter(Boolean)
-        .join(", ")
-    : "nothing new";
+/** Sync all's preview, split by road: Canvas's, the sheets that read, and what failed. */
+const partsOf = (preview) => {
+  const canvasRoad = roadIn(preview, "canvas");
+  const canvas = canvasRoad && canvasRoad.ok ? canvasRoad.preview : null;
+  const sheetRoads = preview.roads.filter((road) => road.service === "sheets");
+  const sheets = sheetRoads.filter((road) => road.ok).map((road) => Object.assign({ id: road.id }, road.preview));
+  return {
+    canvasError: canvasRoad && !canvasRoad.ok ? canvasRoad.error : null,
+    send: canvas ? canvas.send : [],
+    take: canvas ? canvas.take : [],
+    absent: canvas ? canvas.absent || [] : [],
+    held: canvas ? canvas.held : [],
+    sheets,
+    moving: sheets.filter((sheet) => sheet.moves > 0),
+    failed: sheetRoads.filter((road) => !road.ok),
+  };
+};
 
-/** The preview Sync all shows, and its one Send. */
+/** What Sync all's Send sends: Canvas's previewed rows (and its class-list notes), and each sheet that would bring marks in. */
+const chooseAll = (preview) => {
+  const parts = partsOf(preview);
+  const keys = {};
+  if (parts.send.length || parts.take.length || parts.absent.length) keys.canvas = parts.send.concat(parts.take).map((entry) => entry.key);
+  for (const sheet of parts.moving) keys[sheet.id] = [sheet.id];
+  return Object.keys(keys).length ? keys : null;
+};
+
+const sendAllLabel = (preview) => {
+  const parts = partsOf(preview);
+  return (
+    "Sync: " +
+    [
+      parts.send.length ? "send " + parts.send.length + " to Canvas" : null,
+      parts.take.length || parts.absent.length ? "update the class list" : null,
+      parts.moving.length ? "bring in " + plural(parts.moving.length, "sheet") : null,
+    ]
+      .filter(Boolean)
+      .join(", ")
+  );
+};
+
+/** The preview Sync all shows above its one Send. */
 function SyncAllPreview(props) {
   const preview = props.preview;
-  const canvas = preview.canvas && !preview.canvas.error ? preview.canvas : null;
-  const send = canvas ? canvas.send : [];
-  const take = canvas ? canvas.take : [];
-  const absent = canvas ? canvas.absent || [] : [];
-  const held = canvas ? canvas.held : [];
+  const { send, take, absent, held, sheets, failed, canvasError } = partsOf(preview);
   const marks = send.filter((entry) => entry.kind === "grades");
   const fields = send.filter((entry) => entry.kind === "assignments");
-  const sheets = preview.sheets.filter((sheet) => sheet.ok);
-  const moving = sheets.filter((sheet) => sheet.moves > 0);
-  const failed = preview.sheets.filter((sheet) => !sheet.ok);
   const sheetHeld = sheets.reduce((sum, sheet) => sum + (sheet.held || 0), 0);
-  const nothing = !send.length && !take.length && !absent.length && !moving.length;
-
-  const go = () =>
-    props.onSend({
-      canvas: send.concat(take).map((entry) => entry.key),
-      sheets: moving.map((sheet) => sheet.id),
-      from: Object.fromEntries(moving.filter((sheet) => sheet.from).map((sheet) => [sheet.id, sheet.from])),
-    });
-
-  const label = [
-    send.length ? "send " + send.length + " to Canvas" : null,
-    take.length || absent.length ? "update the class list" : null,
-    moving.length ? "bring in " + plural(moving.length, "sheet") : null,
-  ]
-    .filter(Boolean)
-    .join(", ");
 
   return h(
-    "div",
-    { className: "pp-syncallx" },
+    React.Fragment,
+    null,
     h("span", { className: "pp-as" }, "Asked " + when(preview.previewedAt) + ". Nothing has been sent or saved yet."),
     // What comes in: changes the run's own records; nobody outside sees it.
     h(
@@ -125,7 +123,7 @@ function SyncAllPreview(props) {
         !send.length ? h("li", { className: "pp-as" }, "nothing") : null,
       ),
     ),
-    held.length || sheetHeld || failed.length || (preview.canvas && preview.canvas.error)
+    held.length || sheetHeld || failed.length || canvasError
       ? h(
           "div",
           { className: "pp-sxgroup" },
@@ -135,7 +133,7 @@ function SyncAllPreview(props) {
             null,
             held.length ? h("li", null, plural(held.length, "Canvas difference") + " — conflicts and what Canvas changed; settle them below") : null,
             sheetHeld ? h("li", null, plural(sheetHeld, "sheet row") + " the sync was not sure of; confirm them below") : null,
-            preview.canvas && preview.canvas.error ? h("li", { className: "pp-saveerr" }, "Canvas: " + preview.canvas.error) : null,
+            canvasError ? h("li", { className: "pp-saveerr" }, "Canvas: " + canvasError) : null,
             failed.map((sheet) =>
               h("li", { key: sheet.id, className: "pp-saveerr" }, "Grade sheet " + sheet.id + ": " + sheet.error),
             ),
@@ -149,18 +147,6 @@ function SyncAllPreview(props) {
           "Not in Sync all: " + preview.elsewhere.map((road) => road.why).filter((why, i, all) => all.indexOf(why) === i).join(" "),
         )
       : null,
-    h(
-      "div",
-      { className: "pp-dacts" },
-      nothing
-        ? h("span", { className: "pp-as" }, "Everything Sync all moves is already in step.")
-        : h(
-            "button",
-            { type: "button", className: "pp-segbtn pp-danger", disabled: props.sending, onClick: go },
-            props.sending ? "Syncing…" : "Sync: " + label,
-          ),
-      h("button", { type: "button", className: "pp-segbtn", disabled: props.sending, onClick: props.onClose }, nothing ? "Close" : "Cancel"),
-    ),
   );
 }
 
@@ -189,32 +175,10 @@ export function SyncView(props) {
   React.useEffect(() => {
     if (props.focus && props.focus.section === "marks" && marksRef.current) marksRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [props.focus ? props.focus.n : null, Boolean(kept.current)]);
-  const [phase, setPhase] = React.useState("idle");
-  const [preview, setPreview] = React.useState(null);
-  const [results, setResults] = React.useState(null);
 
   const done = (tags) => {
     setTick((value) => value + 1);
     if (props.onWrite) props.onWrite(tags);
-  };
-  const ask = () => {
-    setPhase("asking");
-    setResults(null);
-    post("/api/sync-all", props.runId, props.sessionId, { confirm: false, names: Boolean(props.names) }).then((body) => {
-      setPhase("idle");
-      setPreview(body);
-      // A sheet plan keeps the rows it could not place for review.
-      done(["syncs"]);
-    });
-  };
-  const send = (chosen) => {
-    setPhase("sending");
-    post("/api/sync-all", props.runId, props.sessionId, Object.assign({ confirm: true, names: Boolean(props.names) }, chosen)).then((body) => {
-      setPhase("idle");
-      setPreview(null);
-      setResults(body);
-      done(["syncs", "marks", "integrations", "canvas", "records"]);
-    });
   };
 
   const doc = kept.current;
@@ -231,65 +195,46 @@ export function SyncView(props) {
   return h(
     "div",
     { className: "pp-syncview" },
-    h(
-      "section",
-      { className: "pp-ccard" },
-      h(
-        "div",
-        { className: "pp-chead" },
+    h(RoadFlow, {
+      runId: props.runId,
+      sessionId: props.sessionId,
+      names: props.names,
+      roads: null,
+      label: "Preview all…",
+      asking: "Asking Canvas and the sheets…",
+      title: "Ask Canvas and every grade sheet what would move. Nothing is sent until you press Sync.",
+      disabled: !canvasOn && !sheets.length,
+      describe: (preview) => h(SyncAllPreview, { preview }),
+      choose: chooseAll,
+      sendLabel: sendAllLabel,
+      nothing: "Everything Sync all moves is already in step.",
+      // A sheet plan keeps the rows it could not place for review.
+      onPreviewed: () => done(["syncs"]),
+      onSent: () => done(["syncs", "marks", "integrations", "canvas", "records"]),
+      frame: (button, body) =>
         h(
-          "span",
-          { className: "pp-cname" },
-          "Sync all",
+          "section",
+          { className: "pp-ccard" },
           h(
-            "span",
-            { className: "pp-intwhat" },
-            [canvasOn ? "Canvas" : null, sheets.length ? plural(sheets.length, "grade sheet") : null].filter(Boolean).join(" and ") ||
-              "No road here moves with Sync all",
-          ),
-        ),
-        h("span", { className: "pp-segspacer" }),
-        h(
-          "button",
-          {
-            type: "button",
-            className: "pp-segbtn",
-            disabled: phase !== "idle" || Boolean(preview) || (!canvasOn && !sheets.length),
-            title: "Ask Canvas and every grade sheet what would move. Nothing is sent until you press Sync.",
-            onClick: ask,
-          },
-          phase === "asking" ? "Asking Canvas and the sheets…" : "Preview all…",
-        ),
-      ),
-      preview && preview.error ? h("p", { className: "pp-saveerr" }, preview.error) : null,
-      preview && !preview.error
-        ? h(SyncAllPreview, { preview, sending: phase === "sending", onSend: send, onClose: () => setPreview(null) })
-        : null,
-      results
-        ? h(
             "div",
-            { className: "pp-syncallx" },
-            results.error
-              ? h("pre", { className: "pp-approveout pp-approveerr" }, results.error)
-              : results.results.map((entry, index) =>
-                  h(
-                    "pre",
-                    { className: "pp-approveout" + (entry.ok ? "" : " pp-approveerr"), key: index },
-                    (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + "\n" + entry.output,
-                  ),
-                ),
+            { className: "pp-chead" },
             h(
-              "div",
-              { className: "pp-dacts" },
-              // A preview that went stale or was lost in a reload: ask again, one press.
-              results.results && results.results.some((entry) => entry.again)
-                ? h("button", { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: ask }, phase === "asking" ? "Asking…" : "Preview again")
-                : null,
-              h("button", { type: "button", className: "pp-segbtn", onClick: () => setResults(null) }, "Close"),
+              "span",
+              { className: "pp-cname" },
+              "Sync all",
+              h(
+                "span",
+                { className: "pp-intwhat" },
+                [canvasOn ? "Canvas" : null, sheets.length ? plural(sheets.length, "grade sheet") : null].filter(Boolean).join(" and ") ||
+                  "No road here moves with Sync all",
+              ),
             ),
-          )
-        : null,
-    ),
+            h("span", { className: "pp-segspacer" }),
+            button,
+          ),
+          body,
+        ),
+    }),
     // What Canvas lacks, per assessment, with its send: one assessment at a
     // time, beside Sync all, which sends them all.
     canvasOn

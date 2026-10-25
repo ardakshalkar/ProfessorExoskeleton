@@ -7,32 +7,22 @@
  * Nothing here compares anything itself: it reads that answer, and every
  * press is `ainar lms …`, for `runPublish`'s reason.
  *
- * Sync all is two presses, as every write to Canvas in this pane is. The
- * first asks Canvas again and answers with exactly what would go and come;
- * the second sends those rows and no others — each push names its students
- * (`--student`) or fields (`--field`), and a row that changed in between is
- * not overwritten, because a push without `--overwrite-drift` never is.
- * Conflicts, and grades or definitions Canvas changed, are left: each is the
- * professor's, one at a time, with "keep AINAR" (a send, previewed) or "keep
- * Canvas" (`lms keep`, a note in the ledger; nothing sent).
+ * Canvas is a road (server/roads.js): Sync all and the Canvas card's own Sync
+ * all are `canvasRoad`. Its plan asks Canvas again and answers with exactly
+ * what would go and come; its send sends those rows and no others — each push
+ * names its students (`--student`) or fields (`--field`), and a row that
+ * changed in between is not overwritten, because a push without
+ * `--overwrite-drift` never is. Conflicts, and grades or definitions Canvas
+ * changed, are left: each is the professor's, one at a time, with "keep
+ * AINAR" (a send, previewed, from its own snapshot) or "keep Canvas"
+ * (`lms keep`, a note in the ledger; nothing sent).
  */
 
 import { syncAllPlan, tallyDifferences } from "@ainar/core/src/lms/canvas-diff.ts";
 
 import { amendCanvasCheck, canvasCheckState, lastCanvasCheck, runCanvasCheck, runScans } from "./actions.js";
+import { recall, remember } from "./previews.js";
 import { rosterPeople } from "./workspace.js";
-
-/** How old the previewed check may be when its Send is pressed. */
-const PREVIEW_MS = 15 * 60 * 1000;
-
-/**
- * The check each run's last preview was made from, kept apart from the
- * pane's running check: the watch (client/canvas-check.js) checks again every
- * few minutes, and a Send pressed while that check ran used to be refused.
- * Like every module cache here it is empty after a reload of server/, and the
- * Send then answers `again: true` so the pane offers Preview again.
- */
-const previewed = new Map(); // runId -> { at, value }
 
 const named = (differences, names) => {
   const people = names ? rosterPeople() : null;
@@ -81,30 +71,31 @@ const previewOf = (value, names) => {
   };
 };
 
-/**
- * `{confirm: false}` asks Canvas (a fresh check) and answers with the
- * preview; `{confirm: true, keys}` sends the previewed rows named in `keys`.
- */
-export const canvasSyncAll = async (root, runId, body) => {
-  const names = body.names === true;
-  if (body.confirm !== true) {
+/** Canvas as a road: marks and definitions out, the class list in. */
+export const canvasRoad = {
+  id: "canvas",
+  service: "canvas",
+  label: "Canvas",
+  live: true,
+  /** A fresh check; the preview is what Sync all would apply of its differences. */
+  async plan({ root, runId, names }) {
     const state = await runCanvasCheck(root, runId);
     if (!state.value) return { error: state.error || "Canvas gave no answer." };
     if (!Array.isArray(state.value.differences)) return { error: "This check has no differences in it; restart the harness so it runs the new `lms check`." };
-    previewed.set(runId, { at: state.at, value: state.value });
-    return { checkedAt: state.at, preview: previewOf(state.value, names) };
-  }
+    const preview = Object.assign({ checkedAt: state.at }, previewOf(state.value, names));
+    return { preview, keys: preview.send.concat(preview.take).map((entry) => entry.key), snapshot: state.value };
+  },
+  send: (ctx, value, keys) => sendCanvas(ctx, value, keys),
+};
 
-  const last = previewed.get(runId);
-  if (!last) return { error: "The pane's server reloaded since this preview, and its check went with it. Preview again.", again: true };
-  if (Date.now() - Date.parse(last.at) > PREVIEW_MS) return { error: "The preview is more than 15 minutes old. Preview again.", again: true };
-  previewed.delete(runId);
-  const wanted = new Set(Array.isArray(body.keys) ? body.keys.map(String) : []);
+/** The previewed rows named in `keys`, sent; then Canvas asked again. */
+const sendCanvas = async ({ root, runId }, value, keys) => {
+  const wanted = new Set(keys);
   // Students Canvas no longer lists are noted whatever was chosen: the note
   // drops nobody, so it needs no choosing.
-  const absent = syncAllPlan(last.value.differences).absent;
+  const absent = syncAllPlan(value.differences).absent;
   if (!wanted.size && !absent.length) return { error: "Nothing was chosen to send." };
-  const plan = syncAllPlan(last.value.differences.filter((entry) => wanted.has(entry.key)));
+  const plan = syncAllPlan(value.differences.filter((entry) => wanted.has(entry.key)));
 
   const results = [];
   for (const batch of plan.batches) {
@@ -142,52 +133,68 @@ export const canvasSyncAll = async (root, runId, body) => {
   }
   // What it all came to, asked of Canvas again.
   const after = await runCanvasCheck(root, runId);
-  return { confirmed: true, results, check: after };
+  return { results, after };
 };
 
 /**
  * One difference, settled. `keep: "canvas"` pins it (`lms keep`), and sends
  * nothing. `keep: "ainar"` sends AINAR's value over Canvas's — previewed
  * first, `confirm: true` to send — with `--overwrite-drift` for that one row.
+ * The send goes from the row its preview showed (server/previews.js), under
+ * the roads' rules: fifteen minutes, one send, `again` when it cannot.
  */
 export const canvasResolve = async (root, runId, body) => {
+  const key = String(body.key || "");
+  if (body.keep === "ainar" && body.confirm === true) {
+    const got = recall(runId, "canvas-row:" + key);
+    if (got.again) return { error: got.again, again: true };
+    const entry = got.last.snapshot;
+    const args =
+      entry.kind === "grades"
+        ? ["lms", "push", runId, "--target", "canvas-api", ...where(entry), ...rowOf(entry), "--overwrite-drift", "--confirm"]
+        : ["lms", "assignment-push", runId, ...where(entry), ...rowOf(entry), "--overwrite-drift", "--confirm"];
+    const result = await runScans(args, root);
+    if (result.ok) settle(runId, entry.key, false);
+    return { ok: result.ok, kept: "ainar", output: result.output, command: result.command };
+  }
+
   const last = lastCanvasCheck(runId);
   if (!last || !Array.isArray(last.value.differences)) return { error: "Check Canvas first: there is no comparison to settle." };
-  const entry = last.value.differences.find((item) => item.key === String(body.key || ""));
+  const entry = last.value.differences.find((item) => item.key === key);
   if (!entry) return { error: "That difference is not in the last check any more. Check again." };
   if (entry.kind === "roster") return { error: "The class list is settled by its sync, not row by row." };
-  const row = entry.student_id ? ["--student", entry.student_id] : ["--field", entry.field];
 
   if (body.keep === "canvas") {
     const result = await runScans(
-      ["lms", "keep", runId, ...where(entry), ...row, "--ours", entry.pin_ours, "--canvas", entry.pin_theirs],
+      ["lms", "keep", runId, ...where(entry), ...rowOf(entry), "--ours", entry.pin_ours, "--canvas", entry.pin_theirs],
       root,
     );
-    if (result.ok) settle(runId, last.value, entry.key, true);
+    if (result.ok) settle(runId, entry.key, true);
     return { ok: result.ok, kept: "canvas", output: result.output, command: result.command };
   }
   if (body.keep !== "ainar") return { error: "Keep which: ainar or canvas." };
   if (entry.ours === null && entry.kind === "grades") return { error: "There is no mark here to send." };
+  remember(runId, "canvas-row:" + entry.key, [entry.key], entry);
+  const [shown] = named([entry], body.names === true);
   const preview =
-    (entry.kind === "grades" ? (entry.name || entry.student_id) + " in " + (entry.title || entry.assessment_id) : (entry.title || entry.assessment_id) + " · " + entry.field) +
+    (entry.kind === "grades" ? (shown.name || entry.student_id) + " in " + (entry.title || entry.assessment_id) : (entry.title || entry.assessment_id) + " · " + entry.field) +
     (entry.group ? " (" + entry.group + ")" : "") +
     ": Canvas has " +
     (entry.theirs ?? "nothing") +
     ", and would get " +
     entry.ours +
     ".";
-  if (body.confirm !== true) return { preview };
-  const args =
-    entry.kind === "grades"
-      ? ["lms", "push", runId, "--target", "canvas-api", ...where(entry), ...row, "--overwrite-drift", "--confirm"]
-      : ["lms", "assignment-push", runId, ...where(entry), ...row, "--overwrite-drift", "--confirm"];
-  const result = await runScans(args, root);
-  if (result.ok) settle(runId, last.value, entry.key, false);
-  return { ok: result.ok, kept: "ainar", output: result.output, command: result.command };
+  return { preview };
 };
 
+/** The one row of a difference: its student, or its definition field. */
+const rowOf = (entry) => (entry.student_id ? ["--student", entry.student_id] : ["--field", entry.field]);
+
 /** The settled row out of the last answer, so the list redraws without asking Canvas. */
-const settle = (runId, value, key, kept) => {
+const settle = (runId, key, kept) => {
+  const last = lastCanvasCheck(runId);
+  if (!last || !Array.isArray(last.value.differences)) return;
+  const value = last.value;
   const differences = value.differences.filter((entry) => entry.key !== key);
   amendCanvasCheck(
     runId,

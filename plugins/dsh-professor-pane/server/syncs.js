@@ -24,6 +24,7 @@ import { exportPath, loadSheetConfig } from "@ainar/core/src/grade-sheet.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { LinkTable } from "@ainar/core/src/sync/links.ts";
 import { syncsOf } from "@ainar/core/src/sync/registry.ts";
+import { describeChange } from "@ainar/core/src/sync/sheet-marks.ts";
 import { checkSheet } from "@ainar/core/src/sync/sheet-watch.ts";
 
 import { expiredAt } from "@ainar/core/src/connections/google.ts";
@@ -61,7 +62,7 @@ const needs = (sync) =>
       ? "message"
       : null;
 
-const isMarksSheet = (sync) => sync.service === "sheets" && sync.stream === "marks";
+export const isMarksSheet = (sync) => sync.service === "sheets" && sync.stream === "marks";
 
 /**
  * A waiting row's place in the sheet, for the view to draw as a small grid.
@@ -247,6 +248,8 @@ export const syncsDocument = (workspace, runId, { names = false } = {}) => {
     from: sync.from || null,
     enabled: sync.enabled !== false,
     live: isLive(sync),
+    // A grade sheet's Preview and Send go through its road (server/roads.js).
+    road: isMarksSheet(sync) ? sync.sync_id : null,
     needs: needs(sync),
     // Only the sheet reads from a file the professor exports; the rest speak
     // to their service directly.
@@ -439,6 +442,98 @@ export const runSyncAction = async (workspace, root, runId, body) => {
   if (isMarksSheet(sync) && body.json === true) args.push("--json");
   return withReconnect(await runScans(args, root));
 };
+
+/** The one JSON object in a command's output, which may carry a warning line around it. */
+const jsonOf = (output) => {
+  const start = String(output || "").indexOf("{");
+  const end = String(output || "").lastIndexOf("}");
+  if (start < 0 || end < start) return null;
+  try {
+    return JSON.parse(output.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * One grade sheet, planned (`sync plan --json`): what would come in, what
+ * waits, or why it cannot be read. A machine with no Google login plans from
+ * the copy the professor downloaded; `runSyncAction` refuses with the reason
+ * when there is none. The snapshot is where it was read from and what it
+ * would change, so a send can tell whether the sheet moved since.
+ */
+const planSheet = async ({ workspace, root, runId, names, from }, sync) => {
+  const ask = (source) =>
+    runSyncAction(workspace, root, runId, { action: "plan", sync: sync.sync_id, json: true, names, from: source });
+  let read = from === "export" ? "export" : null;
+  let answer = await ask(read || undefined);
+  if (!read && answer.error && /no Google login/.test(answer.error)) {
+    read = "export";
+    answer = await ask("export");
+  }
+  if (answer.error) return { error: answer.error, reconnect: Boolean(answer.reconnect) };
+  const plan = jsonOf(answer.output);
+  if (!answer.ok || !plan) return { error: answer.output || "The sheet gave no answer.", reconnect: Boolean(answer.reconnect) };
+  const { bundle } = loadedRun(workspace, runId);
+  const titles = new Map(assessmentsOf(bundle, runId).map((entry) => [entry.assessment_id, entry.title || entry.assessment_id]));
+  const people = names ? rosterPeople() : null;
+  const changes = plan.changes || [];
+  const counts = countsOf(changes);
+  return {
+    preview: {
+      from: read,
+      live: isLive(sync),
+      rows: plan.rows ?? null,
+      placed: Array.isArray(plan.placed) ? plan.placed.length : 0,
+      held: plan.queued ?? 0,
+      problems: Array.isArray(plan.problems) ? plan.problems.length : 0,
+      ...counts,
+      moves: counts.added + counts.changed + counts.removed,
+      changes: changes.map((change) => ({
+        student: change.student,
+        name: nameOf(people, change.student),
+        title: titles.get(change.assessment) || change.assessment,
+        said: describeChange(change),
+      })),
+    },
+    // The whole plan is the one thing a sheet's send can name.
+    keys: [sync.sync_id],
+    snapshot: { from: read, live: isLive(sync), changes: JSON.stringify(changes) },
+  };
+};
+
+/**
+ * A grade sheet you keep, as a road (server/roads.js): marks come in, and a
+ * two-way or anchored sheet is written into, which is why that one is live.
+ * `sync run` cannot be told which rows to take, so a send first plans again
+ * from the same source, and goes ahead only if the sheet would bring in
+ * exactly what the preview showed.
+ */
+export const sheetRoad = (sync) => ({
+  id: sync.sync_id,
+  service: "sheets",
+  label: LABELS["sheets|marks"],
+  live: isLive(sync),
+  enabled: sync.enabled !== false,
+  plan: (ctx) => planSheet(ctx, sync),
+  async recheck(ctx, snapshot) {
+    const again = await planSheet(Object.assign({}, ctx, { from: snapshot.from || undefined }), sync);
+    if (again.error) return { error: again.error };
+    return again.snapshot.changes === snapshot.changes ? null : { again: "The sheet changed since the preview. Preview again." };
+  },
+  async send(ctx, snapshot, keys) {
+    if (!keys.includes(sync.sync_id)) return { error: "Nothing was chosen to send." };
+    const answer = await runSyncAction(ctx.workspace, ctx.root, ctx.runId, {
+      action: "run",
+      sync: sync.sync_id,
+      names: ctx.names,
+      from: snapshot.from === "export" ? "export" : undefined,
+      confirm: snapshot.live,
+    });
+    if (answer.error) return { error: answer.error };
+    return { results: [{ kind: "marks", ok: Boolean(answer.ok), command: answer.command, output: answer.output || "" }] };
+  },
+});
 
 const NO_LOGIN = "This computer has no Google login of its own, so it cannot open the sheet directly.";
 const HOW_TO_DOWNLOAD =

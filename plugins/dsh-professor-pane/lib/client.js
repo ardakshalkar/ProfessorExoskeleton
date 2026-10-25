@@ -4533,6 +4533,103 @@ var diffSummary = (answer) => {
   return { total: directions.total, kinds, directions, applicable: canApply, kept: answer.kept || 0 };
 };
 
+// client/road-flow.js
+var postRoads = (runId, sessionId, body) => fetch(scoped(BASE + "/api/roads?run=" + encodeURIComponent(runId || ""), sessionId), {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify(body)
+}).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) }));
+var roadIn = (preview, id) => preview && Array.isArray(preview.roads) ? preview.roads.find((road) => road.id === id) || null : null;
+function useRoad(props) {
+  const [phase, setPhase] = React.useState("idle");
+  const [preview, setPreview] = React.useState(null);
+  const [results, setResults] = React.useState(null);
+  const base = { names: Boolean(props.names) };
+  const ask = (extra) => {
+    setPhase("asking");
+    setResults(null);
+    return postRoads(props.runId, props.sessionId, Object.assign({ confirm: false, roads: props.roads || void 0 }, base, extra)).then((body) => {
+      setPhase("idle");
+      setPreview(body);
+      return body;
+    });
+  };
+  const send2 = (keys, extra) => {
+    setPhase("sending");
+    return postRoads(props.runId, props.sessionId, Object.assign({ confirm: true, keys }, base, extra)).then((body) => {
+      setPhase("idle");
+      setPreview(null);
+      setResults(body);
+      return body;
+    });
+  };
+  const adopt = (body) => {
+    setResults(null);
+    setPreview(body);
+  };
+  const close = () => {
+    setPreview(null);
+    setResults(null);
+  };
+  return { phase, preview, results, ask, send: send2, adopt, close };
+}
+function RoadResults(props) {
+  const results = props.results;
+  return h(
+    "div",
+    { className: props.className || "pp-syncallx" },
+    results.error ? h("pre", { className: "pp-approveout pp-approveerr" }, results.error) : (results.results || []).map(
+      (entry, index) => h(
+        "pre",
+        { className: "pp-approveout" + (entry.ok ? "" : " pp-approveerr"), key: index },
+        (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + "\n" + entry.output
+      )
+    ),
+    h(
+      "div",
+      { className: "pp-dacts" },
+      results.again && props.onAgain ? h("button", { type: "button", className: "pp-segbtn", disabled: props.busy, onClick: props.onAgain }, props.busy ? "Asking…" : "Preview again") : null,
+      props.onClose ? h("button", { type: "button", className: "pp-segbtn", onClick: props.onClose }, "Close") : null
+    )
+  );
+}
+function RoadFlow(props) {
+  const road = useRoad(props);
+  const asking = road.phase === "asking";
+  const sending = road.phase === "sending";
+  const ask = () => road.ask().then((body2) => {
+    if (props.onPreviewed) props.onPreviewed(body2);
+  });
+  const send2 = (keys2) => road.send(keys2).then((body2) => {
+    if (props.onSent) props.onSent(body2);
+  });
+  const button = h(
+    "button",
+    {
+      type: "button",
+      className: "pp-segbtn",
+      disabled: props.disabled || road.phase !== "idle" || Boolean(road.preview && !road.preview.error),
+      title: props.title,
+      onClick: ask
+    },
+    asking ? props.asking || "Asking…" : props.label || "Preview…"
+  );
+  const preview = road.preview;
+  const keys = preview && !preview.error ? props.choose(preview) : null;
+  const body = preview ? preview.error ? h("p", { className: "pp-saveerr" }, preview.error) : h(
+    "div",
+    { className: props.className || "pp-syncallx" },
+    props.describe(preview),
+    h(
+      "div",
+      { className: "pp-dacts" },
+      keys ? h("button", { type: "button", className: "pp-segbtn pp-danger", disabled: sending, onClick: () => send2(keys) }, sending ? "Syncing…" : props.sendLabel(preview)) : h("span", { className: "pp-as" }, props.nothing || "Nothing to send."),
+      h("button", { type: "button", className: "pp-segbtn", disabled: sending, onClick: road.close }, keys ? "Cancel" : "Close")
+    )
+  ) : road.results ? h(RoadResults, { results: road.results, className: props.className, busy: asking, onAgain: ask, onClose: road.close }) : null;
+  return props.frame ? props.frame(button, body) : h(React.Fragment, null, button, body);
+}
+
 // client/syncs.js
 var shortWhy = (why) => {
   const text = String(why || "");
@@ -4607,6 +4704,36 @@ var when = (iso) => {
   const date = at.toLocaleDateString([], { day: "numeric", month: "short" });
   return days < 14 ? days + " days ago · " + date : date;
 };
+var plural = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
+var sheetLine = (sheet2) => sheet2.moves ? [
+  sheet2.added ? plural(sheet2.added, "mark") + " added" : null,
+  sheet2.changed ? plural(sheet2.changed, "mark") + " changed" : null,
+  sheet2.removed ? plural(sheet2.removed, "mark") + " taken back" : null
+].filter(Boolean).join(", ") : "nothing new";
+var CHANGES_AT_FIRST = 12;
+function SheetPlan(props) {
+  const plan = props.plan;
+  const [all, setAll] = React.useState(false);
+  const shown = all ? plan.changes : plan.changes.slice(0, CHANGES_AT_FIRST);
+  return h(
+    React.Fragment,
+    null,
+    h(
+      "b",
+      null,
+      sheetLine(plan) + (plan.rows !== null ? " · " + plural(plan.rows, "row") + " read" : ""),
+      plan.from === "export" ? h("span", { className: "pp-as" }, " (from the downloaded copy)") : null
+    ),
+    shown.length ? h(
+      "ul",
+      null,
+      shown.map((change, index) => h("li", { key: index }, (change.name || change.student) + " · " + change.title + ": " + change.said))
+    ) : null,
+    plan.changes.length > shown.length ? h("button", { type: "button", className: "pp-morebtn", onClick: () => setAll(true) }, "Show " + (plan.changes.length - shown.length) + " more") : null,
+    plan.held ? h("span", { className: "pp-as" }, plural(plan.held, "row") + " the sync was not sure of wait for you under Names to confirm.") : null,
+    plan.problems ? h("span", { className: "pp-as" }, plural(plan.problems, "row") + " could not be read.") : null
+  );
+}
 var initials = (name) => String(name || "").split(/\s+/).filter(Boolean).slice(0, 2).map((word) => word[0].toUpperCase()).join("") || "?";
 function SheetPreview(props) {
   const preview = props.preview;
@@ -4700,8 +4827,11 @@ function SyncCard(props) {
   const [picked, setPicked] = React.useState("");
   const [reading, setReading] = React.useState(null);
   const [previewed, setPreviewed] = React.useState(false);
-  const [busy, setBusy] = React.useState(null);
+  const [pressed, setBusy] = React.useState(null);
   const [dropping, setDropping] = React.useState(false);
+  const road = useRoad({ runId: props.runId, sessionId: props.sessionId, names: props.names, roads: sync.road ? [sync.road] : null });
+  const busy = pressed || (road.phase === "asking" ? "plan" : road.phase === "sending" ? "run" : null);
+  const roadPreview = roadIn(road.preview, sync.road);
   const service = SERVICE[sync.service] || { mark: sync.service.slice(0, 2), name: sync.service };
   const needsAssessment = sync.needs === "assessment";
   const assessment = props.assessment || picked;
@@ -4711,7 +4841,19 @@ function SyncCard(props) {
     if (props.onDone) props.onDone();
   };
   const from = reading || (sync.canReadLive ? "live" : "export");
+  const canSend = sync.road ? Boolean(roadPreview && roadPreview.ok) : previewed;
+  const forget = () => {
+    setPreviewed(false);
+    road.close();
+  };
   const press2 = (action, confirm) => {
+    if (sync.road) {
+      setResult(null);
+      const source = { from: sync.exported && from === "export" ? "export" : "live" };
+      const asked = action === "plan" ? road.ask(source) : road.send({ [sync.road]: [sync.road] }, sync.live ? {} : Object.assign({ direct: true }, source));
+      asked.then(done);
+      return;
+    }
     setBusy(action);
     syncPost(props.runId, props.sessionId, "/api/syncs/action", {
       action,
@@ -4733,7 +4875,7 @@ function SyncCard(props) {
       (answer) => {
         setBusy(null);
         setResult(Object.assign({ action: "map" }, answer));
-        setPreviewed(false);
+        forget();
         done();
       }
     );
@@ -4755,9 +4897,15 @@ function SyncCard(props) {
       })
     ).catch((error) => ({ error: String(error.message || error) })).then((answer) => {
       setBusy(null);
-      setResult(Object.assign({ action: "plan" }, answer));
       const kept = !answer.error && answer.ok;
       if (kept) setReading("export");
+      if (kept && answer.road) {
+        setResult(null);
+        road.adopt({ previewedAt: answer.road.at, roads: [answer.road] });
+      } else {
+        road.close();
+        setResult(Object.assign({ action: "plan" }, answer));
+      }
       setPreviewed(Boolean(kept));
       done();
     });
@@ -4841,7 +4989,7 @@ function SyncCard(props) {
           value: picked,
           onChange: (event) => {
             setPicked(event.target.value);
-            setPreviewed(false);
+            forget();
           }
         },
         h("option", { value: "" }, "Choose the assessment…"),
@@ -4856,7 +5004,7 @@ function SyncCard(props) {
           value: from,
           onChange: (event) => {
             setReading(event.target.value);
-            setPreviewed(false);
+            forget();
           }
         },
         h("option", { value: "live" }, "Read the sheet in Google"),
@@ -4898,10 +5046,11 @@ function SyncCard(props) {
       ) : null,
       h("span", { className: "pp-segspacer" }),
       // Before Preview: pressing it with a refused sign-in only fails again.
-      sync.reconnect || check && check.reconnect || result && result.reconnect ? h(ReconnectGoogle, {
+      sync.reconnect || check && check.reconnect || result && result.reconnect || roadPreview && roadPreview.reconnect ? h(ReconnectGoogle, {
         className: "pp-syncbtn pp-syncbtn-send",
         onBack: () => {
           setResult(null);
+          road.close();
           done();
         }
       }) : null,
@@ -4915,8 +5064,8 @@ function SyncCard(props) {
         {
           type: "button",
           className: "pp-syncbtn pp-syncbtn-send",
-          disabled: Boolean(busy) || !ready || !previewed,
-          title: previewed ? "Do what the preview shows" : "Preview first",
+          disabled: Boolean(busy) || !ready || !canSend,
+          title: canSend ? "Do what the preview shows" : "Preview first",
           onClick: () => press2("run", true)
         },
         busy === "run" ? "Sending…" : "Send"
@@ -4966,7 +5115,20 @@ function SyncCard(props) {
         h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: () => setResult(null) }, "×")
       ),
       h("pre", null, result.error || result.output || "(nothing printed)")
-    ) : null
+    ) : null,
+    // The road's preview: what Send would bring in, from the snapshot it keeps.
+    road.preview ? h(
+      "div",
+      { className: "pp-syncout" + (road.preview.error || roadPreview && !roadPreview.ok ? " pp-syncout-err" : "") },
+      h(
+        "div",
+        { className: "pp-syncouthead" },
+        h("span", null, roadPreview && roadPreview.ok ? "Preview — nothing was changed" : "Could not preview"),
+        h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: forget }, "×")
+      ),
+      roadPreview && roadPreview.ok ? h("div", { className: "pp-syncallx" }, h(SheetPlan, { plan: roadPreview.preview })) : h("pre", null, road.preview.error || roadPreview && roadPreview.error || "(nothing printed)")
+    ) : null,
+    road.results ? h(RoadResults, { results: road.results, busy: road.phase === "asking", onAgain: () => press2("plan"), onClose: road.close }) : null
   );
 }
 function WaitingCard(props) {
@@ -5101,7 +5263,7 @@ var post = (path, runId, sessionId, body) => fetch(scoped(BASE + path + "?run=" 
   headers: { "content-type": "application/json" },
   body: JSON.stringify(body)
 }).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) }));
-var plural = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
+var plural2 = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
 var subject = (entry) => entry.kind === "assignments" ? entry.field.replace(/_/g, " ") : entry.name || entry.student_id || entry.theirs || "—";
 var valueText = (value) => {
   if (value === null || value === void 0) return "—";
@@ -5203,14 +5365,51 @@ function DiffRow(props) {
       "pre",
       { className: "pp-approveout" + (answer.error || !answer.ok ? " pp-approveerr" : "") },
       answer.error || answer.output || (answer.kept === "canvas" ? "Kept Canvas's." : "Sent.")
+    ) : null,
+    // The preview went stale or was lost in a reload: the roads' retry, here for one row.
+    answer && answer.again ? h(
+      "div",
+      { className: "pp-dacts" },
+      h(
+        "button",
+        {
+          type: "button",
+          className: "pp-segbtn",
+          disabled: phase !== "idle",
+          onClick: () => {
+            setAnswer(null);
+            settle("ainar", false);
+          }
+        },
+        "Preview again"
+      )
     ) : null
   );
 }
+var canvasPreview = (answer) => {
+  const road = roadIn(answer, "canvas");
+  return road && road.ok ? road.preview : null;
+};
+var chooseCanvas = (answer) => {
+  const preview = canvasPreview(answer);
+  if (!preview || !preview.send.length && !preview.take.length && !(preview.absent || []).length) return null;
+  return { canvas: preview.send.concat(preview.take).map((entry) => entry.key) };
+};
+var canvasSendLabel = (answer) => {
+  const preview = canvasPreview(answer);
+  const absent = preview.absent || [];
+  return [
+    preview.send.length ? "Send " + preview.send.length + " to Canvas" : null,
+    preview.take.length ? "bring in " + preview.take.length : null,
+    absent.length ? "note " + absent.length + " not in Canvas" : null
+  ].filter(Boolean).join(" and ");
+};
 function SyncAll(props) {
-  const preview = props.preview;
-  const [phase, setPhase] = React.useState("idle");
-  const [result, setResult] = React.useState(null);
+  const answer = props.answer;
+  const preview = canvasPreview(answer);
   const [open2, setOpen] = React.useState(false);
+  const road = roadIn(answer, "canvas");
+  if (!preview) return h("p", { className: "pp-saveerr" }, road && road.error || "Canvas gave no answer.");
   const send2 = preview.send;
   const take = preview.take;
   const held = preview.held;
@@ -5218,36 +5417,6 @@ function SyncAll(props) {
   const marks = send2.filter((entry) => entry.kind === "grades");
   const fields = send2.filter((entry) => entry.kind === "assignments");
   const nothing = !send2.length && !take.length && !absent.length;
-  const go = () => {
-    setPhase("sending");
-    post("/api/canvas/sync-all", props.runId, props.sessionId, {
-      confirm: true,
-      keys: send2.concat(take).map((entry) => entry.key)
-    }).then((body) => {
-      setPhase("idle");
-      setResult(body);
-      if (body.check && props.onChecked) props.onChecked(body.check);
-    });
-  };
-  if (result) {
-    return h(
-      "div",
-      { className: "pp-syncall" },
-      result.error ? h("pre", { className: "pp-approveout pp-approveerr" }, result.error) : result.results.map(
-        (entry, index) => h(
-          "pre",
-          { className: "pp-approveout" + (entry.ok ? "" : " pp-approveerr"), key: index },
-          (entry.ok ? "✓ " : "✗ ") + entry.command + "\n" + entry.output
-        )
-      ),
-      h(
-        "div",
-        { className: "pp-dacts" },
-        result.again && props.onAgain ? h("button", { type: "button", className: "pp-segbtn", onClick: props.onAgain }, "Preview again") : null,
-        h("button", { type: "button", className: "pp-segbtn", onClick: props.onClose }, "Close")
-      )
-    );
-  }
   const byAssessment2 = (rows) => {
     const counts = /* @__PURE__ */ new Map();
     for (const entry of rows) {
@@ -5267,17 +5436,17 @@ function SyncAll(props) {
     );
   };
   return h(
-    "div",
-    { className: "pp-syncall" },
-    h("span", { className: "pp-as" }, "Asked Canvas " + when(props.checkedAt) + ". Nothing has been sent yet."),
+    React.Fragment,
+    null,
+    h("span", { className: "pp-as" }, "Asked Canvas " + when(preview.checkedAt) + ". Nothing has been sent yet."),
     nothing ? h("span", null, "Nothing one-sided to apply.") : null,
-    marks.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(marks.length, "mark")), h("ul", null, byAssessment2(marks))) : null,
-    fields.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(fields.length, "definition field")), h("ul", null, byAssessment2(fields))) : null,
-    take.length ? h("b", null, "Into the class list: " + plural(take.length, "student") + " Canvas has and this run does not") : null,
+    marks.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural2(marks.length, "mark")), h("ul", null, byAssessment2(marks))) : null,
+    fields.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural2(fields.length, "definition field")), h("ul", null, byAssessment2(fields))) : null,
+    take.length ? h("b", null, "Into the class list: " + plural2(take.length, "student") + " Canvas has and this run does not") : null,
     absent.length ? h(
       "span",
       null,
-      h("b", null, "Not in Canvas any more: " + plural(absent.length, "student")),
+      h("b", null, "Not in Canvas any more: " + plural2(absent.length, "student")),
       " — each is noted with today's date and stays in the class until you drop them.",
       absent.length <= 8 ? h("ul", null, absent.map((entry) => h("li", { key: entry.key }, subject(entry)))) : null
     ) : null,
@@ -5301,22 +5470,8 @@ function SyncAll(props) {
     held.length ? h(
       "span",
       { className: "pp-as" },
-      "Left for you: " + plural(held.length, "difference") + " — conflicts, what Canvas changed, and what is held. Each is in Details, with Keep AINAR and Keep Canvas."
-    ) : null,
-    h(
-      "div",
-      { className: "pp-dacts" },
-      nothing ? null : h(
-        "button",
-        { type: "button", className: "pp-segbtn pp-danger", disabled: phase !== "idle", onClick: go },
-        phase === "sending" ? "Syncing…" : [
-          send2.length ? "Send " + send2.length + " to Canvas" : null,
-          take.length ? "bring in " + take.length : null,
-          absent.length ? "note " + absent.length + " not in Canvas" : null
-        ].filter(Boolean).join(" and ")
-      ),
-      h("button", { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: props.onClose }, "Cancel")
-    )
+      "Left for you: " + plural2(held.length, "difference") + " — conflicts, what Canvas changed, and what is held. Each is in Details, with Keep AINAR and Keep Canvas."
+    ) : null
   );
 }
 function CanvasDifferences(props) {
@@ -5328,7 +5483,6 @@ function CanvasDifferences(props) {
   const [kind, setKind] = React.useState(null);
   const [way, setWay] = React.useState("all");
   const [more, setMore] = React.useState({});
-  const [syncing, setSyncing] = React.useState(null);
   const url = scoped(
     BASE + "/api/canvas/differences?run=" + encodeURIComponent(props.runId || "") + (props.names ? "&names=1" : "") + // Read again when a check lands — this pane's, or one the server
     // already had — and after a press here.
@@ -5345,14 +5499,6 @@ function CanvasDifferences(props) {
   const running2 = check.phase === "running";
   const summary = diffSummary(answer);
   const reread = () => setTick((value) => value + 1);
-  const preview = () => {
-    setSyncing("asking");
-    post("/api/canvas/sync-all", props.runId, props.sessionId, { confirm: false, names: Boolean(props.names) }).then((body) => {
-      if (body.error) return setSyncing({ error: body.error });
-      setSyncing(body);
-      reread();
-    });
-  };
   const head = h(
     "div",
     { className: "pp-cdiffhead" },
@@ -5376,6 +5522,11 @@ function CanvasDifferences(props) {
   }
   const shownWay = way !== "all" && !summary.directions[way] ? "all" : way;
   const rows = answer.differences.filter((entry) => (!kind || entry.kind === kind) && (shownWay === "all" || entry.direction === shownWay));
+  const details = h(
+    "button",
+    { type: "button", className: "pp-segbtn", "aria-expanded": open2, disabled: !summary.total, onClick: () => setOpen(!open2) },
+    open2 ? "Hide details" : "Details"
+  );
   const ways = [{ id: "all", label: "All " + summary.total }].concat(
     DIRECTIONS.filter((item) => summary.directions[item.id]).map((item) => ({
       id: item.id,
@@ -5412,48 +5563,35 @@ function CanvasDifferences(props) {
       "span",
       { className: "pp-cdiffways" },
       summary.directions.push + " to Canvas · " + summary.directions.pull + " from Canvas · ",
-      h("span", { className: summary.directions.conflict ? "pp-way-conflict" : null }, plural(summary.directions.conflict, "conflict")),
+      h("span", { className: summary.directions.conflict ? "pp-way-conflict" : null }, plural2(summary.directions.conflict, "conflict")),
       " · " + summary.directions.held + " held" + (summary.kept ? " · " + summary.kept + " kept as Canvas has them" : ""),
       checked ? h("span", { className: "pp-as" }, " — " + checked) : null
     ),
     answer.roster && answer.roster.error ? h("span", { className: "pp-saveerr" }, "Class list: " + answer.roster.error) : null,
-    h(
-      "div",
-      { className: "pp-dacts" },
-      h(
-        "button",
-        { type: "button", className: "pp-segbtn", "aria-expanded": open2, disabled: !summary.total, onClick: () => setOpen(!open2) },
-        open2 ? "Hide details" : "Details"
-      ),
-      // In the Sync view, Sync all is the one above every road.
-      props.noSyncAll ? null : h(
-        "button",
-        {
-          type: "button",
-          className: "pp-segbtn",
-          disabled: running2 || syncing === "asking" || Boolean(syncing && syncing.preview),
-          title: "Ask Canvas again and show what Sync all would send and bring in. Nothing is sent until you press Send.",
-          onClick: preview
-        },
-        syncing === "asking" ? "Asking Canvas…" : "Sync all…"
-      )
-    ),
-    syncing && syncing.error ? h("p", { className: "pp-saveerr" }, syncing.error) : null,
-    syncing && syncing.preview ? h(SyncAll, {
-      // A new preview is a new SyncAll, so Preview again leaves the old result behind.
-      key: syncing.checkedAt,
-      preview: syncing.preview,
-      checkedAt: syncing.checkedAt,
+    // In the Sync view, Sync all is the one above every road.
+    props.noSyncAll ? h("div", { className: "pp-dacts" }, details) : h(RoadFlow, {
       runId: props.runId,
       sessionId: props.sessionId,
-      onChecked: (state) => noteCanvasCheck(props.runId, state, props.sessionId),
-      onAgain: preview,
-      onClose: () => {
-        setSyncing(null);
+      names: props.names,
+      roads: ["canvas"],
+      label: "Sync all…",
+      asking: "Asking Canvas…",
+      title: "Ask Canvas again and show what Sync all would send and bring in. Nothing is sent until you press Send.",
+      disabled: running2,
+      className: "pp-syncall",
+      // A preview is a fresh check: the counts above read it again.
+      describe: (answer2) => h(SyncAll, { answer: answer2, key: answer2.previewedAt }),
+      choose: chooseCanvas,
+      sendLabel: canvasSendLabel,
+      nothing: "Nothing one-sided to apply.",
+      onPreviewed: reread,
+      onSent: (body) => {
+        if (body.after && body.after.canvas) noteCanvasCheck(props.runId, body.after.canvas, props.sessionId);
         reread();
         if (props.onWrite) props.onWrite();
-      }
-    }) : null,
+      },
+      frame: (button, body) => h(React.Fragment, null, h("div", { className: "pp-dacts" }, details, button), body)
+    }),
     open2 ? h(
       "div",
       { className: "pp-dlist" },
@@ -7784,7 +7922,7 @@ function Accounts(props) {
 }
 
 // client/service-cards.js
-var plural2 = (count, one) => count + " " + one + (count === 1 ? "" : "s");
+var plural3 = (count, one) => count + " " + one + (count === 1 ? "" : "s");
 var dayOf = (iso) => {
   if (!iso) return null;
   const at = new Date(iso);
@@ -7829,7 +7967,7 @@ function SheetsCard(props) {
     props.onOpenSync && syncs.length ? h(
       "p",
       { className: "pp-as" },
-      plural2(syncs.length, "grade sheet") + (waiting2.length ? " · " + waiting2.length + " names to confirm" : "") + " — synced from Sync.",
+      plural3(syncs.length, "grade sheet") + (waiting2.length ? " · " + waiting2.length + " names to confirm" : "") + " — synced from Sync.",
       h("button", { type: "button", className: "pp-linkbtn", onClick: props.onOpenSync }, "Open Sync")
     ) : null,
     props.onOpenSync ? null : syncs.map(
@@ -8117,7 +8255,7 @@ function CourseIntegrations(props) {
     setFilter((current) => ({ id, tick: current.tick + 1 }));
     scrollTo("pp-card-canvas");
   };
-  const plural8 = (count, one, many) => count + " " + (count === 1 ? one : many);
+  const plural9 = (count, one, many) => count + " " + (count === 1 ? one : many);
   const migrate = () => {
     setMigrating("working");
     fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
@@ -8134,21 +8272,21 @@ function CourseIntegrations(props) {
       key: "waiting",
       service: "sheets",
       mark: "GS",
-      text: plural8(waiting2, "name", "names") + " from the grade sheet to confirm",
+      text: plural9(waiting2, "name", "names") + " from the grade sheet to confirm",
       go: props.onOpenSync || (() => scrollTo("pp-card-sheets"))
     } : null,
     reachable && counts.unlinked.length ? {
       key: "unlinked",
       service: "canvas",
       mark: "Cv",
-      text: plural8(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
+      text: plural9(counts.unlinked.length, "assessment has", "assessments have") + " no Canvas column",
       go: () => show("unlinked")
     } : null,
     counts.toSend.length ? {
       key: "marks",
       service: "canvas",
       mark: "Cv",
-      text: "Canvas is missing marks for " + plural8(counts.toSend.length, "assessment", "assessments"),
+      text: "Canvas is missing marks for " + plural9(counts.toSend.length, "assessment", "assessments"),
       // Sync's Marks for Canvas, where course mode has it; the card's own
       // filter only without one.
       go: props.onOpenSync || (() => show("marks"))
@@ -8258,7 +8396,7 @@ function CourseIntegrations(props) {
       h(
         "span",
         { className: "pp-as" },
-        (implied === syncs.length ? "All " : implied + " of ") + plural8(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
+        (implied === syncs.length ? "All " : implied + " of ") + plural9(syncs.length, "sync is", "syncs are") + " read from older settings. Saving them writes syncs: into the run's settings."
       ),
       h(
         "button",
@@ -9795,7 +9933,7 @@ function Planning(props) {
       })
     );
   };
-  const post3 = (path, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId), sessionId), {
+  const post2 = (path, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId), sessionId), {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
@@ -9804,7 +9942,7 @@ function Planning(props) {
     const p = pending;
     const o = dates[p.id];
     setPending(Object.assign({}, p, { saving: true }));
-    post3("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at }).then((result) => {
+    post2("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at }).then((result) => {
       if (result.error) {
         setDates((d) => {
           const next = Object.assign({}, d);
@@ -9851,7 +9989,7 @@ function Planning(props) {
     const moves = [{ module: p.id, week: p.to, meetings: stamps(p.id, p.meetings) }];
     if (p.other && p.swap) moves.push({ module: p.other, week: p.from, meetings: stamps(p.other, p.otherMeetings) });
     setPending(Object.assign({}, p, { saving: true }));
-    post3("/api/plan/topic", { moves }).then((result) => {
+    post2("/api/plan/topic", { moves }).then((result) => {
       const ids = [p.id, p.other].filter(Boolean);
       if (result.error) {
         setTopicWeeks((tw) => {
@@ -11543,7 +11681,7 @@ var size = (bytes) => {
   return (value >= 10 || unit === 0 ? Math.round(value) : Math.round(value * 10) / 10) + " " + units[unit];
 };
 var minutes = (seconds) => seconds ? Math.max(1, Math.round(seconds / 60)) + " min" : "—";
-var plural3 = (n, one, many) => n + " " + (n === 1 ? one : many);
+var plural4 = (n, one, many) => n + " " + (n === 1 ? one : many);
 var WHOSE_MOVE = { you: "Your move", assistant: "Assistant", done: "Done" };
 function PileProgress(props) {
   const standing = props.standing;
@@ -11635,14 +11773,14 @@ function Files(props) {
           "div",
           { className: "pp-filetile" },
           h("span", { className: "pp-filetilehead" }, "Scans"),
-          h("b", null, plural3(doc.totals.scans.files, "PDF", "PDFs")),
+          h("b", null, plural4(doc.totals.scans.files, "PDF", "PDFs")),
           h("span", { className: "pp-as" }, size(doc.totals.scans.bytes))
         ),
         h(
           "div",
           { className: "pp-filetile" },
           h("span", { className: "pp-filetilehead" }, "Audio"),
-          h("b", null, doc.totals.audio.takes ? plural3(doc.totals.audio.takes, "recording", "recordings") : "None yet"),
+          h("b", null, doc.totals.audio.takes ? plural4(doc.totals.audio.takes, "recording", "recordings") : "None yet"),
           h(
             "span",
             { className: "pp-as" },
@@ -11656,7 +11794,7 @@ function Files(props) {
           h(
             "b",
             null,
-            [doc.unfiled.count ? plural3(doc.unfiled.count, "scan", "scans") : null, doc.recordings.count ? plural3(doc.recordings.count, "recording", "recordings") : null].filter(Boolean).join(" · ")
+            [doc.unfiled.count ? plural4(doc.unfiled.count, "scan", "scans") : null, doc.recordings.count ? plural4(doc.recordings.count, "recording", "recordings") : null].filter(Boolean).join(" · ")
           ),
           h("span", { className: "pp-as" }, "uploaded, not yet given to an assessment or a student")
         ) : null
@@ -11769,7 +11907,7 @@ function Files(props) {
       doc.papers.count ? h(
         "p",
         { className: "pp-as" },
-        "Also stored: " + plural3(doc.papers.count, "question paper or answer key", "question papers and answer keys") + " (" + size(doc.papers.bytes) + ")."
+        "Also stored: " + plural4(doc.papers.count, "question paper or answer key", "question papers and answer keys") + " (" + size(doc.papers.bytes) + ")."
       ) : null
     )
   );
@@ -11778,7 +11916,7 @@ function Files(props) {
 // client/connections-menu.js
 var MARK = { canvas: "Cv", sheets: "GS", github: "GH", telegram: "Tg", moodle: "Md", transcription: "Tr" };
 var RANK = { bad: 3, warn: 2, ok: 1 };
-var plural4 = (count, one, many) => count + " " + (count === 1 ? one : many);
+var plural5 = (count, one, many) => count + " " + (count === 1 ? one : many);
 var connectionsOf = (data, roads, checks) => {
   if (!data) return [];
   const rows = data.integrations || [];
@@ -11804,7 +11942,7 @@ var connectionsOf = (data, roads, checks) => {
       state.state = "connected";
       state.line = (data.canvas && data.canvas.host ? data.canvas.host : "Canvas") + " · every step recorded.";
     }
-    if (waiting2 && state.tone === "ok") Object.assign(state, { tone: "warn", state: plural4(waiting2, "row", "rows") + " to confirm" });
+    if (waiting2 && state.tone === "ok") Object.assign(state, { tone: "warn", state: plural5(waiting2, "row", "rows") + " to confirm" });
     out.push(Object.assign({ id: "canvas", name: "Canvas", syncs: syncsOf("canvas") }, state));
   }
   const sheetSyncs = syncsOf("sheets");
@@ -11816,7 +11954,7 @@ var connectionsOf = (data, roads, checks) => {
     const changed = found.filter((check) => check.state === "changed");
     const waiting2 = waitingOf("sheets");
     const who2 = google.account ? " for " + google.account : "";
-    const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who2 + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural4(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
+    const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who2 + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural5(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
       tone: "warn",
       state: "changed in Google",
       line: "The sheet changed" + (changed[0].modified ? " " + when(changed[0].modified) : "") + " since the last sync.",
@@ -11985,14 +12123,14 @@ function ConnectionsMenu(props) {
         // is said on Today and in Sync, and in the header it was the widest
         // control on every screen (docs/RIBBONS.md R5). The marks keep their
         // colour, so a service in trouble still shows here.
-        title: props.disabled ? "Private — not shown while previewing as a student" : [label, props.waiting ? plural4(props.waiting, "row", "rows") + " waiting" : null, "press for each connection and its syncs"].filter(Boolean).join(" · "),
+        title: props.disabled ? "Private — not shown while previewing as a student" : [label, props.waiting ? plural5(props.waiting, "row", "rows") + " waiting" : null, "press for each connection and its syncs"].filter(Boolean).join(" · "),
         "aria-label": "Connections: " + label,
         onClick: () => setOpen(!open2)
       },
       rows.map(
         (row) => h("span", { className: "pp-conndot pp-conn-" + row.tone, key: row.id, title: row.name + ": " + row.state }, MARK[row.id] || row.id.slice(0, 2))
       ),
-      props.waiting ? h("span", { className: "pp-connwait", title: plural4(props.waiting, "row", "rows") + " waiting" }, String(props.waiting)) : null,
+      props.waiting ? h("span", { className: "pp-connwait", title: plural5(props.waiting, "row", "rows") + " waiting" }, String(props.waiting)) : null,
       h("span", { className: "pp-connchev", "aria-hidden": "true" }, open2 ? "▴" : "▾")
     ),
     open2 ? ReactDOM.createPortal(panel, document.body) : null
@@ -12247,7 +12385,7 @@ function Preferences(props) {
 
 // client/concepts.js
 var pct2 = (value) => value === null || value === void 0 ? "—" : Math.round(value * 100) + "%";
-var plural5 = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
+var plural6 = (n, one, many) => n + " " + (n === 1 ? one : many || one + "s");
 var STATE_WORDS = {
   not_observed: "not observed",
   introduced: "introduced",
@@ -12272,7 +12410,7 @@ function Cell(props) {
     {
       type: "button",
       className: "pp-cg-cell" + (band === null ? " pp-cg-none" : " pp-cg-b" + band) + (thin ? " pp-cg-thin" : "") + (props.selected ? " pp-cg-sel" : "") + (props.lit ? " pp-cg-lit" : ""),
-      title: who(props.student) + " · " + props.concept.title + "\n" + (cell[1] ? pct2(cell[0]) + " on " + plural5(cell[1], "piece") + " of evidence" : "no evidence") + (cell[2] ? "\nrecorded: " + (STATE_WORDS[cell[2]] || cell[2]) : ""),
+      title: who(props.student) + " · " + props.concept.title + "\n" + (cell[1] ? pct2(cell[0]) + " on " + plural6(cell[1], "piece") + " of evidence" : "no evidence") + (cell[2] ? "\nrecorded: " + (STATE_WORDS[cell[2]] || cell[2]) : ""),
       onClick: props.onClick
     },
     cell[2] ? h("i", { className: "pp-cg-state", "aria-hidden": "true" }) : null
@@ -12292,7 +12430,7 @@ function CellPanel(props) {
     h(
       "p",
       { className: "pp-as" },
-      props.cell[1] ? pct2(props.cell[0]) + " on " + plural5(props.cell[1], "piece") + " of evidence" : "No evidence for this concept yet.",
+      props.cell[1] ? pct2(props.cell[0]) + " on " + plural6(props.cell[1], "piece") + " of evidence" : "No evidence for this concept yet.",
       props.cell[2] ? " · recorded: " + (STATE_WORDS[props.cell[2]] || props.cell[2]) : ""
     ),
     !answer ? h("p", { className: "pp-as" }, "Reading the evidence…") : answer.error ? h("p", { className: "pp-saveerr" }, answer.error) : answer.items.length ? h(
@@ -12351,7 +12489,7 @@ function ConceptPanel(props) {
     under.length ? h(
       React.Fragment,
       null,
-      h("p", { className: "pp-cg-sub" }, plural5(under.length, "student") + " under " + pct2(props.threshold)),
+      h("p", { className: "pp-cg-sub" }, plural6(under.length, "student") + " under " + pct2(props.threshold)),
       h(
         "ul",
         { className: "pp-cg-list" },
@@ -12360,7 +12498,7 @@ function ConceptPanel(props) {
             "li",
             { key: row.student.id },
             h("button", { type: "button", className: "pp-linkbtn", onClick: () => props.onStudent(row.student.id) }, who(row.student)),
-            h("small", null, pct2(row.value) + " · " + plural5(row.evidence, "piece"))
+            h("small", null, pct2(row.value) + " · " + plural6(row.evidence, "piece"))
           )
         )
       )
@@ -12581,7 +12719,7 @@ function ConceptsGrid(props) {
             h(
               "tr",
               null,
-              h("th", { className: "pp-cg-corner" }, plural5(rows.length, "concept") + " · " + plural5(order.length, "student")),
+              h("th", { className: "pp-cg-corner" }, plural6(rows.length, "concept") + " · " + plural6(order.length, "student")),
               order.map(
                 (entry) => h(
                   "th",
@@ -12754,12 +12892,7 @@ var matchCommand = (query, index, limit = 7) => {
 };
 
 // client/sync-view.js
-var plural6 = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
-var post2 = (path, runId, sessionId, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify(body)
-}).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) }));
+var plural7 = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
 var byAssessment = (rows) => {
   const counts = /* @__PURE__ */ new Map();
   for (const entry of rows) {
@@ -12768,38 +12901,46 @@ var byAssessment = (rows) => {
   }
   return [...counts].map(([title, n]) => title + ": " + n).join(" · ");
 };
-var sheetLine = (sheet2) => sheet2.moves ? [
-  sheet2.added ? plural6(sheet2.added, "mark") + " added" : null,
-  sheet2.changed ? plural6(sheet2.changed, "mark") + " changed" : null,
-  sheet2.removed ? plural6(sheet2.removed, "mark") + " taken back" : null
-].filter(Boolean).join(", ") : "nothing new";
+var partsOf = (preview) => {
+  const canvasRoad = roadIn(preview, "canvas");
+  const canvas = canvasRoad && canvasRoad.ok ? canvasRoad.preview : null;
+  const sheetRoads = preview.roads.filter((road) => road.service === "sheets");
+  const sheets = sheetRoads.filter((road) => road.ok).map((road) => Object.assign({ id: road.id }, road.preview));
+  return {
+    canvasError: canvasRoad && !canvasRoad.ok ? canvasRoad.error : null,
+    send: canvas ? canvas.send : [],
+    take: canvas ? canvas.take : [],
+    absent: canvas ? canvas.absent || [] : [],
+    held: canvas ? canvas.held : [],
+    sheets,
+    moving: sheets.filter((sheet2) => sheet2.moves > 0),
+    failed: sheetRoads.filter((road) => !road.ok)
+  };
+};
+var chooseAll = (preview) => {
+  const parts = partsOf(preview);
+  const keys = {};
+  if (parts.send.length || parts.take.length || parts.absent.length) keys.canvas = parts.send.concat(parts.take).map((entry) => entry.key);
+  for (const sheet2 of parts.moving) keys[sheet2.id] = [sheet2.id];
+  return Object.keys(keys).length ? keys : null;
+};
+var sendAllLabel = (preview) => {
+  const parts = partsOf(preview);
+  return "Sync: " + [
+    parts.send.length ? "send " + parts.send.length + " to Canvas" : null,
+    parts.take.length || parts.absent.length ? "update the class list" : null,
+    parts.moving.length ? "bring in " + plural7(parts.moving.length, "sheet") : null
+  ].filter(Boolean).join(", ");
+};
 function SyncAllPreview(props) {
   const preview = props.preview;
-  const canvas = preview.canvas && !preview.canvas.error ? preview.canvas : null;
-  const send2 = canvas ? canvas.send : [];
-  const take = canvas ? canvas.take : [];
-  const absent = canvas ? canvas.absent || [] : [];
-  const held = canvas ? canvas.held : [];
+  const { send: send2, take, absent, held, sheets, failed, canvasError } = partsOf(preview);
   const marks = send2.filter((entry) => entry.kind === "grades");
   const fields = send2.filter((entry) => entry.kind === "assignments");
-  const sheets = preview.sheets.filter((sheet2) => sheet2.ok);
-  const moving = sheets.filter((sheet2) => sheet2.moves > 0);
-  const failed = preview.sheets.filter((sheet2) => !sheet2.ok);
   const sheetHeld = sheets.reduce((sum, sheet2) => sum + (sheet2.held || 0), 0);
-  const nothing = !send2.length && !take.length && !absent.length && !moving.length;
-  const go = () => props.onSend({
-    canvas: send2.concat(take).map((entry) => entry.key),
-    sheets: moving.map((sheet2) => sheet2.id),
-    from: Object.fromEntries(moving.filter((sheet2) => sheet2.from).map((sheet2) => [sheet2.id, sheet2.from]))
-  });
-  const label = [
-    send2.length ? "send " + send2.length + " to Canvas" : null,
-    take.length || absent.length ? "update the class list" : null,
-    moving.length ? "bring in " + plural6(moving.length, "sheet") : null
-  ].filter(Boolean).join(", ");
   return h(
-    "div",
-    { className: "pp-syncallx" },
+    React.Fragment,
+    null,
     h("span", { className: "pp-as" }, "Asked " + when(preview.previewedAt) + ". Nothing has been sent or saved yet."),
     // What comes in: changes the run's own records; nobody outside sees it.
     h(
@@ -12809,8 +12950,8 @@ function SyncAllPreview(props) {
       h(
         "ul",
         null,
-        take.length ? h("li", null, "Class list: " + plural6(take.length, "student") + " Canvas has and this run does not") : null,
-        absent.length ? h("li", null, "Class list: " + plural6(absent.length, "student") + " no longer in Canvas — noted, nobody dropped") : null,
+        take.length ? h("li", null, "Class list: " + plural7(take.length, "student") + " Canvas has and this run does not") : null,
+        absent.length ? h("li", null, "Class list: " + plural7(absent.length, "student") + " no longer in Canvas — noted, nobody dropped") : null,
         sheets.map(
           (sheet2) => h(
             "li",
@@ -12831,20 +12972,20 @@ function SyncAllPreview(props) {
         "ul",
         null,
         marks.length ? h("li", null, "Canvas marks: " + marks.length + " (" + byAssessment(marks) + ")") : null,
-        fields.length ? h("li", null, "Canvas definitions: " + plural6(fields.length, "field") + " (" + byAssessment(fields) + ")") : null,
+        fields.length ? h("li", null, "Canvas definitions: " + plural7(fields.length, "field") + " (" + byAssessment(fields) + ")") : null,
         !send2.length ? h("li", { className: "pp-as" }, "nothing") : null
       )
     ),
-    held.length || sheetHeld || failed.length || preview.canvas && preview.canvas.error ? h(
+    held.length || sheetHeld || failed.length || canvasError ? h(
       "div",
       { className: "pp-sxgroup" },
       h("b", null, "Left for you"),
       h(
         "ul",
         null,
-        held.length ? h("li", null, plural6(held.length, "Canvas difference") + " — conflicts and what Canvas changed; settle them below") : null,
-        sheetHeld ? h("li", null, plural6(sheetHeld, "sheet row") + " the sync was not sure of; confirm them below") : null,
-        preview.canvas && preview.canvas.error ? h("li", { className: "pp-saveerr" }, "Canvas: " + preview.canvas.error) : null,
+        held.length ? h("li", null, plural7(held.length, "Canvas difference") + " — conflicts and what Canvas changed; settle them below") : null,
+        sheetHeld ? h("li", null, plural7(sheetHeld, "sheet row") + " the sync was not sure of; confirm them below") : null,
+        canvasError ? h("li", { className: "pp-saveerr" }, "Canvas: " + canvasError) : null,
         failed.map(
           (sheet2) => h("li", { key: sheet2.id, className: "pp-saveerr" }, "Grade sheet " + sheet2.id + ": " + sheet2.error)
         )
@@ -12854,17 +12995,7 @@ function SyncAllPreview(props) {
       "p",
       { className: "pp-as" },
       "Not in Sync all: " + preview.elsewhere.map((road) => road.why).filter((why, i, all) => all.indexOf(why) === i).join(" ")
-    ) : null,
-    h(
-      "div",
-      { className: "pp-dacts" },
-      nothing ? h("span", { className: "pp-as" }, "Everything Sync all moves is already in step.") : h(
-        "button",
-        { type: "button", className: "pp-segbtn pp-danger", disabled: props.sending, onClick: go },
-        props.sending ? "Syncing…" : "Sync: " + label
-      ),
-      h("button", { type: "button", className: "pp-segbtn", disabled: props.sending, onClick: props.onClose }, nothing ? "Close" : "Cancel")
-    )
+    ) : null
   );
 }
 function SyncView(props) {
@@ -12883,30 +13014,9 @@ function SyncView(props) {
   React.useEffect(() => {
     if (props.focus && props.focus.section === "marks" && marksRef.current) marksRef.current.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [props.focus ? props.focus.n : null, Boolean(kept.current)]);
-  const [phase, setPhase] = React.useState("idle");
-  const [preview, setPreview] = React.useState(null);
-  const [results, setResults] = React.useState(null);
   const done = (tags) => {
     setTick((value) => value + 1);
     if (props.onWrite) props.onWrite(tags);
-  };
-  const ask = () => {
-    setPhase("asking");
-    setResults(null);
-    post2("/api/sync-all", props.runId, props.sessionId, { confirm: false, names: Boolean(props.names) }).then((body) => {
-      setPhase("idle");
-      setPreview(body);
-      done(["syncs"]);
-    });
-  };
-  const send2 = (chosen) => {
-    setPhase("sending");
-    post2("/api/sync-all", props.runId, props.sessionId, Object.assign({ confirm: true, names: Boolean(props.names) }, chosen)).then((body) => {
-      setPhase("idle");
-      setPreview(null);
-      setResults(body);
-      done(["syncs", "marks", "integrations", "canvas", "records"]);
-    });
   };
   const doc = kept.current;
   if (syncs.phase === "ready" && syncs.value && syncs.value.error && !doc) return h(Message, { error: true }, syncs.value.error);
@@ -12920,56 +13030,44 @@ function SyncView(props) {
   return h(
     "div",
     { className: "pp-syncview" },
-    h(
-      "section",
-      { className: "pp-ccard" },
-      h(
-        "div",
-        { className: "pp-chead" },
-        h(
-          "span",
-          { className: "pp-cname" },
-          "Sync all",
-          h(
-            "span",
-            { className: "pp-intwhat" },
-            [canvasOn ? "Canvas" : null, sheets.length ? plural6(sheets.length, "grade sheet") : null].filter(Boolean).join(" and ") || "No road here moves with Sync all"
-          )
-        ),
-        h("span", { className: "pp-segspacer" }),
-        h(
-          "button",
-          {
-            type: "button",
-            className: "pp-segbtn",
-            disabled: phase !== "idle" || Boolean(preview) || !canvasOn && !sheets.length,
-            title: "Ask Canvas and every grade sheet what would move. Nothing is sent until you press Sync.",
-            onClick: ask
-          },
-          phase === "asking" ? "Asking Canvas and the sheets…" : "Preview all…"
-        )
-      ),
-      preview && preview.error ? h("p", { className: "pp-saveerr" }, preview.error) : null,
-      preview && !preview.error ? h(SyncAllPreview, { preview, sending: phase === "sending", onSend: send2, onClose: () => setPreview(null) }) : null,
-      results ? h(
-        "div",
-        { className: "pp-syncallx" },
-        results.error ? h("pre", { className: "pp-approveout pp-approveerr" }, results.error) : results.results.map(
-          (entry, index) => h(
-            "pre",
-            { className: "pp-approveout" + (entry.ok ? "" : " pp-approveerr"), key: index },
-            (entry.ok ? "✓ " : "✗ ") + (entry.command || entry.road) + "\n" + entry.output
-          )
-        ),
+    h(RoadFlow, {
+      runId: props.runId,
+      sessionId: props.sessionId,
+      names: props.names,
+      roads: null,
+      label: "Preview all…",
+      asking: "Asking Canvas and the sheets…",
+      title: "Ask Canvas and every grade sheet what would move. Nothing is sent until you press Sync.",
+      disabled: !canvasOn && !sheets.length,
+      describe: (preview) => h(SyncAllPreview, { preview }),
+      choose: chooseAll,
+      sendLabel: sendAllLabel,
+      nothing: "Everything Sync all moves is already in step.",
+      // A sheet plan keeps the rows it could not place for review.
+      onPreviewed: () => done(["syncs"]),
+      onSent: () => done(["syncs", "marks", "integrations", "canvas", "records"]),
+      frame: (button, body) => h(
+        "section",
+        { className: "pp-ccard" },
         h(
           "div",
-          { className: "pp-dacts" },
-          // A preview that went stale or was lost in a reload: ask again, one press.
-          results.results && results.results.some((entry) => entry.again) ? h("button", { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: ask }, phase === "asking" ? "Asking…" : "Preview again") : null,
-          h("button", { type: "button", className: "pp-segbtn", onClick: () => setResults(null) }, "Close")
-        )
-      ) : null
-    ),
+          { className: "pp-chead" },
+          h(
+            "span",
+            { className: "pp-cname" },
+            "Sync all",
+            h(
+              "span",
+              { className: "pp-intwhat" },
+              [canvasOn ? "Canvas" : null, sheets.length ? plural7(sheets.length, "grade sheet") : null].filter(Boolean).join(" and ") || "No road here moves with Sync all"
+            )
+          ),
+          h("span", { className: "pp-segspacer" }),
+          button
+        ),
+        body
+      )
+    }),
     // What Canvas lacks, per assessment, with its send: one assessment at a
     // time, beside Sync all, which sends them all.
     canvasOn ? h(
@@ -13043,7 +13141,7 @@ function SyncView(props) {
 }
 
 // client/today.js
-var plural7 = (n, one, many) => n + " " + (n === 1 ? one : many);
+var plural8 = (n, one, many) => n + " " + (n === 1 ? one : many);
 var MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var day = (iso) => {
   const found = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
@@ -13109,7 +13207,7 @@ function PhaseList(props) {
         h(
           "span",
           null,
-          now.phase === "before" ? (props.run.start_date ? "starts " + day(props.run.start_date) + " · " : "") + (open2 ? plural7(open2, "thing", "things") + " missing" : "ready to start") : (props.run.end_date ? "ended " + day(props.run.end_date) + " · " : "") + (open2 ? plural7(open2, "thing", "things") + " before it can be closed" : "ready to close")
+          now.phase === "before" ? (props.run.start_date ? "starts " + day(props.run.start_date) + " · " : "") + (open2 ? plural8(open2, "thing", "things") + " missing" : "ready to start") : (props.run.end_date ? "ended " + day(props.run.end_date) + " · " : "") + (open2 ? plural8(open2, "thing", "things") + " before it can be closed" : "ready to close")
         ),
         now.previewing ? h("span", { className: "pp-ttag" }, "preview — the term is under way") : null
       ),
@@ -13180,7 +13278,7 @@ function Now(props) {
         "div",
         { className: "pp-tnowacts" },
         h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "teaching" }) }, "Open this week"),
-        now.gaps ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "planning" }) }, plural7(now.gaps, "week has gaps", "weeks have gaps")) : null
+        now.gaps ? h("button", { type: "button", className: "pp-segbtn", onClick: () => props.onOpen({ mode: "planning" }) }, plural8(now.gaps, "week has gaps", "weeks have gaps")) : null
       )
     )
   );
@@ -13208,7 +13306,7 @@ function Waiting(props) {
     props.snoozed && props.snoozed.length ? h(
       "p",
       { className: "pp-as pp-tsnoozed" },
-      plural7(props.snoozed.length, "item", "items") + " snoozed",
+      plural8(props.snoozed.length, "item", "items") + " snoozed",
       props.onOpenWaiting ? h("button", { type: "button", className: "pp-linkbtn", onClick: props.onOpenWaiting }, "See them in Waiting") : null
     ) : null
   );
@@ -13408,7 +13506,7 @@ function Pulse(props) {
             type: "button",
             key: chip.service,
             className: "pp-tsync" + (chip.waiting || chip.reconnect ? " pp-tsync-wait" : ""),
-            title: plural7(chip.roads, "road", "roads") + (chip.last ? " · last ran " + day(chip.last) : " · never run"),
+            title: plural8(chip.roads, "road", "roads") + (chip.last ? " · last ran " + day(chip.last) : " · never run"),
             // A refused sign-in is fixed in settings; everything else is syncing.
             onClick: () => props.onOpen(chip.reconnect ? { view: "settings", sub: "integrations" } : { view: "syncs" })
           },
@@ -15478,7 +15576,7 @@ function GradeBoard(props) {
     const node = document.querySelector(".pp-gcard.pp-focus");
     if (node && document.activeElement && document.activeElement.tagName !== "INPUT") node.focus({ preventScroll: false });
   }, [focus, at, tick, state.phase]);
-  const post3 = (path, body, label2) => {
+  const post2 = (path, body, label2) => {
     if (busy) return;
     setBusy(label2);
     setSaid(null);
@@ -15641,7 +15739,7 @@ function GradeBoard(props) {
                 className: mine ? "pp-segbtn" : "pp-primary",
                 disabled: Boolean(busy) || item.counts.decided > 0,
                 title: item.counts.decided ? qName + " already has marks decided against its rubric" : "Write this as " + qName + "'s rubric, as a draft to review",
-                onClick: () => post3("/api/grade/choose", { proposal: proposal.id, item: item.item_id }, "choose")
+                onClick: () => post2("/api/grade/choose", { proposal: proposal.id, item: item.item_id }, "choose")
               },
               busy === "choose" ? "Writing…" : mine ? "Use again for " + qName : "Use for " + qName
             ),
@@ -15651,7 +15749,7 @@ function GradeBoard(props) {
                 type: "button",
                 className: "pp-segbtn",
                 disabled: Boolean(busy) || doc.items.some((entry) => entry.counts.decided > 0),
-                onClick: () => post3("/api/grade/choose", { proposal: proposal.id }, "choose")
+                onClick: () => post2("/api/grade/choose", { proposal: proposal.id }, "choose")
               },
               "Use for every question"
             ) : null
@@ -15674,7 +15772,7 @@ function GradeBoard(props) {
           type: "button",
           className: "pp-primary",
           disabled: Boolean(busy) || rest.some((entry) => entry.counts.decided > 0),
-          onClick: () => post3("/api/grade/choose", { proposal: same.id, items: rest.map((entry) => entry.item_id) }, "choose")
+          onClick: () => post2("/api/grade/choose", { proposal: same.id, items: rest.map((entry) => entry.item_id) }, "choose")
         },
         busy === "choose" ? "Writing…" : "Use “" + same.title + "” for " + without.join(", ")
       ) : null,
@@ -15737,7 +15835,7 @@ function GradeBoard(props) {
                 className: "pp-segbtn",
                 disabled: Boolean(busy),
                 title: "One criterion per question, worth its marks, accepted now — then 0…" + label(max) + " buttons on every answer",
-                onClick: () => post3("/api/grade/points-only", {}, "points")
+                onClick: () => post2("/api/grade/points-only", {}, "points")
               },
               busy === "points" ? "Writing…" : "Grade by points only"
             ) : null
@@ -15780,7 +15878,7 @@ function GradeBoard(props) {
               "aria-label": "Move this group to a level",
               value: group.score == null ? "" : String(group.score),
               disabled: Boolean(busy),
-              onChange: (event) => post3(
+              onChange: (event) => post2(
                 "/api/grade/move",
                 { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) },
                 "move"
@@ -15844,14 +15942,14 @@ function GradeBoard(props) {
             key: "accept",
             className: "pp-primary",
             disabled: Boolean(busy) || without.length > 0,
-            onClick: () => post3("/api/grade/accept-rubric", {}, "accept")
+            onClick: () => post2("/api/grade/accept-rubric", {}, "accept")
           },
           busy === "accept" ? "Accepting…" : "Accept rubric"
         )
       ]
     );
   }
-  const decide = (list, via, labelText) => post3(
+  const decide = (list, via, labelText) => post2(
     "/api/grade/decide",
     {
       via,
@@ -16070,7 +16168,7 @@ function GradeBoard(props) {
                 "aria-label": "Move " + group.label + " to another mark",
                 value: group.score == null ? "" : String(group.score),
                 disabled: Boolean(busy),
-                onChange: (event) => post3("/api/grade/move", { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) }, "move")
+                onChange: (event) => post2("/api/grade/move", { item: item.item_id, group: group.index, score: event.target.value === "" ? null : Number(event.target.value) }, "move")
               },
               h("option", { value: "" }, "no mark"),
               levelsNow.map((option) => h("option", { value: String(option.score), key: option.score }, "→ " + label(option.score)))
@@ -16104,7 +16202,7 @@ function GradeBoard(props) {
               className: "pp-primary",
               disabled: Boolean(busy),
               title: "Write it as " + qName + "'s rubric, accepted. Marks already given stay; any it disagrees with are flagged.",
-              onClick: () => post3("/api/grade/choose", { proposal: proposal.id, item: item.item_id, keepMarks: true, accept: true }, "revise")
+              onClick: () => post2("/api/grade/choose", { proposal: proposal.id, item: item.item_id, keepMarks: true, accept: true }, "revise")
             },
             busy === "revise" ? "Applying…" : "Use this"
           ),
@@ -16292,7 +16390,7 @@ function ScansTab(props) {
   }, [props.runId, pile, names, props.revision, tick]);
   const doc = state.value;
   const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
-  const post3 = (path, body, label, done) => {
+  const post2 = (path, body, label, done) => {
     if (blocked) return;
     setBusy(label);
     setSaid(null);
@@ -16613,7 +16711,7 @@ function ScansTab(props) {
     const ok = window.confirm(
       "Confirm all " + papers.length + " weak matches? Each paper stays on the student it was matched to, and is marked as confirmed by you."
     );
-    if (ok) post3("/api/scans/assign", { papers }, "confirm-all");
+    if (ok) post2("/api/scans/assign", { papers }, "confirm-all");
   };
   const now = doc.now || { step: doc.next || null, index: 0, total: doc.stages.length, title: "", body: "", whose: "you", action: null };
   const shown = openStep || now.step || "canvas";
@@ -16637,7 +16735,7 @@ function ScansTab(props) {
       className: primary ? "pp-primary" : "pp-segbtn",
       disabled: blocked,
       title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
-      onClick: () => post3("/api/scans/read", {}, "read")
+      onClick: () => post2("/api/scans/read", {}, "read")
     },
     busy === "read" ? "Reading… a few minutes for a class" : "Read and record the answers"
   );
@@ -16884,7 +16982,7 @@ function ScansTab(props) {
               className: "pp-segbtn",
               disabled: blocked,
               title: "Run `scans apply` again — after editing plan.yaml by hand, say",
-              onClick: () => post3("/api/scans/apply", {}, "apply")
+              onClick: () => post2("/api/scans/apply", {}, "apply")
             },
             busy === "apply" ? "Applying…" : "Re-apply the plan"
           )
@@ -16938,7 +17036,7 @@ function ScansTab(props) {
       cropUrl,
       busy: busy === "review",
       onClose: () => setReviewing(false),
-      onSubmit: (papers) => post3("/api/scans/assign", { papers }, "review", () => setReviewing(false))
+      onSubmit: (papers) => post2("/api/scans/assign", { papers }, "review", () => setReviewing(false))
     }) : null
   );
 }
@@ -17576,7 +17674,7 @@ function ProfessorPane(props) {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run2 = currentRunRef.current;
         if (!run2 || !id.test(String(data.assessment))) return;
-        const post3 = (what, body2) => fetch(
+        const post2 = (what, body2) => fetch(
           scoped(BASE + "/api/reports/" + what + "?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
           { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) }
         ).then((response) => response.json());
@@ -17586,7 +17684,7 @@ function ProfessorPane(props) {
           write(["grading"]);
         };
         if (data.kind === "reports-make") {
-          post3("make", {}).then((result) => {
+          post2("make", {}).then((result) => {
             if (!result.ok) window.alert(said(result).split("\n").slice(-3).join(" ") || "the reports were not made");
             done();
           }).catch((error) => {
@@ -17595,7 +17693,7 @@ function ProfessorPane(props) {
           });
           return;
         }
-        post3("send", { confirm: false }).then((plan) => {
+        post2("send", { confirm: false }).then((plan) => {
           if (!plan.ok) {
             window.alert(said(plan).split("\n").slice(-3).join(" ") || "the send could not be planned");
             done();
@@ -17612,7 +17710,7 @@ function ProfessorPane(props) {
             done();
             return null;
           }
-          return post3("send", { confirm: true }).then((result) => {
+          return post2("send", { confirm: true }).then((result) => {
             window.alert(said(result).split("\n").slice(-3).join("\n") || (result.ok ? "sent" : "not sent"));
             done();
           });

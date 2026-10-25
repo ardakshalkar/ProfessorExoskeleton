@@ -28,6 +28,7 @@ import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { lmsScale, rescales, toLms } from "@ainar/core/src/lms-scale.ts";
 
 import { integrationsAnswer } from "../server/integrations.js";
+import { previewRoads } from "../server/roads.js";
 import { runSyncAction, syncsDocument } from "../server/syncs.js";
 import { unpublishedDocument } from "../server/unpublished.js";
 import { loadedRun, resolveWorkspace } from "../server/workspace.js";
@@ -302,20 +303,37 @@ http
             groups: [{ group: null, courseId: "0", ok: true, unlinked: false, output: "(mock) marks " + (body.confirm ? "sent" : "planned") + " for " + body.assessment }],
           });
         }
-        if (path === "/api/canvas/sync-all") {
+        // The roads (server/roads.js): Canvas from memory, nothing sent.
+        if (path === "/api/roads") {
+          // A grade sheet alone is previewed by its real road: a plan, which writes nothing.
+          if (body.confirm !== true && Array.isArray(body.roads) && !body.roads.includes("canvas")) {
+            return json(res, await previewRoads(workspace, root, RUN, body));
+          }
           if (body.confirm !== true) {
             const state = checkNow();
             const plan = syncAllPlan(state.value.differences);
             const names = body.names === true;
-            return json(res, {
+            const preview = {
               checkedAt: state.at,
-              preview: { send: withNames(plan.send, names), take: withNames(plan.take, names), held: withNames(plan.held, names), batches: plan.batches },
+              send: withNames(plan.send, names),
+              take: withNames(plan.take, names),
+              held: withNames(plan.held, names),
+              absent: withNames(plan.absent, names),
+              batches: plan.batches,
+            };
+            const keys = plan.send.concat(plan.take).map((entry) => entry.key);
+            return json(res, {
+              previewedAt: new Date().toISOString(),
+              roads: [{ id: "canvas", service: "canvas", label: "Canvas", live: true, ok: true, at: state.at, keys, preview }],
+              elsewhere: [],
             });
           }
+          const keys = Object.values(body.keys || {}).flat();
           return json(res, {
             confirmed: true,
-            results: [{ kind: "grades", ok: true, command: "(mock) sync all", output: `(mock) ${body.keys.length} difference(s) — nothing was sent` }],
-            check: checked,
+            results: [{ road: "canvas", kind: "grades", ok: true, command: "(mock) sync all", output: `(mock) ${keys.length} difference(s) — nothing was sent` }],
+            after: { canvas: checked },
+            again: false,
           });
         }
         if (path === "/api/canvas/resolve") {

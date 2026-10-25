@@ -1668,6 +1668,30 @@ is worth building.
       vendor JSON regeneration (`ENTITY_NAMES` is the half `ainar schema`
       needs; the envelope and `preference_profile` are not done), and
       `sqlgen.ts`/`schema.sql`, which stay hand-written by design.
+- [x] **MOD-6** One shape for the pane's roads (2026-10-25). Canvas and the
+      grade sheets each had their own preview, send, staleness and errors,
+      and Sync all sent from the pane's constantly refreshed Canvas check, so
+      a Send during a background check or after a reload of `server/` was
+      refused. Now a road is an object with `plan` (read only: preview, keys,
+      snapshot), optional `recheck` and `send`; `server/roads.js` holds the
+      rules once — two presses, only the previewed keys, one send per preview
+      within 15 minutes (`server/previews.js`), `again: true` and Preview
+      again otherwise, and a road that writes only into the run may run in
+      one press. `canvasRoad` (`server/canvas-sync.js`) and `sheetRoad`
+      (`server/syncs.js`) plug in; `/api/roads` replaces `/api/sync-all` and
+      `/api/canvas/sync-all`; a sheet's send re-plans and goes only if the
+      plan matches the preview, since `sync run` cannot be given keys. On the
+      page, `client/road-flow.js` (`useRoad`, `RoadFlow`, `RoadResults`)
+      draws Sync all, the Canvas card's Sync all and the sheet card. "Keep
+      AINAR" on one Canvas difference sends from its own snapshot too.
+      Telegram and GitHub stay publications in Publish, by design: one
+      composed item per send, nothing on the far side to compare, and Sync
+      all must never post or open one (the header of `server/roads.js`).
+      Tests: `test/roads.test.mjs`. **Left:** Canvas's per-assessment marks
+      push (`/api/canvas/marks`) and definition push (`/api/canvas/assignment`)
+      still keep their preview on the page, not as a server snapshot; moving
+      them makes each a road keyed by assessment. MOD-2's LMS adapter is the
+      CLI side of the same seam.
 
 ## E34 · Long work in the background and queued, and pages that open at once — no `FUTURE.md` section yet
 

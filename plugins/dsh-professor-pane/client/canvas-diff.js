@@ -24,6 +24,7 @@ import { noteCanvasCheck, useCanvasCheck } from "./canvas-check.js";
 import { DIRECTIONS, KINDS, diffSummary } from "./canvas-diff-count.js";
 import { useVersion } from "./data.js";
 import { h, React } from "./react.js";
+import { RoadFlow, roadIn } from "./road-flow.js";
 import { when } from "./syncs.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -168,15 +169,61 @@ function DiffRow(props) {
           answer.error || answer.output || (answer.kept === "canvas" ? "Kept Canvas's." : "Sent."),
         )
       : null,
+    // The preview went stale or was lost in a reload: the roads' retry, here for one row.
+    answer && answer.again
+      ? h(
+          "div",
+          { className: "pp-dacts" },
+          h(
+            "button",
+            {
+              type: "button",
+              className: "pp-segbtn",
+              disabled: phase !== "idle",
+              onClick: () => {
+                setAnswer(null);
+                settle("ainar", false);
+              },
+            },
+            "Preview again",
+          ),
+        )
+      : null,
   );
 }
 
-/** The preview Sync all shows before it sends, and its outcome after. */
+/** The Canvas road's preview, out of a `/api/roads` answer. */
+const canvasPreview = (answer) => {
+  const road = roadIn(answer, "canvas");
+  return road && road.ok ? road.preview : null;
+};
+
+/** What Sync all on this card sends: the previewed rows, and the class-list notes with them. */
+const chooseCanvas = (answer) => {
+  const preview = canvasPreview(answer);
+  if (!preview || (!preview.send.length && !preview.take.length && !(preview.absent || []).length)) return null;
+  return { canvas: preview.send.concat(preview.take).map((entry) => entry.key) };
+};
+
+const canvasSendLabel = (answer) => {
+  const preview = canvasPreview(answer);
+  const absent = preview.absent || [];
+  return [
+    preview.send.length ? "Send " + preview.send.length + " to Canvas" : null,
+    preview.take.length ? "bring in " + preview.take.length : null,
+    absent.length ? "note " + absent.length + " not in Canvas" : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
+};
+
+/** What Sync all would send and bring in, before its Send (client/road-flow.js). */
 function SyncAll(props) {
-  const preview = props.preview;
-  const [phase, setPhase] = React.useState("idle");
-  const [result, setResult] = React.useState(null);
+  const answer = props.answer;
+  const preview = canvasPreview(answer);
   const [open, setOpen] = React.useState(false);
+  const road = roadIn(answer, "canvas");
+  if (!preview) return h("p", { className: "pp-saveerr" }, (road && road.error) || "Canvas gave no answer.");
   const send = preview.send;
   const take = preview.take;
   const held = preview.held;
@@ -186,40 +233,6 @@ function SyncAll(props) {
   const marks = send.filter((entry) => entry.kind === "grades");
   const fields = send.filter((entry) => entry.kind === "assignments");
   const nothing = !send.length && !take.length && !absent.length;
-
-  const go = () => {
-    setPhase("sending");
-    post("/api/canvas/sync-all", props.runId, props.sessionId, {
-      confirm: true,
-      keys: send.concat(take).map((entry) => entry.key),
-    }).then((body) => {
-      setPhase("idle");
-      setResult(body);
-      if (body.check && props.onChecked) props.onChecked(body.check);
-    });
-  };
-
-  if (result) {
-    return h(
-      "div",
-      { className: "pp-syncall" },
-      result.error
-        ? h("pre", { className: "pp-approveout pp-approveerr" }, result.error)
-        : result.results.map((entry, index) =>
-            h(
-              "pre",
-              { className: "pp-approveout" + (entry.ok ? "" : " pp-approveerr"), key: index },
-              (entry.ok ? "✓ " : "✗ ") + entry.command + "\n" + entry.output,
-            ),
-          ),
-      h(
-        "div",
-        { className: "pp-dacts" },
-        result.again && props.onAgain ? h("button", { type: "button", className: "pp-segbtn", onClick: props.onAgain }, "Preview again") : null,
-        h("button", { type: "button", className: "pp-segbtn", onClick: props.onClose }, "Close"),
-      ),
-    );
-  }
 
   // One line per assessment: how many in all, and per Canvas course.
   const byAssessment = (rows) => {
@@ -244,9 +257,9 @@ function SyncAll(props) {
   };
 
   return h(
-    "div",
-    { className: "pp-syncall" },
-    h("span", { className: "pp-as" }, "Asked Canvas " + when(props.checkedAt) + ". Nothing has been sent yet."),
+    React.Fragment,
+    null,
+    h("span", { className: "pp-as" }, "Asked Canvas " + when(preview.checkedAt) + ". Nothing has been sent yet."),
     nothing ? h("span", null, "Nothing one-sided to apply.") : null,
     marks.length ? h(React.Fragment, null, h("b", null, "To Canvas: " + plural(marks.length, "mark")), h("ul", null, byAssessment(marks))) : null,
     fields.length
@@ -292,26 +305,6 @@ function SyncAll(props) {
             " — conflicts, what Canvas changed, and what is held. Each is in Details, with Keep AINAR and Keep Canvas.",
         )
       : null,
-    h(
-      "div",
-      { className: "pp-dacts" },
-      nothing
-        ? null
-        : h(
-            "button",
-            { type: "button", className: "pp-segbtn pp-danger", disabled: phase !== "idle", onClick: go },
-            phase === "sending"
-              ? "Syncing…"
-              : [
-                  send.length ? "Send " + send.length + " to Canvas" : null,
-                  take.length ? "bring in " + take.length : null,
-                  absent.length ? "note " + absent.length + " not in Canvas" : null,
-                ]
-                  .filter(Boolean)
-                  .join(" and "),
-          ),
-      h("button", { type: "button", className: "pp-segbtn", disabled: phase !== "idle", onClick: props.onClose }, "Cancel"),
-    ),
   );
 }
 
@@ -325,7 +318,6 @@ export function CanvasDifferences(props) {
   const [kind, setKind] = React.useState(null);
   const [way, setWay] = React.useState("all");
   const [more, setMore] = React.useState({});
-  const [syncing, setSyncing] = React.useState(null);
 
   const url = scoped(
     BASE +
@@ -352,15 +344,6 @@ export function CanvasDifferences(props) {
   const running = check.phase === "running";
   const summary = diffSummary(answer);
   const reread = () => setTick((value) => value + 1);
-
-  const preview = () => {
-    setSyncing("asking");
-    post("/api/canvas/sync-all", props.runId, props.sessionId, { confirm: false, names: Boolean(props.names) }).then((body) => {
-      if (body.error) return setSyncing({ error: body.error });
-      setSyncing(body);
-      reread();
-    });
-  };
 
   const head = h(
     "div",
@@ -398,6 +381,11 @@ export function CanvasDifferences(props) {
   // A filter whose last row was just settled falls back to everything.
   const shownWay = way !== "all" && !summary.directions[way] ? "all" : way;
   const rows = answer.differences.filter((entry) => (!kind || entry.kind === kind) && (shownWay === "all" || entry.direction === shownWay));
+  const details = h(
+    "button",
+    { type: "button", className: "pp-segbtn", "aria-expanded": open, disabled: !summary.total, onClick: () => setOpen(!open) },
+    open ? "Hide details" : "Details",
+  );
   const ways = [{ id: "all", label: "All " + summary.total }].concat(
     DIRECTIONS.filter((item) => summary.directions[item.id]).map((item) => ({
       id: item.id,
@@ -440,47 +428,32 @@ export function CanvasDifferences(props) {
       checked ? h("span", { className: "pp-as" }, " — " + checked) : null,
     ),
     answer.roster && answer.roster.error ? h("span", { className: "pp-saveerr" }, "Class list: " + answer.roster.error) : null,
-    h(
-      "div",
-      { className: "pp-dacts" },
-      h(
-        "button",
-        { type: "button", className: "pp-segbtn", "aria-expanded": open, disabled: !summary.total, onClick: () => setOpen(!open) },
-        open ? "Hide details" : "Details",
-      ),
-      // In the Sync view, Sync all is the one above every road.
-      props.noSyncAll
-        ? null
-        : h(
-            "button",
-            {
-              type: "button",
-              className: "pp-segbtn",
-              disabled: running || syncing === "asking" || Boolean(syncing && syncing.preview),
-              title: "Ask Canvas again and show what Sync all would send and bring in. Nothing is sent until you press Send.",
-              onClick: preview,
-            },
-            syncing === "asking" ? "Asking Canvas…" : "Sync all…",
-          ),
-    ),
-    syncing && syncing.error ? h("p", { className: "pp-saveerr" }, syncing.error) : null,
-    syncing && syncing.preview
-      ? h(SyncAll, {
-          // A new preview is a new SyncAll, so Preview again leaves the old result behind.
-          key: syncing.checkedAt,
-          preview: syncing.preview,
-          checkedAt: syncing.checkedAt,
+    // In the Sync view, Sync all is the one above every road.
+    props.noSyncAll
+      ? h("div", { className: "pp-dacts" }, details)
+      : h(RoadFlow, {
           runId: props.runId,
           sessionId: props.sessionId,
-          onChecked: (state) => noteCanvasCheck(props.runId, state, props.sessionId),
-          onAgain: preview,
-          onClose: () => {
-            setSyncing(null);
+          names: props.names,
+          roads: ["canvas"],
+          label: "Sync all…",
+          asking: "Asking Canvas…",
+          title: "Ask Canvas again and show what Sync all would send and bring in. Nothing is sent until you press Send.",
+          disabled: running,
+          className: "pp-syncall",
+          // A preview is a fresh check: the counts above read it again.
+          describe: (answer) => h(SyncAll, { answer, key: answer.previewedAt }),
+          choose: chooseCanvas,
+          sendLabel: canvasSendLabel,
+          nothing: "Nothing one-sided to apply.",
+          onPreviewed: reread,
+          onSent: (body) => {
+            if (body.after && body.after.canvas) noteCanvasCheck(props.runId, body.after.canvas, props.sessionId);
             reread();
             if (props.onWrite) props.onWrite();
           },
-        })
-      : null,
+          frame: (button, body) => h(React.Fragment, null, h("div", { className: "pp-dacts" }, details, button), body),
+        }),
     open
       ? h(
           "div",

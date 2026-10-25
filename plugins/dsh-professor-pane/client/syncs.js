@@ -18,6 +18,7 @@
  */
 
 import { h, React } from "./react.js";
+import { RoadResults, roadIn, useRoad } from "./road-flow.js";
 import { BASE, scoped } from "./tabs.js";
 import { ReconnectGoogle } from "./integration-parts.js";
 
@@ -114,6 +115,52 @@ export const when = (iso) => {
   const date = at.toLocaleDateString([], { day: "numeric", month: "short" });
   return days < 14 ? days + " days ago · " + date : date;
 };
+
+const plural = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
+
+/** A sheet's plan in one sentence. */
+export const sheetLine = (sheet) =>
+  sheet.moves
+    ? [
+        sheet.added ? plural(sheet.added, "mark") + " added" : null,
+        sheet.changed ? plural(sheet.changed, "mark") + " changed" : null,
+        sheet.removed ? plural(sheet.removed, "mark") + " taken back" : null,
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : "nothing new";
+
+/** How many change rows a sheet's preview lists before "Show N more". */
+const CHANGES_AT_FIRST = 12;
+
+/** A grade sheet's preview: what would come in, mark by mark, and what waits. */
+function SheetPlan(props) {
+  const plan = props.plan;
+  const [all, setAll] = React.useState(false);
+  const shown = all ? plan.changes : plan.changes.slice(0, CHANGES_AT_FIRST);
+  return h(
+    React.Fragment,
+    null,
+    h(
+      "b",
+      null,
+      sheetLine(plan) + (plan.rows !== null ? " · " + plural(plan.rows, "row") + " read" : ""),
+      plan.from === "export" ? h("span", { className: "pp-as" }, " (from the downloaded copy)") : null,
+    ),
+    shown.length
+      ? h(
+          "ul",
+          null,
+          shown.map((change, index) => h("li", { key: index }, (change.name || change.student) + " · " + change.title + ": " + change.said)),
+        )
+      : null,
+    plan.changes.length > shown.length
+      ? h("button", { type: "button", className: "pp-morebtn", onClick: () => setAll(true) }, "Show " + (plan.changes.length - shown.length) + " more")
+      : null,
+    plan.held ? h("span", { className: "pp-as" }, plural(plan.held, "row") + " the sync was not sure of wait for you under Names to confirm.") : null,
+    plan.problems ? h("span", { className: "pp-as" }, plural(plan.problems, "row") + " could not be read.") : null,
+  );
+}
 
 export const initials = (name) =>
   String(name || "")
@@ -246,8 +293,13 @@ export function SyncCard(props) {
   const [picked, setPicked] = React.useState("");
   const [reading, setReading] = React.useState(null);
   const [previewed, setPreviewed] = React.useState(false);
-  const [busy, setBusy] = React.useState(null);
+  const [pressed, setBusy] = React.useState(null);
   const [dropping, setDropping] = React.useState(false);
+  // A grade sheet is a road (client/road-flow.js): its Preview and Send are
+  // the ones Sync all makes, with the same snapshot and the same retry.
+  const road = useRoad({ runId: props.runId, sessionId: props.sessionId, names: props.names, roads: sync.road ? [sync.road] : null });
+  const busy = pressed || (road.phase === "asking" ? "plan" : road.phase === "sending" ? "run" : null);
+  const roadPreview = roadIn(road.preview, sync.road);
 
   const service = SERVICE[sync.service] || { mark: sync.service.slice(0, 2), name: sync.service };
   const needsAssessment = sync.needs === "assessment";
@@ -262,8 +314,23 @@ export function SyncCard(props) {
   // professor downloaded. A copy is older than the sheet by definition, so it
   // is never the default when the live read is there.
   const from = reading || (sync.canReadLive ? "live" : "export");
+  const canSend = sync.road ? Boolean(roadPreview && roadPreview.ok) : previewed;
+  const forget = () => {
+    setPreviewed(false);
+    road.close();
+  };
 
   const press = (action, confirm) => {
+    if (sync.road) {
+      setResult(null);
+      const source = { from: sync.exported && from === "export" ? "export" : "live" };
+      const asked =
+        action === "plan"
+          ? road.ask(source)
+          : road.send({ [sync.road]: [sync.road] }, sync.live ? {} : Object.assign({ direct: true }, source));
+      asked.then(done);
+      return;
+    }
     setBusy(action);
     syncPost(props.runId, props.sessionId, "/api/syncs/action", {
       action,
@@ -286,7 +353,7 @@ export function SyncCard(props) {
       (answer) => {
         setBusy(null);
         setResult(Object.assign({ action: "map" }, answer));
-        setPreviewed(false);
+        forget();
         done();
       },
     );
@@ -316,9 +383,16 @@ export function SyncCard(props) {
       .catch((error) => ({ error: String(error.message || error) }))
       .then((answer) => {
         setBusy(null);
-        setResult(Object.assign({ action: "plan" }, answer));
         const kept = !answer.error && answer.ok;
         if (kept) setReading("export");
+        // The copy kept comes back previewed as the sheet's road, ready to Send.
+        if (kept && answer.road) {
+          setResult(null);
+          road.adopt({ previewedAt: answer.road.at, roads: [answer.road] });
+        } else {
+          road.close();
+          setResult(Object.assign({ action: "plan" }, answer));
+        }
         setPreviewed(Boolean(kept));
         done();
       });
@@ -433,7 +507,7 @@ export function SyncCard(props) {
                   value: picked,
                   onChange: (event) => {
                     setPicked(event.target.value);
-                    setPreviewed(false);
+                    forget();
                   },
                 },
                 h("option", { value: "" }, "Choose the assessment…"),
@@ -450,7 +524,7 @@ export function SyncCard(props) {
                   value: from,
                   onChange: (event) => {
                     setReading(event.target.value);
-                    setPreviewed(false);
+                    forget();
                   },
                 },
                 h("option", { value: "live" }, "Read the sheet in Google"),
@@ -499,11 +573,12 @@ export function SyncCard(props) {
             : null,
           h("span", { className: "pp-segspacer" }),
           // Before Preview: pressing it with a refused sign-in only fails again.
-          sync.reconnect || (check && check.reconnect) || (result && result.reconnect)
+          sync.reconnect || (check && check.reconnect) || (result && result.reconnect) || (roadPreview && roadPreview.reconnect)
             ? h(ReconnectGoogle, {
                 className: "pp-syncbtn pp-syncbtn-send",
                 onBack: () => {
                   setResult(null);
+                  road.close();
                   done();
                 },
               })
@@ -519,8 +594,8 @@ export function SyncCard(props) {
                 {
                   type: "button",
                   className: "pp-syncbtn pp-syncbtn-send",
-                  disabled: Boolean(busy) || !ready || !previewed,
-                  title: previewed ? "Do what the preview shows" : "Preview first",
+                  disabled: Boolean(busy) || !ready || !canSend,
+                  title: canSend ? "Do what the preview shows" : "Preview first",
                   onClick: () => press("run", true),
                 },
                 busy === "run" ? "Sending…" : "Send",
@@ -590,6 +665,23 @@ export function SyncCard(props) {
           h("pre", null, result.error || result.output || "(nothing printed)"),
         )
       : null,
+    // The road's preview: what Send would bring in, from the snapshot it keeps.
+    road.preview
+      ? h(
+          "div",
+          { className: "pp-syncout" + (road.preview.error || (roadPreview && !roadPreview.ok) ? " pp-syncout-err" : "") },
+          h(
+            "div",
+            { className: "pp-syncouthead" },
+            h("span", null, roadPreview && roadPreview.ok ? "Preview — nothing was changed" : "Could not preview"),
+            h("button", { type: "button", className: "pp-close", "aria-label": "Close", onClick: forget }, "×"),
+          ),
+          roadPreview && roadPreview.ok
+            ? h("div", { className: "pp-syncallx" }, h(SheetPlan, { plan: roadPreview.preview }))
+            : h("pre", null, road.preview.error || (roadPreview && roadPreview.error) || "(nothing printed)"),
+        )
+      : null,
+    road.results ? h(RoadResults, { results: road.results, busy: road.phase === "asking", onAgain: () => press("plan"), onClose: road.close }) : null,
   );
 }
 

@@ -4,6 +4,7 @@
  */
 
 import { readBody, sendJson } from "../http.js";
+import { previewRoads, roadsOf, sendRoads } from "../roads.js";
 import {
   copyFromUpload,
   marksActivity,
@@ -12,7 +13,6 @@ import {
   syncsDocument,
   UPLOAD_LIMIT as SHEET_UPLOAD_LIMIT,
 } from "../syncs.js";
-import { syncAll } from "../sync-all.js";
 
 export const routes = [
   // The Syncs view: every road to a service outside the run, and the
@@ -68,18 +68,24 @@ export const routes = [
           } catch {
             return sendJson(res, 200, { error: "The request body is not JSON." });
           }
+          // A road's Send goes from its preview (`/api/roads`), never from here.
+          if (body && body.action === "run" && roadsOf(workspace, runId).roads.some((road) => road.id === String(body.sync || ""))) {
+            return sendJson(res, 200, { error: "This one sends from its preview. Preview it, then Send.", again: true });
+          }
           return sendJson(res, 200, await runSyncAction(workspace, root, runId, body ?? {}));
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     },
   },
-  // Sync all across Canvas and the grade sheets: a preview, then one Send.
-  // POST both ways — the preview asks Canvas and Google. See server/sync-all.js.
+  // Every road a press brings into step — Sync all, and each service's own
+  // card. `{confirm: false, roads?}` previews (asks Canvas and Google, writes
+  // nothing outside the run); `{confirm: true, keys}` sends what was
+  // previewed. POST both ways. See server/roads.js.
   {
-    paths: ["/api/sync-all"],
+    paths: ["/api/roads"],
     handle(c) {
       const { req, res, runId, workspace, root } = c;
-      if (req.method !== "POST") return sendJson(res, 405, { error: "Sync all is POST only" });
+      if (req.method !== "POST") return sendJson(res, 405, { error: "a road is POST only" });
       if (!runId) return sendJson(res, 200, { error: "No run chosen." });
       return readBody(req)
         .then(async (raw) => {
@@ -89,7 +95,12 @@ export const routes = [
           } catch {
             return sendJson(res, 200, { error: "The request body is not JSON." });
           }
-          return sendJson(res, 200, await syncAll(workspace, root, runId, body ?? {}));
+          body = body ?? {};
+          return sendJson(
+            res,
+            200,
+            body.confirm === true ? await sendRoads(workspace, root, runId, body) : await previewRoads(workspace, root, runId, body),
+          );
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     },
@@ -111,7 +122,11 @@ export const routes = [
           } catch {
             return sendJson(res, 200, { error: "The request body is not JSON." });
           }
-          return sendJson(res, 200, await copyFromUpload(workspace, root, runId, body ?? {}));
+          const answer = await copyFromUpload(workspace, root, runId, body ?? {});
+          if (!answer.kept) return sendJson(res, 200, answer);
+          // The copy kept is previewed as its road, so Send can follow at once.
+          const previewed = await previewRoads(workspace, root, runId, { roads: [String(body.sync)], from: "export", names: body.names === true });
+          return sendJson(res, 200, Object.assign({}, answer, { road: previewed.roads ? previewed.roads[0] : null }));
         })
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
     },
