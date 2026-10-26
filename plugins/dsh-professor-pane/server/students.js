@@ -269,14 +269,43 @@ export const studentsDocument = (
     cv: "In Canvas",
     cvo: "Not in Canvas yet",
     cvd: "Canvas has a different mark",
+    cvb: "Left blank in Canvas",
+    cvx: "Cannot go to Canvas",
   };
+  // Students the last roster sync did not find in Canvas: nothing of theirs
+  // can be sent, whatever the ledger says went before.
+  const outOfCanvasIds = new Set(
+    enrolled.filter((entry) => entry.lms && entry.lms.in_course === false).map((entry) => String(entry.student_id ?? "")),
+  );
   // Without a check, a sent mark is all that can be said: whether it moved
   // since, on either side, is the check's to answer.
   const unchecked = "Canvas has not been checked since the pane started, so a change made since — here or in Canvas — would not show. Check Canvas on the Canvas page to be sure.";
   // Marks go to Canvas on its own scale where the grading scheme says so,
   // and the check's two values are on that scale.
-  const canvasOf = (assessmentId, studentId, state) => {
-    if (state !== "graded" && state !== "voided") return null;
+  /*
+   * A missing hand-in is a mark too where the policy says zero (`missing_work:
+   * zero`, the gradebook's `not_submitted` row scoring 0): it goes to Canvas
+   * as 0 and is iconed like any other. Under `blank` nothing goes, and the
+   * icon says that rather than nothing.
+   */
+  const canvasOf = (assessmentId, studentId, state, entry) => {
+    const zeroed = state === "missing" && entry && entry.status === "not_submitted" && entry.score === 0;
+    if (state === "missing" && !zeroed) {
+      return {
+        cls: "cvb",
+        body: "Missing, and missing work on this assessment is left blank rather than given 0, so nothing is sent to Canvas.",
+        foot: "Its missing-work rule is set in the Gradebook's policy.",
+      };
+    }
+    if (state !== "graded" && state !== "voided" && !zeroed) return null;
+    const what = zeroed ? "Missing, so 0 under the missing-work rule. " : "";
+    if (outOfCanvasIds.has(studentId)) {
+      return {
+        cls: "cvx",
+        body: what + "This student is not in the Canvas course, so the mark has nowhere to go.",
+        foot: "The roster sync on the Canvas page brings them back if they rejoin.",
+      };
+    }
     const sent = sentTo["canvas-api|" + assessmentId + "|" + studentId];
     const applied = sent && sent.state === "applied" ? sent : null;
     const gap = differs.get(assessmentId + "|" + studentId);
@@ -284,14 +313,14 @@ export const studentsDocument = (
       return gap.direction === "push"
         ? {
             cls: "cvo",
-            body: applied
+            body: what + (applied
               ? "Changed here after it was sent on " + stamp(applied.at) + ". Canvas still has " + (gap.theirs ?? "nothing") + "; it would get " + gap.ours + "."
-              : "This mark has not been sent" + (gap.theirs ? "; Canvas has " + gap.theirs + " and would get " + gap.ours : "; Canvas would get " + gap.ours) + ".",
+              : "This mark has not been sent" + (gap.theirs ? "; Canvas has " + gap.theirs + " and would get " + gap.ours : "; Canvas would get " + gap.ours) + "."),
             foot: "Sync all on the Canvas page sends it.",
           }
         : {
             cls: "cvd",
-            body: "Canvas has " + (gap.theirs ?? "nothing") + ", this course " + (gap.ours ?? "nothing") + "." +
+            body: what + "Canvas has " + (gap.theirs ?? "nothing") + ", this course " + (gap.ours ?? "nothing") + "." +
               (gap.direction === "conflict" ? " Both changed since the last send." : " It was changed in Canvas."),
             foot: "Keep one or the other on the Canvas page.",
           };
@@ -299,11 +328,16 @@ export const studentsDocument = (
     if (checked) {
       return {
         cls: "cv",
-        body: "Canvas has the same mark as this course" + (applied ? ", sent " + stamp(applied.at) : "") + ".",
+        body: what + "Canvas has the same mark as this course" + (applied ? ", sent " + stamp(applied.at) : "") + ".",
         foot: "As of the Canvas check at " + stamp(check.at) + ".",
       };
     }
-    return applied ? { cls: "cv", body: "Sent " + stamp(applied.at) + ", and Canvas confirmed it.", foot: unchecked } : null;
+    if (applied) return { cls: "cv", body: what + "Sent " + stamp(applied.at) + ", and Canvas confirmed it.", foot: unchecked };
+    // A zero never sent, with no check to ask: say so rather than nothing,
+    // since a missing mark has no number on it to tell it apart.
+    return zeroed
+      ? { cls: "cvo", body: what + "Nothing from here has sent it yet.", foot: "Check Canvas, then Sync all on the Canvas page sends it." }
+      : null;
   };
   /*
    * The icon, with its card on hover (`tipScript`). The empty `title` keeps
@@ -313,6 +347,8 @@ export const studentsDocument = (
     cv: '<circle cx="6" cy="6" r="5.5" fill="#2f8a5b"/><path d="M3.3 6.2l1.8 1.8 3.6-3.9" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
     cvo: '<circle cx="6" cy="6" r="5" fill="var(--dwbg)" stroke="#2f8a5b" stroke-width="1.3"/><path d="M6 8.8V3.6M3.9 5.6L6 3.4l2.1 2.2" fill="none" stroke="#2f8a5b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
     cvd: '<circle cx="6" cy="6" r="5.5" fill="var(--warn)"/><path d="M6 3.2v3.4" stroke="var(--dwbg)" stroke-width="1.6" stroke-linecap="round"/><circle cx="6" cy="8.7" r=".9" fill="var(--dwbg)"/>',
+    cvb: '<circle cx="6" cy="6" r="5" fill="var(--dwbg)" stroke="var(--dim)" stroke-width="1.2"/><path d="M3.6 6h4.8" stroke="var(--dim)" stroke-width="1.5" stroke-linecap="round"/>',
+    cvx: '<circle cx="6" cy="6" r="5" fill="var(--dwbg)" stroke="var(--dim)" stroke-width="1.2"/><path d="M3.1 8.9l5.8-5.8" stroke="var(--dim)" stroke-width="1.4" stroke-linecap="round"/>',
   };
   const canvasIcon = (cls, head, body, foot) =>
     '<span class="cvi" title="" data-tip-head="' + escapeAttribute(head) + '" data-tip="' + escapeAttribute(body) + '"' +
@@ -379,7 +415,7 @@ export const studentsDocument = (
                 at.state === "graded" && Number(at.entry.maximum) > 0
                   ? Math.max(0, Math.min(100, (100 * Number(at.entry.score)) / Number(at.entry.maximum)))
                   : null;
-              const canvas = studentId ? canvasOf(a.assessment_id, studentId, at.state) : null;
+              const canvas = studentId ? canvasOf(a.assessment_id, studentId, at.state, at.entry) : null;
               return (
                 '<span class="m ' + at.state + (share !== null && share < 50 ? " lo" : "") + (flagged ? " ic" : "") + '"' +
                 (share !== null ? ' style="--f:' + share.toFixed(0) + '%"' : "") +
@@ -1848,7 +1884,7 @@ export const studentsDocument = (
       (hasCases ? ' <span class="m held"></span>held by an integrity case' : "") +
       '<span class="lgs">Canvas</span>' +
       '<span class="lgi">' +
-      canvasIcon("cv", CANVAS_STATES.cv, "The mark in this cell is in Canvas: sent from here and confirmed, or the same as Canvas at the last check.") +
+      canvasIcon("cv", CANVAS_STATES.cv, "The mark in this cell is in Canvas — a missing hand-in as 0 where the rule gives zero: sent from here and confirmed, or the same as Canvas at the last check.") +
       "in Canvas</span>" +
       '<span class="lgi">' +
       canvasIcon("cvo", CANVAS_STATES.cvo, "Never sent, or changed here after it was sent.", "Sync all on the Canvas page sends it.") +
@@ -1856,7 +1892,13 @@ export const studentsDocument = (
       '<span class="lgi">' +
       canvasIcon("cvd", CANVAS_STATES.cvd, "Canvas holds a different mark, usually because someone changed it there.", "Keep one or the other on the Canvas page.") +
       "Canvas differs</span>" +
-      '<span class="lgi" title="No mark yet, or nothing sent from here and Canvas not checked">no icon: not known</span>' +
+      '<span class="lgi">' +
+      canvasIcon("cvb", CANVAS_STATES.cvb, "Missing, on an assessment whose missing work is left blank rather than given 0, so nothing is sent.") +
+      "left blank</span>" +
+      '<span class="lgi">' +
+      canvasIcon("cvx", CANVAS_STATES.cvx, "The student is not in the Canvas course, so the mark has nowhere to go.") +
+      "student not in Canvas</span>" +
+      '<span class="lgi" title="Not due or not graded yet, or a mark nothing here has sent and Canvas not checked">no icon: nothing to say yet</span>' +
       (checked
         ? ' <span title="' + escapeAttribute("Checked " + stamp(check.at)) + '">· checked ' + escapeText(stamp(check.at)) + "</span>"
         : ' <span class="lgw" title="' + escapeAttribute(unchecked) + '">· not checked since the pane started</span>') +
