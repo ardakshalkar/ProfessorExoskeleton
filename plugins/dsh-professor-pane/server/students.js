@@ -8,6 +8,7 @@ import { loadSheetConfig } from "@ainar/core/src/grade-sheet.ts";
 import { gradeChanges } from "@ainar/core/src/grade-changes.ts";
 import { finalRange, gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { ASSESSMENT_KINDS } from "@ainar/core/src/assessment-kinds.ts";
+import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { reportPlace, reportsDir } from "@ainar/core/src/report-place.ts";
 import { existsSync, readFileSync } from "node:fs";
 
@@ -20,6 +21,7 @@ import {
   summarise,
   windowPanel,
 } from "./assessment-window.js";
+import { lastCanvasCheck } from "./actions.js";
 import { BASE } from "./http.js";
 import { escapeAttribute, escapeText } from "./markdown.js";
 import { extensionOfKey, SHOWABLE } from "./materials.js";
@@ -50,8 +52,8 @@ export const studentsDocument = (
   // GitHub column, read whether or not names are on: they only pick a
   // student's fork out of the list, and are never drawn on their own.
   const recorded = recordedLogins(withNames ? people : rosterPeople());
-  // In class and at home (E38): a section above the list, a chip on the row,
-  // a block in the drawer. Null until somebody has a mark.
+  // In class and at home (E38): a tab of its own beside the list, and a block
+  // in the drawer — not on the rows. Null until somebody has a mark.
   const sv = standingView(bundle, runId, {
     nameOf: (id) => (people && typeof people[id]?.name === "string" && people[id].name.trim() ? people[id].name.trim() : id),
   });
@@ -237,6 +239,87 @@ export const studentsDocument = (
   };
 
   /*
+   * Whether a mark is in Canvas, as an icon in its cell's corner.
+   *
+   * Two sources, neither recomputed here: the ledger, which says what this
+   * machine sent and Canvas confirmed (`applied`; a CSV only ever `prepared`,
+   * which is not a claim it arrived), and the last Canvas check, which says
+   * which marks differ now. The check wins where there is one — a mark changed
+   * after it was sent is in the check, not in the ledger, whose scores are on
+   * Canvas's scale and cannot be held against the marks here. Without a check
+   * the icon says only when it was sent, and its card says that too.
+   */
+  let sentTo = {};
+  try {
+    sentTo = Ledger.load(runId).entries;
+  } catch {
+    // An unreadable ledger is the Canvas card's to report; the cells go without icons.
+  }
+  const check = lastCanvasCheck(runId);
+  const checked = Boolean(check && Array.isArray(check.value.differences));
+  const differs = new Map(
+    checked
+      ? check.value.differences
+          .filter((entry) => entry.kind === "grades" && entry.student_id && entry.direction !== "held")
+          .map((entry) => [entry.assessment_id + "|" + entry.student_id, entry])
+      : [],
+  );
+  // What each icon is called, here and in the legend.
+  const CANVAS_STATES = {
+    cv: "In Canvas",
+    cvo: "Not in Canvas yet",
+    cvd: "Canvas has a different mark",
+  };
+  // Without a check, a sent mark is all that can be said: whether it moved
+  // since, on either side, is the check's to answer.
+  const unchecked = "Canvas has not been checked since the pane started, so a change made since — here or in Canvas — would not show. Check Canvas on the Canvas page to be sure.";
+  // Marks go to Canvas on its own scale where the grading scheme says so,
+  // and the check's two values are on that scale.
+  const canvasOf = (assessmentId, studentId, state) => {
+    if (state !== "graded" && state !== "voided") return null;
+    const sent = sentTo["canvas-api|" + assessmentId + "|" + studentId];
+    const applied = sent && sent.state === "applied" ? sent : null;
+    const gap = differs.get(assessmentId + "|" + studentId);
+    if (gap) {
+      return gap.direction === "push"
+        ? {
+            cls: "cvo",
+            body: applied
+              ? "Changed here after it was sent on " + stamp(applied.at) + ". Canvas still has " + (gap.theirs ?? "nothing") + "; it would get " + gap.ours + "."
+              : "This mark has not been sent" + (gap.theirs ? "; Canvas has " + gap.theirs + " and would get " + gap.ours : "; Canvas would get " + gap.ours) + ".",
+            foot: "Sync all on the Canvas page sends it.",
+          }
+        : {
+            cls: "cvd",
+            body: "Canvas has " + (gap.theirs ?? "nothing") + ", this course " + (gap.ours ?? "nothing") + "." +
+              (gap.direction === "conflict" ? " Both changed since the last send." : " It was changed in Canvas."),
+            foot: "Keep one or the other on the Canvas page.",
+          };
+    }
+    if (checked) {
+      return {
+        cls: "cv",
+        body: "Canvas has the same mark as this course" + (applied ? ", sent " + stamp(applied.at) : "") + ".",
+        foot: "As of the Canvas check at " + stamp(check.at) + ".",
+      };
+    }
+    return applied ? { cls: "cv", body: "Sent " + stamp(applied.at) + ", and Canvas confirmed it.", foot: unchecked } : null;
+  };
+  /*
+   * The icon, with its card on hover (`tipScript`). The empty `title` keeps
+   * the cell's own tooltip from opening over the card.
+   */
+  const CANVAS_ICONS = {
+    cv: '<circle cx="6" cy="6" r="5.5" fill="#2f8a5b"/><path d="M3.3 6.2l1.8 1.8 3.6-3.9" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>',
+    cvo: '<circle cx="6" cy="6" r="5" fill="var(--dwbg)" stroke="#2f8a5b" stroke-width="1.3"/><path d="M6 8.8V3.6M3.9 5.6L6 3.4l2.1 2.2" fill="none" stroke="#2f8a5b" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>',
+    cvd: '<circle cx="6" cy="6" r="5.5" fill="var(--warn)"/><path d="M6 3.2v3.4" stroke="var(--dwbg)" stroke-width="1.6" stroke-linecap="round"/><circle cx="6" cy="8.7" r=".9" fill="var(--dwbg)"/>',
+  };
+  const canvasIcon = (cls, head, body, foot) =>
+    '<span class="cvi" title="" data-tip-head="' + escapeAttribute(head) + '" data-tip="' + escapeAttribute(body) + '"' +
+    (foot ? ' data-tip-foot="' + escapeAttribute(foot) + '"' : "") +
+    '><svg viewBox="0 0 12 12" aria-hidden="true">' + CANVAS_ICONS[cls] + "</svg></span>";
+
+  /*
    * The row's marks: one column per kind — Homework, Quizzes, Exams,
    * Projects — and one fixed-width cell per assessment inside it, in the order
    * the detail lists them, so cell 3 of Homework is HW3 on every row. Colour
@@ -244,11 +327,18 @@ export const studentsDocument = (
    * list is a hand-in the whole class missed, which is the pattern a card per
    * student could never show.
    */
-  const CELL = 24;
+  const CELL = 20;
   const GAP = 2;
+  /*
+   * The row fits the window rather than scrolling it: each kind takes as many
+   * shares of the width as it has assessments, so every cell in every kind is
+   * the same width, and the name and the range give way with them. CELL is the
+   * floor a cell can shrink to and still hold a mark.
+   */
   const kindWidth = (kind) => kind.assessments.length * (CELL + GAP) - GAP;
   const columns =
-    "minmax(150px,1.3fr) 56px 140px 52px 56px " + kinds.map((kind) => Math.max(kindWidth(kind), 52) + "px").join(" ");
+    "minmax(170px,2.6fr) 40px minmax(90px,1.6fr) 44px 52px " +
+    kinds.map((kind) => "minmax(" + kindWidth(kind) + "px," + kind.assessments.length + "fr)").join(" ");
   // The number the professor calls an assessment by — HW3, Quiz 4 — where its
   // title starts with one, and its place in the kind where it does not.
   const shortOf = (assessment, index) => {
@@ -289,10 +379,12 @@ export const studentsDocument = (
                 at.state === "graded" && Number(at.entry.maximum) > 0
                   ? Math.max(0, Math.min(100, (100 * Number(at.entry.score)) / Number(at.entry.maximum)))
                   : null;
+              const canvas = studentId ? canvasOf(a.assessment_id, studentId, at.state) : null;
               return (
                 '<span class="m ' + at.state + (share !== null && share < 50 ? " lo" : "") + (flagged ? " ic" : "") + '"' +
                 (share !== null ? ' style="--f:' + share.toFixed(0) + '%"' : "") +
                 ' title="' + escapeText(tipOf(a, at)) + '"' + opens(studentId, a) + ">" +
+                (canvas ? canvasIcon(canvas.cls, CANVAS_STATES[canvas.cls], canvas.body, canvas.foot) : "") +
                 escapeText(text) + "</span>"
               );
             })
@@ -1440,16 +1532,16 @@ export const studentsDocument = (
       '" data-gone="' +
       (gone ? "1" : "0") +
       '"><div class="sr' +
-      (dimmed ? " gone" : "") +
+      (dimmed ? " gone" : gone ? " out" : "") +
       '"' +
       (dimmed ? "" : ' role="button" tabindex="0" aria-expanded="false"') +
       ' title="' +
       escapeText(id) +
-      '"><span class="nm">' +
+      '"><span class="nm"><span class="nmt">' +
       escapeText(named || id) +
+      "</span>" +
       (flag ? ' <span class="todo" title="Noted in the grade sheet">' + escapeText(flag) + "</span>" : "") +
-      (gone && !dimmed ? ' <span class="todo" title="' + escapeAttribute(lms.note) + '">not in Canvas</span>' : "") +
-      (sv && !dimmed ? sv.chipFor(id) : "") +
+      (gone && !dimmed ? ' <span class="nic" title="' + escapeAttribute(lms.note) + '">not in Canvas</span>' : "") +
       "</span>" +
       '<span class="gr" title="' + escapeText(label(entry)) + '">' + escapeText(shortGroup(label(entry))) + "</span>" +
       (dimmed
@@ -1751,10 +1843,24 @@ export const studentsDocument = (
   const header = "<section>" + tiles + (health ? '<div class="health">' + health + "</div>" : "") + refusedHtml + "</section>";
 
   const legend = weighted.length
-    ? '<p class="legend dim"><span class="m graded"></span>graded <span class="m in"></span>handed in ' +
+    ? '<p class="legend dim"><span class="lgs">Hand-in</span><span class="m graded"></span>graded <span class="m in"></span>handed in ' +
       '<span class="m missing"></span>missing <span class="m unrecorded"></span>not imported <span class="m ahead"></span>not due' +
       (hasCases ? ' <span class="m held"></span>held by an integrity case' : "") +
-      " · " +
+      '<span class="lgs">Canvas</span>' +
+      '<span class="lgi">' +
+      canvasIcon("cv", CANVAS_STATES.cv, "The mark in this cell is in Canvas: sent from here and confirmed, or the same as Canvas at the last check.") +
+      "in Canvas</span>" +
+      '<span class="lgi">' +
+      canvasIcon("cvo", CANVAS_STATES.cvo, "Never sent, or changed here after it was sent.", "Sync all on the Canvas page sends it.") +
+      "not sent yet</span>" +
+      '<span class="lgi">' +
+      canvasIcon("cvd", CANVAS_STATES.cvd, "Canvas holds a different mark, usually because someone changed it there.", "Keep one or the other on the Canvas page.") +
+      "Canvas differs</span>" +
+      '<span class="lgi" title="No mark yet, or nothing sent from here and Canvas not checked">no icon: not known</span>' +
+      (checked
+        ? ' <span title="' + escapeAttribute("Checked " + stamp(check.at)) + '">· checked ' + escapeText(stamp(check.at)) + "</span>"
+        : ' <span class="lgw" title="' + escapeAttribute(unchecked) + '">· not checked since the pane started</span>') +
+      '<span class="lgs">Keys</span>' +
       "press a row for the student, a cell for that hand-in · ↑ ↓ next student, ← → next assessment</p>"
     : "";
 
@@ -2092,9 +2198,12 @@ export const studentsDocument = (
     ".idn.named{color:#a5561f;font-weight:600}" +
     // One row per student. The same columns on the header and every row; the
     // strip takes what is left and the name gives way first.
-    ".tbl{overflow-x:auto}" +
-    ".th,.sr{display:grid;grid-template-columns:var(--cols);min-width:max-content;" +
+    ".th,.sr{display:grid;grid-template-columns:var(--cols);" +
     "gap:10px;align-items:center}" +
+    // A rule down the table before each kind, through the header and every row.
+    ".th>.kh,.sr>.sk{position:relative}" +
+    ".th>.kh::before,.sr>.sk::before{content:'';position:absolute;left:-6px;top:-6px;bottom:-6px;border-left:1px solid var(--line)}" +
+    ".th{position:sticky;top:0;z-index:1;background:var(--dwbg);padding-top:6px}" +
     ".th{font-size:11px;color:var(--dim);padding:0 4px 4px;border-bottom:1px solid var(--line)}" +
     ".th button{font:inherit;background:none;border:0;padding:0;color:inherit;text-align:left;cursor:pointer}" +
     ".th button:hover{color:var(--fg)}" +
@@ -2106,7 +2215,9 @@ export const studentsDocument = (
     ".sr:focus-visible{outline:2px solid var(--info);outline-offset:-2px}" +
     ".sr.gone{cursor:default;color:var(--dim)}.sr.gone:hover{background:none}" +
     ".sr .rest{grid-column:3/-1}" +
-    ".nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    // The name gives way before its badges do: "not in Canvas" is never cut.
+    ".nm{min-width:0;display:flex;align-items:center;gap:4px;white-space:nowrap}" +
+    ".nmt{min-width:0;overflow:hidden;text-overflow:ellipsis}.nm>:not(.nmt){flex:none}" +
     ".gr{color:var(--dim);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
     ".pc{font-variant-numeric:tabular-nums;font-weight:600}" +
     ".pc.low,.tv.low{color:var(--warn)}" +
@@ -2121,12 +2232,36 @@ export const studentsDocument = (
     "font-size:10px;line-height:1;color:var(--dim);font-variant-numeric:tabular-nums}" +
     // Every cell the same size, whatever it holds, so the columns line up
     // down the list and under the header's numbers.
-    ".sk{display:inline-flex;gap:2px}" +
-    ".sk .m,.sk .n{width:24px;height:18px;padding:0;font-size:10px;line-height:16px;text-align:center;" +
-    "font-variant-numeric:tabular-nums;box-sizing:border-box;overflow:hidden;vertical-align:middle}" +
+    ".sk{display:flex;gap:2px;min-width:0}" +
+    ".sk .m,.sk .n{flex:1 1 0;min-width:0;width:auto;height:18px;padding:0;font-size:10px;line-height:16px;text-align:center;" +
+    "font-variant-numeric:tabular-nums;box-sizing:border-box;overflow:hidden;vertical-align:middle;position:relative}" +
     ".sk .n{border:0;color:var(--dim);line-height:14px;height:14px}" +
-    ".kh{display:flex;flex-direction:column;gap:1px}" +
-    ".kn{color:var(--fg);font-weight:600}" +
+    ".kh{display:flex;flex-direction:column;gap:1px;min-width:0}" +
+    ".kn{color:var(--fg);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}" +
+    // In Canvas: an icon in the top-left corner of the mark — a tick, Canvas
+    // has it; an arrow, not sent yet; a warning, Canvas differs. Its card is
+    // `.tipc`, opened on hover by `tipScript`.
+    ".cvi{display:inline-flex;width:10px;height:10px;cursor:help;vertical-align:-1px}" +
+    ".cvi svg{width:100%;height:100%;display:block}" +
+    ".sk .m .cvi{position:absolute;top:3px;left:2px}.sk .m:has(.cvi){text-indent:8px}" +
+    ".cvi:hover{transform:scale(1.25)}" +
+    ".tipc{position:fixed;z-index:30;max-width:260px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;" +
+    "background:var(--dwbg);color:var(--fg);box-shadow:0 4px 14px rgba(0,0,0,.16);font-size:12px;line-height:1.4;pointer-events:none}" +
+    ".tipc b{display:block;margin-bottom:2px}.tipc .dim{display:block;margin-top:4px}.tipc[hidden]{display:none}" +
+    // The legend in labelled groups, above the list.
+    ".legend{display:flex;flex-wrap:wrap;align-items:center;gap:4px 0}" +
+    ".lgs{font-weight:600;color:var(--fg);margin:0 6px 0 16px}.lgs:first-child{margin-left:0}" +
+    ".lgi{display:inline-flex;align-items:center;gap:4px;margin-right:10px}" +
+    ".lgw{color:var(--warn);margin-left:4px;cursor:help}" +
+    // A student the last roster sync did not find in Canvas: the whole row says it.
+    ".sr.out{background:color-mix(in srgb,var(--warn) 16%,transparent);box-shadow:inset 4px 0 0 var(--warn)}" +
+    ".sr.out:hover,.sr.out.lit{background:color-mix(in srgb,var(--warn) 26%,transparent)}" +
+    ".nic{background:var(--warn);color:var(--dwbg);border-radius:3px;padding:0 6px;font-size:11px;font-weight:600}" +
+    // The page's own tabs: the class list, and what sits beside it.
+    ".ptabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 12px}" +
+    ".ptab{font:inherit;font-size:13px;background:none;border:0;border-bottom:2px solid transparent;padding:6px 14px;color:var(--dim);cursor:pointer;margin-bottom:-1px}" +
+    ".ptab:hover{color:var(--fg)}.ptab[aria-selected=true]{color:var(--fg);font-weight:600;border-bottom-color:var(--info)}" +
+    ".ptp[hidden]{display:none}" +
     ".m{display:inline-block;width:9px;height:14px;border-radius:2px;border:1px solid var(--line);vertical-align:-2px}" +
     ".m.graded{background:var(--infobg);border-color:var(--info);color:var(--fg)}" +
     ".sk .m.graded{--cf:color-mix(in srgb,var(--info) 38%,transparent);" +
@@ -2144,7 +2279,7 @@ export const studentsDocument = (
     "border-width:0 6px 6px 0;border-color:transparent var(--warn) transparent transparent}" +
     ".icl{margin:0 0 4px;font-size:12px}.icl.on b{color:var(--warn)}" +
     ".icn{display:inline-block;margin-left:6px;font-size:11px;color:var(--dim)}.icn summary{cursor:pointer}" +
-    ".legend{font-size:11px;margin:8px 0 16px}.legend .m{margin:0 3px 0 8px}.legend .m:first-child{margin-left:0}" +
+    ".legend{font-size:11px;margin:6px 0 10px}.legend .m{margin:0 3px 0 8px}.legend .lgs+.m{margin-left:0}" +
     ".detail>p{margin:0 0 4px}" +
     "section.tbl{margin-top:18px}" +
     // A narrow pane keeps who, where they are heading, and what they owe.
@@ -2213,14 +2348,61 @@ export const studentsDocument = (
     "assessment:b.getAttribute('data-defence'),student:b.getAttribute('data-student')},'*');" +
     "});})();</script>";
 
+  /*
+   * The card a Canvas icon opens on hover: one element for the page, placed
+   * beside the icon and kept inside the window. A native tooltip waits a
+   * second and has no room for what the icon means and what to do about it.
+   */
+  const tipScript =
+    "<script>(function(){var c=document.createElement('div');c.className='tipc';c.hidden=true;c.setAttribute('role','tooltip');document.body.appendChild(c);" +
+    "function show(t){var h=t.getAttribute('data-tip-head'),f=t.getAttribute('data-tip-foot');c.textContent='';" +
+    "var b=document.createElement('b');b.textContent=h||'';c.appendChild(b);c.appendChild(document.createTextNode(t.getAttribute('data-tip')||''));" +
+    "if(f){var s=document.createElement('span');s.className='dim';s.textContent=f;c.appendChild(s);}" +
+    "c.hidden=false;var r=t.getBoundingClientRect(),w=c.offsetWidth,ht=c.offsetHeight;" +
+    "var x=Math.min(Math.max(8,r.left-8),innerWidth-w-8),y=r.bottom+6;if(y+ht>innerHeight-8)y=r.top-ht-6;" +
+    "c.style.left=x+'px';c.style.top=Math.max(8,y)+'px';}" +
+    "document.addEventListener('mouseover',function(e){var t=e.target.closest&&e.target.closest('[data-tip]');if(t)show(t);else c.hidden=true;});" +
+    "document.addEventListener('scroll',function(){c.hidden=true;},true);" +
+    "})();</script>";
+
   // Every shared piece the rows above asked for, once (see `templates`).
   const templateHtml = [...templates.values()]
     .map((entry) => '<template id="' + entry.id + '">' + entry.html + "</template>")
     .join("");
 
+  /*
+   * The page in tabs: the class list first and on every load, and what sits
+   * beside it — where each student stands in class and at home, and who has
+   * left — a press away rather than above or below the list. A tab with
+   * nothing in it is not drawn; one tab is no tabs.
+   */
+  const pages = [
+    // The legend above the list, where it is read before the cells are.
+    { id: "list", label: "Students", html: header + filterBar + legend + list },
+    sv ? { id: "standing", label: "In class and at home", html: sv.section } : null,
+    departed ? { id: "left", label: "No longer active <span class=\"dim\">" + inactive.length + "</span>", html: departed } : null,
+  ].filter(Boolean);
+  const tabbed =
+    pages.length > 1
+      ? '<div class="ptabs" role="tablist">' +
+        pages
+          .map(
+            (page, i) =>
+              '<button type="button" class="ptab" role="tab" data-ptab="' + page.id + '" aria-selected="' + (i === 0) + '">' + page.label + "</button>",
+          )
+          .join("") +
+        "</div>" +
+        pages
+          .map((page, i) => '<div class="ptp" role="tabpanel" data-ptp="' + page.id + '"' + (i === 0 ? "" : " hidden") + ">" + page.html + "</div>")
+          .join("") +
+        "<script>document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('.ptab');if(!b)return;" +
+        "var id=b.getAttribute('data-ptab');[].forEach.call(document.querySelectorAll('.ptab'),function(x){x.setAttribute('aria-selected',String(x===b));});" +
+        "[].forEach.call(document.querySelectorAll('.ptp'),function(p){p.hidden=p.getAttribute('data-ptp')!==id;});});</script>"
+      : pages[0].html;
+
   return documentPage(
-    workStyle + "<style>" + assessmentWindowStyle + "</style>" + (sv ? sv.style : "") + header + (sv ? sv.section : "") + filterBar + list + legend + departed + drawer + assessmentWindow +
-      templateHtml + filterScript + drawerScript + defenceScript + assessmentWindowScript + presetScript + (sv ? sv.script : "") + VIEW_SCRIPT,
+    workStyle + "<style>" + assessmentWindowStyle + "</style>" + (sv ? sv.style : "") + tabbed + drawer + assessmentWindow +
+      templateHtml + tipScript + filterScript + drawerScript + defenceScript + assessmentWindowScript + presetScript + (sv ? sv.script : "") + VIEW_SCRIPT,
     dark,
   );
 };
