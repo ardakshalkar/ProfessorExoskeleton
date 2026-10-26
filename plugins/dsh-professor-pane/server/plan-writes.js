@@ -27,6 +27,8 @@ import { activitiesOf, assessmentsOf, modulesOf, runById } from "@ainar/core/src
 import { COLLECTIONS } from "@ainar/core/src/loader.ts";
 import { editRecords, setRecordFields } from "@ainar/core/src/record-edit.ts";
 
+import { runScans } from "./actions.js";
+import { canvasBinding } from "./unpublished.js";
 import { loadedRun } from "./workspace.js";
 
 // What `awareDatetime` accepts in the model, narrowed to what the form sends:
@@ -143,6 +145,69 @@ export const writeAssessmentDates = (workspace, root, runId, body) => {
   } catch (error) {
     return { error: String(error?.message ?? error) };
   }
+};
+
+/**
+ * *Close now* in the assessment window: no more hand-ins, late ones included.
+ *
+ * `closes_at` is the professor's decision the way the other two dates are, so
+ * the pane writes it — now, in the offset the due date is written in. Only
+ * once the work is due: closing before the deadline would shut out work
+ * handed in on time, and the validator refuses that record.
+ *
+ * Then Canvas's `lock_at`, by `lms assignment-push --field lock_at`, to every
+ * Canvas course that already has the assignment and to no other: with one
+ * field named, a course without it would be sent a new assignment holding
+ * nothing but a closing date. A lock someone set in Canvas by hand is drift
+ * and is not overwritten; the push says so, and that is what comes back.
+ */
+export const closeSubmissions = async (workspace, root, runId, body, now = new Date()) => {
+  const assessmentId = String(body?.assessment ?? "").trim();
+  if (!/^[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) return { error: "Not an assessment id." };
+
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId);
+  if (!run) return { error: `no course run '${runId}' in this workspace` };
+  const record = assessmentsOf(bundle, runId).find((entry) => entry.assessment_id === assessmentId);
+  if (!record) return { error: `${assessmentId} is not an assessment of ${runId}.` };
+  if (!record.due_at) return { error: `${assessmentId} has no due date, so there is nothing to close after.` };
+  if (Date.parse(record.due_at) > now.getTime()) return { error: `${assessmentId} is not due yet. Nothing was written.` };
+  if (record.closes_at && Date.parse(record.closes_at) <= now.getTime()) {
+    return { error: `${assessmentId} is already closed. Nothing was written.` };
+  }
+
+  // Now, written as the due date is: its own offset, to the minute.
+  const offset = /([+-]\d{2}:\d{2}|Z)$/.exec(String(record.due_at))?.[1] ?? "Z";
+  const minutes = offset === "Z" ? 0 : (offset[0] === "-" ? -1 : 1) * (Number(offset.slice(1, 3)) * 60 + Number(offset.slice(4, 6)));
+  const local = new Date(now.getTime() + minutes * 60_000).toISOString().slice(0, 16);
+  const closes = normalised(local + offset);
+
+  try {
+    setRecordFields({
+      root,
+      courseId: run.course_id,
+      patterns: COLLECTIONS.assessments,
+      idField: "assessment_id",
+      collection: "assessments",
+      edits: new Map([[assessmentId, { closes_at: closes }]]),
+    });
+  } catch (error) {
+    return { error: String(error?.message ?? error) };
+  }
+
+  const binding = canvasBinding(run, record);
+  if (binding.state === null || binding.state === "none") {
+    return { ok: true, closes_at: closes, canvas: null, note: binding.state === null ? null : "Not in Canvas: no assignment is linked, so nothing was sent." };
+  }
+  const groups = binding.state === "some" ? Object.keys(record.extensions?.lms?.canvas_assignments ?? {}).filter((group) => !binding.missing.includes(group)) : [null];
+  const sent = [];
+  for (const group of groups) {
+    const args = ["lms", "assignment-push", runId, "--assessment", assessmentId, "--field", "lock_at", "--confirm"];
+    if (group) args.push("--group", group);
+    const result = await runScans(args, root);
+    sent.push({ group, ok: result.ok, output: result.output || result.error || "" });
+  }
+  return { ok: true, closes_at: closes, canvas: sent, note: binding.state === "some" ? "Not sent to " + binding.missing.join(", ") + ": no assignment there." : null };
 };
 
 /**

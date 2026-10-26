@@ -4,9 +4,25 @@
  */
 
 import { readBody, sendJson } from "../http.js";
-import { writeAssessmentDates, writeTopicMoves } from "../plan-writes.js";
+import { closeSubmissions, writeAssessmentDates, writeTopicMoves } from "../plan-writes.js";
 
 export const routes = [
+  /**
+   * *Close now* in the assessment window: `closes_at` written as now, and
+   * Canvas's `lock_at` sent where the assignment is linked. `?assessment=`;
+   * `closeSubmissions` says what it refuses and why.
+   */
+  {
+    paths: ["/api/assessment/close"],
+    handle(c) {
+      const { req, res, url, runId, workspace, root } = c;
+      if (req.method !== "POST") return sendJson(res, 405, { error: "closing is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return closeSubmissions(workspace, root, runId, { assessment: url.searchParams.get("assessment") })
+        .then((result) => sendJson(res, 200, result))
+        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    },
+  },
   /**
    * A piece of graded work's two dates, from Planning's drag and its form.
    *

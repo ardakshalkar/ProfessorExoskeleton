@@ -111,6 +111,19 @@ test("a field the model says nothing about is never sent", () => {
   }
 });
 
+test("a closing date goes to Canvas as lock_at; none says nothing", () => {
+  const closed = plan(specFor({ ...ASSESSMENT, closes_at: "2026-10-09T23:59:00+05:00" }, null), {
+    name: "Data Preparation Report",
+    points_possible: 100,
+  });
+  assert.equal(closed.fields.find((row) => row.field === "lock_at")!.action, "new");
+  assert.equal(closed.send.lock_at, "2026-10-09T23:59:00+05:00");
+  // An assignment closed by hand in Canvas is never reopened from here.
+  const open = plan(specFor(ASSESSMENT, null), { name: "Data Preparation Report", lock_at: "2026-10-09T18:59:00Z" });
+  assert.equal("lock_at" in open.send, false);
+  assert.equal(open.fields.some((row) => row.field === "lock_at"), false);
+});
+
 // ------------------------------------------------------------------ sameness
 
 test("the same instant written two ways is not a change", () => {

@@ -20,3 +20,7 @@ GradingScheme, matching ainar-node/src/model/common.ts `MissingWork`.
 Fork, 2026-10-24 (STN-1): assessment.schema.json and course-bundle.schema.json
 gain `Assessment.setting` (supervised | unsupervised), matching
 ainar-node/src/model/common.ts `Setting`.
+
+Fork, 2026-10-26: assessment.schema.json and course-bundle.schema.json gain
+`Assessment.closes_at` (when hand-ins stop, Canvas's lock_at), matching
+ainar-node/src/model/assessment.ts.

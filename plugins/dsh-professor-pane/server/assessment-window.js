@@ -149,6 +149,7 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
     type: assessment.type ?? null,
     weight: typeof assessment.weight === "number" ? assessment.weight : null,
     due: assessment.due_at ?? null,
+    closes: assessment.closes_at ?? null,
     maximum: graded[0]?.entry.maximum ?? assessment.maximum_score ?? null,
     students: cells.length,
     counts: {
@@ -221,7 +222,22 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
     s.maximum !== null ? "out of " + escapeText(round(Number(s.maximum))) : null,
     s.weight !== null ? escapeText(round(s.weight * 100)) + "% of the course" : null,
     s.due ? "due " + escapeText(when(s.due)) : "no due date",
+    s.closes ? (Date.parse(s.closes) <= Date.now() ? "closed " : "closes ") + escapeText(when(s.closes)) : null,
   ].filter(Boolean);
+
+  /*
+   * *Close now*, once the work is due and not closed: no more hand-ins, late
+   * ones included, here and in Canvas. Pressed, it asks once, in place — it
+   * reaches Canvas, and reopening is done in Canvas.
+   */
+  const closable = s.due && Date.parse(s.due) <= Date.now() && !(s.closes && Date.parse(s.closes) <= Date.now());
+  const closeNow = closable
+    ? '<div class="awlock" data-aw-lock-for="' + escapeText(s.id) + '">' +
+      '<button type="button" class="chip" data-aw-lock title="Stop taking hand-ins, late ones included">Close now</button>' +
+      '<span class="awlockq" hidden>Stop taking hand-ins for this, late ones included? Canvas gets the closing date too. ' +
+      '<button type="button" class="chip act" data-aw-lock-go>Close it</button> <button type="button" class="chip" data-aw-lock-no>Cancel</button></span>' +
+      "</div>"
+    : "";
 
   // Who handed it in, in one bar: graded, handed in and waiting, missing,
   // not imported, not due — the legend's colours, in the strip's order.
@@ -681,7 +697,7 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
   ].filter(([, , html]) => html);
   return (
     '<div class="awpanel" data-aw-panel="' + escapeText(s.id) + '" hidden>' +
-    '<div class="awhead"><div class="awheadtop"><div><div class="awtitle">' + escapeText(s.title) + '</div><div class="dim">' + facts.join(" · ") + "</div></div>" +
+    '<div class="awhead"><div class="awheadtop"><div><div class="awtitle">' + escapeText(s.title) + '</div><div class="dim">' + facts.join(" · ") + "</div>" + closeNow + "</div>" +
     '<button type="button" class="dwk" data-aw-close aria-label="Close" title="Close (Esc)">×</button></div>' +
     '<div class="awtabs" role="tablist">' +
     tabs
@@ -737,6 +753,7 @@ export const assessmentWindowStyle =
   ".awhead{padding:12px 18px 0;border-bottom:1px solid var(--line);background:var(--dwbg)}" +
   ".awheadtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}" +
   ".awtitle{font-size:16px;font-weight:600}" +
+  ".awlock{margin-top:6px;font-size:12px}.awlock [hidden]{display:none}" +
   ".awtabs{display:flex;gap:2px;margin-top:10px}" +
   ".awtabs button{font:inherit;font-size:12px;background:none;border:0;border-bottom:2px solid transparent;padding:6px 12px;color:var(--dim);cursor:pointer}" +
   ".awtabs button[aria-selected=true]{color:var(--fg);border-bottom-color:var(--info);font-weight:600}" +
@@ -920,6 +937,12 @@ export const assessmentWindowScript =
   "dc.textContent='Writing…';say({kind:'integrity',action:'decide',assessment:dc.closest('[data-ic-for]').getAttribute('data-ic-for')," +
   "case:rw.getAttribute('data-ic'),state:st,outcome:st==='upheld'&&oc?oc.value:null," +
   "note:rw.querySelector('[data-ic-note]')?rw.querySelector('[data-ic-note]').value.trim():''});return;}" +
+  // Close now: ask in place, then send.
+  "var lk=t.closest('[data-aw-lock],[data-aw-lock-no],[data-aw-lock-go]');if(lk){var lb=lk.closest('[data-aw-lock-for]'),q=lb.querySelector('.awlockq'),b0=lb.querySelector('[data-aw-lock]');" +
+  "if(lk.hasAttribute('data-aw-lock')){b0.hidden=true;q.hidden=false;return;}" +
+  "if(lk.hasAttribute('data-aw-lock-no')){q.hidden=true;b0.hidden=false;return;}" +
+  "if(lk.disabled||!up)return;[].slice.call(q.querySelectorAll('button')).forEach(function(x){x.disabled=true;});lk.textContent='Closing…';" +
+  "say({kind:'close-submissions',assessment:lb.getAttribute('data-aw-lock-for')});return;}" +
   // The curve's presses: an exponent preset, Apply, Take it off.
   "var cx=t.closest('[data-cv-exp]');if(cx){var bx=cx.closest('.awcv');bx.querySelector('[data-cv-exponent]').value=cx.getAttribute('data-cv-exp');cvDraw(bx);return;}" +
   "var ca=t.closest('[data-cv-apply],[data-cv-clear]');if(ca){if(ca.disabled||!up)return;var bx=ca.closest('.awcv');" +

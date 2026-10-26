@@ -593,6 +593,20 @@
       "default": null,
       "title": "Due At"
     },
+    "closes_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When hand-ins stop being accepted, late ones included; Canvas's lock_at. Absent, the work stays open after it is due.",
+      "title": "Closes At"
+    },
     "outcomes": {
       "items": {
         "pattern": "^LO-[0-9]{2,3}$",

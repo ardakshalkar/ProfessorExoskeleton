@@ -413,6 +413,39 @@ export function ProfessorPane(props) {
           });
         return;
       }
+      // *Close now* in the assessment window: the server writes `closes_at`
+      // and sends Canvas its `lock_at`. What Canvas said is told here when it
+      // was not a plain success; the redraw shows "closed".
+      if (data.kind === "close-submissions") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run = currentRunRef.current;
+        if (!run || !id.test(String(data.assessment))) return;
+        fetch(
+          scoped(BASE + "/api/assessment/close?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
+          { method: "POST" },
+        )
+          .then((response) => response.json())
+          .then((result) => {
+            const failed = (result.canvas || []).filter((entry) => !entry.ok);
+            if (!result.ok) window.alert(String(result.error || "it was not closed"));
+            else if (failed.length) {
+              window.alert(
+                "Closed here, but Canvas did not take it" + (failed[0].group ? " in " + failed[0].group : "") + ": " +
+                  String(failed[0].output).trim().split("\n").slice(-2).join(" "),
+              );
+            } else if ((result.canvas || []).some((entry) => /nothing to send/.test(entry.output))) {
+              // Drift: a closing date set in Canvas by hand is not overwritten.
+              window.alert("Closed here. Canvas already has its own closing date for this, set there, and keeps it.");
+            } else if (result.note) window.alert("Closed here. " + result.note);
+            placedAt.current = Date.now();
+            write(["assessments"]);
+          })
+          .catch((error) => {
+            window.alert(String(error));
+            write(["assessments"]);
+          });
+        return;
+      }
       // An integrity case: *Open a case* on a hand-in, or *Clear* / *Uphold* /
       // *Reopen* in the exam window's Integrity tab. The server writes it in
       // its own process (src/integrity.ts); the redraw shows the case, and a

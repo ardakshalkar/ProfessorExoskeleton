@@ -17987,6 +17987,31 @@ function ProfessorPane(props) {
         });
         return;
       }
+      if (data.kind === "close-submissions") {
+        const id = /^[A-Z0-9][A-Z0-9-]*$/;
+        const run2 = currentRunRef.current;
+        if (!run2 || !id.test(String(data.assessment))) return;
+        fetch(
+          scoped(BASE + "/api/assessment/close?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
+          { method: "POST" }
+        ).then((response) => response.json()).then((result) => {
+          const failed = (result.canvas || []).filter((entry) => !entry.ok);
+          if (!result.ok) window.alert(String(result.error || "it was not closed"));
+          else if (failed.length) {
+            window.alert(
+              "Closed here, but Canvas did not take it" + (failed[0].group ? " in " + failed[0].group : "") + ": " + String(failed[0].output).trim().split("\n").slice(-2).join(" ")
+            );
+          } else if ((result.canvas || []).some((entry) => /nothing to send/.test(entry.output))) {
+            window.alert("Closed here. Canvas already has its own closing date for this, set there, and keeps it.");
+          } else if (result.note) window.alert("Closed here. " + result.note);
+          placedAt.current = Date.now();
+          write(["assessments"]);
+        }).catch((error) => {
+          window.alert(String(error));
+          write(["assessments"]);
+        });
+        return;
+      }
       if (data.kind === "integrity") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run2 = currentRunRef.current;

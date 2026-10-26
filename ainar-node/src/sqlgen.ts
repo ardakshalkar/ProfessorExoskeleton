@@ -639,6 +639,8 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       weight: real(a.weight),
       opens_at: a.opens_at,
       due_at: a.due_at,
+      // Only when there is one, as `curve`: the golden import predates it.
+      ...(a.closes_at ? { closes_at: a.closes_at } : {}),
       submission_type: a.submission_type,
       delivery: a.delivery ?? null,
       instructions_document_id: ref(a.instructions_document_id),

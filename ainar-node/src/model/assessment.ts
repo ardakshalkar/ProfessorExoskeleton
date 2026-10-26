@@ -160,6 +160,8 @@ export const Assessment = entity({
   component: ComponentId.nullish(),
   opens_at: awareDatetime().nullish(),
   due_at: awareDatetime().nullish(),
+  /** When hand-ins stop being accepted, late ones included — Canvas's `lock_at`. Absent, open after it is due. */
+  closes_at: awareDatetime().nullish(),
   outcomes: z.array(OutcomeId).default([]),
   rubric_id: RubricId.nullish(),
   rubric: Rubric.nullish(),

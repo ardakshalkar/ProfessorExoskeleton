@@ -429,6 +429,14 @@ const checkAssessments = (b: CourseBundle, issues: IssueList): void => {
     if (assessment.opens_at && assessment.due_at && assessment.opens_at > assessment.due_at) {
       issues.error("date.order", "opens_at is after due_at", assessment.assessment_id);
     }
+    // Closing before the deadline would shut out on-time work; closing before
+    // it opened would shut out everyone.
+    const closes = assessment.closes_at ? Date.parse(assessment.closes_at) : NaN;
+    if (Number.isFinite(closes) && assessment.due_at && closes < Date.parse(assessment.due_at)) {
+      issues.error("date.order", "closes_at is before due_at", assessment.assessment_id);
+    } else if (Number.isFinite(closes) && assessment.opens_at && closes < Date.parse(assessment.opens_at)) {
+      issues.error("date.order", "closes_at is before opens_at", assessment.assessment_id);
+    }
     if (!((assessment.submission_type as string[]) ?? []).length) {
       issues.warn("assessment.no_submission_type", "no submission type declared", assessment.assessment_id);
     }

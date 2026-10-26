@@ -1822,6 +1822,8 @@ const fieldValue = (
       return spec.due_at === null ? null : { due_at: spec.due_at };
     case "unlock_at":
       return spec.unlock_at === null ? null : { unlock_at: spec.unlock_at };
+    case "lock_at":
+      return spec.lock_at === null ? null : { lock_at: spec.lock_at };
     case "submission_types":
       return { submission_types: spec.submission_types };
     case "allowed_extensions":

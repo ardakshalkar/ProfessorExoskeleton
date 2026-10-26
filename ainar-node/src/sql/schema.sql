@@ -321,6 +321,8 @@ CREATE TABLE IF NOT EXISTS assessment.assessments (
     weight         NUMERIC(5, 4) CHECK (weight IS NULL OR (weight >= 0 AND weight <= 1)),
     opens_at       TIMESTAMPTZ,
     due_at         TIMESTAMPTZ,
+    -- When hand-ins stop being accepted, late ones included (Canvas lock_at).
+    closes_at      TIMESTAMPTZ,
     submission_type TEXT[] NOT NULL DEFAULT '{}',
     -- Where the work arrives, as against what shape it is in: canvas_upload,
     -- github_repo, paper_exam, oral_defense, presentation,
@@ -341,6 +343,8 @@ CREATE TABLE IF NOT EXISTS assessment.assessments (
 );
 -- Added 2026-10-22; a database loaded before then has the table without it.
 ALTER TABLE assessment.assessments ADD COLUMN IF NOT EXISTS curve JSONB;
+-- Added 2026-10-26.
+ALTER TABLE assessment.assessments ADD COLUMN IF NOT EXISTS closes_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS assessment.assessment_outcomes (
     assessment_id UUID NOT NULL REFERENCES assessment.assessments(id) ON DELETE CASCADE,

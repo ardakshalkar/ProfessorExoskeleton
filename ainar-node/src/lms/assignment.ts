@@ -54,6 +54,8 @@ export interface AssignmentSpec {
   points_possible: number | null;
   due_at: string | null;
   unlock_at: string | null;
+  /** `closes_at`: Canvas's "Available until", after which no hand-in is taken. */
+  lock_at: string | null;
   submission_types: string[];
   allowed_extensions: string[];
   description: string | null;
@@ -252,6 +254,7 @@ export const specFor = (assessment: any, description: string | null, points: num
       points ?? (typeof assessment.maximum_score === "number" ? assessment.maximum_score : null),
     due_at: assessment.due_at ?? null,
     unlock_at: assessment.opens_at ?? null,
+    lock_at: assessment.closes_at ?? null,
     submission_types: types,
     allowed_extensions: extensions,
     description,
@@ -432,6 +435,16 @@ export const planAssignment = ({
     last.unlock_at ?? null,
     sameInstant,
     (value) => ({ unlock_at: String(value) }),
+  );
+  // Absent here says nothing, so an assignment closed by hand in Canvas stays
+  // closed; it is never reopened from this side.
+  field(
+    "lock_at",
+    spec.lock_at,
+    held.lock_at ?? null,
+    last.lock_at ?? null,
+    sameInstant,
+    (value) => ({ lock_at: String(value) }),
   );
   field(
     "submission_types",
