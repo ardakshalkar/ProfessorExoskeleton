@@ -229,7 +229,7 @@ export const studentsDocument = (
           : state === "graded"
         ? number(entry.score) + " of " + number(entry.maximum) + caseSaid
         : state === "in"
-          ? "handed in, not graded yet"
+          ? "handed in, waiting for a mark"
           : state === "missing"
             ? "missing — past due, nothing handed in"
             : state === "unrecorded"
@@ -296,6 +296,12 @@ export const studentsDocument = (
         body: "Missing, and missing work on this assessment is left blank rather than given 0, so nothing is sent to Canvas.",
         foot: "Its missing-work rule is set in the Gradebook's policy.",
       };
+    }
+    // Handed in and not marked: nothing to send until it is.
+    if (state === "in") {
+      return outOfCanvasIds.has(studentId)
+        ? { cls: "cvx", body: "Handed in, waiting for a mark. This student is not in the Canvas course, so the mark will have nowhere to go." }
+        : { cls: "cvo", body: "Handed in, waiting for a mark. Nothing goes to Canvas until it is graded.", foot: "Once graded, Sync all on the Canvas page sends it." };
     }
     if (state !== "graded" && state !== "voided" && !zeroed) return null;
     const what = zeroed ? "Missing, so 0 under the missing-work rule. " : "";
@@ -405,7 +411,8 @@ export const studentsDocument = (
               const text =
                 at.state === "graded"
                   ? number(at.entry.score)
-                  : { in: "✓", missing: "✗", unrecorded: "?", held: "⚑", voided: "EX" }[at.state] ?? "";
+                  // Waiting for a mark is "…", not a tick: a tick read as done.
+                  : { in: "…", missing: "✗", unrecorded: "?", held: "⚑", voided: "EX" }[at.state] ?? "";
               // A mark an upheld case decided (zero, no penalty) keeps its
               // number, with the flag in the corner.
               const flagged = at.state === "graded" && at.entry?.integrity && at.entry.integrity.state !== "cleared";
@@ -1879,7 +1886,7 @@ export const studentsDocument = (
   const header = "<section>" + tiles + (health ? '<div class="health">' + health + "</div>" : "") + refusedHtml + "</section>";
 
   const legend = weighted.length
-    ? '<p class="legend dim"><span class="lgs">Hand-in</span><span class="m graded"></span>graded <span class="m in"></span>handed in ' +
+    ? '<p class="legend dim"><span class="lgs">Hand-in</span><span class="m graded"></span>graded <span class="m in"></span>waiting for a mark ' +
       '<span class="m missing"></span>missing <span class="m unrecorded"></span>not imported <span class="m ahead"></span>not due' +
       (hasCases ? ' <span class="m held"></span>held by an integrity case' : "") +
       '<span class="lgs">Canvas</span>' +
@@ -1887,7 +1894,7 @@ export const studentsDocument = (
       canvasIcon("cv", CANVAS_STATES.cv, "The mark in this cell is in Canvas — a missing hand-in as 0 where the rule gives zero: sent from here and confirmed, or the same as Canvas at the last check.") +
       "in Canvas</span>" +
       '<span class="lgi">' +
-      canvasIcon("cvo", CANVAS_STATES.cvo, "Never sent, or changed here after it was sent.", "Sync all on the Canvas page sends it.") +
+      canvasIcon("cvo", CANVAS_STATES.cvo, "Never sent, changed here after it was sent, or handed in and waiting for a mark.", "Sync all on the Canvas page sends what is marked.") +
       "not sent yet</span>" +
       '<span class="lgi">' +
       canvasIcon("cvd", CANVAS_STATES.cvd, "Canvas holds a different mark, usually because someone changed it there.", "Keep one or the other on the Canvas page.") +

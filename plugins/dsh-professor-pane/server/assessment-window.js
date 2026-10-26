@@ -244,7 +244,7 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
   const share = (n) => (s.students ? (100 * n) / s.students : 0);
   const parts = [
     ["graded", c.graded, "graded"],
-    ["in", c.in, "handed in, not graded"],
+    ["in", c.in, "waiting for a mark"],
     ["missing", c.missing, "missing"],
     ["unrecorded", c.unrecorded, "not imported"],
     ["ahead", c.ahead, "not due"],
