@@ -1973,6 +1973,41 @@ export const studentsDocument = (
   );
 
   /*
+   * The top of the assessment window: where its marks stand in Canvas, and
+   * the presses that publish them — *Publish*, and where missing work is left
+   * blank, *Publish with 0 for missing*, which first gives the missing 0 (the
+   * column menu's rule) and then publishes. Each opens the pane's send dialog
+   * (client/send-marks.js): it checks Canvas first and sends only on its own
+   * red press, so nothing here reaches a student by itself.
+   */
+  const sendingBar = (a) => {
+    const reach = reaches.get(a.assessment_id);
+    if (!reach) return "";
+    const { r, sides } = reach;
+    const out = sides.out;
+    const record = assessmentTitles.get(a.assessment_id) ?? a;
+    const blank = missingWorkOf(run, record) === "blank";
+    const id = escapeText(a.assessment_id);
+    const label = escapeText(a.title ?? a.assessment_id);
+    const press = (text, zeros, primary) =>
+      '<button type="button" class="chip' + (primary ? " act" : "") + '" data-pub="' + id + '" data-pub-label="' + label + '"' +
+      (zeros ? ' data-pub-zeros="' + zeros + '"' : "") + ">" + escapeText(text) + "</button>";
+    // The rule a "with 0" press writes: drop this assessment's own blank where the course already gives 0.
+    const zeroRule = (record.missing_work ?? null) === "blank" && run.grading_scheme?.missing_work === "zero" ? "run" : "zero";
+    const canSend = r.binding.state !== null;
+    const presses = canSend
+      ? (out.state === "none" || out.state === "part" || out.state === "warn" ? press("Publish", null, true) : press("Publish", null, false)) +
+        (blank && r.missing && r.pastDue ? press("Publish with 0 for " + plural(r.missing, "missing student", "missing students"), zeroRule, false) : "")
+      : "";
+    return (
+      '<div class="awsl"><span class="hi"><svg viewBox="0 0 12 12" aria-hidden="true">' + signalSvg("out", out.state, out.share) + "</svg></span>" +
+      "<span><b>" + escapeText(out.head) + "</b> · " + escapeText(out.lines[0]?.[1] ?? "") +
+      (blank && r.missing ? ' <span class="dim">Missing work is left blank here, not 0.</span>' : "") + "</span></div>" +
+      (presses ? '<div class="awsp">' + presses + "</div>" : "")
+    );
+  };
+
+  /*
    * One list, not a section per subgroup. The group is a column and a filter
    * now; sectioning by it made "who is lowest across the class" a question
    * the screen could not answer without three scrolls and a memory.
@@ -2053,6 +2088,7 @@ export const studentsDocument = (
       {
         nameOf: (id) => (people && typeof people[id]?.name === "string" && people[id].name.trim() ? people[id].name.trim() : id),
         when: stamp,
+        sending: sendingBar(a),
         reports: (() => {
           const reports = reportsOf.get(a.assessment_id);
           const students = Object.entries(reports?.manifest.students ?? {});
@@ -2798,6 +2834,9 @@ export const studentsDocument = (
     "var m=document.querySelector('[data-hm=\"'+id+'\"]');if(!m)return;m.hidden=false;b.setAttribute('aria-expanded','true');open={m:m,b:b};" +
     "var r=b.getBoundingClientRect(),w=m.offsetWidth,h=m.offsetHeight,y=r.bottom+4;if(y+h>innerHeight-8)y=Math.max(8,r.top-h-4);" +
     "m.style.left=Math.min(Math.max(8,r.left+r.width/2-w/2),innerWidth-w-8)+'px';m.style.top=y+'px';return;}" +
+    // The assessment window's Publish presses (`sendingBar`): the pane's send dialog.
+    "var pb=t.closest('[data-pub]');if(pb){say({kind:'publish-marks',assessment:pb.getAttribute('data-pub'),label:pb.getAttribute('data-pub-label')," +
+    "zeros:pb.getAttribute('data-pub-zeros')||null});return;}" +
     "var mm=t.closest('.hmenu');if(!mm){shut();return;}" +
     "var s=t.closest('[data-hm-sync]');if(s){say({kind:'syncs',assessment:s.getAttribute('data-hm-sync')});shut();return;}" +
     "var q=t.closest('[data-hm-q]');if(q){q.hidden=true;q.nextElementSibling.hidden=false;return;}" +

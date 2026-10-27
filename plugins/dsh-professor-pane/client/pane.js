@@ -19,6 +19,7 @@ import { GradeBoard } from "./grade-board.js";
 import { ScansModal } from "./scans.js";
 import { BASE, scoped } from "./tabs.js";
 import { AREAS, useVersion, useWorkspaceWatch, wrote } from "./data.js";
+import { SendMarksModal } from "./send-marks.js";
 import { BatchModal, UploadModal } from "./upload.js";
 
 // ----------------------------------------------------------------- pane
@@ -131,6 +132,8 @@ export function ProfessorPane(props) {
   // The upload dialog, open or not. Not held by a frame for the material
   // overlay's reason: a theme change mid-upload must not lose the files.
   const [uploading, setUploading] = React.useState(false);
+  // One assessment's marks being published from its window on Students: `{assessment, label, zeros}`.
+  const [publishingMarks, setPublishingMarks] = React.useState(null);
   // Course mode open or not. Not persisted: like the column itself, it
   // opens on a press, and a reload is back in the conversation.
   const [courseMode, setCourseMode] = React.useState(false);
@@ -437,6 +440,18 @@ export function ProfessorPane(props) {
             window.alert(String(error));
             write(["grading", "assessments"]);
           });
+        return;
+      }
+      // *Publish* at the top of an assessment's window on Students, with or
+      // without giving the missing 0 first: the send dialog, which checks
+      // Canvas before its own red press sends anything.
+      if (data.kind === "publish-marks") {
+        if (!/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+        setPublishingMarks({
+          assessment: data.assessment,
+          label: typeof data.label === "string" && data.label.trim() ? data.label.trim() : data.assessment,
+          zeros: data.zeros === "zero" || data.zeros === "run" ? data.zeros : null,
+        });
         return;
       }
       // The column menu's "Open the policy", when a locked policy holds a rule.
@@ -1150,7 +1165,7 @@ export function ProfessorPane(props) {
           setDrafts: setDrafts,
           covered:
             material !== null || publishing !== null || uploading || batch ||
-            desk !== null || grading !== null || scansPile !== null,
+            desk !== null || grading !== null || scansPile !== null || publishingMarks !== null,
           onPublish: () => openPublish("page"),
           onUpload: () => setUploading(true),
           // For Files: a pile in the Scans window, the batch in the recordings dialog.
@@ -1198,6 +1213,25 @@ export function ProfessorPane(props) {
           reload: deskVersion,
           preparing: Boolean(desk.preparing),
           onClose: () => setDesk(null),
+        })
+      : null,
+    publishingMarks && current
+      ? h(SendMarksModal, {
+          key: "publish|" + publishingMarks.assessment + "|" + (publishingMarks.zeros || ""),
+          runId: current.runId,
+          sessionId: props.sessionId,
+          assessment: publishingMarks.assessment,
+          label: publishingMarks.label,
+          zeros: publishingMarks.zeros,
+          names: names,
+          revision: marksVersion,
+          ask: props.ask,
+          onWrite: write,
+          onPolicy: () => {
+            setPublishingMarks(null);
+            openPlace({ view: "gradebook", sub: "policy" });
+          },
+          onClose: () => setPublishingMarks(null),
         })
       : null,
     grading && current

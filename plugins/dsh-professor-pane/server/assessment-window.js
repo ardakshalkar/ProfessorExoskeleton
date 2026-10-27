@@ -210,7 +210,7 @@ export const summarise = ({ assessment, cells, criteria = [], evaluations = [], 
  * handwritten name, so only with names on; `page(student, n)` the address of a
  * page of a student's scan, or null, loaded only when its answer is opened.
  */
-export const windowPanel = (summary, { nameOf, when, crop = () => null, page = () => null, reports = null }) => {
+export const windowPanel = (summary, { nameOf, when, crop = () => null, page = () => null, reports = null, sending = "" }) => {
   const s = summary;
   const c = s.counts;
   const stat = (label, value, warm = false) =>
@@ -697,7 +697,10 @@ export const windowPanel = (summary, { nameOf, when, crop = () => null, page = (
   ].filter(([, , html]) => html);
   return (
     '<div class="awpanel" data-aw-panel="' + escapeText(s.id) + '" hidden>' +
-    '<div class="awhead"><div class="awheadtop"><div><div class="awtitle">' + escapeText(s.title) + '</div><div class="dim">' + facts.join(" · ") + "</div>" + closeNow + "</div>" +
+    '<div class="awhead"><div class="awheadtop"><div><div class="awtitle">' + escapeText(s.title) + '</div><div class="dim">' + facts.join(" · ") + "</div>" +
+    // Where its marks stand in Canvas and the presses that publish them
+    // (`sending`, drawn by the caller), beside *Close now*.
+    (sending || closeNow ? '<div class="awsend">' + sending + closeNow + "</div>" : "") + "</div>" +
     '<button type="button" class="dwk" data-aw-close aria-label="Close" title="Close (Esc)">×</button></div>' +
     '<div class="awtabs" role="tablist">' +
     tabs
@@ -754,6 +757,9 @@ export const assessmentWindowStyle =
   ".awheadtop{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}" +
   ".awtitle{font-size:16px;font-weight:600}" +
   ".awlock{margin-top:6px;font-size:12px}.awlock [hidden]{display:none}" +
+  ".awsend{margin-top:8px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font-size:12px;display:flex;flex-direction:column;gap:6px}" +
+  ".awsend .awlock{margin-top:0}.awsl{display:flex;align-items:flex-start;gap:6px}.awsl .hi{flex:0 0 12px;width:12px;height:12px;margin-top:2px}" +
+  ".awsp{display:flex;flex-wrap:wrap;gap:6px}" +
   ".awtabs{display:flex;gap:2px;margin-top:10px}" +
   ".awtabs button{font:inherit;font-size:12px;background:none;border:0;border-bottom:2px solid transparent;padding:6px 12px;color:var(--dim);cursor:pointer}" +
   ".awtabs button[aria-selected=true]{color:var(--fg);border-bottom-color:var(--info);font-weight:600}" +
