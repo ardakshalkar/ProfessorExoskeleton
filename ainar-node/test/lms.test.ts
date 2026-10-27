@@ -472,6 +472,17 @@ test("the join returns identifiers and not names", () => {
   assert.equal(JSON.stringify([...mapped]).includes("Aigerim"), false);
 });
 
+test("the join takes the Canvas link roster sync recorded over a disagreeing SIS id", () => {
+  const people = { ...PEOPLE, "STUDENT-K4QM2X": { ...PEOPLE["STUDENT-K4QM2X"], canvas_user_id: "5002" } };
+  const { mapped, unmatched } = canvasUserIds(
+    [{ id: 5002, sis_user_id: "S-SOMETHING-ELSE", name: "Bekzat K." }],
+    directory(people),
+    "sis-id",
+  );
+  assert.deepEqual([...mapped], [["STUDENT-K4QM2X", "5002"]]);
+  assert.deepEqual(unmatched, []);
+});
+
 test("an ungraded or excused submission is not a zero", () => {
   const scores = apiCurrentScores(
     [

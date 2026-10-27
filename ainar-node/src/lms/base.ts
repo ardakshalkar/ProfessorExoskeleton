@@ -54,15 +54,19 @@ export class Directory {
   salt: Buffer;
   private byInstitutional: Map<string, string>;
   private byEmail: Map<string, string>;
+  private byCanvasUser: Map<string, string>;
 
   constructor(store: RosterStore, salt: Buffer) {
     this.store = store;
     this.salt = salt;
     this.byInstitutional = store.byInstitutionalId();
     this.byEmail = new Map();
+    this.byCanvasUser = new Map();
     for (const [studentId, person] of Object.entries(store.people)) {
       const email = (person.email ?? "").trim().toLowerCase();
       if (email) this.byEmail.set(email, studentId);
+      const canvas = String(person.canvas_user_id ?? "").trim();
+      if (canvas) this.byCanvasUser.set(canvas, studentId);
     }
     // The Canvas ids `roster sync` keeps, for a roster keyed on something
     // Canvas does not carry. Never over an identifier the import itself wrote.
@@ -98,6 +102,11 @@ export class Directory {
     }
     if (by === "login" || by === "email") return this.byEmail.get(cleaned.toLowerCase()) ?? null;
     throw new Error(`unknown match key '${by}'`);
+  }
+
+  /** The pseudonym `roster sync` linked to this Canvas user id, if any. */
+  pseudonymForCanvasUser(canvasUserId: string): string | null {
+    return this.byCanvasUser.get((canvasUserId ?? "").trim()) ?? null;
   }
 
   identity(studentId: string): Identity | null {

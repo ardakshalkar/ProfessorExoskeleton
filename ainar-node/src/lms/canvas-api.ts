@@ -640,6 +640,13 @@ export const canvasUserIds = (
   const mapped = new Map<string, string>();
   const unmatched: string[] = [];
   for (const student of students) {
+    // The link `roster sync` recorded comes first: it is the same join the
+    // roster uses, and holds when Canvas's SIS id or login differs from ours.
+    const linked = directory.pseudonymForCanvasUser(String(student.id ?? ""));
+    if (linked !== null) {
+      mapped.set(linked, String(student.id));
+      continue;
+    }
     const value = student[fieldName];
     if (!value) {
       unmatched.push(String(student.id ?? "?"));
