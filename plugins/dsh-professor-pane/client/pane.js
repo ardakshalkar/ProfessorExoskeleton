@@ -766,9 +766,11 @@ export function ProfessorPane(props) {
         return;
       }
       // The Students tab's "Sync from sheet": Sync, where the sheets are run;
-      // setting one up is a link from there to Course settings.
+      // setting one up is a link from there to Course settings. From a
+      // column's menu, with that assessment's line To Canvas opened.
       if (data.kind === "syncs") {
-        openPlace({ view: "syncs" });
+        if (/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment || ""))) openPlace({ view: "syncs", focus: "marks", assessment: data.assessment });
+        else openPlace({ view: "syncs" });
         return;
       }
       if (data.kind === "publish") {

@@ -10,6 +10,8 @@ import { finalRange, gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { ASSESSMENT_KINDS } from "@ainar/core/src/assessment-kinds.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { reportPlace, reportsDir } from "@ainar/core/src/report-place.ts";
+import { syncsOf } from "@ainar/core/src/sync/registry.ts";
+import { sheetConfigFromSync } from "@ainar/core/src/sync/sheet-marks.ts";
 import { existsSync, readFileSync } from "node:fs";
 
 import {
@@ -27,6 +29,7 @@ import { escapeAttribute, escapeText } from "./markdown.js";
 import { extensionOfKey, SHOWABLE } from "./materials.js";
 import { documentPage, stamp, VIEW_SCRIPT } from "./page.js";
 import { standingView } from "./standing-view.js";
+import { canvasBinding } from "./unpublished.js";
 import { loadedRun, rosterPath, rosterPeople } from "./workspace.js";
 import { decisionOf } from "../shared/marks.js";
 
@@ -1634,6 +1637,300 @@ export const studentsDocument = (
   };
   const byDisplayed = (a, b) => sortKey(a).localeCompare(sortKey(b));
 
+  const standings = new Map(active.map((entry) => [String(entry.student_id ?? ""), standingOf(String(entry.student_id ?? ""))]));
+
+  /* ------------------------------------------------------- each column's reach
+   *
+   * Under each header number, two signals, as the Sync page divides things:
+   * IN, what came into the records — the hand-ins brought in, the grade
+   * sheet's marks read, and marks somebody changed in Canvas that wait for
+   * the professor — and OUT, what students see: the marks in Canvas, and in
+   * a sheet synced both ways, the marks written back. Each is whole, a share,
+   * nothing yet, a decision, or nothing due. A padlock sits on the number
+   * once hand-ins are closed. Counted from the same cells and `canvasOf` the
+   * rows draw, over the active class, so the header and its column cannot
+   * disagree. Pressing the signals opens what can be done about each side;
+   * every send is on the Sync page, behind its preview.
+   */
+  const run = runById(bundle).get(runId) ?? {};
+  let ledgerSyncs = null;
+  try {
+    ledgerSyncs = Ledger.load(runId);
+  } catch {
+    // As for the cells: no ledger, no sheet coverage.
+  }
+  const legacySheet = loadSheetConfig(runId);
+  const sheetSyncs = (() => {
+    try {
+      return syncsOf(bundle, runId)
+        .filter((sync) => sync.service === "sheets" && sync.stream === "marks" && sync.enabled !== false)
+        .map((sync) => {
+          const columns = sheetConfigFromSync(sync, legacySheet).columns ?? {};
+          return {
+            id: sync.sync_id,
+            both: sync.role === "both",
+            tab: (sync.where && sync.where.tab) || legacySheet?.tab || null,
+            columnOf: new Map(Object.entries(columns).map(([header, id]) => [id, header])),
+            base: ledgerSyncs ? ledgerSyncs.synced(sync.sync_id) : {},
+            last: ledgerSyncs ? ledgerSyncs.lastRun(sync.sync_id) : null,
+          };
+        });
+    } catch {
+      return [];
+    }
+  })();
+
+  const reachOf = (a) => {
+    const counts = { cv: 0, cvo: 0, cvd: 0, cvx: 0, cvb: 0 };
+    const graded = [];
+    let waiting = 0;
+    let handed = 0;
+    let missing = 0;
+    for (const entry of active) {
+      const id = String(entry.student_id ?? "");
+      const at = standings.get(id).cells.get(a.assessment_id);
+      if (at.state === "graded") graded.push(id);
+      if (at.state === "graded" || at.state === "in" || at.state === "held" || at.state === "voided") handed += 1;
+      if (at.state === "missing") missing += 1;
+      // Handed in and not marked: nothing to send yet, but the column is not
+      // whole in Canvas until it is — a tick over a column of "…" read as done.
+      if (at.state === "in") {
+        if (!outOfCanvasIds.has(id)) waiting += 1;
+        continue;
+      }
+      const canvas = canvasOf(a.assessment_id, id, at.state, at.entry);
+      if (canvas) counts[canvas.cls] += 1;
+    }
+    const record = assessmentTitles.get(a.assessment_id) ?? a;
+    const sheets = sheetSyncs
+      .filter((sync) => sync.columnOf.has(a.assessment_id))
+      .map((sync) => ({
+        ...sync,
+        column: sync.columnOf.get(a.assessment_id),
+        held: graded.filter((id) => sync.base[id + "|" + a.assessment_id] !== undefined).length,
+      }));
+    const closes = record.closes_at ? Date.parse(record.closes_at) : NaN;
+    const due = a.due_at ? Date.parse(a.due_at) : NaN;
+    return {
+      counts,
+      ready: counts.cv + counts.cvo + counts.cvd,
+      waiting,
+      handed,
+      missing,
+      unrecorded: unrecorded.has(a.assessment_id),
+      graded: graded.length,
+      binding: canvasBinding(run, record),
+      sheets,
+      closes: Number.isFinite(closes) ? record.closes_at : null,
+      closed: Number.isFinite(closes) && closes <= now,
+      due,
+      pastDue: Number.isFinite(due) && due <= now,
+    };
+  };
+
+  const plural = (n, one, many = one + "s") => n + " " + (n === 1 ? one : many);
+  const asOf = checked ? "As of the Canvas check at " + stamp(check.at) + "." : "Not checked against Canvas since the pane started.";
+
+  /*
+   * One signal: an arrow in a rounded square — down for in, up for out —
+   * filled when whole, filled from the bottom as far as it has got, empty
+   * when nothing has, amber where it waits on the professor, and a dashed
+   * outline with no arrow when there is nothing to move yet.
+   */
+  const SIGNAL_PATHS = { in: "M6 2.4v6.8M3.2 6.4L6 9.3l2.8-2.9", out: "M6 9.6V2.8M3.2 5.6L6 2.7l2.8 2.9" };
+  const signalSvg = (dir, state, share = 0) => {
+    const box = (fill, stroke, extra = "") =>
+      '<rect x=".6" y=".6" width="10.8" height="10.8" rx="2.6" fill="' + fill + '" stroke="' + stroke + '" stroke-width="1.1"' + extra + "/>";
+    const arrow = (colour) =>
+      '<path d="' + SIGNAL_PATHS[dir] + '" fill="none" stroke="' + colour + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>';
+    if (state === "idle") return box("none", "var(--line)", ' stroke-dasharray="2 1.5"');
+    if (state === "full") return box("#2f8a5b", "#2f8a5b") + arrow("#fff");
+    if (state === "warn") return box("var(--warn)", "var(--warn)") + arrow("var(--dwbg)");
+    if (state === "none") return box("var(--dwbg)", "var(--dim)") + arrow("var(--dim)");
+    const height = (10.8 * Math.max(0.12, Math.min(0.92, share))).toFixed(2);
+    return (
+      box("var(--dwbg)", "#2f8a5b") +
+      '<rect x=".6" y="' + (11.4 - height).toFixed(2) + '" width="10.8" height="' + height + '" rx="1.5" fill="#2f8a5b" opacity=".4"/>' +
+      arrow("#2f8a5b")
+    );
+  };
+
+  /** What came in: hand-ins, the sheet's marks, Canvas's own changes, and when hand-ins close. */
+  const inReach = (a, r) => {
+    const cvd = r.counts.cvd;
+    const lines = [];
+    const presses = [];
+    const id = escapeText(a.assessment_id);
+
+    lines.push([
+      "Hand-ins",
+      r.unrecorded
+        ? "None brought in for anyone, though it is past due. Bring them in with ainar lms import-submissions " + runId + " --assessment " + a.assessment_id + "."
+        : r.handed
+          ? "Brought in for " + r.handed + " of " + active.length + (r.missing ? "; " + r.missing + " missing, past due." : ".")
+          : r.pastDue
+            ? "Nobody handed it in."
+            : "None yet.",
+    ]);
+    for (const sheet of r.sheets) {
+      lines.push([
+        "Grade sheet",
+        (r.graded ? sheet.held + " of " + r.graded + " marks were in column “" + sheet.column + "” at its last sync" : "Column “" + sheet.column + "” has no marks here yet") +
+          (sheet.last ? ", " + stamp(sheet.last) + "." : "; never synced."),
+      ]);
+    }
+    if (r.sheets.length) presses.push('<button type="button" class="chip" data-syncs>Sync from sheet</button>');
+    else if (sheetSyncs.length) {
+      lines.push(["Grade sheet", "Not a column the grade sheet maps."]);
+      presses.push('<button type="button" class="chip" data-syncs>Map a column…</button>');
+    }
+    if (cvd) {
+      lines.push(["Canvas", plural(cvd, "mark") + " changed in Canvas since the last send. " + asOf]);
+      presses.unshift('<button type="button" class="chip act" data-hm-sync="' + id + '">Keep one or the other…</button>');
+    }
+    lines.push([
+      "Closing",
+      r.closed
+        ? "Closed " + stamp(r.closes) + ". No more hand-ins, late ones included."
+        : r.closes
+          ? "Open; closes " + stamp(r.closes) + "."
+          : Number.isFinite(r.due)
+            ? r.pastDue
+              ? "Past due " + stamp(a.due_at) + "; still open to late hand-ins."
+              : "Due " + stamp(a.due_at) + "."
+            : "No due date.",
+    ]);
+    if (r.pastDue && !r.closed) {
+      presses.push(
+        '<button type="button" class="chip" data-hm-close>Close now</button>' +
+          '<span class="hmq" hidden>Stop taking hand-ins, late ones included? Canvas gets the closing date too. ' +
+          '<button type="button" class="chip act" data-hm-close-go="' + id + '">Close it</button> <button type="button" class="chip" data-hm-close-no>Cancel</button></span>',
+      );
+    }
+
+    const held = r.sheets.length ? Math.max(...r.sheets.map((sheet) => sheet.held)) : null;
+    const sheetShare = held !== null && r.graded ? held / r.graded : null;
+    let state;
+    let head;
+    if (cvd) {
+      state = "warn";
+      head = "Canvas changed marks";
+    } else if (r.unrecorded) {
+      state = "none";
+      head = "Nothing brought in";
+    } else if (!r.handed && !r.pastDue && !r.graded) {
+      state = "idle";
+      head = "Nothing to bring in yet";
+    } else if (sheetShare !== null && sheetShare < 1) {
+      state = "part";
+      head = "Partly in from the sheet";
+    } else {
+      state = "full";
+      head = "Brought in";
+    }
+    return { dir: "in", state, share: sheetShare ?? 0, head, lines, presses };
+  };
+
+  /** What went out: the marks in Canvas, and the sheet's written-back column. */
+  const outReach = (a, r) => {
+    const { cv, cvd, cvx, cvb } = r.counts;
+    const id = escapeText(a.assessment_id);
+    const lines = [];
+    const presses = [];
+    const toSync = (label, primary) =>
+      '<button type="button" class="chip' + (primary ? " act" : "") + '" data-hm-sync="' + id + '">' + escapeText(label) + "</button>";
+    const asides =
+      (r.waiting ? " " + plural(r.waiting, "more is", "more are") + " handed in and waiting for a mark." : "") +
+      (cvx ? " " + plural(cvx, "mark has", "marks have") + " nowhere to go: the student is not in the Canvas course." : "") +
+      (cvb ? " " + cvb + " missing, left blank in Canvas by the missing-work rule." : "") +
+      (r.binding.state === "some" ? " No assignment in " + r.binding.missing.join(", ") + ", so those subgroups get nothing." : "");
+    const whole = r.ready + r.waiting;
+
+    let state;
+    let head;
+    if (r.binding.state === null) {
+      lines.push(["Canvas", "This run sends nothing to Canvas."]);
+      state = "idle";
+      head = "Nothing goes out";
+    } else if (!whole) {
+      lines.push(["Canvas", "No mark on this is ready to send." + (r.binding.state === "none" ? " It has no Canvas assignment either." : "") + asides]);
+      state = "idle";
+      head = "Nothing to send yet";
+    } else if (r.binding.state === "none" && r.ready) {
+      lines.push(["Canvas", plural(r.ready, "mark is", "marks are") + " ready, with no Canvas assignment to send them to." + asides]);
+      presses.push(toSync("Link or create…", true));
+      state = "warn";
+      head = "No Canvas assignment";
+    } else if (cv === whole && r.binding.state === "all") {
+      lines.push(["Canvas", "Canvas has all " + plural(cv, "mark") + "." + asides + " " + asOf]);
+      presses.push(toSync("Open in Sync", false));
+      state = "full";
+      head = cvx ? "All that can go is in Canvas" : "All in Canvas";
+    } else if (cv === 0) {
+      lines.push(["Canvas", "None of the " + plural(r.ready, "mark") + " ready is in Canvas." + asides + " " + asOf]);
+      if (r.ready) presses.push(toSync("Send to Canvas…", true));
+      state = "none";
+      head = "Not in Canvas yet";
+    } else {
+      const unsent = r.ready - cv - cvd;
+      lines.push([
+        "Canvas",
+        "Canvas has " + cv + " of " + whole + "." + (unsent ? " " + unsent + " not sent yet." : "") +
+          (cvd ? " " + plural(cvd, "differs", "differ") + " — see In." : "") + asides + " " + asOf,
+      ]);
+      presses.push(
+        unsent
+          ? toSync("Send to Canvas…", true)
+          : r.waiting
+            ? '<button type="button" class="chip act" data-grade-open="' + id + '">Mark the rest</button>'
+            : toSync("Open in Sync", false),
+      );
+      state = "part";
+      head = unsent ? "Partly in Canvas" : "In Canvas as far as it is marked";
+    }
+    for (const sheet of r.sheets) {
+      lines.push([
+        "Grade sheet",
+        sheet.both
+          ? sheet.held + " of " + r.graded + " marks in column “" + sheet.column + "” as of its last sync; changes here are written back on the next."
+          : "Read only: nothing is written back to column “" + sheet.column + "”.",
+      ]);
+    }
+    return { dir: "out", state, share: whole ? cv / whole : 0, head, lines, presses };
+  };
+
+  const signalIcon = (side) =>
+    '<span class="hi" title="" data-tip-head="' + escapeAttribute((side.dir === "in" ? "In · " : "Out · ") + side.head) + '" data-tip="' +
+    escapeAttribute(side.lines.map(([name, text]) => name + ": " + text).join("\n")) + '"><svg viewBox="0 0 12 12" aria-hidden="true">' +
+    signalSvg(side.dir, side.state, side.share) + "</svg></span>";
+  const LOCK =
+    '<svg viewBox="0 0 12 12" aria-hidden="true"><rect x="2.5" y="5.5" width="7" height="5" rx="1" fill="currentColor"/>' +
+    '<path d="M4 5.5V4a2 2 0 0 1 4 0v1.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>';
+
+  /** The menu the signals open: In, then Out, each with what can be done about it. */
+  const reachMenu = (a, sides) => {
+    const title = escapeText(a.title ?? a.assessment_id);
+    const id = escapeText(a.assessment_id);
+    const section = (side, name) =>
+      '<div class="hms"><div class="hmn"><span class="hi">' + '<svg viewBox="0 0 12 12" aria-hidden="true">' +
+      signalSvg(side.dir, side.state, side.share) + "</svg></span>" + name + ' <span class="dim">· ' + escapeText(side.head) + "</span></div>" +
+      side.lines.map(([label, text]) => '<div class="hml"><span class="hmw">' + escapeText(label) + "</span><span>" + escapeText(text) + "</span></div>").join("") +
+      (side.presses.length ? '<div class="hmp">' + side.presses.join("") + "</div>" : "") + "</div>";
+    return (
+      '<div class="hmenu" data-hm="' + id + '" hidden role="dialog" aria-label="' + title + '">' +
+      '<div class="hmt"><b>' + title + "</b>" +
+      '<button type="button" class="chip" data-aw="' + id + '">Class results</button></div>' +
+      section(sides.in, "In — into your records") + section(sides.out, "Out — what students see") + "</div>"
+    );
+  };
+  const reaches = new Map(
+    weighted.map((a) => {
+      const r = reachOf(a);
+      const sides = { in: inReach(a, r), out: outReach(a, r) };
+      return [a.assessment_id, { r, sides, menu: reachMenu(a, sides) }];
+    }),
+  );
+
   /*
    * One list, not a section per subgroup. The group is a column and a filter
    * now; sectioning by it made "who is lowest across the class" a question
@@ -1655,11 +1952,25 @@ export const studentsDocument = (
               escapeText(kind.label) +
               '</span><span class="sk">' +
               kind.assessments
-                .map(
-                  (a, i) =>
-                    '<button type="button" class="n" data-aw="' + escapeText(a.assessment_id) + '" title="' +
-                    escapeText((a.title ?? a.assessment_id) + " — press for the class's results") + '">' + escapeText(shortOf(a, i)) + "</button>",
-                )
+                .map((a, i) => {
+                  const closed = reaches.get(a.assessment_id).r.closed;
+                  return (
+                    '<button type="button" class="n' + (closed ? " cl" : "") + '" data-aw="' + escapeText(a.assessment_id) + '" title="' +
+                    escapeText((a.title ?? a.assessment_id) + (closed ? " — closed to hand-ins" : "") + " — press for the class's results") + '">' +
+                    escapeText(shortOf(a, i)) + (closed ? '<span class="lk">' + LOCK + "</span>" : "") + "</button>"
+                  );
+                })
+                .join("") +
+              '</span><span class="sk hs">' +
+              kind.assessments
+                .map((a) => {
+                  const reach = reaches.get(a.assessment_id);
+                  return (
+                    '<button type="button" class="hb" data-hs="' + escapeText(a.assessment_id) + '" aria-haspopup="dialog" aria-label="' +
+                    escapeText("What came in and what went out for " + (a.title ?? a.assessment_id)) + '">' +
+                    signalIcon(reach.sides.in) + signalIcon(reach.sides.out) + "</button>"
+                  );
+                })
                 .join("") +
               "</span></span>",
           )
@@ -1675,7 +1986,6 @@ export const studentsDocument = (
    * their decided marks, and — for a paper exam — its pile's standing.
    */
   const rubrics = allRubrics(bundle);
-  const standings = new Map(active.map((entry) => [String(entry.student_id ?? ""), standingOf(String(entry.student_id ?? ""))]));
   const assessmentPanels = weighted.map((a) => {
     const record = (bundle.assessments ?? []).find((entry) => entry.assessment_id === a.assessment_id) ?? a;
     const rubric = rubrics.get(record.rubric_id ?? record.rubric?.rubric_id ?? "") ?? null;
@@ -2294,6 +2604,23 @@ export const studentsDocument = (
     ".cvi svg{width:100%;height:100%;display:block}" +
     ".sk .m .cvi{position:absolute;top:3px;left:2px}.sk .m:has(.cvi){text-indent:8px}" +
     ".cvi:hover{transform:scale(1.25)}" +
+    // Each column's reach, under its number: Canvas round, the sheet square,
+    // and a padlock on the number once hand-ins are closed.
+    ".sk.hs{margin-top:1px}" +
+    ".th .hb{flex:1 1 0;min-width:0;height:24px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:1px;border-radius:3px;text-align:center}" +
+    ".th .hb:hover,.th .hb[aria-expanded=true]{background:var(--infobg)}" +
+    ".hi{display:inline-flex;width:10px;height:10px;flex:0 0 10px}.hi svg{width:100%;height:100%;display:block}" +
+    ".hmn .hi{width:11px;height:11px;margin-right:5px;vertical-align:-1px}" +
+    ".hml{display:flex;gap:8px;margin:3px 0}.hmw{flex:0 0 74px;color:var(--dim)}" +
+    ".tipc{white-space:pre-line}" +
+    ".sk .n.cl{color:var(--fg)}.sk .n .lk{position:absolute;top:0;right:0;width:7px;height:7px;color:var(--dim);display:flex}" +
+    ".sk .n .lk svg{width:100%;height:100%}" +
+    ".hmenu{position:fixed;z-index:25;width:300px;max-width:calc(100vw - 16px);padding:8px 10px;border:1px solid var(--line);border-radius:8px;" +
+    "background:var(--dwbg);color:var(--fg);box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:12px;line-height:1.4}" +
+    ".hmenu[hidden]{display:none}" +
+    ".hmt{display:flex;align-items:center;gap:8px;justify-content:space-between;margin-bottom:4px}" +
+    ".hms{border-top:1px solid var(--line);padding:6px 0 4px}" +
+    ".hmn{font-weight:600;font-size:12px;display:flex;align-items:center;margin-bottom:2px}.hmp{margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}" +
     ".tipc{position:fixed;z-index:30;max-width:260px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;" +
     "background:var(--dwbg);color:var(--fg);box-shadow:0 4px 14px rgba(0,0,0,.16);font-size:12px;line-height:1.4;pointer-events:none}" +
     ".tipc b{display:block;margin-bottom:2px}.tipc .dim{display:block;margin-top:4px}.tipc[hidden]{display:none}" +
@@ -2414,6 +2741,32 @@ export const studentsDocument = (
     "document.addEventListener('scroll',function(){c.hidden=true;},true);" +
     "})();</script>";
 
+  /*
+   * A column's menu, opened from its status row and placed under it. Its
+   * presses post up like the rest: the Sync page on that assessment, or
+   * *Close now* after one question in place. Esc, a press outside, or a
+   * scroll shuts it.
+   */
+  const reachMenus = [...reaches.values()].map((entry) => entry.menu).join("");
+  const reachScript =
+    "<script>(function(){var open=null;" +
+    "function shut(){if(!open)return;open.m.hidden=true;open.b.setAttribute('aria-expanded','false');open=null;}" +
+    "function say(m){if(parent!==window)parent.postMessage(Object.assign({source:'professor-pane'},m),'*');}" +
+    "document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;" +
+    "var b=t.closest('[data-hs]');if(b){var id=b.getAttribute('data-hs'),was=open&&open.b===b;shut();if(was)return;" +
+    "var m=document.querySelector('[data-hm=\"'+id+'\"]');if(!m)return;m.hidden=false;b.setAttribute('aria-expanded','true');open={m:m,b:b};" +
+    "var r=b.getBoundingClientRect(),w=m.offsetWidth,h=m.offsetHeight,y=r.bottom+4;if(y+h>innerHeight-8)y=Math.max(8,r.top-h-4);" +
+    "m.style.left=Math.min(Math.max(8,r.left+r.width/2-w/2),innerWidth-w-8)+'px';m.style.top=y+'px';return;}" +
+    "var mm=t.closest('.hmenu');if(!mm){shut();return;}" +
+    "var s=t.closest('[data-hm-sync]');if(s){say({kind:'syncs',assessment:s.getAttribute('data-hm-sync')});shut();return;}" +
+    "if(t.closest('[data-hm-close]')){t.closest('[data-hm-close]').hidden=true;mm.querySelector('.hmq').hidden=false;return;}" +
+    "if(t.closest('[data-hm-close-no]')){mm.querySelector('.hmq').hidden=true;mm.querySelector('[data-hm-close]').hidden=false;return;}" +
+    "var g=t.closest('[data-hm-close-go]');if(g){g.disabled=true;g.textContent='Closing…';say({kind:'close-submissions',assessment:g.getAttribute('data-hm-close-go')});return;}" +
+    "if(t.closest('[data-aw],[data-syncs],[data-grade-open]'))shut();});" +
+    "document.addEventListener('keydown',function(e){if(e.key==='Escape')shut();});" +
+    "document.addEventListener('scroll',function(e){if(open&&!open.m.contains(e.target))shut();},true);" +
+    "})();</script>";
+
   // Every shared piece the rows above asked for, once (see `templates`).
   const templateHtml = [...templates.values()]
     .map((entry) => '<template id="' + entry.id + '">' + entry.html + "</template>")
@@ -2450,8 +2803,8 @@ export const studentsDocument = (
       : pages[0].html;
 
   return documentPage(
-    workStyle + "<style>" + assessmentWindowStyle + "</style>" + (sv ? sv.style : "") + tabbed + drawer + assessmentWindow +
-      templateHtml + tipScript + filterScript + drawerScript + defenceScript + assessmentWindowScript + presetScript + (sv ? sv.script : "") + VIEW_SCRIPT,
+    workStyle + "<style>" + assessmentWindowStyle + "</style>" + (sv ? sv.style : "") + tabbed + drawer + assessmentWindow + reachMenus +
+      templateHtml + tipScript + reachScript + filterScript + drawerScript + defenceScript + assessmentWindowScript + presetScript + (sv ? sv.script : "") + VIEW_SCRIPT,
     dark,
   );
 };

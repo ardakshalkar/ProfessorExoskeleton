@@ -146,7 +146,7 @@ function RowGroup(props) {
   const noun = entries.every((entry) => entry.kind !== "assignments" && entry.student_id) ? ["student"] : rowNoun(entries);
   return h(
     "div",
-    { className: "pp-sxgroupline" },
+    { className: "pp-sxgroupline", "data-sx-a": props.assessment || undefined },
     h(
       "details",
       { className: "pp-sxheld", open: props.open },
@@ -311,9 +311,19 @@ function CanvasPart(props) {
   const unpublished = useUnpublished(props.runId, props.sessionId, props.marksRevision);
   // An assessment whose Canvas link or creation is open under its line.
   const [linking, setLinking] = React.useState(null);
+  // The assessment a column's menu on the Students page asked for: its line
+  // opened, its link or creation opened where it has no assignment, and
+  // brought into view once the check has drawn the page.
+  const aimed = props.focus && props.focus.assessment ? props.focus.assessment : null;
 
   const road = roadIn(flow.plan, "canvas");
   const preview = road && road.ok ? road.preview : null;
+  React.useEffect(() => {
+    if (!aimed || !preview) return;
+    setLinking((current) => current || aimed);
+    const line = document.querySelector('[data-sx-a="' + aimed + '"]');
+    if (line) line.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [aimed, props.focus ? props.focus.n : null, Boolean(preview)]);
   const checking = check.phase === "running" || (flow.asking && !preview);
   const busy = flow.sending || checking;
 
@@ -386,14 +396,16 @@ function CanvasPart(props) {
       sendGroups.map((group) => {
         const keys = group.entries.map((entry) => entry.key);
         const count = sendNoun(group.entries);
+        const id = (group.entries.find((entry) => entry.assessment_id) || {}).assessment_id || null;
         return h(RowGroup, {
           key: group.title,
           group,
+          assessment: id,
           row: (entry) => h(SendRow, { entry }),
           extra: sendSplit(group.entries.filter((entry) => entry.kind === "grades")),
           action: h(SendConfirm, { label: "Send…", busy: busy || Boolean(confirming), open: confirming === group.title, onOpen: () => setConfirming(group.title) }),
           under: confirmFor(group.title, keys, "Send " + count + " for " + group.short + " to Canvas? Students will see them.", "Send " + count, group.short + " (" + count + ")", ["canvas", "marks"]),
-          open: send.length < OPEN_UNDER,
+          open: send.length < OPEN_UNDER || (aimed !== null && id === aimed),
         });
       }),
       sendGroups.length > 1
@@ -498,7 +510,7 @@ function CanvasPart(props) {
           unlinked.length
             ? h(
                 "details",
-                { className: "pp-sxheld", open: unlinked.length < 4 },
+                { className: "pp-sxheld", open: unlinked.length < 4 || unlinked.some((entry) => entry.id === aimed) },
                 h("summary", null, h("b", null, plural(unlinked.length, "assessment")), " with marks ready and no Canvas assignment to send them to"),
                 h(
                   "div",
@@ -506,7 +518,7 @@ function CanvasPart(props) {
                   unlinked.map((entry) =>
                     h(
                       "div",
-                      { className: "pp-sxgroupline", key: entry.id },
+                      { className: "pp-sxgroupline", key: entry.id, "data-sx-a": entry.id },
                       h(
                         "div",
                         { className: "pp-drowline" },
@@ -601,6 +613,7 @@ export function SyncView(props) {
           marksRevision: props.marksRevision,
           roster,
           ask: props.ask,
+          focus: props.focus,
           marksRef,
           onWrite: done,
         })

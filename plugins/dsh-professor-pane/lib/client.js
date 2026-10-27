@@ -12831,7 +12831,7 @@ function RowGroup(props) {
   const noun = entries.every((entry) => entry.kind !== "assignments" && entry.student_id) ? ["student"] : rowNoun(entries);
   return h(
     "div",
-    { className: "pp-sxgroupline" },
+    { className: "pp-sxgroupline", "data-sx-a": props.assessment || void 0 },
     h(
       "details",
       { className: "pp-sxheld", open: props.open },
@@ -12960,8 +12960,15 @@ function CanvasPart(props) {
   const [outcome, setOutcome] = React.useState(null);
   const unpublished = useUnpublished(props.runId, props.sessionId, props.marksRevision);
   const [linking, setLinking] = React.useState(null);
+  const aimed = props.focus && props.focus.assessment ? props.focus.assessment : null;
   const road = roadIn(flow.plan, "canvas");
   const preview = road && road.ok ? road.preview : null;
+  React.useEffect(() => {
+    if (!aimed || !preview) return;
+    setLinking((current) => current || aimed);
+    const line = document.querySelector('[data-sx-a="' + aimed + '"]');
+    if (line) line.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [aimed, props.focus ? props.focus.n : null, Boolean(preview)]);
   const checking = check.phase === "running" || flow.asking && !preview;
   const busy = flow.sending || checking;
   const sendNow = (keys, label, tags) => {
@@ -13019,14 +13026,16 @@ function CanvasPart(props) {
       sendGroups.map((group) => {
         const keys = group.entries.map((entry) => entry.key);
         const count = sendNoun(group.entries);
+        const id = (group.entries.find((entry) => entry.assessment_id) || {}).assessment_id || null;
         return h(RowGroup, {
           key: group.title,
           group,
+          assessment: id,
           row: (entry) => h(SendRow, { entry }),
           extra: sendSplit(group.entries.filter((entry) => entry.kind === "grades")),
           action: h(SendConfirm, { label: "Send…", busy: busy || Boolean(confirming), open: confirming === group.title, onOpen: () => setConfirming(group.title) }),
           under: confirmFor(group.title, keys, "Send " + count + " for " + group.short + " to Canvas? Students will see them.", "Send " + count, group.short + " (" + count + ")", ["canvas", "marks"]),
-          open: send2.length < OPEN_UNDER
+          open: send2.length < OPEN_UNDER || aimed !== null && id === aimed
         });
       }),
       sendGroups.length > 1 ? h(
@@ -13109,7 +13118,7 @@ function CanvasPart(props) {
       ),
       unlinked.length ? h(
         "details",
-        { className: "pp-sxheld", open: unlinked.length < 4 },
+        { className: "pp-sxheld", open: unlinked.length < 4 || unlinked.some((entry) => entry.id === aimed) },
         h("summary", null, h("b", null, plural7(unlinked.length, "assessment")), " with marks ready and no Canvas assignment to send them to"),
         h(
           "div",
@@ -13117,7 +13126,7 @@ function CanvasPart(props) {
           unlinked.map(
             (entry) => h(
               "div",
-              { className: "pp-sxgroupline", key: entry.id },
+              { className: "pp-sxgroupline", key: entry.id, "data-sx-a": entry.id },
               h(
                 "div",
                 { className: "pp-drowline" },
@@ -13194,6 +13203,7 @@ function SyncView(props) {
       marksRevision: props.marksRevision,
       roster,
       ask: props.ask,
+      focus: props.focus,
       marksRef,
       onWrite: done
     }) : h("p", { className: "pp-as" }, "This run sends nothing to Canvas. Set Canvas up in Course settings to see what it lacks here."),
@@ -14002,7 +14012,7 @@ function CourseMode(props) {
   const taskSub = subOf("tasks");
   const doorOf = (entry) => entry && entry.view === "concepts" && (entry.student || entry.concept || entry.week) ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n } : null;
   const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
-  const aimOf = (entry) => entry && (entry.focus || entry.kind) ? { view: entry.view || null, section: entry.focus || null, kind: entry.kind || null, n: entry.n } : null;
+  const aimOf = (entry) => entry && (entry.focus || entry.kind) ? { view: entry.view || null, section: entry.focus || null, kind: entry.kind || null, assessment: entry.assessment || null, n: entry.n } : null;
   const [aim, setAim] = React.useState(() => aimOf(request));
   const doorCount = React.useRef(0);
   const [fill, setFill] = React.useState(null);
@@ -18258,7 +18268,8 @@ function ProfessorPane(props) {
         return;
       }
       if (data.kind === "syncs") {
-        openPlace({ view: "syncs" });
+        if (/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment || ""))) openPlace({ view: "syncs", focus: "marks", assessment: data.assessment });
+        else openPlace({ view: "syncs" });
         return;
       }
       if (data.kind === "publish") {

@@ -464,7 +464,9 @@ export function CourseMode(props) {
   // or the kind Waiting · Everything is filtered to — what the folded parts'
   // old links meant (shared/places.js). Numbered like the request.
   const aimOf = (entry) =>
-    entry && (entry.focus || entry.kind) ? { view: entry.view || null, section: entry.focus || null, kind: entry.kind || null, n: entry.n } : null;
+    entry && (entry.focus || entry.kind)
+      ? { view: entry.view || null, section: entry.focus || null, kind: entry.kind || null, assessment: entry.assessment || null, n: entry.n }
+      : null;
   const [aim, setAim] = React.useState(() => aimOf(request));
   const doorCount = React.useRef(0);
   // Words a press on the page puts into the field at its foot, unsent.
