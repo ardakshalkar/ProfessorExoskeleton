@@ -6,7 +6,7 @@ import { allRubrics, assessmentsOf, enrollmentsOf, runById } from "@ainar/core/s
 import { forkChoices, recordedLogins } from "@ainar/core/src/forks.ts";
 import { loadSheetConfig } from "@ainar/core/src/grade-sheet.ts";
 import { gradeChanges } from "@ainar/core/src/grade-changes.ts";
-import { finalRange, gradebookPayload } from "@ainar/core/src/gradebook.ts";
+import { finalRange, gradebookPayload, missingWorkOf } from "@ainar/core/src/gradebook.ts";
 import { ASSESSMENT_KINDS } from "@ainar/core/src/assessment-kinds.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { reportPlace, reportsDir } from "@ainar/core/src/report-place.ts";
@@ -297,7 +297,7 @@ export const studentsDocument = (
       return {
         cls: "cvb",
         body: "Missing, and missing work on this assessment is left blank rather than given 0, so nothing is sent to Canvas.",
-        foot: "Its missing-work rule is set in the Gradebook's policy.",
+        foot: "Its missing-work rule is in the menu under the column's number.",
       };
     }
     // Handed in and not marked: nothing to send until it is.
@@ -1729,6 +1729,10 @@ export const studentsDocument = (
   };
 
   const plural = (n, one, many = one + "s") => n + " " + (n === 1 ? one : many);
+  // A press that asks once, in place: the question and its go beside Cancel.
+  const asked = (label, question, go) =>
+    '<button type="button" class="chip" data-hm-q>' + escapeText(label) + "</button>" +
+    '<span class="hmq" hidden>' + escapeText(question) + " " + go + ' <button type="button" class="chip" data-hm-no>Cancel</button></span>';
   const asOf = checked ? "As of the Canvas check at " + stamp(check.at) + "." : "Not checked against Canvas since the pane started.";
 
   /*
@@ -1802,10 +1806,47 @@ export const studentsDocument = (
     ]);
     if (r.pastDue && !r.closed) {
       presses.push(
-        '<button type="button" class="chip" data-hm-close>Close now</button>' +
-          '<span class="hmq" hidden>Stop taking hand-ins, late ones included? Canvas gets the closing date too. ' +
-          '<button type="button" class="chip act" data-hm-close-go="' + id + '">Close it</button> <button type="button" class="chip" data-hm-close-no>Cancel</button></span>',
+        asked("Close now", "Stop taking hand-ins, late ones included? Canvas gets the closing date too.",
+          '<button type="button" class="chip act" data-hm-close-go="' + id + '">Close it</button>'),
       );
+    }
+
+    /*
+     * What missing work gets: the run's rule, or this assessment's own. The
+     * press is `ainar grading missing-work … --assessment`, refused while the
+     * policy is locked — so a locked policy offers the way to unlock it
+     * rather than a press that can only fail.
+     */
+    const record = assessmentTitles.get(a.assessment_id) ?? a;
+    const own = record.missing_work ?? null;
+    const runRule = run.grading_scheme?.missing_work === "zero" ? "zero" : "blank";
+    const rule = missingWorkOf(run, record);
+    const whose = own ? "this assessment's own rule; the course's is " + (runRule === "zero" ? "0" : "blank") : "the course's rule";
+    lines.push([
+      "Missing work",
+      (rule === "zero" ? "0 once due" : "Left blank, not 0") + " — " + whose + "." +
+        (r.missing ? " " + plural(r.missing, "student is", "students are") + " missing now." : ""),
+    ]);
+    if (run.grading_scheme?.locked === true) {
+      lines.push(["", "The grading policy is locked, so this rule cannot change until it is unlocked."]);
+      presses.push('<button type="button" class="chip" data-hm-policy>Open the policy</button>');
+    } else {
+      // To the other rule: dropping this assessment's own where the course's already says it.
+      const to = rule === "zero" ? "blank" : "zero";
+      const send = own && runRule === to ? "run" : to;
+      const effect =
+        to === "zero"
+          ? (r.missing ? "Give the " + plural(r.missing, "missing student", "missing students") + " 0? " : "Give missing work 0? ") +
+            "Their totals change now; Canvas gets the zeros only when you send them from Sync."
+          : "Leave missing work blank? " + (r.missing ? plural(r.missing, "zero", "zeros") + " come out of the totals; " : "") +
+            "Canvas keeps any 0 it already has until you change it there.";
+      presses.push(
+        asked(to === "zero" ? "Give missing work 0" : "Leave missing work blank", effect,
+          '<button type="button" class="chip act" data-hm-rule="' + send + '" data-hm-for="' + id + '">' + (to === "zero" ? "Give 0" : "Leave blank") + "</button>"),
+      );
+      if (own && runRule !== to) {
+        presses.push('<button type="button" class="chip" data-hm-rule="run" data-hm-for="' + id + '" title="Drop this assessment\'s own rule">Use the course\'s rule</button>');
+      }
     }
 
     const held = r.sheets.length ? Math.max(...r.sheets.map((sheet) => sheet.held)) : null;
@@ -2759,9 +2800,12 @@ export const studentsDocument = (
     "m.style.left=Math.min(Math.max(8,r.left+r.width/2-w/2),innerWidth-w-8)+'px';m.style.top=y+'px';return;}" +
     "var mm=t.closest('.hmenu');if(!mm){shut();return;}" +
     "var s=t.closest('[data-hm-sync]');if(s){say({kind:'syncs',assessment:s.getAttribute('data-hm-sync')});shut();return;}" +
-    "if(t.closest('[data-hm-close]')){t.closest('[data-hm-close]').hidden=true;mm.querySelector('.hmq').hidden=false;return;}" +
-    "if(t.closest('[data-hm-close-no]')){mm.querySelector('.hmq').hidden=true;mm.querySelector('[data-hm-close]').hidden=false;return;}" +
+    "var q=t.closest('[data-hm-q]');if(q){q.hidden=true;q.nextElementSibling.hidden=false;return;}" +
+    "var no=t.closest('[data-hm-no]');if(no){var sp=no.closest('.hmq');sp.hidden=true;sp.previousElementSibling.hidden=false;return;}" +
     "var g=t.closest('[data-hm-close-go]');if(g){g.disabled=true;g.textContent='Closing…';say({kind:'close-submissions',assessment:g.getAttribute('data-hm-close-go')});return;}" +
+    "var mw=t.closest('[data-hm-rule]');if(mw){if(mw.disabled)return;mw.disabled=true;mw.textContent='Saving…';" +
+    "say({kind:'missing-work',assessment:mw.getAttribute('data-hm-for'),rule:mw.getAttribute('data-hm-rule')});return;}" +
+    "if(t.closest('[data-hm-policy]')){say({kind:'policy'});shut();return;}" +
     "if(t.closest('[data-aw],[data-syncs],[data-grade-open]'))shut();});" +
     "document.addEventListener('keydown',function(e){if(e.key==='Escape')shut();});" +
     "document.addEventListener('scroll',function(e){if(open&&!open.m.contains(e.target))shut();},true);" +

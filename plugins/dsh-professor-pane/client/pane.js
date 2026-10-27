@@ -413,6 +413,37 @@ export function ProfessorPane(props) {
           });
         return;
       }
+      // A column's missing-work rule, from its menu on the Students page:
+      // written by the server (`ainar grading missing-work`), refused while
+      // the policy is locked. The redraw shows the zeros, or their absence.
+      if (data.kind === "missing-work") {
+        const run = currentRunRef.current;
+        if (!run || !/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment)) || !["zero", "blank", "run"].includes(data.rule)) return;
+        fetch(
+          scoped(
+            BASE + "/api/assessment/missing-work?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment) +
+              "&rule=" + encodeURIComponent(data.rule),
+            props.sessionId,
+          ),
+          { method: "POST" },
+        )
+          .then((response) => response.json())
+          .then((result) => {
+            if (!result.ok) window.alert(String(result.error || "the rule was not changed"));
+            placedAt.current = Date.now();
+            write(["grading", "assessments"]);
+          })
+          .catch((error) => {
+            window.alert(String(error));
+            write(["grading", "assessments"]);
+          });
+        return;
+      }
+      // The column menu's "Open the policy", when a locked policy holds a rule.
+      if (data.kind === "policy") {
+        openPlace({ view: "gradebook", sub: "policy" });
+        return;
+      }
       // *Close now* in the assessment window: the server writes `closes_at`
       // and sends Canvas its `lock_at`. What Canvas said is told here when it
       // was not a plain success; the redraw shows "closed".

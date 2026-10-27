@@ -25,7 +25,9 @@
 
 import { activitiesOf, assessmentsOf, modulesOf, runById } from "@ainar/core/src/bundle.ts";
 import { COLLECTIONS } from "@ainar/core/src/loader.ts";
+import { setMissingWork } from "@ainar/core/src/missing-work.ts";
 import { editRecords, setRecordFields } from "@ainar/core/src/record-edit.ts";
+import { decidedAt } from "@ainar/core/src/records-write.ts";
 
 import { runScans } from "./actions.js";
 import { canvasBinding } from "./unpublished.js";
@@ -208,6 +210,39 @@ export const closeSubmissions = async (workspace, root, runId, body, now = new D
     sent.push({ group, ok: result.ok, output: result.output || result.error || "" });
   }
   return { ok: true, closes_at: closes, canvas: sent, note: binding.state === "some" ? "Not sent to " + binding.missing.join(", ") + ": no assignment there." : null };
+};
+
+/**
+ * What one assessment's missing work gets, from its column's menu on the
+ * Students page: `zero`, `blank`, or `run` to drop its own rule and follow
+ * the run's — `ainar grading missing-work RUN … --assessment A`, the same
+ * function. It moves every total a missing student has, so it is refused
+ * while the grading policy is locked, as the command refuses it; the reason
+ * comes back as the error. Nothing goes to Canvas: the zeros it makes wait
+ * on the Sync page like any other mark.
+ */
+export const setMissingWorkRule = (workspace, root, runId, body) => {
+  const assessmentId = String(body?.assessment ?? "").trim();
+  if (!/^[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) return { error: "Not an assessment id." };
+  const rule = body?.rule === "run" ? null : body?.rule;
+  if (rule !== null && rule !== "zero" && rule !== "blank") return { error: "Missing work is zero, blank, or the run's rule." };
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId);
+  if (!run) return { error: `no course run '${runId}' in this workspace` };
+  try {
+    const written = setMissingWork({
+      root,
+      bundle,
+      runId,
+      assessmentId,
+      rule,
+      at: decidedAt(run.timezone),
+      by: run.instructors?.[0] ?? null,
+    });
+    return { ok: true, written: written.length > 0, assessment: assessmentId, rule: rule ?? "run" };
+  } catch (error) {
+    return { error: String(error?.message ?? error) };
+  }
 };
 
 /**

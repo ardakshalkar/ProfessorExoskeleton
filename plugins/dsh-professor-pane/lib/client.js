@@ -17997,6 +17997,29 @@ function ProfessorPane(props) {
         });
         return;
       }
+      if (data.kind === "missing-work") {
+        const run2 = currentRunRef.current;
+        if (!run2 || !/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment)) || !["zero", "blank", "run"].includes(data.rule)) return;
+        fetch(
+          scoped(
+            BASE + "/api/assessment/missing-work?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&rule=" + encodeURIComponent(data.rule),
+            props.sessionId
+          ),
+          { method: "POST" }
+        ).then((response) => response.json()).then((result) => {
+          if (!result.ok) window.alert(String(result.error || "the rule was not changed"));
+          placedAt.current = Date.now();
+          write(["grading", "assessments"]);
+        }).catch((error) => {
+          window.alert(String(error));
+          write(["grading", "assessments"]);
+        });
+        return;
+      }
+      if (data.kind === "policy") {
+        openPlace({ view: "gradebook", sub: "policy" });
+        return;
+      }
       if (data.kind === "close-submissions") {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run2 = currentRunRef.current;

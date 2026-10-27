@@ -4,7 +4,7 @@
  */
 
 import { readBody, sendJson } from "../http.js";
-import { closeSubmissions, writeAssessmentDates, writeTopicMoves } from "../plan-writes.js";
+import { closeSubmissions, setMissingWorkRule, writeAssessmentDates, writeTopicMoves } from "../plan-writes.js";
 
 export const routes = [
   /**
@@ -21,6 +21,24 @@ export const routes = [
       return closeSubmissions(workspace, root, runId, { assessment: url.searchParams.get("assessment") })
         .then((result) => sendJson(res, 200, result))
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    },
+  },
+  /**
+   * An assessment's missing-work rule, from its column's menu on the Students
+   * page: `?assessment=&rule=zero|blank|run`. `setMissingWorkRule` refuses
+   * it while the grading policy is locked.
+   */
+  {
+    paths: ["/api/assessment/missing-work"],
+    handle(c) {
+      const { req, res, url, runId, workspace, root } = c;
+      if (req.method !== "POST") return sendJson(res, 405, { error: "setting the rule is POST only" });
+      if (!runId) return sendJson(res, 200, { error: "No run chosen." });
+      return sendJson(
+        res,
+        200,
+        setMissingWorkRule(workspace, root, runId, { assessment: url.searchParams.get("assessment"), rule: url.searchParams.get("rule") }),
+      );
     },
   },
   /**
