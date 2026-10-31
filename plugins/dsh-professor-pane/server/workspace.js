@@ -17,6 +17,8 @@ import { outlinePayload } from "@ainar/core/src/outline.ts";
 import { dashboardPayload } from "@ainar/core/src/progress.ts";
 import { YamlCourseStore } from "@ainar/core/src/store/course.ts";
 import { callTool } from "@ainar/core/src/tools/index.ts";
+
+import { jobAreas } from "./jobs.js";
 import {
   referenceDate,
   ToolError,
@@ -435,10 +437,26 @@ const REVISIONS = new Map();
 export const revisionDocument = (root, fresh = false) => {
   const now = Date.now();
   const found = REVISIONS.get(root);
-  if (!fresh && found && now - found.at < REVISION_TTL_MS) return found.value;
-  const value = walkRevision(root);
-  REVISIONS.set(root, { at: now, value });
-  return value;
+  const value = !fresh && found && now - found.at < REVISION_TTL_MS ? found.value : walkRevision(root);
+  if (value !== found?.value) REVISIONS.set(root, { at: now, value });
+  return withJobs(value, jobAreas(root));
+};
+
+/**
+ * The walk's answer with the job runner's counters on it (server/jobs.js):
+ * a job writes the private folder, which the walk does not see, so a
+ * finished read moves `scans` — and the revision — here. Not cached with the
+ * walk, so a job finishing shows on the next poll, not a second later.
+ */
+const withJobs = (value, moved) => {
+  const entries = Object.entries(moved);
+  if (!entries.length) return value;
+  const areas = Object.assign({}, value.areas);
+  for (const [area, count] of entries) areas[area] = `${areas[area] ?? ""}~${count}`;
+  return Object.assign({}, value, {
+    revision: value.revision + "~" + entries.map(([area, count]) => area + count).join("."),
+    areas,
+  });
 };
 
 /**

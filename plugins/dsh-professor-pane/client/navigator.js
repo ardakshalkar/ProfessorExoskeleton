@@ -34,6 +34,7 @@
 import { h, React } from "./react.js";
 import { BASE, PLACE_SHOWN_EVENT, scoped } from "./tabs.js";
 import { AREAS, useVersion, useWorkspaceWatch } from "./data.js";
+import { progressText, useRunJobs } from "./jobs.js";
 import { placeToHash } from "../shared/route.js";
 
 // ------------------------------------------------------------- the request
@@ -429,6 +430,36 @@ function HeldPapers(props) {
   );
 }
 
+/**
+ * What the harness is doing in the background for this run (server/jobs.js):
+ * a read or a transcription with its count, and for a while after it ends,
+ * what it did. A read opens its pile in Scans.
+ */
+function Working(props) {
+  const version = useVersion(["jobs"]);
+  const jobs = useRunJobs(props.runId, props.sessionId, version);
+  if (!jobs.length) return null;
+  return h(
+    React.Fragment,
+    null,
+    h("div", { className: "pp-nav-label" }, h("span", null, "Working")),
+    jobs.map((job) => {
+      const count = progressText(job);
+      const meta = job.state === "failed" ? "failed" : job.finishedAt ? "done" + (count ? " · " + count : "") : count || "starting";
+      const pile = job.kind.startsWith("scans-") && job.subject;
+      return h(Row, {
+        key: job.id,
+        dot: !job.finishedAt,
+        label: job.label,
+        hint: job.label + " — " + meta + (job.finishedAt ? "" : ". It runs on in the harness; this page can be closed."),
+        meta: meta,
+        href: pile ? placeToHash({ view: "files", scans: pile }) : undefined,
+        onClick: pile ? () => props.onOpenPile(pile) : () => {},
+      });
+    }),
+  );
+}
+
 /** The chats in this course, newest first, six until asked for all. */
 function Chats(props) {
   const [all, setAll] = React.useState(false);
@@ -619,6 +650,7 @@ export function CourseNavigator(props) {
           })
         : h("div", { className: "pp-nav-quiet" }, "Add a course folder with Folders and search, below."),
       run ? h(ThisWeek, { week: data.week, nextDue: data.next_due, runId: run.run_id }) : null,
+      run ? h(Working, { runId: run.run_id, sessionId: sessionId, onOpenPile: openPile }) : null,
       run ? h(HeldPapers, { piles: heldPiles, onOpen: openPile }) : null,
       run ? h("div", { className: "pp-nav-label" }, h("span", null, "Course")) : null,
       run

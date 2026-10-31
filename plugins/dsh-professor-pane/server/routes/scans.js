@@ -89,6 +89,8 @@ export const routes = [
             subject: assessmentId,
             keys: [pileKey(runId, assessmentId)],
             background: true,
+            // `scans read` opens with the count and prints a line per paper.
+            progress: { unit: "read", total: /^reading (\d+) /, step: /^\s+(read|partly read|unparsed|failed)\s+STUDENT-/ },
             work: async (job) => {
               const read = await runScans(["scans", "read", runId, ...scope], root, 1800000, null, job.say);
               if (!read.ok) return read;

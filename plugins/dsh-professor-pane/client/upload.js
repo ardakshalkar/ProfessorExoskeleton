@@ -2,7 +2,7 @@
  * Uploading: the kinds a file can be, and the single and batch upload dialogs.
  */
 
-import { followJob } from "./jobs.js";
+import { followJob, progressText } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -140,7 +140,11 @@ export function BatchModal(props) {
       .then((response) => response.json())
       // Sending runs in the background on the server; its answer is the
       // finished job's, and its running output is shown while it goes.
-      .then((answer) => followJob(answer, props.sessionId, (job) => job.output && setOutput(job.output)))
+      .then((answer) =>
+        followJob(answer, props.sessionId, (job) =>
+          setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…")),
+        ),
+      )
       .then((result) => {
         setBusy(null);
         setOutput(result.error || result.output || "(nothing said)");

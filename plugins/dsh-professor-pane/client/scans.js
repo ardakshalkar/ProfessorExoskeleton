@@ -5,7 +5,7 @@
 import { Message } from "./common.js";
 import { GradeBoard } from "./grade-board.js";
 import { CanvasMarks, MatchReview, STEP_PROMPTS } from "./marks.js";
-import { followJob, runningJob } from "./jobs.js";
+import { followJob, progressText, runningJob } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { enqueuePlacement, placementKey, placementsWaiting, usePlacements } from "./scans-queue.js";
 import { BASE, scoped } from "./tabs.js";
@@ -26,6 +26,8 @@ function ScansTab(props) {
   // A whole-pile write in flight (read, apply, the review's Confirm), or null.
   // Placing one paper is not one: those wait in line (client/scans-queue.js).
   const [busy, setBusy] = React.useState(null);
+  // The read running on the server, as last asked after: its "12 of 48 read".
+  const [reading, setReading] = React.useState(null);
   const placements = usePlacements();
   // Read, apply and the review rewrite the whole plan, so they wait for the
   // line to empty, and the line waits for them.
@@ -84,12 +86,16 @@ function ScansTab(props) {
     runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => {
       if (!live || !job) return;
       setBusy("read");
-      followJob({ job }, props.sessionId).then((result) => live && finish(result));
+      setReading(job);
+      followJob({ job }, props.sessionId, setReading, () => live).then((result) => live && result && finish(result));
     });
     return () => {
       live = false;
     };
   }, [props.runId, assessmentId]);
+  // Asked after only while this view is open; the job runs on without it.
+  const mounted = React.useRef(true);
+  React.useEffect(() => () => (mounted.current = false), []);
 
   const post = (path, body, label, done) => {
     if (blocked) return;
@@ -101,8 +107,8 @@ function ScansTab(props) {
       body: JSON.stringify(body || {}),
     })
       .then((response) => response.json())
-      .then((answer) => followJob(answer, props.sessionId))
-      .then((result) => finish(result, done))
+      .then((answer) => followJob(answer, props.sessionId, setReading, () => mounted.current))
+      .then((result) => result && finish(result, done))
       .catch((error) => {
         setBusy(null);
         setSaid({ error: true, text: String(error) });
@@ -111,6 +117,7 @@ function ScansTab(props) {
   // A whole-pile write's answer: said, and the pile read again.
   const finish = (result, done) => {
     setBusy(null);
+    setReading(null);
     const stale = /no route \/api\/scans/.test(String(result.error || ""));
     setSaid({
       error: Boolean(result.error) || !result.ok,
@@ -555,7 +562,7 @@ function ScansTab(props) {
         title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
         onClick: () => post("/api/scans/read", {}, "read"),
       },
-      busy === "read" ? "Reading… a few minutes for a class" : "Read and record the answers",
+      busy === "read" ? "Reading… " + (progressText(reading) || "a few minutes for a class") : "Read and record the answers",
     );
   const gradeButton = (primary) =>
     h(
@@ -696,6 +703,9 @@ function ScansTab(props) {
           stage.state === "done" ? "✓" : String(index + 1),
         ),
         h("span", null, stage.label),
+        stage.id === "read" && busy === "read" && progressText(reading)
+          ? h("span", { className: "pp-stepjob" }, progressText(reading))
+          : null,
       ),
     ),
   );

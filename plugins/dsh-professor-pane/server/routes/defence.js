@@ -136,7 +136,9 @@ export const routes = [
           subject: assessmentId,
           keys: sending ? defences : step === "apply" ? [recordingsKey(runId), ...defences] : [recordingsKey(runId)],
           background: sending,
-          work: (job) => runScans(args, root, sending ? 1800000 : 300000, null, job.say),
+          // Sending opens with "N recording(s), …" and says each student as it lands.
+          progress: sending ? { unit: "transcribed", total: /^(\d+) recording\(s\),/, step: /^\s+STUDENT-[A-Z0-9-]+: / } : null,
+          work:(job) => runScans(args, root, sending ? 1800000 : 300000, null, job.say),
         }),
       );
     },

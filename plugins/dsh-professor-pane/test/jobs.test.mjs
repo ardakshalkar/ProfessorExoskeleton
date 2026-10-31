@@ -4,7 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { holderOf, jobById, listJobs, pileKey, recordsKey, startJob } from "../server/jobs.js";
+import { holderOf, jobAreas, jobById, listJobs, pileKey, progressText, recordsKey, startJob } from "../server/jobs.js";
 
 const ROOT = "/tmp/jobs-test-" + process.pid;
 
@@ -79,6 +79,29 @@ test("a job takes a later key when it needs it, and a failure is a finished job"
   assert.match(job.output, /STUDENT-1/);
   assert.equal(holderOf([recordsKey("E", "item_responses")]), null);
   assert.equal(job.root, undefined, "no workspace path leaves the server");
+});
+
+test("progress is counted from whole lines, cut wherever the chunks fall", async () => {
+  const reading = gate();
+  const before = jobAreas(ROOT);
+  const started = await startJob({
+    root: ROOT, runId: "RUN-D", kind: "scans-read", label: "Reading", keys: [pileKey("RUN-D", "Q1")], background: true,
+    progress: { unit: "read", total: /^reading (\d+) /, step: /^\s+(read|partly read|unparsed|failed)\s+STUDENT-/ },
+    work: async (job) => {
+      job.say("reading 3 ASSESSMENT-Q1 paper(s) with m, effort low\n  read        STUD");
+      job.say("ENT-A  12s\n  partly read STUDENT-B  9s\n");
+      return reading.work()();
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.deepEqual(jobById(ROOT, started.job.id).progress, { done: 2, total: 3, unit: "read" });
+  assert.equal(progressText(jobById(ROOT, started.job.id)), "2 of 3 read");
+  assert.equal(jobAreas(ROOT).jobs, (before.jobs ?? 0) + 1, "a start moves `jobs`");
+  reading.open();
+  await started.done;
+  assert.equal(jobAreas(ROOT).scans, (before.scans ?? 0) + 1, "a finished read moves `scans`");
+  assert.equal(jobAreas(ROOT).jobs, (before.jobs ?? 0) + 2);
+  assert.equal(progressText({ progress: null }), null);
 });
 
 test("jobs are per workspace and per run, and the table is shared across imports", async () => {

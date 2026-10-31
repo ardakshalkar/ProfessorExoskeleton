@@ -7,6 +7,7 @@
  * so a caller can put `followJob` after any press's JSON.
  */
 
+import { React } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
 const EVERY = 2000;
@@ -19,12 +20,18 @@ const ask = (path, sessionId) =>
 /**
  * The press's final answer: `answer` itself, or — when it is a job — the
  * job's result once it has finished. `onJob(job)` hears each time it is
- * asked after, for a page that shows the running output.
+ * asked after, for a page that shows the running output or the count.
+ * `alive()`, when it turns false — the view was closed — stops the asking
+ * and resolves to null; the job runs on, and the view finds it again.
  */
-export const followJob = (answer, sessionId, onJob) => {
+export const followJob = (answer, sessionId, onJob, alive) => {
   if (!answer || !answer.job) return Promise.resolve(answer);
   return new Promise((resolve) => {
     const poll = (job) => {
+      if (alive && !alive()) {
+        resolve(null);
+        return;
+      }
       if (onJob) onJob(job);
       if (job.state === "done" || job.state === "failed") {
         resolve(job.result || { error: "The job finished without an answer." });
@@ -40,6 +47,50 @@ export const followJob = (answer, sessionId, onJob) => {
     poll(answer.job);
   });
 };
+
+/** "12 of 48 read", as server/jobs.js `progressText` says it; null for a job that does not count. */
+export const progressText = (job) => {
+  const progress = job && job.progress;
+  if (!progress) return null;
+  return progress.total === null ? progress.done + " " + progress.unit : progress.done + " of " + progress.total + " " + progress.unit;
+};
+
+/** How long a finished background job stays listed, saying what it did. */
+const RECENT_MS = 15 * 60 * 1000;
+
+/**
+ * The run's background jobs — running, waiting, and finished in the last
+ * quarter hour — asked again when `version` moves, and every few seconds
+ * while one runs, so its count goes up without the revision moving.
+ */
+export function useRunJobs(runId, sessionId, version) {
+  const [jobs, setJobs] = React.useState([]);
+  React.useEffect(() => {
+    if (!runId || !sessionId) return undefined;
+    let live = true;
+    let timer = null;
+    const load = () =>
+      ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId)
+        .then((value) => {
+          if (!live) return;
+          const now = Date.now();
+          const shown = (value.jobs || []).filter(
+            (job) => job.background && (!job.finishedAt || now - Date.parse(job.finishedAt) < RECENT_MS),
+          );
+          setJobs(shown);
+          if (shown.some((job) => !job.finishedAt)) timer = setTimeout(load, EVERY);
+        })
+        .catch(() => {
+          if (live) timer = setTimeout(load, EVERY * 5);
+        });
+    load();
+    return () => {
+      live = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [runId, sessionId, version]);
+  return jobs;
+}
 
 /** The run's job of this kind on this subject that has not finished, or null — for a page opened while it runs. */
 export const runningJob = (runId, sessionId, kind, subject) =>

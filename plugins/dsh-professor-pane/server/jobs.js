@@ -30,6 +30,9 @@ const STATE = (globalThis[Symbol.for("professor-pane.jobs")] ??= {
   holders: new Map(), // key -> job id
   waiters: [], // { keys, resolve }, in the order they asked
 });
+// Added after the table first existed: a harness running since then has a
+// table without it, and a reload must not fail on that.
+STATE.stamps ??= new Map(); // root -> area -> how many times it has moved
 
 /** How many finished jobs are kept for `GET /api/jobs`. */
 const KEEP = 40;
@@ -99,7 +102,32 @@ export const publicJob = (job) =>
     finishedAt: job.finishedAt,
     output: job.output,
     result: job.result,
+    progress: job.progress,
   };
+
+/**
+ * How far a job has got, in words: "12 of 48 read", or "12 read" before the
+ * count is known; null for a job that does not count.
+ */
+export const progressText = (job) => {
+  const progress = job && job.progress;
+  if (!progress) return null;
+  return progress.total === null ? `${progress.done} ${progress.unit}` : `${progress.done} of ${progress.total} ${progress.unit}`;
+};
+
+/**
+ * What jobs add to the revision (server/workspace.js), per area: `jobs`
+ * moves when one starts or finishes, `scans` or `defence` when one of that
+ * kind finishes. Counters, not contents: never per line, so a running read
+ * does not redraw the pane every poll.
+ */
+export const jobAreas = (root) => Object.fromEntries(STATE.stamps.get(root) ?? []);
+
+const stamp = (root, ...areas) => {
+  if (!STATE.stamps.has(root)) STATE.stamps.set(root, new Map());
+  const counts = STATE.stamps.get(root);
+  for (const area of areas) counts.set(area, (counts.get(area) ?? 0) + 1);
+};
 
 /** The sentence a refused press gets. */
 export const refusal = (holder) =>
@@ -115,7 +143,7 @@ export const refusal = (holder) =>
  * Resolves to `{ refused }`, the holder, when a background job has one of
  * the keys; else to `{ job, done }`, `done` being the answer.
  */
-export const startJob = async ({ root, runId, kind, label, subject = null, keys, background = false, work }) => {
+export const startJob = async ({ root, runId, kind, label, subject = null, keys, background = false, progress = null, work }) => {
   const holder = holderOf(keys);
   if (holder && holder.background) return { refused: holder };
   STATE.seq += 1;
@@ -133,12 +161,24 @@ export const startJob = async ({ root, runId, kind, label, subject = null, keys,
     finishedAt: null,
     output: "",
     result: null,
+    progress: progress && { done: 0, total: null, unit: progress.unit },
   };
+  // Whole lines only are counted: output arrives in chunks that can cut one.
+  let partial = "";
   job.say = (text) => {
     job.output = (job.output + String(text)).slice(-OUTPUT_LIMIT);
+    if (!progress) return;
+    const lines = (partial + String(text)).split("\n");
+    partial = lines.pop();
+    for (const line of lines) {
+      const total = progress.total.exec(line);
+      if (total) job.progress.total = Number(total[1]);
+      else if (progress.step.test(line)) job.progress.done += 1;
+    }
   };
   job.take = (more) => take(job, more);
   STATE.jobs.set(job.id, job);
+  stamp(root, "jobs");
   await take(job, keys);
   job.state = "running";
   const done = Promise.resolve()
@@ -150,6 +190,9 @@ export const startJob = async ({ root, runId, kind, label, subject = null, keys,
       job.finishedAt = new Date().toISOString();
       release(job);
       forget();
+      // What it wrote is in the private folder, which the revision walk does
+      // not see: its area moves here, so the views that read it redraw.
+      stamp(root, "jobs", kind.split("-")[0]);
       return result;
     });
   return { job, done };

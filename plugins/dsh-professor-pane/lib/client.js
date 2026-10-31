@@ -359,6 +359,7 @@ a.pp-segbtn{display:inline-flex}
   font:inherit;cursor:pointer;background:0 0;border:0;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-stepbtn span{font-size:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .pp-stepbtn[aria-pressed=true] span{color:var(--dsw-alias-label-primary,#111);font-weight:600}
+.pp-stepbtn .pp-stepjob{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#4a4a4a);font-weight:400}
 .pp-dot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:10px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2,#cfcfd4)}
 .pp-dot-done{background:#2e7d4f;border-color:#2e7d4f;color:#fff}
@@ -14983,6 +14984,68 @@ function MaterialModal(props) {
   );
 }
 
+// client/jobs.js
+var EVERY = 2e3;
+var ask = (path, sessionId) => fetch(scoped(BASE + path, sessionId), { cache: "no-store", headers: { accept: "application/json" } }).then(
+  (response) => response.json()
+);
+var followJob = (answer, sessionId, onJob, alive) => {
+  if (!answer || !answer.job) return Promise.resolve(answer);
+  return new Promise((resolve) => {
+    const poll = (job) => {
+      if (alive && !alive()) {
+        resolve(null);
+        return;
+      }
+      if (onJob) onJob(job);
+      if (job.state === "done" || job.state === "failed") {
+        resolve(job.result || { error: "The job finished without an answer." });
+        return;
+      }
+      setTimeout(() => {
+        ask("/api/jobs/" + encodeURIComponent(job.id), sessionId).then((value) => value.job ? poll(value.job) : resolve({ error: value.error || "The job is gone." })).catch(() => poll(job));
+      }, EVERY);
+    };
+    poll(answer.job);
+  });
+};
+var progressText = (job) => {
+  const progress = job && job.progress;
+  if (!progress) return null;
+  return progress.total === null ? progress.done + " " + progress.unit : progress.done + " of " + progress.total + " " + progress.unit;
+};
+var RECENT_MS = 15 * 60 * 1e3;
+function useRunJobs(runId, sessionId, version) {
+  const [jobs, setJobs] = React.useState([]);
+  React.useEffect(() => {
+    if (!runId || !sessionId) return void 0;
+    let live = true;
+    let timer = null;
+    const load = () => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then((value) => {
+      if (!live) return;
+      const now = Date.now();
+      const shown = (value.jobs || []).filter(
+        (job) => job.background && (!job.finishedAt || now - Date.parse(job.finishedAt) < RECENT_MS)
+      );
+      setJobs(shown);
+      if (shown.some((job) => !job.finishedAt)) timer = setTimeout(load, EVERY);
+    }).catch(() => {
+      if (live) timer = setTimeout(load, EVERY * 5);
+    });
+    load();
+    return () => {
+      live = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [runId, sessionId, version]);
+  return jobs;
+}
+var runningJob = (runId, sessionId, kind, subject2) => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then(
+  (value) => (value.jobs || []).find(
+    (job) => job.kind === kind && (!subject2 || job.subject === subject2) && (job.state === "running" || job.state === "waiting")
+  ) || null
+).catch(() => null);
+
 // client/navigator.js
 var PLACE_EVENT = "professor-pane:place";
 var PENDING_MS = 4e3;
@@ -15265,6 +15328,31 @@ function HeldPapers(props) {
     )
   );
 }
+function Working(props) {
+  const version = useVersion(["jobs"]);
+  const jobs = useRunJobs(props.runId, props.sessionId, version);
+  if (!jobs.length) return null;
+  return h(
+    React.Fragment,
+    null,
+    h("div", { className: "pp-nav-label" }, h("span", null, "Working")),
+    jobs.map((job) => {
+      const count = progressText(job);
+      const meta = job.state === "failed" ? "failed" : job.finishedAt ? "done" + (count ? " · " + count : "") : count || "starting";
+      const pile = job.kind.startsWith("scans-") && job.subject;
+      return h(Row2, {
+        key: job.id,
+        dot: !job.finishedAt,
+        label: job.label,
+        hint: job.label + " — " + meta + (job.finishedAt ? "" : ". It runs on in the harness; this page can be closed."),
+        meta,
+        href: pile ? placeToHash({ view: "files", scans: pile }) : void 0,
+        onClick: pile ? () => props.onOpenPile(pile) : () => {
+        }
+      });
+    })
+  );
+}
 function Chats(props) {
   const [all, setAll] = React.useState(false);
   const now = Date.now();
@@ -15398,6 +15486,7 @@ function CourseNavigator(props) {
         onPick: pick
       }) : h("div", { className: "pp-nav-quiet" }, "Add a course folder with Folders and search, below."),
       run2 ? h(ThisWeek, { week: data.week, nextDue: data.next_due, runId: run2.run_id }) : null,
+      run2 ? h(Working, { runId: run2.run_id, sessionId, onOpenPile: openPile }) : null,
       run2 ? h(HeldPapers, { piles: heldPiles, onOpen: openPile }) : null,
       run2 ? h("div", { className: "pp-nav-label" }, h("span", null, "Course")) : null,
       run2 ? PLACES.map((entry) => {
@@ -16677,39 +16766,13 @@ function GradePage(props) {
   );
 }
 
-// client/jobs.js
-var EVERY = 2e3;
-var ask = (path, sessionId) => fetch(scoped(BASE + path, sessionId), { cache: "no-store", headers: { accept: "application/json" } }).then(
-  (response) => response.json()
-);
-var followJob = (answer, sessionId, onJob) => {
-  if (!answer || !answer.job) return Promise.resolve(answer);
-  return new Promise((resolve) => {
-    const poll = (job) => {
-      if (onJob) onJob(job);
-      if (job.state === "done" || job.state === "failed") {
-        resolve(job.result || { error: "The job finished without an answer." });
-        return;
-      }
-      setTimeout(() => {
-        ask("/api/jobs/" + encodeURIComponent(job.id), sessionId).then((value) => value.job ? poll(value.job) : resolve({ error: value.error || "The job is gone." })).catch(() => poll(job));
-      }, EVERY);
-    };
-    poll(answer.job);
-  });
-};
-var runningJob = (runId, sessionId, kind, subject2) => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then(
-  (value) => (value.jobs || []).find(
-    (job) => job.kind === kind && (!subject2 || job.subject === subject2) && (job.state === "running" || job.state === "waiting")
-  ) || null
-).catch(() => null);
-
 // client/scans.js
 function ScansTab(props) {
   const [pile, setPile] = React.useState(props.pile || "");
   const [tick, setTick] = React.useState(0);
   const [state, setState] = React.useState({ phase: "loading", value: null });
   const [busy, setBusy] = React.useState(null);
+  const [reading, setReading] = React.useState(null);
   const placements = usePlacements();
   const blocked = Boolean(busy) || placementsWaiting(placements);
   const [said, setSaid] = React.useState(null);
@@ -16749,12 +16812,15 @@ function ScansTab(props) {
     runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => {
       if (!live || !job) return;
       setBusy("read");
-      followJob({ job }, props.sessionId).then((result) => live && finish(result));
+      setReading(job);
+      followJob({ job }, props.sessionId, setReading, () => live).then((result) => live && result && finish(result));
     });
     return () => {
       live = false;
     };
   }, [props.runId, assessmentId]);
+  const mounted = React.useRef(true);
+  React.useEffect(() => () => mounted.current = false, []);
   const post2 = (path, body, label, done) => {
     if (blocked) return;
     setBusy(label);
@@ -16763,13 +16829,14 @@ function ScansTab(props) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {})
-    }).then((response) => response.json()).then((answer) => followJob(answer, props.sessionId)).then((result) => finish(result, done)).catch((error) => {
+    }).then((response) => response.json()).then((answer) => followJob(answer, props.sessionId, setReading, () => mounted.current)).then((result) => result && finish(result, done)).catch((error) => {
       setBusy(null);
       setSaid({ error: true, text: String(error) });
     });
   };
   const finish = (result, done) => {
     setBusy(null);
+    setReading(null);
     const stale2 = /no route \/api\/scans/.test(String(result.error || ""));
     setSaid({
       error: Boolean(result.error) || !result.ok,
@@ -17103,7 +17170,7 @@ function ScansTab(props) {
       title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
       onClick: () => post2("/api/scans/read", {}, "read")
     },
-    busy === "read" ? "Reading… a few minutes for a class" : "Read and record the answers"
+    busy === "read" ? "Reading… " + (progressText(reading) || "a few minutes for a class") : "Read and record the answers"
   );
   const gradeButton = (primary) => h(
     "button",
@@ -17222,7 +17289,8 @@ function ScansTab(props) {
           },
           stage.state === "done" ? "✓" : String(index + 1)
         ),
-        h("span", null, stage.label)
+        h("span", null, stage.label),
+        stage.id === "read" && busy === "read" && progressText(reading) ? h("span", { className: "pp-stepjob" }, progressText(reading)) : null
       )
     )
   );
@@ -17613,7 +17681,13 @@ function BatchModal(props) {
     const sending = step === "transcribe" && /confirm/.test(extra || "");
     setBusy(step);
     setOutput(sending ? "Sending and transcribing — this takes a while for a long batch…" : "Working…");
-    fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }).then((response) => response.json()).then((answer) => followJob(answer, props.sessionId, (job) => job.output && setOutput(job.output))).then((result) => {
+    fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }).then((response) => response.json()).then(
+      (answer) => followJob(
+        answer,
+        props.sessionId,
+        (job) => setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"))
+      )
+    ).then((result) => {
       setBusy(null);
       setOutput(result.error || result.output || "(nothing said)");
       if (step === "transcribe") setQuoted(!sending && !!result.ok);

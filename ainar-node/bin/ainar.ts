@@ -3317,7 +3317,9 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         }
         const apiKey = deepseekKey(fileURLToPath(new URL("../../", import.meta.url)));
         if (!apiKey) throw new Error("no DeepSeek key: set DEEPSEEK_API_KEY, or add it to the harness (.dsh/.credentials.yaml)");
-        out(`reading ${assessmentId} papers with ${model}, effort ${effort}`);
+        // The count first: the pane's job runner reads "12 of 48" off it and
+        // the paper lines below (plugins/dsh-professor-pane/server/jobs.js).
+        out(`reading ${readTargets(place, options).targets.length} ${assessmentId} paper(s) with ${model}, effort ${effort}`);
         const { results, skipped } = await readScans({
           place,
           title: assessment.title,

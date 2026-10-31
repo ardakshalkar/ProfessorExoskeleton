@@ -1751,7 +1751,16 @@ is worth building.
       *12 of 48 read* and the pane shows it in the step strip and the
       navigator, and on reopening the page. Finished jobs say what they did
       (the same `readSummary`) and bump the revision so the views refresh.
-      `S` · depends: JOB-2
+      `S` · depends: JOB-2. Done 2026-10-31: `scans read` now opens with the
+      count ("reading 48 … paper(s)"); a job declares a total and a per-line
+      pattern and the runner counts whole lines. The Read step and its button
+      say "12 of 48 read"; the batch dialog heads its output with "3 of 9
+      transcribed so far"; the navigator has a Working section (running
+      jobs with their count, finished ones for 15 minutes with what they
+      did), polling `/api/jobs` only while one runs. The revision carries
+      job counters per area — `jobs` on a start or finish, `scans` or
+      `defence` on a finish — never per line, so a running read does not
+      redraw the pane each poll.
 - [ ] **JOB-4** The pane un-blocked. Only the presses JOB-1 marks as
       conflicting wait for a running job; everything else — other steps,
       grading cards, another assessment, other pages — stays usable. The
