@@ -1710,7 +1710,7 @@ is worth building.
 > in a queue rather than being refused, and the runner accepts only known
 > kinds of job from the pane (JOB-8 – JOB-11).
 
-- [ ] **JOB-1** What is secured, written down. One table: every pane action
+- [x] **JOB-1** What is secured, written down. One table: every pane action
       that writes the private folder or the run's records, what it rewrites
       (one student's transcript, the whole plan, `version.yaml`, a take), and
       what keeps a second writer out today — client `busy`, the placements
@@ -1718,7 +1718,15 @@ is worth building.
       conflict (read vs. apply rewriting the same plan) and which are only
       blocked because the button shared a `busy` (read vs. opening the
       grading cards, vs. another assessment's pile, vs. the gradebook). This
-      decides JOB-2's lock keys. `S` · depends: —
+      decides JOB-2's lock keys. `S` · depends: —. Done 2026-10-30 as
+      [`docs/JOBS.md`](docs/JOBS.md). Locks go per *store*, not per action
+      (`pile:RUN:A`, `records:C:COLLECTION`, `ledger:RUN`, …), taken all at
+      once; split `scans read` from `scans record` so the 30 minutes hold
+      only the pile. The course's `records/*.yaml` are shared by every
+      pile and run, and the sync ledger is held whole across network calls —
+      the widest window. Four bugs found on the way (Canvas link args,
+      publish dropping its ledger entry, Sync all sending twice, batch
+      transcription not re-checking consent), listed there.
 - [ ] **JOB-2** A server-side job runner. `POST` starts the job and returns a
       job id at once; the CLI child runs on in the harness process; `GET
       /api/jobs` lists running and recent jobs with their progress and
