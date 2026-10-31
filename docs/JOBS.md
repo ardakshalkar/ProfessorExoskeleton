@@ -244,4 +244,8 @@ stopped it; `transcribeTake` reads consent itself. Tests for 3 and 4 in
   ledger at save would shorten it; that is a ledger change, not a runner one.
 - **Atomic writes.** One tmp + rename helper used by every RMW store above
   would stop a crash or a killed child (JOB-5's Cancel) from truncating a
-  records file. Worth doing before Cancel exists.
+  records file. Worth doing before Cancel exists. *Partly done 2026-10-31
+  with JOB-5: `ainar-node/src/write-file.ts`, used for scan transcripts,
+  `reading.json`, defence sessions and `records/*.yaml` — what a
+  cancellable job writes. Still plain: the scan plan, the recordings plan,
+  assessment and run records, the ledger, links, roster.*

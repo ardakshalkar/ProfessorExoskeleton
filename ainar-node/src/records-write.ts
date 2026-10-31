@@ -12,7 +12,7 @@
  */
 
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
@@ -20,6 +20,7 @@ import { AGENT_WRITABLE, ID_FIELDS } from "./approval.ts";
 import { COLLECTIONS } from "./loader.ts";
 import { candidateFiles, editRecords } from "./record-edit.ts";
 import { activeProfile } from "./profile.ts";
+import { writeFileWhole } from "./write-file.ts";
 import { dump } from "./yaml-out.ts";
 
 /**
@@ -317,7 +318,7 @@ export const upsertRecords = (
   const floats = schema ? floatPaths(schema, [collection]) : new Set<string>();
   const body = dump({ [collection]: payload }, (path_) => floats.has(path_.join(".")));
 
-  writeFileSync(path, HEADER + body, { encoding: "utf-8" });
+  writeFileWhole(path, HEADER + body);
   return path;
 };
 
@@ -342,7 +343,7 @@ export const removeRecords = (courseDir: string, collection: string, ids: Iterab
   if (!removed) return 0;
   const schema = (AGENT_WRITABLE as Record<string, z.ZodTypeAny>)[collection];
   const floats = schema ? floatPaths(schema, [collection]) : new Set<string>();
-  writeFileSync(path, HEADER + dump({ [collection]: kept }, (path_) => floats.has(path_.join("."))), { encoding: "utf-8" });
+  writeFileWhole(path, HEADER + dump({ [collection]: kept }, (path_) => floats.has(path_.join("."))));
   return removed;
 };
 

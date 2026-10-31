@@ -4877,7 +4877,7 @@ function SyncCard(props) {
     setPreviewed(false);
     road.close();
   };
-  const press2 = (action, confirm) => {
+  const press3 = (action, confirm) => {
     if (sync.road) {
       setResult(null);
       const source = { from: sync.exported && from === "export" ? "export" : "live" };
@@ -5087,7 +5087,7 @@ function SyncCard(props) {
       }) : null,
       h(
         "button",
-        { type: "button", className: "pp-syncbtn", disabled: Boolean(busy) || !ready, onClick: () => press2("plan") },
+        { type: "button", className: "pp-syncbtn", disabled: Boolean(busy) || !ready, onClick: () => press3("plan") },
         busy === "plan" ? "Looking…" : "Preview"
       ),
       sync.live ? h(
@@ -5097,7 +5097,7 @@ function SyncCard(props) {
           className: "pp-syncbtn pp-syncbtn-send",
           disabled: Boolean(busy) || !ready || !canSend,
           title: canSend ? "Do what the preview shows" : "Preview first",
-          onClick: () => press2("run", true)
+          onClick: () => press3("run", true)
         },
         busy === "run" ? "Sending…" : "Send"
       ) : h(
@@ -5106,7 +5106,7 @@ function SyncCard(props) {
           type: "button",
           className: "pp-syncbtn pp-syncbtn-run",
           disabled: Boolean(busy) || !ready || !sync.enabled,
-          onClick: () => press2("run")
+          onClick: () => press3("run")
         },
         busy === "run" ? "Running…" : "Run"
       )
@@ -5159,7 +5159,7 @@ function SyncCard(props) {
       ),
       roadPreview && roadPreview.ok ? h("div", { className: "pp-syncallx" }, h(SheetPlan, { plan: roadPreview.preview })) : h("pre", null, road.preview.error || roadPreview && roadPreview.error || "(nothing printed)")
     ) : null,
-    road.results ? h(RoadResults, { results: road.results, busy: road.phase === "asking", onAgain: () => press2("plan"), onClose: road.close }) : null
+    road.results ? h(RoadResults, { results: road.results, busy: road.phase === "asking", onAgain: () => press3("plan"), onClose: road.close }) : null
   );
 }
 function WaitingCard(props) {
@@ -6708,7 +6708,7 @@ function CanvasRead(props) {
   const [result, setResult] = React.useState(null);
   const sync = props.sync;
   if (!sync) return null;
-  const press2 = (action) => {
+  const press3 = (action) => {
     setBusy(action);
     postSync(props.runId, props.sessionId, {
       action,
@@ -6743,7 +6743,7 @@ function CanvasRead(props) {
       ),
       h(
         "button",
-        { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => press2("plan") },
+        { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => press3("plan") },
         busy === "plan" ? "Looking…" : "Preview"
       ),
       sync.live ? null : h(
@@ -6752,7 +6752,7 @@ function CanvasRead(props) {
           type: "button",
           className: "pp-segbtn",
           disabled: Boolean(busy) || !sync.enabled,
-          onClick: () => press2("run")
+          onClick: () => press3("run")
         },
         busy === "run" ? "Running…" : "Run"
       )
@@ -14999,7 +14999,7 @@ var followJob = (answer, sessionId, onJob, alive) => {
         return;
       }
       if (onJob) onJob(job);
-      if (job.state === "done" || job.state === "failed") {
+      if (job.finishedAt) {
         resolve(job.result || { error: "The job finished without an answer." });
         return;
       }
@@ -15041,11 +15041,11 @@ function useRunJobs(runId, sessionId, version) {
   }, [runId, sessionId, version]);
   return jobs;
 }
-var runningJob = (runId, sessionId, kind, subject2) => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then(
-  (value) => (value.jobs || []).find(
-    (job) => job.kind === kind && (!subject2 || job.subject === subject2) && (job.state === "running" || job.state === "waiting")
-  ) || null
-).catch(() => null);
+var lastJob = (runId, sessionId, kind, subject2) => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then((value) => (value.jobs || []).find((job) => job.kind === kind && (!subject2 || job.subject === subject2)) || null).catch(() => null);
+var press2 = (path, sessionId) => fetch(scoped(BASE + path, sessionId), { method: "POST", headers: { accept: "application/json" } }).then((response) => response.json()).catch((error) => ({ error: String(error) }));
+var cancelJob = (id, sessionId) => press2("/api/jobs/" + encodeURIComponent(id) + "/cancel", sessionId);
+var continueJob = (id, sessionId) => press2("/api/jobs/" + encodeURIComponent(id) + "/continue", sessionId);
+var CUT_SHORT_WORDS = { interrupted: "was interrupted by a restart", cancelled: "was cancelled", failed: "failed" };
 
 // client/navigator.js
 var PLACE_EVENT = "professor-pane:place";
@@ -15339,7 +15339,7 @@ function Working(props) {
     h("div", { className: "pp-nav-label" }, h("span", null, "Working")),
     jobs.map((job) => {
       const count = progressText(job);
-      const meta = job.state === "failed" ? "failed" : job.finishedAt ? "done" + (count ? " · " + count : "") : count || "starting";
+      const meta = !job.finishedAt ? count || "starting" : (job.state === "done" ? "done" : job.state) + (count ? " · " + count : "");
       const pile = job.kind.startsWith("scans-") && job.subject;
       return h(Row2, {
         key: job.id,
@@ -16820,12 +16820,24 @@ function ScansTab(props) {
   React.useEffect(() => {
     if (!assessmentId) return void 0;
     let live = true;
-    runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => live && job && followRead(job));
+    lastJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => {
+      if (!live || !job) return;
+      if (!job.finishedAt) followRead(job);
+      else if (job.continuable) setReading(job);
+    });
     return () => {
       live = false;
       follower.current += 1;
     };
   }, [props.runId, assessmentId]);
+  const cancelRead = () => cancelJob(reading.id, props.sessionId).then((answer) => answer.error && setSaid({ error: true, text: answer.error }));
+  const continueRead = () => {
+    setSaid(null);
+    continueJob(reading.id, props.sessionId).then(
+      (answer) => answer.job ? followRead(answer.job) : setSaid({ error: true, text: answer.error || "It could not be continued." })
+    );
+  };
+  const cutShort = Boolean(reading) && reading.subject === assessmentId && Boolean(reading.finishedAt) && reading.continuable;
   const post2 = (path, body, label, done) => {
     if (blocked) return;
     setBusy(label);
@@ -16848,7 +16860,6 @@ function ScansTab(props) {
   };
   const finish = (result, done) => {
     setBusy(null);
-    setReading(null);
     const stale2 = /no route \/api\/scans/.test(String(result.error || ""));
     setSaid({
       error: Boolean(result.error) || !result.ok,
@@ -17461,9 +17472,28 @@ function ScansTab(props) {
     stepper,
     detail,
     readingNow ? h(
-      "p",
-      { className: "pp-as pp-jobnote" },
-      "Reading runs in the harness — this page can be left, and other piles and the Grade view can be used meanwhile. Placing papers on this pile waits until it has finished."
+      "div",
+      { className: "pp-jobnote" },
+      h(
+        "span",
+        { className: "pp-as" },
+        "Reading runs in the harness — this page can be left, and other piles and the Grade view can be used meanwhile. Placing papers on this pile waits until it has finished. "
+      ),
+      h(
+        "button",
+        { type: "button", className: "pp-segbtn", title: "Stops the read; what is read so far is kept, and Continue reads the rest", onClick: cancelRead },
+        "Cancel"
+      )
+    ) : null,
+    cutShort ? h(
+      "div",
+      { className: "pp-jobnote" },
+      h(
+        "span",
+        { className: "pp-as" },
+        "Reading " + (CUT_SHORT_WORDS[reading.state] || reading.state) + (progressText(reading) ? " at " + progressText(reading) : "") + ". Continue reads only the papers still unread, then records the pile. "
+      ),
+      h("button", { type: "button", className: "pp-segbtn", disabled: blocked, onClick: continueRead }, "Continue reading")
     ) : null,
     said ? h("pre", { className: "pp-approveout" + (said.error ? " pp-approveerr" : "") }, said.text) : null,
     grading ? h(GradeBoard, {
@@ -17673,7 +17703,8 @@ function BatchModal(props) {
   const [consent, setConsent] = React.useState(false);
   const [quoted2, setQuoted] = React.useState(false);
   const [busy, setBusy] = React.useState(null);
-  const [sendingJob, setSendingJob] = React.useState(null);
+  const [lastSend, setLastSend] = React.useState(null);
+  const sendingJob = lastSend && !lastSend.finishedAt ? lastSend : null;
   const [output, setOutput] = React.useState("");
   const url = (extra) => scoped(BASE + "/api/defence/batch?run=" + encodeURIComponent(props.runId) + (extra || ""), props.sessionId);
   const mounted = React.useRef(true);
@@ -17681,28 +17712,32 @@ function BatchModal(props) {
   const chosen = React.useRef(assessment);
   chosen.current = assessment;
   const showJob = (job) => {
-    setSendingJob(job.finishedAt ? null : job);
-    if (chosen.current !== job.subject) return;
+    setLastSend(job);
+    if (chosen.current !== job.subject || job.finishedAt) return;
     setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"));
   };
   const followSend = (job) => {
     const alive = () => mounted.current;
     showJob(job);
     followJob({ job }, props.sessionId, (next) => alive() && showJob(next), alive).then((result) => {
-      if (!result) return;
-      setSendingJob(null);
-      if (chosen.current === job.subject) setOutput(result.error || result.output || "(nothing said)");
+      if (result && chosen.current === job.subject) setOutput(result.error || result.output || "(nothing said)");
     });
   };
   React.useEffect(() => {
-    runningJob(props.runId, props.sessionId, "defence-transcribe").then((job) => {
-      if (!job || !mounted.current) return;
+    lastJob(props.runId, props.sessionId, "defence-transcribe").then((job) => {
+      if (!job || !mounted.current || job.finishedAt && !job.continuable) return;
       chosen.current = job.subject;
       setAssessment(job.subject);
-      followSend(job);
+      if (job.finishedAt) setLastSend(job);
+      else followSend(job);
     });
   }, [props.runId]);
   const sendingHere = Boolean(sendingJob) && sendingJob.subject === assessment;
+  const cutShort = Boolean(lastSend) && Boolean(lastSend.finishedAt) && lastSend.continuable && lastSend.subject === assessment;
+  const cancelSend = () => cancelJob(sendingJob.id, props.sessionId).then((answer) => answer.error && setOutput(answer.error));
+  const continueSend = () => continueJob(lastSend.id, props.sessionId).then(
+    (answer) => answer.job ? followSend(answer.job) : setOutput(answer.error || "It could not be continued.")
+  );
   React.useEffect(() => {
     fetch(url(), { cache: "no-store" }).then((response) => response.json()).then((result) => {
       const list = result.assessments || [];
@@ -17816,8 +17851,27 @@ function BatchModal(props) {
           ),
           sendingJob ? h(
             "div",
-            { className: "pp-dim" },
-            sendingJob.label + " — " + (progressText(sendingJob) || "starting") + ". It runs on in the harness: this can be closed."
+            { className: "pp-approverow" },
+            h(
+              "span",
+              { className: "pp-dim" },
+              sendingJob.label + " — " + (progressText(sendingJob) || "starting") + ". It runs on in the harness: this can be closed."
+            ),
+            h(
+              "button",
+              { type: "button", className: "pp-segbtn", title: "Stops sending; what is transcribed is kept, and Continue sends the rest", onClick: cancelSend },
+              "Cancel"
+            )
+          ) : null,
+          cutShort ? h(
+            "div",
+            { className: "pp-approverow" },
+            h(
+              "span",
+              { className: "pp-dim" },
+              "Transcribing " + (CUT_SHORT_WORDS[lastSend.state] || lastSend.state) + (progressText(lastSend) ? " at " + progressText(lastSend) : "") + ". Continue sends only the recordings still without a transcript."
+            ),
+            h("button", { type: "button", className: "pp-segbtn pp-drec", disabled: Boolean(busy), onClick: continueSend }, "Continue sending")
           ) : null,
           h(
             "div",

@@ -25,10 +25,9 @@ import {
   WHOLE_DEFENCE,
   withdrawConsent,
 } from "@ainar/core/src/defence.ts";
-import { readRecordingPlan, recordingsInbox } from "@ainar/core/src/recordings.ts";
-import { submissionsDir } from "@ainar/core/src/scans.ts";
 import { configFromRegistry, realtimeSession, transcriber } from "@ainar/core/src/transcribe.ts";
 import { runScans } from "../actions.js";
+import { KINDS, recordedStudents } from "../job-kinds.js";
 import { answerJob, defenceKey, holderOf, recordingsKey, refusal, startJob } from "../jobs.js";
 import {
   chooseNext,
@@ -106,39 +105,27 @@ export const routes = [
         step === "apply" && url.searchParams.get("consent") === "1" ? ["--consent-confirmed"] : sending ? ["--confirm"] : [];
       const args = ["defence", "batch", step, runId, "--assessment", assessmentId, ...extra];
       const title = assessmentsOf(loaded.bundle, runId).find((entry) => entry.assessment_id === assessmentId)?.title || assessmentId;
-      // A quote writes nothing and runs as it always has. Plan and apply
-      // rewrite the run's one recordings plan, and apply files into each
-      // placed student's defence; sending writes each filed student's
-      // session for up to half an hour, so it runs in the background and
-      // the desk is refused only for those students.
+      // A quote writes nothing and runs as it always has. Sending is a
+      // background job (server/job-kinds.js). Plan and apply rewrite the
+      // run's one recordings plan, and apply files into each placed
+      // student's defence: seconds, inline.
       if (step === "transcribe" && !sending) {
         return runScans(args, root)
           .then((result) => sendJson(res, 200, result))
           .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
       }
-      let students = [];
-      try {
-        const plan = readRecordingPlan(recordingsInbox(submissionsDir(null), runId));
-        if (plan && plan.assessment === assessmentId) {
-          students = [...new Set(plan.entries.filter((entry) => entry.student && !entry.skip).map((entry) => entry.student))];
-        }
-      } catch {
-        // No plan, or one that does not read: the CLI says so in its own words.
-      }
-      const defences = students.map((student) => defenceKey(runId, assessmentId, student));
+      if (sending) return answerJob(res, KINDS["defence-transcribe"](c, { assessmentId }));
+      const defences = recordedStudents(runId, assessmentId).map((student) => defenceKey(runId, assessmentId, student));
       return answerJob(
         res,
         startJob({
           root,
           runId,
-          kind: sending ? "defence-transcribe" : `defence-batch-${step}`,
-          label: sending ? `Transcribing the defences for ${title}` : `Filing recorded defences for ${title}`,
+          kind: `defence-batch-${step}`,
+          label: `Filing recorded defences for ${title}`,
           subject: assessmentId,
-          keys: sending ? defences : step === "apply" ? [recordingsKey(runId), ...defences] : [recordingsKey(runId)],
-          background: sending,
-          // Sending opens with "N recording(s), …" and says each student as it lands.
-          progress: sending ? { unit: "transcribed", total: /^(\d+) recording\(s\),/, step: /^\s+STUDENT-[A-Z0-9-]+: / } : null,
-          work:(job) => runScans(args, root, sending ? 1800000 : 300000, null, job.say),
+          keys: step === "apply" ? [recordingsKey(runId), ...defences] : [recordingsKey(runId)],
+          work: () => runScans(args, root),
         }),
       );
     },

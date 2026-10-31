@@ -445,7 +445,11 @@ function Working(props) {
     h("div", { className: "pp-nav-label" }, h("span", null, "Working")),
     jobs.map((job) => {
       const count = progressText(job);
-      const meta = job.state === "failed" ? "failed" : job.finishedAt ? "done" + (count ? " · " + count : "") : count || "starting";
+      // Cut short — failed, cancelled, interrupted by a restart — it says so,
+      // and where: its own page offers Continue.
+      const meta = !job.finishedAt
+        ? count || "starting"
+        : (job.state === "done" ? "done" : job.state) + (count ? " · " + count : "");
       const pile = job.kind.startsWith("scans-") && job.subject;
       return h(Row, {
         key: job.id,

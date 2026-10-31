@@ -51,6 +51,7 @@ import { writeRecords } from "./records-write.ts";
 import { parseReply } from "./scan-read.ts";
 import { evaluationId } from "./grade-board.ts";
 import { type Range, type Segment, type Transcriber, type Transcript, labelSpeakers, studentWords } from "./transcribe.ts";
+import { writeFileWhole } from "./write-file.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -613,7 +614,7 @@ export const readSession = (file: string): Session | null => {
 
 export const writeSession = (file: string, session: Session): void => {
   mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, SESSION_HEADER + stringify(session, { lineWidth: 0 }), "utf-8");
+  writeFileWhole(file, SESSION_HEADER + stringify(session, { lineWidth: 0 }));
 };
 
 const EXTENSIONS: Record<string, string> = {

@@ -30,12 +30,13 @@
  */
 
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { PDFDocument } from "pdf-lib";
 import { parse, stringify } from "yaml";
 import { itemsForVariant, type ScanPlace } from "./scans.ts";
+import { writeFileWhole } from "./write-file.ts";
 
 const run = promisify(execFile);
 
@@ -397,7 +398,7 @@ export const fillTranscript = (
 const writeTranscript = (path: string, transcript: any): void => {
   const raw = readFileSync(path, "utf-8");
   const header = raw.slice(0, Math.max(0, raw.indexOf("student_id:")));
-  writeFileSync(path, header + stringify(transcript, { lineWidth: 0 }), "utf-8");
+  writeFileWhole(path, header + stringify(transcript, { lineWidth: 0 }));
 };
 
 // --------------------------------------------------------------------------
@@ -482,7 +483,7 @@ export const readScans = async (context: ReadContext): Promise<{ results: PaperR
       const reply = await context.reader(requestContent(prompt, pages));
       const reading = parseReply(reply.text);
       const usd = estimateCost(reply.usage, new Date(reply.at));
-      writeFileSync(
+      writeFileWhole(
         join(folder, "reading.json"),
         JSON.stringify(
           {

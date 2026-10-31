@@ -1,12 +1,34 @@
 // The job runner (server/jobs.js): locks per store key, a background holder
-// refuses, an inline one is waited for, and the table outlives a reload.
+// refuses, an inline one is waited for, the table outlives a reload, and a
+// background job outlives a restart, can be cancelled and continued.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-
-import { holderOf, jobAreas, jobById, listJobs, pileKey, progressText, recordsKey, startJob } from "../server/jobs.js";
+import { spawn } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const ROOT = "/tmp/jobs-test-" + process.pid;
+
+// Never the professor's own ~/.ainar/jobs: set before the runner is imported,
+// with one job a harness that is gone left running.
+const DIR = mkdtempSync(join(tmpdir(), "pane-jobs-"));
+process.env.AINAR_JOBS_DIR = DIR;
+mkdirSync(DIR, { recursive: true });
+writeFileSync(
+  join(DIR, "job-left-1.json"),
+  JSON.stringify({
+    id: "job-left-1", pid: 2147483646, root: ROOT, runId: "RUN-R", kind: "scans-read", label: "Reading Quiz 9",
+    subject: "Q9", params: { assessmentId: "Q9" }, keys: ["pile:RUN-R:Q9"], background: true, state: "running",
+    startedAt: "2026-10-31T10:00:00.000Z", finishedAt: null, output: "read STUDENT-A\n",
+    progress: { done: 12, total: 48, unit: "read" },
+  }),
+);
+
+const { cancelJob, continueJob, holderOf, jobAreas, jobById, listJobs, pileKey, progressText, recordsKey, startJob } = await import(
+  "../server/jobs.js"
+);
 
 /** A piece of work that finishes when told to. */
 const gate = () => {
@@ -102,6 +124,56 @@ test("progress is counted from whole lines, cut wherever the chunks fall", async
   assert.equal(jobAreas(ROOT).scans, (before.scans ?? 0) + 1, "a finished read moves `scans`");
   assert.equal(jobAreas(ROOT).jobs, (before.jobs ?? 0) + 2);
   assert.equal(progressText({ progress: null }), null);
+});
+
+test("a job its harness left running comes back interrupted, holding nothing, and can be continued", async () => {
+  const left = jobById(ROOT, "job-left-1");
+  assert.equal(left.state, "interrupted");
+  assert.ok(left.finishedAt);
+  assert.equal(left.continuable, true);
+  assert.equal(progressText(left), "12 of 48 read");
+  assert.equal(holderOf([pileKey("RUN-R", "Q9")]), null);
+  assert.equal(JSON.parse(readFileSync(join(DIR, "job-left-1.json"), "utf-8")).state, "interrupted", "and says so on disk");
+
+  const started = [];
+  const KINDS = {
+    "scans-read": (c, params) => {
+      started.push({ runId: c.runId, params });
+      return startJob({
+        root: c.root, runId: c.runId, kind: "scans-read", label: "Reading Quiz 9", subject: params.assessmentId,
+        params, keys: [pileKey(c.runId, params.assessmentId)], background: true, work: () => ({ ok: true }),
+      });
+    },
+  };
+  const again = await continueJob({ root: ROOT, workspace: null }, "job-left-1", KINDS);
+  assert.deepEqual(started, [{ runId: "RUN-R", params: { assessmentId: "Q9" } }]);
+  await again.done;
+  assert.equal(jobById(ROOT, "job-left-1").continuedBy, again.job.id);
+  assert.equal(jobById(ROOT, "job-left-1").continuable, false, "continued once, not twice");
+  assert.match((await continueJob({ root: ROOT }, "job-left-1", KINDS)).error, /cannot be continued/);
+  assert.match((await continueJob({ root: "/elsewhere" }, "job-left-1", KINDS)).error, /No such job/);
+  assert.ok(existsSync(join(DIR, `${again.job.id}.json`)), "a background job is kept on disk");
+});
+
+test("cancel kills the child, and the job finishes cancelled and continuable", async () => {
+  const started = await startJob({
+    root: ROOT, runId: "RUN-K", kind: "defence-transcribe", label: "Transcribing", subject: "A1",
+    params: { assessmentId: "A1" }, keys: ["defence:RUN-K:A1:S1"], background: true,
+    work: (job) =>
+      new Promise((resolve) => {
+        const child = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"]);
+        job.adopt(child);
+        child.on("exit", (code, signal) => resolve({ ok: false, exitCode: code, output: `ended by ${signal}` }));
+      }),
+  });
+  assert.match(cancelJob(ROOT, "nope").error, /No such job/);
+  assert.equal(cancelJob(ROOT, started.job.id).job.id, started.job.id);
+  await started.done;
+  const job = jobById(ROOT, started.job.id);
+  assert.equal(job.state, "cancelled");
+  assert.equal(job.continuable, true);
+  assert.equal(holderOf(["defence:RUN-K:A1:S1"]), null);
+  assert.match(cancelJob(ROOT, started.job.id).error, /already finished/);
 });
 
 test("jobs are per workspace and per run, and the table is shared across imports", async () => {

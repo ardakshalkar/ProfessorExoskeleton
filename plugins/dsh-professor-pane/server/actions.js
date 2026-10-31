@@ -49,8 +49,9 @@ export const DOTS_BUNDLE = fileURLToPath(new URL("../vendor/dots-swarm.js", impo
  *
  * `onOutput`, when given, hears stdout and stderr as they come — a job's
  * running output (server/jobs.js); the answer still carries all of it.
+ * `onChild` is handed the child process, so a job can be cancelled.
  */
-export const runScans = (args, root, timeout = 300000, input = null, onOutput = null) =>
+export const runScans = (args, root, timeout = 300000, input = null, onOutput = null, onChild = null) =>
   new Promise((resolveRun) => {
     if (!existsSync(AINAR_CLI)) {
       resolveRun({ ok: false, error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.` });
@@ -76,6 +77,7 @@ export const runScans = (args, root, timeout = 300000, input = null, onOutput = 
       child.stdout?.on("data", onOutput);
       child.stderr?.on("data", onOutput);
     }
+    if (onChild) onChild(child);
     if (input !== null) child.stdin.end(input);
   });
 

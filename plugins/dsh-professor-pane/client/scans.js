@@ -5,7 +5,7 @@
 import { Message } from "./common.js";
 import { GradeBoard } from "./grade-board.js";
 import { CanvasMarks, MatchReview, STEP_PROMPTS } from "./marks.js";
-import { followJob, progressText, runningJob } from "./jobs.js";
+import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, progressText } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { enqueuePlacement, placementKey, placementsWaiting, usePlacements } from "./scans-queue.js";
 import { BASE, scoped } from "./tabs.js";
@@ -95,18 +95,33 @@ function ScansTab(props) {
     setReading(job);
     followJob({ job }, props.sessionId, (next) => alive() && setReading(next), alive).then((result) => result && finish(result));
   };
-  // A read already running on the server — pressed before a reload, in
+  // The pile's latest read: one still running — pressed before a reload, in
   // another tab, or on this pile before another was shown — is followed here
-  // as if it had been pressed in this one.
+  // as if it had been pressed in this one; one cut short is offered Continue.
   React.useEffect(() => {
     if (!assessmentId) return undefined;
     let live = true;
-    runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => live && job && followRead(job));
+    lastJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => {
+      if (!live || !job) return;
+      if (!job.finishedAt) followRead(job);
+      else if (job.continuable) setReading(job);
+    });
     return () => {
       live = false;
       follower.current += 1;
     };
   }, [props.runId, assessmentId]);
+  // Cancel and Continue, on the read of the pile shown.
+  const cancelRead = () =>
+    cancelJob(reading.id, props.sessionId).then((answer) => answer.error && setSaid({ error: true, text: answer.error }));
+  const continueRead = () => {
+    setSaid(null);
+    continueJob(reading.id, props.sessionId).then((answer) =>
+      answer.job ? followRead(answer.job) : setSaid({ error: true, text: answer.error || "It could not be continued." }),
+    );
+  };
+  // A read of the pile shown that ended early and can be picked up again.
+  const cutShort = Boolean(reading) && reading.subject === assessmentId && Boolean(reading.finishedAt) && reading.continuable;
 
   const post = (path, body, label, done) => {
     if (blocked) return;
@@ -135,7 +150,6 @@ function ScansTab(props) {
   // A whole-pile write's answer: said, and the pile read again.
   const finish = (result, done) => {
     setBusy(null);
-    setReading(null);
     const stale = /no route \/api\/scans/.test(String(result.error || ""));
     setSaid({
       error: Boolean(result.error) || !result.ok,
@@ -908,10 +922,33 @@ function ScansTab(props) {
     detail,
     readingNow
       ? h(
-          "p",
-          { className: "pp-as pp-jobnote" },
-          "Reading runs in the harness — this page can be left, and other piles and the Grade view can be used meanwhile. " +
-            "Placing papers on this pile waits until it has finished.",
+          "div",
+          { className: "pp-jobnote" },
+          h(
+            "span",
+            { className: "pp-as" },
+            "Reading runs in the harness — this page can be left, and other piles and the Grade view can be used meanwhile. " +
+              "Placing papers on this pile waits until it has finished. ",
+          ),
+          h(
+            "button",
+            { type: "button", className: "pp-segbtn", title: "Stops the read; what is read so far is kept, and Continue reads the rest", onClick: cancelRead },
+            "Cancel",
+          ),
+        )
+      : null,
+    cutShort
+      ? h(
+          "div",
+          { className: "pp-jobnote" },
+          h(
+            "span",
+            { className: "pp-as" },
+            "Reading " + (CUT_SHORT_WORDS[reading.state] || reading.state) +
+              (progressText(reading) ? " at " + progressText(reading) : "") +
+              ". Continue reads only the papers still unread, then records the pile. ",
+          ),
+          h("button", { type: "button", className: "pp-segbtn", disabled: blocked, onClick: continueRead }, "Continue reading"),
         )
       : null,
     said

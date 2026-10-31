@@ -33,7 +33,8 @@ export const followJob = (answer, sessionId, onJob, alive) => {
         return;
       }
       if (onJob) onJob(job);
-      if (job.state === "done" || job.state === "failed") {
+      // Done, failed, cancelled, or interrupted by a restart: finished.
+      if (job.finishedAt) {
         resolve(job.result || { error: "The job finished without an answer." });
         return;
       }
@@ -92,13 +93,26 @@ export function useRunJobs(runId, sessionId, version) {
   return jobs;
 }
 
-/** The run's job of this kind on this subject that has not finished, or null — for a page opened while it runs. */
-export const runningJob = (runId, sessionId, kind, subject) =>
+/**
+ * The run's latest job of this kind (on this subject, when given), finished
+ * or not, or null — for a page opened while one runs, or after one was cut
+ * short and can be continued.
+ */
+export const lastJob = (runId, sessionId, kind, subject) =>
   ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId)
-    .then(
-      (value) =>
-        (value.jobs || []).find(
-          (job) => job.kind === kind && (!subject || job.subject === subject) && (job.state === "running" || job.state === "waiting"),
-        ) || null,
-    )
+    .then((value) => (value.jobs || []).find((job) => job.kind === kind && (!subject || job.subject === subject)) || null)
     .catch(() => null);
+
+const press = (path, sessionId) =>
+  fetch(scoped(BASE + path, sessionId), { method: "POST", headers: { accept: "application/json" } })
+    .then((response) => response.json())
+    .catch((error) => ({ error: String(error) }));
+
+/** Cancel a running job: `{ job }`, or `{ error }`. Its follower sees it finish. */
+export const cancelJob = (id, sessionId) => press("/api/jobs/" + encodeURIComponent(id) + "/cancel", sessionId);
+
+/** Start a cut-short job's kind again: `{ job }` (the new one), or `{ error }`. */
+export const continueJob = (id, sessionId) => press("/api/jobs/" + encodeURIComponent(id) + "/continue", sessionId);
+
+/** What a cut-short job's state is called. */
+export const CUT_SHORT_WORDS = { interrupted: "was interrupted by a restart", cancelled: "was cancelled", failed: "failed" };

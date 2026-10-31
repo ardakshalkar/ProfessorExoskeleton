@@ -2,7 +2,7 @@
  * Uploading: the kinds a file can be, and the single and batch upload dialogs.
  */
 
-import { followJob, progressText, runningJob } from "./jobs.js";
+import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, progressText } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -108,8 +108,10 @@ export function BatchModal(props) {
   // keeps the dialog open; sending does not — see `sendingJob`.
   const [busy, setBusy] = React.useState(null);
   // Sending runs in the harness as a job (server/jobs.js): the dialog can be
-  // closed while it goes on, and opening it again finds it.
-  const [sendingJob, setSendingJob] = React.useState(null);
+  // closed while it goes on, and opening it again finds it — or, if it was
+  // cut short, offers to continue it. The latest send, running or not.
+  const [lastSend, setLastSend] = React.useState(null);
+  const sendingJob = lastSend && !lastSend.finishedAt ? lastSend : null;
   const [output, setOutput] = React.useState("");
   const url = (extra) => scoped(BASE + "/api/defence/batch?run=" + encodeURIComponent(props.runId) + (extra || ""), props.sessionId);
   const mounted = React.useRef(true);
@@ -120,28 +122,33 @@ export function BatchModal(props) {
   const chosen = React.useRef(assessment);
   chosen.current = assessment;
   const showJob = (job) => {
-    setSendingJob(job.finishedAt ? null : job);
-    if (chosen.current !== job.subject) return;
+    setLastSend(job);
+    if (chosen.current !== job.subject || job.finishedAt) return;
     setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"));
   };
   const followSend = (job) => {
     const alive = () => mounted.current;
     showJob(job);
     followJob({ job }, props.sessionId, (next) => alive() && showJob(next), alive).then((result) => {
-      if (!result) return;
-      setSendingJob(null);
-      if (chosen.current === job.subject) setOutput(result.error || result.output || "(nothing said)");
+      if (result && chosen.current === job.subject) setOutput(result.error || result.output || "(nothing said)");
     });
   };
   React.useEffect(() => {
-    runningJob(props.runId, props.sessionId, "defence-transcribe").then((job) => {
-      if (!job || !mounted.current) return;
+    lastJob(props.runId, props.sessionId, "defence-transcribe").then((job) => {
+      if (!job || !mounted.current || (job.finishedAt && !job.continuable)) return;
       chosen.current = job.subject;
       setAssessment(job.subject);
-      followSend(job);
+      if (job.finishedAt) setLastSend(job);
+      else followSend(job);
     });
   }, [props.runId]);
   const sendingHere = Boolean(sendingJob) && sendingJob.subject === assessment;
+  const cutShort = Boolean(lastSend) && Boolean(lastSend.finishedAt) && lastSend.continuable && lastSend.subject === assessment;
+  const cancelSend = () => cancelJob(sendingJob.id, props.sessionId).then((answer) => answer.error && setOutput(answer.error));
+  const continueSend = () =>
+    continueJob(lastSend.id, props.sessionId).then((answer) =>
+      answer.job ? followSend(answer.job) : setOutput(answer.error || "It could not be continued."),
+    );
 
   React.useEffect(() => {
     fetch(url(), { cache: "no-store" })
@@ -269,8 +276,31 @@ export function BatchModal(props) {
           sendingJob
             ? h(
                 "div",
-                { className: "pp-dim" },
-                sendingJob.label + " — " + (progressText(sendingJob) || "starting") + ". It runs on in the harness: this can be closed.",
+                { className: "pp-approverow" },
+                h(
+                  "span",
+                  { className: "pp-dim" },
+                  sendingJob.label + " — " + (progressText(sendingJob) || "starting") + ". It runs on in the harness: this can be closed.",
+                ),
+                h(
+                  "button",
+                  { type: "button", className: "pp-segbtn", title: "Stops sending; what is transcribed is kept, and Continue sends the rest", onClick: cancelSend },
+                  "Cancel",
+                ),
+              )
+            : null,
+          cutShort
+            ? h(
+                "div",
+                { className: "pp-approverow" },
+                h(
+                  "span",
+                  { className: "pp-dim" },
+                  "Transcribing " + (CUT_SHORT_WORDS[lastSend.state] || lastSend.state) +
+                    (progressText(lastSend) ? " at " + progressText(lastSend) : "") +
+                    ". Continue sends only the recordings still without a transcript.",
+                ),
+                h("button", { type: "button", className: "pp-segbtn pp-drec", disabled: Boolean(busy), onClick: continueSend }, "Continue sending"),
               )
             : null,
           h(

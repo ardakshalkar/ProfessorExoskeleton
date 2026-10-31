@@ -20,11 +20,25 @@
  * forgotten — its locks with it — because a file was edited while it ran.
  * It is per process: a second harness, a terminal, and the assistant's own
  * `ainar` are not seen here (docs/JOBS.md, *Open questions*).
+ *
+ * A background job is also kept on disk, one file per job in
+ * `~/.ainar/jobs/` (`AINAR_JOBS_DIR`), so a harness restart does not forget
+ * it (JOB-5): one that was running when its harness went away is marked
+ * `interrupted`, with what it had done, and can be continued. It can be
+ * cancelled, which kills its child; the stores it writes are written whole
+ * (ainar-node/src/write-file.ts), so a kill leaves no half a file.
  */
+
+import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 
 import { sendJson } from "./http.js";
 
-const STATE = (globalThis[Symbol.for("professor-pane.jobs")] ??= {
+const SYMBOL = Symbol.for("professor-pane.jobs");
+// The first import in this process: the jobs on disk are read once, here.
+const FIRST = !globalThis[SYMBOL];
+const STATE = (globalThis[SYMBOL] ??= {
   seq: 0,
   jobs: new Map(), // id -> job, running and the last finished ones
   holders: new Map(), // key -> job id
@@ -33,6 +47,69 @@ const STATE = (globalThis[Symbol.for("professor-pane.jobs")] ??= {
 // Added after the table first existed: a harness running since then has a
 // table without it, and a reload must not fail on that.
 STATE.stamps ??= new Map(); // root -> area -> how many times it has moved
+
+export const jobsDir = () => (process.env.AINAR_JOBS_DIR ? resolve(process.env.AINAR_JOBS_DIR) : join(homedir(), ".ainar", "jobs"));
+
+/** What a job's file holds: enough to list it and to start it again. */
+const SAVED = [
+  "id", "pid", "root", "runId", "kind", "label", "subject", "params", "keys", "background",
+  "state", "startedAt", "finishedAt", "output", "result", "progress", "continuedBy",
+];
+
+const save = (job) => {
+  if (!job.background) return;
+  job.savedAt = Date.now();
+  try {
+    mkdirSync(jobsDir(), { recursive: true });
+    const path = join(jobsDir(), `${job.id}.json`);
+    const temporary = `${path}.${process.pid}.tmp`;
+    writeFileSync(temporary, JSON.stringify(Object.fromEntries(SAVED.map((field) => [field, job[field] ?? null])), null, 1));
+    renameSync(temporary, path);
+  } catch {
+    // A job not saved is still running; it is only forgotten by a restart.
+  }
+};
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+};
+
+/**
+ * The jobs on disk, into the table, once per process. One whose harness is
+ * gone was cut short: `interrupted`. One whose harness is still running — a
+ * second harness on this machine — is that harness's, and left alone.
+ */
+const loadSaved = () => {
+  let names = [];
+  try {
+    names = readdirSync(jobsDir()).filter((name) => name.endsWith(".json"));
+  } catch {
+    return;
+  }
+  const loaded = [];
+  for (const name of names) {
+    try {
+      const job = JSON.parse(readFileSync(join(jobsDir(), name), "utf-8"));
+      if (!job || !job.id || !job.root) continue;
+      if (!job.finishedAt) {
+        if (job.pid && job.pid !== process.pid && alive(job.pid)) continue;
+        job.state = "interrupted";
+        job.finishedAt = new Date().toISOString();
+        save(job);
+      }
+      loaded.push(job);
+    } catch {
+      // A file that does not read is not a job.
+    }
+  }
+  for (const job of loaded.sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1))) STATE.jobs.set(job.id, job);
+  forget();
+};
 
 /** How many finished jobs are kept for `GET /api/jobs`. */
 const KEEP = 40;
@@ -84,8 +161,15 @@ const release = (job) => {
 
 const forget = () => {
   const finished = [...STATE.jobs.values()].filter((job) => job.finishedAt);
-  for (const job of finished.slice(0, Math.max(0, finished.length - KEEP))) STATE.jobs.delete(job.id);
+  for (const job of finished.slice(0, Math.max(0, finished.length - KEEP))) {
+    STATE.jobs.delete(job.id);
+    if (job.background) rmSync(join(jobsDir(), `${job.id}.json`), { force: true });
+  }
 };
+
+/** A cut-short background job that has not been continued yet. */
+const CUT_SHORT = ["interrupted", "cancelled", "failed"];
+const continuable = (job) => Boolean(job.background) && CUT_SHORT.includes(job.state) && !job.continuedBy;
 
 /** A job as the page sees it: no workspace path, no promise. */
 export const publicJob = (job) =>
@@ -103,6 +187,8 @@ export const publicJob = (job) =>
     output: job.output,
     result: job.result,
     progress: job.progress,
+    continuedBy: job.continuedBy ?? null,
+    continuable: continuable(job),
   };
 
 /**
@@ -142,18 +228,24 @@ export const refusal = (holder) =>
  *
  * Resolves to `{ refused }`, the holder, when a background job has one of
  * the keys; else to `{ job, done }`, `done` being the answer.
+ *
+ * `params` are what server/job-kinds.js needs to start the same kind again
+ * (Continue); `work` hands any child it spawns to `job.adopt`, so Cancel
+ * can kill it, and stops early when `job.cancelled`.
  */
-export const startJob = async ({ root, runId, kind, label, subject = null, keys, background = false, progress = null, work }) => {
+export const startJob = async ({ root, runId, kind, label, subject = null, params = null, keys, background = false, progress = null, work }) => {
   const holder = holderOf(keys);
   if (holder && holder.background) return { refused: holder };
   STATE.seq += 1;
   const job = {
     id: `job-${Date.now().toString(36)}-${STATE.seq}`,
+    pid: process.pid,
     root,
     runId,
     kind,
     label,
     subject,
+    params,
     keys: [],
     background,
     state: "waiting",
@@ -175,19 +267,28 @@ export const startJob = async ({ root, runId, kind, label, subject = null, keys,
       if (total) job.progress.total = Number(total[1]);
       else if (progress.step.test(line)) job.progress.done += 1;
     }
+    // On disk every few seconds, so a restart knows how far it had got.
+    if (Date.now() - (job.savedAt ?? 0) > 3000) save(job);
   };
   job.take = (more) => take(job, more);
+  job.adopt = (child) => {
+    job.child = child;
+    if (job.cancelled) child.kill();
+  };
   STATE.jobs.set(job.id, job);
   stamp(root, "jobs");
   await take(job, keys);
   job.state = "running";
+  save(job);
   const done = Promise.resolve()
     .then(() => work(job))
     .catch((error) => ({ error: String(error?.message ?? error) }))
     .then((result) => {
       job.result = result;
-      job.state = result && !result.error && result.ok !== false ? "done" : "failed";
+      job.state = job.cancelled ? "cancelled" : result && !result.error && result.ok !== false ? "done" : "failed";
       job.finishedAt = new Date().toISOString();
+      job.child = null;
+      save(job);
       release(job);
       forget();
       // What it wrote is in the private folder, which the revision walk does
@@ -211,6 +312,40 @@ export const answerJob = (res, starting) =>
     })
     .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
 
+/**
+ * Cancel a running background job of this workspace: its child is killed,
+ * and it finishes as `cancelled` with what it had done. Its stores are
+ * written whole, so what was written stays and nothing is half-written.
+ */
+export const cancelJob = (root, id) => {
+  const job = STATE.jobs.get(id);
+  if (!job || job.root !== root) return { error: "No such job." };
+  if (!job.background) return { error: "Only background work can be cancelled; this one takes seconds." };
+  if (job.finishedAt) return { error: `${job.label} has already finished.` };
+  job.cancelled = true;
+  job.child?.kill();
+  save(job);
+  return { job: publicJob(job) };
+};
+
+/**
+ * Start a cut-short job again — interrupted by a restart, cancelled, or
+ * failed — from `kinds` (server/job-kinds.js), with the parameters it was
+ * started with. Each kind skips what is already done, so only the rest runs.
+ */
+export const continueJob = (c, id, kinds) => {
+  const job = STATE.jobs.get(id);
+  if (!job || job.root !== c.root) return Promise.resolve({ error: "No such job." });
+  if (!continuable(job) || !kinds[job.kind]) return Promise.resolve({ error: `${job.label} cannot be continued.` });
+  return Promise.resolve(kinds[job.kind]({ workspace: c.workspace, root: c.root, runId: job.runId }, job.params ?? {})).then((started) => {
+    if (started.job) {
+      job.continuedBy = started.job.id;
+      save(job);
+    }
+    return started;
+  });
+};
+
 /** This workspace's jobs, newest first; `runId` narrows them to one run. */
 export const listJobs = (root, runId = "") =>
   [...STATE.jobs.values()]
@@ -223,3 +358,6 @@ export const jobById = (root, id) => {
   const job = STATE.jobs.get(id);
   return job && job.root === root ? publicJob(job) : null;
 };
+
+// Last, once everything above is defined: the jobs a previous harness left.
+if (FIRST) loadSaved();

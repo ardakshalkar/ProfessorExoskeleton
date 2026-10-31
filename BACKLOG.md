@@ -1780,7 +1780,20 @@ is worth building.
       `~/.ainar/jobs/`; a harness restart marks a running job as interrupted
       (its partial transcripts are already on disk — `scans read` writes per
       student) and offers "continue", which re-runs only what is missing.
-      Cancel kills the child. `S` · depends: JOB-2
+      Cancel kills the child. `S` · depends: JOB-2. Done 2026-10-31: each
+      background job is a file in `~/.ainar/jobs/` (`AINAR_JOBS_DIR`), saved
+      on start, every few seconds while it prints, and on finish, with the
+      harness's pid; a new harness marks one whose harness is gone
+      `interrupted` and leaves a live second harness's alone. The background
+      kinds are one table, `server/job-kinds.js`; Continue (`POST
+      /api/jobs/ID/continue`) starts the same kind with the same parameters,
+      once, for an interrupted, cancelled or failed job, and the commands
+      themselves skip what is done. Cancel (`POST /api/jobs/ID/cancel`) kills
+      the child; a cancelled read is not recorded. Before Cancel could exist,
+      transcripts, `reading.json`, defence sessions and `records/*.yaml` are
+      written whole (`ainar-node/src/write-file.ts`: tmp + rename). Cancel
+      and Continue are in the Scans view and the batch dialog; the navigator
+      names a cut-short job's state.
 - [ ] **JOB-6** Measure why pages load late. Time each page from click to
       drawn: the server-side cost of each `/api/*` read (bundle load and
       validation per request, `loadedRun`, scans status walking the private
