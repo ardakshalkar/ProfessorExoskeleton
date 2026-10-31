@@ -1734,7 +1734,18 @@ is worth building.
       `defence:<run>:<assessment>`), held by the server, so a second tab or a
       reload sees the same lock and a conflicting press is refused with
       "Reading is running for Quiz 1" instead of being raced. `M` · depends:
-      JOB-1
+      JOB-1. Done 2026-10-31: `server/jobs.js`, its table on `globalThis` so
+      a live reload keeps running jobs and their locks; `GET /api/jobs`,
+      `/api/jobs/ID`. Background: `scans read` (holds `pile:RUN:A`, takes
+      `records:C:item_responses` only for the record) and sending a defence
+      batch (`defence:RUN:A:S` per placed student). Inline, waiting on each
+      other and refused by a background holder: scans assign/apply, defence
+      batch plan/apply. The desk's voices, split and override are refused
+      for a student being transcribed; consent, a recorded answer and the
+      next question are not. The Scans view picks up a read already running
+      on opening; the batch dialog shows the job's output as it runs. Not
+      yet keyed: the other `records:*` writers (grade decide, defence mark,
+      sheet run), the ledger, reports.
 - [ ] **JOB-3** Progress, not a spinner. `scans read` and `defence batch
       transcribe` print a line per student/take; the runner turns those into
       *12 of 48 read* and the pane shows it in the step strip and the

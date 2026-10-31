@@ -5,6 +5,7 @@
 import { Message } from "./common.js";
 import { GradeBoard } from "./grade-board.js";
 import { CanvasMarks, MatchReview, STEP_PROMPTS } from "./marks.js";
+import { followJob, runningJob } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { enqueuePlacement, placementKey, placementsWaiting, usePlacements } from "./scans-queue.js";
 import { BASE, scoped } from "./tabs.js";
@@ -75,6 +76,21 @@ function ScansTab(props) {
   const doc = state.value;
   const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
 
+  // A read already running on the server — pressed before a reload, or in
+  // another tab — is followed here as if it had been pressed in this one.
+  React.useEffect(() => {
+    if (!assessmentId) return;
+    let live = true;
+    runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => {
+      if (!live || !job) return;
+      setBusy("read");
+      followJob({ job }, props.sessionId).then((result) => live && finish(result));
+    });
+    return () => {
+      live = false;
+    };
+  }, [props.runId, assessmentId]);
+
   const post = (path, body, label, done) => {
     if (blocked) return;
     setBusy(label);
@@ -85,23 +101,26 @@ function ScansTab(props) {
       body: JSON.stringify(body || {}),
     })
       .then((response) => response.json())
-      .then((result) => {
-        setBusy(null);
-        const stale = /no route \/api\/scans/.test(String(result.error || ""));
-        setSaid({
-          error: Boolean(result.error) || !result.ok,
-          text: stale
-            ? "The harness was started before this tab existed. Restart it, then try again."
-            : result.error || result.output || "Done.",
-        });
-        setTick((value) => value + 1);
-        props.onWrite();
-        if (done && !result.error && result.ok) done();
-      })
+      .then((answer) => followJob(answer, props.sessionId))
+      .then((result) => finish(result, done))
       .catch((error) => {
         setBusy(null);
         setSaid({ error: true, text: String(error) });
       });
+  };
+  // A whole-pile write's answer: said, and the pile read again.
+  const finish = (result, done) => {
+    setBusy(null);
+    const stale = /no route \/api\/scans/.test(String(result.error || ""));
+    setSaid({
+      error: Boolean(result.error) || !result.ok,
+      text: stale
+        ? "The harness was started before this tab existed. Restart it, then try again."
+        : result.error || result.output || "Done.",
+    });
+    setTick((value) => value + 1);
+    props.onWrite();
+    if (done && !result.error && result.ok) done();
   };
   // One paper: into the line, so the next can be pressed at once. Each
   // answer is said as it comes back, and the pile is read again after it.

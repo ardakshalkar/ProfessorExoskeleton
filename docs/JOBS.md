@@ -147,6 +147,9 @@ children and with the session — never with each other.
 
 ## Lock keys for JOB-2
 
+*Since 2026-10-31 these are held by `P/server/jobs.js`; BACKLOG JOB-2 says
+which actions take them so far.*
+
 A key names a **store**, not an action. A job declares every key it writes,
 takes them all at once or waits (all-or-nothing, sorted, so no deadlock), and
 releases them when its child exits.

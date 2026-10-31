@@ -4574,7 +4574,7 @@ function useRoad(props) {
   const [preview, setPreview] = React.useState(null);
   const [results, setResults] = React.useState(null);
   const base = { names: Boolean(props.names) };
-  const ask = (extra) => {
+  const ask2 = (extra) => {
     setPhase("asking");
     setResults(null);
     return postRoads(props.runId, props.sessionId, Object.assign({ confirm: false, roads: props.roads || void 0 }, base, extra)).then((body) => {
@@ -4600,7 +4600,7 @@ function useRoad(props) {
     setPreview(null);
     setResults(null);
   };
-  return { phase, preview, results, ask, send: send2, adopt, close };
+  return { phase, preview, results, ask: ask2, send: send2, adopt, close };
 }
 function RoadResults(props) {
   const results = props.results;
@@ -4626,7 +4626,7 @@ function RoadFlow(props) {
   const road = useRoad(props);
   const asking = road.phase === "asking";
   const sending = road.phase === "sending";
-  const ask = () => road.ask(props.fresh ? { fresh: true } : void 0).then((body2) => {
+  const ask2 = () => road.ask(props.fresh ? { fresh: true } : void 0).then((body2) => {
     if (props.onPreviewed) props.onPreviewed(body2);
   });
   const send2 = (keys2) => road.send(keys2).then((body2) => {
@@ -4639,7 +4639,7 @@ function RoadFlow(props) {
       className: "pp-segbtn",
       disabled: props.disabled || road.phase !== "idle" || Boolean(road.preview && !road.preview.error),
       title: props.title,
-      onClick: ask
+      onClick: ask2
     },
     asking ? props.asking || "Asking…" : props.label || "Preview…"
   );
@@ -4655,7 +4655,7 @@ function RoadFlow(props) {
       keys ? h("button", { type: "button", className: "pp-segbtn pp-danger", disabled: sending, onClick: () => send2(keys) }, sending ? "Syncing…" : props.sendLabel(preview)) : h("span", { className: "pp-as" }, props.nothing || "Nothing to send."),
       h("button", { type: "button", className: "pp-segbtn", disabled: sending, onClick: road.close }, keys ? "Cancel" : "Close")
     )
-  ) : road.results ? h(RoadResults, { results: road.results, className: props.className, busy: asking, onAgain: ask, onClose: road.close }) : null;
+  ) : road.results ? h(RoadResults, { results: road.results, className: props.className, busy: asking, onAgain: ask2, onClose: road.close }) : null;
   return props.frame ? props.frame(button, body) : h(React.Fragment, null, button, body);
 }
 
@@ -6426,16 +6426,16 @@ function useSheetCheck(runId, sessionId, revision) {
   React.useEffect(() => {
     if (!runId) return void 0;
     let live = true;
-    const ask = () => {
+    const ask2 = () => {
       if (document.visibilityState === "hidden") return;
       fetch(scoped(BASE + "/api/sheet-check?run=" + encodeURIComponent(runId) + "&r=" + revision, sessionId), {
         headers: { accept: "application/json" }
       }).then((response) => response.json()).then((answer) => live && setValue(answer)).catch(() => {
       });
     };
-    ask();
-    const timer = setInterval(ask, SHEET_CHECK_EVERY);
-    const onShow = () => document.visibilityState === "visible" && ask();
+    ask2();
+    const timer = setInterval(ask2, SHEET_CHECK_EVERY);
+    const onShow = () => document.visibilityState === "visible" && ask2();
     document.addEventListener("visibilitychange", onShow);
     return () => {
       live = false;
@@ -8894,7 +8894,7 @@ function RecordDialog(props) {
   const [values, setValues] = React.useState({});
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
-  const [ask, setAsk] = React.useState("");
+  const [ask2, setAsk] = React.useState("");
   const box = React.useRef(null);
   React.useEffect(() => {
     let live = true;
@@ -8925,7 +8925,7 @@ function RecordDialog(props) {
   };
   const title = record ? (record.fields.find((f) => f.name === "title") || {}).value : "";
   const sendAsk = () => {
-    const text = ask.trim();
+    const text = ask2.trim();
     if (!text) return;
     press.ask("About " + id + (title ? " (“" + title + "”)" : "") + " in " + edit.runId + ": " + text);
     onClose();
@@ -8978,7 +8978,7 @@ function RecordDialog(props) {
       "input",
       {
         placeholder: "Anything else about it — the weight, the rubric, the outcomes — ask the assistant",
-        value: ask,
+        value: ask2,
         onChange: (e) => setAsk(e.target.value),
         onKeyDown: (e) => {
           if (e.key === "Enter") {
@@ -8987,7 +8987,7 @@ function RecordDialog(props) {
           }
         }
       }
-    ), /* @__PURE__ */ h("button", { type: "button", className: "chip ask", disabled: !ask.trim(), onClick: sendAsk }, "Ask"))
+    ), /* @__PURE__ */ h("button", { type: "button", className: "chip ask", disabled: !ask2.trim(), onClick: sendAsk }, "Ask"))
   ));
 }
 function EditScope(props) {
@@ -12927,7 +12927,7 @@ function useCanvasPlan(props, check) {
   const [sending, setSending] = React.useState(false);
   const live = React.useRef(true);
   React.useEffect(() => () => live.current = false, []);
-  const ask = React.useCallback(() => {
+  const ask2 = React.useCallback(() => {
     if (!props.enabled) return Promise.resolve(null);
     setAsking(true);
     return postRoads(props.runId, props.sessionId, { confirm: false, roads: ["canvas"], names: Boolean(props.names) }).then((body) => {
@@ -12939,19 +12939,19 @@ function useCanvasPlan(props, check) {
   }, [props.runId, props.sessionId, props.names, props.enabled]);
   const landed = check.value && check.value.at;
   React.useEffect(() => {
-    ask();
-  }, [ask, landed]);
+    ask2();
+  }, [ask2, landed]);
   const send2 = (keys) => {
     setSending(true);
     return postRoads(props.runId, props.sessionId, { confirm: true, keys: { canvas: keys }, names: Boolean(props.names) }).then((body) => {
       if (!live.current) return body;
       setSending(false);
       if (body.after && body.after.canvas) noteCanvasCheck(props.runId, body.after.canvas, props.sessionId);
-      else ask();
+      else ask2();
       return body;
     });
   };
-  return { plan, asking, sending, ask, send: send2 };
+  return { plan, asking, sending, ask: ask2, send: send2 };
 }
 function CanvasPart(props) {
   const [check, recheck] = useCanvasCheck(props.runId, props.sessionId);
@@ -16008,7 +16008,7 @@ function GradeBoard(props) {
   const itemState = !item.criterion ? "none" : doc.rubric === "accepted" ? "accepted" : "draft";
   const qName = "Q" + (item.number || at + 1);
   const without = doc.items.filter((entry) => !entry.criterion).map((entry, index) => "Q" + (entry.number || index + 1));
-  const ask = (several) => "/import-assessment " + props.assessmentId + " " + props.runId + " — " + (several ? "propose the rubric" : "propose one rubric");
+  const ask2 = (several) => "/import-assessment " + props.assessmentId + " " + props.runId + " — " + (several ? "propose the rubric" : "propose one rubric");
   const compare = () => {
     const answered = item.counts.answers - item.counts.unread - item.counts.blank;
     return h(
@@ -16141,7 +16141,7 @@ function GradeBoard(props) {
             h(
               "button",
               { type: "button", className: (proposed ? "pp-segbtn" : "pp-primary") + " pp-chat", disabled: Boolean(busy), onClick: () => {
-                props.ask(ask(true));
+                props.ask(ask2(true));
                 close();
               } },
               proposed ? "Ask for other rubrics" : "Ask the assistant to propose rubrics"
@@ -16149,7 +16149,7 @@ function GradeBoard(props) {
             !proposed ? h(
               "button",
               { type: "button", className: "pp-segbtn pp-chat", disabled: Boolean(busy), onClick: () => {
-                props.ask(ask(false));
+                props.ask(ask2(false));
                 close();
               } },
               "Just one rubric"
@@ -16677,6 +16677,33 @@ function GradePage(props) {
   );
 }
 
+// client/jobs.js
+var EVERY = 2e3;
+var ask = (path, sessionId) => fetch(scoped(BASE + path, sessionId), { cache: "no-store", headers: { accept: "application/json" } }).then(
+  (response) => response.json()
+);
+var followJob = (answer, sessionId, onJob) => {
+  if (!answer || !answer.job) return Promise.resolve(answer);
+  return new Promise((resolve) => {
+    const poll = (job) => {
+      if (onJob) onJob(job);
+      if (job.state === "done" || job.state === "failed") {
+        resolve(job.result || { error: "The job finished without an answer." });
+        return;
+      }
+      setTimeout(() => {
+        ask("/api/jobs/" + encodeURIComponent(job.id), sessionId).then((value) => value.job ? poll(value.job) : resolve({ error: value.error || "The job is gone." })).catch(() => poll(job));
+      }, EVERY);
+    };
+    poll(answer.job);
+  });
+};
+var runningJob = (runId, sessionId, kind, subject2) => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then(
+  (value) => (value.jobs || []).find(
+    (job) => job.kind === kind && (!subject2 || job.subject === subject2) && (job.state === "running" || job.state === "waiting")
+  ) || null
+).catch(() => null);
+
 // client/scans.js
 function ScansTab(props) {
   const [pile, setPile] = React.useState(props.pile || "");
@@ -16716,6 +16743,18 @@ function ScansTab(props) {
   }, [props.runId, pile, names, props.revision, tick]);
   const doc = state.value;
   const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
+  React.useEffect(() => {
+    if (!assessmentId) return;
+    let live = true;
+    runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => {
+      if (!live || !job) return;
+      setBusy("read");
+      followJob({ job }, props.sessionId).then((result) => live && finish(result));
+    });
+    return () => {
+      live = false;
+    };
+  }, [props.runId, assessmentId]);
   const post2 = (path, body, label, done) => {
     if (blocked) return;
     setBusy(label);
@@ -16724,20 +16763,21 @@ function ScansTab(props) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {})
-    }).then((response) => response.json()).then((result) => {
-      setBusy(null);
-      const stale2 = /no route \/api\/scans/.test(String(result.error || ""));
-      setSaid({
-        error: Boolean(result.error) || !result.ok,
-        text: stale2 ? "The harness was started before this tab existed. Restart it, then try again." : result.error || result.output || "Done."
-      });
-      setTick((value) => value + 1);
-      props.onWrite();
-      if (done && !result.error && result.ok) done();
-    }).catch((error) => {
+    }).then((response) => response.json()).then((answer) => followJob(answer, props.sessionId)).then((result) => finish(result, done)).catch((error) => {
       setBusy(null);
       setSaid({ error: true, text: String(error) });
     });
+  };
+  const finish = (result, done) => {
+    setBusy(null);
+    const stale2 = /no route \/api\/scans/.test(String(result.error || ""));
+    setSaid({
+      error: Boolean(result.error) || !result.ok,
+      text: stale2 ? "The harness was started before this tab existed. Restart it, then try again." : result.error || result.output || "Done."
+    });
+    setTick((value) => value + 1);
+    props.onWrite();
+    if (done && !result.error && result.ok) done();
   };
   const assign = (paper, to) => {
     if (busy) return;
@@ -17573,7 +17613,7 @@ function BatchModal(props) {
     const sending = step === "transcribe" && /confirm/.test(extra || "");
     setBusy(step);
     setOutput(sending ? "Sending and transcribing — this takes a while for a long batch…" : "Working…");
-    fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }).then((response) => response.json()).then((result) => {
+    fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }).then((response) => response.json()).then((answer) => followJob(answer, props.sessionId, (job) => job.output && setOutput(job.output))).then((result) => {
       setBusy(null);
       setOutput(result.error || result.output || "(nothing said)");
       if (step === "transcribe") setQuoted(!sending && !!result.ok);
@@ -18774,7 +18814,7 @@ function OpenPaneAction(props) {
 
 // client/main.js
 function apply(ctx) {
-  const ask = (sessionId) => (text) => {
+  const ask2 = (sessionId) => (text) => {
     const scope = ctx.sessions.scope(sessionId);
     const session = scope === void 0 ? void 0 : ctx.sessions.sessionOf(scope);
     if (session === void 0) return;
@@ -18812,7 +18852,7 @@ function apply(ctx) {
         inject: (sessionId) => ({
           closeDetails: () => ctx.layout.closeDetails(),
           openDetails: () => ctx.layout.openDetails(),
-          ask: ask(sessionId),
+          ask: ask2(sessionId),
           mention: mention(sessionId),
           // A new chat in the open chat's own workspace, opened.
           startChat: () => ctx.workspaces.startSession(),

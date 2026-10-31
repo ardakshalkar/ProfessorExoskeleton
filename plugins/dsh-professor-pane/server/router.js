@@ -46,6 +46,7 @@ import { routes as files } from "./routes/files.js";
 import { routes as grade } from "./routes/grade.js";
 import { routes as grading } from "./routes/grading.js";
 import { routes as integrations } from "./routes/integrations.js";
+import { routes as jobs } from "./routes/jobs.js";
 import { routes as materials } from "./routes/materials.js";
 import { routes as plan } from "./routes/plan.js";
 import { routes as preferences } from "./routes/preferences.js";
@@ -64,6 +65,7 @@ export const ROUTES = [
   ...defence,
   ...files,
   ...scans,
+  ...jobs,
   ...grade,
   ...preferences,
   ...syncs,

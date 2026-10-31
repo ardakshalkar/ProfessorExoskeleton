@@ -46,8 +46,11 @@ export const DOTS_BUNDLE = fileURLToPath(new URL("../vendor/dots-swarm.js", impo
  * `input`, when given, is written to the CLI's stdin: a payload too long for a
  * command line goes there (Windows refuses a command line past 32,767
  * characters — a few hundred marks as one `--decisions` argument).
+ *
+ * `onOutput`, when given, hears stdout and stderr as they come — a job's
+ * running output (server/jobs.js); the answer still carries all of it.
  */
-export const runScans = (args, root, timeout = 300000, input = null) =>
+export const runScans = (args, root, timeout = 300000, input = null, onOutput = null) =>
   new Promise((resolveRun) => {
     if (!existsSync(AINAR_CLI)) {
       resolveRun({ ok: false, error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.` });
@@ -69,6 +72,10 @@ export const runScans = (args, root, timeout = 300000, input = null) =>
         resolveRun({ ok: code === 0, exitCode: code, command: `bin/ainar ${args.join(" ")}`, output });
       },
     );
+    if (onOutput) {
+      child.stdout?.on("data", onOutput);
+      child.stderr?.on("data", onOutput);
+    }
     if (input !== null) child.stdin.end(input);
   });
 

@@ -25,8 +25,11 @@ import {
   WHOLE_DEFENCE,
   withdrawConsent,
 } from "@ainar/core/src/defence.ts";
+import { readRecordingPlan, recordingsInbox } from "@ainar/core/src/recordings.ts";
+import { submissionsDir } from "@ainar/core/src/scans.ts";
 import { configFromRegistry, realtimeSession, transcriber } from "@ainar/core/src/transcribe.ts";
 import { runScans } from "../actions.js";
+import { answerJob, defenceKey, holderOf, recordingsKey, refusal, startJob } from "../jobs.js";
 import {
   chooseNext,
   defenceSessionPayload,
@@ -38,6 +41,20 @@ import {
 import { readBody, readBytes, send, sendJson } from "../http.js";
 import { studentScreenPage } from "../student-screen.js";
 import { loadedRun } from "../workspace.js";
+
+/**
+ * The desk's refusal while a batch transcription holds this student's
+ * session (docs/JOBS.md pair 8), or null — for the edits a professor can
+ * make again later (voices, split, override). Not for consent: a student may
+ * withdraw at any time, and the batch reads consent before each send. Not
+ * for a recorded answer or the next question: refusing those would lose a
+ * take or stall a defence in progress, and each re-reads the session in the
+ * same moment it writes.
+ */
+const deskHeld = (runId, params) => {
+  const holder = holderOf([defenceKey(runId, params.get("assessment") ?? "", params.get("student") ?? "")]);
+  return holder ? { error: refusal(holder), busy: holder.id } : null;
+};
 
 export const routes = [
   // The defence desk: what was asked and answered, a recorded answer, and
@@ -84,15 +101,44 @@ export const routes = [
       if (!["plan", "apply", "transcribe"].includes(step) || !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(assessmentId)) {
         return sendJson(res, 200, { error: "A step (plan, apply, transcribe) and an assessment, please." });
       }
+      const sending = step === "transcribe" && url.searchParams.get("confirm") === "1";
       const extra =
-        step === "apply" && url.searchParams.get("consent") === "1"
-          ? ["--consent-confirmed"]
-          : step === "transcribe" && url.searchParams.get("confirm") === "1"
-            ? ["--confirm"]
-            : [];
-      return runScans(["defence", "batch", step, runId, "--assessment", assessmentId, ...extra], root, step === "transcribe" ? 1800000 : 300000)
-        .then((result) => sendJson(res, 200, result))
-        .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+        step === "apply" && url.searchParams.get("consent") === "1" ? ["--consent-confirmed"] : sending ? ["--confirm"] : [];
+      const args = ["defence", "batch", step, runId, "--assessment", assessmentId, ...extra];
+      const title = assessmentsOf(loaded.bundle, runId).find((entry) => entry.assessment_id === assessmentId)?.title || assessmentId;
+      // A quote writes nothing and runs as it always has. Plan and apply
+      // rewrite the run's one recordings plan, and apply files into each
+      // placed student's defence; sending writes each filed student's
+      // session for up to half an hour, so it runs in the background and
+      // the desk is refused only for those students.
+      if (step === "transcribe" && !sending) {
+        return runScans(args, root)
+          .then((result) => sendJson(res, 200, result))
+          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+      }
+      let students = [];
+      try {
+        const plan = readRecordingPlan(recordingsInbox(submissionsDir(null), runId));
+        if (plan && plan.assessment === assessmentId) {
+          students = [...new Set(plan.entries.filter((entry) => entry.student && !entry.skip).map((entry) => entry.student))];
+        }
+      } catch {
+        // No plan, or one that does not read: the CLI says so in its own words.
+      }
+      const defences = students.map((student) => defenceKey(runId, assessmentId, student));
+      return answerJob(
+        res,
+        startJob({
+          root,
+          runId,
+          kind: sending ? "defence-transcribe" : `defence-batch-${step}`,
+          label: sending ? `Transcribing the defences for ${title}` : `Filing recorded defences for ${title}`,
+          subject: assessmentId,
+          keys: sending ? defences : step === "apply" ? [recordingsKey(runId), ...defences] : [recordingsKey(runId)],
+          background: sending,
+          work: (job) => runScans(args, root, sending ? 1800000 : 300000, null, job.say),
+        }),
+      );
     },
   },
   // The whole defence in one recording: make sure Q0 exists, so the desk can
@@ -109,6 +155,8 @@ export const routes = [
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }
+      const held = deskHeld(runId, url.searchParams);
+      if (held) return sendJson(res, 200, held);
       return readBody(req)
         .then((text) => {
           const body = text ? JSON.parse(text) : {};
@@ -140,6 +188,8 @@ export const routes = [
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }
+      const held = deskHeld(runId, url.searchParams);
+      if (held) return sendJson(res, 200, held);
       return readBody(req)
         .then((text) => {
           const body = text ? JSON.parse(text) : {};
@@ -209,6 +259,8 @@ export const routes = [
           .then((chosen) => sendJson(res, 200, chosen))
           .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
       }
+      const held = deskHeld(runId, url.searchParams);
+      if (held) return sendJson(res, 200, held);
       return readBody(req)
         .then((text) => {
           const body = text ? JSON.parse(text) : {};

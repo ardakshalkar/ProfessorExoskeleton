@@ -3,12 +3,22 @@
  * server/router.js for the table they join and what `c` carries.
  */
 
+import { assessmentsOf, runById } from "@ainar/core/src/bundle.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
 import { readSummary, runScans } from "../actions.js";
 import { readBody, send, sendJson } from "../http.js";
+import { answerJob, pileKey, recordsKey, startJob } from "../jobs.js";
 import { paperCrop, scansDocument } from "../scans.js";
 import { loadedRun, rosterDir } from "../workspace.js";
+
+/** What a pile's jobs are named by and lock: the assessment's title, the run's course. */
+const pileOf = (workspace, runId, assessmentId) => {
+  const { bundle } = loadedRun(workspace, runId);
+  const run = runById(bundle).get(runId);
+  const record = assessmentsOf(bundle, runId).find((entry) => entry.assessment_id === assessmentId);
+  return { courseId: run?.course_id ?? runId, title: record?.title || assessmentId };
+};
 
 export const routes = [
   {
@@ -60,30 +70,44 @@ export const routes = [
       // then `scans record`, run here rather than asked of the assistant. Here
       // they run in the harness's process, which can write the private
       // folder; the assistant's sandbox cannot, and would ask for each call.
-      // A pile takes minutes, hence the long timeout.
+      // A pile takes minutes, so it is a background job (server/jobs.js): the
+      // press is answered at once and the page follows the job. The half hour
+      // holds only the pile; the course's answers file is taken for the
+      // record at the end, so placing papers on another pile is not held up.
       if (path === "/api/scans/read") {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
         if (!assessmentId) return sendJson(res, 200, { error: "No assessment given." });
-        loadedRun(workspace, runId);
+        const pile = pileOf(workspace, runId, assessmentId);
         const scope = ["--assessment", assessmentId];
-        return runScans(["scans", "read", runId, ...scope], root, 1800000)
-          .then((read) =>
-            read.ok
-              ? runScans(["scans", "record", runId, ...scope], root).then((record) => ({
-                  ok: record.ok,
-                  exitCode: record.exitCode,
-                  command: `${read.command} && ${record.command}`,
-                  output: [readSummary(read.output), record.output].filter(Boolean).join("\n\n"),
-                }))
-              : read,
-          )
-          .then((result) => sendJson(res, 200, result))
-          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+        return answerJob(
+          res,
+          startJob({
+            root,
+            runId,
+            kind: "scans-read",
+            label: `Reading ${pile.title}`,
+            subject: assessmentId,
+            keys: [pileKey(runId, assessmentId)],
+            background: true,
+            work: async (job) => {
+              const read = await runScans(["scans", "read", runId, ...scope], root, 1800000, null, job.say);
+              if (!read.ok) return read;
+              await job.take([recordsKey(pile.courseId, "item_responses")]);
+              const record = await runScans(["scans", "record", runId, ...scope], root, 300000, null, job.say);
+              return {
+                ok: record.ok,
+                exitCode: record.exitCode,
+                command: `${read.command} && ${record.command}`,
+                output: [readSummary(read.output), record.output].filter(Boolean).join("\n\n"),
+              };
+            },
+          }),
+        );
       }
       if (path === "/api/scans/assign" || path === "/api/scans/apply") {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
         if (!assessmentId) return sendJson(res, 200, { error: "No assessment given." });
-        loadedRun(workspace, runId); // the run has to be this workspace's
+        const pile = pileOf(workspace, runId, assessmentId); // the run has to be this workspace's
         return readBody(req)
           .then((text) => {
             const body = text ? JSON.parse(text) : {};
@@ -112,7 +136,24 @@ export const routes = [
               if (!answers.length || answers.length > 500) throw new Error("No papers given.");
               args.push("--assignments", JSON.stringify(answers));
             }
-            return runScans(args, root).then((result) => sendJson(res, 200, result));
+            // Short, so inline: it waits for another placement's second on the
+            // course's records, and is refused while the pile is being read.
+            return answerJob(
+              res,
+              startJob({
+                root,
+                runId,
+                kind: path.endsWith("assign") ? "scans-assign" : "scans-apply",
+                label: `Placing papers on ${pile.title}`,
+                subject: assessmentId,
+                keys: [
+                  pileKey(runId, assessmentId),
+                  recordsKey(pile.courseId, "submissions"),
+                  recordsKey(pile.courseId, "item_responses"),
+                ],
+                work: () => runScans(args, root),
+              }),
+            );
           })
           .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
       }
