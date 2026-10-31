@@ -75,6 +75,31 @@ test("a preview is sent from in parts, each key once; a key sent already is told
   assert.match(spent.results[0].output, /no check to send from/, "with every key sent the preview is gone");
 });
 
+test("two presses from one preview, the second while the first is out, send each key once", async () => {
+  const runId = nextRun();
+  let release;
+  const road = fakeRoad("canvas", { recheck: () => new Promise((resolve) => (release = () => resolve(null))) });
+  await preview([road], runId);
+  const first = send([road], runId, { keys: { canvas: ["a"] } });
+  const second = await send([road], runId, { keys: { canvas: ["a"] } });
+  release();
+  await first;
+  assert.deepEqual(road.sent.map((entry) => entry.chosen), [["a"]]);
+  assert.match(second.results[0].output, /sent already/);
+});
+
+test("a send the far side stopped gives its keys back to the preview", async () => {
+  const runId = nextRun();
+  let moved = { error: "Canvas did not answer." };
+  const road = fakeRoad("canvas", { recheck: async () => moved });
+  await preview([road], runId);
+  const stopped = await send([road], runId, { keys: { canvas: ["a"] } });
+  assert.match(stopped.results[0].output, /did not answer/);
+  moved = null;
+  await send([road], runId, { keys: { canvas: ["a"] } });
+  assert.deepEqual(road.sent.map((entry) => entry.chosen), [["a"]]);
+});
+
 test("no preview — as after a reload of server/ — answers again, and sends nothing", async () => {
   const road = fakeRoad("canvas");
   const sent = await send([road], nextRun(), { keys: { canvas: ["a"] } });

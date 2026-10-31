@@ -721,6 +721,17 @@ export const transcribeTake = async (options: {
   language?: string | null;
 }): Promise<Answer> => {
   const { place, answer } = options;
+  // AGT-7, read again here rather than trusted from whoever listed the take:
+  // `defence batch transcribe` lists its takes before the first is sent, and
+  // a student may withdraw while it runs.
+  const session = readSession(place.session);
+  if (!consentGiven(session)) {
+    return setTranscript(place, answer.question_id, answer.take, {
+      error: session?.consent?.withdrawn_at
+        ? "the student withdrew consent; not sent for transcription"
+        : "no recorded consent; not sent for transcription",
+    });
+  }
   try {
     const transcript = await options.transcribe(
       { path: join(place.dir, answer.audio), mime: answer.mime, seconds: answer.seconds },

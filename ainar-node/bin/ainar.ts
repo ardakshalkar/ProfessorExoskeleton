@@ -256,7 +256,7 @@ import {
   nothingChanged,
   restamp,
 } from "../src/freshness.ts";
-import { Ledger } from "../src/lms/ledger.ts";
+import { Ledger, type Publication } from "../src/lms/ledger.ts";
 import { describeImpact, impact } from "../src/impact.ts";
 import { describeRecordImpact, recordImpact } from "../src/record-impact.ts";
 import { Workspace } from "../src/workspace.ts";
@@ -2292,6 +2292,12 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       // at the moment it goes.
       const sentChecksums = materialChecksums(fingerprints(published, runId, root));
 
+      // What came back, noted on a ledger read again at the end rather than on
+      // the one loaded above: a Canvas job saves the ledger itself, with the
+      // assignment it created, and saving the copy from before it would drop
+      // that.
+      const noted: { target: string; scope: string; entry: Publication }[] = [];
+
       /**
        * One publication, performed and noted.
        *
@@ -2383,20 +2389,24 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         // these three have changed since" instead of describing every
         // publication as though it were the first.
         if (where) {
-          ledger.recordPublication(job.target, job.scope, {
-            where,
-            at: decidedAt(run?.timezone),
-            reference,
-            handle,
-            // For a page, the materials it actually copied; for the rest, the
-            // materials of the run as they stood, which is what a later "has
-            // anything changed" is asked about.
-            materials: Object.fromEntries(
-              (job.target === "page" ? sent : [...sentChecksums.keys()])
-                .filter((id) => sentChecksums.has(id))
-                .map((id) => [id, sentChecksums.get(id)!]),
-            ),
-            ...(payload ? { payload } : {}),
+          noted.push({
+            target: job.target,
+            scope: job.scope,
+            entry: {
+              where,
+              at: decidedAt(run?.timezone),
+              reference,
+              handle,
+              // For a page, the materials it actually copied; for the rest, the
+              // materials of the run as they stood, which is what a later "has
+              // anything changed" is asked about.
+              materials: Object.fromEntries(
+                (job.target === "page" ? sent : [...sentChecksums.keys()])
+                  .filter((id) => sentChecksums.has(id))
+                  .map((id) => [id, sentChecksums.get(id)!]),
+              ),
+              ...(payload ? { payload } : {}),
+            },
           });
         }
         return 0;
@@ -2427,7 +2437,9 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         }
       }
 
-      out(`noted in ${within(root, ledger.save())}`);
+      const current = Ledger.load(runId, flag("sync-dir"));
+      for (const note of noted) current.recordPublication(note.target, note.scope, note.entry);
+      out(`noted in ${within(root, current.save())}`);
       if (failures) {
         console.error(
           `\n${failures} of ${jobs.length} destination(s) did not go out. The rest did, and ` +

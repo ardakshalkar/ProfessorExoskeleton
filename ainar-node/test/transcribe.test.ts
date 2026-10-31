@@ -19,6 +19,7 @@ import {
   recordConsent,
   saveAnswer,
   transcribeTake,
+  withdrawConsent,
   type Question,
 } from "../src/defence.ts";
 import { connectionAsJson, readConnection } from "../src/connections/index.ts";
@@ -275,4 +276,24 @@ test("every take is kept, numbered, and a failed transcription leaves the record
   assert.equal(heard.error, undefined);
   const session = readSession(place.session)!;
   assert.deepEqual(session.answers.map((a) => [a.question_id, a.take, !!a.transcript]), [["Q2", 1, true], ["Q2", 2, false]]);
+});
+
+test("a take listed before the student withdrew is not sent", async () => {
+  const place = defencePlace(mkdtempSync(join(tmpdir(), "subs-")), "/ws", "RUN", "ASSESSMENT-HW1", "STUDENT-JNG7SN");
+  const ids = { submission_id: "SUB-1", assessment_id: "ASSESSMENT-HW1", student_id: "STUDENT-JNG7SN" };
+  recordConsent(place, ids, { agreed: true, at: "2026-10-06T10:00:00Z", statement: "s", provider: null });
+  const { answer } = saveAnswer({ place, ids, questionId: "Q0", bytes: Buffer.from("a"), mime: "audio/webm", seconds: 600 });
+  withdrawConsent(place, "2026-10-06T10:05:00Z");
+  let sent = false;
+  const kept = await transcribeTake({
+    place,
+    answer,
+    transcribe: async () => {
+      sent = true;
+      throw new Error("should not be asked");
+    },
+  });
+  assert.equal(sent, false);
+  assert.match(kept.error!, /withdrew consent/);
+  assert.equal(kept.transcript, null);
 });

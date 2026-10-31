@@ -52,7 +52,7 @@
 import { syncsOf } from "@ainar/core/src/sync/registry.ts";
 
 import { canvasRoad } from "./canvas-sync.js";
-import { recall, remember, spend } from "./previews.js";
+import { recall, remember, spend, unspend } from "./previews.js";
 import { isMarksSheet, sheetRoad } from "./syncs.js";
 import { loadedRun } from "./workspace.js";
 
@@ -157,13 +157,6 @@ export const sendOn = async ({ roads }, workspace, root, runId, body) => {
         continue;
       }
       last = got.last;
-      if (road.recheck) {
-        const moved = await road.recheck(ctx, last.snapshot).catch((error) => ({ error: failure(error) }));
-        if (moved) {
-          refused(road, moved.again || moved.error, Boolean(moved.again));
-          continue;
-        }
-      }
     }
     const direct = body.direct === true && !road.live;
     const keys = (Array.isArray(chosen[road.id]) ? chosen[road.id] : []).map(String).filter((key) => last.keys.includes(key));
@@ -171,9 +164,19 @@ export const sendOn = async ({ roads }, workspace, root, runId, body) => {
       refused(road, "Those were sent already from this check. Check again.", true);
       continue;
     }
-    const sent = await road.send(ctx, last.snapshot, direct ? last.keys : keys).catch((error) => ({ error: failure(error) }));
-    // Each key goes once; what was not chosen can still go from the same check.
+    // Each key goes once; what was not chosen can still go from the same
+    // check. Spent here, before anything is awaited: a second press from this
+    // preview, arriving while this one is out, finds them gone.
     if (!direct) spend(runId, road.id, keys);
+    if (!direct && road.recheck) {
+      const moved = await road.recheck(ctx, last.snapshot).catch((error) => ({ error: failure(error) }));
+      if (moved) {
+        unspend(runId, road.id, last, keys);
+        refused(road, moved.again || moved.error, Boolean(moved.again));
+        continue;
+      }
+    }
+    const sent = await road.send(ctx, last.snapshot, direct ? last.keys : keys).catch((error) => ({ error: failure(error) }));
     if (sent.error) refused(road, sent.error);
     else for (const entry of sent.results) results.push(Object.assign({ road: road.id }, entry));
     if (sent.after) after[road.id] = sent.after;

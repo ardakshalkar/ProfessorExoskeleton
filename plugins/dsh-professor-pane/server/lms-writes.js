@@ -209,8 +209,8 @@ export const recordAssessmentLinks = (workspace, root, runId, links) => {
   const { bundle } = loadedRun(workspace, runId);
   const run = runById(bundle).get(runId);
   if (!run) return { error: `no course run '${runId}' in this workspace` };
-  if (!run.course_id || !run.term) {
-    return { error: `${runId} carries no course_id and term, so its records cannot be located.` };
+  if (!run.course_id) {
+    return { error: `${runId} carries no course_id, so its records cannot be located.` };
   }
   if (!links || typeof links !== "object" || Array.isArray(links)) {
     return { error: "The links must be an object of assessment id to Canvas assignment id." };
@@ -267,7 +267,7 @@ export const recordAssessmentLinks = (workspace, root, runId, links) => {
   // subgroup is one the run has, whether an id is the number the API takes.
   // That belongs where the payload arrives, not in a module the CLI shares.
   try {
-    const recorded = writeAssessmentLinks(root, run.course_id, run.term, wanted);
+    const recorded = writeAssessmentLinks(root, run.course_id, wanted);
     return { written: recorded.count > 0, count: recorded.count, files: recorded.written };
   } catch (error) {
     // The shared writer throws; this route answers in-band, because its caller

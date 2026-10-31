@@ -42,13 +42,30 @@ export const recall = (runId, what) => {
   return { last };
 };
 
-/** The keys a send went out with, taken off its preview; the preview goes when none is left. */
+/**
+ * The keys a send is going out with, taken off its preview; the preview goes
+ * when none is left. Spent before the send is awaited, so a second press from
+ * the same preview, arriving while the first is out, finds them gone.
+ */
 export const spend = (runId, what, keys) => {
   const last = kept.get(slot(runId, what));
   if (!last) return;
   const gone = new Set(keys.map(String));
   last.keys = last.keys.filter((key) => !gone.has(key));
   if (!last.keys.length) kept.delete(slot(runId, what));
+};
+
+/**
+ * Keys spent for a send that then did not go — the far side moved before it
+ * left — put back on the preview they came from. A newer preview, kept since,
+ * is left as it is.
+ */
+export const unspend = (runId, what, last, keys) => {
+  const now = kept.get(slot(runId, what));
+  if (now && now !== last) return;
+  const back = keys.map(String).filter((key) => !last.keys.includes(key));
+  last.keys = last.keys.concat(back);
+  kept.set(slot(runId, what), last);
 };
 
 /** A snapshot used once and for all — a row's own "keep AINAR" — out of the way. */
