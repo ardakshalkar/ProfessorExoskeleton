@@ -324,6 +324,7 @@ a.pp-segbtn{display:inline-flex}
   font:inherit;cursor:pointer;background:0 0;border:0;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-stepbtn span{font-size:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .pp-stepbtn[aria-pressed=true] span{color:var(--dsw-alias-label-primary,#111);font-weight:600}
+.pp-jobnote{margin:6px 0 2px;font-size:12px}
 .pp-stepbtn .pp-stepjob{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#4a4a4a);font-weight:400}
 .pp-dot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:10px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2,#cfcfd4)}

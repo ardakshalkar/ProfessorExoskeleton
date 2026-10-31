@@ -359,6 +359,7 @@ a.pp-segbtn{display:inline-flex}
   font:inherit;cursor:pointer;background:0 0;border:0;color:var(--dsw-alias-label-tertiary,#6b6b6b)}
 .pp-stepbtn span{font-size:10px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .pp-stepbtn[aria-pressed=true] span{color:var(--dsw-alias-label-primary,#111);font-weight:600}
+.pp-jobnote{margin:6px 0 2px;font-size:12px}
 .pp-stepbtn .pp-stepjob{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#4a4a4a);font-weight:400}
 .pp-dot{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:10px;box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2,#cfcfd4)}
@@ -16774,7 +16775,6 @@ function ScansTab(props) {
   const [busy, setBusy] = React.useState(null);
   const [reading, setReading] = React.useState(null);
   const placements = usePlacements();
-  const blocked = Boolean(busy) || placementsWaiting(placements);
   const [said, setSaid] = React.useState(null);
   const [selected, setSelected] = React.useState(null);
   const [laneView, setLaneView] = React.useState(props.lane === "held" ? "held" : "all");
@@ -16806,21 +16806,26 @@ function ScansTab(props) {
   }, [props.runId, pile, names, props.revision, tick]);
   const doc = state.value;
   const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
-  React.useEffect(() => {
-    if (!assessmentId) return;
-    let live = true;
-    runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => {
-      if (!live || !job) return;
-      setBusy("read");
-      setReading(job);
-      followJob({ job }, props.sessionId, setReading, () => live).then((result) => live && result && finish(result));
-    });
-    return () => {
-      live = false;
-    };
-  }, [props.runId, assessmentId]);
+  const readingNow = Boolean(reading) && reading.subject === assessmentId && !reading.finishedAt;
+  const blocked = Boolean(busy) || readingNow || placementsWaiting(placements);
   const mounted = React.useRef(true);
   React.useEffect(() => () => mounted.current = false, []);
+  const follower = React.useRef(0);
+  const followRead = (job) => {
+    const mine = ++follower.current;
+    const alive = () => mounted.current && follower.current === mine;
+    setReading(job);
+    followJob({ job }, props.sessionId, (next) => alive() && setReading(next), alive).then((result) => result && finish(result));
+  };
+  React.useEffect(() => {
+    if (!assessmentId) return void 0;
+    let live = true;
+    runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => live && job && followRead(job));
+    return () => {
+      live = false;
+      follower.current += 1;
+    };
+  }, [props.runId, assessmentId]);
   const post2 = (path, body, label, done) => {
     if (blocked) return;
     setBusy(label);
@@ -16829,7 +16834,14 @@ function ScansTab(props) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {})
-    }).then((response) => response.json()).then((answer) => followJob(answer, props.sessionId, setReading, () => mounted.current)).then((result) => result && finish(result, done)).catch((error) => {
+    }).then((response) => response.json()).then((answer) => {
+      if (answer && answer.job) {
+        setBusy(null);
+        followRead(answer.job);
+        return;
+      }
+      finish(answer, done);
+    }).catch((error) => {
       setBusy(null);
       setSaid({ error: true, text: String(error) });
     });
@@ -16847,7 +16859,7 @@ function ScansTab(props) {
     if (done && !result.error && result.ok) done();
   };
   const assign = (paper, to) => {
-    if (busy) return;
+    if (busy || readingNow) return;
     setSaid(null);
     enqueuePlacement({
       runId: props.runId,
@@ -16932,7 +16944,7 @@ function ScansTab(props) {
     return work.slice(index + 1).concat(work.slice(0, Math.max(0, index))).find((entry) => entry !== paper && !statusOf(entry)) || null;
   };
   const place = (paper, to) => {
-    if (busy || !paper || statusOf(paper)) return;
+    if (busy || readingNow || !paper || statusOf(paper)) return;
     assign(paper, to);
     const next = nextAfter(paper);
     setSelected(next ? keyOf(next) : null);
@@ -16971,7 +16983,7 @@ function ScansTab(props) {
   const deskDetail = (paper) => {
     if (!paper) return h("div", { className: "pp-mdetail pp-as" }, "Nothing here needs you.");
     const status = statusOf(paper);
-    const off = Boolean(busy) || Boolean(status);
+    const off = Boolean(busy) || readingNow || Boolean(status);
     const ranked = paper.ranked && paper.ranked.length ? paper.ranked : paper.candidates;
     return h(
       "div",
@@ -17170,7 +17182,7 @@ function ScansTab(props) {
       title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
       onClick: () => post2("/api/scans/read", {}, "read")
     },
-    busy === "read" ? "Reading… " + (progressText(reading) || "a few minutes for a class") : "Read and record the answers"
+    readingNow ? "Reading… " + (progressText(reading) || "a few minutes for a class") : busy === "read" ? "Starting the read…" : "Read and record the answers"
   );
   const gradeButton = (primary) => h(
     "button",
@@ -17290,7 +17302,7 @@ function ScansTab(props) {
           stage.state === "done" ? "✓" : String(index + 1)
         ),
         h("span", null, stage.label),
-        stage.id === "read" && busy === "read" && progressText(reading) ? h("span", { className: "pp-stepjob" }, progressText(reading)) : null
+        stage.id === "read" && readingNow && progressText(reading) ? h("span", { className: "pp-stepjob" }, progressText(reading)) : null
       )
     )
   );
@@ -17448,6 +17460,11 @@ function ScansTab(props) {
     nowCard,
     stepper,
     detail,
+    readingNow ? h(
+      "p",
+      { className: "pp-as pp-jobnote" },
+      "Reading runs in the harness — this page can be left, and other piles and the Grade view can be used meanwhile. Placing papers on this pile waits until it has finished."
+    ) : null,
     said ? h("pre", { className: "pp-approveout" + (said.error ? " pp-approveerr" : "") }, said.text) : null,
     grading ? h(GradeBoard, {
       runId: props.runId,
@@ -17656,8 +17673,36 @@ function BatchModal(props) {
   const [consent, setConsent] = React.useState(false);
   const [quoted2, setQuoted] = React.useState(false);
   const [busy, setBusy] = React.useState(null);
+  const [sendingJob, setSendingJob] = React.useState(null);
   const [output, setOutput] = React.useState("");
   const url = (extra) => scoped(BASE + "/api/defence/batch?run=" + encodeURIComponent(props.runId) + (extra || ""), props.sessionId);
+  const mounted = React.useRef(true);
+  React.useEffect(() => () => mounted.current = false, []);
+  const chosen = React.useRef(assessment);
+  chosen.current = assessment;
+  const showJob = (job) => {
+    setSendingJob(job.finishedAt ? null : job);
+    if (chosen.current !== job.subject) return;
+    setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"));
+  };
+  const followSend = (job) => {
+    const alive = () => mounted.current;
+    showJob(job);
+    followJob({ job }, props.sessionId, (next) => alive() && showJob(next), alive).then((result) => {
+      if (!result) return;
+      setSendingJob(null);
+      if (chosen.current === job.subject) setOutput(result.error || result.output || "(nothing said)");
+    });
+  };
+  React.useEffect(() => {
+    runningJob(props.runId, props.sessionId, "defence-transcribe").then((job) => {
+      if (!job || !mounted.current) return;
+      chosen.current = job.subject;
+      setAssessment(job.subject);
+      followSend(job);
+    });
+  }, [props.runId]);
+  const sendingHere = Boolean(sendingJob) && sendingJob.subject === assessment;
   React.useEffect(() => {
     fetch(url(), { cache: "no-store" }).then((response) => response.json()).then((result) => {
       const list = result.assessments || [];
@@ -17681,14 +17726,13 @@ function BatchModal(props) {
     const sending = step === "transcribe" && /confirm/.test(extra || "");
     setBusy(step);
     setOutput(sending ? "Sending and transcribing — this takes a while for a long batch…" : "Working…");
-    fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }).then((response) => response.json()).then(
-      (answer) => followJob(
-        answer,
-        props.sessionId,
-        (job) => setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"))
-      )
-    ).then((result) => {
+    fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }).then((response) => response.json()).then((result) => {
       setBusy(null);
+      if (result.job) {
+        setQuoted(false);
+        followSend(result.job);
+        return;
+      }
       setOutput(result.error || result.output || "(nothing said)");
       if (step === "transcribe") setQuoted(!sending && !!result.ok);
     }).catch((error) => {
@@ -17759,13 +17803,22 @@ function BatchModal(props) {
           h(
             "div",
             { className: "pp-approverow" },
-            h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => run2("transcribe") }, "3 · Quote the transcription"),
-            quoted2 ? h(
+            h(
+              "button",
+              { type: "button", className: "pp-segbtn", disabled: Boolean(busy) || sendingHere, onClick: () => run2("transcribe") },
+              "3 · Quote the transcription"
+            ),
+            quoted2 && !sendingHere ? h(
               "button",
               { type: "button", className: "pp-segbtn pp-drec", disabled: Boolean(busy), onClick: () => run2("transcribe", "&confirm=1") },
               "Send them and transcribe"
             ) : null
           ),
+          sendingJob ? h(
+            "div",
+            { className: "pp-dim" },
+            sendingJob.label + " — " + (progressText(sendingJob) || "starting") + ". It runs on in the harness: this can be closed."
+          ) : null,
           h(
             "div",
             { className: "pp-dim" },

@@ -2,7 +2,7 @@
  * Uploading: the kinds a file can be, and the single and batch upload dialogs.
  */
 
-import { followJob, progressText } from "./jobs.js";
+import { followJob, progressText, runningJob } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -104,9 +104,44 @@ export function BatchModal(props) {
   const [assessment, setAssessment] = React.useState("");
   const [consent, setConsent] = React.useState(false);
   const [quoted, setQuoted] = React.useState(false);
+  // A step this dialog waits on (plan, file, quote: seconds), or null. It
+  // keeps the dialog open; sending does not — see `sendingJob`.
   const [busy, setBusy] = React.useState(null);
+  // Sending runs in the harness as a job (server/jobs.js): the dialog can be
+  // closed while it goes on, and opening it again finds it.
+  const [sendingJob, setSendingJob] = React.useState(null);
   const [output, setOutput] = React.useState("");
   const url = (extra) => scoped(BASE + "/api/defence/batch?run=" + encodeURIComponent(props.runId) + (extra || ""), props.sessionId);
+  const mounted = React.useRef(true);
+  React.useEffect(() => () => (mounted.current = false), []);
+
+  // The assessment chosen now, for a send's answers arriving later: its
+  // output is shown only while its own assessment is the one chosen.
+  const chosen = React.useRef(assessment);
+  chosen.current = assessment;
+  const showJob = (job) => {
+    setSendingJob(job.finishedAt ? null : job);
+    if (chosen.current !== job.subject) return;
+    setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"));
+  };
+  const followSend = (job) => {
+    const alive = () => mounted.current;
+    showJob(job);
+    followJob({ job }, props.sessionId, (next) => alive() && showJob(next), alive).then((result) => {
+      if (!result) return;
+      setSendingJob(null);
+      if (chosen.current === job.subject) setOutput(result.error || result.output || "(nothing said)");
+    });
+  };
+  React.useEffect(() => {
+    runningJob(props.runId, props.sessionId, "defence-transcribe").then((job) => {
+      if (!job || !mounted.current) return;
+      chosen.current = job.subject;
+      setAssessment(job.subject);
+      followSend(job);
+    });
+  }, [props.runId]);
+  const sendingHere = Boolean(sendingJob) && sendingJob.subject === assessment;
 
   React.useEffect(() => {
     fetch(url(), { cache: "no-store" })
@@ -138,15 +173,14 @@ export function BatchModal(props) {
     setOutput(sending ? "Sending and transcribing — this takes a while for a long batch…" : "Working…");
     fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" })
       .then((response) => response.json())
-      // Sending runs in the background on the server; its answer is the
-      // finished job's, and its running output is shown while it goes.
-      .then((answer) =>
-        followJob(answer, props.sessionId, (job) =>
-          setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…")),
-        ),
-      )
       .then((result) => {
         setBusy(null);
+        // Sending runs in the background on the server: followed, not waited on.
+        if (result.job) {
+          setQuoted(false);
+          followSend(result.job);
+          return;
+        }
         setOutput(result.error || result.output || "(nothing said)");
         if (step === "transcribe") setQuoted(!sending && !!result.ok);
       })
@@ -219,8 +253,12 @@ export function BatchModal(props) {
           h(
             "div",
             { className: "pp-approverow" },
-            h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(busy), onClick: () => run("transcribe") }, "3 · Quote the transcription"),
-            quoted
+            h(
+              "button",
+              { type: "button", className: "pp-segbtn", disabled: Boolean(busy) || sendingHere, onClick: () => run("transcribe") },
+              "3 · Quote the transcription",
+            ),
+            quoted && !sendingHere
               ? h(
                   "button",
                   { type: "button", className: "pp-segbtn pp-drec", disabled: Boolean(busy), onClick: () => run("transcribe", "&confirm=1") },
@@ -228,6 +266,13 @@ export function BatchModal(props) {
                 )
               : null,
           ),
+          sendingJob
+            ? h(
+                "div",
+                { className: "pp-dim" },
+                sendingJob.label + " — " + (progressText(sendingJob) || "starting") + ". It runs on in the harness: this can be closed.",
+              )
+            : null,
           h(
             "div",
             { className: "pp-dim" },

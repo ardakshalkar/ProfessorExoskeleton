@@ -23,15 +23,15 @@ function ScansTab(props) {
   const [pile, setPile] = React.useState(props.pile || "");
   const [tick, setTick] = React.useState(0);
   const [state, setState] = React.useState({ phase: "loading", value: null });
-  // A whole-pile write in flight (read, apply, the review's Confirm), or null.
-  // Placing one paper is not one: those wait in line (client/scans-queue.js).
+  // A whole-pile write this page is waiting on (apply, the review's Confirm,
+  // a read being started), or null. Placing one paper is not one: those wait
+  // in line (client/scans-queue.js).
   const [busy, setBusy] = React.useState(null);
   // The read running on the server, as last asked after: its "12 of 48 read".
+  // It is not `busy`: it holds only its own pile (docs/JOBS.md pair 4), so
+  // the Grade view, another pile and every other page stay usable.
   const [reading, setReading] = React.useState(null);
   const placements = usePlacements();
-  // Read, apply and the review rewrite the whole plan, so they wait for the
-  // line to empty, and the line waits for them.
-  const blocked = Boolean(busy) || placementsWaiting(placements);
   const [said, setSaid] = React.useState(null);
   // Match's desk: the paper chosen in its list (file|pages, or null for the
   // first that waits), which papers the list shows, and the class search.
@@ -78,24 +78,35 @@ function ScansTab(props) {
   const doc = state.value;
   const assessmentId = doc && doc.assessment ? doc.assessment.id : "";
 
-  // A read already running on the server — pressed before a reload, or in
-  // another tab — is followed here as if it had been pressed in this one.
-  React.useEffect(() => {
-    if (!assessmentId) return;
-    let live = true;
-    runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => {
-      if (!live || !job) return;
-      setBusy("read");
-      setReading(job);
-      followJob({ job }, props.sessionId, setReading, () => live).then((result) => live && result && finish(result));
-    });
-    return () => {
-      live = false;
-    };
-  }, [props.runId, assessmentId]);
-  // Asked after only while this view is open; the job runs on without it.
+  // A read of the pile shown that has not finished: it holds this pile's plan.
+  const readingNow = Boolean(reading) && reading.subject === assessmentId && !reading.finishedAt;
+  // Read, apply and the review rewrite the whole plan, so they wait for the
+  // line to empty, and the line waits for them; all wait for a running read.
+  const blocked = Boolean(busy) || readingNow || placementsWaiting(placements);
+
+  // A read is asked after only while its pile is the one shown and this view
+  // is open; the job runs on without it, and is found again on coming back.
   const mounted = React.useRef(true);
   React.useEffect(() => () => (mounted.current = false), []);
+  const follower = React.useRef(0);
+  const followRead = (job) => {
+    const mine = ++follower.current;
+    const alive = () => mounted.current && follower.current === mine;
+    setReading(job);
+    followJob({ job }, props.sessionId, (next) => alive() && setReading(next), alive).then((result) => result && finish(result));
+  };
+  // A read already running on the server — pressed before a reload, in
+  // another tab, or on this pile before another was shown — is followed here
+  // as if it had been pressed in this one.
+  React.useEffect(() => {
+    if (!assessmentId) return undefined;
+    let live = true;
+    runningJob(props.runId, props.sessionId, "scans-read", assessmentId).then((job) => live && job && followRead(job));
+    return () => {
+      live = false;
+      follower.current += 1;
+    };
+  }, [props.runId, assessmentId]);
 
   const post = (path, body, label, done) => {
     if (blocked) return;
@@ -107,8 +118,15 @@ function ScansTab(props) {
       body: JSON.stringify(body || {}),
     })
       .then((response) => response.json())
-      .then((answer) => followJob(answer, props.sessionId, setReading, () => mounted.current))
-      .then((result) => result && finish(result, done))
+      .then((answer) => {
+        // Started in the background: the page is free again at once.
+        if (answer && answer.job) {
+          setBusy(null);
+          followRead(answer.job);
+          return;
+        }
+        finish(answer, done);
+      })
       .catch((error) => {
         setBusy(null);
         setSaid({ error: true, text: String(error) });
@@ -132,7 +150,7 @@ function ScansTab(props) {
   // One paper: into the line, so the next can be pressed at once. Each
   // answer is said as it comes back, and the pile is read again after it.
   const assign = (paper, to) => {
-    if (busy) return;
+    if (busy || readingNow) return;
     setSaid(null);
     enqueuePlacement({
       runId: props.runId,
@@ -254,7 +272,7 @@ function ScansTab(props) {
   };
   // Place a paper and go on to the next, so a run of presses works down the list.
   const place = (paper, to) => {
-    if (busy || !paper || statusOf(paper)) return;
+    if (busy || readingNow || !paper || statusOf(paper)) return;
     assign(paper, to);
     const next = nextAfter(paper);
     setSelected(next ? keyOf(next) : null);
@@ -324,7 +342,7 @@ function ScansTab(props) {
   const deskDetail = (paper) => {
     if (!paper) return h("div", { className: "pp-mdetail pp-as" }, "Nothing here needs you.");
     const status = statusOf(paper);
-    const off = Boolean(busy) || Boolean(status);
+    const off = Boolean(busy) || readingNow || Boolean(status);
     const ranked = paper.ranked && paper.ranked.length ? paper.ranked : paper.candidates;
     return h(
       "div",
@@ -562,7 +580,11 @@ function ScansTab(props) {
         title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
         onClick: () => post("/api/scans/read", {}, "read"),
       },
-      busy === "read" ? "Reading… " + (progressText(reading) || "a few minutes for a class") : "Read and record the answers",
+      readingNow
+        ? "Reading… " + (progressText(reading) || "a few minutes for a class")
+        : busy === "read"
+          ? "Starting the read…"
+          : "Read and record the answers",
     );
   const gradeButton = (primary) =>
     h(
@@ -703,7 +725,7 @@ function ScansTab(props) {
           stage.state === "done" ? "✓" : String(index + 1),
         ),
         h("span", null, stage.label),
-        stage.id === "read" && busy === "read" && progressText(reading)
+        stage.id === "read" && readingNow && progressText(reading)
           ? h("span", { className: "pp-stepjob" }, progressText(reading))
           : null,
       ),
@@ -884,6 +906,14 @@ function ScansTab(props) {
     nowCard,
     stepper,
     detail,
+    readingNow
+      ? h(
+          "p",
+          { className: "pp-as pp-jobnote" },
+          "Reading runs in the harness — this page can be left, and other piles and the Grade view can be used meanwhile. " +
+            "Placing papers on this pile waits until it has finished.",
+        )
+      : null,
     said
       ? h("pre", { className: "pp-approveout" + (said.error ? " pp-approveerr" : "") }, said.text)
       : null,

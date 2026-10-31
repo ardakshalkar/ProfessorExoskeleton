@@ -1767,7 +1767,15 @@ is worth building.
       defence batch dialog closes while transcription runs on. The live
       per-take transcription on the desk (`routes/defence.js:352`) stays
       inline: it is seconds, and the desk needs the text back. `S` · depends:
-      JOB-2
+      JOB-2. Done 2026-10-31: a running read is no longer the Scans view's
+      `busy` — it holds only its own pile's writes (read, apply, the review,
+      placing papers), with a line saying so; the Grade view, other piles and
+      other pages stay usable, and the view follows the read only while its
+      pile is shown, finding it again on return. The batch dialog closes and
+      Escapes while sending runs on; opened again, it finds the send, its
+      assessment and its count. Plan, file and quote still hold the dialog
+      for their seconds. Checked in the v1 harness that the views render;
+      the running state was exercised through the router, not by eye.
 - [ ] **JOB-5** Survive a restart. A job's state is kept on disk under
       `~/.ainar/jobs/`; a harness restart marks a running job as interrupted
       (its partial transcripts are already on disk — `scans read` writes per
