@@ -56,13 +56,17 @@ export const progressText = (job) => {
   return progress.total === null ? progress.done + " " + progress.unit : progress.done + " of " + progress.total + " " + progress.unit;
 };
 
+/** "waiting for Reading Quiz 1", for a job in the queue; null for one that is not. */
+export const waitingText = (job) => (job && job.state === "waiting" && job.waitingFor ? "waiting for " + job.waitingFor : null);
+
 /** How long a finished background job stays listed, saying what it did. */
 const RECENT_MS = 15 * 60 * 1000;
 
 /**
- * The run's background jobs — running, waiting, and finished in the last
- * quarter hour — asked again when `version` moves, and every few seconds
- * while one runs, so its count goes up without the revision moving.
+ * The run's background jobs, and the short ones queued behind them —
+ * running, waiting, and finished in the last quarter hour — asked again
+ * when `version` moves, and every few seconds while one runs, so its count
+ * goes up without the revision moving.
  */
 export function useRunJobs(runId, sessionId, version) {
   const [jobs, setJobs] = React.useState([]);
@@ -76,7 +80,7 @@ export function useRunJobs(runId, sessionId, version) {
           if (!live) return;
           const now = Date.now();
           const shown = (value.jobs || []).filter(
-            (job) => job.background && (!job.finishedAt || now - Date.parse(job.finishedAt) < RECENT_MS),
+            (job) => (job.background || job.queued) && (!job.finishedAt || now - Date.parse(job.finishedAt) < RECENT_MS),
           );
           setJobs(shown);
           if (shown.some((job) => !job.finishedAt)) timer = setTimeout(load, EVERY);
@@ -108,7 +112,7 @@ const press = (path, sessionId) =>
     .then((response) => response.json())
     .catch((error) => ({ error: String(error) }));
 
-/** Cancel a running job: `{ job }`, or `{ error }`. Its follower sees it finish. */
+/** Cancel a running or waiting job: `{ job }`, or `{ error }`. Its follower sees it finish. */
 export const cancelJob = (id, sessionId) => press("/api/jobs/" + encodeURIComponent(id) + "/cancel", sessionId);
 
 /** Start a cut-short job's kind again: `{ job }` (the new one), or `{ error }`. */

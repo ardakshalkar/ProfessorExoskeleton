@@ -2,7 +2,7 @@
  * Uploading: the kinds a file can be, and the single and batch upload dialogs.
  */
 
-import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, progressText } from "./jobs.js";
+import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, progressText, waitingText } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -124,7 +124,8 @@ export function BatchModal(props) {
   const showJob = (job) => {
     setLastSend(job);
     if (chosen.current !== job.subject || job.finishedAt) return;
-    setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"));
+    if (waitingText(job)) setOutput("Queued — " + waitingText(job) + ".");
+    else setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"));
   };
   const followSend = (job) => {
     const alive = () => mounted.current;
@@ -181,6 +182,17 @@ export function BatchModal(props) {
     fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" })
       .then((response) => response.json())
       .then((result) => {
+        // Filing queued behind a send on the same students (JOB-8): waited
+        // on, saying what for, as a quick step is.
+        if (result.job && result.job.kind !== "defence-transcribe") {
+          const said = (job) => mounted.current && waitingText(job) && setOutput(job.label + " — " + waitingText(job) + ".");
+          followJob(result, props.sessionId, said, () => mounted.current).then((answer) => {
+            if (!answer || !mounted.current) return;
+            setBusy(null);
+            setOutput(answer.error || answer.output || "(nothing said)");
+          });
+          return;
+        }
         setBusy(null);
         // Sending runs in the background on the server: followed, not waited on.
         if (result.job) {

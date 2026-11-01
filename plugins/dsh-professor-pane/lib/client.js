@@ -1589,6 +1589,11 @@ i.pp-cg-cell{cursor:default;flex:none}
 .pp-nav-row svg{flex:none;color:var(--dsw-alias-label-secondary,#444)}
 .pp-nav-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pp-nav-meta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#888)}
+.pp-nav-jobrow{display:flex;align-items:center;min-width:0}
+.pp-nav-jobrow>.pp-nav-row{flex:1;min-width:0}
+.pp-nav-jobx{flex:none;border:0;background:none;padding:0 6px;font-size:14px;line-height:1;cursor:pointer;
+  color:var(--dsw-alias-label-tertiary,#888)}
+.pp-nav-jobx:hover{color:var(--dsw-alias-label-primary,#111)}
 .pp-nav-badge{flex:none;font-size:11px;padding:1px 7px;border-radius:8px;background:rgba(214,140,30,.16);color:#9a5b00}
 body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
 .pp-nav-week{display:flex;flex-direction:column;gap:1px;padding:2px 0}
@@ -15019,6 +15024,7 @@ var progressText = (job) => {
   if (!progress) return null;
   return progress.total === null ? progress.done + " " + progress.unit : progress.done + " of " + progress.total + " " + progress.unit;
 };
+var waitingText = (job) => job && job.state === "waiting" && job.waitingFor ? "waiting for " + job.waitingFor : null;
 var RECENT_MS = 15 * 60 * 1e3;
 function useRunJobs(runId, sessionId, version) {
   const [jobs, setJobs] = React.useState([]);
@@ -15030,7 +15036,7 @@ function useRunJobs(runId, sessionId, version) {
       if (!live) return;
       const now = Date.now();
       const shown = (value.jobs || []).filter(
-        (job) => job.background && (!job.finishedAt || now - Date.parse(job.finishedAt) < RECENT_MS)
+        (job) => (job.background || job.queued) && (!job.finishedAt || now - Date.parse(job.finishedAt) < RECENT_MS)
       );
       setJobs(shown);
       if (shown.some((job) => !job.finishedAt)) timer = setTimeout(load, EVERY);
@@ -15336,26 +15342,48 @@ function HeldPapers(props) {
 function Working(props) {
   const version = useVersion(["jobs"]);
   const jobs = useRunJobs(props.runId, props.sessionId, version);
+  const [said, setSaid] = React.useState(null);
   if (!jobs.length) return null;
+  const ordered = jobs.slice().reverse();
   return h(
     React.Fragment,
     null,
     h("div", { className: "pp-nav-label" }, h("span", null, "Working")),
-    jobs.map((job) => {
+    ordered.map((job) => {
       const count = progressText(job);
-      const meta = !job.finishedAt ? count || "starting" : (job.state === "done" ? "done" : job.state) + (count ? " · " + count : "");
+      const meta = job.finishedAt ? (job.state === "done" ? "done" : job.state) + (count ? " · " + count : "") : job.state === "waiting" ? "waiting" : count || "starting";
+      const waiting2 = waitingText(job);
       const pile = job.kind.startsWith("scans-") && job.subject;
-      return h(Row2, {
-        key: job.id,
-        dot: !job.finishedAt,
-        label: job.label,
-        hint: job.label + " — " + meta + (job.finishedAt ? "" : ". It runs on in the harness; this page can be closed."),
-        meta,
-        href: pile ? placeToHash({ view: "files", scans: pile }) : void 0,
-        onClick: pile ? () => props.onOpenPile(pile) : () => {
-        }
-      });
-    })
+      const cancellable = !job.finishedAt && (job.state === "waiting" || job.background);
+      return h(
+        "div",
+        { key: job.id, className: "pp-nav-jobrow" },
+        h(Row2, {
+          dot: !job.finishedAt && job.state !== "waiting",
+          label: job.label,
+          hint: job.label + " — " + (waiting2 || meta) + (job.finishedAt ? "" : ". It runs on in the harness; this page can be closed."),
+          meta,
+          href: pile ? placeToHash({ view: "files", scans: pile }) : void 0,
+          onClick: pile ? () => props.onOpenPile(pile) : () => {
+          }
+        }),
+        cancellable ? h(
+          "button",
+          {
+            type: "button",
+            className: "pp-nav-jobx",
+            title: job.state === "waiting" ? "Take it out of the queue; it never starts" : "Stop it; what is done so far is kept",
+            "aria-label": "Cancel " + job.label,
+            onClick: () => {
+              setSaid(null);
+              cancelJob(job.id, props.sessionId).then((answer) => answer.error && setSaid(answer.error));
+            }
+          },
+          "×"
+        ) : null
+      );
+    }),
+    said ? h("div", { className: "pp-nav-quiet" }, said) : null
   );
 }
 function Chats(props) {
@@ -15685,7 +15713,7 @@ var pump = () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(Object.assign({ pages: job.pages, file: job.file }, job.answer))
     }
-  ).then((response) => response.json()).catch((error) => ({ error: String(error) })).then((result) => {
+  ).then((response) => response.json()).then((answer) => followJob(answer, job.sessionId)).catch((error) => ({ error: String(error) })).then((result) => {
     running = null;
     publish();
     try {
@@ -16851,9 +16879,14 @@ function ScansTab(props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body || {})
     }).then((response) => response.json()).then((answer) => {
-      if (answer && answer.job) {
+      if (answer && answer.job && answer.job.kind === "scans-read") {
         setBusy(null);
         followRead(answer.job);
+        return;
+      }
+      if (answer && answer.job) {
+        const said2 = (job) => mounted.current && waitingText(job) && setSaid({ error: false, text: job.label + " — " + waitingText(job) + "." });
+        followJob(answer, props.sessionId, said2, () => mounted.current).then((result) => result && finish(result, done));
         return;
       }
       finish(answer, done);
@@ -17197,7 +17230,7 @@ function ScansTab(props) {
       title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
       onClick: () => post2("/api/scans/read", {}, "read")
     },
-    readingNow ? "Reading… " + (progressText(reading) || "a few minutes for a class") : busy === "read" ? "Starting the read…" : "Read and record the answers"
+    readingNow && waitingText(reading) ? "Reading, " + waitingText(reading) + "…" : readingNow ? "Reading… " + (progressText(reading) || "a few minutes for a class") : busy === "read" ? "Starting the read…" : "Read and record the answers"
   );
   const gradeButton = (primary) => h(
     "button",
@@ -17718,7 +17751,8 @@ function BatchModal(props) {
   const showJob = (job) => {
     setLastSend(job);
     if (chosen.current !== job.subject || job.finishedAt) return;
-    setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"));
+    if (waitingText(job)) setOutput("Queued — " + waitingText(job) + ".");
+    else setOutput((progressText(job) ? progressText(job) + " so far\n\n" : "") + (job.output || "Starting…"));
   };
   const followSend = (job) => {
     const alive = () => mounted.current;
@@ -17766,6 +17800,15 @@ function BatchModal(props) {
     setBusy(step);
     setOutput(sending ? "Sending and transcribing — this takes a while for a long batch…" : "Working…");
     fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }).then((response) => response.json()).then((result) => {
+      if (result.job && result.job.kind !== "defence-transcribe") {
+        const said = (job) => mounted.current && waitingText(job) && setOutput(job.label + " — " + waitingText(job) + ".");
+        followJob(result, props.sessionId, said, () => mounted.current).then((answer) => {
+          if (!answer || !mounted.current) return;
+          setBusy(null);
+          setOutput(answer.error || answer.output || "(nothing said)");
+        });
+        return;
+      }
       setBusy(null);
       if (result.job) {
         setQuoted(false);

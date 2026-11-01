@@ -1827,7 +1827,7 @@ is worth building.
       except **Students, 560–710 ms**: the browser taking in its 5.5 MB page.
       Sending the class without every student's whole panel is left for a
       task of its own.
-- [ ] **JOB-8** Queued, not refused. A press that conflicts with a running job
+- [x] **JOB-8** Queued, not refused. A press that conflicts with a running job
       (JOB-1's lock keys) joins that key's queue instead of being turned away:
       *Apply placements — waiting for Reading (Quiz 1)*. Jobs on one key run
       one after another in the order pressed; jobs on different keys run side
@@ -1836,7 +1836,21 @@ is worth building.
       page and the navigator: waiting, running, done, with cancel on a
       waiting job and on a running one. Replaces JOB-2's "refused" for
       everything except a press of the very job that is already queued,
-      which is a no-op. `M` · depends: JOB-2
+      which is a no-op. `M` · depends: JOB-2. Done 2026-11-01 in
+      `server/jobs.js`: a press is never refused. It waits in one queue, in the
+      order pressed, and a later press does not jump ahead on a key that an
+      earlier one wants. A running job's later key (a read's records file)
+      goes to the front of the queue, so it cannot deadlock. Background jobs
+      use up to `AINAR_JOBS_CAP` slots (default 2); inline ones are not
+      counted. An inline press that would wait behind a long job is answered
+      with the job (`queued`) and followed like a background one, by the
+      placement line, Scans and the defence dialog. A job says what it waits
+      for (`waitingFor`). The navigator's Working list shows the queue oldest
+      first, with × on a waiting job and on a running background one. A
+      waiting job that is cancelled never starts. Only the desk's edits still
+      refuse (`refusal`), as JOB-1 pair 8 says. The Scans tab still disables
+      its own presses while its pile is being read; the queue shows up from
+      the Students view, between piles at the cap, and in the defence dialog.
 - [ ] **JOB-9** The queue survives. Waiting jobs are written to
       `~/.ainar/jobs/` with the running ones (JOB-5), so a restart resumes
       the queue in order rather than dropping it; a job whose inputs changed

@@ -14,6 +14,7 @@
  * placed from the other. A paper already waiting is not added twice.
  */
 
+import { followJob } from "./jobs.js";
 import { React } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -47,6 +48,9 @@ const pump = () => {
     },
   )
     .then((response) => response.json())
+    // Pressed while the pile is read, it is queued behind the read (JOB-8):
+    // the line waits for the job's answer, as it would for a quick one.
+    .then((answer) => followJob(answer, job.sessionId))
     .catch((error) => ({ error: String(error) }))
     .then((result) => {
       running = null;

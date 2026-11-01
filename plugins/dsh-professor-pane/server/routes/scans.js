@@ -103,7 +103,8 @@ export const routes = [
               args.push("--assignments", JSON.stringify(answers));
             }
             // Short, so inline: it waits for another placement's second on the
-            // course's records, and is refused while the pile is being read.
+            // course's records. Pressed while the pile is being read, it is
+            // queued behind the read and answered with the job (JOB-8).
             return answerJob(
               res,
               startJob({

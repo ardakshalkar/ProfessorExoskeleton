@@ -5,7 +5,7 @@
 import { Message } from "./common.js";
 import { GradeBoard } from "./grade-board.js";
 import { CanvasMarks, MatchReview, STEP_PROMPTS } from "./marks.js";
-import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, progressText } from "./jobs.js";
+import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, progressText, waitingText } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { enqueuePlacement, placementKey, placementsWaiting, usePlacements } from "./scans-queue.js";
 import { BASE, scoped } from "./tabs.js";
@@ -135,9 +135,16 @@ function ScansTab(props) {
       .then((response) => response.json())
       .then((answer) => {
         // Started in the background: the page is free again at once.
-        if (answer && answer.job) {
+        if (answer && answer.job && answer.job.kind === "scans-read") {
           setBusy(null);
           followRead(answer.job);
+          return;
+        }
+        // Queued behind a long job (JOB-8): the press waits for its answer,
+        // saying what it waits for.
+        if (answer && answer.job) {
+          const said = (job) => mounted.current && waitingText(job) && setSaid({ error: false, text: job.label + " — " + waitingText(job) + "." });
+          followJob(answer, props.sessionId, said, () => mounted.current).then((result) => result && finish(result, done));
           return;
         }
         finish(answer, done);
@@ -594,7 +601,9 @@ function ScansTab(props) {
         title: "Runs `scans read`, then `scans record`: every answer recorded as a draft, the low-confidence ones listed",
         onClick: () => post("/api/scans/read", {}, "read"),
       },
-      readingNow
+      readingNow && waitingText(reading)
+        ? "Reading, " + waitingText(reading) + "…"
+        : readingNow
         ? "Reading… " + (progressText(reading) || "a few minutes for a class")
         : busy === "read"
           ? "Starting the read…"

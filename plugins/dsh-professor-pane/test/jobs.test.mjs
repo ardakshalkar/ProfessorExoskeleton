@@ -37,7 +37,9 @@ const gate = () => {
   return { open, work: (result = { ok: true, output: "done" }) => () => opened.then(() => result) };
 };
 
-test("a background job is refused to a second press on its key, and frees it when done", async () => {
+const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+test("a press on a background job's key is queued behind it, not refused, and runs when it is done", async () => {
   const reading = gate();
   const first = await startJob({
     root: ROOT, runId: "RUN-A", kind: "scans-read", label: "Reading Quiz 1", subject: "Q1",
@@ -46,23 +48,136 @@ test("a background job is refused to a second press on its key, and frees it whe
   assert.equal(first.job.state, "running");
   assert.equal(holderOf([pileKey("RUN-A", "Q1")]).id, first.job.id);
 
+  const ran = [];
   const second = await startJob({
-    root: ROOT, runId: "RUN-A", kind: "scans-assign", label: "Placing papers on Quiz 1",
-    keys: [pileKey("RUN-A", "Q1"), recordsKey("C", "submissions")], work: () => ({ ok: true }),
+    root: ROOT, runId: "RUN-A", kind: "scans-apply", label: "Apply placements",
+    keys: [pileKey("RUN-A", "Q1"), recordsKey("C", "submissions")], work: () => (ran.push("apply"), { ok: true }),
   });
-  assert.equal(second.refused.id, first.job.id);
+  assert.equal(second.job.state, "waiting");
+  assert.equal(second.job.queued, true, "an inline press behind a long job is answered with the job");
+  assert.equal(jobById(ROOT, second.job.id).waitingFor, "Reading Quiz 1");
 
-  // Another pile is not held up.
+  // Another pile is not held up, though it shares nothing with the queued apply but the records.
   const other = await startJob({
     root: ROOT, runId: "RUN-A", kind: "scans-assign", label: "Placing papers on Quiz 2",
-    keys: [pileKey("RUN-A", "Q2"), recordsKey("C", "submissions")], work: () => ({ ok: true }),
+    keys: [pileKey("RUN-A", "Q2")], work: () => ({ ok: true }),
   });
   assert.deepEqual(await other.done, { ok: true });
+  assert.deepEqual(ran, []);
 
   reading.open();
   await first.done;
+  assert.deepEqual(await second.done, { ok: true });
+  assert.deepEqual(ran, ["apply"]);
   assert.equal(jobById(ROOT, first.job.id).state, "done");
+  assert.equal(jobById(ROOT, second.job.id).state, "done");
   assert.equal(holderOf([pileKey("RUN-A", "Q1")]), null);
+});
+
+test("jobs on one key run in the order pressed, and a later press does not jump the queue", async () => {
+  const reading = gate();
+  const first = await startJob({
+    root: ROOT, runId: "RUN-O", kind: "scans-read", label: "Reading", keys: [pileKey("RUN-O", "Q1")], background: true, work: reading.work(),
+  });
+  const order = [];
+  const a = await startJob({
+    root: ROOT, runId: "RUN-O", kind: "scans-apply", label: "A", keys: [pileKey("RUN-O", "Q1"), recordsKey("O", "submissions")],
+    work: () => (order.push("A"), { ok: true }),
+  });
+  // Its key is free, but A asked for it first.
+  const b = await startJob({
+    root: ROOT, runId: "RUN-O", kind: "defence-mark", label: "B", keys: [recordsKey("O", "submissions")],
+    work: () => (order.push("B"), { ok: true }),
+  });
+  assert.equal(b.job.state, "waiting");
+  assert.equal(jobById(ROOT, b.job.id).waitingFor, "A");
+  assert.equal(b.job.queued, true, "behind a job that is itself queued behind a long one");
+  await tick();
+  assert.deepEqual(order, []);
+  reading.open();
+  await Promise.all([first.done, a.done, b.done]);
+  assert.deepEqual(order, ["A", "B"]);
+});
+
+test("background jobs on different keys run side by side up to the cap; the next waits for a turn", async () => {
+  const gates = [gate(), gate(), gate()];
+  const jobs = [];
+  for (const [i, g] of gates.entries()) {
+    jobs.push(
+      await startJob({
+        root: ROOT, runId: "RUN-P", kind: "scans-read", label: `Reading Q${i}`, subject: `Q${i}`, params: { assessmentId: `Q${i}` },
+        keys: [pileKey("RUN-P", `Q${i}`)], background: true, work: g.work(),
+      }),
+    );
+  }
+  assert.deepEqual(jobs.map((started) => started.job.state), ["running", "running", "waiting"]);
+  assert.match(jobById(ROOT, jobs[2].job.id).waitingFor, /a free turn \(2 long jobs are running\)/);
+  // An inline job is not counted against the cap.
+  const inline = await startJob({ root: ROOT, runId: "RUN-P", kind: "scans-assign", label: "Placing", keys: [recordsKey("P", "x")], work: () => ({ ok: true }) });
+  assert.deepEqual(await inline.done, { ok: true });
+
+  gates[1].open();
+  await jobs[1].done;
+  assert.equal(jobs[2].job.state, "running");
+  gates[0].open();
+  gates[2].open();
+  await Promise.all([jobs[0].done, jobs[2].done]);
+});
+
+test("pressing a waiting job again is a no-op, and a waiting job can be cancelled before it starts", async () => {
+  const reading = gate();
+  const first = await startJob({
+    root: ROOT, runId: "RUN-Q", kind: "scans-read", label: "Reading Quiz 1", subject: "Q1", params: { assessmentId: "Q1" },
+    keys: [pileKey("RUN-Q", "Q1")], background: true, work: reading.work(),
+  });
+  let runs = 0;
+  const press = () =>
+    startJob({
+      root: ROOT, runId: "RUN-Q", kind: "scans-read", label: "Reading Quiz 1 again", subject: "Q1", params: { assessmentId: "Q1" },
+      keys: [pileKey("RUN-Q", "Q1")], background: true, work: () => (runs++, { ok: true }),
+    });
+  const queued = await press();
+  assert.equal(queued.job.state, "waiting", "the running read is not the same press: a second one queues");
+  const again = await press();
+  assert.equal(again.job.id, queued.job.id, "a press of the job already waiting is that job");
+  assert.equal(listJobs(ROOT, "RUN-Q").length, 2);
+
+  const after = await startJob({
+    root: ROOT, runId: "RUN-Q", kind: "scans-apply", label: "Apply", keys: [pileKey("RUN-Q", "Q1")], work: () => ({ ok: true }),
+  });
+  assert.equal(jobById(ROOT, after.job.id).waitingFor, "Reading Quiz 1");
+
+  assert.equal(cancelJob(ROOT, queued.job.id).job.id, queued.job.id);
+  assert.match((await queued.done).error, /cancelled before it started/);
+  assert.equal(jobById(ROOT, queued.job.id).state, "cancelled");
+  assert.equal(runs, 0);
+  assert.equal(jobById(ROOT, after.job.id).waitingFor, "Reading Quiz 1", "what queued behind it moves up");
+
+  // An inline waiting job can be cancelled too.
+  assert.equal(cancelJob(ROOT, after.job.id).job.id, after.job.id);
+  assert.match((await after.done).error, /cancelled before it started/);
+  reading.open();
+  await first.done;
+  assert.equal(holderOf([pileKey("RUN-Q", "Q1")]), null);
+});
+
+test("a running job's later key goes ahead of a press waiting on its first key", async () => {
+  const reading = gate();
+  const first = await startJob({
+    root: ROOT, runId: "RUN-U", kind: "scans-read", label: "Reading", keys: [pileKey("RUN-U", "Q1")], background: true,
+    work: async (job) => {
+      await reading.work()();
+      await job.take([recordsKey("U", "item_responses")]);
+      return { ok: true };
+    },
+  });
+  const waiting = await startJob({
+    root: ROOT, runId: "RUN-U", kind: "scans-apply", label: "Apply",
+    keys: [pileKey("RUN-U", "Q1"), recordsKey("U", "item_responses")], work: () => ({ ok: true }),
+  });
+  reading.open();
+  assert.deepEqual(await first.done, { ok: true });
+  assert.deepEqual(await waiting.done, { ok: true });
 });
 
 test("an inline job waits for another inline holder rather than being refused", async () => {

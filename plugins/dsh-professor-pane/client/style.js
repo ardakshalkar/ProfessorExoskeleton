@@ -1554,6 +1554,11 @@ i.pp-cg-cell{cursor:default;flex:none}
 .pp-nav-row svg{flex:none;color:var(--dsw-alias-label-secondary,#444)}
 .pp-nav-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pp-nav-meta{flex:none;font-size:11px;color:var(--dsw-alias-label-tertiary,#888)}
+.pp-nav-jobrow{display:flex;align-items:center;min-width:0}
+.pp-nav-jobrow>.pp-nav-row{flex:1;min-width:0}
+.pp-nav-jobx{flex:none;border:0;background:none;padding:0 6px;font-size:14px;line-height:1;cursor:pointer;
+  color:var(--dsw-alias-label-tertiary,#888)}
+.pp-nav-jobx:hover{color:var(--dsw-alias-label-primary,#111)}
 .pp-nav-badge{flex:none;font-size:11px;padding:1px 7px;border-radius:8px;background:rgba(214,140,30,.16);color:#9a5b00}
 body[data-ds-dark-theme] .pp-nav-badge{color:#f0b45c}
 .pp-nav-week{display:flex;flex-direction:column;gap:1px;padding:2px 0}

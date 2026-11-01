@@ -34,7 +34,7 @@
 import { h, React } from "./react.js";
 import { BASE, PLACE_SHOWN_EVENT, scoped } from "./tabs.js";
 import { AREAS, useVersion, useWorkspaceWatch } from "./data.js";
-import { progressText, useRunJobs } from "./jobs.js";
+import { cancelJob, progressText, useRunJobs, waitingText } from "./jobs.js";
 import { placeToHash } from "../shared/route.js";
 
 // ------------------------------------------------------------- the request
@@ -432,35 +432,66 @@ function HeldPapers(props) {
 
 /**
  * What the harness is doing in the background for this run (server/jobs.js):
- * a read or a transcription with its count, and for a while after it ends,
- * what it did. A read opens its pile in Scans.
+ * a read or a transcription with its count, what waits in the queue and
+ * for what, and for a while after it ends, what it did. A read opens its
+ * pile in Scans. A running or waiting job can be cancelled from here.
  */
 function Working(props) {
   const version = useVersion(["jobs"]);
   const jobs = useRunJobs(props.runId, props.sessionId, version);
+  const [said, setSaid] = React.useState(null);
   if (!jobs.length) return null;
+  // Oldest first, so the queue reads in the order it will run.
+  const ordered = jobs.slice().reverse();
   return h(
     React.Fragment,
     null,
     h("div", { className: "pp-nav-label" }, h("span", null, "Working")),
-    jobs.map((job) => {
+    ordered.map((job) => {
       const count = progressText(job);
       // Cut short — failed, cancelled, interrupted by a restart — it says so,
       // and where: its own page offers Continue.
-      const meta = !job.finishedAt
-        ? count || "starting"
-        : (job.state === "done" ? "done" : job.state) + (count ? " · " + count : "");
+      const meta = job.finishedAt
+        ? (job.state === "done" ? "done" : job.state) + (count ? " · " + count : "")
+        : job.state === "waiting"
+          ? "waiting"
+          : count || "starting";
+      const waiting = waitingText(job);
       const pile = job.kind.startsWith("scans-") && job.subject;
-      return h(Row, {
-        key: job.id,
-        dot: !job.finishedAt,
-        label: job.label,
-        hint: job.label + " — " + meta + (job.finishedAt ? "" : ". It runs on in the harness; this page can be closed."),
-        meta: meta,
-        href: pile ? placeToHash({ view: "files", scans: pile }) : undefined,
-        onClick: pile ? () => props.onOpenPile(pile) : () => {},
-      });
+      // Only background work stops part-way; a short job is cancelled only while it waits.
+      const cancellable = !job.finishedAt && (job.state === "waiting" || job.background);
+      return h(
+        "div",
+        { key: job.id, className: "pp-nav-jobrow" },
+        h(Row, {
+          dot: !job.finishedAt && job.state !== "waiting",
+          label: job.label,
+          hint:
+            job.label + " — " + (waiting || meta) +
+            (job.finishedAt ? "" : ". It runs on in the harness; this page can be closed."),
+          meta: meta,
+          href: pile ? placeToHash({ view: "files", scans: pile }) : undefined,
+          onClick: pile ? () => props.onOpenPile(pile) : () => {},
+        }),
+        cancellable
+          ? h(
+              "button",
+              {
+                type: "button",
+                className: "pp-nav-jobx",
+                title: job.state === "waiting" ? "Take it out of the queue; it never starts" : "Stop it; what is done so far is kept",
+                "aria-label": "Cancel " + job.label,
+                onClick: () => {
+                  setSaid(null);
+                  cancelJob(job.id, props.sessionId).then((answer) => answer.error && setSaid(answer.error));
+                },
+              },
+              "×",
+            )
+          : null,
+      );
     }),
+    said ? h("div", { className: "pp-nav-quiet" }, said) : null,
   );
 }
 

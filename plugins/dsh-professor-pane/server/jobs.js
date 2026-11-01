@@ -8,12 +8,19 @@
  *
  * * **background** — the long ones (reading a pile, transcribing a batch).
  *   The press is answered at once with the job; the page asks `GET
- *   /api/jobs/ID` until it is finished. A press that needs a key one of these
- *   holds is refused with what is running, not raced.
+ *   /api/jobs/ID` until it is finished.
  * * **inline** — the short spawned writes (placing a paper, filing
- *   recordings). The request waits for its answer as it always has; one that
- *   needs a key another inline job holds waits its turn — seconds — and only
- *   a background holder refuses it.
+ *   recordings). The request waits for its answer as it always has, while
+ *   what it waits behind is seconds.
+ *
+ * A press whose keys are taken joins the queue (JOB-8), never a refusal:
+ * jobs on one key run one after another in the order they were pressed, and
+ * background jobs on different keys side by side up to a cap (`CAP`), so two
+ * piles do not fight for the machine or the model's rate limit. An inline
+ * press that would wait behind a long job is answered at once with the job,
+ * `queued`, and followed like a background one. Pressing a background job
+ * that is already waiting is a no-op: the press gets the waiting job. A
+ * waiting job can be cancelled; it then never starts.
  *
  * The table lives on `globalThis`, not in this module: `index.js` re-imports
  * everything under `server/` on a save, and a half-hour read must not be
@@ -42,7 +49,7 @@ const STATE = (globalThis[SYMBOL] ??= {
   seq: 0,
   jobs: new Map(), // id -> job, running and the last finished ones
   holders: new Map(), // key -> job id
-  waiters: [], // { keys, resolve }, in the order they asked
+  waiters: [], // { job, keys, counts, urgent, grant, resolve }, in the order they asked
 });
 // Added after the table first existed: a harness running since then has a
 // table without it, and a reload must not fail on that.
@@ -133,30 +140,105 @@ export const holderOf = (keys) => {
 
 const free = (keys) => keys.every((key) => !STATE.holders.has(key));
 
-/** All of `keys` for `job`, when every one is free; waits otherwise. */
-const take = (job, keys) => {
+/**
+ * How many background jobs run at once (`AINAR_JOBS_CAP`, default 2): each
+ * is a CLI child, most of them asking the model, so a third waits its turn.
+ * Inline jobs are seconds and are not counted.
+ */
+const CAP = () => Math.max(1, Number(process.env.AINAR_JOBS_CAP) || 2);
+const slotsTaken = () => [...STATE.jobs.values()].filter((job) => job.slot).length;
+
+/**
+ * Whether a waiter can have its keys now: all of them free, none wanted by
+ * a waiter that asked before it (`claimed`), and a slot when it counts. A
+ * running job's later key (`urgent`) asks only that the key be free — it
+ * holds keys already, and making it queue behind a job that waits for those
+ * would wait for ever.
+ */
+const admissible = (waiter, claimed) =>
+  free(waiter.keys) &&
+  (waiter.urgent || (!waiter.keys.some((key) => claimed.has(key)) && (!waiter.counts || slotsTaken() < CAP())));
+
+/** The keys the waiting jobs have asked for, in order: what a newcomer queues behind. */
+const claimedKeys = () => new Set(STATE.waiters.filter((waiter) => !waiter.urgent).flatMap((waiter) => waiter.keys));
+
+/**
+ * All of `keys` for `job`, when it can have them; waits in the queue
+ * otherwise. `counts` takes a background slot with them; `onGrant` runs the
+ * moment they are granted, before anything else is let in.
+ */
+const take = (job, keys, { counts = false, urgent = false, onGrant = null } = {}) => {
   const wanted = [...new Set(keys)].filter((key) => STATE.holders.get(key) !== job.id).sort();
   const grant = () => {
     for (const key of wanted) STATE.holders.set(key, job.id);
     job.keys = [...new Set([...job.keys, ...wanted])].sort();
+    if (counts) job.slot = true;
+    if (onGrant) onGrant();
   };
-  if (free(wanted)) {
+  const waiter = { job, keys: wanted, counts, urgent, grant };
+  if (admissible(waiter, urgent ? new Set() : claimedKeys())) {
     grant();
     return Promise.resolve();
   }
-  return new Promise((resolve) => STATE.waiters.push({ keys: wanted, resolve: () => (grant(), resolve()) }));
+  return new Promise((resolve) => {
+    waiter.resolve = resolve;
+    // A running job's later key goes ahead of the presses still waiting.
+    if (urgent) STATE.waiters.unshift(waiter);
+    else STATE.waiters.push(waiter);
+  });
+};
+
+/** Let in each waiter that can now have its keys, in the order they asked. */
+const pump = () => {
+  const claimed = new Set();
+  for (let i = 0; i < STATE.waiters.length; ) {
+    const waiter = STATE.waiters[i];
+    // A waiter left by a harness from before JOB-8 grants inside its resolve.
+    if (!waiter.grant ? free(waiter.keys) : admissible(waiter, claimed)) {
+      STATE.waiters.splice(i, 1);
+      waiter.grant?.();
+      waiter.resolve();
+    } else {
+      if (!waiter.urgent) for (const key of waiter.keys) claimed.add(key);
+      i += 1;
+    }
+  }
 };
 
 const release = (job) => {
   for (const key of job.keys) if (STATE.holders.get(key) === job.id) STATE.holders.delete(key);
-  // Waiters in the order they asked; each that can now have all its keys does.
-  for (let i = 0; i < STATE.waiters.length; ) {
-    const waiter = STATE.waiters[i];
-    if (free(waiter.keys)) {
-      STATE.waiters.splice(i, 1);
-      waiter.resolve();
-    } else i += 1;
-  }
+  job.slot = false;
+  pump();
+};
+
+/**
+ * What a waiting job waits for: the job holding one of its keys, or the
+ * waiting one ahead of it on a key — `{ job }` — or a slot, `{ slots }`.
+ */
+const blockerOf = (job) => {
+  const waiter = STATE.waiters.find((entry) => entry.job === job);
+  if (!waiter) return null;
+  const holder = holderOf(waiter.keys);
+  if (holder && holder !== job) return { job: holder };
+  const ahead = STATE.waiters
+    .slice(0, STATE.waiters.indexOf(waiter))
+    .find((entry) => !entry.urgent && entry.job && entry.keys.some((key) => waiter.keys.includes(key)));
+  if (ahead) return { job: ahead.job };
+  return waiter.counts ? { slots: CAP() } : null;
+};
+
+/** "Reading Quiz 1", or "a free turn (2 long jobs are running)"; null when not waiting. */
+const waitingFor = (job) => {
+  if (job.state !== "waiting") return null;
+  const blocker = blockerOf(job);
+  if (!blocker) return null;
+  return blocker.job ? blocker.job.label : `a free turn (${blocker.slots} long ${blocker.slots === 1 ? "job is" : "jobs are"} running)`;
+};
+
+/** Whether what `job` waits behind is long: a background job, or one queued behind one, or a slot. */
+const waitsLong = (job) => {
+  const blocker = blockerOf(job);
+  return Boolean(blocker) && (Boolean(blocker.slots) || Boolean(blocker.job.background) || Boolean(blocker.job.queued));
 };
 
 const forget = () => {
@@ -181,7 +263,9 @@ export const publicJob = (job) =>
     subject: job.subject,
     keys: job.keys,
     background: job.background,
+    queued: Boolean(job.queued),
     state: job.state,
+    waitingFor: waitingFor(job),
     startedAt: job.startedAt,
     finishedAt: job.finishedAt,
     output: job.output,
@@ -215,7 +299,7 @@ const stamp = (root, ...areas) => {
   for (const area of areas) counts.set(area, (counts.get(area) ?? 0) + 1);
 };
 
-/** The sentence a refused press gets. */
+/** The sentence a refused desk edit gets (routes/defence.js); jobs queue instead. */
 export const refusal = (holder) =>
   `${holder.label} is running (since ${new Date(holder.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}). ` +
   "Press again once it has finished.";
@@ -226,16 +310,24 @@ export const refusal = (holder) =>
  * `{ error }`); it may `job.say(text)` as it goes and `await job.take(keys)`
  * for a key it needs only later (a read's records file, at the end).
  *
- * Resolves to `{ refused }`, the holder, when a background job has one of
- * the keys; else to `{ job, done }`, `done` being the answer.
+ * Resolves at once to `{ job, done }`, `done` being the answer: the job is
+ * `running` when it could have its keys, else `waiting` in the queue.
  *
  * `params` are what server/job-kinds.js needs to start the same kind again
- * (Continue); `work` hands any child it spawns to `job.adopt`, so Cancel
- * can kill it, and stops early when `job.cancelled`.
+ * (Continue), and what makes two presses the same job: a background job
+ * with these `params` already waiting is the answer, not a second one.
+ * `work` hands any child it spawns to `job.adopt`, so Cancel can kill it,
+ * and stops early when `job.cancelled`.
  */
 export const startJob = async ({ root, runId, kind, label, subject = null, params = null, keys, background = false, progress = null, work }) => {
-  const holder = holderOf(keys);
-  if (holder && holder.background) return { refused: holder };
+  if (params) {
+    const same = JSON.stringify(params);
+    for (const waiting of STATE.jobs.values()) {
+      if (waiting.state === "waiting" && waiting.root === root && waiting.runId === runId && waiting.kind === kind && JSON.stringify(waiting.params) === same) {
+        return { job: waiting, done: waiting.done };
+      }
+    }
+  }
   STATE.seq += 1;
   const job = {
     id: `job-${Date.now().toString(36)}-${STATE.seq}`,
@@ -270,18 +362,31 @@ export const startJob = async ({ root, runId, kind, label, subject = null, param
     // On disk every few seconds, so a restart knows how far it had got.
     if (Date.now() - (job.savedAt ?? 0) > 3000) save(job);
   };
-  job.take = (more) => take(job, more);
+  job.take = (more) => take(job, more, { urgent: true });
   job.adopt = (child) => {
     job.child = child;
     if (job.cancelled) child.kill();
   };
   STATE.jobs.set(job.id, job);
   stamp(root, "jobs");
-  await take(job, keys);
-  job.state = "running";
-  save(job);
-  const done = Promise.resolve()
-    .then(() => work(job))
+  const admitted = take(job, keys, {
+    counts: background,
+    onGrant: () => {
+      job.state = "running";
+      job.startedAt = new Date().toISOString();
+      save(job);
+      // Let in from the queue: the pages listing it as waiting redraw.
+      if (job.waited) stamp(root, "jobs");
+    },
+  });
+  if (job.state === "waiting") {
+    job.waited = true;
+    // Waiting behind something long, an inline press is answered with the job.
+    if (!background) job.queued = waitsLong(job);
+  }
+  job.done = admitted
+    // Cancelled while it waited: it never ran, and says so.
+    .then(() => (job.state === "waiting" ? { error: `${label} was cancelled before it started.` } : work(job)))
     .catch((error) => ({ error: String(error?.message ?? error) }))
     .then((result) => {
       job.result = result;
@@ -296,32 +401,43 @@ export const startJob = async ({ root, runId, kind, label, subject = null, param
       stamp(root, "jobs", kind.split("-")[0]);
       return result;
     });
-  return { job, done };
+  return { job, done: job.done };
 };
 
 /**
- * Answer the press that started a job: the refusal; the job itself, at once,
- * when it runs in the background; else its answer, when it has one.
+ * Answer the press that started a job: the job itself, at once, when it
+ * runs in the background or is queued behind something long; else its
+ * answer, when it has one.
  */
 export const answerJob = (res, starting) =>
   Promise.resolve(starting)
     .then((started) => {
-      if (started.refused) return sendJson(res, 200, { error: refusal(started.refused), busy: publicJob(started.refused) });
-      if (started.job.background) return sendJson(res, 200, { job: publicJob(started.job) });
+      if (started.job.background || started.job.queued) return sendJson(res, 200, { job: publicJob(started.job) });
       return started.done.then((result) => sendJson(res, 200, result));
     })
     .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
 
 /**
- * Cancel a running background job of this workspace: its child is killed,
- * and it finishes as `cancelled` with what it had done. Its stores are
- * written whole, so what was written stays and nothing is half-written.
+ * Cancel a job of this workspace. A waiting one leaves the queue and never
+ * starts. A running background one has its child killed, and finishes as
+ * `cancelled` with what it had done; its stores are written whole, so what
+ * was written stays and nothing is half-written.
  */
 export const cancelJob = (root, id) => {
   const job = STATE.jobs.get(id);
   if (!job || job.root !== root) return { error: "No such job." };
-  if (!job.background) return { error: "Only background work can be cancelled; this one takes seconds." };
   if (job.finishedAt) return { error: `${job.label} has already finished.` };
+  if (job.state === "waiting") {
+    const at = STATE.waiters.findIndex((waiter) => waiter.job === job);
+    if (at < 0) return { error: `${job.label} is starting; cancel it once it runs.` };
+    const [waiter] = STATE.waiters.splice(at, 1);
+    job.cancelled = true;
+    waiter.resolve();
+    // What queued behind it on its keys may go now.
+    pump();
+    return { job: publicJob(job) };
+  }
+  if (!job.background) return { error: "Only background work can be cancelled; this one takes seconds." };
   job.cancelled = true;
   job.child?.kill();
   save(job);
