@@ -7656,7 +7656,7 @@ function Accounts(props) {
   );
   const announce = (type, mark, name, describe) => {
     const entry = ofType(type)[0] || legacy(type)[0] || null;
-    const token = Boolean(entry) && (configured(entry.tokenEnv) || entry.tokenInEnv || entry.tokenInFile);
+    const token2 = Boolean(entry) && (configured(entry.tokenEnv) || entry.tokenInEnv || entry.tokenInFile);
     return h(
       AccountRow,
       {
@@ -7664,14 +7664,14 @@ function Accounts(props) {
         mark,
         name,
         key: type,
-        connected: Boolean(entry) && token,
-        status: entry ? describe(entry) + " · " + (token ? "token saved" : "no token") : "not set up",
+        connected: Boolean(entry) && token2,
+        status: entry ? describe(entry) + " · " + (token2 ? "token saved" : "no token") : "not set up",
         action: entry ? "Change" : "Connect",
         open: open2 === type,
         onToggle: () => toggle(type),
         error: errors[type]
       },
-      entry && entry.tokenEnv && !token ? secret(type, entry.tokenEnv) : null,
+      entry && entry.tokenEnv && !token2 ? secret(type, entry.tokenEnv) : null,
       h(ProviderSetup, { integration: integration(type), runId: props.runId, sessionId: props.sessionId, onSaved: saved })
     );
   };
@@ -15052,10 +15052,31 @@ function useRunJobs(runId, sessionId, version) {
   return jobs;
 }
 var lastJob = (runId, sessionId, kind, subject2) => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then((value) => (value.jobs || []).find((job) => job.kind === kind && (!subject2 || job.subject === subject2)) || null).catch(() => null);
-var press2 = (path, sessionId) => fetch(scoped(BASE + path, sessionId), { method: "POST", headers: { accept: "application/json" } }).then((response) => response.json()).catch((error) => ({ error: String(error) }));
+var token = null;
+var paneToken = (sessionId, fresh) => {
+  if (fresh || !token) {
+    token = ask("/api/jobs/token", sessionId).then((value) => value.token || "").catch(() => {
+      token = null;
+      return "";
+    });
+  }
+  return token;
+};
+var pressWork = (url, init, sessionId) => {
+  const send2 = (fresh) => paneToken(sessionId, fresh).then(
+    (value) => fetch(url, Object.assign({}, init, { headers: Object.assign({ accept: "application/json" }, init && init.headers, { "x-pane-token": value }) }))
+  ).then((response) => response.json());
+  return send2(false).then((answer) => answer && answer.token ? send2(true) : answer);
+};
+var press2 = (path, sessionId) => pressWork(scoped(BASE + path, sessionId), { method: "POST" }, sessionId).catch((error) => ({ error: String(error) }));
 var cancelJob = (id, sessionId) => press2("/api/jobs/" + encodeURIComponent(id) + "/cancel", sessionId);
 var continueJob = (id, sessionId) => press2("/api/jobs/" + encodeURIComponent(id) + "/continue", sessionId);
-var CUT_SHORT_WORDS = { interrupted: "was interrupted by a restart", cancelled: "was cancelled", failed: "failed" };
+var CUT_SHORT_WORDS = {
+  interrupted: "was interrupted by a restart",
+  cancelled: "was cancelled",
+  failed: "failed",
+  held: "was held: its plan changed while it waited"
+};
 
 // client/navigator.js
 var PLACE_EVENT = "professor-pane:place";
@@ -15361,7 +15382,7 @@ function Working(props) {
         h(Row2, {
           dot: !job.finishedAt && job.state !== "waiting",
           label: job.label,
-          hint: job.label + " — " + (waiting2 || meta) + (job.finishedAt ? "" : ". It runs on in the harness; this page can be closed."),
+          hint: job.label + " — " + (waiting2 || meta) + (job.heldBecause ? ". " + job.heldBecause : "") + (job.finishedAt ? "" : ". It runs on in the harness; this page can be closed."),
           meta,
           href: pile ? placeToHash({ view: "files", scans: pile }) : void 0,
           onClick: pile ? () => props.onOpenPile(pile) : () => {
@@ -15703,7 +15724,7 @@ var pump = () => {
   running = waiting.shift();
   publish();
   const job = running;
-  fetch(
+  pressWork(
     scoped(
       BASE + "/api/scans/assign?run=" + encodeURIComponent(job.runId) + "&assessment=" + encodeURIComponent(job.assessment),
       job.sessionId
@@ -15712,8 +15733,9 @@ var pump = () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(Object.assign({ pages: job.pages, file: job.file }, job.answer))
-    }
-  ).then((response) => response.json()).then((answer) => followJob(answer, job.sessionId)).catch((error) => ({ error: String(error) })).then((result) => {
+    },
+    job.sessionId
+  ).then((answer) => followJob(answer, job.sessionId)).catch((error) => ({ error: String(error) })).then((result) => {
     running = null;
     publish();
     try {
@@ -16874,11 +16896,11 @@ function ScansTab(props) {
     if (blocked) return;
     setBusy(label);
     setSaid(null);
-    fetch(query(path).replace(/assessment=[^&]*/, "") + "&assessment=" + encodeURIComponent(assessmentId), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body || {})
-    }).then((response) => response.json()).then((answer) => {
+    pressWork(
+      query(path).replace(/assessment=[^&]*/, "") + "&assessment=" + encodeURIComponent(assessmentId),
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) },
+      props.sessionId
+    ).then((answer) => {
       if (answer && answer.job && answer.job.kind === "scans-read") {
         setBusy(null);
         followRead(answer.job);
@@ -17799,7 +17821,7 @@ function BatchModal(props) {
     const sending = step === "transcribe" && /confirm/.test(extra || "");
     setBusy(step);
     setOutput(sending ? "Sending and transcribing — this takes a while for a long batch…" : "Working…");
-    fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }).then((response) => response.json()).then((result) => {
+    pressWork(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }, props.sessionId).then((result) => {
       if (result.job && result.job.kind !== "defence-transcribe") {
         const said = (job) => mounted.current && waitingText(job) && setOutput(job.label + " — " + waitingText(job) + ".");
         followJob(result, props.sessionId, said, () => mounted.current).then((answer) => {

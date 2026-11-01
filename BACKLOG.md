@@ -1851,12 +1851,25 @@ is worth building.
       refuse (`refusal`), as JOB-1 pair 8 says. The Scans tab still disables
       its own presses while its pile is being read; the queue shows up from
       the Students view, between piles at the cap, and in the defence dialog.
-- [ ] **JOB-9** The queue survives. Waiting jobs are written to
+- [x] **JOB-9** The queue survives. Waiting jobs are written to
       `~/.ainar/jobs/` with the running ones (JOB-5), so a restart resumes
       the queue in order rather than dropping it; a job whose inputs changed
       while it waited (the plan it would apply was rewritten) is held with
-      the reason in words, not run on stale data. `S` · depends: JOB-5, JOB-8
-- [ ] **JOB-10** Secured: only known work, only from the pane. The runner
+      the reason in words, not run on stale data. `S` · depends: JOB-5, JOB-8.
+      Done 2026-11-01: a waiting job is saved as soon as it queues. After a
+      restart, the queue a dead harness left is queued again on its
+      workspace's first request (`resumeSaved`, called from the router),
+      in the order pressed and under the same ids, so a page following a
+      job still finds it. A short job brought back is `queued`: nobody is
+      waiting on its request any more. A kind declares `inputs`, which is
+      read when pressed and again when let in. Placing and applying watch
+      the pile's layout (files, checksums, page splits; `student:` and
+      `resolved:` don't count). Filing and transcribing watch the
+      recordings plan, which is also where transcribe's lock keys come
+      from. A job whose inputs moved ends `held`, with the reason, and
+      Continue runs it on the plan as it is now. A job with nothing ahead
+      of it is never held.
+- [x] **JOB-10** Secured: only known work, only from the pane. The runner
       takes a job *kind* from a fixed table (`scans-read`, `scans-record`,
       `defence-transcribe`, `sync-tick`, …) with checked arguments, never a
       command line, so nothing a page, a file or the assistant writes can
@@ -1867,7 +1880,31 @@ is worth building.
       publish, Telegram) are not queueable at all — they stay the professor's
       press, as BGS-7 holds for background sync. Every job's start, finish,
       cancel and who pressed it go to `records/events.yaml`. A test fails if
-      an unlisted kind or a send kind is accepted. `M` · depends: JOB-2
+      an unlisted kind or a send kind is accepted. `M` · depends: JOB-2.
+      Done 2026-11-01: `server/job-kinds.js` `KINDS` is the table. It holds
+      `scans-read`, `scans-assign`, `scans-apply`, `defence-batch-plan`,
+      `defence-batch-apply` and `defence-transcribe`. Each kind checks and
+      cleans its parameters and builds its own command line. Every press,
+      Continue and restart resume goes through `startKind`, which refuses
+      a kind not in the table (`__proto__` included), the send kinds
+      (`SEND_KINDS`) and bad parameters. A test fails if a route calls
+      `startJob` directly. Presses that start or stop work (scans read,
+      assign and apply; defence plan, apply and send; cancel and continue)
+      need a same-origin request (`Sec-Fetch-Site`, and `Origin` matching
+      `Host`, so a document in the sandboxed frame, whose origin is "null",
+      is refused) and the per-start token from `GET /api/jobs/token`. The
+      client fetches the token again once if the harness has restarted.
+      Checked in the browser pane against the real course: a press without
+      the token is refused, and one with it goes through. Started, finished
+      and cancelled go to the run's course `records/events.yaml` as
+      `job_*` events with kind, parameters, state and `pressed_by`.
+      *Not done:* `sync-tick` waits for BGS-2/JOB-11, and `scans-record`
+      runs inside `scans-read`. "Writes only under its run's folders" is
+      true of the kinds' commands, which are each given the run id, but
+      nothing enforces it at the file system. A local process that forges
+      the headers and reads the token gets past the guard. Against that,
+      the guarantee is the table: it can still only start known work with
+      checked parameters.
 - [ ] **JOB-11** One runner for everything long. Background sync's tick
       (BGS-2/BGS-3) and E18's scheduled digest enqueue into this runner as
       ordinary jobs instead of keeping a scheduler and a lock of their own,

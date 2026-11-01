@@ -2,7 +2,7 @@
  * Uploading: the kinds a file can be, and the single and batch upload dialogs.
  */
 
-import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, progressText, waitingText } from "./jobs.js";
+import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, pressWork, progressText, waitingText } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -179,8 +179,7 @@ export function BatchModal(props) {
     const sending = step === "transcribe" && /confirm/.test(extra || "");
     setBusy(step);
     setOutput(sending ? "Sending and transcribing — this takes a while for a long batch…" : "Working…");
-    fetch(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" })
-      .then((response) => response.json())
+    pressWork(url("&step=" + step + "&assessment=" + encodeURIComponent(assessment) + (extra || "")), { method: "POST" }, props.sessionId)
       .then((result) => {
         // Filing queued behind a send on the same students (JOB-8): waited
         // on, saying what for, as a quick step is.

@@ -36,6 +36,7 @@
  * (ainar-node/src/write-file.ts), so a kill leaves no half a file.
  */
 
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -54,17 +55,25 @@ const STATE = (globalThis[SYMBOL] ??= {
 // Added after the table first existed: a harness running since then has a
 // table without it, and a reload must not fail on that.
 STATE.stamps ??= new Map(); // root -> area -> how many times it has moved
+STATE.pending ??= []; // saved waiting jobs a previous harness left, until their workspace is asked for (JOB-9)
+// The pane's per-start secret (JOB-10): a press that starts or stops work
+// carries it. New with each harness process, kept across a reload.
+STATE.token ??= randomBytes(24).toString("hex");
 
 export const jobsDir = () => (process.env.AINAR_JOBS_DIR ? resolve(process.env.AINAR_JOBS_DIR) : join(homedir(), ".ainar", "jobs"));
 
 /** What a job's file holds: enough to list it and to start it again. */
 const SAVED = [
-  "id", "pid", "root", "runId", "kind", "label", "subject", "params", "keys", "background",
-  "state", "startedAt", "finishedAt", "output", "result", "progress", "continuedBy",
+  "id", "pid", "root", "runId", "kind", "label", "subject", "params", "keys", "background", "queued",
+  "state", "pressedAt", "startedAt", "finishedAt", "inputs", "heldBecause", "output", "result", "progress", "continuedBy",
 ];
 
+/**
+ * Kept on disk: background jobs, and the short ones queued behind them —
+ * the ones a page follows, and the ones a restart must not drop (JOB-9).
+ */
 const save = (job) => {
-  if (!job.background) return;
+  if (!job.background && !job.queued) return;
   job.savedAt = Date.now();
   try {
     mkdirSync(jobsDir(), { recursive: true });
@@ -87,9 +96,12 @@ const alive = (pid) => {
 };
 
 /**
- * The jobs on disk, into the table, once per process. One whose harness is
- * gone was cut short: `interrupted`. One whose harness is still running — a
- * second harness on this machine — is that harness's, and left alone.
+ * The jobs on disk, into the table, once per process. One that was running
+ * when its harness went away was cut short: `interrupted`. One that was
+ * still waiting is queued again, in the order it was pressed, the first
+ * time its workspace is asked for (`resumeSaved`) — the kinds need the
+ * workspace to start. One whose harness is still running — a second
+ * harness on this machine — is that harness's, and left alone.
  */
 const loadSaved = () => {
   let names = [];
@@ -105,6 +117,10 @@ const loadSaved = () => {
       if (!job || !job.id || !job.root) continue;
       if (!job.finishedAt) {
         if (job.pid && job.pid !== process.pid && alive(job.pid)) continue;
+        if (job.state === "waiting" && job.params) {
+          STATE.pending.push(job);
+          continue;
+        }
         job.state = "interrupted";
         job.finishedAt = new Date().toISOString();
         save(job);
@@ -115,7 +131,35 @@ const loadSaved = () => {
     }
   }
   for (const job of loaded.sort((a, b) => (a.startedAt < b.startedAt ? -1 : 1))) STATE.jobs.set(job.id, job);
+  STATE.pending.sort((a, b) => ((a.pressedAt ?? a.startedAt) < (b.pressedAt ?? b.startedAt) ? -1 : 1));
   forget();
+};
+
+/**
+ * The waiting jobs a previous harness left for this workspace, queued
+ * again in the order they were pressed, each under its old id so a page
+ * that followed it finds it. `start(c, kind, params, resume)` is
+ * server/job-kinds.js `startKind`. One that cannot start again — its kind
+ * gone, its parameters no longer accepted — is kept as failed, saying why.
+ * Once per workspace per process; resolves when every one is queued.
+ */
+export const resumeSaved = async (c, start) => {
+  const mine = STATE.pending.filter((job) => job.root === c.root);
+  if (!mine.length) return;
+  STATE.pending = STATE.pending.filter((job) => job.root !== c.root);
+  for (const saved of mine) {
+    const started = await start({ ...c, runId: saved.runId }, saved.kind, saved.params, {
+      id: saved.id,
+      pressedAt: saved.pressedAt ?? saved.startedAt,
+      inputs: saved.inputs ?? null,
+    });
+    if (started.error) {
+      Object.assign(saved, { state: "failed", finishedAt: new Date().toISOString(), result: { error: `Not queued again after a restart: ${started.error}` } });
+      STATE.jobs.set(saved.id, saved);
+      save(saved);
+    }
+  }
+  stamp(c.root, "jobs");
 };
 
 /** How many finished jobs are kept for `GET /api/jobs`. */
@@ -245,13 +289,17 @@ const forget = () => {
   const finished = [...STATE.jobs.values()].filter((job) => job.finishedAt);
   for (const job of finished.slice(0, Math.max(0, finished.length - KEEP))) {
     STATE.jobs.delete(job.id);
-    if (job.background) rmSync(join(jobsDir(), `${job.id}.json`), { force: true });
+    if (job.background || job.queued) rmSync(join(jobsDir(), `${job.id}.json`), { force: true });
   }
 };
 
-/** A cut-short background job that has not been continued yet. */
-const CUT_SHORT = ["interrupted", "cancelled", "failed"];
-const continuable = (job) => Boolean(job.background) && CUT_SHORT.includes(job.state) && !job.continuedBy;
+/**
+ * A cut-short job a page follows — background, or queued behind one — that
+ * has not been continued yet. `held` is one whose plan changed while it
+ * waited (JOB-9); Continue runs it on the plan as it is now.
+ */
+const CUT_SHORT = ["interrupted", "cancelled", "failed", "held"];
+const continuable = (job) => Boolean(job.params) && Boolean(job.background || job.queued) && CUT_SHORT.includes(job.state) && !job.continuedBy;
 
 /** A job as the page sees it: no workspace path, no promise. */
 export const publicJob = (job) =>
@@ -266,6 +314,8 @@ export const publicJob = (job) =>
     queued: Boolean(job.queued),
     state: job.state,
     waitingFor: waitingFor(job),
+    heldBecause: job.heldBecause ?? null,
+    pressedAt: job.pressedAt ?? job.startedAt,
     startedAt: job.startedAt,
     finishedAt: job.finishedAt,
     output: job.output,
@@ -318,8 +368,20 @@ export const refusal = (holder) =>
  * with these `params` already waiting is the answer, not a second one.
  * `work` hands any child it spawns to `job.adopt`, so Cancel can kill it,
  * and stops early when `job.cancelled`.
+ *
+ * `inputs` — `{ read(), changed }` — is what the work depends on that the
+ * professor looked at before pressing (a pile's plan): read when pressed and
+ * again when the job is let in, and a job that waited while it changed is
+ * `held`, with `changed` as the reason, instead of being run (JOB-9).
+ * `log(type, job)` hears `started`, `finished` and `cancelled`
+ * (server/job-kinds.js writes them to the course's events). `resume` is a
+ * saved waiting job a restart queues again: its id, when it was pressed,
+ * and the inputs it saw then.
  */
-export const startJob = async ({ root, runId, kind, label, subject = null, params = null, keys, background = false, progress = null, work }) => {
+export const startJob = async ({
+  root, runId, kind, label, subject = null, params = null, keys, background = false, progress = null,
+  inputs = null, log = null, resume = null, work,
+}) => {
   if (params) {
     const same = JSON.stringify(params);
     for (const waiting of STATE.jobs.values()) {
@@ -329,8 +391,9 @@ export const startJob = async ({ root, runId, kind, label, subject = null, param
     }
   }
   STATE.seq += 1;
+  const now = new Date().toISOString();
   const job = {
-    id: `job-${Date.now().toString(36)}-${STATE.seq}`,
+    id: resume?.id ?? `job-${Date.now().toString(36)}-${STATE.seq}`,
     pid: process.pid,
     root,
     runId,
@@ -340,13 +403,20 @@ export const startJob = async ({ root, runId, kind, label, subject = null, param
     params,
     keys: [],
     background,
+    // Brought back by a restart, a short job has nobody waiting on its
+    // request any more: it is followed by its id, as a queued one is.
+    queued: Boolean(resume) && !background,
     state: "waiting",
-    startedAt: new Date().toISOString(),
+    pressedAt: resume?.pressedAt ?? now,
+    startedAt: now,
     finishedAt: null,
+    inputs: resume ? resume.inputs : inputs ? inputs.read() : null,
+    heldBecause: null,
     output: "",
     result: null,
     progress: progress && { done: 0, total: null, unit: progress.unit },
   };
+  job.log = (type) => log?.(type, job);
   // Whole lines only are counted: output arrives in chunks that can cut one.
   let partial = "";
   job.say = (text) => {
@@ -372,9 +442,15 @@ export const startJob = async ({ root, runId, kind, label, subject = null, param
   const admitted = take(job, keys, {
     counts: background,
     onGrant: () => {
+      // What it was pressed on changed while it waited: held, not run.
+      if (inputs && job.inputs !== null && (job.waited || resume) && inputs.read() !== job.inputs) {
+        job.heldBecause = inputs.changed;
+        return;
+      }
       job.state = "running";
       job.startedAt = new Date().toISOString();
       save(job);
+      job.log("started");
       // Let in from the queue: the pages listing it as waiting redraw.
       if (job.waited) stamp(root, "jobs");
     },
@@ -382,18 +458,33 @@ export const startJob = async ({ root, runId, kind, label, subject = null, param
   if (job.state === "waiting") {
     job.waited = true;
     // Waiting behind something long, an inline press is answered with the job.
-    if (!background) job.queued = waitsLong(job);
+    if (!background) job.queued = job.queued || waitsLong(job);
+    // On disk while it waits, so a restart queues it again (JOB-9).
+    save(job);
   }
   job.done = admitted
-    // Cancelled while it waited: it never ran, and says so.
-    .then(() => (job.state === "waiting" ? { error: `${label} was cancelled before it started.` } : work(job)))
+    .then(() =>
+      job.heldBecause
+        ? { error: job.heldBecause }
+        : // Cancelled while it waited: it never ran, and says so.
+          job.state === "waiting"
+          ? { error: `${label} was cancelled before it started.` }
+          : work(job),
+    )
     .catch((error) => ({ error: String(error?.message ?? error) }))
     .then((result) => {
       job.result = result;
-      job.state = job.cancelled ? "cancelled" : result && !result.error && result.ok !== false ? "done" : "failed";
+      job.state = job.heldBecause
+        ? "held"
+        : job.cancelled
+          ? "cancelled"
+          : result && !result.error && result.ok !== false
+            ? "done"
+            : "failed";
       job.finishedAt = new Date().toISOString();
       job.child = null;
       save(job);
+      job.log("finished");
       release(job);
       forget();
       // What it wrote is in the private folder, which the revision walk does
@@ -412,6 +503,7 @@ export const startJob = async ({ root, runId, kind, label, subject = null, param
 export const answerJob = (res, starting) =>
   Promise.resolve(starting)
     .then((started) => {
+      if (started.error) return sendJson(res, 200, { error: started.error });
       if (started.job.background || started.job.queued) return sendJson(res, 200, { job: publicJob(started.job) });
       return started.done.then((result) => sendJson(res, 200, result));
     })
@@ -432,6 +524,7 @@ export const cancelJob = (root, id) => {
     if (at < 0) return { error: `${job.label} is starting; cancel it once it runs.` };
     const [waiter] = STATE.waiters.splice(at, 1);
     job.cancelled = true;
+    job.log?.("cancelled");
     waiter.resolve();
     // What queued behind it on its keys may go now.
     pump();
@@ -439,21 +532,24 @@ export const cancelJob = (root, id) => {
   }
   if (!job.background) return { error: "Only background work can be cancelled; this one takes seconds." };
   job.cancelled = true;
+  job.log?.("cancelled");
   job.child?.kill();
   save(job);
   return { job: publicJob(job) };
 };
 
 /**
- * Start a cut-short job again — interrupted by a restart, cancelled, or
- * failed — from `kinds` (server/job-kinds.js), with the parameters it was
- * started with. Each kind skips what is already done, so only the rest runs.
+ * Start a cut-short job again — interrupted by a restart, cancelled,
+ * failed, or held — with the parameters it was started with, through
+ * `start(c, kind, params)` (server/job-kinds.js `startKind`), so it is
+ * checked as a fresh press is. Each kind skips what is already done, so
+ * only the rest runs; a held one runs on the plan as it is now.
  */
-export const continueJob = (c, id, kinds) => {
+export const continueJob = (c, id, start) => {
   const job = STATE.jobs.get(id);
   if (!job || job.root !== c.root) return Promise.resolve({ error: "No such job." });
-  if (!continuable(job) || !kinds[job.kind]) return Promise.resolve({ error: `${job.label} cannot be continued.` });
-  return Promise.resolve(kinds[job.kind]({ workspace: c.workspace, root: c.root, runId: job.runId }, job.params ?? {})).then((started) => {
+  if (!continuable(job)) return Promise.resolve({ error: `${job.label} cannot be continued.` });
+  return Promise.resolve(start({ workspace: c.workspace, root: c.root, runId: job.runId }, job.kind, job.params ?? {})).then((started) => {
     if (started.job) {
       job.continuedBy = started.job.id;
       save(job);
@@ -461,6 +557,42 @@ export const continueJob = (c, id, kinds) => {
     return started;
   });
 };
+
+/**
+ * Whether a request comes from the pane's own page (JOB-10): the browser
+ * says it is same-origin, and, when `withToken`, it carries this harness's
+ * per-start token. A page on another site, a document the pane shows (in a
+ * sandboxed frame, so its origin is "null"), or a press saved from a
+ * previous start does not. The sentence why, or null.
+ *
+ * What it cannot stop is a process on this machine that forges the headers
+ * and reads the token: against that, the kinds table is the guarantee —
+ * such a request can still only start known work with checked parameters.
+ */
+export const notFromThePane = (req, withToken = true) => {
+  const site = req.headers["sec-fetch-site"];
+  if (site !== undefined && site !== "same-origin") return "Work is started from the pane's own page, not from another site or a shown document.";
+  const origin = req.headers.origin;
+  if (origin !== undefined) {
+    let host = null;
+    try {
+      host = origin === "null" ? null : new URL(origin).host;
+    } catch {
+      host = null;
+    }
+    if (!host || host !== req.headers.host) return "Work is started from the pane's own page, not from another site or a shown document.";
+  }
+  if (!withToken) return null;
+  const sent = Buffer.from(String(req.headers["x-pane-token"] ?? ""));
+  const mine = Buffer.from(STATE.token);
+  if (sent.length !== mine.length || !timingSafeEqual(sent, mine)) {
+    return "This page was opened before the harness last started. Reload it, then press again.";
+  }
+  return null;
+};
+
+/** The per-start token, for the pane's page to send back (`GET /api/jobs/token`). */
+export const paneToken = () => STATE.token;
 
 /** This workspace's jobs, newest first; `runId` narrows them to one run. */
 export const listJobs = (root, runId = "") =>

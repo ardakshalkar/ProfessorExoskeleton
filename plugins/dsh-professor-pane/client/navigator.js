@@ -468,6 +468,7 @@ function Working(props) {
           label: job.label,
           hint:
             job.label + " — " + (waiting || meta) +
+            (job.heldBecause ? ". " + job.heldBecause : "") +
             (job.finishedAt ? "" : ". It runs on in the harness; this page can be closed."),
           meta: meta,
           href: pile ? placeToHash({ view: "files", scans: pile }) : undefined,

@@ -5,7 +5,7 @@
 import { Message } from "./common.js";
 import { GradeBoard } from "./grade-board.js";
 import { CanvasMarks, MatchReview, STEP_PROMPTS } from "./marks.js";
-import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, progressText, waitingText } from "./jobs.js";
+import { cancelJob, continueJob, CUT_SHORT_WORDS, followJob, lastJob, pressWork, progressText, waitingText } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { enqueuePlacement, placementKey, placementsWaiting, usePlacements } from "./scans-queue.js";
 import { BASE, scoped } from "./tabs.js";
@@ -127,12 +127,11 @@ function ScansTab(props) {
     if (blocked) return;
     setBusy(label);
     setSaid(null);
-    fetch(query(path).replace(/assessment=[^&]*/, "") + "&assessment=" + encodeURIComponent(assessmentId), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body || {}),
-    })
-      .then((response) => response.json())
+    pressWork(
+      query(path).replace(/assessment=[^&]*/, "") + "&assessment=" + encodeURIComponent(assessmentId),
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) },
+      props.sessionId,
+    )
       .then((answer) => {
         // Started in the background: the page is free again at once.
         if (answer && answer.job && answer.job.kind === "scans-read") {

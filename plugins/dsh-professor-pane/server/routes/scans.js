@@ -5,10 +5,9 @@
 
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
-import { runScans } from "../actions.js";
 import { readBody, send, sendJson } from "../http.js";
-import { assessmentOf, KINDS } from "../job-kinds.js";
-import { answerJob, pileKey, recordsKey, startJob } from "../jobs.js";
+import { startKind } from "../job-kinds.js";
+import { answerJob, notFromThePane } from "../jobs.js";
 import { paperCrop, scansDocument } from "../scans.js";
 import { loadedRun, rosterDir } from "../workspace.js";
 
@@ -65,62 +64,24 @@ export const routes = [
       // folder; the assistant's sandbox cannot, and would ask for each call.
       // A pile takes minutes, so it is a background job (server/job-kinds.js):
       // the press is answered at once and the page follows the job.
-      if (path === "/api/scans/read") {
+      // A press that starts work: from the pane's page only (JOB-10), and
+      // only as a kind in server/job-kinds.js, which checks what it is sent.
+      if (path === "/api/scans/read" || path === "/api/scans/assign" || path === "/api/scans/apply") {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+        const why = notFromThePane(req);
+        if (why) return sendJson(res, 200, { error: why, token: true });
         if (!assessmentId) return sendJson(res, 200, { error: "No assessment given." });
-        return answerJob(res, KINDS["scans-read"](c, { assessmentId }));
-      }
-      if (path === "/api/scans/assign" || path === "/api/scans/apply") {
-        if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
-        if (!assessmentId) return sendJson(res, 200, { error: "No assessment given." });
-        const pile = assessmentOf(workspace, runId, assessmentId); // the run has to be this workspace's
+        if (path === "/api/scans/read") return answerJob(res, startKind(c, "scans-read", { assessmentId }));
         return readBody(req)
           .then((text) => {
             const body = text ? JSON.parse(text) : {};
-            const args = ["scans", path.endsWith("assign") ? "assign" : "apply", runId, "--assessment", assessmentId];
-            if (path.endsWith("assign")) {
-              // One answer, or `papers: [...]` from the review's Confirm — sent
-              // to the CLI as one list, so it is checked whole and applied once.
-              const answers = (Array.isArray(body.papers) ? body.papers : [body]).map((entry) => {
-                const pages = String(entry.pages ?? "");
-                if (!/^[\d ,-]{1,40}$/.test(pages)) throw new Error("No paper given.");
-                const answer = { pages };
-                if (entry.file) {
-                  if (!/^[\w.-]+\.pdf$/i.test(String(entry.file))) throw new Error("Not a scan's file name.");
-                  answer.file = String(entry.file);
-                }
-                const pseudonym = (value) => {
-                  if (!/^STUDENT-[A-Z0-9]+$/.test(String(value))) throw new Error("Not a pseudonym.");
-                  return String(value);
-                };
-                if (entry.student) answer.student = pseudonym(entry.student);
-                else if (entry.reject) answer.reject = pseudonym(entry.reject);
-                else if (entry.skip) answer.skip = String(entry.skip).slice(0, 200);
-                else throw new Error("Say who the paper is, who it is not, or that it is nobody's.");
-                return answer;
-              });
-              if (!answers.length || answers.length > 500) throw new Error("No papers given.");
-              args.push("--assignments", JSON.stringify(answers));
-            }
-            // Short, so inline: it waits for another placement's second on the
-            // course's records. Pressed while the pile is being read, it is
-            // queued behind the read and answered with the job (JOB-8).
-            return answerJob(
-              res,
-              startJob({
-                root,
-                runId,
-                kind: path.endsWith("assign") ? "scans-assign" : "scans-apply",
-                label: `Placing papers on ${pile.title}`,
-                subject: assessmentId,
-                keys: [
-                  pileKey(runId, assessmentId),
-                  recordsKey(pile.courseId, "submissions"),
-                  recordsKey(pile.courseId, "item_responses"),
-                ],
-                work: () => runScans(args, root),
-              }),
-            );
+            // One answer, or `papers: [...]` from the review's Confirm — sent
+            // to the CLI as one list, so it is checked whole and applied once.
+            // Pressed while the pile is being read, either is queued behind
+            // the read and answered with the job (JOB-8).
+            return path.endsWith("assign")
+              ? answerJob(res, startKind(c, "scans-assign", { assessmentId, papers: Array.isArray(body.papers) ? body.papers : [body] }))
+              : answerJob(res, startKind(c, "scans-apply", { assessmentId }));
           })
           .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
       }

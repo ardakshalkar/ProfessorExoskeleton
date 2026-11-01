@@ -25,10 +25,20 @@ writeFileSync(
     progress: { done: 12, total: 48, unit: "read" },
   }),
 );
+// And two that were still waiting, pressed in the order W1, W2 (JOB-9).
+for (const [id, pressedAt] of [["job-wait-2", "2026-10-31T10:05:00.000Z"], ["job-wait-1", "2026-10-31T10:01:00.000Z"]]) {
+  writeFileSync(
+    join(DIR, `${id}.json`),
+    JSON.stringify({
+      id, pid: 2147483646, root: ROOT, runId: "RUN-W", kind: "scans-apply", label: `Apply ${id}`, subject: "Q1",
+      params: { assessmentId: "Q1", n: id }, keys: [], background: false, queued: true, state: "waiting",
+      pressedAt, startedAt: pressedAt, finishedAt: null, inputs: "plan-v1", output: "",
+    }),
+  );
+}
 
-const { cancelJob, continueJob, holderOf, jobAreas, jobById, listJobs, pileKey, progressText, recordsKey, startJob } = await import(
-  "../server/jobs.js"
-);
+const { cancelJob, continueJob, holderOf, jobAreas, jobById, listJobs, notFromThePane, paneToken, pileKey, progressText, recordsKey, resumeSaved, startJob } =
+  await import("../server/jobs.js");
 
 /** A piece of work that finishes when told to. */
 const gate = () => {
@@ -251,22 +261,20 @@ test("a job its harness left running comes back interrupted, holding nothing, an
   assert.equal(JSON.parse(readFileSync(join(DIR, "job-left-1.json"), "utf-8")).state, "interrupted", "and says so on disk");
 
   const started = [];
-  const KINDS = {
-    "scans-read": (c, params) => {
-      started.push({ runId: c.runId, params });
-      return startJob({
-        root: c.root, runId: c.runId, kind: "scans-read", label: "Reading Quiz 9", subject: params.assessmentId,
-        params, keys: [pileKey(c.runId, params.assessmentId)], background: true, work: () => ({ ok: true }),
-      });
-    },
+  const start = (c, kind, params) => {
+    started.push({ runId: c.runId, kind, params });
+    return startJob({
+      root: c.root, runId: c.runId, kind, label: "Reading Quiz 9", subject: params.assessmentId,
+      params, keys: [pileKey(c.runId, params.assessmentId)], background: true, work: () => ({ ok: true }),
+    });
   };
-  const again = await continueJob({ root: ROOT, workspace: null }, "job-left-1", KINDS);
-  assert.deepEqual(started, [{ runId: "RUN-R", params: { assessmentId: "Q9" } }]);
+  const again = await continueJob({ root: ROOT, workspace: null }, "job-left-1", start);
+  assert.deepEqual(started, [{ runId: "RUN-R", kind: "scans-read", params: { assessmentId: "Q9" } }]);
   await again.done;
   assert.equal(jobById(ROOT, "job-left-1").continuedBy, again.job.id);
   assert.equal(jobById(ROOT, "job-left-1").continuable, false, "continued once, not twice");
-  assert.match((await continueJob({ root: ROOT }, "job-left-1", KINDS)).error, /cannot be continued/);
-  assert.match((await continueJob({ root: "/elsewhere" }, "job-left-1", KINDS)).error, /No such job/);
+  assert.match((await continueJob({ root: ROOT }, "job-left-1", start)).error, /cannot be continued/);
+  assert.match((await continueJob({ root: "/elsewhere" }, "job-left-1", start)).error, /No such job/);
   assert.ok(existsSync(join(DIR, `${again.job.id}.json`)), "a background job is kept on disk");
 });
 
@@ -289,6 +297,94 @@ test("cancel kills the child, and the job finishes cancelled and continuable", a
   assert.equal(job.continuable, true);
   assert.equal(holderOf(["defence:RUN-K:A1:S1"]), null);
   assert.match(cancelJob(ROOT, started.job.id).error, /already finished/);
+});
+
+test("the jobs a restart left waiting are queued again, in the order pressed, under their own ids", async () => {
+  assert.equal(jobById(ROOT, "job-wait-1"), null, "not listed until their workspace is asked for");
+  const seen = [];
+  let plan = "plan-v1";
+  const start = (c, kind, params, resume) => {
+    seen.push(resume.id);
+    return startJob({
+      root: c.root, runId: c.runId, kind, label: `Apply ${params.n}`, subject: params.assessmentId, params, resume,
+      inputs: { read: () => (params.n === "job-wait-2" ? plan + "-moved" : plan), changed: "The plan changed." },
+      keys: [pileKey(c.runId, "Q1")], work: () => ({ ok: true, output: params.n }),
+    });
+  };
+  await resumeSaved({ root: ROOT, workspace: null }, start);
+  assert.deepEqual(seen, ["job-wait-1", "job-wait-2"], "in the order pressed, not the order on disk");
+  await resumeSaved({ root: ROOT, workspace: null }, start);
+  assert.equal(seen.length, 2, "once per workspace");
+
+  const one = jobById(ROOT, "job-wait-1");
+  assert.equal(one.queued, true, "a short job brought back is followed by its id");
+  assert.equal(one.pressedAt, "2026-10-31T10:01:00.000Z");
+  await tick();
+  assert.equal(jobById(ROOT, "job-wait-1").state, "done");
+  // The second saw a plan on disk that is not the one it was pressed on.
+  const two = jobById(ROOT, "job-wait-2");
+  assert.equal(two.state, "held");
+  assert.equal(two.heldBecause, "The plan changed.");
+  assert.equal(two.continuable, true);
+});
+
+test("a job whose plan changed while it waited is held, not run; one whose plan did not runs", async () => {
+  const reading = gate();
+  const first = await startJob({
+    root: ROOT, runId: "RUN-H", kind: "scans-read", label: "Reading", keys: [pileKey("RUN-H", "Q1")], background: true, work: reading.work(),
+  });
+  let plan = "v1";
+  let ran = 0;
+  const apply = (n) =>
+    startJob({
+      root: ROOT, runId: "RUN-H", kind: "scans-apply", label: `Apply ${n}`, params: { assessmentId: "Q1", n },
+      inputs: { read: () => plan, changed: "The pile's plan was rewritten while this waited." },
+      keys: [pileKey("RUN-H", "Q1")], work: () => (ran++, { ok: true }),
+    });
+  const held = await apply(1);
+  assert.equal(held.job.state, "waiting");
+  assert.ok(existsSync(join(DIR, `${held.job.id}.json`)), "a waiting job is on disk (JOB-9)");
+  assert.equal(JSON.parse(readFileSync(join(DIR, `${held.job.id}.json`), "utf-8")).state, "waiting");
+  plan = "v2";
+  const fine = await apply(2);
+  reading.open();
+  await first.done;
+  assert.match((await held.done).error, /rewritten/);
+  assert.equal(jobById(ROOT, held.job.id).state, "held");
+  assert.deepEqual(await fine.done, { ok: true }, "pressed on v2, run on v2");
+  assert.equal(ran, 1);
+  // Pressed with nothing ahead of it, a job is never held: there was no wait.
+  plan = "v3";
+  const at = await apply(3);
+  assert.deepEqual(await at.done, { ok: true });
+});
+
+test("a job's start, finish and cancel are told to its log", async () => {
+  const heard = [];
+  const log = (type, job) => heard.push(`${type}:${job.state}`);
+  const running = gate();
+  const one = await startJob({ root: ROOT, runId: "RUN-L", kind: "scans-read", label: "L", keys: [pileKey("RUN-L", "Q1")], background: true, log, work: running.work() });
+  const two = await startJob({ root: ROOT, runId: "RUN-L", kind: "scans-read", label: "L2", params: { a: 1 }, keys: [pileKey("RUN-L", "Q1")], background: true, log, work: () => ({ ok: true }) });
+  cancelJob(ROOT, two.job.id);
+  await two.done;
+  cancelJob(ROOT, one.job.id);
+  // Its work would see `job.cancelled` and stop; this one is let go.
+  running.open();
+  await one.done;
+  assert.deepEqual(heard, ["started:running", "cancelled:waiting", "finished:cancelled", "cancelled:running", "finished:cancelled"]);
+});
+
+test("only the pane's own page, with this start's token, may start or stop work", () => {
+  const req = (headers) => ({ headers: { host: "localhost:3080", ...headers } });
+  const pane = { "sec-fetch-site": "same-origin", origin: "http://localhost:3080", "x-pane-token": paneToken() };
+  assert.equal(notFromThePane(req(pane)), null);
+  assert.match(notFromThePane(req({ ...pane, "sec-fetch-site": "cross-site" })), /another site/);
+  assert.match(notFromThePane(req({ ...pane, origin: "http://evil.example" })), /another site/);
+  assert.match(notFromThePane(req({ ...pane, origin: "null" })), /shown document/, "a document in the sandboxed frame");
+  assert.match(notFromThePane(req({ ...pane, "x-pane-token": "0".repeat(48) })), /Reload it/);
+  assert.match(notFromThePane(req({ "sec-fetch-site": "same-origin", origin: "http://localhost:3080" })), /Reload it/, "no token");
+  assert.equal(notFromThePane(req({ "sec-fetch-site": "same-origin" }), false), null, "the token itself is asked without one");
+  assert.equal(paneToken().length, 48);
 });
 
 test("jobs are per workspace and per run, and the table is shared across imports", async () => {

@@ -27,8 +27,8 @@ import {
 } from "@ainar/core/src/defence.ts";
 import { configFromRegistry, realtimeSession, transcriber } from "@ainar/core/src/transcribe.ts";
 import { runScans } from "../actions.js";
-import { KINDS, recordedStudents } from "../job-kinds.js";
-import { answerJob, defenceKey, holderOf, recordingsKey, refusal, startJob } from "../jobs.js";
+import { startKind } from "../job-kinds.js";
+import { answerJob, defenceKey, holderOf, notFromThePane, refusal } from "../jobs.js";
 import {
   chooseNext,
   defenceSessionPayload,
@@ -101,32 +101,21 @@ export const routes = [
         return sendJson(res, 200, { error: "A step (plan, apply, transcribe) and an assessment, please." });
       }
       const sending = step === "transcribe" && url.searchParams.get("confirm") === "1";
-      const extra =
-        step === "apply" && url.searchParams.get("consent") === "1" ? ["--consent-confirmed"] : sending ? ["--confirm"] : [];
-      const args = ["defence", "batch", step, runId, "--assessment", assessmentId, ...extra];
-      const title = assessmentsOf(loaded.bundle, runId).find((entry) => entry.assessment_id === assessmentId)?.title || assessmentId;
-      // A quote writes nothing and runs as it always has. Sending is a
-      // background job (server/job-kinds.js). Plan and apply rewrite the
-      // run's one recordings plan, and apply files into each placed
-      // student's defence: seconds, inline.
+      // A quote writes nothing and runs as it always has.
       if (step === "transcribe" && !sending) {
-        return runScans(args, root)
+        return runScans(["defence", "batch", "transcribe", runId, "--assessment", assessmentId], root)
           .then((result) => sendJson(res, 200, result))
           .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
       }
-      if (sending) return answerJob(res, KINDS["defence-transcribe"](c, { assessmentId }));
-      const defences = recordedStudents(runId, assessmentId).map((student) => defenceKey(runId, assessmentId, student));
+      // The rest start work: from the pane's page only, and as kinds
+      // (server/job-kinds.js) — sending in the background, plan and apply
+      // inline (JOB-10).
+      const why = notFromThePane(req);
+      if (why) return sendJson(res, 200, { error: why, token: true });
+      if (sending) return answerJob(res, startKind(c, "defence-transcribe", { assessmentId }));
       return answerJob(
         res,
-        startJob({
-          root,
-          runId,
-          kind: `defence-batch-${step}`,
-          label: `Filing recorded defences for ${title}`,
-          subject: assessmentId,
-          keys: step === "apply" ? [recordingsKey(runId), ...defences] : [recordingsKey(runId)],
-          work: () => runScans(args, root),
-        }),
+        startKind(c, `defence-batch-${step}`, { assessmentId, consent: step === "apply" && url.searchParams.get("consent") === "1" }),
       );
     },
   },

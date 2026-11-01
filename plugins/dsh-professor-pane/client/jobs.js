@@ -107,10 +107,38 @@ export const lastJob = (runId, sessionId, kind, subject) =>
     .then((value) => (value.jobs || []).find((job) => job.kind === kind && (!subject || job.subject === subject)) || null)
     .catch(() => null);
 
+// The harness's per-start token (server/jobs.js), asked once and again
+// only when a press finds the harness has restarted since.
+let token = null;
+const paneToken = (sessionId, fresh) => {
+  if (fresh || !token) {
+    token = ask("/api/jobs/token", sessionId)
+      .then((value) => value.token || "")
+      .catch(() => {
+        token = null;
+        return "";
+      });
+  }
+  return token;
+};
+
+/**
+ * A press that starts or stops work (JOB-10): `fetch(url, init)` with the
+ * pane's token, answered as JSON. A press refused for an old token — the
+ * harness restarted since this page asked — is sent once more with a new one.
+ */
+export const pressWork = (url, init, sessionId) => {
+  const send = (fresh) =>
+    paneToken(sessionId, fresh)
+      .then((value) =>
+        fetch(url, Object.assign({}, init, { headers: Object.assign({ accept: "application/json" }, init && init.headers, { "x-pane-token": value }) })),
+      )
+      .then((response) => response.json());
+  return send(false).then((answer) => (answer && answer.token ? send(true) : answer));
+};
+
 const press = (path, sessionId) =>
-  fetch(scoped(BASE + path, sessionId), { method: "POST", headers: { accept: "application/json" } })
-    .then((response) => response.json())
-    .catch((error) => ({ error: String(error) }));
+  pressWork(scoped(BASE + path, sessionId), { method: "POST" }, sessionId).catch((error) => ({ error: String(error) }));
 
 /** Cancel a running or waiting job: `{ job }`, or `{ error }`. Its follower sees it finish. */
 export const cancelJob = (id, sessionId) => press("/api/jobs/" + encodeURIComponent(id) + "/cancel", sessionId);
@@ -119,4 +147,9 @@ export const cancelJob = (id, sessionId) => press("/api/jobs/" + encodeURICompon
 export const continueJob = (id, sessionId) => press("/api/jobs/" + encodeURIComponent(id) + "/continue", sessionId);
 
 /** What a cut-short job's state is called. */
-export const CUT_SHORT_WORDS = { interrupted: "was interrupted by a restart", cancelled: "was cancelled", failed: "failed" };
+export const CUT_SHORT_WORDS = {
+  interrupted: "was interrupted by a restart",
+  cancelled: "was cancelled",
+  failed: "failed",
+  held: "was held: its plan changed while it waited",
+};

@@ -34,6 +34,8 @@ import { useWorkspaceProfile } from "@ainar/core/src/profile.ts";
 import { ToolError } from "@ainar/core/src/workspace.ts";
 
 import { BASE, sendErrorPage, sendJson } from "./http.js";
+import { startKind } from "./job-kinds.js";
+import { resumeSaved } from "./jobs.js";
 import { resolveWorkspace, VIEWS } from "./workspace.js";
 
 // The first page's reads, done ahead by `index.js`; see server/prewarm.js.
@@ -149,6 +151,9 @@ export const handle = (req, res, { registry, credentials, harness }) => {
   // This workspace's profile for everything the request reads (timezone,
   // grading shapes, marks); the pane serves several workspaces, so per request.
   useWorkspaceProfile({ root: c.root });
+  // The queue a previous harness left for this workspace, queued again on
+  // its first request (JOB-9); a no-op after that.
+  resumeSaved(c, startKind).catch(() => {});
 
   try {
     if (!route) return sendJson(res, 404, { error: `no route ${path} under ${BASE}` });
