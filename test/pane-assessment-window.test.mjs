@@ -34,7 +34,7 @@ const evaluations = [
 
 test("the figures: counts, ends and middle of the graded, spread, tenths, groups, questions", () => {
   const s = summarise({ assessment, cells, criteria, evaluations });
-  assert.deepEqual(s.counts, { graded: 4, in: 1, handed: 5, missing: 2, unrecorded: 0, ahead: 0 });
+  assert.deepEqual(s.counts, { graded: 4, in: 1, handed: 5, missing: 2, unrecorded: 0, ahead: 0, held: 0, voided: 0 });
   assert.equal(s.students, 7);
   assert.equal(s.scores.mean, 7.5);
   assert.equal(s.scores.median, 8);

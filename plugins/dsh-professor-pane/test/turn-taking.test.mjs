@@ -14,7 +14,8 @@ const loadClient = () => {
   const window = {
     __ModuleLoader__: {
       load: ({ factory }) => {
-        exported = factory((name) => (name === "react" ? { createElement: () => null } : {}));
+        // Only what the bundle calls while it loads: elements, and the contexts its modules declare.
+        exported = factory((name) => (name === "react" ? { createElement: () => null, createContext: () => ({}) } : {}));
       },
     },
   };

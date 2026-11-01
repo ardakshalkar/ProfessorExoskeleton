@@ -15,10 +15,17 @@ import { enqueuePlacement, onPlacements, placementKey, placementsNow, placements
 
 test("presses wait in line, one request at a time, in the order pressed; a paper already waiting is not added twice", async () => {
   const calls = [];
-  globalThis.fetch = (url, init) =>
-    new Promise((resolve) => {
-      calls.push({ url, body: JSON.parse(init.body), resolve });
+  let tokens = 0;
+  globalThis.fetch = (url, init) => {
+    // The pane's per-start token (JOB-10), asked once before the first press.
+    if (/\/api\/jobs\/token/.test(url)) {
+      tokens += 1;
+      return Promise.resolve({ json: () => Promise.resolve({ token: "t".repeat(48) }) });
+    }
+    return new Promise((resolve) => {
+      calls.push({ url, body: JSON.parse(init.body), token: init.headers["x-pane-token"], resolve });
     });
+  };
   const answer = (index, value) => calls[index].resolve({ json: () => Promise.resolve(value) });
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -39,7 +46,9 @@ test("presses wait in line, one request at a time, in the order pressed; a paper
   assert.equal(press("65,66,68,67", "STUDENT-ZHCW4G"), true);
   assert.equal(press("29-32", "STUDENT-H75AZ6"), true);
   assert.equal(press("29-32", "STUDENT-H75AZ6"), false, "the same paper twice is one placement");
+  await settle();
   assert.equal(calls.length, 1, "the second waits for the first");
+  assert.equal(calls[0].token, "t".repeat(48), "a press carries the pane's token");
   assert.deepEqual(placementsNow(), {
     running: placementKey("ASSESSMENT-MIDTERM-1", "scan-1.pdf", "65,66,68,67"),
     queued: [placementKey("ASSESSMENT-MIDTERM-1", "scan-1.pdf", "29-32")],
@@ -61,6 +70,7 @@ test("presses wait in line, one request at a time, in the order pressed; a paper
   assert.deepEqual(done, [["65,66,68,67", true], ["29-32", false], ["49-52", true]]);
   assert.equal(placementsWaiting(), false);
   assert.equal(calls.length, 3);
+  assert.equal(tokens, 1, "the token is asked once, not per press");
   assert.ok(seen.length >= 6, "every move of the line is told");
   stop();
 });

@@ -1,0 +1,73 @@
+# INS-1: every test suite, on Linux and on Windows, on every push to master
+# and every pull request. Until this existed, every green result was one
+# Windows laptop with whatever happened to be installed on it.
+#
+# Three suites, each run even when another fails, so one red does not hide
+# the next:
+#   ainar-node/                  the CLI and the course model (`npm test`)
+#   ./                           the pane's client modules and the plugins (`npm test`)
+#   plugins/dsh-professor-pane/  the pane's server, and that the committed
+#                                lib/client.js is what client/ builds to
+#
+# Not here yet: the golden and validator checks (`npm run check` in
+# ainar-node, INS-2), and an install without --legacy-peer-deps (INS-3) —
+# see package.json `comments.install` for why the flag is needed today. The
+# second install, in ainar-node, is the manual one INS-4 is to remove.
+
+name: test
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # 22.18 is the first 22 that strips TypeScript types on import without a
+      # flag; the pane imports @ainar/core's .ts source directly.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            ainar-node/package-lock.json
+
+      # Two steps, not one script: on Windows a failed first command in a
+      # multi-line `run` does not stop the second, and its exit code is lost.
+      - name: install (root)
+        run: npm ci --legacy-peer-deps
+
+      - name: install (ainar-node)
+        id: install
+        working-directory: ainar-node
+        run: npm ci --legacy-peer-deps
+
+      - name: ainar-node
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: ainar-node
+        run: npm test
+
+      - name: root
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm test
+
+      - name: pane
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: plugins/dsh-professor-pane
+        run: npm test

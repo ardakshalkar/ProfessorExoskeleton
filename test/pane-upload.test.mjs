@@ -132,7 +132,7 @@ test("what the kind does not take is refused, and nothing is left behind", async
   assert.match((await upload(handler, `run=${RUN}&kind=scans&name=photo.jpg`, PDF)).error, /uploaded as PDF/);
   assert.match((await upload(handler, `run=${RUN}&kind=scans&name=fake.pdf`, Buffer.from("not a pdf"))).error, /does not start like a PDF/);
   assert.match((await upload(handler, `run=${RUN}&kind=scans&name=empty.pdf`, Buffer.alloc(0))).error, /empty/);
-  assert.match((await upload(handler, `run=${RUN}&kind=secrets&name=a.pdf`, PDF)).error, /scans or paper/);
+  assert.match((await upload(handler, `run=${RUN}&kind=secrets&name=a.pdf`, PDF)).error, /scans, paper or recordings/);
   assert.match((await upload(handler, `run=NOPE-2026-FALL&kind=scans&name=a.pdf`, PDF)).error, /no course run/);
   assert.match((await upload(handler, `run=${RUN}&kind=scans&name=a.pdf`, PDF, "GET")).error, /POST/);
   const inbox = join(submissions, RUN, "_inbox");
