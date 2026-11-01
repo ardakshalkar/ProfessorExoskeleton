@@ -1799,7 +1799,16 @@ is worth building.
       validation per request, `loadedRun`, scans status walking the private
       folder, `lms check` on Gradebook open), the client waiting on more than
       one fetch in series, and the revision tick refetching everything. A
-      table of the five slowest, with the cause of each. `S` · depends: —
+      table of the five slowest, with the cause of each. `S` · depends: —.
+      Done 2026-11-01 as [`docs/PANE-SPEED.md`](docs/PANE-SPEED.md), with
+      `plugins/dsh-professor-pane/test/reads-timing.mjs` to measure again.
+      Slowest: Sync's first visit 7.8–10 s (waits for the ~30 s Canvas check
+      the pane starts on opening, then a 15-read refetch because every tag
+      bumps `"*"`); Students 0.7–1 s (a 5.5 MB page rebuilt per request);
+      Files 0.8–0.9 s and Scans 0.6 s (`keptScanPiles` exists but they call
+      `scanPiles`); Today 0.4–0.66 s (11 walks of `courses/` per request,
+      20 ms each on OneDrive); the sidebar 175 ms on every change. No page
+      waits on reads in series.
 - [ ] **JOB-7** Fix what JOB-6 finds. Likely candidates: cache the loaded
       bundle per run keyed by file mtimes instead of reloading per request;
       draw the page from the last answer while the fresh one loads
