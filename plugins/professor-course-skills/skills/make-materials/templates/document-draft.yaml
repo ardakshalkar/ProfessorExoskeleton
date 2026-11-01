@@ -18,13 +18,7 @@ documents:
     course_run_id: "{{ COURSE_VERSION_ID }}"
     module_id: "{{ MODULE-ID }}"
     concepts: ["{{ CONCEPT-ID }}"]
-    generated_by:
-      produced_by: make-materials-skill
-      model_id: "{{ the model that wrote it }}"
-      workflow_version: claude-code/prototype
-      prompt_version: make-materials/v1
-      input_refs: ["{{ MODULE-ID }}", "{{ LO-ID }}"]
-      created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+    generated_by: …   # ../ainar-records/templates/provenance.yaml, citing ["{{ MODULE-ID }}", "{{ LO-ID }}"]
     # Slides only. The plan is a contract with the renderer: slide count, order
     # and titles must match the markdown or it stops.
     presentation_plan:
@@ -53,13 +47,7 @@ documents:
     course_run_id: "{{ COURSE_VERSION_ID }}"
     module_id: "{{ MODULE-ID }}"
     concepts: ["{{ CONCEPT-ID }}"]
-    generated_by:
-      produced_by: make-materials-skill
-      model_id: "{{ the model that wrote it }}"
-      workflow_version: claude-code/prototype
-      prompt_version: make-materials/v1
-      input_refs: ["{{ MODULE-ID }}"]
-      created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+    generated_by: …   # ../ainar-records/templates/provenance.yaml, citing ["{{ MODULE-ID }}"]
 
 resources:
   - resource_id: RES-{{ nnnn }}

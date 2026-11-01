@@ -140,6 +140,24 @@ in the pane, where each homework has **Defended / Not defended** buttons that
 write the same field. This is recording what the professor said, not deciding:
 never set it on your own reading of a defence session or a transcript.
 
+## Where it came from
+
+**Every draft says which skill wrote it, on which model, from what.** The block
+is defined once, in `templates/provenance.yaml` beside this file, and every
+skill that drafts a record points there — reach it as
+`../ainar-records/templates/provenance.yaml` from that skill's own directory.
+Five fields: `produced_by` the skill (`/design-assessment`), `workflow_version`
+the `version:` in that skill's front matter, `model_id` the model this session
+runs on as the session names it (left out if it does not say — never guessed),
+`input_refs` the identifiers the draft rests on, `created_at` now in the run's
+offset. It goes on the record as `provenance`, on an evaluation inside
+`ai_suggestion`, and on a Document as `generated_by`.
+
+A year later "why is this rubric like that" is answered by it, so do not leave
+it off a draft because the draft is small. A command that writes drafts for you
+(`defence grade`) takes `--by <model>` and `--workflow-version <version>` and
+writes the block itself.
+
 ## What the field means
 
 - **No `approval` field is approved.** Anything typed into `courses/` by hand is

@@ -29,13 +29,7 @@ action_items:
     status: pending
     due_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
     available_actions: [review, approve, dismiss]
-    provenance:
-      produced_by: action-inbox-skill
-      model_id: "{{ the model that wrote it }}"
-      workflow_version: claude-code/prototype
-      prompt_version: action-inbox/v1
-      input_refs: ["{{ EVENT-… }}", "{{ EVAL-… }}"]
-      created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+    provenance: …   # ../ainar-records/templates/provenance.yaml, citing ["{{ EVENT-… }}", "{{ EVAL-… }}"]
 
   # A step from the readiness ladder. Sourced to the rung it came from and to
   # nothing else. No `approve` — nothing has been drafted. No `due_at`.
@@ -52,10 +46,4 @@ action_items:
     source_refs: ["readiness:{{ rung }}"]
     status: pending
     available_actions: [review, dismiss]
-    provenance:
-      produced_by: action-inbox-skill
-      model_id: "{{ the model that wrote it }}"
-      workflow_version: claude-code/prototype
-      prompt_version: action-inbox/v1
-      input_refs: ["readiness:{{ rung }}"]
-      created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"
+    provenance: …   # ../ainar-records/templates/provenance.yaml, citing ["readiness:{{ rung }}"]

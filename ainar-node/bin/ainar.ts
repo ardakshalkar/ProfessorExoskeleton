@@ -557,8 +557,9 @@ const HELP = `ainar — the AINAR course model CLI
                                            PRIVATE: the rubric and the student's
                                            own words by criterion, citable
   defence grade RUN --assessment A --student S --from FILE.json [--by MODEL]
-                                           check a proposed grade and write it
-                                           as suggested evaluations
+                [--workflow-version V]     check a proposed grade and write it
+                                           as suggested evaluations; --by and
+                                           --workflow-version go in provenance
   defence transcribe RUN --assessment A --student S [--question Q] [--all]
                      [--connection NAME]   transcribe recorded takes through the
                                            \`transcription\` connection
@@ -4054,7 +4055,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             "       defence session RUN --assessment A --student S [--json]\n" +
             "       defence replay RUN --assessment A --student S [--json]\n" +
             "       defence evidence RUN --assessment A --student S\n" +
-            "       defence grade RUN --assessment A --student S --from FILE.json [--by MODEL]\n" +
+            "       defence grade RUN --assessment A --student S --from FILE.json [--by MODEL] [--workflow-version V]\n" +
             "       defence transcribe RUN --assessment A --student S [--question Q] [--all] [--connection NAME]",
         );
         process.exit(2);
@@ -4142,8 +4143,9 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           student_id: studentId,
           existing: bundle.evaluations as any[],
           provenance: {
-            produced_by: "defend-submission-skill",
+            produced_by: "/defend-submission",
             model_id: flag("by") ?? null,
+            workflow_version: flag("workflow-version") ?? null,
             created_at: decidedAt((runById(bundle).get(runId) as { timezone?: string })?.timezone),
             input_refs: [submission.submission_id, `private://submissions/${runId}/${assessmentId}/${studentId}/defence/session.yaml`, ...(pin ? [`${pin.url}@${pin.commit}`] : [])],
           },

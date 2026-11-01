@@ -5,6 +5,7 @@ stage: assess
 requires: [enrollments]
 produces: [assessments, items, documents]
 writes: drafts
+version: 2026.11.1
 ---
 
 > **Non-negotiables.** This skill proposes; a person decides.
@@ -13,6 +14,9 @@ writes: drafts
 >   collection under `courses/<COURSE>/`, with its real identifier — and mark
 >   every record you write `approval: draft` (a grade: `status: suggested`).
 >   Nothing is moved afterwards, and nothing student-facing reads a draft.
+> - **Say where every draft came from** — the provenance block in
+>   `../ainar-records/templates/provenance.yaml`, filled with this skill's
+>   `version` above and the model this session runs on.
 > - **The paper is the professor's. Copy it, never compose it.** The questions,
 >   their marks and the answer key come from the paper and from the professor —
 >   word for word, marks as printed, the key as given. Never work out a key from

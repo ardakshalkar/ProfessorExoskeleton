@@ -5,12 +5,16 @@ stage: assess
 requires: [assessments, submissions]
 produces: [defence questions]
 writes: drafts
+version: 2026.11.1
 ---
 
 > **Non-negotiables.** This skill proposes; a person decides.
 >
 > - Every question is `approval: draft`. The professor reads, edits or cuts
 >   them before asking any. Never mark one approved.
+> - **Say where every draft came from** — the provenance block in
+>   `../ainar-records/templates/provenance.yaml`, filled with this skill's
+>   `version` above and the model this session runs on.
 > - **You never grade and you never accuse.** A question is a question. If
 >   the code looks copied, write the question that would tell — never a
 >   sentence saying so.
@@ -77,7 +81,7 @@ there; it cannot write `~/.ainar`):
 ```
 
 ```bash
-bin/ainar defence questions RUN --assessment ASSESSMENT --student STUDENT --from output/defence-draft.json --by "<your model name>"
+bin/ainar defence questions RUN --assessment ASSESSMENT --student STUDENT --from output/defence-draft.json --by "<the model this session runs on>"
 ```
 
 It numbers them, marks each `approval: draft`, and writes
@@ -182,7 +186,7 @@ that, without accusing anyone (VIV-3).
 ```
 
 ```bash
-bin/ainar defence grade RUN --assessment ASSESSMENT --student STUDENT --from output/defence-grade.json --by "<your model name>"
+bin/ainar defence grade RUN --assessment ASSESSMENT --student STUDENT --from output/defence-grade.json --by "<the model this session runs on>" --workflow-version 2026.11.1
 bin/ainar validate <COURSE>
 ```
 

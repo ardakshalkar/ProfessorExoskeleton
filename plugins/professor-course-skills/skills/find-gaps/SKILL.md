@@ -5,6 +5,7 @@ stage: analyse
 requires: [evidence]
 produces: [concept_states, signals]
 writes: drafts
+version: 2026.11.1
 ---
 
 > **Non-negotiables.** This skill proposes; a person decides.
@@ -14,6 +15,9 @@ writes: drafts
 >   every record you write `approval: draft` (a grade: `status: suggested`).
 >   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
 >   nothing student-facing reads a draft.
+> - **Say where every draft came from** — the provenance block in
+>   `../ainar-records/templates/provenance.yaml`, filled with this skill's
+>   `version` above and the model this session runs on.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
@@ -130,13 +134,7 @@ concept_states:
     mastery_estimate: 0.58
     evidence_ids: [EVID-2801, EVID-3011]
     last_updated_at: 2026-10-19T14:15:00+05:00
-    provenance:
-      produced_by: find-gaps-skill
-      model_id: claude-opus-5
-      workflow_version: claude-code/prototype
-      prompt_version: find-gaps/v1
-      input_refs: [EVID-2801, EVID-3011, CONCEPT-OVERFITTING]
-      created_at: 2026-10-19T14:15:00+05:00
+    provenance: …   # ../ainar-records/templates/provenance.yaml, citing [EVID-2801, EVID-3011, CONCEPT-OVERFITTING]
 
 # courses/CSS-4008/records/signals.yaml
 signals:
