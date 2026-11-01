@@ -227,6 +227,15 @@ export const entity = <T extends z.ZodRawShape>(shape: T) =>
     })
     .strict();
 
+/**
+ * Where a record an agent wrote came from (PRV-1): `produced_by` the skill or
+ * workflow (`/design-assessment`), `workflow_version` its version, `model_id`
+ * the model the session ran on, `input_refs` the identifiers of the evidence
+ * and records it cited, `created_at` when. Every collection whose records can
+ * be drafts carries it — as `provenance`, on an evaluation's `ai_suggestion`,
+ * and as a document's `generated_by`; `provenanceOf` in `approval.ts` reads
+ * all three.
+ */
 export const Provenance = entity({
   produced_by: z.string(),
   model_id: z.string().nullish(),

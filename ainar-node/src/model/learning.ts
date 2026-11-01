@@ -96,4 +96,5 @@ export const Intervention = entity({
   scheduled_at: awareDatetime().nullish(),
   completed_at: awareDatetime().nullish(),
   effectiveness_note: z.string().nullish(),
+  provenance: Provenance.nullish(),
 });

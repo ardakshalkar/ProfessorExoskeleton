@@ -10,6 +10,85 @@
       ],
       "title": "InterventionStatus",
       "type": "string"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Where an AI-produced statement came from.\n\nEvery AI conclusion must be reconstructable: which data, which model,\nwhich workflow version, what evidence, who approved it.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "produced_by": {
+          "description": "Agent or workflow that produced this output.",
+          "title": "Produced By",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "workflow_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Version"
+        },
+        "prompt_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Version"
+        },
+        "input_refs": {
+          "description": "Identifiers of the records and documents used as input.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Refs",
+          "type": "array"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        }
+      },
+      "required": [
+        "produced_by"
+      ],
+      "title": "Provenance",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -133,6 +212,17 @@
       ],
       "default": null,
       "title": "Effectiveness Note"
+    },
+    "provenance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Provenance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

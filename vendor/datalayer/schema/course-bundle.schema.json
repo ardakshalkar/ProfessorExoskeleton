@@ -480,6 +480,17 @@
           "default": null,
           "description": "Whether the work was done under supervision (a paper in class, an oral defence) or not (homework, an online quiz); absent, inferred from type and delivery where they settle it.",
           "title": "Setting"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -743,6 +754,17 @@
           ],
           "default": null,
           "title": "Marking Guidance"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -1158,6 +1180,17 @@
           "additionalProperties": true,
           "title": "Payload",
           "type": "object"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2259,6 +2292,17 @@
           ],
           "default": null,
           "title": "Effectiveness Note"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2429,6 +2473,17 @@
           },
           "title": "Allowed Item Types",
           "type": "array"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2601,6 +2656,17 @@
           ],
           "default": null,
           "title": "Responded At"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2764,6 +2830,17 @@
           "default": null,
           "description": "What students should do before the activity.",
           "title": "Preparation"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -3477,6 +3554,17 @@
           "default": false,
           "title": "Required",
           "type": "boolean"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Provenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [

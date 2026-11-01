@@ -87,6 +87,7 @@ export const ItemModel = entity({
   misconceptions: z.array(ConceptId).default([]),
   answer_requirements: z.array(z.string()).default([]),
   allowed_item_types: z.array(ItemType).default([]),
+  provenance: Provenance.nullish(),
 }).superRefine((value, ctx) => {
   if (!value.outcome_id && !value.capability_id) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "an item model must name an outcome_id or capability_id" });
@@ -175,6 +176,7 @@ export const Assessment = entity({
   curve: ScoreCurve.nullish(),
   /** This assessment's own rule for work not handed in; absent, the run's `grading_scheme.missing_work`. */
   missing_work: MissingWork.nullish(),
+  provenance: Provenance.nullish(),
 })
   // An inline rubric fills in `rubric_id`, and contradicting it is an error.
   // Ported from `_rubric_consistency`; without it every assessment carrying an
@@ -230,6 +232,7 @@ export const AssessmentItem = entity({
   options: z.array(ItemOption).default([]),
   answer_key: z.string().nullish(),
   marking_guidance: z.string().nullish(),
+  provenance: Provenance.nullish(),
 })
   // Ported from `_choice_items_need_an_answer`. An unanswerable choice item is
   // one that `ainar score-items` would have to guess at, so it is refused here.
@@ -262,6 +265,7 @@ export const ItemResponse = entity({
   correct: z.boolean().nullish(),
   scored_by: z.string().nullish(),
   responded_at: awareDatetime().nullish(),
+  provenance: Provenance.nullish(),
 });
 
 export const SubmissionFile = entity({

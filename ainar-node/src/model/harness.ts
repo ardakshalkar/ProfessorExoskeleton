@@ -26,6 +26,7 @@ export const CourseEvent = entity({
   entity_id: z.string().nullish(),
   occurred_at: awareDatetime(),
   payload: z.record(z.string(), z.unknown()).default({}),
+  provenance: Provenance.nullish(),
 });
 
 export const ActionItem = entity({

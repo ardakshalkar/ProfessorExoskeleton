@@ -57,9 +57,21 @@ is worth building.
 > **Rank 2.** Cheap now, expensive to backfill, and both E6 and E8 are dead
 > without it. The single highest-leverage small thing on this page.
 
-- [ ] **PRV-1** Provenance block on the draft schema: model, skill and version,
+- [x] **PRV-1** Provenance block on the draft schema: model, skill and version,
       evidence identifiers cited, timestamp. `ainar-node/src/approval.ts` holds
       the draft contract (`AGENT_WRITABLE`). `S` · depends: —
+      Done 2026-11-01: the block already existed as `Provenance`
+      (`produced_by` = skill, `workflow_version`, `model_id`, `input_refs` =
+      evidence cited, `created_at`) on evidence, student states, signals,
+      action items, an evaluation's `ai_suggestion` and a document's
+      `generated_by`. It is now `provenance` on the eight draftable kinds that
+      had none — activities, resources, assessments, items, item models, item
+      responses, interventions, events — in the zod model and in the vendored
+      JSON Schemas. `provenanceOf(collection, record)` in `approval.ts` reads
+      all three spellings. `test/provenance.test.ts` fails if a draftable
+      collection or its vendored schema goes without it. Not here: the SQL
+      tables of those eight have no `provenance` column, so `ainar db` drops it
+      (with PRV-3), and nothing writes it yet (PRV-2).
 - [ ] **PRV-2** Skills write it. One shared template line rather than forty
       bespoke ones. `M` · depends: PRV-1
 - [ ] **PRV-3** It stays on the record when the professor accepts it and when a

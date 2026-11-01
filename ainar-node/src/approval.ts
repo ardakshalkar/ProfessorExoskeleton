@@ -65,6 +65,21 @@ export const isApproved = (collection: string, record: Record_): boolean => {
   return record.approval !== "draft";
 };
 
+/**
+ * Where a record came from, if an agent said: model, skill and version, the
+ * evidence it cited, when (`Provenance`, model/common.ts). Three spellings, one
+ * question — an evaluation's sits on its `ai_suggestion` beside the professor's
+ * decision, a document's is `generated_by` from before the rest had one. Null
+ * when the record says nothing, which for a record typed by hand is the truth.
+ */
+export const provenanceOf = (collection: string, record: Record_): Record_ | null => {
+  if (collection === "evaluations") {
+    return ((record.ai_suggestion as Record_ | null | undefined)?.provenance as Record_ | null | undefined) ?? null;
+  }
+  if (collection === "documents") return (record.generated_by as Record_ | null | undefined) ?? null;
+  return (record.provenance as Record_ | null | undefined) ?? null;
+};
+
 /** How a record is named in a list — its id, or its key for the state collections. */
 export const recordLabel = (collection: string, record: Record_): string => {
   const field = ID_FIELDS[collection];

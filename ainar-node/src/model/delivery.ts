@@ -19,6 +19,7 @@ import {
   MissingWork,
   ModuleId,
   OutcomeId,
+  Provenance,
   ResourceId,
   ResourceKind,
   RunStatus,
@@ -154,6 +155,7 @@ export const Resource = entity({
   concepts: z.array(ConceptId).default([]),
   description: z.string().nullish(),
   required: z.boolean().default(false),
+  provenance: Provenance.nullish(),
 });
 
 export const LearningActivity = entity({
@@ -181,4 +183,5 @@ export const LearningActivity = entity({
   concepts: z.array(ConceptId).default([]),
   resources: z.array(ResourceId).default([]),
   preparation: z.string().nullish(),
+  provenance: Provenance.nullish(),
 });

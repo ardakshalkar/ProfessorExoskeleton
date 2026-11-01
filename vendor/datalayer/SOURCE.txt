@@ -24,3 +24,9 @@ ainar-node/src/model/common.ts `Setting`.
 Fork, 2026-10-26: assessment.schema.json and course-bundle.schema.json gain
 `Assessment.closes_at` (when hand-ins stop, Canvas's lock_at), matching
 ainar-node/src/model/assessment.ts.
+
+Fork, 2026-11-01 (PRV-1): `provenance` (the existing `Provenance` definition) on
+LearningActivity, Resource, Assessment, AssessmentItem, ItemModel,
+ItemResponse, Intervention and CourseEvent, in their own files and in
+course-bundle.schema.json, matching ainar-node/src/model/. Inserted as text,
+last among each entity's properties; no existing line changed.
