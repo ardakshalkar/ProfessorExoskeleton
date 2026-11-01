@@ -11,6 +11,7 @@ import { submissionsDir } from "@ainar/core/src/scans.ts";
 import { runScans } from "../actions.js";
 import { answerPage, gradeDocument, groupsStamp } from "../grade.js";
 import { readBody, send, sendJson } from "../http.js";
+import { notFromThePane } from "../jobs.js";
 import { loadedRun, rosterDir } from "../workspace.js";
 
 export const routes = [
@@ -160,6 +161,9 @@ export const routes = [
       const WRITES = ["/api/grade/decide", "/api/grade/move", "/api/grade/choose", "/api/grade/accept-rubric", "/api/grade/points-only"];
       if (WRITES.includes(path)) {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+        // GRD-3: a mark is the professor's press on the pane's own page, never a POST from elsewhere on this machine.
+        const why = notFromThePane(req);
+        if (why) return sendJson(res, 200, { error: why, token: true });
         loadedRun(workspace, runId); // the run has to be this workspace's
         // Accept all sends a mark per suggested answer — thousands on a long
         // exam — so the body may be larger than a card's press.

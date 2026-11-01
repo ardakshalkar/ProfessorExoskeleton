@@ -4573,12 +4573,96 @@ var diffSummary = (answer) => {
   return { total: directions.total, kinds, directions, applicable: canApply, kept: answer.kept || 0 };
 };
 
+// client/jobs.js
+var EVERY = 2e3;
+var ask = (path, sessionId) => fetch(scoped(BASE + path, sessionId), { cache: "no-store", headers: { accept: "application/json" } }).then(
+  (response) => response.json()
+);
+var followJob = (answer, sessionId, onJob, alive) => {
+  if (!answer || !answer.job) return Promise.resolve(answer);
+  return new Promise((resolve) => {
+    const poll = (job) => {
+      if (alive && !alive()) {
+        resolve(null);
+        return;
+      }
+      if (onJob) onJob(job);
+      if (job.finishedAt) {
+        resolve(job.result || { error: "The job finished without an answer." });
+        return;
+      }
+      setTimeout(() => {
+        ask("/api/jobs/" + encodeURIComponent(job.id), sessionId).then((value) => value.job ? poll(value.job) : resolve({ error: value.error || "The job is gone." })).catch(() => poll(job));
+      }, EVERY);
+    };
+    poll(answer.job);
+  });
+};
+var progressText = (job) => {
+  const progress = job && job.progress;
+  if (!progress) return null;
+  return progress.total === null ? progress.done + " " + progress.unit : progress.done + " of " + progress.total + " " + progress.unit;
+};
+var waitingText = (job) => job && job.state === "waiting" && job.waitingFor ? "waiting for " + job.waitingFor : null;
+var RECENT_MS = 15 * 60 * 1e3;
+function useRunJobs(runId, sessionId, version) {
+  const [jobs, setJobs] = React.useState([]);
+  React.useEffect(() => {
+    if (!runId || !sessionId) return void 0;
+    let live = true;
+    let timer = null;
+    const load = () => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then((value) => {
+      if (!live) return;
+      const now = Date.now();
+      const shown = (value.jobs || []).filter(
+        (job) => (job.background || job.queued) && (!job.finishedAt || now - Date.parse(job.finishedAt) < RECENT_MS)
+      );
+      setJobs(shown);
+      if (shown.some((job) => !job.finishedAt)) timer = setTimeout(load, EVERY);
+    }).catch(() => {
+      if (live) timer = setTimeout(load, EVERY * 5);
+    });
+    load();
+    return () => {
+      live = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [runId, sessionId, version]);
+  return jobs;
+}
+var lastJob = (runId, sessionId, kind, subject2) => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then((value) => (value.jobs || []).find((job) => job.kind === kind && (!subject2 || job.subject === subject2)) || null).catch(() => null);
+var token = null;
+var paneToken = (sessionId, fresh) => {
+  if (fresh || !token) {
+    token = ask("/api/jobs/token", sessionId).then((value) => value.token || "").catch(() => {
+      token = null;
+      return "";
+    });
+  }
+  return token;
+};
+var pressWork = (url, init, sessionId) => {
+  const send2 = (fresh) => paneToken(sessionId, fresh).then(
+    (value) => fetch(url, Object.assign({}, init, { headers: Object.assign({ accept: "application/json" }, init && init.headers, { "x-pane-token": value }) }))
+  ).then((response) => response.json());
+  return send2(false).then((answer) => answer && answer.token ? send2(true) : answer);
+};
+var press = (path, sessionId) => pressWork(scoped(BASE + path, sessionId), { method: "POST" }, sessionId).catch((error) => ({ error: String(error) }));
+var cancelJob = (id, sessionId) => press("/api/jobs/" + encodeURIComponent(id) + "/cancel", sessionId);
+var continueJob = (id, sessionId) => press("/api/jobs/" + encodeURIComponent(id) + "/continue", sessionId);
+var CUT_SHORT_WORDS = {
+  interrupted: "was interrupted by a restart",
+  cancelled: "was cancelled",
+  failed: "failed",
+  held: "was held: its plan changed while it waited"
+};
+
 // client/road-flow.js
-var postRoads = (runId, sessionId, body) => fetch(scoped(BASE + "/api/roads?run=" + encodeURIComponent(runId || ""), sessionId), {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify(body)
-}).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) }));
+var postRoads = (runId, sessionId, body) => pressWork(
+  scoped(BASE + "/api/roads?run=" + encodeURIComponent(runId || ""), sessionId),
+  { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+  sessionId
+).catch((error) => ({ error: String(error && error.message || error) }));
 var roadIn = (preview, id) => preview && Array.isArray(preview.roads) ? preview.roads.find((road) => road.id === id) || null : null;
 function useRoad(props) {
   const [phase, setPhase] = React.useState("idle");
@@ -4856,11 +4940,11 @@ function UnmappedColumn(props) {
     )
   );
 }
-var syncPost = (runId, sessionId, path, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify(body)
-}).then((response) => response.json()).catch((error) => ({ error: String(error.message || error) }));
+var syncPost = (runId, sessionId, path, body) => pressWork(
+  scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId),
+  { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+  sessionId
+).catch((error) => ({ error: String(error.message || error) }));
 function SyncCard(props) {
   const sync = props.sync;
   const [result, setResult] = React.useState(null);
@@ -5298,11 +5382,11 @@ function WaitingList(props) {
 }
 
 // client/canvas-diff.js
-var post = (path, runId, sessionId, body) => fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify(body)
-}).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) }));
+var post = (path, runId, sessionId, body) => pressWork(
+  scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId),
+  { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+  sessionId
+).catch((error) => ({ error: String(error && error.message || error) }));
 var plural2 = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
 var subject = (entry) => entry.kind === "assignments" ? entry.field.replace(/_/g, " ") : entry.name || entry.student_id || entry.theirs || "—";
 var valueText = (value) => {
@@ -6182,9 +6266,7 @@ function CanvasMarks(props) {
   const [picks, setPicks] = React.useState({});
   const [creating, setCreating] = React.useState({});
   const endpoint = (path) => scoped(BASE + path + "?run=" + encodeURIComponent(props.runId || ""), props.sessionId);
-  const postJson = (path, body) => fetch(endpoint(path), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then(
-    (response) => response.json()
-  );
+  const postJson = (path, body) => pressWork(endpoint(path), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, props.sessionId);
   const marks = (extra, label) => {
     setPhase(label);
     setFailed(null);
@@ -6707,11 +6789,11 @@ var columnsOf = (assessment, courses) => {
 };
 var assignmentUrl = (host, courseId, assignmentId) => host && courseId && assignmentId ? String(host).replace(/\/+$/, "") + "/courses/" + courseId + "/assignments/" + assignmentId : null;
 var byDue = (left, right) => String(left.a.dueAt || "9999").localeCompare(String(right.a.dueAt || "9999")) || String(left.a.title || left.a.assessmentId).localeCompare(String(right.a.title || right.a.assessmentId));
-var postSync = (runId, sessionId, body) => fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(runId || ""), sessionId), {
-  method: "POST",
-  headers: { "content-type": "application/json" },
-  body: JSON.stringify(body)
-}).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) }));
+var postSync = (runId, sessionId, body) => pressWork(
+  scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(runId || ""), sessionId),
+  { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+  sessionId
+).catch((error) => ({ error: String(error && error.message || error) }));
 function CanvasRead(props) {
   const [busy, setBusy] = React.useState(null);
   const [result, setResult] = React.useState(null);
@@ -8140,11 +8222,11 @@ function CourseIntegrations(props) {
   const plural9 = (count, one, many) => count + " " + (count === 1 ? one : many);
   const migrate = () => {
     setMigrating("working");
-    fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "migrate" })
-    }).then((response) => response.json()).catch((error) => ({ error: String(error && error.message || error) })).then((answer) => {
+    pressWork(
+      scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId),
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "migrate" }) },
+      props.sessionId
+    ).catch((error) => ({ error: String(error && error.message || error) })).then((answer) => {
       setMigrating(answer);
       if (props.onSynced) props.onSynced();
     });
@@ -8561,7 +8643,7 @@ table.plan tr.projrow td{padding:3px 12px 5px;border-top:0}
 
 // client/course/parts.jsx
 var send = (message) => window.postMessage(Object.assign({ source: "professor-pane" }, message), "*");
-var press = {
+var press2 = {
   ask: (prompt) => send({ kind: "ask", prompt }),
   grade: (assessment, label) => send({ kind: "grade", assessment, label }),
   scans: (assessment) => send({ kind: "scans", assessment }),
@@ -8580,7 +8662,7 @@ function ConceptChip(props) {
       type: "button",
       className: "chip concept",
       title: "How the class stands on " + (c.title || c.id) + ", student by student",
-      onClick: () => press.concepts({ concept: c.id })
+      onClick: () => press2.concepts({ concept: c.id })
     },
     c.title || c.id
   );
@@ -8602,11 +8684,11 @@ function Icon(props) {
   return /* @__PURE__ */ h("svg", { className: "i", "aria-hidden": "true" }, /* @__PURE__ */ h("use", { href: "#i-" + props.name }));
 }
 function AskButton(props) {
-  return /* @__PURE__ */ h("button", { type: "button", className: props.className || "chip ask", "data-ask": "", title: props.title, onClick: () => press.ask(props.prompt) }, /* @__PURE__ */ h(Icon, { name: "ask" }), props.label);
+  return /* @__PURE__ */ h("button", { type: "button", className: props.className || "chip ask", "data-ask": "", title: props.title, onClick: () => press2.ask(props.prompt) }, /* @__PURE__ */ h(Icon, { name: "ask" }), props.label);
 }
 function GapChip(props) {
   const gap = GAP[props.kind];
-  return /* @__PURE__ */ h("button", { type: "button", className: "chip gap " + props.tier, "data-ask": "", title: props.title, onClick: () => press.ask(props.prompt) }, /* @__PURE__ */ h(Icon, { name: gap.icon }), props.label || gap.verb);
+  return /* @__PURE__ */ h("button", { type: "button", className: "chip gap " + props.tier, "data-ask": "", title: props.title, onClick: () => press2.ask(props.prompt) }, /* @__PURE__ */ h(Icon, { name: gap.icon }), props.label || gap.verb);
 }
 function MaterialChips(props) {
   const r = props.resource;
@@ -8663,12 +8745,12 @@ function StatusLine(props) {
   const parts = [];
   if (st.grading) {
     parts.push(
-      /* @__PURE__ */ h(Fragment2, { key: "grading" }, /* @__PURE__ */ h("span", { className: "stat" }, st.grading.suggested, " suggested · ", st.grading.decided, " decided"), /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the Grade view", onClick: () => press.grade(id, label) }, "Grade"))
+      /* @__PURE__ */ h(Fragment2, { key: "grading" }, /* @__PURE__ */ h("span", { className: "stat" }, st.grading.suggested, " suggested · ", st.grading.decided, " decided"), /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the Grade view", onClick: () => press2.grade(id, label) }, "Grade"))
     );
   }
   if (st.scans && st.scans.none) {
     parts.push(
-      /* @__PURE__ */ h(Fragment2, { key: "scans" }, /* @__PURE__ */ h("span", { className: "stat" }, "no scans yet"), /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Upload the scanned papers of " + label, onClick: () => press.upload(id, label) }, "Upload scans…"))
+      /* @__PURE__ */ h(Fragment2, { key: "scans" }, /* @__PURE__ */ h("span", { className: "stat" }, "no scans yet"), /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Upload the scanned papers of " + label, onClick: () => press2.upload(id, label) }, "Upload scans…"))
     );
   } else if (st.scans) {
     parts.push(/* @__PURE__ */ h(ScanSteps, { key: "scans", id, label, scans: st.scans, graded: Boolean(st.grading) }));
@@ -8681,7 +8763,7 @@ function StatusLine(props) {
           type: "button",
           className: "chip act",
           title: "The defence desk, on " + st.defences.student,
-          onClick: () => press.desk(id, st.defences.student)
+          onClick: () => press2.desk(id, st.defences.student)
         },
         "Open defence desk"
       ) : null)
@@ -8695,7 +8777,7 @@ function StatusLine(props) {
           type: "button",
           className: "chip act",
           title: "Send its definition to Canvas — reads a plan first",
-          onClick: () => press.publish(id, label, "canvas")
+          onClick: () => press2.publish(id, label, "canvas")
         },
         "publish…"
       ))
@@ -8709,7 +8791,7 @@ function StatusLine(props) {
           type: "button",
           className: "chip act",
           title: "Create the starter repository on GitHub — reads a plan first",
-          onClick: () => press.publish(id, label, "homework")
+          onClick: () => press2.publish(id, label, "homework")
         },
         "publish…"
       ))
@@ -8727,11 +8809,11 @@ function ScanSteps(props) {
   if (act && act.kind === "ask") {
     action = /* @__PURE__ */ h(AskButton, { className: "chip act", label: act.label, prompt: act.prompt, title: act.prompt });
   } else if (act && act.kind === "grade" && !props.graded) {
-    action = /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the Grade view", onClick: () => press.grade(id, label) }, act.label);
+    action = /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the Grade view", onClick: () => press2.grade(id, label) }, act.label);
   } else if (opensScans) {
-    action = /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the pile in Scans, on this step", onClick: () => press.scans(id) }, act.label);
+    action = /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the pile in Scans, on this step", onClick: () => press2.scans(id) }, act.label);
   }
-  return /* @__PURE__ */ h(Fragment2, null, steps.length ? /* @__PURE__ */ h("span", { className: "steps", role: "img", "aria-label": strip, title: strip }, steps.map((step) => /* @__PURE__ */ h("i", { key: step.label, className: step.state }))) : null, /* @__PURE__ */ h("span", { className: "stat" + (scans.whose === "you" ? " yours" : "") }, scans.phrase, scans.whose === "assistant" ? " · the assistant's" : ""), action, opensScans ? null : /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the pile in Scans", onClick: () => press.scans(id) }, "Scans"));
+  return /* @__PURE__ */ h(Fragment2, null, steps.length ? /* @__PURE__ */ h("span", { className: "steps", role: "img", "aria-label": strip, title: strip }, steps.map((step) => /* @__PURE__ */ h("i", { key: step.label, className: step.state }))) : null, /* @__PURE__ */ h("span", { className: "stat" + (scans.whose === "you" ? " yours" : "") }, scans.phrase, scans.whose === "assistant" ? " · the assistant's" : ""), action, opensScans ? null : /* @__PURE__ */ h("button", { type: "button", className: "chip act", title: "Open the pile in Scans", onClick: () => press2.scans(id) }, "Scans"));
 }
 var Dash = () => /* @__PURE__ */ h("span", { className: "dash" }, "—");
 var twoDigits = (n) => n < 10 ? "0" + n : String(n);
@@ -8765,7 +8847,7 @@ function saveRecord(edit, kind, id, fields, check) {
     body: JSON.stringify({ kind, id, fields, check: Boolean(check) })
   }).then((response) => response.json()).catch((error) => ({ error: String(error.message || error) })).then((result) => {
     if (result.written) wrote(edit.sessionId, []);
-    if (check && result.written && result.before) press.ask(checkPrompt(edit.runId, result));
+    if (check && result.written && result.before) press2.ask(checkPrompt(edit.runId, result));
     return result;
   });
 }
@@ -8938,7 +9020,7 @@ function RecordDialog(props) {
   const sendAsk = () => {
     const text = ask2.trim();
     if (!text) return;
-    press.ask("About " + id + (title ? " (“" + title + "”)" : "") + " in " + edit.runId + ": " + text);
+    press2.ask("About " + id + (title ? " (“" + title + "”)" : "") + " in " + edit.runId + ": " + text);
     onClose();
   };
   return /* @__PURE__ */ h("div", { className: "rdveil", "data-own-escape": "", onMouseDown: (e) => e.target === e.currentTarget && !busy && onClose() }, /* @__PURE__ */ h(
@@ -9145,7 +9227,7 @@ function BandRow(props) {
       type: "button",
       className: "chip gap " + tierOf(a, current),
       "data-ask": "",
-      onClick: () => press.ask(
+      onClick: () => press2.ask(
         span + " of " + run2.id + " have no module. Propose what they should teach, given what comes before them and what falls due in them, as draft modules for me to read."
       )
     },
@@ -9222,7 +9304,7 @@ function Evidence(props) {
       const x = concepts[c.id];
       const low = has(c) && x.class_mean < REVISIT_BELOW;
       return /* @__PURE__ */ h("li", { key: c.id, className: low ? "flagged" : "" }, /* @__PURE__ */ h(Icon, { name: "concept" }), /* @__PURE__ */ h("span", null, c.title || c.id), /* @__PURE__ */ h("small", null, has(c) ? "class " + pct(x.class_mean) + " · " + (x.coverage || "") + " observed" + (low ? " · revisit" : "") : "not assessed yet"));
-    }), conceptsOf(w).some(has) ? /* @__PURE__ */ h("li", null, /* @__PURE__ */ h("button", { type: "button", className: "chip", onClick: () => press.concepts({ week: w.week }) }, "By student")) : null) : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Signals" }, here.length ? /* @__PURE__ */ h("ul", { className: "facts" }, here.map((s, i) => /* @__PURE__ */ h(SignalLine, { key: i, signal: s }))) : /* @__PURE__ */ h(Dash, null)));
+    }), conceptsOf(w).some(has) ? /* @__PURE__ */ h("li", null, /* @__PURE__ */ h("button", { type: "button", className: "chip", onClick: () => press2.concepts({ week: w.week }) }, "By student")) : null) : /* @__PURE__ */ h(Dash, null)), /* @__PURE__ */ h("div", { className: "cell", "data-col": "Signals" }, here.length ? /* @__PURE__ */ h("ul", { className: "facts" }, here.map((s, i) => /* @__PURE__ */ h(SignalLine, { key: i, signal: s }))) : /* @__PURE__ */ h(Dash, null)));
   };
   return /* @__PURE__ */ h("div", { className: "mode evidence" }, /* @__PURE__ */ h("div", { className: "stepper" }, /* @__PURE__ */ h("b", null, current ? "Week " + current + " of " + weeks.length : weeks.length + " weeks"), /* @__PURE__ */ h("span", { className: "private" }, "Private — class figures from approved evidence only")), loose.length ? /* @__PURE__ */ h("div", { className: "side" }, /* @__PURE__ */ h("small", null, "Open signals not tied to a week"), /* @__PURE__ */ h("ul", { className: "facts" }, loose.map((s, i) => /* @__PURE__ */ h(SignalLine, { key: i, signal: s })))) : null, /* @__PURE__ */ h("div", { className: "grid" }, /* @__PURE__ */ h("div", { className: "th" }, "Due that week"), /* @__PURE__ */ h("div", { className: "th" }, "Concepts taught"), /* @__PURE__ */ h("div", { className: "th" }, "Signals"), rowsOf(weeks, (w) => !measured(w)).map((row) => {
     if (!row.band) return /* @__PURE__ */ h(Fragment2, { key: row.week.week }, weekRow(row.week));
@@ -14994,90 +15076,6 @@ function MaterialModal(props) {
   );
 }
 
-// client/jobs.js
-var EVERY = 2e3;
-var ask = (path, sessionId) => fetch(scoped(BASE + path, sessionId), { cache: "no-store", headers: { accept: "application/json" } }).then(
-  (response) => response.json()
-);
-var followJob = (answer, sessionId, onJob, alive) => {
-  if (!answer || !answer.job) return Promise.resolve(answer);
-  return new Promise((resolve) => {
-    const poll = (job) => {
-      if (alive && !alive()) {
-        resolve(null);
-        return;
-      }
-      if (onJob) onJob(job);
-      if (job.finishedAt) {
-        resolve(job.result || { error: "The job finished without an answer." });
-        return;
-      }
-      setTimeout(() => {
-        ask("/api/jobs/" + encodeURIComponent(job.id), sessionId).then((value) => value.job ? poll(value.job) : resolve({ error: value.error || "The job is gone." })).catch(() => poll(job));
-      }, EVERY);
-    };
-    poll(answer.job);
-  });
-};
-var progressText = (job) => {
-  const progress = job && job.progress;
-  if (!progress) return null;
-  return progress.total === null ? progress.done + " " + progress.unit : progress.done + " of " + progress.total + " " + progress.unit;
-};
-var waitingText = (job) => job && job.state === "waiting" && job.waitingFor ? "waiting for " + job.waitingFor : null;
-var RECENT_MS = 15 * 60 * 1e3;
-function useRunJobs(runId, sessionId, version) {
-  const [jobs, setJobs] = React.useState([]);
-  React.useEffect(() => {
-    if (!runId || !sessionId) return void 0;
-    let live = true;
-    let timer = null;
-    const load = () => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then((value) => {
-      if (!live) return;
-      const now = Date.now();
-      const shown = (value.jobs || []).filter(
-        (job) => (job.background || job.queued) && (!job.finishedAt || now - Date.parse(job.finishedAt) < RECENT_MS)
-      );
-      setJobs(shown);
-      if (shown.some((job) => !job.finishedAt)) timer = setTimeout(load, EVERY);
-    }).catch(() => {
-      if (live) timer = setTimeout(load, EVERY * 5);
-    });
-    load();
-    return () => {
-      live = false;
-      if (timer) clearTimeout(timer);
-    };
-  }, [runId, sessionId, version]);
-  return jobs;
-}
-var lastJob = (runId, sessionId, kind, subject2) => ask("/api/jobs?run=" + encodeURIComponent(runId), sessionId).then((value) => (value.jobs || []).find((job) => job.kind === kind && (!subject2 || job.subject === subject2)) || null).catch(() => null);
-var token = null;
-var paneToken = (sessionId, fresh) => {
-  if (fresh || !token) {
-    token = ask("/api/jobs/token", sessionId).then((value) => value.token || "").catch(() => {
-      token = null;
-      return "";
-    });
-  }
-  return token;
-};
-var pressWork = (url, init, sessionId) => {
-  const send2 = (fresh) => paneToken(sessionId, fresh).then(
-    (value) => fetch(url, Object.assign({}, init, { headers: Object.assign({ accept: "application/json" }, init && init.headers, { "x-pane-token": value }) }))
-  ).then((response) => response.json());
-  return send2(false).then((answer) => answer && answer.token ? send2(true) : answer);
-};
-var press2 = (path, sessionId) => pressWork(scoped(BASE + path, sessionId), { method: "POST" }, sessionId).catch((error) => ({ error: String(error) }));
-var cancelJob = (id, sessionId) => press2("/api/jobs/" + encodeURIComponent(id) + "/cancel", sessionId);
-var continueJob = (id, sessionId) => press2("/api/jobs/" + encodeURIComponent(id) + "/continue", sessionId);
-var CUT_SHORT_WORDS = {
-  interrupted: "was interrupted by a restart",
-  cancelled: "was cancelled",
-  failed: "failed",
-  held: "was held: its plan changed while it waited"
-};
-
 // client/navigator.js
 var PLACE_EVENT = "professor-pane:place";
 var PENDING_MS = 4e3;
@@ -16047,7 +16045,7 @@ function GradeBoard(props) {
     if (busy) return;
     setBusy(label2);
     setSaid(null);
-    fetch(url(path), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }).then((response) => response.json()).then((result) => {
+    pressWork(url(path), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }, props.sessionId).then((result) => {
       setBusy(null);
       const stale2 = /no route \/api\/grade/.test(String(result.error || ""));
       const failed = Boolean(result.error) || !result.ok;
@@ -18328,12 +18326,13 @@ function ProfessorPane(props) {
         const run2 = currentRunRef.current;
         if (!run2 || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
         if (!["defended", "not_defended", "clear"].includes(data.outcome)) return;
-        fetch(
+        pressWork(
           scoped(
             BASE + "/api/defence/mark?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&outcome=" + encodeURIComponent(data.outcome),
             props.sessionId
           ),
-          { method: "POST" }
+          { method: "POST" },
+          props.sessionId
         ).then(() => write(["defence"])).catch(() => write(["defence"]));
         return;
       }
@@ -18464,10 +18463,11 @@ function ProfessorPane(props) {
         const id = /^[A-Z0-9][A-Z0-9-]*$/;
         const run2 = currentRunRef.current;
         if (!run2 || !id.test(String(data.assessment))) return;
-        const post2 = (what, body2) => fetch(
+        const post2 = (what, body2) => pressWork(
           scoped(BASE + "/api/reports/" + what + "?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
-          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) }
-        ).then((response) => response.json());
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) },
+          props.sessionId
+        );
         const said = (result) => String(result.error || result.output || "").trim();
         const done = () => {
           placedAt.current = Date.now();
@@ -18584,12 +18584,13 @@ function ProfessorPane(props) {
         if (!run2 || !id.test(String(data.assessment)) || !id.test(String(data.student)) || !id.test(String(data.criterion))) return;
         if (!["confirmed", "partly", "not_confirmed", "clear"].includes(data.outcome)) return;
         const score2 = typeof data.score === "number" && Number.isFinite(data.score) ? "&score=" + data.score : "";
-        fetch(
+        pressWork(
           scoped(
             BASE + "/api/defence/mark?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&student=" + encodeURIComponent(data.student) + "&criterion=" + encodeURIComponent(data.criterion) + "&outcome=" + encodeURIComponent(data.outcome) + score2,
             props.sessionId
           ),
-          { method: "POST" }
+          { method: "POST" },
+          props.sessionId
         ).then(() => write(["defence"])).catch(() => write(["defence"]));
         return;
       }

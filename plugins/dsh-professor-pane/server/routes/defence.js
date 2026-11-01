@@ -508,6 +508,8 @@ export const routes = [
     handle(c) {
       const { req, res, url, runId, workspace, root } = c;
       if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      const why = notFromThePane(req);
+      if (why) return sendJson(res, 200, { error: why, token: true });
       const assessmentId = url.searchParams.get("assessment") ?? "";
       const studentId = url.searchParams.get("student") ?? "";
       const outcome = url.searchParams.get("outcome") ?? "";

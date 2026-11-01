@@ -42,7 +42,7 @@ const serverFiles = () => {
 };
 
 /** One request through the route table, answered into a plain object. */
-const ask = (method, path) =>
+const ask = (method, path, headers = {}) =>
   new Promise((done) => {
     const res = {
       writeHead(status) {
@@ -52,7 +52,7 @@ const ask = (method, path) =>
         done({ status: this.status, body: JSON.parse(String(body)) });
       },
     };
-    handle({ method, url: `/professor-pane${path}`, headers: {} }, res, { registry: { list: () => [] } });
+    handle({ method, url: `/professor-pane${path}`, headers }, res, { registry: { list: () => [] } });
   });
 
 // --------------------------------------------------------------------------
@@ -168,15 +168,53 @@ test("/api/canvas/marks: a GET pushes nothing", async () => {
 });
 
 /**
- * HOLE, not fixed here (GRD-3 says test, not redesign). The routes that decide
- * a grade (/api/grade/decide, /api/defence/mark) and send one (/api/canvas/marks,
- * /api/roads, /api/canvas/resolve, /api/reports/send) check the method and the
- * body's `confirm`, but not where the request came from. `notFromThePane`
- * (server/jobs.js), which the job, scans and defence-batch routes ask, is not
- * asked here — so a POST from any process on this machine that can reach the
- * harness's loopback port, the assistant's shell among them if its sandbox
- * lets it connect, is answered as the professor's press. And `notFromThePane`
- * would not settle it alone: GET /api/jobs/token hands the token to a request
- * that sends no Origin and no Sec-Fetch-Site, which is what curl sends.
+ * The routes that decide a grade and the ones that send one also ask where the
+ * press came from (`notFromThePane`, server/jobs.js): the pane's own page, with
+ * this start's token. A POST from elsewhere on this machine — curl from the
+ * assistant's shell, which sends no Origin, no Sec-Fetch-Site and no token — is
+ * refused before its body is read, as is a page on another site and a page
+ * left open across a restart. Every grade writer and every pusher pinned above
+ * answers through one of these.
  */
-test.todo("/api/grade/decide, /api/defence/mark and the Canvas sends refuse a request that is not from the pane's own page");
+const PRESSES = [
+  `/api/grade/decide?run=${RUN}&assessment=ASSESSMENT-01`,
+  `/api/defence/mark?run=${RUN}&assessment=ASSESSMENT-01&student=STUDENT-001&outcome=defended`,
+  `/api/canvas/marks?run=${RUN}`,
+  `/api/canvas/resolve?run=${RUN}`,
+  `/api/roads?run=${RUN}`,
+  `/api/syncs/action?run=${RUN}`,
+  `/api/reports/send?run=${RUN}&assessment=ASSESSMENT-01`,
+  `/api/reports/make?run=${RUN}&assessment=ASSESSMENT-01`,
+];
+
+test("the grade and send routes refuse a POST that is not the pane's own page's press", async () => {
+  const pane = { host: "localhost:3080", origin: "http://localhost:3080", "sec-fetch-site": "same-origin" };
+  const strangers = {
+    "curl, with nothing": {},
+    "another site": { ...pane, origin: "http://evil.example", "sec-fetch-site": "cross-site" },
+    "the pane, before a restart": { ...pane, "x-pane-token": "0".repeat(48) },
+  };
+  for (const path of PRESSES) {
+    for (const [who, headers] of Object.entries(strangers)) {
+      const answer = await ask("POST", path, headers);
+      assert.equal(answer.body.token, true, `${path} answered ${who}: ${JSON.stringify(answer.body)}`);
+      assert.match(answer.body.error, /pane's own page|Reload it/, `${path}, ${who}`);
+    }
+  }
+});
+
+test("/api/jobs/token: the token goes only to a request the browser marks same-origin", async () => {
+  assert.equal((await ask("GET", "/api/jobs/token")).body.token, undefined, "curl gets no token");
+  const cross = await ask("GET", "/api/jobs/token", { host: "localhost:3080", "sec-fetch-site": "cross-site" });
+  assert.equal(cross.body.token, undefined);
+  const own = await ask("GET", "/api/jobs/token", { host: "localhost:3080", origin: "http://localhost:3080", "sec-fetch-site": "same-origin" });
+  assert.match(own.body.token, /^[0-9a-f]{48}$/);
+});
+
+/**
+ * What these guards cannot stop, said plainly: a process on this machine that
+ * forges Sec-Fetch-Site and Origin, asks for the token, and sends it back.
+ * Nothing served on loopback can tell that process from the browser. Against
+ * it stand the assistant's sandbox, which may not reach the port, and the
+ * skills' rule that the assistant never decides or sends a grade.
+ */

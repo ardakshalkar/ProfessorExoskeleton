@@ -3,6 +3,7 @@
  */
 
 import { Message } from "./common.js";
+import { pressWork } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
@@ -107,8 +108,7 @@ export function GradeBoard(props) {
     if (busy) return;
     setBusy(label);
     setSaid(null);
-    fetch(url(path), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) })
-      .then((response) => response.json())
+    pressWork(url(path), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }, props.sessionId)
       .then((result) => {
         setBusy(null);
         const stale = /no route \/api\/grade/.test(String(result.error || ""));

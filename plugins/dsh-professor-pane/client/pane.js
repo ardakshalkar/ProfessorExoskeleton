@@ -7,6 +7,7 @@ import { useCanvasWatch } from "./canvas-check.js";
 import { Message, useDark, useJson } from "./common.js";
 import { DefenceDesk } from "./defence-desk.js";
 import { Inspector } from "./inspector.js";
+import { pressWork } from "./jobs.js";
 import { SheetNotice } from "./marks.js";
 import { CourseMode, MaterialModal, materialUrl } from "./materials.js";
 import { carryPlace, deliverCarried, PLACE_EVENT, takePendingPlace } from "./navigator.js";
@@ -347,7 +348,7 @@ export function ProfessorPane(props) {
         const run = currentRunRef.current;
         if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student))) return;
         if (!["defended", "not_defended", "clear"].includes(data.outcome)) return;
-        fetch(
+        pressWork(
           scoped(
             BASE + "/api/defence/mark?run=" + encodeURIComponent(run) +
               "&assessment=" + encodeURIComponent(data.assessment) +
@@ -356,6 +357,7 @@ export function ProfessorPane(props) {
             props.sessionId,
           ),
           { method: "POST" },
+          props.sessionId,
         )
           .then(() => write(["defence"]))
           .catch(() => write(["defence"]));
@@ -537,10 +539,11 @@ export function ProfessorPane(props) {
         const run = currentRunRef.current;
         if (!run || !id.test(String(data.assessment))) return;
         const post = (what, body) =>
-          fetch(
+          pressWork(
             scoped(BASE + "/api/reports/" + what + "?run=" + encodeURIComponent(run) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
             { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
-          ).then((response) => response.json());
+            props.sessionId,
+          );
         const said = (result) => String(result.error || result.output || "").trim();
         const done = () => {
           placedAt.current = Date.now();
@@ -689,7 +692,7 @@ export function ProfessorPane(props) {
         if (!run || !id.test(String(data.assessment)) || !id.test(String(data.student)) || !id.test(String(data.criterion))) return;
         if (!["confirmed", "partly", "not_confirmed", "clear"].includes(data.outcome)) return;
         const score = typeof data.score === "number" && Number.isFinite(data.score) ? "&score=" + data.score : "";
-        fetch(
+        pressWork(
           scoped(
             BASE + "/api/defence/mark?run=" + encodeURIComponent(run) +
               "&assessment=" + encodeURIComponent(data.assessment) +
@@ -699,6 +702,7 @@ export function ProfessorPane(props) {
             props.sessionId,
           ),
           { method: "POST" },
+          props.sessionId,
         )
           .then(() => write(["defence"]))
           .catch(() => write(["defence"]));

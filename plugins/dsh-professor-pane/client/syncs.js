@@ -17,6 +17,7 @@
  * sheet, and the grid answers it here.
  */
 
+import { pressWork } from "./jobs.js";
 import { h, React } from "./react.js";
 import { RoadResults, roadIn, useRoad } from "./road-flow.js";
 import { BASE, scoped } from "./tabs.js";
@@ -267,13 +268,11 @@ function UnmappedColumn(props) {
 
 /** A press to one of the sync routes, answered with the CLI's own words. */
 const syncPost = (runId, sessionId, path, body) =>
-  fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  })
-    .then((response) => response.json())
-    .catch((error) => ({ error: String(error.message || error) }));
+  pressWork(
+    scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId),
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    sessionId,
+  ).catch((error) => ({ error: String(error.message || error) }));
 
 /**
  * One sync: its mark, when it last ran, and Preview with Run or Send.

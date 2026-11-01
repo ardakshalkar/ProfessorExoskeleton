@@ -561,7 +561,8 @@ export const continueJob = (c, id, start) => {
 /**
  * Whether a request comes from the pane's own page (JOB-10): the browser
  * says it is same-origin, and, when `withToken`, it carries this harness's
- * per-start token. A page on another site, a document the pane shows (in a
+ * per-start token. Asked by every press that starts work, and (GRD-3) by
+ * every route that decides a grade or sends one. A page on another site, a document the pane shows (in a
  * sandboxed frame, so its origin is "null"), or a press saved from a
  * previous start does not. The sentence why, or null.
  *

@@ -17,6 +17,7 @@ import { reportPlace, reportsDir } from "@ainar/core/src/report-place.ts";
 
 import { runScans } from "../actions.js";
 import { readBody, send, sendJson } from "../http.js";
+import { notFromThePane } from "../jobs.js";
 import { loadedRun } from "../workspace.js";
 
 const ID = /^[A-Z0-9][A-Z0-9-]*$/;
@@ -46,6 +47,8 @@ export const routes = [
       }
 
       if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      const why = notFromThePane(req);
+      if (why) return sendJson(res, 200, { error: why, token: true });
       loadedRun(workspace, runId); // the run has to be this workspace's
       return readBody(req, 64 * 1024)
         .then((text) => {

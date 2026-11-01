@@ -264,15 +264,20 @@ is worth building.
       runs a scans step and nothing else; `/api/record` edits no evaluation
       and no `approval` or `status`; only `routes/grade.js` and
       `routes/defence.js` spawn a deciding command, POST only; every Canvas
-      send is behind the body's `confirm: true`. Two holes, left as
-      `test.todo` and not fixed here: the CLI cannot tell the professor's
+      send is behind the body's `confirm: true`. Two holes were found. The
+      pane's is closed (2026-11-01): `/api/grade/*` writes,
+      `/api/defence/mark`, `/api/canvas/marks`, `/api/canvas/resolve`,
+      `/api/roads`, `/api/syncs/action` and `/api/reports/make|send` now ask
+      `notFromThePane` before reading the body, the page presses them through
+      `pressWork` with the per-start token, and a test sends each one a
+      curl-shaped, a cross-site and a stale-token POST. (`/api/jobs/token`
+      already refused curl; a local process that forges the browser's headers
+      is beyond any loopback check, and the comment in the test says so.)
+      Still open, as a `test.todo`: the CLI cannot tell the professor's
       terminal from the assistant's shell (`grade decide`, `defence mark
       --criterion`, `lms push --confirm`, `sync run --confirm` are held by the
       skills' words alone, and a file write can set `status: approved` with a
-      stamp of its own), and the pane's deciding and sending routes do not ask
-      `notFromThePane`, so a POST from any local process that reaches the
-      loopback port is answered as a press. Neither has an item of its own
-      yet; the todos say what the test would pin once one exists.
+      stamp of its own). It has no item of its own yet.
 - [ ] **GRD-4** Second-grader mode. `L` · depends: GRD-1
 - [ ] **GRD-5** Comparison against last year's distribution. `M` · depends:
       REC-4

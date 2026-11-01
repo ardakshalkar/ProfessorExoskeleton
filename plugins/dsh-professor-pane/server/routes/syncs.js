@@ -4,6 +4,7 @@
  */
 
 import { readBody, sendJson } from "../http.js";
+import { notFromThePane } from "../jobs.js";
 import { previewRoads, roadsOf, sendRoads } from "../roads.js";
 import {
   copyFromUpload,
@@ -59,6 +60,8 @@ export const routes = [
     handle(c) {
       const { req, res, runId, workspace, root } = c;
       if (req.method !== "POST") return sendJson(res, 405, { error: "a sync action is POST only" });
+      const why = notFromThePane(req);
+      if (why) return sendJson(res, 200, { error: why, token: true });
       if (!runId) return sendJson(res, 200, { error: "No run chosen." });
       return readBody(req)
         .then(async (raw) => {
@@ -86,6 +89,8 @@ export const routes = [
     handle(c) {
       const { req, res, runId, workspace, root } = c;
       if (req.method !== "POST") return sendJson(res, 405, { error: "a road is POST only" });
+      const why = notFromThePane(req);
+      if (why) return sendJson(res, 200, { error: why, token: true });
       if (!runId) return sendJson(res, 200, { error: "No run chosen." });
       return readBody(req)
         .then(async (raw) => {

@@ -7,6 +7,7 @@ import { canvasCheckState, runAssignmentPush, runCanvasCheck, runMarksPush } fro
 import { canvasDifferences, canvasResolve } from "../canvas-sync.js";
 import { canvasAssignmentList, canvasCourseList } from "../connections.js";
 import { readBody, sendJson } from "../http.js";
+import { notFromThePane } from "../jobs.js";
 import {
   canvasSettings,
   integrationsAnswer,
@@ -271,6 +272,8 @@ export const routes = [
       if (req.method !== "POST") {
         return sendJson(res, 405, { error: "marks are POST only" });
       }
+      const why = notFromThePane(req);
+      if (why) return sendJson(res, 200, { error: why, token: true });
       if (!runId) return sendJson(res, 200, { error: "No run chosen." });
       return readBody(req)
         .then(async (raw) => {
@@ -317,6 +320,8 @@ export const routes = [
     handle(c) {
       const { req, res, runId, root } = c;
       if (req.method !== "POST") return sendJson(res, 405, { error: "settling a difference is POST only" });
+      const why = notFromThePane(req);
+      if (why) return sendJson(res, 200, { error: why, token: true });
       if (!runId) return sendJson(res, 200, { error: "No run chosen." });
       return readBody(req)
         .then(async (raw) => {

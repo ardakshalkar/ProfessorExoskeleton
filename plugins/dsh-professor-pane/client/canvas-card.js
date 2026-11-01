@@ -30,6 +30,7 @@ import {
   SubgroupCourses,
 } from "./integration-parts.js";
 import { CanvasDifferences } from "./canvas-diff.js";
+import { pressWork } from "./jobs.js";
 import { CanvasMarks } from "./marks.js";
 import { h, React } from "./react.js";
 import { when } from "./syncs.js";
@@ -81,13 +82,11 @@ const byDue = (left, right) =>
 
 /** A press to `/api/syncs/action`, answered with the CLI's own words. */
 const postSync = (runId, sessionId, body) =>
-  fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(runId || ""), sessionId), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  })
-    .then((response) => response.json())
-    .catch((error) => ({ error: String((error && error.message) || error) }));
+  pressWork(
+    scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(runId || ""), sessionId),
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    sessionId,
+  ).catch((error) => ({ error: String((error && error.message) || error) }));
 
 /**
  * One sync that only reads from Canvas — the class list, or one assessment's

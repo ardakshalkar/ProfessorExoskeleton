@@ -5,6 +5,7 @@
 
 import { useCanvasCheck } from "./canvas-check.js";
 import { Message } from "./common.js";
+import { pressWork } from "./jobs.js";
 import { h, React, ReactDOM } from "./react.js";
 import { initials, when } from "./syncs.js";
 import { BASE, scoped } from "./tabs.js";
@@ -396,9 +397,7 @@ export function CanvasMarks(props) {
 
   const endpoint = (path) => scoped(BASE + path + "?run=" + encodeURIComponent(props.runId || ""), props.sessionId);
   const postJson = (path, body) =>
-    fetch(endpoint(path), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }).then((response) =>
-      response.json(),
-    );
+    pressWork(endpoint(path), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }, props.sessionId);
 
   const marks = (extra, label) => {
     setPhase(label);

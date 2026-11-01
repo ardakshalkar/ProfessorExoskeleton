@@ -16,6 +16,7 @@ import { CanvasCard, canvasCounts } from "./canvas-card.js";
 import { Message, useJson } from "./common.js";
 import { Accounts } from "./accounts.js";
 import { IntegrationStatus } from "./integration-parts.js";
+import { pressWork } from "./jobs.js";
 import { useUnpublished } from "./marks.js";
 import { GithubCard, SheetsCard } from "./service-cards.js";
 import { SyncCard } from "./syncs.js";
@@ -257,12 +258,11 @@ function CourseIntegrations(props) {
 
   const migrate = () => {
     setMigrating("working");
-    fetch(scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId), {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "migrate" }),
-    })
-      .then((response) => response.json())
+    pressWork(
+      scoped(BASE + "/api/syncs/action?run=" + encodeURIComponent(props.runId || ""), props.sessionId),
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "migrate" }) },
+      props.sessionId,
+    )
       .catch((error) => ({ error: String((error && error.message) || error) }))
       .then((answer) => {
         setMigrating(answer);

@@ -23,6 +23,7 @@
 import { noteCanvasCheck, useCanvasCheck } from "./canvas-check.js";
 import { DIRECTIONS, KINDS, diffSummary } from "./canvas-diff-count.js";
 import { useVersion } from "./data.js";
+import { pressWork } from "./jobs.js";
 import { h, React } from "./react.js";
 import { RoadFlow, roadIn } from "./road-flow.js";
 import { when } from "./syncs.js";
@@ -31,13 +32,11 @@ import { BASE, scoped } from "./tabs.js";
 export { diffSummary };
 
 const post = (path, runId, sessionId, body) =>
-  fetch(scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  })
-    .then((response) => response.json())
-    .catch((error) => ({ error: String((error && error.message) || error) }));
+  pressWork(
+    scoped(BASE + path + "?run=" + encodeURIComponent(runId || ""), sessionId),
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    sessionId,
+  ).catch((error) => ({ error: String((error && error.message) || error) }));
 
 const plural = (count, one, many) => count + " " + (count === 1 ? one : many || one + "s");
 

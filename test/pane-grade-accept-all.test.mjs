@@ -26,6 +26,7 @@ import { Workspace } from "@ainar/core/src/workspace.ts";
 import { writeGroups } from "@ainar/core/src/grade-board.ts";
 import { scanPlace } from "@ainar/core/src/scans.ts";
 
+import { paneToken } from "../plugins/dsh-professor-pane/server/jobs.js";
 import { routes } from "../plugins/dsh-professor-pane/server/routes/grade.js";
 
 const SAMPLE = fileURLToPath(new URL("../workspace", import.meta.url));
@@ -128,11 +129,12 @@ const course = () => {
   return { root, submissions };
 };
 
-/** One request through the route, as the router would hand it over. */
+/** One request through the route, as the router would hand it over: a POST is the pane's own page's press. */
 const call = (c, path, body) =>
   new Promise((resolve) => {
     const req = new PassThrough();
     req.method = body === undefined ? "GET" : "POST";
+    req.headers = { host: "pane", origin: "http://pane", "sec-fetch-site": "same-origin", "x-pane-token": paneToken() };
     const res = {
       writeHead() {},
       setHeader() {},

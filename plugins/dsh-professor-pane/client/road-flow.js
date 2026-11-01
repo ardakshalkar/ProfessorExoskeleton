@@ -13,17 +13,16 @@
  * (`choose`) and what its button says (`sendLabel`).
  */
 
+import { pressWork } from "./jobs.js";
 import { h, React } from "./react.js";
 import { BASE, scoped } from "./tabs.js";
 
 export const postRoads = (runId, sessionId, body) =>
-  fetch(scoped(BASE + "/api/roads?run=" + encodeURIComponent(runId || ""), sessionId), {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  })
-    .then((response) => response.json())
-    .catch((error) => ({ error: String((error && error.message) || error) }));
+  pressWork(
+    scoped(BASE + "/api/roads?run=" + encodeURIComponent(runId || ""), sessionId),
+    { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) },
+    sessionId,
+  ).catch((error) => ({ error: String((error && error.message) || error) }));
 
 /** One road's answer out of a preview, by id. */
 export const roadIn = (preview, id) => (preview && Array.isArray(preview.roads) ? preview.roads.find((road) => road.id === id) || null : null);
