@@ -27,6 +27,7 @@ import { createHash, createPublicKey, generateKeyPairSync, sign, verify, type Ke
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { isatty } from "node:tty";
 
 /**
  * Set by an assistant's shell on every command it runs. One name per harness;
@@ -206,7 +207,10 @@ export const agentMark = (env: NodeJS.ProcessEnv): string | null => {
 export const whoIsAsking = (
   argv: string[],
   env: NodeJS.ProcessEnv = process.env,
-  tty: boolean = Boolean(process.stdin.isTTY || process.stdout.isTTY),
+  // `isatty` on the descriptors, not `process.stdin.isTTY`: touching
+  // `process.stdin` opens it as a stream, which on Linux leaves a piped stdin
+  // non-blocking, and `grade decide -` then fails to read its marks (EAGAIN).
+  tty: boolean = isatty(0) || isatty(1),
   now = Date.now(),
 ): Asker => {
   const pressed = pressFor(argv, env, now);
