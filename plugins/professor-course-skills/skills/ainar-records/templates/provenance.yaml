@@ -18,7 +18,7 @@
 #   produced_by       the skill, as the professor would type it: /design-assessment
 #   workflow_version  `version:` from that skill's SKILL.md front matter, as written
 #   model_id          the model THIS session runs on, as the session names it to
-#                     you (in Claude Code, "The exact model ID is …"). Never a
+#                     you in its system prompt or environment. Never a
 #                     provider you assume, never a model you remember from an
 #                     example. If the session does not say, leave the line out:
 #                     a missing model is honest, a guessed one is not.
