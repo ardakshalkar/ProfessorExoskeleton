@@ -20,6 +20,7 @@ import { AGENT_WRITABLE, ID_FIELDS } from "./approval.ts";
 import { COLLECTIONS } from "./loader.ts";
 import { candidateFiles, editRecords } from "./record-edit.ts";
 import { activeProfile } from "./profile.ts";
+import { noteCourseWrite } from "./store/written.ts";
 import { writeFileWhole } from "./write-file.ts";
 import { dump } from "./yaml-out.ts";
 
@@ -319,6 +320,7 @@ export const upsertRecords = (
   const body = dump({ [collection]: payload }, (path_) => floats.has(path_.join(".")));
 
   writeFileWhole(path, HEADER + body);
+  noteCourseWrite();
   return path;
 };
 
@@ -344,6 +346,7 @@ export const removeRecords = (courseDir: string, collection: string, ids: Iterab
   const schema = (AGENT_WRITABLE as Record<string, z.ZodTypeAny>)[collection];
   const floats = schema ? floatPaths(schema, [collection]) : new Set<string>();
   writeFileWhole(path, HEADER + dump({ [collection]: kept }, (path_) => floats.has(path_.join("."))));
+  noteCourseWrite();
   return removed;
 };
 

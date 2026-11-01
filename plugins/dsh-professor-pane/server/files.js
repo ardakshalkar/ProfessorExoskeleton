@@ -26,7 +26,7 @@ import { parse as parseYaml } from "yaml";
 import { assessmentsOf } from "@ainar/core/src/bundle.ts";
 import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 
-import { scanPiles } from "./scans.js";
+import { keptPrivate, keptScanPiles, privateFilesVersion } from "./scans.js";
 
 const AUDIO = new Set([".m4a", ".mp4", ".mp3", ".wav", ".webm", ".ogg"]);
 const STUDENT = /^STUDENT-/;
@@ -134,8 +134,22 @@ const batchRecordings = (folder) => {
 /**
  * Everything the Files view draws for one run. `submissions` is the root the
  * caller resolved and checked is outside the repository.
+ *
+ * Kept per version of the course and of the run's private files, as the
+ * piles are (`keptPrivate`): reading every transcript and every defence
+ * session again for each visit was most of the Files page's 0.8 s
+ * (docs/PANE-SPEED.md, 3). A file added, removed or rewritten moves the
+ * fingerprint and the next visit reads again.
  */
-export const filesDocument = ({ bundle, runId, submissions }) => {
+export const filesDocument = ({ bundle, runId, submissions, root }) => {
+  const ledger = Ledger.load(runId);
+  const version = privateFilesVersion({ submissions, root, runId, ledger });
+  return keptPrivate(bundle, `files\0${runId}\0${submissions}\0${version}`, () =>
+    readFiles({ bundle, runId, submissions, root, ledger, version }),
+  );
+};
+
+const readFiles = ({ bundle, runId, submissions, root, ledger, version }) => {
   const folder = join(submissions, runId);
   const titles = new Map(assessmentsOf(bundle, runId).map((entry) => [entry.assessment_id, entry.title || entry.assessment_id]));
   // How far each scan pile has got — identify, match, read, rubric, grade,
@@ -143,7 +157,7 @@ export const filesDocument = ({ bundle, runId, submissions }) => {
   // disagree. A pile the standings cannot read still lists its files.
   let piles = new Map();
   try {
-    const found = scanPiles({ bundle, runId, submissions, ledger: Ledger.load(runId) });
+    const found = keptScanPiles({ bundle, runId, submissions, root, ledger, version });
     piles = new Map(
       found.piles.map((pile) => [pile.id, { now: pile.now, progress: pile.progress, stages: found.standings.get(pile.id)?.stages ?? null }]),
     );

@@ -34,7 +34,7 @@ export const routes = [
       }
       if (path === "/api/files") {
         try {
-          return sendJson(res, 200, filesDocument({ bundle: loadedRun(workspace, runId).bundle, runId, submissions }));
+          return sendJson(res, 200, filesDocument({ bundle: loadedRun(workspace, runId).bundle, runId, submissions, root }));
         } catch (error) {
           return sendJson(res, 200, { error: String(error?.message ?? error) });
         }

@@ -33,6 +33,21 @@ const leanOf = (s) =>
   s.gap === null ? null : s.gap >= GAP_AT ? "home" : s.gap <= -GAP_AT ? "class" : "even";
 
 /**
+ * The standing profile and the shared answers of a run, kept per version of
+ * the course (the bundle object; see `approvedOf` in workspace.js): both read
+ * the course alone, and comparing every pair of answers was a quarter of the
+ * Students page (docs/PANE-SPEED.md, 2). Read only by the view below.
+ */
+const READINGS = new WeakMap(); // bundle -> runId -> { profile, shared }
+
+const readingsOf = (bundle, runId) => {
+  let byRun = READINGS.get(bundle);
+  if (!byRun) READINGS.set(bundle, (byRun = new Map()));
+  if (!byRun.has(runId)) byRun.set(runId, { profile: standingProfile(bundle, runId), shared: sharedAnswers(bundle, runId) });
+  return byRun.get(runId);
+};
+
+/**
  * The view for one run, or null when nothing can be said: no marks yet, or a
  * course the gradebook cannot total (its own tab says why).
  *
@@ -42,8 +57,7 @@ export const standingView = (bundle, runId, { nameOf = (id) => id } = {}) => {
   let profile;
   let shared;
   try {
-    profile = standingProfile(bundle, runId);
-    shared = sharedAnswers(bundle, runId);
+    ({ profile, shared } = readingsOf(bundle, runId));
   } catch {
     return null;
   }

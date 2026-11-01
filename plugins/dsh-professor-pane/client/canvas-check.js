@@ -41,17 +41,45 @@ const urlFor = (runId, sessionId) => scoped(BASE + "/api/canvas/check?run=" + en
 
 const stale = (answer) => !answer || answer.state !== "ready" || !answer.at || Date.now() - Date.parse(answer.at) > FRESH_MS;
 
-/** Run a check now. One at a time per run; the server joins a second to the first too. */
+/**
+ * What a check found, without when: two checks that found the same thing
+ * compare equal. Every key that dates something is left out.
+ */
+const found = (answer) =>
+  answer && answer.value
+    ? JSON.stringify(answer.value, (key, value) => (/(^at$|_at$|At$|checked)/.test(key) ? undefined : value))
+    : null;
+
+/**
+ * Run a check now. One at a time per run; the server joins a second to the
+ * first too.
+ *
+ * The `canvas` tag is bumped only when the check found something other than
+ * the last one did. Every tag also moves everything that reads across the
+ * course, and a check runs every five minutes: bumping on each one made the
+ * whole pane read again — fifteen reads at once — when Canvas had not moved
+ * (docs/PANE-SPEED.md, 1).
+ */
 const run = (runId, sessionId) => {
   const entry = entryFor(runId);
   if (entry.phase === "running") return;
   set(runId, { phase: "running" });
-  fetch(urlFor(runId, sessionId), { method: "POST", headers: { accept: "application/json" } })
-    .then((response) => response.json())
-    .then((answer) => {
-      set(runId, { phase: "ready", value: answer });
-      wrote(sessionId, ["canvas"]);
-    })
+  // The last answer to compare with: this pane's, else the server's.
+  const before =
+    entry.value && !entry.value.error
+      ? Promise.resolve(entry.value)
+      : fetch(urlFor(runId, sessionId), { headers: { accept: "application/json" } })
+          .then((response) => response.json())
+          .catch(() => null);
+  before
+    .then((last) =>
+      fetch(urlFor(runId, sessionId), { method: "POST", headers: { accept: "application/json" } })
+        .then((response) => response.json())
+        .then((answer) => {
+          set(runId, { phase: "ready", value: answer });
+          if (!last || found(last) === null || found(last) !== found(answer)) wrote(sessionId, ["canvas"]);
+        }),
+    )
     .catch((error) => set(runId, { phase: "ready", value: { error: String(error) } }));
 };
 

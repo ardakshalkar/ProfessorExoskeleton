@@ -81,7 +81,9 @@ const STORES = new Map();
 export const storeFor = (root) => {
   const found = STORES.get(root);
   if (found) return found;
-  const made = new YamlCourseStore(root);
+  // Watching: the pane loads a course a dozen times a request, and a walk of
+  // its folder each time was most of Today (docs/PANE-SPEED.md, 4).
+  const made = new YamlCourseStore(root, { watch: true });
   STORES.set(root, made);
   return made;
 };

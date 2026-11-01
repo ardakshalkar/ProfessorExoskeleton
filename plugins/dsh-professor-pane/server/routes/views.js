@@ -12,11 +12,11 @@ import {
   examsDocument,
   slidesDocument,
 } from "../course-views.js";
-import { defenceReader, forksReader } from "../defence-desk.js";
+import { forksReader, keptDefenceReader } from "../defence-desk.js";
 import { send, sendErrorPage } from "../http.js";
 import { withMaterialLinks } from "../materials.js";
 import { widgetDocument } from "../page.js";
-import { scanStandings } from "../scans.js";
+import { runFilesVersion, scanStandings } from "../scans.js";
 import { studentsDocument } from "../students.js";
 import {
   payload,
@@ -91,6 +91,8 @@ export const routes = [
     handle(c) {
       const { req, res, url, runId, workspace, root } = c;
       if (!runId) return sendErrorPage(res, "No run chosen.");
+      // The private files' fingerprint, taken once for both readers below.
+      const version = runFilesVersion(root, runId);
       return send(
         res,
         200,
@@ -105,9 +107,9 @@ export const routes = [
           url.searchParams.get("names") === "1",
           req.headers.host ? `http://${req.headers.host}` : "",
           url.searchParams.get("session") ?? "",
-          defenceReader(root, runId),
+          keptDefenceReader(root, runId, version),
           forksReader(root, runId),
-          (bundle) => scanStandings(bundle, runId, root, rosterDir()),
+          (bundle) => scanStandings(bundle, runId, root, rosterDir(), version),
         ),
       );
     },

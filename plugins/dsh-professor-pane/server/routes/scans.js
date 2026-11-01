@@ -37,6 +37,7 @@ export const routes = [
             loaded: loadedRun(workspace, runId),
             runId,
             submissions,
+            root,
             rosterDirectory: rosterDir(),
             assessmentId,
             names: url.searchParams.get("names") === "1",

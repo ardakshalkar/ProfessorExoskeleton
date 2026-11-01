@@ -35,6 +35,7 @@ import { AGENT_WRITABLE } from "./approval.ts";
 // A cycle — records-write imports this file — that is safe because neither
 // side uses the other at load time, only inside functions.
 import { HEADER, floatPaths } from "./records-write.ts";
+import { noteCourseWrite } from "./store/written.ts";
 import { dump } from "./yaml-out.ts";
 
 export interface EditResult {
@@ -221,6 +222,7 @@ export const editRecords = (options: {
     }
     const text = /\r\n/.test(original) ? rendered.replace(/\r?\n/g, "\r\n") : rendered;
     writeFileSync(path, text, "utf-8");
+    noteCourseWrite();
     written.push(path);
   }
 
@@ -362,6 +364,7 @@ export const setRecordFields = (options: {
     }
 
     writeFileSync(path, candidate, "utf-8");
+    noteCourseWrite();
     written.push(path);
     count += touched;
   }

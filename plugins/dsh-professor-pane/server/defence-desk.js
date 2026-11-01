@@ -28,10 +28,12 @@ import {
   writeDefence,
 } from "@ainar/core/src/defence.ts";
 import { forksPath, readForks } from "@ainar/core/src/forks.ts";
+import { Ledger } from "@ainar/core/src/lms/ledger.ts";
 import { refuseInsideRepo } from "@ainar/core/src/roster.ts";
 import { submissionsDir } from "@ainar/core/src/scans.ts";
 import { describeTranscription } from "@ainar/core/src/transcribe.ts";
 
+import { privateFilesVersion } from "./scans.js";
 import { loadedRun } from "./workspace.js";
 
 /**
@@ -110,6 +112,32 @@ export const defenceReader = (root, runId) => {
     if (!read.has(key)) read.set(key, readOnce(assessmentId, studentId));
     return read.get(key);
   };
+};
+
+/**
+ * `defenceReader`, kept from one render of the class list to the next while
+ * the run's private files have not moved (`privateFilesVersion`: every pin,
+ * session and drafted question is in it). Reading every student's defence
+ * again was a third of the Students page (docs/PANE-SPEED.md, 2). `version`,
+ * when the caller already took the fingerprint.
+ */
+const READERS = new Map(); // root \0 run -> { version, reader }
+
+export const keptDefenceReader = (root, runId, given = null) => {
+  let submissions = null;
+  try {
+    submissions = submissionsDir(null);
+    refuseInsideRepo(submissions, root);
+  } catch {
+    return defenceReader(root, runId);
+  }
+  const version = given ?? privateFilesVersion({ submissions, root, runId, ledger: Ledger.load(runId) });
+  const key = root + "\u0000" + runId;
+  const found = READERS.get(key);
+  if (found && found.version === version) return found.reader;
+  const reader = defenceReader(root, runId);
+  READERS.set(key, { version, reader });
+  return reader;
 };
 
 /**

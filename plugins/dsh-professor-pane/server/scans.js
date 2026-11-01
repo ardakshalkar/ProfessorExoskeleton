@@ -432,12 +432,13 @@ export const heldPapers = (plan, { store, enrolled }) =>
  * cannot be read: for views that only mention scans beside something else
  * (the Students view's assessment window), where no pile is not an error.
  * With the roster's directory, each standing also carries its `held` papers.
+ * `version`, when the caller already took the private files' fingerprint.
  */
-export const scanStandings = (bundle, runId, root, rosterDirectory = null) => {
+export const scanStandings = (bundle, runId, root, rosterDirectory = null, version = null) => {
   try {
     const submissions = submissionsDir(null);
     refuseInsideRepo(submissions, root);
-    const { standings, enrolled } = keptScanPiles({ bundle, runId, submissions, root, ledger: Ledger.load(runId) });
+    const { standings, enrolled } = keptScanPiles({ bundle, runId, submissions, root, ledger: Ledger.load(runId), version });
     if (!rosterDirectory) return standings;
     // The kept standings are shared, so the held papers go on copies.
     const store = RosterStore.load(rosterDirectory);
@@ -500,6 +501,21 @@ export const privateFilesVersion = ({ submissions, root, runId, ledger }) => {
     hash.update("ledger\0none");
   }
   return hash.digest("hex").slice(0, 16);
+};
+
+/**
+ * `privateFilesVersion` for a run in a workspace, or null when the private
+ * folder cannot be used: for a route that hands one fingerprint to several
+ * readers rather than have each walk the folder again.
+ */
+export const runFilesVersion = (root, runId) => {
+  try {
+    const submissions = submissionsDir(null);
+    refuseInsideRepo(submissions, root);
+    return privateFilesVersion({ submissions, root, runId, ledger: Ledger.load(runId) });
+  } catch {
+    return null;
+  }
 };
 
 /**
@@ -569,10 +585,14 @@ export const scanPiles = ({ bundle, runId, submissions, ledger }) => {
   return { piles, standings, enrolled };
 };
 
-export const scansDocument = ({ loaded, runId, submissions, rosterDirectory, assessmentId, names, syncDirectory = null }) => {
+export const scansDocument = ({ loaded, runId, submissions, root = null, rosterDirectory, assessmentId, names, syncDirectory = null }) => {
   const bundle = loaded.bundle;
   const ledger = Ledger.load(runId, syncDirectory);
-  const { piles, standings, enrolled } = scanPiles({ bundle, runId, submissions, ledger });
+  // Kept per version of the course and the private files when the workspace
+  // is known (docs/PANE-SPEED.md, 3); read only below, never written into.
+  const { piles, standings, enrolled } = root
+    ? keptScanPiles({ bundle, runId, submissions, root, ledger })
+    : scanPiles({ bundle, runId, submissions, ledger });
   const chosen = piles.find((pile) => pile.id === assessmentId) ?? piles[0] ?? null;
   const base = { run: runId, piles, names: names === true, crops: cropsAvailable() };
   if (!chosen) return { ...base, assessment: null };

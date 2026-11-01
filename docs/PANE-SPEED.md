@@ -116,6 +116,30 @@ change elsewhere pays this each time.
   course parse. Placing one paper, deciding one grade or marking one defence
   from the pane costs that each time.
 
+## After JOB-7 (2026-11-01)
+
+What changed, and the same measures again (same course, same machine). Every
+answer is byte-identical to before, compared read by read.
+
+| Fix | Where | Before → after (warm, server) |
+|---|---|---|
+| The store watches `courses/<id>` and walks it only after a change it saw, a course write by this process (`store/written.ts`, bumped by `record-edit.ts` and `records-write.ts`), or 30 s of quiet | `ainar-node/src/store/course.ts`, `{ watch: true }` from `P/server/workspace.js` | Today 380 → 185 ms, sidebar 178 → 90 ms |
+| Files kept per course version and private-files fingerprint; Files and Scans use `keptScanPiles` | `P/server/files.js`, `P/server/scans.js` | Files 750 → 57 ms, Scans 570 → 75 ms |
+| The class list's defence reader kept per fingerprint; one fingerprint per request; the standing profile and shared answers kept per course version | `P/server/defence-desk.js`, `P/server/routes/views.js`, `P/server/standing-view.js` | Students 490 → 200 ms |
+| A Canvas check bumps `canvas` only when it found something other than the last one | `P/client/canvas-check.js` | no storm every five minutes |
+
+Click to content in the browser, first visit / again: Sync 65 / 54 ms (it
+always drew at once with "Checking Canvas…" — the 10 s above was the plan
+arriving, which still waits for the check), Today 211 / 239, Waiting 211 /
+264, Files 285 / 107, Concepts 182 / 214, Students **711 / 563**, the rest
+under 90.
+
+**Still over 300 ms: Students.** Its server half is 200 ms; the rest is the
+browser taking in a 5.5 MB page. Sending the class without every student's
+whole panel is the remaining fix (5 below), and a larger one than this job.
+**Still a storm once:** the first check after a harness start has no answer
+to compare with, so it moves `canvas` and everything reads again — once.
+
 ## What JOB-7 should change, in order
 
 1. Keep the store's answer to "did the course move" for the revision's own

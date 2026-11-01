@@ -1727,7 +1727,7 @@ is worth building.
       the widest window. Four bugs found on the way (Canvas link args,
       publish dropping its ledger entry, Sync all sending twice, batch
       transcription not re-checking consent), listed there.
-- [ ] **JOB-2** A server-side job runner. `POST` starts the job and returns a
+- [x] **JOB-2** A server-side job runner. `POST` starts the job and returns a
       job id at once; the CLI child runs on in the harness process; `GET
       /api/jobs` lists running and recent jobs with their progress and
       output. Locks are per key from JOB-1 (e.g. `scans-plan:<run>:<assessment>`,
@@ -1746,7 +1746,7 @@ is worth building.
       on opening; the batch dialog shows the job's output as it runs. Not
       yet keyed: the other `records:*` writers (grade decide, defence mark,
       sheet run), the ledger, reports.
-- [ ] **JOB-3** Progress, not a spinner. `scans read` and `defence batch
+- [x] **JOB-3** Progress, not a spinner. `scans read` and `defence batch
       transcribe` print a line per student/take; the runner turns those into
       *12 of 48 read* and the pane shows it in the step strip and the
       navigator, and on reopening the page. Finished jobs say what they did
@@ -1761,7 +1761,7 @@ is worth building.
       job counters per area — `jobs` on a start or finish, `scans` or
       `defence` on a finish — never per line, so a running read does not
       redraw the pane each poll.
-- [ ] **JOB-4** The pane un-blocked. Only the presses JOB-1 marks as
+- [x] **JOB-4** The pane un-blocked. Only the presses JOB-1 marks as
       conflicting wait for a running job; everything else — other steps,
       grading cards, another assessment, other pages — stays usable. The
       defence batch dialog closes while transcription runs on. The live
@@ -1776,7 +1776,7 @@ is worth building.
       assessment and its count. Plan, file and quote still hold the dialog
       for their seconds. Checked in the v1 harness that the views render;
       the running state was exercised through the router, not by eye.
-- [ ] **JOB-5** Survive a restart. A job's state is kept on disk under
+- [x] **JOB-5** Survive a restart. A job's state is kept on disk under
       `~/.ainar/jobs/`; a harness restart marks a running job as interrupted
       (its partial transcripts are already on disk — `scans read` writes per
       student) and offers "continue", which re-runs only what is missing.
@@ -1794,7 +1794,7 @@ is worth building.
       written whole (`ainar-node/src/write-file.ts`: tmp + rename). Cancel
       and Continue are in the Scans view and the batch dialog; the navigator
       names a cut-short job's state.
-- [ ] **JOB-6** Measure why pages load late. Time each page from click to
+- [x] **JOB-6** Measure why pages load late. Time each page from click to
       drawn: the server-side cost of each `/api/*` read (bundle load and
       validation per request, `loadedRun`, scans status walking the private
       folder, `lms check` on Gradebook open), the client waiting on more than
@@ -1809,13 +1809,24 @@ is worth building.
       `scanPiles`); Today 0.4–0.66 s (11 walks of `courses/` per request,
       20 ms each on OneDrive); the sidebar 175 ms on every change. No page
       waits on reads in series.
-- [ ] **JOB-7** Fix what JOB-6 finds. Likely candidates: cache the loaded
+- [x] **JOB-7** Fix what JOB-6 finds. Likely candidates: cache the loaded
       bundle per run keyed by file mtimes instead of reloading per request;
       draw the page from the last answer while the fresh one loads
       (stale-while-revalidate, as `client/data.js`'s watcher half does);
       fetch a page's reads in parallel; move anything that calls out
       (`lms check`) behind the page, not in front of it. Target: a page
-      shows something within 300 ms of the click. `M` · depends: JOB-6
+      shows something within 300 ms of the click. `M` · depends: JOB-6.
+      Done 2026-11-01, measured in [`docs/PANE-SPEED.md`](docs/PANE-SPEED.md)
+      *After JOB-7*, every answer byte-identical: the pane's course store
+      watches the course folder instead of walking it per load (Today 380 →
+      185 ms server, sidebar 178 → 90); Files and Scans kept per private-files
+      fingerprint (750 → 57, 570 → 75); the class list's defence reads,
+      standing profile and shared answers kept (Students 490 → 200); a Canvas
+      check moves `canvas` only when its answer changed (no refetch storm
+      every five minutes). Every place now shows content within 300 ms
+      except **Students, 560–710 ms**: the browser taking in its 5.5 MB page.
+      Sending the class without every student's whole panel is left for a
+      task of its own.
 - [ ] **JOB-8** Queued, not refused. A press that conflicts with a running job
       (JOB-1's lock keys) joins that key's queue instead of being turned away:
       *Apply placements — waiting for Reading (Quiz 1)*. Jobs on one key run

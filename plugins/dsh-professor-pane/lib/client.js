@@ -2139,7 +2139,7 @@ function SplitView(props) {
   const answer = props.answer;
   const splitting = desk.splitting;
   if (!answer.transcript || answer.withdrawn) return null;
-  const found = (desk.data && desk.data.splits || []).find((entry) => entry.question_id === answer.question_id && entry.take === answer.take);
+  const found2 = (desk.data && desk.data.splits || []).find((entry) => entry.question_id === answer.question_id && entry.take === answer.take);
   const busyHere = splitting && splitting.question === answer.question_id && splitting.take === answer.take;
   const play = (seconds) => {
     const audio = document.getElementById("pp-daudio-" + answer.audio.replace(/[^\w-]/g, "_"));
@@ -2151,18 +2151,18 @@ function SplitView(props) {
   return h(
     "div",
     { className: "pp-dsplit" },
-    busyHere ? h("div", { className: "pp-dim" }, "Dividing the defence into its questions…") : found ? h(
+    busyHere ? h("div", { className: "pp-dim" }, "Dividing the defence into its questions…") : found2 ? h(
       React.Fragment,
       null,
       h(
         "div",
         { className: "pp-dim" },
-        found.parts.length + " question(s), divided by " + found.by + (found.approval === "approved" ? " · you checked them" : " · a draft: check the parts")
+        found2.parts.length + " question(s), divided by " + found2.by + (found2.approval === "approved" ? " · you checked them" : " · a draft: check the parts")
       ),
       h(
         "ol",
         { className: "pp-dsplitlist" },
-        found.parts.map(
+        found2.parts.map(
           (part, index) => h(
             "li",
             { key: index },
@@ -2174,11 +2174,11 @@ function SplitView(props) {
           )
         )
       ),
-      found.notes && found.notes.length ? h("div", { className: "pp-dwarn" }, found.notes.join(" · ")) : null,
+      found2.notes && found2.notes.length ? h("div", { className: "pp-dwarn" }, found2.notes.join(" · ")) : null,
       h(
         "div",
         { className: "pp-approverow" },
-        found.approval !== "approved" ? h("button", { type: "button", className: "pp-segbtn", onClick: () => desk.split(answer.question_id, answer.take, "approve") }, "These are right") : null,
+        found2.approval !== "approved" ? h("button", { type: "button", className: "pp-segbtn", onClick: () => desk.split(answer.question_id, answer.take, "approve") }, "These are right") : null,
         h("button", { type: "button", className: "pp-segbtn", disabled: Boolean(splitting), onClick: () => desk.split(answer.question_id, answer.take) }, "Divide again")
       )
     ) : h(
@@ -3016,8 +3016,8 @@ function DefenceDesk(props) {
     const asked = loop.current ? loop.current.asked : /* @__PURE__ */ new Set();
     const from = after ? questions.findIndex((entry) => entry.id === after) + 1 : 0;
     const ordered = questions.slice(from).concat(questions.slice(0, from));
-    const found = ordered.find((entry) => entry.kind !== "whole" && !answered.has(entry.id) && !asked.has(entry.id));
-    return found ? found.id : null;
+    const found2 = ordered.find((entry) => entry.kind !== "whole" && !answered.has(entry.id) && !asked.has(entry.id));
+    return found2 ? found2.id : null;
   };
   const releaseMicrophone = (final) => {
     stopCaptions();
@@ -4463,14 +4463,18 @@ var set = (runId, next) => {
 };
 var urlFor = (runId, sessionId) => scoped(BASE + "/api/canvas/check?run=" + encodeURIComponent(runId), sessionId);
 var stale = (answer) => !answer || answer.state !== "ready" || !answer.at || Date.now() - Date.parse(answer.at) > FRESH_MS;
+var found = (answer) => answer && answer.value ? JSON.stringify(answer.value, (key, value) => /(^at$|_at$|At$|checked)/.test(key) ? void 0 : value) : null;
 var run = (runId, sessionId) => {
   const entry = entryFor(runId);
   if (entry.phase === "running") return;
   set(runId, { phase: "running" });
-  fetch(urlFor(runId, sessionId), { method: "POST", headers: { accept: "application/json" } }).then((response) => response.json()).then((answer) => {
-    set(runId, { phase: "ready", value: answer });
-    wrote(sessionId, ["canvas"]);
-  }).catch((error) => set(runId, { phase: "ready", value: { error: String(error) } }));
+  const before = entry.value && !entry.value.error ? Promise.resolve(entry.value) : fetch(urlFor(runId, sessionId), { headers: { accept: "application/json" } }).then((response) => response.json()).catch(() => null);
+  before.then(
+    (last) => fetch(urlFor(runId, sessionId), { method: "POST", headers: { accept: "application/json" } }).then((response) => response.json()).then((answer) => {
+      set(runId, { phase: "ready", value: answer });
+      if (!last || found(last) === null || found(last) !== found(answer)) wrote(sessionId, ["canvas"]);
+    })
+  ).catch((error) => set(runId, { phase: "ready", value: { error: String(error) } }));
 };
 var refresh = (runId, sessionId) => {
   const entry = entryFor(runId);
@@ -11821,10 +11825,10 @@ var connectionsOf = (data, roads, checks) => {
   const sheetSyncs = syncsOf("sheets");
   if (used("sheets")) {
     const google = data.google || {};
-    const found = checks && checks.checks ? checks.checks : [];
-    const expired = Boolean(google.connected && (google.expired || found.some((check) => check.reconnect) || sheetSyncs.some((sync) => sync.reconnect)));
+    const found2 = checks && checks.checks ? checks.checks : [];
+    const expired = Boolean(google.connected && (google.expired || found2.some((check) => check.reconnect) || sheetSyncs.some((sync) => sync.reconnect)));
     const readsLive = google.connected || sheetSyncs.some((sync) => sync.canReadLive);
-    const changed = found.filter((check) => check.state === "changed");
+    const changed = found2.filter((check) => check.state === "changed");
     const waiting2 = waitingOf("sheets");
     const who2 = google.account ? " for " + google.account : "";
     const state = expired ? { tone: "bad", state: "sign-in expired", line: "Google stopped accepting the sign-in" + who2 + ".", fix: "reconnect" } : !readsLive ? { tone: "warn", state: "no Google login", line: "The sheet comes in as a download until Google is connected.", fix: "connect" } : waiting2 ? { tone: "warn", state: plural5(waiting2, "name", "names") + " to confirm", line: "Confirm them on the Google Sheets card.", fix: null } : changed.length ? {
@@ -11834,7 +11838,7 @@ var connectionsOf = (data, roads, checks) => {
       fix: null
     } : {
       tone: "ok",
-      state: found.some((check) => check.state === "same") ? "up to date" : "connected",
+      state: found2.some((check) => check.state === "same") ? "up to date" : "connected",
       line: google.account ? "Signed in as " + google.account + "." : "This computer can read the sheet.",
       fix: null
     };
@@ -12053,14 +12057,14 @@ function flattenValues(values) {
   return out;
 }
 function inheritedAt(flats, layers, scope, path) {
-  let found = null;
+  let found2 = null;
   for (let index = 0; index < layers.length; index += 1) {
     if (layers[index].scope === scope) break;
     if (Object.prototype.hasOwnProperty.call(flats[index], path)) {
-      found = { value: flats[index][path], label: layers[index].label };
+      found2 = { value: flats[index][path], label: layers[index].label };
     }
   }
-  return found;
+  return found2;
 }
 function Preferences(props) {
   const url = scoped(
@@ -12734,9 +12738,9 @@ var score = (query, label, extra) => {
 var matchCommand = (query, index, limit = 7) => {
   const q = norm(query);
   if (!q || q.length < 2) return [];
-  const found = [];
+  const found2 = [];
   const add = (entry, result) => {
-    if (result.score > 0) found.push(Object.assign({}, entry, { score: result.score, exact: result.exact }));
+    if (result.score > 0) found2.push(Object.assign({}, entry, { score: result.score, exact: result.exact }));
   };
   for (const action of ACTIONS) {
     add({ key: "a:" + action.id, label: action.label, hint: action.do.fill ? action.do.fill.trim().split(" ")[0] : action.outward ? "students see it" : null, kind: "action", do: action.do, outward: Boolean(action.outward) }, score(q, action.label, action.words));
@@ -12761,7 +12765,7 @@ var matchCommand = (query, index, limit = 7) => {
     const result = score(q, concept.title, concept.id);
     add({ key: "c:" + concept.id, label: concept.title, hint: "the class on it", kind: "concept", do: { open: { view: "concepts", concept: concept.id } } }, result);
   }
-  return found.sort((a, b) => b.score - a.score).slice(0, limit);
+  return found2.sort((a, b) => b.score - a.score).slice(0, limit);
 };
 
 // client/sync-view.js
@@ -12881,12 +12885,12 @@ var ConfirmBar = (props) => h(
   h("button", { type: "button", className: "pp-segbtn", disabled: props.busy, onClick: props.onCancel }, "Cancel")
 );
 var namesIn = (preview) => {
-  const found = /* @__PURE__ */ new Map();
-  if (!preview) return found;
+  const found2 = /* @__PURE__ */ new Map();
+  if (!preview) return found2;
   for (const entry of [].concat(preview.send || [], preview.take || [], preview.held || [], preview.absent || [])) {
-    if (entry.student_id && entry.name) found.set(entry.student_id, entry.name);
+    if (entry.student_id && entry.name) found2.set(entry.student_id, entry.name);
   }
-  return found;
+  return found2;
 };
 var withNamesIn = (text, names) => names.size ? String(text).replace(/STUDENT-[A-Z0-9]+/g, (id) => names.has(id) ? names.get(id) + " (" + id + ")" : id) : String(text);
 function SendOutcome(props) {
@@ -13245,8 +13249,8 @@ function SyncView(props) {
 var plural8 = (n, one, many) => n + " " + (n === 1 ? one : many);
 var MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var day = (iso) => {
-  const found = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
-  return found ? Number(found[3]) + " " + MONTHS2[Number(found[2]) - 1] : null;
+  const found2 = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  return found2 ? Number(found2[3]) + " " + MONTHS2[Number(found2[2]) - 1] : null;
 };
 var URGENCY_WORD = {
   overdue: "overdue",
@@ -15067,9 +15071,9 @@ function deliverCarried(carried) {
   window.dispatchEvent(new CustomEvent(PLACE_EVENT, { detail: pendingPlace }));
 }
 function takePendingPlace() {
-  const found = pendingPlace;
+  const found2 = pendingPlace;
   pendingPlace = null;
-  return found !== null && Date.now() - found.at < PENDING_MS ? found : null;
+  return found2 !== null && Date.now() - found2.at < PENDING_MS ? found2 : null;
 }
 function Icon2(props) {
   const size2 = props.size || 16;
@@ -16962,11 +16966,11 @@ function ScansTab(props) {
     setSearch("");
   };
   const skeleton = (word) => word.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/kh|x/g, "h").replace(/zh/g, "j").replace(/q/g, "k").replace(/w/g, "u").replace(/y/g, "i").replace(/(.)\1+/g, "$1").replace(/[^a-z0-9]/g, "");
-  const found = (entry, text) => text.trim().toLowerCase().split(/\s+/).every((word) => {
+  const found2 = (entry, text) => text.trim().toLowerCase().split(/\s+/).every((word) => {
     const latin = skeleton(word);
     return String(entry.name || "").toLowerCase().includes(word) || entry.student.toLowerCase().includes(word) || latin !== "" && String(entry.search || "").includes(latin);
   });
-  const searched = search.trim() ? noPaper.filter((entry) => found(entry, search)).concat(doc.class.filter((entry) => entry.placed && found(entry, search))).slice(0, 12) : [];
+  const searched = search.trim() ? noPaper.filter((entry) => found2(entry, search)).concat(doc.class.filter((entry) => entry.placed && found2(entry, search))).slice(0, 12) : [];
   const NEAR = { close: "close", possible: "possible", far: "far" };
   const studentLine = (paper, student) => student === paper.resolved ? "placed here now" : hasPaper.has(student) ? "has a paper" : "no paper yet";
   const rankRow = (paper, entry, index, off) => h(
