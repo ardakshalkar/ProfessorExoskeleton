@@ -55,6 +55,8 @@ import { dashboardPayload, rollUpCapabilities, studentRecord } from "../src/prog
 import { extractEvidence } from "../src/evidence.ts";
 import { bundleStats, exportBundle } from "../src/export.ts";
 import { buildScript, schemaSql } from "../src/sqlgen.ts";
+import { DATABASE_URL_ENV, describeTarget, formatStatus, maintenanceTarget, readStatus } from "../src/db.ts";
+import { resolveVariable } from "../src/connections/store.ts";
 import { renderHtml } from "../src/dashboard.ts";
 import { TARGETS } from "../src/lms/index.ts";
 import { MATCH_KEYS } from "../src/lms/base.ts";
@@ -713,6 +715,12 @@ const HELP = `ainar — the AINAR course model CLI
   export [COURSE] [--out DIR]              canonical JSON, default dist/
   sql [COURSE] [--out DIR] [--prune]       an idempotent PostgreSQL import
   sql --ddl [--out FILE]                   the schema the import expects
+
+  The same SQL, sent to the database named by DATABASE_URL:
+
+  db status                                reachable, schema, courses vs workspace
+  db init                                  create the database, apply the schema
+  db push [COURSE]                         import each course, one transaction each
 
   Two HTML surfaces, and deliberately opposite ones. dashboard draws marks by
   pseudonym and is the professor's; page draws the plan and is the only output
@@ -2503,6 +2511,102 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           "  psql -d ainar -f ainar-node/src/sql/schema.sql\n" +
           `  psql -d ainar -f ${outDir.split(/[\\/]/).pop()}/<COURSE>/import.sql`,
       );
+      break;
+    }
+
+    case "db": {
+      // `ainar sql` without the file in between — see src/db.ts. The URL is a
+      // credential, so it comes from the environment or the credential store,
+      // never a flag that would land in shell history.
+      const action = rest[0];
+      if (!["status", "init", "push"].includes(action ?? "")) {
+        throw new Error("usage: ainar db status | init | push [COURSE]");
+      }
+      const connectionString = resolveVariable(DATABASE_URL_ENV)?.value;
+      if (!connectionString) {
+        throw new Error(
+          `${DATABASE_URL_ENV} is not set. Set it in the environment, or under \`refs:\` in ` +
+            "~/.dsh/.credentials.yaml, e.g. postgresql://postgres:PASSWORD@localhost:5432/ainar",
+        );
+      }
+      const target = describeTarget(connectionString);
+      const { default: pg } = await import("pg");
+
+      if (action === "init") {
+        // A fresh local server has no `ainar` database yet; Supabase always
+        // has its `postgres` one, so this branch never runs there.
+        const probe = new pg.Client({ connectionString });
+        try {
+          await probe.connect();
+        } catch (error) {
+          if ((error as { code?: string }).code !== "3D000") throw error;
+          const { url, database } = maintenanceTarget(connectionString);
+          const admin = new pg.Client({ connectionString: url });
+          await admin.connect();
+          try {
+            await admin.query(`CREATE DATABASE "${database.replace(/"/g, '""')}"`);
+          } finally {
+            await admin.end();
+          }
+          out(`created database ${database}`);
+        } finally {
+          await probe.end().catch(() => {});
+        }
+      }
+
+      const client = new pg.Client({ connectionString });
+      await client.connect();
+      try {
+        if (action === "init") {
+          await client.query(schemaSql());
+          out(`schema applied to ${target}`);
+          break;
+        }
+
+        if (action === "push") {
+          const status = await readStatus(client);
+          if (!status.schemaLoaded) throw new Error(`schema absent on ${target}; run \`ainar db init\` first`);
+          const selected = discoverCourses(root).filter(
+            (courseDir) => !rest[1] || rest[1] === courseDir.split(/[\\/]/).pop(),
+          );
+          if (!selected.length) throw new Error(rest[1] ? `no course ${rest[1]}` : "no courses in this workspace");
+          let failed = false;
+          for (const courseDir of selected) {
+            const courseId = courseDir.split(/[\\/]/).pop()!;
+            const { bundle, issues: loadIssues } = loadCourse(courseDir, root);
+            const issues = bundle ? validate(bundle, { root }) : loadIssues;
+            if (!bundle || issues.errors.length) {
+              failed = true;
+              out(`${courseId}: not pushed`);
+              for (const issue of issues.errors) out(`    ${describe(issue)}`);
+              continue;
+            }
+            // The script carries its own BEGIN/COMMIT; a failure part-way
+            // leaves the transaction aborted, so roll it back before the next.
+            try {
+              await client.query(buildScript(bundle));
+              out(`${courseId}: pushed to ${target}`);
+            } catch (error) {
+              failed = true;
+              await client.query("ROLLBACK").catch(() => {});
+              out(`${courseId}: not pushed — ${(error as Error).message}`);
+            }
+          }
+          if (failed) process.exitCode = 1;
+          break;
+        }
+
+        const workspace = { courses: [] as string[], runs: [] as string[] };
+        for (const courseDir of discoverCourses(root)) {
+          const { bundle } = loadCourse(courseDir, root);
+          if (!bundle) continue;
+          workspace.courses.push((bundle.course as any).course_id);
+          for (const run of bundle.versions as any[]) workspace.runs.push(run.course_version_id);
+        }
+        for (const line of formatStatus(target, await readStatus(client), workspace)) out(line);
+      } finally {
+        await client.end();
+      }
       break;
     }
 

@@ -243,6 +243,13 @@ const jsonb = (model: unknown): Json =>
 const jsonbList = (models: unknown[] | null | undefined): Json =>
   !models || !models.length ? json(null) : json(models.map(tidy));
 
+/**
+ * The same, for a `NOT NULL DEFAULT '[]'` column: an empty list is `[]`. A
+ * NULL there aborted the whole import the first time a real rubric had a
+ * criterion with no levels written yet.
+ */
+const jsonbArray = (models: unknown[] | null | undefined): Json => json((models ?? []).map(tidy));
+
 // --------------------------------------------------------------------------
 // Statement building
 // --------------------------------------------------------------------------
@@ -409,7 +416,7 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       title: c.title,
       description: c.description,
       domain: c.domain,
-      levels: jsonbList(c.levels),
+      levels: jsonbArray(c.levels),
       extensions: c.extensions,
     })),
   );
@@ -673,7 +680,7 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       title: c.title,
       description: c.description,
       maximum_score: real(c.maximum_score),
-      levels: jsonbList(c.levels),
+      levels: jsonbArray(c.levels),
       weight: real(c.weight),
       outcome_id: ref(c.outcome_id),
       capability_id: ref(c.capability_id),
