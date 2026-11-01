@@ -220,8 +220,15 @@ is worth building.
 > **Rank 9 — but INS-1 is rank 1.** CI is not a phase; it is the thing that
 > makes every other result mean something. There is no `.github/` today.
 
-- [ ] **INS-1** CI on Linux and Windows running `npm test` in both packages.
+- [x] **INS-1** CI on Linux and Windows running `npm test` in both packages.
       Every green result so far is one machine. `M` · depends: —
+      Done 2026-11-01: `.github/workflows/test.yml` runs all three suites
+      (ainar-node, root, pane) on ubuntu-latest and windows-latest, Node 22.x;
+      first green run 41289451347 (903 / 111 / 63 on both). Linux showed a hang
+      Windows never did: a recursive `fs.watch` keeps a test file's process
+      alive, so `YamlCourseStore` gained `close()` and every `npm test` passes
+      `--test-force-exit`. Still to do: INS-2 (golden and validator checks),
+      INS-3 (an install without `--legacy-peer-deps`), INS-4 (one install, not two).
 - [ ] **INS-2** `npm run check` green, including the golden half. `S` ·
       depends: REC-2, REC-3, INS-1
 - [ ] **INS-3** Install without `--legacy-peer-deps`. The flag is not optional
