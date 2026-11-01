@@ -267,17 +267,47 @@ is worth building.
       send is behind the body's `confirm: true`. Two holes were found. The
       pane's is closed (2026-11-01): `/api/grade/*` writes,
       `/api/defence/mark`, `/api/canvas/marks`, `/api/canvas/resolve`,
-      `/api/roads`, `/api/syncs/action` and `/api/reports/make|send` now ask
+      `/api/roads`, `/api/syncs/action`, `/api/reports/make|send`, and (found
+      with GRD-6) `/api/grade/curve` and `/api/grade/integrity` now ask
       `notFromThePane` before reading the body, the page presses them through
       `pressWork` with the per-start token, and a test sends each one a
       curl-shaped, a cross-site and a stale-token POST. (`/api/jobs/token`
       already refused curl; a local process that forges the browser's headers
       is beyond any loopback check, and the comment in the test says so.)
-      Still open, as a `test.todo`: the CLI cannot tell the professor's
-      terminal from the assistant's shell (`grade decide`, `defence mark
-      --criterion`, `lms push --confirm`, `sync run --confirm` are held by the
-      skills' words alone, and a file write can set `status: approved` with a
-      stamp of its own). It has no item of its own yet.
+      The CLI's is GRD-6.
+- [x] **GRD-6** The CLI tells the professor's word from the assistant's. GRD-3
+      found that `grade decide`, `defence mark --criterion`, `lms push
+      --confirm` and `sync run --confirm` were held by the skills' words alone,
+      and that a file write could set `status: approved` with a stamp of its
+      own. `M` · depends: GRD-3
+      Options weighed, 2026-11-01: (a) a terminal check alone — fails, DSH
+      runs its shell in a pseudo-terminal; (b) refuse when an assistant
+      shell's mark is set (`DSH_SHELL` on every DSH command, `CLAUDECODE`,
+      `AI_AGENT`, …) — cheap, but a mark can be unset; (c) the harness signs
+      what it spawns with a key only it holds — unforgeable without the key,
+      and needs the pane for every non-terminal decision; (d) a typed
+      confirmation — breaks the pane's spawns and scripts; (e) a seal on each
+      decision — the CLI would need a key the assistant can read too.
+      Done 2026-11-01 as (b)+(c), in `ainar-node/src/press.ts`: a deciding
+      command runs from a terminal with no assistant mark, or with a press
+      the harness signed (Ed25519, key in memory, public half under
+      `~/.ainar/press/`, bound to argv, stdin hash and five minutes; a sync's
+      press covers the command it hands its work to). Guarded: `grade
+      decide`, `defence mark --criterion`, `curve`, `integrity open|decide`,
+      `lms push|send-reports --confirm`, `sync run --confirm`, `decisions
+      adopt`. Whether a student defended (`defence mark --outcome`) stays a
+      fact the assistant may note on the professor's word. For the file
+      write, a ledger instead of a seal: each decision a command writes is
+      noted in `~/.ainar/decisions/<COURSE>.jsonl`, and `ainar decisions audit
+      RUN` names any decided evaluation the ledger does not know (`adopt`
+      notes what is decided now, once per machine). Under DSH's sandbox the
+      assistant can write neither `~/.ainar/press` nor the ledger without the
+      professor approving that write; elsewhere, getting past it is a
+      deliberate act — unsetting a mark and faking a terminal, or planting a
+      key — and the module says so. Tests: `test/press.test.ts`, and the
+      invariant test runs each guarded command from DSH's, Claude Code's and
+      an unmarked shell. Left: nothing runs `decisions audit` on its own yet —
+      the inbox or the Grade view could show its count.
 - [ ] **GRD-4** Second-grader mode. `L` · depends: GRD-1
 - [ ] **GRD-5** Comparison against last year's distribution. `M` · depends:
       REC-4

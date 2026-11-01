@@ -178,6 +178,8 @@ test("/api/canvas/marks: a GET pushes nothing", async () => {
  */
 const PRESSES = [
   `/api/grade/decide?run=${RUN}&assessment=ASSESSMENT-01`,
+  `/api/grade/curve?run=${RUN}&assessment=ASSESSMENT-01`,
+  `/api/grade/integrity?run=${RUN}&assessment=ASSESSMENT-01`,
   `/api/defence/mark?run=${RUN}&assessment=ASSESSMENT-01&student=STUDENT-001&outcome=defended`,
   `/api/canvas/marks?run=${RUN}`,
   `/api/canvas/resolve?run=${RUN}`,

@@ -262,6 +262,8 @@ import { Ledger, type Publication } from "../src/lms/ledger.ts";
 import { describeImpact, impact } from "../src/impact.ts";
 import { describeRecordImpact, recordImpact } from "../src/record-impact.ts";
 import { Workspace } from "../src/workspace.ts";
+import { decidesOrSends, refusal, sameInput, whoIsAsking } from "../src/press.ts";
+import { auditDecisions, decisionsDir, recordDecisions } from "../src/decision-ledger.ts";
 
 
 
@@ -618,6 +620,17 @@ const HELP = `ainar — the AINAR course model CLI
                                            total and excuses it in Canvas), or
                                            reopen it
   integrity list RUN [--json]              every case of the run, and its effect
+
+  Deciding, holding, curving or sending a grade (grade decide, defence mark
+  --criterion, curve, integrity open|decide, lms push|send-reports --confirm,
+  sync run --confirm, decisions adopt) runs only from your own terminal or a
+  press in the pane, never from an assistant's shell.
+
+  decisions audit RUN [--json]             decided evaluations no decision-writing
+                                           command noted on this machine
+                                           (~/.ainar/decisions): a hand-written
+                                           approval shows here
+  decisions adopt RUN                      note what is decided now, once
 
   report exam RUN --assessment A [--student S[,S]] [--dir DIR] [--no-names]
                                            exam reports as PDFs, outside the
@@ -1231,6 +1244,15 @@ const publishHomework = async (
   );
   return { code: 0, repo: result.plan.repo ?? null, url: result.url ?? null };
 };
+
+// GRD-3: a grade decided, held, curved or sent is the professor's word —
+// typed at their own terminal, or pressed in the pane. src/press.ts.
+const deciding = decidesOrSends(positional, args);
+const asker = deciding ? whoIsAsking(args) : null;
+if (deciding && refusal(deciding, asker!)) {
+  console.error(refusal(deciding, asker!));
+  process.exit(3);
+}
 
 try {
   switch (command) {
@@ -2704,7 +2726,10 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         if (!given) throw new Error("--decisions is a JSON list of {student, item, score, comment?}");
         // `-` reads the list from stdin, which the pane uses: thousands of marks
         // do not fit on a Windows command line.
-        const decisions = JSON.parse(given === "-" ? readFileSync(0, "utf8") : given);
+        const text = given === "-" ? readFileSync(0, "utf8") : given;
+        // A press covers the marks it was signed with, not others piped in its place.
+        if (given === "-" && !sameInput(asker!, text)) throw new Error("these marks are not the ones the pane's press was for");
+        const decisions = JSON.parse(text);
         if (!Array.isArray(decisions) || !decisions.length) throw new Error("--decisions is a JSON list of {student, item, score, comment?}");
         const via = (flag("via") ?? "one") as DecidedVia;
         if (!["one", "group", "all"].includes(via)) throw new Error(`--via is one, group or all, not ${via}`);
@@ -2720,6 +2745,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           for (const path of writeRecords(courseDir, { evaluations: result.evaluations as never[] })) {
             out(`wrote ${relative(root, path)}`);
           }
+          recordDecisions((bundle.course as { course_id: string }).course_id, result.evaluations, "grade decide");
         }
         out(
           `${result.written} decided` +
@@ -2847,6 +2873,37 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       out(`wrote ${written.students.length} student report(s) in ${join(place.dir, "students")}`);
       const waiting = report.students.filter((student) => student.total === null && (!students.length || students.includes(student.student)));
       if (waiting.length) out(`${waiting.length} of them are not fully marked yet, and say so`);
+      break;
+    }
+
+    case "decisions": {
+      // The decision ledger: src/decision-ledger.ts. `audit` names every
+      // decided evaluation no decision-writing command noted on this machine;
+      // `adopt` notes the ones there now, once, on the professor's word.
+      const sub = rest[0];
+      const runId = rest[1];
+      if (!["audit", "adopt"].includes(sub ?? "") || !runId) {
+        console.error("usage: decisions audit RUN [--json]  |  decisions adopt RUN");
+        process.exit(2);
+      }
+      const bundle = forRun(runId);
+      const audit = auditDecisions(bundle);
+      if (sub === "adopt") {
+        const ids = new Set(audit.unknown.map((entry) => entry.evaluation_id));
+        const noted = recordDecisions(audit.course_id, (bundle.evaluations as any[]).filter((entry) => ids.has(entry.evaluation_id)), "decisions adopt");
+        out(`${audit.course_id}: ${noted} decision(s) adopted into ${decisionsDir()}`);
+        break;
+      }
+      if (args.includes("--json")) {
+        out(audit);
+        break;
+      }
+      out(`${audit.course_id}: ${audit.decided} decided evaluation(s), ${audit.unknown.length} not written by a decision-writing command on this machine`);
+      if (!audit.ledger) out(`  no ledger here yet (${decisionsDir()}): \`ainar decisions adopt ${runId}\` notes what is decided now`);
+      for (const entry of audit.unknown) {
+        out(`  ${entry.evaluation_id}  ${entry.submission_id}  by ${entry.decided_by ?? "?"} at ${entry.decided_at ?? "?"}`);
+      }
+      if (audit.unknown.length) process.exitCode = 1;
       break;
     }
 
@@ -3991,6 +4048,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             for (const path of writeRecords(courseDir, { evaluations: checked.evaluations as never[] })) {
               out(`wrote ${relative(root, path)}`);
             }
+            recordDecisions((bundle.course as any).course_id, checked.evaluations, "defence mark");
             // A record edited where it was written by hand keeps a key the new
             // one leaves out, so what `clear` took away is deleted by name.
             editRecords({
@@ -5077,7 +5135,11 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         },
         forRun(rest[1]!),
         root,
-        { out },
+        {
+          out,
+          onWritten: (evaluations) =>
+            recordDecisions((forRun(rest[1]!).course as { course_id: string }).course_id, evaluations, "sync run"),
+        },
       );
       if (code) process.exit(code);
       break;

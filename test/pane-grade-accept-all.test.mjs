@@ -22,6 +22,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
 
+// The harness signs its press and the CLI notes each decision outside the
+// repository: here, in scratch folders, never the professor's ~/.ainar.
+process.env.AINAR_PRESS_DIR = mkdtempSync(join(tmpdir(), "pane-accept-all-press-"));
+process.env.AINAR_DECISIONS_DIR = mkdtempSync(join(tmpdir(), "pane-accept-all-decisions-"));
+
 import { Workspace } from "@ainar/core/src/workspace.ts";
 import { writeGroups } from "@ainar/core/src/grade-board.ts";
 import { scanPlace } from "@ainar/core/src/scans.ts";

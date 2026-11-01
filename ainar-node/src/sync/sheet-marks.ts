@@ -203,6 +203,8 @@ export const runMarksSync = async (options: {
   sheetsDirectory?: string;
   /** For tests: a client that never leaves the machine. */
   client?: SheetsClient;
+  /** Hears the evaluations written: the CLI notes the decided ones in the decision ledger. */
+  onWritten?: (evaluations: any[]) => void;
 }): Promise<MarksRun> => {
   const { bundle, runId, sync, out } = options;
   const run = (bundle.versions as any[]).find((entry) => entry.course_version_id === runId);
@@ -290,6 +292,7 @@ export const runMarksSync = async (options: {
   if (plan.remove.evaluations.length) removeRecords(courseDir, "evaluations", plan.remove.evaluations);
   if (plan.remove.submissions.length) removeRecords(courseDir, "submissions", plan.remove.submissions);
   writeRecords(courseDir, { submissions: plan.submissions as any[], evaluations: plan.evaluations as any[] });
+  options.onWritten?.(plan.evaluations as any[]);
   const flagged = applyFlags(store, runId, plan.placed.map((entry) => entry.student), plan.flags);
   const githubs = applyGithubLogins(store, plan.githubs);
   if (flagged || githubs.changed) store.save();

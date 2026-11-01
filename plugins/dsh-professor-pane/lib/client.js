@@ -18361,10 +18361,11 @@ function ProfessorPane(props) {
           exclude: Array.isArray(data.exclude) ? data.exclude.map(String) : [],
           note: data.note ? String(data.note) : ""
         };
-        fetch(
+        pressWork(
           scoped(BASE + "/api/grade/curve?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
-          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) }
-        ).then((response) => response.json()).then((result) => {
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) },
+          props.sessionId
+        ).then((result) => {
           if (!result.ok) {
             window.alert(String(result.error || result.output || "the curve was not written").trim().split("\n").slice(-2).join(" "));
           }
@@ -18444,10 +18445,11 @@ function ProfessorPane(props) {
           ...data.outcome ? { outcome: String(data.outcome) } : {},
           note: data.note ? String(data.note) : ""
         };
-        fetch(
+        pressWork(
           scoped(BASE + "/api/grade/integrity?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment), props.sessionId),
-          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) }
-        ).then((response) => response.json()).then((result) => {
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body2) },
+          props.sessionId
+        ).then((result) => {
           if (!result.ok) {
             window.alert(String(result.error || result.output || "the case was not written").trim().split("\n").slice(-2).join(" "));
           }

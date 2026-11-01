@@ -15,6 +15,7 @@
  */
 
 import { strict as assert } from "node:assert";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, mkdtempSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -328,21 +329,53 @@ test("lms push --target canvas-api: without --confirm nothing is posted", async 
 // --------------------------------------------------------------------------
 
 /**
- * HOLE, not fixed here (GRD-3 says test, not redesign). The CLI is a
- * professor's surface, and an agent's shell can run it: nothing in the
- * process tells a terminal the professor typed into from a command the
- * session's model ran. These write a decision or send a grade with no check
- * but the words in the skills (`ainar-records`, `publish`: "never"):
+ * The CLI is the professor's surface, and an assistant's shell can run it.
+ * Every command that decides, holds, curves or sends a grade asks who is
+ * running it (src/press.ts): the professor's own terminal, or a press the
+ * pane's harness signed. An assistant's shell is neither — DSH's sets
+ * DSH_SHELL on each command, and runs it in a pseudo-terminal, so a terminal
+ * alone would not tell. Each is run here as such a shell runs it, and must be
+ * refused before it reads the course.
  *
- *   ainar grade decide RUN --assessment A --decisions '[…]'   writes professor_decision
- *   ainar defence mark RUN … --criterion C --outcome …        writes professor_decision
- *   ainar lms push RUN --target canvas-api --confirm          posts grades to Canvas
- *   ainar sync run RUN SYNC --confirm                         the same, through a sync
- *
- * And below the CLI, an agent with file access can write `status: approved`
- * with a decided_by and decided_at of its own into records/evaluations.yaml;
- * the validator checks the stamp is there, not who wrote it. What catches that
- * today is the diff. The test to write, once there is something to pin: a
- * decision-writing command run without the professor's mark on it is refused.
+ * Below the CLI, a hand-written `status: approved` is not stopped but shown:
+ * `ainar decisions audit RUN` names a decision no command noted in the ledger
+ * (test/press.test.ts).
  */
-test.todo("CLI: grade decide, defence mark --criterion, lms push --confirm and sync run --confirm refuse when run from an agent's shell");
+const GUARDED = [
+  `grade decide ${RUN} --assessment ASSESSMENT-01 --decisions [{"student":"STUDENT-X","item":"ITEM-X","score":1}]`,
+  `defence mark ${RUN} --assessment ASSESSMENT-01 --student STUDENT-X --criterion CRIT-X --outcome confirmed`,
+  `curve ${RUN} --assessment ASSESSMENT-01 --anchor 50`,
+  `integrity open ${RUN} --student STUDENT-X --assessment ASSESSMENT-01`,
+  `integrity decide ${RUN} --case INTEGRITY-X --state upheld --outcome zero`,
+  `lms push ${RUN} --assessment ASSESSMENT-01 --target canvas-api --confirm`,
+  `lms send-reports ${RUN} --assessment ASSESSMENT-01 --confirm`,
+  `sync run ${RUN} canvas-grades --confirm`,
+  `decisions adopt ${RUN}`,
+];
+
+test("CLI: every command that decides or sends a grade refuses an assistant's shell", () => {
+  const root = scratch();
+  cpSync(ROOT, root, { recursive: true });
+  const before = snapshot(root);
+  const shells: Record<string, NodeJS.ProcessEnv> = {
+    "DSH's shell": { DSH_SHELL: "1", TERM: "dumb" },
+    "Claude Code's shell": { CLAUDECODE: "1" },
+    "a shell that sets no mark": {},
+  };
+  for (const line of GUARDED) {
+    for (const [shell, marks] of Object.entries(shells)) {
+      const env = { ...process.env, ...marks, AINAR_PRESS_DIR: scratch() } as NodeJS.ProcessEnv;
+      if (!("CLAUDECODE" in marks)) delete env.CLAUDECODE;
+      if (!("DSH_SHELL" in marks)) delete env.DSH_SHELL;
+      delete env.AINAR_PRESS;
+      const ran = spawnSync(process.execPath, ["--experimental-strip-types", join(PACKAGE, "bin", "ainar.ts"), ...line.split(" "), "--root", root], {
+        env,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      assert.equal(ran.status, 3, `${line}, from ${shell}: exit ${ran.status}\n${ran.stdout}${ran.stderr}`);
+      assert.match(ran.stderr, /runs only on the professor's word/, `${line}, from ${shell}`);
+    }
+  }
+  assert.deepEqual(snapshot(root), before, "a refused command changed the workspace");
+});

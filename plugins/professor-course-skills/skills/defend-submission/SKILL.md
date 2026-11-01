@@ -5,7 +5,7 @@ stage: assess
 requires: [assessments, submissions]
 produces: [defence questions]
 writes: drafts
-version: 2026.11.1
+version: 2026.11.2
 ---
 
 > **Non-negotiables.** This skill proposes; a person decides.
@@ -186,7 +186,7 @@ that, without accusing anyone (VIV-3).
 ```
 
 ```bash
-bin/ainar defence grade RUN --assessment ASSESSMENT --student STUDENT --from output/defence-grade.json --by "<the model this session runs on>" --workflow-version 2026.11.1
+bin/ainar defence grade RUN --assessment ASSESSMENT --student STUDENT --from output/defence-grade.json --by "<the model this session runs on>" --workflow-version 2026.11.2
 bin/ainar validate <COURSE>
 ```
 
@@ -208,7 +208,10 @@ the professor says so — `bin/ainar defence mark RUN --assessment ASSESSMENT
 answers.
 
 The same goes for the check **against the homework's own rubric**, which changes
-the grade: `bin/ainar defence mark RUN --assessment ASSESSMENT --student STUDENT
---criterion CRIT --outcome confirmed|partly|not_confirmed|clear [--score N]`, or
-the Students view's *Check against the rubric*. Your proposed grade (`defence
-grade`) is a suggestion beside the mark; this is the professor's word on it.
+the grade: the Students view's *Check against the rubric*, or `bin/ainar defence
+mark RUN --assessment ASSESSMENT --student STUDENT --criterion CRIT --outcome
+confirmed|partly|not_confirmed|clear [--score N]` at their terminal. Your
+proposed grade (`defence grade`) is a suggestion beside the mark; this is the
+professor's word on it. `defence mark --criterion` refuses to run from your
+shell, even when the professor says the word in chat: point them at the press,
+or give them the line to type.

@@ -108,7 +108,12 @@ with the CLI, never by hand:
 The defence can also be checked **against the homework's own rubric**, and
 that changes the grade. Per criterion the professor says `confirmed` (the
 written mark stands), `partly` (half of it, or the points they name) or
-`not_confirmed` (0, or the points they name):
+`not_confirmed` (0, or the points they name). That is a grade, so it is not
+yours to run: `defence mark --criterion` refuses an assistant's shell, as
+`grade decide` does. The professor presses *Check against the rubric* in the
+Students view, or types the line at their own terminal — write it out for them,
+criteria named from `<cli> rubric <A>`; "partly on the second one, 1 point" is
+`--criterion <that id> --outcome partly --score 1`:
 
 ```bash
 <cli> defence mark <RUN> --assessment <A> --student <S> --criterion <CRIT>[,<CRIT>…] --outcome confirmed|partly|not_confirmed|clear [--score N] --root "<workspace>"
@@ -116,10 +121,7 @@ written mark stands), `partly` (half of it, or the points they name) or
 
 It writes the evaluation's `professor_decision` with `defence:` set and
 `decided_via: defence`; the written mark goes into `extensions.history`, and
-`clear` restores it. The grade sheet's sync leaves such a mark alone. Name the
-criteria from `<cli> rubric <A>`; "partly on the second one, 1 point" is
-`--criterion <that id> --outcome partly --score 1`. Read the lines it prints
-back to the professor — old mark → new mark per criterion.
+`clear` restores it. The grade sheet's sync leaves such a mark alone.
 
 A student who **forked and showed the professor** without handing in through
 Canvas has no link to defend from. When the professor gives you the fork:
@@ -195,10 +197,14 @@ you wrote, into which files, and that it is waiting for the professor.
 **Not you.** Never write `approval: approved`, a `professor_decision`, or an
 approved status (`approved`, `overridden`, an approved intervention) — not on
 your own work, not on anyone's. Accepting is the professor's act, and the only
-thing that makes a proposal a record. The one way a decision reaches the
-course through you is `defence mark`, when the professor has just told you, in
-their own words, what the defence showed — you are typing their decision, not
-making one, and you never infer it. An older skill that says to run
+thing that makes a proposal a record. The one fact of this kind that reaches the
+course through you is whether a student defended (`defence mark --outcome
+defended|not_defended`), when the professor has just told you in their own
+words — you are typing their word, not deciding, and you never infer it. The
+commands that decide, hold, curve or send a grade (`grade decide`, `defence mark
+--criterion`, `curve`, `integrity open|decide`, `lms push --confirm`, `sync run
+--confirm`) refuse to run from your shell: give the professor the press or the
+line to type. An older skill that says to run
 `ainar approve` is out of date: the command is gone and only prints a message
 saying so.
 

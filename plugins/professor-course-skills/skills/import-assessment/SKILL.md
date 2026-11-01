@@ -5,7 +5,7 @@ stage: assess
 requires: [enrollments]
 produces: [assessments, items, documents]
 writes: drafts
-version: 2026.11.1
+version: 2026.11.2
 ---
 
 > **Non-negotiables.** This skill proposes; a person decides.
@@ -367,8 +367,9 @@ Once the professor has accepted the rubric, they grade in the same view: each
 group's answers as cards beside the page, the group's score as the suggestion,
 a mark per card, Accept per group, or Accept all. Every press is
 `ainar grade decide`, which writes the `professor_decision` — never write one
-yourself, and never run `grade decide` or `grade accept-rubric` unless the
-professor has told you the marks or the decision in so many words. Answers that
+yourself. `grade decide` refuses to run from your shell; it runs from the
+professor's press or their own terminal. Never run `grade accept-rubric` unless
+the professor has told you the decision in so many words. Answers that
 need more than a group's score — a long written answer, a criterion with parts —
 go to `/grade-batch`, whose per-answer suggestions the view shows the same way.
 Report:

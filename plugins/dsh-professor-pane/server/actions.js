@@ -11,6 +11,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { assessmentsOf, runById } from "@ainar/core/src/bundle.ts";
+import { signPress } from "@ainar/core/src/press.ts";
 
 import { sendJson } from "./http.js";
 import {
@@ -50,6 +51,12 @@ export const DOTS_BUNDLE = fileURLToPath(new URL("../vendor/dots-swarm.js", impo
  * `onOutput`, when given, hears stdout and stderr as they come — a job's
  * running output (server/jobs.js); the answer still carries all of it.
  * `onChild` is handed the child process, so a job can be cancelled.
+ *
+ * Every spawn here carries the harness's signed press (GRD-3,
+ * @ainar/core/src/press.ts): the routes that reach this are the professor's
+ * presses, checked by `notFromThePane`, so a command that decides or sends a
+ * grade runs. The assistant's own road into the harness, `scan_pile`, spawns
+ * through plugins/dsh-professor-scan-steps and signs nothing.
  */
 export const runScans = (args, root, timeout = 300000, input = null, onOutput = null, onChild = null) =>
   new Promise((resolveRun) => {
@@ -57,10 +64,11 @@ export const runScans = (args, root, timeout = 300000, input = null, onOutput = 
       resolveRun({ ok: false, error: `The TypeScript ainar CLI is not at ${AINAR_CLI}.` });
       return;
     }
+    const argv = [...args, "--root", root];
     const child = execFile(
       process.execPath,
-      ["--experimental-strip-types", AINAR_CLI, ...args, "--root", root],
-      { cwd: root, timeout, maxBuffer: 4 * 1024 * 1024 },
+      ["--experimental-strip-types", AINAR_CLI, ...argv],
+      { cwd: root, timeout, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, AINAR_PRESS: signPress(argv, input) } },
       (error, stdout, stderr) => {
         const code = error && typeof error.code === "number" ? error.code : error ? 1 : 0;
         const output = [stdout, stderr]

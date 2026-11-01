@@ -57,6 +57,8 @@ interface Deps {
   out: (line: unknown) => void;
   /** Run another `ainar` command; returns its exit code. Replaceable in tests. */
   delegate?: (argv: string[]) => number;
+  /** Hears the evaluations a marks sheet wrote (the CLI's decision ledger). */
+  onWritten?: (evaluations: any[]) => void;
 }
 
 const defaultDelegate = (argv: string[]): number => {
@@ -190,6 +192,7 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
           codes: args.codes === true,
           out,
           linksDirectory: args.linksDir,
+          onWritten: deps.onWritten,
         });
         return 0;
       }

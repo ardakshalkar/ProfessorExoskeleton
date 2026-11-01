@@ -88,6 +88,8 @@ export const routes = [
       // The professor's curve on the totals, or taking it off: `ainar curve`.
       if (path === "/api/grade/curve") {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+        const why = notFromThePane(req);
+        if (why) return sendJson(res, 200, { error: why, token: true });
         loadedRun(workspace, runId);
         return readBody(req, 64 * 1024)
           .then((text) => {
@@ -119,6 +121,8 @@ export const routes = [
       // seconds a press on a real one. Nothing here reaches a student.
       if (path === "/api/grade/integrity") {
         if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+        const why = notFromThePane(req);
+        if (why) return sendJson(res, 200, { ok: false, error: why, token: true });
         return readBody(req, 64 * 1024)
           .then((text) => {
             const body = text ? JSON.parse(text) : {};
