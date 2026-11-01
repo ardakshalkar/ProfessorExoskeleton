@@ -195,9 +195,34 @@ is worth building.
       disagreements listed rather than averaged. `M` · depends: —
 - [ ] **GRD-2** Confidence calibration — does a confidence of 0.8 mean eight in
       ten? Until this exists the number is decoration. `M` · depends: GRD-1
-- [ ] **GRD-3** Test the invariant directly: no path in any interface can
+- [x] **GRD-3** Test the invariant directly: no path in any interface can
       approve an evaluation or push a grade. Cheap, and it is the constraint
       everything else is checked against. `S` · depends: —
+      Done 2026-11-01: one test per road, in
+      `ainar-node/test/invariant.test.ts` and
+      `plugins/dsh-professor-pane/test/invariant.test.mjs`. What holds today:
+      the MCP tools are the sixteen readers, pinned by name, and calling every
+      one changes no file in the workspace (`approve` is refused by the
+      server); `defence grade --from` writes the model's JSON as `suggested`
+      and leaves a decided criterion alone; the validator refuses an approved
+      evaluation with no decision, `decided_by` or `decided_at`; `lms push
+      --target canvas-api` posts nothing without `--confirm`; the callers that
+      hand evaluations to `writeRecords` are pinned (`grade decide`, `defence
+      mark`, `defence grade`, the grade-sheet sync). In the pane: no job kind
+      decides or sends (`startKind` refuses `SEND_KINDS` and anything not in
+      `KINDS`, and every kind runs `scans` or `defence batch`); `scan_pile`
+      runs a scans step and nothing else; `/api/record` edits no evaluation
+      and no `approval` or `status`; only `routes/grade.js` and
+      `routes/defence.js` spawn a deciding command, POST only; every Canvas
+      send is behind the body's `confirm: true`. Two holes, left as
+      `test.todo` and not fixed here: the CLI cannot tell the professor's
+      terminal from the assistant's shell (`grade decide`, `defence mark
+      --criterion`, `lms push --confirm`, `sync run --confirm` are held by the
+      skills' words alone, and a file write can set `status: approved` with a
+      stamp of its own), and the pane's deciding and sending routes do not ask
+      `notFromThePane`, so a POST from any local process that reaches the
+      loopback port is answered as a press. Neither has an item of its own
+      yet; the todos say what the test would pin once one exists.
 - [ ] **GRD-4** Second-grader mode. `L` · depends: GRD-1
 - [ ] **GRD-5** Comparison against last year's distribution. `M` · depends:
       REC-4
