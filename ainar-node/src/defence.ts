@@ -1337,7 +1337,13 @@ export const defenceEvaluations = (context: {
   submission_id: string;
   student_id: string;
   existing: any[];
-  provenance: { produced_by: string; model_id: string | null; created_at: string; input_refs: string[] };
+  provenance: {
+    produced_by: string;
+    model_id: string | null;
+    workflow_version?: string | null;
+    created_at: string;
+    input_refs: string[];
+  };
 }): { evaluations: any[]; decided: string[] } => {
   const evaluations: any[] = [];
   const decided: string[] = [];
@@ -1365,6 +1371,7 @@ export const defenceEvaluations = (context: {
         provenance: {
           produced_by: context.provenance.produced_by,
           ...(context.provenance.model_id ? { model_id: context.provenance.model_id } : {}),
+          ...(context.provenance.workflow_version ? { workflow_version: context.provenance.workflow_version } : {}),
           prompt_version: "defend-submission/grade/v1",
           input_refs: context.provenance.input_refs,
           created_at: context.provenance.created_at,

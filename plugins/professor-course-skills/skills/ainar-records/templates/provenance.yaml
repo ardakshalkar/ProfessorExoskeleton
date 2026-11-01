@@ -1,0 +1,42 @@
+# Where a draft came from — the one block every skill that drafts a record into
+# a course writes beside it. Skills point here rather than each spelling it out,
+# so a change to the block is made once. `Provenance` in
+# ainar-node/src/model/common.ts is what it is checked against, and the loader
+# refuses a key it does not know.
+#
+# Where it goes depends on the collection:
+#
+#   evaluations   inside the suggestion:   ai_suggestion: { …, provenance: <block> }
+#   documents     as the Document's        generated_by: <block>
+#   everything    on the record itself:    provenance: <block>
+#   else          (activities, resources, assessments, items, item_models,
+#                  item_responses, interventions, events, evidence,
+#                  concept_states, signals, action_items)
+#
+# The fields:
+#
+#   produced_by       the skill, as the professor would type it: /design-assessment
+#   workflow_version  `version:` from that skill's SKILL.md front matter, as written
+#   model_id          the model THIS session runs on, as the session names it to
+#                     you (in Claude Code, "The exact model ID is …"). Never a
+#                     provider you assume, never a model you remember from an
+#                     example. If the session does not say, leave the line out:
+#                     a missing model is honest, a guessed one is not.
+#   input_refs        the identifiers you read and relied on — the outcomes,
+#                     criteria, submission, evidence, concept states, the
+#                     source file a record was taken from. What a professor
+#                     would open to see why the draft says what it says. Not
+#                     every file you glanced at.
+#   created_at        now, in the run's own offset (its `timezone`, e.g.
+#                     +05:00). Never without an offset — the loader refuses
+#                     that.
+#
+# One block per record. Records written together in one turn share the same
+# values apart from `input_refs`.
+
+provenance:
+  produced_by: "/{{ skill name }}"
+  workflow_version: "{{ version from the skill's front matter, e.g. 2026.11.1 }}"
+  model_id: "{{ the model this session runs on }}"
+  input_refs: ["{{ ID the draft rests on }}", "{{ … }}"]
+  created_at: "{{ YYYY-MM-DDTHH:MM:SS+05:00 }}"

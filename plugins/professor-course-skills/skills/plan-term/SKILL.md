@@ -5,6 +5,7 @@ stage: design
 requires: [concepts]
 produces: [modules, activities, assessments]
 writes: records, drafts
+version: 2026.11.1
 ---
 
 > **Non-negotiables.** This skill proposes; a person decides.
@@ -13,6 +14,9 @@ writes: records, drafts
 >   structure is the professor's own authoring, and `modules` is no longer a
 >   draftable collection. Meetings and assessments go into the
 >   course too, marked `approval: draft` until the professor accepts them.
+> - **Say where every draft came from** — the provenance block in
+>   `../ainar-records/templates/provenance.yaml`, filled with this skill's
+>   `version` above and the model this session runs on.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Modules you now write into the record directly, which raises the
@@ -174,6 +178,7 @@ and add to what is there):
 activities:
   - activity_id: ACT-0701
     approval: draft
+    provenance: …   # ../ainar-records/templates/provenance.yaml
     course_run_id: CSS-4008-2026-FALL
     module_id: MODULE-07
     type: lecture
@@ -186,6 +191,7 @@ activities:
 
   - activity_id: ACT-0702
     approval: draft
+    provenance: …   # ../ainar-records/templates/provenance.yaml
     course_run_id: CSS-4008-2026-FALL
     module_id: MODULE-07
     type: lab
@@ -235,6 +241,7 @@ this is the one place this skill proposes one. They go into
 assessments:
   - assessment_id: ASSESSMENT-MT1
     approval: draft
+    provenance: …   # ../ainar-records/templates/provenance.yaml
     course_run_id: CSS-4008-2026-FALL
     title: Midterm 1
     type: exam

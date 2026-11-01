@@ -72,8 +72,40 @@ is worth building.
       collection or its vendored schema goes without it. Not here: the SQL
       tables of those eight have no `provenance` column, so `ainar db` drops it
       (with PRV-3), and nothing writes it yet (PRV-2).
-- [ ] **PRV-2** Skills write it. One shared template line rather than forty
+- [x] **PRV-2** Skills write it. One shared template line rather than forty
       bespoke ones. `M` · depends: PRV-1
+      Done 2026-11-01: the block is defined once, in
+      `ainar-records/templates/provenance.yaml`, with a section in that
+      skill's SKILL.md. `ainar-records` because it is the one skill every
+      host loads beside the others — `~/.claude/skills/` flat in Claude Code,
+      `plugins/professor-course-skills/skills/` in DSH — so
+      `../ainar-records/templates/provenance.yaml` resolves from every course
+      skill in both, and it already owns how a draft is written. The nine
+      skills that draft (`writes: drafts` with something in `produces`) —
+      action-inbox, defend-submission, design-assessment, find-gaps,
+      grade-batch, grade-submission, import-assessment, make-materials,
+      plan-term — carry one identical non-negotiable pointing there, and the
+      ten bespoke blocks in their examples and templates (`produced_by:
+      x-skill`, `model_id: claude-opus-5`, `workflow_version:
+      claude-code/prototype`) are one pointer line each, keeping only what
+      that skill cites. `workflow_version` is a new `version:` in each
+      skill's front matter, calendar-style (`2026.11.1`), bumped by hand when
+      what the skill drafts changes: the skills run from a copy that is not a
+      git checkout, so nothing commit-derived is readable where they run.
+      `model_id` is the session's own model as the session names it, left
+      out when it does not — never a provider assumed or remembered.
+      `produced_by` is `/<skill>`. The one CLI writer driven by a skill's
+      judgement, `defence grade`, takes `--workflow-version` beside its
+      `--by` and now says `/defend-submission`. `test/skill-provenance.test.ts`
+      fills the template and loads it on every draftable collection the sample
+      course has (failing if a skill produces one it lacks), and fails if a
+      drafting skill lacks a version or the pointer, passes a different
+      `--workflow-version`, or spells its own block again. Not here:
+      `scans record` and `import-paper` write item responses and imported
+      items without the model's name (the transcript's `read_by` is in
+      `extensions.scan`); the slides skills under `professor-skills/` write a
+      deck's front-matter `generated_by: <skill>` string, not a course record;
+      nothing yet checks that `version:` was bumped when a skill changed.
 - [ ] **PRV-3** It stays on the record when the professor accepts it and when a
       writer rebuilds it, rather than being dropped — `ainar-node/src/records-write.ts`,
       around `upsertRecords` and `writeRecords`, which already keep `approval`

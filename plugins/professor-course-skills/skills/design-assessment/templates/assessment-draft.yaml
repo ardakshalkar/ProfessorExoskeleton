@@ -19,6 +19,7 @@
 
 assessment_id: ASSESSMENT-{{ nn }}
 approval: draft   # always; never write approved
+provenance: …   # ../ainar-records/templates/provenance.yaml
 course_version_id: "{{ COURSE_VERSION_ID }}"
 title: "{{ assessment title }}"
 type: "{{ quiz / assignment / exam / project }}"
@@ -76,6 +77,7 @@ rubric:
 items:
   - item_id: ITEM-{{ nn }}-01
     approval: draft
+    provenance: …   # ../ainar-records/templates/provenance.yaml
     assessment_id: ASSESSMENT-{{ nn }}
     criterion_id: CRIT-{{ nn }}-01
     concepts: ["{{ CONCEPT-ID }}"]

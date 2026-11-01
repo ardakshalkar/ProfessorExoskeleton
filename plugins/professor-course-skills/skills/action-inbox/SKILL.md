@@ -5,6 +5,7 @@ stage: analyse
 requires: []
 produces: [action_items]
 writes: drafts
+version: 2026.11.1
 ---
 
 > **Non-negotiables.** This skill proposes; a person decides.
@@ -14,6 +15,9 @@ writes: drafts
 >   every record you write `approval: draft` (a grade: `status: suggested`).
 >   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
 >   nothing student-facing reads a draft.
+> - **Say where every draft came from** — the provenance block in
+>   `../ainar-records/templates/provenance.yaml`, filled with this skill's
+>   `version` above and the model this session runs on.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
@@ -191,13 +195,7 @@ action_items:
     status: pending
     due_at: 2026-10-20T17:00:00+05:00
     available_actions: [review, approve, dismiss]
-    provenance:
-      produced_by: action-inbox-skill
-      model_id: claude-opus-5
-      workflow_version: claude-code/prototype
-      prompt_version: action-inbox/v1
-      input_refs: [EVENT-882, EVAL-6002]
-      created_at: 2026-10-18T09:00:00+05:00
+    provenance: …   # ../ainar-records/templates/provenance.yaml, citing [EVENT-882, EVAL-6002]
 ```
 
 A `next_step` from the ladder is written the same way, sourced to the rung it

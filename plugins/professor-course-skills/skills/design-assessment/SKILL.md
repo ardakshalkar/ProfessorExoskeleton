@@ -5,6 +5,7 @@ stage: design
 requires: [outcomes, concepts]
 produces: [assessments, items, item_models, documents]
 writes: drafts
+version: 2026.11.1
 ---
 
 > **Non-negotiables.** This skill proposes; a person decides.
@@ -14,6 +15,9 @@ writes: drafts
 >   every record you write `approval: draft` (a grade: `status: suggested`).
 >   Materials go in `materials/<MATERIAL>/`. Nothing is moved afterwards, and
 >   nothing student-facing reads a draft.
+> - **Say where every draft came from** — the provenance block in
+>   `../ainar-records/templates/provenance.yaml`, filled with this skill's
+>   `version` above and the model this session runs on.
 > - **Claims come from the professor.** Never invent a learning outcome, a
 >   rubric criterion or an assessment weight — write `TODO` and say what is
 >   missing. Artefacts that serve an existing claim you may draft; that is the
@@ -171,6 +175,7 @@ keep, and mark every one `approval: draft`. The shapes, shown together:
 assessments:
   - assessment_id: ASSESSMENT-06
     approval: draft
+    provenance: …   # ../ainar-records/templates/provenance.yaml
     course_run_id: CSS-4008-2026-FALL
     title: Midterm Examination
     type: exam
@@ -223,6 +228,7 @@ assessments:
 item_models:
   - item_model_id: ITEM-MODEL-OVERFITTING-DIAGNOSIS
     approval: draft
+    provenance: …   # ../ainar-records/templates/provenance.yaml
     course_version_id: CSS-4008-2026-FALL
     title: Diagnose generalisation failure from evaluation evidence
     outcome_id: LO-02
@@ -248,6 +254,7 @@ item_models:
 items:
   - item_id: ITEM-06-01
     approval: draft
+    provenance: …   # ../ainar-records/templates/provenance.yaml
     assessment_id: ASSESSMENT-06
     item_model_id: ITEM-MODEL-OVERFITTING-DIAGNOSIS
     number: 1
@@ -340,12 +347,7 @@ documents:
     storage_key: courses/CSS-4008/materials/midterm-2-brief/midterm-2-brief.md
     mime_type: text/markdown
     course_run_id: CSS-4008-2026-FALL
-    generated_by:
-      produced_by: design-assessment-skill
-      model_id: claude-opus-5
-      prompt_version: design-assessment/v1
-      input_refs: [ASSESSMENT-06, LO-02, LO-04]
-      created_at: 2026-08-13T10:00:00+05:00
+    generated_by: …   # ../ainar-records/templates/provenance.yaml, citing [ASSESSMENT-06, LO-02, LO-04]
 ```
 
 Then set `instructions_document_id: DOC-A06-BRIEF` on the assessment, so the

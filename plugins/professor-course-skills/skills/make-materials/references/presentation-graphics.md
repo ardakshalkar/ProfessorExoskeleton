@@ -97,13 +97,7 @@ documents:
     course_version_id: CSS-4008-2026-FALL
     module_id: MODULE-06
     concepts: [CONCEPT-TRAIN-TEST-SPLIT]
-    generated_by:
-      produced_by: make-materials-skill
-      model_id: claude-opus-5
-      workflow_version: claude-code/prototype
-      prompt_version: make-materials/v1
-      input_refs: [MODULE-06, CONCEPT-TRAIN-TEST-SPLIT]
-      created_at: 2026-09-28T10:52:00+05:00
+    generated_by: …   # ../ainar-records/templates/provenance.yaml, citing [MODULE-06, CONCEPT-TRAIN-TEST-SPLIT]
 ```
 
 An unregistered figure is a file `ainar validate` never checks and the course

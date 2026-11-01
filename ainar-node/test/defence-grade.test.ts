@@ -10,6 +10,7 @@ import {
   type Session,
 } from "../src/defence.ts";
 import { evaluationId } from "../src/grade-board.ts";
+import { COLLECTION_SPECS } from "../src/collections.ts";
 
 const CRITERIA: GradingCriterion[] = [
   { criterion_id: "CRIT-HW1-SPLIT", title: "Train/test split", maximum_score: 10, levels: [{ score: 10, description: "Justified" }, { score: 5, description: "Asserted" }] },
@@ -114,4 +115,17 @@ test("evaluations land on the homework's submission with the shared id, and a de
   assert.equal(evaluations[0].ai_suggestion.score, 8);
   assert.equal(evaluations[0].ai_suggestion.provenance.prompt_version, "defend-submission/grade/v1");
   assert.equal("professor_decision" in evaluations[0], false);
+});
+
+test("--by and --workflow-version reach the suggestion's provenance, and it loads", () => {
+  const { evaluations } = defenceEvaluations({
+    proposed: [{ criterion_id: "CRIT-HW1-SPLIT", score: 8, confidence: 0.7, comment: "c", evidence: [] }],
+    submission_id: "SUB-JNG7SN-HW1", student_id: "STUDENT-JNG7SN", existing: [],
+    provenance: { produced_by: "/defend-submission", model_id: "deepseek-v4-pro", workflow_version: "2026.11.1", created_at: "2026-11-01T12:00:00+05:00", input_refs: ["SUB-JNG7SN-HW1"] },
+  });
+  const provenance = evaluations[0].ai_suggestion.provenance;
+  assert.equal(provenance.workflow_version, "2026.11.1");
+  assert.equal(provenance.model_id, "deepseek-v4-pro");
+  const loaded = COLLECTION_SPECS.evaluations.model.parse(evaluations[0]) as any;
+  assert.equal(loaded.ai_suggestion.provenance.produced_by, "/defend-submission");
 });
