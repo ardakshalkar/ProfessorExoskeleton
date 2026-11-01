@@ -175,12 +175,30 @@ is worth building.
       same field instead of answering the question twice. `test/outline.test.ts`
       is new, and the two halves — the page draws none, a view that asks gets
       them — are pinned in `page.test.ts` and `widgets.test.ts`.
-- [ ] **UI-1** Spec the context packet: for every pane button, what the press
+- [x] **UI-1** Spec the context packet: for every pane button, what the press
       should carry — run, view, sub-view, selected record. This is a table, not
       code, and it is the task the rest depends on. `S` · depends: —
-- [ ] **UI-2** Widen the pane→session envelope. Today `sendFollowUpMessage` in
-      `plugins/dsh-professor-pane/index.js` posts `{source, kind:'ask',
-      prompt}` — one string. Add a `context` object beside the prompt. `M` ·
+      Done 2026-11-01:
+      [`CONTEXT-PACKET.md`](plugins/dsh-professor-pane/CONTEXT-PACKET.md).
+      There are 55 controls that reach the session, one row each. The presses
+      that start work through a route are listed in eleven families; they need
+      no packet. The packet
+      is `{ prompt, context }`. Always present: `run`, `place` (the place
+      `placeNow()` already builds, in `shared/route.js`'s words), `layer`,
+      `names` and `intent`. Per control: `subject`, `related`, `gap`, `step`
+      and `seen`. Gaps found: no press carries the place, which today reaches
+      only the URL. Records on screen are sent by title (concepts), by first
+      of several (a week's modules), or not at all (the Grade window's
+      question, Upload's assessment). The week's asks are written three times
+      and have already drifted: the widget's Prepare has no module, and the
+      dates prompt names a directory nobody searches. Seven open questions,
+      the first being where UI-3 reads the packet.
+- [ ] **UI-2** Widen the pane→session envelope to the packet in
+      [`CONTEXT-PACKET.md`](plugins/dsh-professor-pane/CONTEXT-PACKET.md).
+      Today `sendFollowUpMessage` in `plugins/dsh-professor-pane/server/page.js`
+      (and the served pages' `data-ask`) posts `{source, kind:'ask', prompt}`,
+      one string, and `ask` in `client/main.js` queues it as the turn. Add a
+      `context` object beside the prompt and carry it through to `ask`. `M` ·
       depends: UI-1
 - [ ] **UI-3** Turn the packet into the turn's opening context on the harness
       side, so a press stops producing a prompt the agent must interpret from
