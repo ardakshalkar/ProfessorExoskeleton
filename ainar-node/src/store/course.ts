@@ -69,7 +69,7 @@ export class YamlCourseStore implements CourseStore {
   readonly root: string;
   readonly label: string;
   private loaded = new Map<string, { result: LoadResult; stamp: number }>();
-  private readonly watching: boolean;
+  private watching: boolean;
   private watched = new Map<string, Watched>();
 
   constructor(root: string, options: { watch?: boolean } = {}) {
@@ -92,6 +92,18 @@ export class YamlCourseStore implements CourseStore {
     const result = loadCourse(directory, this.root);
     this.loaded.set(courseId, { result, stamp });
     return result;
+  }
+
+  /**
+   * Stop watching. `unref` is not enough on Linux: Node's recursive watch
+   * there is one watcher per directory, and those keep the process alive
+   * (seen in CI, where a test file never exited). A store that is done
+   * closes; loads after this walk every time, as a store that never watched.
+   */
+  close(): void {
+    for (const seen of this.watched.values()) seen.watcher?.close();
+    this.watched.clear();
+    this.watching = false;
   }
 
   /** Whether a watching store may skip the walk: nothing moved, nothing written, not quiet for long. */

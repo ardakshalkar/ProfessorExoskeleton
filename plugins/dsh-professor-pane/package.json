@@ -6,7 +6,7 @@
   "description": "The right pane of the DeepSeek Harness as the professor's visualization pane: course outline, class progress, the inbox, and the resolved preferences, switched by a button bar.",
   "main": "index.js",
   "scripts": {
-    "test": "node --test \"test/*.test.mjs\"",
+    "test": "node --test --test-force-exit \"test/*.test.mjs\"",
     "desk": "node test/desk-page.mjs",
     "build": "node client/build.mjs",
     "watch": "node client/build.mjs --watch"

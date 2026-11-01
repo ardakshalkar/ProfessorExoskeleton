@@ -9,6 +9,10 @@
 #   plugins/dsh-professor-pane/  the pane's server, and that the committed
 #                                lib/client.js is what client/ builds to
 #
+# Each suite's `npm test` passes --test-force-exit: on Linux a recursive
+# fs.watch (the pane's watching course store) keeps a test file's process
+# alive after its tests have passed, and the first run sat at 30 minutes.
+#
 # Not here yet: the golden and validator checks (`npm run check` in
 # ainar-node, INS-2), and an install without --legacy-peer-deps (INS-3) —
 # see package.json `comments.install` for why the flag is needed today. The
@@ -34,13 +38,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # 22.18 is the first 22 that strips TypeScript types on import without a
       # flag; the pane imports @ainar/core's .ts source directly.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22.x
           cache: npm

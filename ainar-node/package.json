@@ -6,7 +6,7 @@
   "description": "The AINAR canonical model, loader and read paths. Ported from ainar/ — see docs/node-migration.md.",
   "scripts": {
     "golden": "node --experimental-strip-types bin/golden-check.ts ../workspace",
-    "test": "node --experimental-strip-types --test \"test/*.test.ts\"",
+    "test": "node --experimental-strip-types --test --test-force-exit \"test/*.test.ts\"",
     "check": "npm run test && npm run golden && npm run validator",
     "validator": "node --experimental-strip-types bin/validator-check.ts ../workspace",
     "ainar": "node --experimental-strip-types bin/ainar.ts",

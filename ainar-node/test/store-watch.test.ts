@@ -34,17 +34,24 @@ const touch = (root: string, courseId: string): void => {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 300));
 
-test("a quiet course is answered from what was loaded", () => {
-  const { root, courseId } = copy();
+/** A watching store, closed when its test ends: on Linux an open watch keeps the test file from exiting. */
+const watching = (t: { after: (fn: () => void) => void }, root: string): YamlCourseStore => {
   const store = new YamlCourseStore(root, { watch: true });
+  t.after(() => store.close());
+  return store;
+};
+
+test("a quiet course is answered from what was loaded", (t) => {
+  const { root, courseId } = copy();
+  const store = watching(t, root);
   const first = store.load(courseId);
   assert.equal(store.load(courseId), first);
   assert.equal(store.load(courseId), first);
 });
 
-test("a change the watch sees is read on the next load", async () => {
+test("a change the watch sees is read on the next load", async (t) => {
   const { root, courseId } = copy();
-  const store = new YamlCourseStore(root, { watch: true });
+  const store = watching(t, root);
   const first = store.load(courseId);
   await settle();
   touch(root, courseId);
@@ -52,12 +59,21 @@ test("a change the watch sees is read on the next load", async () => {
   assert.notEqual(store.load(courseId), first);
 });
 
-test("this process's own write is read at once, before any watch event", () => {
+test("this process's own write is read at once, before any watch event", (t) => {
   const { root, courseId } = copy();
-  const store = new YamlCourseStore(root, { watch: true });
+  const store = watching(t, root);
   const first = store.load(courseId);
   touch(root, courseId);
   noteCourseWrite();
+  assert.notEqual(store.load(courseId), first);
+});
+
+test("a closed store stops watching and walks every time", (t) => {
+  const { root, courseId } = copy();
+  const store = watching(t, root);
+  const first = store.load(courseId);
+  store.close();
+  touch(root, courseId);
   assert.notEqual(store.load(courseId), first);
 });
 
