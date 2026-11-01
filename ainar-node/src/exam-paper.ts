@@ -41,6 +41,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { renderExam } from "../bin/render-exam.ts";
+import { localDate } from "./dates.ts";
 import { documentRecord } from "./materials.ts";
 import { writeRecords } from "./records-write.ts";
 import { Workspace } from "./workspace.ts";
@@ -333,7 +334,9 @@ export const printPaper = async (options: PrintOptions): Promise<PrintReport> =>
   // `QUIZ-01` for `ASSESSMENT-QUIZ-01`: the name a professor says aloud.
   const stem = assessmentId.replace(/^ASSESSMENT-/, "");
   const formats: PaperFormat[] = format === "both" ? ["docx", "pdf"] : [format];
-  const due = assessment.due_at ? String(assessment.due_at).slice(0, 10) : null;
+  // The day students read on the paper is the run's day, whatever offset the stamp was written in.
+  const zone = (bundle.versions as any[]).find((row) => row.course_version_id === assessment.course_version_id)?.timezone;
+  const due = assessment.due_at ? localDate(String(assessment.due_at), zone) : null;
   const declared = assessment.maximum_score;
   const printing_ = assessment.extensions?.paper ?? {};
   const pageSize = options.pageSize ?? (printing_.page_size === "a4" || printing_.page_size === "letter" ? printing_.page_size : null);

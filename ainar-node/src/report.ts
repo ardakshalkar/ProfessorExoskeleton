@@ -23,6 +23,7 @@ import {
   type CourseBundle,
 } from "./bundle.ts";
 import { outcomeGradeShare } from "./blueprint.ts";
+import { localDate } from "./dates.ts";
 import { roundHalfEven } from "./grading.ts";
 
 const CHECK = "x";
@@ -149,7 +150,7 @@ export const syllabusMarkdown = (b: CourseBundle, courseVersionId: string): stri
         assessment.title,
         assessment.type,
         percent(assessment.weight),
-        assessment.due_at ? (assessment.due_at as string).slice(0, 10) : "",
+        assessment.due_at ? localDate(assessment.due_at as string, run.timezone) : "",
         (assessment.outcomes as string[]).join(", "),
       ]),
     ),

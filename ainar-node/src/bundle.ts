@@ -8,6 +8,7 @@
 
 import { z } from "zod";
 import { COLLECTION_NAMES, COLLECTION_SCHEMAS, COURSE_MODEL, type CollectionName } from "./collections.ts";
+import { localDate } from "./dates.ts";
 
 // The collections are declared once, in collections.ts; these names are where
 // the rest of the package has always found them.
@@ -313,7 +314,7 @@ export const courseContext = (b: CourseBundle, courseVersionId: string, on: stri
         }
       : null,
     active_assessments: runAssessments
-      .filter((assessment) => !assessment.due_at || assessment.due_at.slice(0, 10) >= on)
+      .filter((assessment) => !assessment.due_at || localDate(assessment.due_at, run.timezone) >= on)
       .map((assessment) => ({
         id: assessment.assessment_id,
         title: assessment.title,

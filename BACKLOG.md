@@ -349,11 +349,26 @@ is worth building.
       Same audit (timezone 9, grading 13, institution 9, credits/term 7). MOD-1
       has closed T1, T2, T5, T6, G1, G3, G6, G7 and G4 partly (the boundary rule,
       not the two-period shape). Open: T3, T4, T7-T9, G2, G5, G8-G13, I1-I9, C1-C7.
-- [ ] **LNG-6** Date arithmetic in UTC. `grading-policy.ts:194`, `bundle.ts:292`,
+- [x] **LNG-6** Date arithmetic in UTC. `grading-policy.ts:194`, `bundle.ts:292`,
       `outline.ts:44` and `validate.ts:1004` compare dates in UTC rather than in
       the run's timezone, so a date can land in the wrong week or period by up
       to a day at a term boundary. This is a correctness bug, not a
       configuration gap, and can be fixed before MOD-1. `S` · depends: —
+      Done 2026-11-01. Two bugs, not one. The term's midpoint (the grading
+      halves) was built from UTC midnights; and every reader took a stamp's day
+      off its text, which is the day in whatever offset it was written in —
+      `2026-09-07T20:00:00Z` is the 8th in Almaty. Date-only arithmetic between
+      two plain dates was always right and is unchanged. New `src/dates.ts`
+      holds `localDate`, `startOfDay` and the zone offset (moved from
+      `records-write.ts`, which re-exports it). Fixed in grading-policy, the
+      outline's weeks, the context's active assessments, validate's run window
+      and teaching week, the inbox's status and readiness, the exam paper's
+      printed due date, the syllabus table and the impact note; `validate`'s
+      opens-after-due now compares instants, not text. `test/dates.test.ts`.
+      Left: the Canvas assignment listing (`lms/command.ts`, Canvas's own
+      data), `slides/context.ts` `moduleOnDate` (its model has no timezone),
+      and the pane's `today.js`, which should read the inbox's `status` rather
+      than slice `due_at` itself.
 - [ ] **LNG-3** Workspace-level locale and scale configuration. `M` · depends:
       LNG-1, LNG-2 · the code side is spelled out in MOD-1 (E33)
 - [ ] **LNG-4** Material generation honours it without being asked each time.

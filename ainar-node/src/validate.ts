@@ -27,6 +27,7 @@
  */
 
 import { COLLECTION_ID_FIELDS } from "./collections.ts";
+import { localDate } from "./dates.ts";
 import {
   allRubrics,
   assessmentById,
@@ -417,7 +418,7 @@ const checkAssessments = (b: CourseBundle, issues: IssueList): void => {
       issues.error("ref.module", `unknown module ${assessment.module_id}`, assessment.assessment_id);
     }
     if (assessment.due_at) {
-      const due = String(assessment.due_at).slice(0, 10);
+      const due = localDate(String(assessment.due_at), run.timezone);
       if (!(run.start_date <= due && due <= run.end_date)) {
         issues.warn(
           "schedule.outside_run",
@@ -426,7 +427,8 @@ const checkAssessments = (b: CourseBundle, issues: IssueList): void => {
         );
       }
     }
-    if (assessment.opens_at && assessment.due_at && assessment.opens_at > assessment.due_at) {
+    // Instants, not strings: `+05:00` and `Z` do not sort as text.
+    if (assessment.opens_at && assessment.due_at && Date.parse(assessment.opens_at) > Date.parse(assessment.due_at)) {
       issues.error("date.order", "opens_at is after due_at", assessment.assessment_id);
     }
     // Closing before the deadline would shut out on-time work; closing before
@@ -1039,7 +1041,7 @@ const teachingWeek = (run: any, moment: string): number => {
   // Python's `weekday()` is Monday=0; JS `getUTCDay()` is Sunday=0.
   const weekday = (start.getUTCDay() + 6) % 7;
   const anchor = new Date(start.getTime() - weekday * 86_400_000);
-  const day = new Date(`${moment.slice(0, 10)}T00:00:00Z`);
+  const day = new Date(`${localDate(moment, run.timezone)}T00:00:00Z`);
   return Math.floor((day.getTime() - anchor.getTime()) / (7 * 86_400_000)) + 1;
 };
 
@@ -1090,7 +1092,7 @@ const checkActivities = (b: CourseBundle, issues: IssueList): void => {
       );
     }
     if (activity.scheduled_at) {
-      const scheduled = String(activity.scheduled_at).slice(0, 10);
+      const scheduled = localDate(String(activity.scheduled_at), run.timezone);
       if (!(run.start_date <= scheduled && scheduled <= run.end_date)) {
         issues.warn(
           "schedule.outside_run",

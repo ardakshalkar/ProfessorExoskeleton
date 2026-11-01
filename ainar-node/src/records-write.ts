@@ -17,9 +17,9 @@ import { basename, dirname, join, resolve } from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
 import { AGENT_WRITABLE, ID_FIELDS } from "./approval.ts";
+import { zoneOffsetMinutes } from "./dates.ts";
 import { COLLECTIONS } from "./loader.ts";
 import { candidateFiles, editRecords } from "./record-edit.ts";
-import { activeProfile } from "./profile.ts";
 import { noteCourseWrite } from "./store/written.ts";
 import { writeFileWhole } from "./write-file.ts";
 import { dump } from "./yaml-out.ts";
@@ -93,36 +93,9 @@ export const recordFile = (collection: string, record: Record_, context: PlaceCo
 // Timestamps
 // --------------------------------------------------------------------------
 
-/**
- * A run's UTC offset in minutes — `run_timezone(...)`, resolved once.
- *
- * Exported because more than one place needs the same answer: the lms ledger
- * stamps a push with it, and `lms.pull` converts Canvas's UTC timestamps into
- * it. Two mechanisms for one question is how two records of the same moment end
- * up an hour apart.
- */
-const offsetOf = (zone: string, now: Date): number | null => {
-  try {
-    const format = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" });
-    const part = format.formatToParts(now).find((entry) => entry.type === "timeZoneName")?.value ?? "";
-    if (part === "GMT") return 0; // UTC itself carries no offset to read
-    const match = /GMT([+-])(\d{2}):(\d{2})/.exec(part);
-    return match ? (match[1] === "-" ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3])) : null;
-  } catch {
-    return null;
-  }
-};
-
-export const zoneOffsetMinutes = (timezone: string | undefined, now: Date = new Date()): number => {
-  const home = activeProfile().locale.timezone;
-  // A run's zone Intl does not know falls back to the profile's, never to a
-  // guessed constant: a stamp with the wrong offset misreports when it happened.
-  const offset = offsetOf(timezone || home, now) ?? offsetOf(home, now);
-  if (offset === null) {
-    throw new Error(`"${home}" is not a timezone this runtime knows. Set a valid one in the profile (locale.timezone).`);
-  }
-  return offset;
-};
+// The offset itself lives in dates.ts, beside the other readers of the run's
+// zone; it is re-exported here for the callers that always imported it here.
+export { zoneOffsetMinutes } from "./dates.ts";
 
 /**
  * `datetime.now(run_timezone(...)).replace(microsecond=0).isoformat()`.

@@ -4,6 +4,7 @@
  */
 
 import { drafts } from "./approval.ts";
+import { localDate } from "./dates.ts";
 import {
   activitiesOf,
   allRubrics,
@@ -112,7 +113,7 @@ export const inboxPayload = (
         .filter((s) => s.assessment_id === assessment.assessment_id && inScope(s.student_id))
         .map((s) => s.student_id as string),
     );
-    const due = assessment.due_at ? (assessment.due_at as string).slice(0, 10) : null;
+    const due = assessment.due_at ? localDate(assessment.due_at as string, run.timezone) : null;
     let status: string;
     if (due === null) status = "undated";
     else if (due < on) status = "closed";
@@ -586,7 +587,7 @@ export const readiness = (b: CourseBundle, courseVersionId: string, on: string |
   // are computed here rather than left to the agent: "do not invent urgency"
   // is only enforceable if the urgency is in the data.
   const run = runById(b).get(courseVersionId) as any;
-  const dated = real.filter((a) => a.due_at).map((a) => (a.due_at as string).slice(0, 10)).sort();
+  const dated = real.filter((a) => a.due_at).map((a) => localDate(a.due_at as string, run.timezone)).sort();
   const firstAssessment = dated[0] ?? null;
   const phase = on ? termPhase(run.start_date, run.end_date, on) : null;
 

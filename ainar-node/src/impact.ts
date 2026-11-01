@@ -34,6 +34,7 @@
  */
 
 import type { CourseBundle } from "./bundle.ts";
+import { localDate } from "./dates.ts";
 import { type Fingerprint, fingerprints } from "./freshness.ts";
 import type { Publication } from "./lms/ledger.ts";
 
@@ -92,11 +93,12 @@ const references = (bundle: CourseBundle, courseVersionId: string, documentId: s
   // A meeting reaches a document through a resource, which is the chain the
   // week-by-week view walks. Naming the meeting rather than only the resource
   // is the difference between "RES-442" and "week 6's lecture".
+  const zone = ((bundle.versions ?? []) as any[]).find((row) => row.course_version_id === courseVersionId)?.timezone;
   for (const activity of (bundle.activities ?? []) as any[]) {
     if (activity.course_version_id !== courseVersionId) continue;
     for (const resourceId of activity.resources ?? []) {
       if (!byResource.has(resourceId)) continue;
-      const when = activity.scheduled_at ? ` on ${String(activity.scheduled_at).slice(0, 10)}` : "";
+      const when = activity.scheduled_at ? ` on ${localDate(String(activity.scheduled_at), zone)}` : "";
       found.push(`${activity.activity_id} — ${activity.title}${when}, through ${resourceId}`);
     }
   }

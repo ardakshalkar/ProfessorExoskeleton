@@ -27,6 +27,7 @@ import {
   userById,
   type CourseBundle,
 } from "./bundle.ts";
+import { localDate } from "./dates.ts";
 import { roundHalfEven } from "./grading.ts";
 
 /** How placement works, carried in the payload so a surface can print it. */
@@ -50,9 +51,12 @@ const weekNumber = (start: string, day: string): number =>
 const addDays = (from: string, days: number): string =>
   new Date(Date.parse(`${from}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
 
-/** The local date of an aware timestamp: its own offset, not the machine's. */
-const dateOf = (stamp: string | null | undefined): string | null =>
-  stamp ? stamp.slice(0, 10) : null;
+/**
+ * The day an aware timestamp falls on in the run's timezone — not in the
+ * offset it happens to be written in, and not the machine's (LNG-6).
+ */
+const dateOf = (stamp: string | null | undefined, zone: string | undefined): string | null =>
+  stamp ? localDate(stamp, zone) : null;
 
 /** Source-outline week labels, kept separate from approved modules. */
 const sourceOutlineByWeek = (
@@ -121,13 +125,14 @@ const meeting = (
   activity: any,
   resources: Map<string, any>,
   concepts: Map<string, any>,
+  zone: string | undefined,
 ): Record<string, unknown> => ({
   activity_id: activity.activity_id,
   module_id: activity.module_id ?? null,
   type: activity.type,
   title: activity.title,
   scheduled_at: activity.scheduled_at ?? null,
-  on: dateOf(activity.scheduled_at),
+  on: dateOf(activity.scheduled_at, zone),
   duration_minutes: activity.duration_minutes ?? null,
   location: activity.location ?? null,
   // Null is "the whole run meets". Emitted either way, because two subgroups'
@@ -142,7 +147,7 @@ const meeting = (
   ...drafted(activity),
 });
 
-const assessmentEntry = (assessment: any, rubrics: Map<string, any>): Record<string, unknown> => {
+const assessmentEntry = (assessment: any, rubrics: Map<string, any>, zone: string | undefined): Record<string, unknown> => {
   const rubric = assessment.rubric_id ? rubrics.get(assessment.rubric_id) : assessment.rubric;
   return {
     assessment_id: assessment.assessment_id,
@@ -169,8 +174,8 @@ const assessmentEntry = (assessment: any, rubrics: Map<string, any>): Record<str
     maximum_score: assessment.maximum_score,
     opens_at: assessment.opens_at ?? null,
     due_at: assessment.due_at ?? null,
-    opens_on: dateOf(assessment.opens_at),
-    due_on: dateOf(assessment.due_at),
+    opens_on: dateOf(assessment.opens_at, zone),
+    due_on: dateOf(assessment.due_at, zone),
     outcomes: assessment.outcomes,
     submission_type: assessment.submission_type,
     // Where the starter repository lives, as the record has it — and only as
@@ -383,7 +388,7 @@ export const outlinePayload = (
     if (week === null && activity.scheduled_at) {
       // No module, or a module with no week of its own: fall back to the date,
       // which is the only other thing that says when this happens.
-      const candidate = weekNumber(run.start_date, dateOf(activity.scheduled_at)!);
+      const candidate = weekNumber(run.start_date, dateOf(activity.scheduled_at, run.timezone)!);
       week = placed(candidate) ? candidate : null;
     }
     if (week === null) unplacedMeetings.push(activity);
@@ -415,7 +420,7 @@ export const outlinePayload = (
       [assessment.opens_at, opensByWeek],
     ] as [string | null, Map<number, any[]>][]) {
       if (!stamp) continue;
-      const week = weekNumber(run.start_date, dateOf(stamp)!);
+      const week = weekNumber(run.start_date, dateOf(stamp, run.timezone)!);
       if (placed(week)) {
         table.set(week, [...(table.get(week) ?? []), assessment]);
         anywhere = true;
@@ -455,11 +460,11 @@ export const outlinePayload = (
         concepts: titled(module.concepts, concepts),
       })),
       meetings: (meetingsByWeek.get(number) ?? []).map((activity) =>
-        meeting(activity, resources, concepts),
+        meeting(activity, resources, concepts, run.timezone),
       ),
-      opens: (opensByWeek.get(number) ?? []).map((a) => assessmentEntry(a, rubrics)),
-      due: (dueByWeek.get(number) ?? []).map((a) => assessmentEntry(a, rubrics)),
-      undated: (undatedByWeek.get(number) ?? []).map((a) => assessmentEntry(a, rubrics)),
+      opens: (opensByWeek.get(number) ?? []).map((a) => assessmentEntry(a, rubrics, run.timezone)),
+      due: (dueByWeek.get(number) ?? []).map((a) => assessmentEntry(a, rubrics, run.timezone)),
+      undated: (undatedByWeek.get(number) ?? []).map((a) => assessmentEntry(a, rubrics, run.timezone)),
       // Not "empty": nobody has planned it.
       planned: here.length > 0,
     };
@@ -522,7 +527,7 @@ export const outlinePayload = (
       weight: outcome.weight ?? null,
     })),
     weeks,
-    assessments: assessments.map((assessment) => assessmentEntry(assessment, rubrics)),
+    assessments: assessments.map((assessment) => assessmentEntry(assessment, rubrics, run.timezone)),
     grading: grading(assessments),
     required_materials: (b.resources as any[])
       .filter((resource) => resource.required)
@@ -533,8 +538,8 @@ export const outlinePayload = (
         title: module.title,
         week: module.week ?? null,
       })),
-      meetings: unplacedMeetings.map((activity) => meeting(activity, resources, concepts)),
-      assessments: unplacedAssessments.map((a) => assessmentEntry(a, rubrics)),
+      meetings: unplacedMeetings.map((activity) => meeting(activity, resources, concepts, run.timezone)),
+      assessments: unplacedAssessments.map((a) => assessmentEntry(a, rubrics, run.timezone)),
     },
     // Present only when it is a real filter; the meetings above are then this
     // subgroup's plus everything every subgroup attends.

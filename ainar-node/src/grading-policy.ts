@@ -36,6 +36,7 @@ import { createHash } from "node:crypto";
 
 import { approvedView } from "./approval.ts";
 import { assessmentsOf, runById, type CourseBundle } from "./bundle.ts";
+import { startOfDay } from "./dates.ts";
 import { gradebookPayload } from "./gradebook.ts";
 import { roundHalfEven } from "./grading.ts";
 import { IssueList } from "./issues.ts";
@@ -123,8 +124,10 @@ const boundaryOf = (run: any, assessments: readonly any[]): number => {
     .filter(Number.isFinite)
     .sort((a, c) => a - c)[0];
   if (midterm !== undefined) return midterm;
-  const start = Date.parse(`${run.start_date}T00:00:00Z`);
-  const end = Date.parse(`${run.end_date}T23:59:59Z`);
+  // The term's days are the run's local days. Built in UTC, the middle sat five
+  // hours late in Almaty, and work due that evening counted in the wrong half.
+  const start = startOfDay(run.start_date, run.timezone);
+  const end = startOfDay(run.end_date, run.timezone) + 86_400_000 - 1000;
   return start + (end - start) / 2;
 };
 
