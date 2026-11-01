@@ -3,35 +3,36 @@
   "assessments": [
     {
       "assessment_id": "ASSESSMENT-05",
+      "component": null,
       "criteria": [
         {
           "criterion_id": "CRIT-05-01",
-          "maximum": 20.0,
+          "maximum": 20,
           "outcome_id": "LO-01",
           "title": "Problem formulation"
         },
         {
           "criterion_id": "CRIT-05-02",
-          "maximum": 20.0,
+          "maximum": 20,
           "outcome_id": "LO-03",
           "title": "Data handling"
         },
         {
           "criterion_id": "CRIT-05-03",
-          "maximum": 35.0,
+          "maximum": 35,
           "outcome_id": "LO-02",
           "title": "Implementation and evaluation"
         },
         {
           "criterion_id": "CRIT-05-04",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-04",
           "title": "Design justification and oral defence"
         }
       ],
       "due_at": "2026-12-15T23:59:00+05:00",
       "issues": [],
-      "maximum": 100.0,
+      "maximum": 100,
       "rows": [
         {
           "assessment_id": "ASSESSMENT-05",
@@ -41,7 +42,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -56,7 +57,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -71,7 +72,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -122,10 +123,10 @@
         "ASSESSMENT-05"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-JNG7SN",
-      "weight_graded": 0.0
+      "weight_graded": 0
     },
     {
       "assessments_counted": [],
@@ -133,10 +134,10 @@
         "ASSESSMENT-05"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-K4QM2X",
-      "weight_graded": 0.0
+      "weight_graded": 0
     },
     {
       "assessments_counted": [],
@@ -144,10 +145,10 @@
         "ASSESSMENT-05"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-R7TB5D",
-      "weight_graded": 0.0
+      "weight_graded": 0
     }
   ]
 }

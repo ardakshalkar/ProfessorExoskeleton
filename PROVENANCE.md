@@ -191,19 +191,23 @@ decisions this project made, not code it inherited.
   reader can say “nothing can mark this” without guessing which of the two a
   type ought to have. `criteria` is `outline`'s field computed `outline`'s way,
   on purpose: the two views must not disagree about whether work is gradeable.
-  Both are extra against `workspace/golden/CSS-4008/2026-FALL/action_inbox.json`, which
-  that fixture does not notice today only because it already fails earlier, on
-  the `readiness` block this port does not produce. Whoever adds `readiness`
-  will meet these two.
+  Both were extra against Python's `action_inbox.json`. Since 2026-11-01
+  `readiness` is ported (REC-1) and reproduces Python's block exactly, and the
+  fixture was regenerated from this port with the two fields in it (REC-2):
+  nothing else in it changed.
 * `src/outline.ts` — each assessment entry also carries
   `instructions_document_id`, the brief students read. The model has always
   recorded it and no read path published it, so every view could name a piece
-  of graded work and none could open it. Extra against
-  `workspace/golden/CSS-4008/2026-FALL/course_outline.json`, and it is now the FIRST
-  difference that fixture reports — which means it hides the `placement`
-  sentence this port also rewrote (an undated assessment sits on its module's
-  week, which upstream's wording does not describe). Both are deliberate;
-  whoever reconciles one will meet the other underneath it.
+  of graded work and none could open it. With `description`, `github`, the
+  week's `gaps`, `urgency`, `undated` and a meeting's `group`, and the
+  rewritten `placement` sentence (an undated assessment sits on its module's
+  week, which upstream's wording does not describe), it made
+  `course_outline.json` disagree with this port. On 2026-11-01 (REC-3) that
+  fixture, and the gradebook ones that lacked an assessment's `component`
+  (the grading scheme), were regenerated from this port. Every value Python
+  wrote was checked to be reproduced first; what changed was only added
+  fields, that one sentence, and `60.0` written as `60`. So these fixtures are
+  now the port's own output, not an independent check from Python.
 
 **New here**
 

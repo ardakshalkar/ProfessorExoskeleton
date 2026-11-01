@@ -3,8 +3,10 @@
   "assessments": [
     {
       "assessment_id": "ASSESSMENT-01",
+      "criteria": 2,
       "due_at": "2026-09-29T23:59:00+05:00",
       "enrolled": 3,
+      "items": 4,
       "missing": [],
       "status": "closed",
       "submissions_received": 3,
@@ -14,8 +16,10 @@
     },
     {
       "assessment_id": "ASSESSMENT-02",
+      "criteria": 2,
       "due_at": "2026-10-06T23:59:00+05:00",
       "enrolled": 3,
+      "items": 0,
       "missing": [
         "STUDENT-K4QM2X",
         "STUDENT-R7TB5D"
@@ -28,8 +32,10 @@
     },
     {
       "assessment_id": "ASSESSMENT-04",
+      "criteria": 4,
       "due_at": "2026-10-15T23:59:00+05:00",
       "enrolled": 3,
+      "items": 0,
       "missing": [
         "STUDENT-R7TB5D"
       ],
@@ -41,8 +47,10 @@
     },
     {
       "assessment_id": "ASSESSMENT-05",
+      "criteria": 4,
       "due_at": "2026-12-15T23:59:00+05:00",
       "enrolled": 3,
+      "items": 0,
       "missing": [],
       "status": "upcoming",
       "submissions_received": 0,

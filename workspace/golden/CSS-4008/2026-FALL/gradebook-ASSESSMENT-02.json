@@ -3,23 +3,24 @@
   "assessments": [
     {
       "assessment_id": "ASSESSMENT-02",
+      "component": null,
       "criteria": [
         {
           "criterion_id": "CRIT-02-01",
-          "maximum": 60.0,
+          "maximum": 60,
           "outcome_id": "LO-03",
           "title": "Quality of data reasoning"
         },
         {
           "criterion_id": "CRIT-02-02",
-          "maximum": 40.0,
+          "maximum": 40,
           "outcome_id": "LO-03",
           "title": "Correctness of the preparation pipeline"
         }
       ],
       "due_at": "2026-10-06T23:59:00+05:00",
       "issues": [],
-      "maximum": 100.0,
+      "maximum": 100,
       "rows": [
         {
           "assessment_id": "ASSESSMENT-02",
@@ -31,7 +32,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-02-01",
-              "maximum": 60.0,
+              "maximum": 60,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -41,7 +42,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-02-02",
-              "maximum": 40.0,
+              "maximum": 40,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -50,7 +51,7 @@
             }
           ],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "partially_graded",
@@ -65,7 +66,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -80,7 +81,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -131,10 +132,10 @@
         "ASSESSMENT-02"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-JNG7SN",
-      "weight_graded": 0.0
+      "weight_graded": 0
     },
     {
       "assessments_counted": [],
@@ -142,10 +143,10 @@
         "ASSESSMENT-02"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-K4QM2X",
-      "weight_graded": 0.0
+      "weight_graded": 0
     },
     {
       "assessments_counted": [],
@@ -153,10 +154,10 @@
         "ASSESSMENT-02"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-R7TB5D",
-      "weight_graded": 0.0
+      "weight_graded": 0
     }
   ]
 }

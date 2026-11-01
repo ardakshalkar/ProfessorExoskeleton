@@ -4,9 +4,12 @@
     {
       "assessment_id": "ASSESSMENT-01",
       "criteria": 2,
+      "description": "Short quiz on problem formulation and method families.",
       "due_at": "2026-09-29T23:59:00+05:00",
       "due_on": "2026-09-29",
-      "maximum_score": 100.0,
+      "github": null,
+      "instructions_document_id": null,
+      "maximum_score": 100,
       "module_id": "MODULE-02",
       "opens_at": "2026-09-28T09:00:00+05:00",
       "opens_on": "2026-09-28",
@@ -24,9 +27,12 @@
     {
       "assessment_id": "ASSESSMENT-02",
       "criteria": 2,
+      "description": "Prepare the teaching dataset for supervised learning and report the choices made, with their consequences for what can be concluded.",
       "due_at": "2026-10-06T23:59:00+05:00",
       "due_on": "2026-10-06",
-      "maximum_score": 100.0,
+      "github": null,
+      "instructions_document_id": null,
+      "maximum_score": 100,
       "module_id": "MODULE-03",
       "opens_at": null,
       "opens_on": null,
@@ -45,9 +51,12 @@
     {
       "assessment_id": "ASSESSMENT-04",
       "criteria": 4,
+      "description": "Train two models on the teaching dataset, diagnose whether either overfits, and defend the evaluation procedure used.",
       "due_at": "2026-10-15T23:59:00+05:00",
       "due_on": "2026-10-15",
-      "maximum_score": 100.0,
+      "github": null,
+      "instructions_document_id": null,
+      "maximum_score": 100,
       "module_id": "MODULE-06",
       "opens_at": "2026-10-07T12:00:00+05:00",
       "opens_on": "2026-10-07",
@@ -68,9 +77,12 @@
     {
       "assessment_id": "ASSESSMENT-05",
       "criteria": 4,
+      "description": "Choose a problem, design an AI solution, evaluate it honestly and defend it orally.",
       "due_at": "2026-12-15T23:59:00+05:00",
       "due_on": "2026-12-15",
-      "maximum_score": 100.0,
+      "github": null,
+      "instructions_document_id": null,
+      "maximum_score": 100,
       "module_id": "MODULE-09",
       "opens_at": "2026-10-27T09:00:00+05:00",
       "opens_on": "2026-10-27",
@@ -95,7 +107,7 @@
   "grading": {
     "complete": true,
     "note": null,
-    "total_weight": 1.0,
+    "total_weight": 1,
     "unweighted": []
   },
   "outcomes": [
@@ -134,7 +146,7 @@
       "weight": 0.3
     }
   ],
-  "placement": "Weeks are counted in sevens from the run's start date. A meeting sits in its module's week and shows its own date beside it; an assessment sits in the week it opens and in the week it is due. Whether a meeting's date disagrees with its module is `ainar validate`'s call (schedule.week_mismatch), not this document's.",
+  "placement": "Weeks are counted in sevens from the run's start date. A meeting sits in its module's week and shows its own date beside it; an assessment sits in the week it opens and in the week it is due, or — with no dates at all — in its module's week, marked as having no deadline. Whether a meeting's date disagrees with its module is `ainar validate`'s call (schedule.week_mismatch), not this document's.",
   "required_materials": [
     {
       "document_id": null,
@@ -171,7 +183,7 @@
   ],
   "run": {
     "course_id": "CSS-4008",
-    "credits": 5.0,
+    "credits": 5,
     "department": "Institute of Digital Transformation and AI",
     "description": "Introduction to artificial intelligence methods and their application: problem formulation, search, data preparation, supervised learning, evaluation, and the design of defensible AI experiments.",
     "end_date": "2026-12-20",
@@ -190,6 +202,19 @@
   },
   "totals": {
     "assessments": 4,
+    "gaps": {
+      "deadline": 0,
+      "deck": 8,
+      "misdated": 4,
+      "module": 6,
+      "weeks": 15,
+      "weight": 0
+    },
+    "gaps_by_urgency": {
+      "later": 6,
+      "past": 8,
+      "soon": 4
+    },
     "meetings": 10,
     "modules": 10,
     "weeks": 16,
@@ -204,6 +229,15 @@
     {
       "due": [],
       "ends_on": "2026-09-07",
+      "gaps": [
+        {
+          "ids": [
+            "ACT-0101"
+          ],
+          "kind": "deck",
+          "note": "1 meeting this week, and no slides are registered against it."
+        }
+      ],
       "meetings": [
         {
           "activity_id": "ACT-0101",
@@ -214,6 +248,7 @@
             }
           ],
           "duration_minutes": 100,
+          "group": null,
           "location": "A-204",
           "module_id": "MODULE-01",
           "on": "2026-09-02",
@@ -245,7 +280,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-01",
           "outcomes": [
             {
@@ -259,12 +294,23 @@
       "opens": [],
       "planned": true,
       "starts_on": "2026-09-01",
+      "undated": [],
+      "urgency": "past",
       "week": 1,
       "when": "past"
     },
     {
       "due": [],
       "ends_on": "2026-09-14",
+      "gaps": [
+        {
+          "ids": [
+            "ACT-0202"
+          ],
+          "kind": "deck",
+          "note": "1 meeting this week, and no slides are registered against it."
+        }
+      ],
       "meetings": [
         {
           "activity_id": "ACT-0202",
@@ -275,6 +321,7 @@
             }
           ],
           "duration_minutes": 100,
+          "group": null,
           "location": "A-204",
           "module_id": "MODULE-02",
           "on": "2026-09-09",
@@ -306,7 +353,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-02",
           "outcomes": [
             {
@@ -320,12 +367,23 @@
       "opens": [],
       "planned": true,
       "starts_on": "2026-09-08",
+      "undated": [],
+      "urgency": "past",
       "week": 2,
       "when": "past"
     },
     {
       "due": [],
       "ends_on": "2026-09-21",
+      "gaps": [
+        {
+          "ids": [
+            "ACT-0301"
+          ],
+          "kind": "deck",
+          "note": "1 meeting this week, and no slides are registered against it."
+        }
+      ],
       "meetings": [
         {
           "activity_id": "ACT-0301",
@@ -336,6 +394,7 @@
             }
           ],
           "duration_minutes": 150,
+          "group": null,
           "location": "Lab B-113",
           "module_id": "MODULE-03",
           "on": "2026-09-16",
@@ -367,7 +426,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-03",
           "outcomes": [
             {
@@ -381,12 +440,23 @@
       "opens": [],
       "planned": true,
       "starts_on": "2026-09-15",
+      "undated": [],
+      "urgency": "past",
       "week": 3,
       "when": "past"
     },
     {
       "due": [],
       "ends_on": "2026-09-28",
+      "gaps": [
+        {
+          "ids": [
+            "ACT-0401"
+          ],
+          "kind": "deck",
+          "note": "1 meeting this week, and no slides are registered against it."
+        }
+      ],
       "meetings": [
         {
           "activity_id": "ACT-0401",
@@ -397,6 +467,7 @@
             }
           ],
           "duration_minutes": 150,
+          "group": null,
           "location": "Lab B-113",
           "module_id": "MODULE-04",
           "on": "2026-09-23",
@@ -428,7 +499,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-04",
           "outcomes": [
             {
@@ -443,9 +514,12 @@
         {
           "assessment_id": "ASSESSMENT-01",
           "criteria": 2,
+          "description": "Short quiz on problem formulation and method families.",
           "due_at": "2026-09-29T23:59:00+05:00",
           "due_on": "2026-09-29",
-          "maximum_score": 100.0,
+          "github": null,
+          "instructions_document_id": null,
+          "maximum_score": 100,
           "module_id": "MODULE-02",
           "opens_at": "2026-09-28T09:00:00+05:00",
           "opens_on": "2026-09-28",
@@ -463,6 +537,8 @@
       ],
       "planned": true,
       "starts_on": "2026-09-22",
+      "undated": [],
+      "urgency": "past",
       "week": 4,
       "when": "past"
     },
@@ -471,9 +547,12 @@
         {
           "assessment_id": "ASSESSMENT-01",
           "criteria": 2,
+          "description": "Short quiz on problem formulation and method families.",
           "due_at": "2026-09-29T23:59:00+05:00",
           "due_on": "2026-09-29",
-          "maximum_score": 100.0,
+          "github": null,
+          "instructions_document_id": null,
+          "maximum_score": 100,
           "module_id": "MODULE-02",
           "opens_at": "2026-09-28T09:00:00+05:00",
           "opens_on": "2026-09-28",
@@ -490,6 +569,15 @@
         }
       ],
       "ends_on": "2026-10-05",
+      "gaps": [
+        {
+          "ids": [
+            "ACT-0501"
+          ],
+          "kind": "deck",
+          "note": "1 meeting this week, and no slides are registered against it."
+        }
+      ],
       "meetings": [
         {
           "activity_id": "ACT-0501",
@@ -500,6 +588,7 @@
             }
           ],
           "duration_minutes": 150,
+          "group": null,
           "location": "Lab B-113",
           "module_id": "MODULE-05",
           "on": "2026-09-30",
@@ -532,7 +621,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-05",
           "outcomes": [
             {
@@ -550,6 +639,8 @@
       "opens": [],
       "planned": true,
       "starts_on": "2026-09-29",
+      "undated": [],
+      "urgency": "past",
       "week": 5,
       "when": "past"
     },
@@ -558,9 +649,12 @@
         {
           "assessment_id": "ASSESSMENT-02",
           "criteria": 2,
+          "description": "Prepare the teaching dataset for supervised learning and report the choices made, with their consequences for what can be concluded.",
           "due_at": "2026-10-06T23:59:00+05:00",
           "due_on": "2026-10-06",
-          "maximum_score": 100.0,
+          "github": null,
+          "instructions_document_id": null,
+          "maximum_score": 100,
           "module_id": "MODULE-03",
           "opens_at": null,
           "opens_on": null,
@@ -578,6 +672,15 @@
         }
       ],
       "ends_on": "2026-10-12",
+      "gaps": [
+        {
+          "ids": [
+            "ACT-0601"
+          ],
+          "kind": "misdated",
+          "note": "ACT-0601 is dated 2026-10-05, outside 2026-10-06 – 2026-10-12, though its module puts it in week 6. Which of the date, the module's week or the run's start is wrong is the professor's to say."
+        }
+      ],
       "meetings": [
         {
           "activity_id": "ACT-0601",
@@ -588,6 +691,7 @@
             }
           ],
           "duration_minutes": 100,
+          "group": null,
           "location": "A-204",
           "module_id": "MODULE-06",
           "on": "2026-10-05",
@@ -619,6 +723,7 @@
             }
           ],
           "duration_minutes": 150,
+          "group": null,
           "location": "Lab B-113",
           "module_id": "MODULE-06",
           "on": "2026-10-07",
@@ -662,7 +767,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-06",
           "outcomes": [
             {
@@ -681,9 +786,12 @@
         {
           "assessment_id": "ASSESSMENT-04",
           "criteria": 4,
+          "description": "Train two models on the teaching dataset, diagnose whether either overfits, and defend the evaluation procedure used.",
           "due_at": "2026-10-15T23:59:00+05:00",
           "due_on": "2026-10-15",
-          "maximum_score": 100.0,
+          "github": null,
+          "instructions_document_id": null,
+          "maximum_score": 100,
           "module_id": "MODULE-06",
           "opens_at": "2026-10-07T12:00:00+05:00",
           "opens_on": "2026-10-07",
@@ -704,6 +812,8 @@
       ],
       "planned": true,
       "starts_on": "2026-10-06",
+      "undated": [],
+      "urgency": "past",
       "week": 6,
       "when": "past"
     },
@@ -712,9 +822,12 @@
         {
           "assessment_id": "ASSESSMENT-04",
           "criteria": 4,
+          "description": "Train two models on the teaching dataset, diagnose whether either overfits, and defend the evaluation procedure used.",
           "due_at": "2026-10-15T23:59:00+05:00",
           "due_on": "2026-10-15",
-          "maximum_score": 100.0,
+          "github": null,
+          "instructions_document_id": null,
+          "maximum_score": 100,
           "module_id": "MODULE-06",
           "opens_at": "2026-10-07T12:00:00+05:00",
           "opens_on": "2026-10-07",
@@ -734,6 +847,22 @@
         }
       ],
       "ends_on": "2026-10-19",
+      "gaps": [
+        {
+          "ids": [
+            "ACT-0701"
+          ],
+          "kind": "deck",
+          "note": "1 meeting this week, and no slides are registered against it."
+        },
+        {
+          "ids": [
+            "ACT-0701"
+          ],
+          "kind": "misdated",
+          "note": "ACT-0701 is dated 2026-10-12, outside 2026-10-13 – 2026-10-19, though its module puts it in week 7. Which of the date, the module's week or the run's start is wrong is the professor's to say."
+        }
+      ],
       "meetings": [
         {
           "activity_id": "ACT-0701",
@@ -744,6 +873,7 @@
             }
           ],
           "duration_minutes": 100,
+          "group": null,
           "location": "A-204",
           "module_id": "MODULE-07",
           "on": "2026-10-12",
@@ -775,7 +905,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-07",
           "outcomes": [
             {
@@ -789,12 +919,30 @@
       "opens": [],
       "planned": true,
       "starts_on": "2026-10-13",
+      "undated": [],
+      "urgency": "past",
       "week": 7,
       "when": "past"
     },
     {
       "due": [],
       "ends_on": "2026-10-26",
+      "gaps": [
+        {
+          "ids": [
+            "ACT-0801"
+          ],
+          "kind": "deck",
+          "note": "1 meeting this week, and no slides are registered against it."
+        },
+        {
+          "ids": [
+            "ACT-0801"
+          ],
+          "kind": "misdated",
+          "note": "ACT-0801 is dated 2026-10-19, outside 2026-10-20 – 2026-10-26, though its module puts it in week 8. Which of the date, the module's week or the run's start is wrong is the professor's to say."
+        }
+      ],
       "meetings": [
         {
           "activity_id": "ACT-0801",
@@ -805,6 +953,7 @@
             }
           ],
           "duration_minutes": 100,
+          "group": null,
           "location": "A-204",
           "module_id": "MODULE-08",
           "on": "2026-10-19",
@@ -827,7 +976,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-08",
           "outcomes": [
             {
@@ -841,12 +990,30 @@
       "opens": [],
       "planned": true,
       "starts_on": "2026-10-20",
+      "undated": [],
+      "urgency": "soon",
       "week": 8,
       "when": "current"
     },
     {
       "due": [],
       "ends_on": "2026-11-02",
+      "gaps": [
+        {
+          "ids": [
+            "ACT-0901"
+          ],
+          "kind": "deck",
+          "note": "1 meeting this week, and no slides are registered against it."
+        },
+        {
+          "ids": [
+            "ACT-0901"
+          ],
+          "kind": "misdated",
+          "note": "ACT-0901 is dated 2026-10-26, outside 2026-10-27 – 2026-11-02, though its module puts it in week 9. Which of the date, the module's week or the run's start is wrong is the professor's to say."
+        }
+      ],
       "meetings": [
         {
           "activity_id": "ACT-0901",
@@ -857,6 +1024,7 @@
             }
           ],
           "duration_minutes": 100,
+          "group": null,
           "location": "A-204",
           "module_id": "MODULE-09",
           "on": "2026-10-26",
@@ -888,7 +1056,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-09",
           "outcomes": [
             {
@@ -903,9 +1071,12 @@
         {
           "assessment_id": "ASSESSMENT-05",
           "criteria": 4,
+          "description": "Choose a problem, design an AI solution, evaluate it honestly and defend it orally.",
           "due_at": "2026-12-15T23:59:00+05:00",
           "due_on": "2026-12-15",
-          "maximum_score": 100.0,
+          "github": null,
+          "instructions_document_id": null,
+          "maximum_score": 100,
           "module_id": "MODULE-09",
           "opens_at": "2026-10-27T09:00:00+05:00",
           "opens_on": "2026-10-27",
@@ -928,23 +1099,35 @@
       ],
       "planned": true,
       "starts_on": "2026-10-27",
+      "undated": [],
+      "urgency": "soon",
       "week": 9,
       "when": "upcoming"
     },
     {
       "due": [],
       "ends_on": "2026-11-09",
+      "gaps": [
+        {
+          "ids": [],
+          "kind": "module",
+          "note": "No module names this week. Unplanned is not the same as nothing being taught, and only the professor can say which this is."
+        }
+      ],
       "meetings": [],
       "modules": [],
       "opens": [],
       "planned": false,
       "starts_on": "2026-11-03",
+      "undated": [],
+      "urgency": "later",
       "week": 10,
       "when": "upcoming"
     },
     {
       "due": [],
       "ends_on": "2026-11-16",
+      "gaps": [],
       "meetings": [],
       "modules": [
         {
@@ -955,7 +1138,7 @@
             }
           ],
           "description": null,
-          "estimated_hours": 6.0,
+          "estimated_hours": 6,
           "module_id": "MODULE-11",
           "outcomes": [
             {
@@ -969,50 +1152,88 @@
       "opens": [],
       "planned": true,
       "starts_on": "2026-11-10",
+      "undated": [],
+      "urgency": "later",
       "week": 11,
       "when": "upcoming"
     },
     {
       "due": [],
       "ends_on": "2026-11-23",
+      "gaps": [
+        {
+          "ids": [],
+          "kind": "module",
+          "note": "No module names this week. Unplanned is not the same as nothing being taught, and only the professor can say which this is."
+        }
+      ],
       "meetings": [],
       "modules": [],
       "opens": [],
       "planned": false,
       "starts_on": "2026-11-17",
+      "undated": [],
+      "urgency": "later",
       "week": 12,
       "when": "upcoming"
     },
     {
       "due": [],
       "ends_on": "2026-11-30",
+      "gaps": [
+        {
+          "ids": [],
+          "kind": "module",
+          "note": "No module names this week. Unplanned is not the same as nothing being taught, and only the professor can say which this is."
+        }
+      ],
       "meetings": [],
       "modules": [],
       "opens": [],
       "planned": false,
       "starts_on": "2026-11-24",
+      "undated": [],
+      "urgency": "later",
       "week": 13,
       "when": "upcoming"
     },
     {
       "due": [],
       "ends_on": "2026-12-07",
+      "gaps": [
+        {
+          "ids": [],
+          "kind": "module",
+          "note": "No module names this week. Unplanned is not the same as nothing being taught, and only the professor can say which this is."
+        }
+      ],
       "meetings": [],
       "modules": [],
       "opens": [],
       "planned": false,
       "starts_on": "2026-12-01",
+      "undated": [],
+      "urgency": "later",
       "week": 14,
       "when": "upcoming"
     },
     {
       "due": [],
       "ends_on": "2026-12-14",
+      "gaps": [
+        {
+          "ids": [],
+          "kind": "module",
+          "note": "No module names this week. Unplanned is not the same as nothing being taught, and only the professor can say which this is."
+        }
+      ],
       "meetings": [],
       "modules": [],
       "opens": [],
       "planned": false,
       "starts_on": "2026-12-08",
+      "undated": [],
+      "urgency": "later",
       "week": 15,
       "when": "upcoming"
     },
@@ -1021,9 +1242,12 @@
         {
           "assessment_id": "ASSESSMENT-05",
           "criteria": 4,
+          "description": "Choose a problem, design an AI solution, evaluate it honestly and defend it orally.",
           "due_at": "2026-12-15T23:59:00+05:00",
           "due_on": "2026-12-15",
-          "maximum_score": 100.0,
+          "github": null,
+          "instructions_document_id": null,
+          "maximum_score": 100,
           "module_id": "MODULE-09",
           "opens_at": "2026-10-27T09:00:00+05:00",
           "opens_on": "2026-10-27",
@@ -1045,11 +1269,20 @@
         }
       ],
       "ends_on": "2026-12-20",
+      "gaps": [
+        {
+          "ids": [],
+          "kind": "module",
+          "note": "No module names this week. Unplanned is not the same as nothing being taught, and only the professor can say which this is."
+        }
+      ],
       "meetings": [],
       "modules": [],
       "opens": [],
       "planned": false,
       "starts_on": "2026-12-15",
+      "undated": [],
+      "urgency": "later",
       "week": 16,
       "when": "upcoming"
     }

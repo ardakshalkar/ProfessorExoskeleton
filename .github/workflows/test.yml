@@ -2,9 +2,11 @@
 # and every pull request. Until this existed, every green result was one
 # Windows laptop with whatever happened to be installed on it.
 #
-# Three suites, each run even when another fails, so one red does not hide
-# the next:
+# Three suites and two checks, each run even when another fails, so one red
+# does not hide the next:
 #   ainar-node/                  the CLI and the course model (`npm test`)
+#   ainar-node/ golden           the read paths against workspace/golden/ (INS-2)
+#   ainar-node/ validator        every validator mutation reproduces its issue
 #   ./                           the pane's client modules and the plugins (`npm test`)
 #   plugins/dsh-professor-pane/  the pane's server, and that the committed
 #                                lib/client.js is what client/ builds to
@@ -13,10 +15,9 @@
 # fs.watch (the pane's watching course store) keeps a test file's process
 # alive after its tests have passed, and the first run sat at 30 minutes.
 #
-# Not here yet: the golden and validator checks (`npm run check` in
-# ainar-node, INS-2), and an install without --legacy-peer-deps (INS-3) —
-# see package.json `comments.install` for why the flag is needed today. The
-# second install, in ainar-node, is the manual one INS-4 is to remove.
+# Not here yet: an install without --legacy-peer-deps (INS-3) — see
+# package.json `comments.install` for why the flag is needed today. The second
+# install, in ainar-node, is the manual one INS-4 is to remove.
 
 name: test
 
@@ -66,6 +67,18 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         working-directory: ainar-node
         run: npm test
+
+      # `npm run check` is these two after `npm test`; run apart so a red test
+      # does not skip them.
+      - name: ainar-node golden
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: ainar-node
+        run: npm run golden
+
+      - name: ainar-node validator
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        working-directory: ainar-node
+        run: npm run validator
 
       - name: root
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}

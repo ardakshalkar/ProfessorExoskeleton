@@ -3,35 +3,36 @@
   "assessments": [
     {
       "assessment_id": "ASSESSMENT-04",
+      "component": null,
       "criteria": [
         {
           "criterion_id": "CRIT-04-01",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-04",
           "title": "Method selection"
         },
         {
           "criterion_id": "CRIT-04-02",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-02",
           "title": "Evaluation design"
         },
         {
           "criterion_id": "CRIT-04-03",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-02",
           "title": "Diagnosis of overfitting"
         },
         {
           "criterion_id": "CRIT-04-04",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-04",
           "title": "Reporting and reproducibility"
         }
       ],
       "due_at": "2026-10-15T23:59:00+05:00",
       "issues": [],
-      "maximum": 100.0,
+      "maximum": 100,
       "rows": [
         {
           "assessment_id": "ASSESSMENT-04",
@@ -43,9 +44,9 @@
             {
               "comment": "The oral defence supplied the missing justification.",
               "criterion_id": "CRIT-04-01",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": null,
-              "score": 20.0,
+              "score": 20,
               "source": "decision",
               "status": "decided",
               "title": "Method selection"
@@ -53,7 +54,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-02",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -63,7 +64,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-03",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -73,7 +74,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-04",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -82,9 +83,9 @@
             }
           ],
           "exportable": false,
-          "maximum": 100.0,
-          "percent": 20.0,
-          "score": 20.0,
+          "maximum": 100,
+          "percent": 20,
+          "score": 20,
           "status": "partially_graded",
           "student_id": "STUDENT-JNG7SN",
           "submission_id": "SUB-9081"
@@ -99,7 +100,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-01",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -109,7 +110,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-02",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -119,7 +120,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-03",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -129,7 +130,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-04",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -138,7 +139,7 @@
             }
           ],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "partially_graded",
@@ -153,7 +154,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -204,10 +205,10 @@
         "ASSESSMENT-04"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-JNG7SN",
-      "weight_graded": 0.0
+      "weight_graded": 0
     },
     {
       "assessments_counted": [],
@@ -215,10 +216,10 @@
         "ASSESSMENT-04"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-K4QM2X",
-      "weight_graded": 0.0
+      "weight_graded": 0
     },
     {
       "assessments_counted": [],
@@ -226,10 +227,10 @@
         "ASSESSMENT-04"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-R7TB5D",
-      "weight_graded": 0.0
+      "weight_graded": 0
     }
   ]
 }

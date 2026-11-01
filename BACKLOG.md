@@ -74,21 +74,33 @@ is worth building.
 > **Rank 3.** `readiness` is the best-specified task in this document: the exact
 > output is already checked in, and porting it turns a red fixture green.
 
-- [ ] **REC-1** Port `readiness` into `ainar-node/src/inbox.ts`. The shape is
+- [x] **REC-1** Port `readiness` into `ainar-node/src/inbox.ts`. The shape is
       fully pinned by
       `workspace/golden/CSS-4008/2026-FALL/action_inbox.json:103` — `checklist`,
       `by_importance`, `next_step`, `phase`, `stages`, `reminders`,
       `has_student_work`, each item carrying `importance`, `timing`, `kind` and
       the `next` skill to run. `M` · depends: —
-- [ ] **REC-2** `npm run golden` green on `action_inbox.json`. `S` · depends:
+      Done 2026-11-01: ported rung for rung from `ProfessorHarness/ainar/inbox.py`;
+      the block is deep-equal to Python's fixture. It reads the whole run even
+      when the inbox is narrowed to a group. `test/readiness.test.ts` pins what
+      the fixture does not reach: before the term, no date, a `TODO` outcome, a
+      missing weight.
+- [x] **REC-2** `npm run golden` green on `action_inbox.json`. `S` · depends:
       REC-1
-- [ ] **REC-3** Settle `course_outline.json`: the code is ahead of the fixture
+      Done 2026-11-01: with `readiness` in place the only difference left was
+      the assessments' `criteria` and `items` (PROVENANCE.md), so the fixture
+      was regenerated with them.
+- [x] **REC-3** Settle `course_outline.json`: the code is ahead of the fixture
       by four deliberate additions now — `description`, `github` and
       `instructions_document_id` on an assessment, and `gaps` on every week and
       in `totals` since UI-0 — so regenerate it once and say so in the commit,
       rather than leaving a golden file that disagrees. Regenerating makes it
       the Node port's own output rather than Python's, which is the trade this
       item is for taking. `S` · depends: —
+      Done 2026-11-01: regenerated, with the five gradebook fixtures, which
+      were red on an assessment's `component` (the grading scheme). Every
+      difference was listed first: all of them were added fields, plus the
+      rewritten `placement` sentence. `npm run golden` is 23/23.
 - [ ] **REC-4** Multi-term comparison — the same concept, the same assessment,
       two offerings, what moved. `L` · depends: REC-5, REC-6
 - [ ] **REC-5** Read path into `archive/<TERM>/` so a retired term is
@@ -229,8 +241,11 @@ is worth building.
       alive, so `YamlCourseStore` gained `close()` and every `npm test` passes
       `--test-force-exit`. Still to do: INS-2 (golden and validator checks),
       INS-3 (an install without `--legacy-peer-deps`), INS-4 (one install, not two).
-- [ ] **INS-2** `npm run check` green, including the golden half. `S` ·
+- [x] **INS-2** `npm run check` green, including the golden half. `S` ·
       depends: REC-2, REC-3, INS-1
+      Done 2026-11-01: green here (golden 23/23, validator 99/99 mutations), and
+      `golden` and `validator` are steps of their own in the CI workflow, on
+      both systems.
 - [ ] **INS-3** Install without `--legacy-peer-deps`. The flag is not optional
       today: without it npm spends eight-plus minutes and a gigabyte and does
       not converge. Probably means pinning or vendoring the peer graph. `L` ·

@@ -3,23 +3,24 @@
   "assessments": [
     {
       "assessment_id": "ASSESSMENT-01",
+      "component": null,
       "criteria": [
         {
           "criterion_id": "CRIT-01-01",
-          "maximum": 60.0,
+          "maximum": 60,
           "outcome_id": "LO-01",
           "title": "Correct classification of problem types"
         },
         {
           "criterion_id": "CRIT-01-02",
-          "maximum": 40.0,
+          "maximum": 40,
           "outcome_id": "LO-01",
           "title": "Method selection reasoning"
         }
       ],
       "due_at": "2026-09-29T23:59:00+05:00",
       "issues": [],
-      "maximum": 100.0,
+      "maximum": 100,
       "rows": [
         {
           "assessment_id": "ASSESSMENT-01",
@@ -32,7 +33,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-01-01",
-              "maximum": 60.0,
+              "maximum": 60,
               "note": "items sum to 40 but the criterion maximum is 60, so an item-derived score is on the wrong scale — fix one of the two rather than rescaling",
               "score": null,
               "source": null,
@@ -42,7 +43,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-01-02",
-              "maximum": 40.0,
+              "maximum": 40,
               "note": "1 of 2 items scored — the rest need a human",
               "score": null,
               "source": null,
@@ -51,7 +52,7 @@
             }
           ],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "partially_graded",
@@ -68,7 +69,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-01-01",
-              "maximum": 60.0,
+              "maximum": 60,
               "note": "1 of 2 items scored — the rest need a human",
               "score": null,
               "source": null,
@@ -78,7 +79,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-01-02",
-              "maximum": 40.0,
+              "maximum": 40,
               "note": "0 of 2 items scored — the rest need a human",
               "score": null,
               "source": null,
@@ -87,7 +88,7 @@
             }
           ],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "partially_graded",
@@ -104,7 +105,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-01-01",
-              "maximum": 60.0,
+              "maximum": 60,
               "note": "1 of 2 items scored — the rest need a human",
               "score": null,
               "source": null,
@@ -114,7 +115,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-01-02",
-              "maximum": 40.0,
+              "maximum": 40,
               "note": "0 of 2 items scored — the rest need a human",
               "score": null,
               "source": null,
@@ -123,7 +124,7 @@
             }
           ],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "partially_graded",
@@ -150,23 +151,24 @@
     },
     {
       "assessment_id": "ASSESSMENT-02",
+      "component": null,
       "criteria": [
         {
           "criterion_id": "CRIT-02-01",
-          "maximum": 60.0,
+          "maximum": 60,
           "outcome_id": "LO-03",
           "title": "Quality of data reasoning"
         },
         {
           "criterion_id": "CRIT-02-02",
-          "maximum": 40.0,
+          "maximum": 40,
           "outcome_id": "LO-03",
           "title": "Correctness of the preparation pipeline"
         }
       ],
       "due_at": "2026-10-06T23:59:00+05:00",
       "issues": [],
-      "maximum": 100.0,
+      "maximum": 100,
       "rows": [
         {
           "assessment_id": "ASSESSMENT-02",
@@ -178,7 +180,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-02-01",
-              "maximum": 60.0,
+              "maximum": 60,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -188,7 +190,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-02-02",
-              "maximum": 40.0,
+              "maximum": 40,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -197,7 +199,7 @@
             }
           ],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "partially_graded",
@@ -212,7 +214,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -227,7 +229,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -254,35 +256,36 @@
     },
     {
       "assessment_id": "ASSESSMENT-04",
+      "component": null,
       "criteria": [
         {
           "criterion_id": "CRIT-04-01",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-04",
           "title": "Method selection"
         },
         {
           "criterion_id": "CRIT-04-02",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-02",
           "title": "Evaluation design"
         },
         {
           "criterion_id": "CRIT-04-03",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-02",
           "title": "Diagnosis of overfitting"
         },
         {
           "criterion_id": "CRIT-04-04",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-04",
           "title": "Reporting and reproducibility"
         }
       ],
       "due_at": "2026-10-15T23:59:00+05:00",
       "issues": [],
-      "maximum": 100.0,
+      "maximum": 100,
       "rows": [
         {
           "assessment_id": "ASSESSMENT-04",
@@ -294,9 +297,9 @@
             {
               "comment": "The oral defence supplied the missing justification.",
               "criterion_id": "CRIT-04-01",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": null,
-              "score": 20.0,
+              "score": 20,
               "source": "decision",
               "status": "decided",
               "title": "Method selection"
@@ -304,7 +307,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-02",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -314,7 +317,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-03",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -324,7 +327,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-04",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -333,9 +336,9 @@
             }
           ],
           "exportable": false,
-          "maximum": 100.0,
-          "percent": 20.0,
-          "score": 20.0,
+          "maximum": 100,
+          "percent": 20,
+          "score": 20,
           "status": "partially_graded",
           "student_id": "STUDENT-JNG7SN",
           "submission_id": "SUB-9081"
@@ -350,7 +353,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-01",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -360,7 +363,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-02",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -370,7 +373,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-03",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -380,7 +383,7 @@
             {
               "comment": null,
               "criterion_id": "CRIT-04-04",
-              "maximum": 25.0,
+              "maximum": 25,
               "note": "no professor decision",
               "score": null,
               "source": null,
@@ -389,7 +392,7 @@
             }
           ],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "partially_graded",
@@ -404,7 +407,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -431,35 +434,36 @@
     },
     {
       "assessment_id": "ASSESSMENT-05",
+      "component": null,
       "criteria": [
         {
           "criterion_id": "CRIT-05-01",
-          "maximum": 20.0,
+          "maximum": 20,
           "outcome_id": "LO-01",
           "title": "Problem formulation"
         },
         {
           "criterion_id": "CRIT-05-02",
-          "maximum": 20.0,
+          "maximum": 20,
           "outcome_id": "LO-03",
           "title": "Data handling"
         },
         {
           "criterion_id": "CRIT-05-03",
-          "maximum": 35.0,
+          "maximum": 35,
           "outcome_id": "LO-02",
           "title": "Implementation and evaluation"
         },
         {
           "criterion_id": "CRIT-05-04",
-          "maximum": 25.0,
+          "maximum": 25,
           "outcome_id": "LO-04",
           "title": "Design justification and oral defence"
         }
       ],
       "due_at": "2026-12-15T23:59:00+05:00",
       "issues": [],
-      "maximum": 100.0,
+      "maximum": 100,
       "rows": [
         {
           "assessment_id": "ASSESSMENT-05",
@@ -469,7 +473,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -484,7 +488,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -499,7 +503,7 @@
           "comment": null,
           "criteria": [],
           "exportable": false,
-          "maximum": 100.0,
+          "maximum": 100,
           "percent": null,
           "score": null,
           "status": "not_submitted",
@@ -555,10 +559,10 @@
         "ASSESSMENT-05"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-JNG7SN",
-      "weight_graded": 0.0
+      "weight_graded": 0
     },
     {
       "assessments_counted": [],
@@ -569,10 +573,10 @@
         "ASSESSMENT-05"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-K4QM2X",
-      "weight_graded": 0.0
+      "weight_graded": 0
     },
     {
       "assessments_counted": [],
@@ -583,10 +587,10 @@
         "ASSESSMENT-05"
       ],
       "complete": false,
-      "earned_weighted": 0.0,
+      "earned_weighted": 0,
       "percent_of_graded": null,
       "student_id": "STUDENT-R7TB5D",
-      "weight_graded": 0.0
+      "weight_graded": 0
     }
   ]
 }
