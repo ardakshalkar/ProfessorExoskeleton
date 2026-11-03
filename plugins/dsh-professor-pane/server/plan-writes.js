@@ -52,6 +52,11 @@ const normalised = (value) => value.replace(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(Z|
  * into it. A week is taught once the week of today has begun after it, on
  * the outline's own count of seven days from the start date.
  *
+ * The taught weeks are a default, not a wall: a quiz that was never given
+ * still sits in the week it was meant for. `taught: true` in the body is the
+ * professor saying they read the warning the form shows and move it anyway.
+ * Results stay a wall; nothing overrides them.
+ *
  * `taughtBefore` is that boundary as a calendar date: a date earlier than it
  * lies in a week already taught. Null before the term has begun.
  */
@@ -112,12 +117,16 @@ export const writeAssessmentDates = (workspace, root, runId, body) => {
   if (locks.results.has(assessmentId)) {
     return { error: `${assessmentId} already has results; its dates stay as they are. Nothing was written.` };
   }
+  // A closing date before the new due date is a record the validator refuses.
+  if (record.closes_at && Date.parse(record.closes_at) < Date.parse(due)) {
+    return { error: `${assessmentId} was closed on ${dayOf(record.closes_at)}, before that due date. Nothing was written.` };
+  }
   // Only a date that changes is held to the taught weeks: work that opened
   // last week may still have its due date moved.
   const same = (a, b) => (a ? Date.parse(a) : null) === (b ? Date.parse(b) : null);
   for (const [key, next] of [["opens_at", opens], ["due_at", due]]) {
     const was = record[key] ?? null;
-    if (same(was, next)) continue;
+    if (same(was, next) || body?.taught === true) continue;
     if (taught(locks, was)) {
       return { error: `Its ${key === "due_at" ? "due date" : "opening"} is in a week already taught. Nothing was written.` };
     }

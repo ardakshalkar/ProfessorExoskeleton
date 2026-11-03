@@ -20,7 +20,9 @@
  * The guardrails are drawn here and enforced again by the writes
  * (`planLocks`, server/plan-writes.js): work with results has no handle and no
  * date button, a week already taught takes no drop, and work that opened in
- * one moves only by its due end.
+ * one moves only by its due end. A date leaving or entering a taught week is
+ * the one guardrail the professor may pass: the form says what it changes and
+ * Save waits for a tick, which goes to the write as `taught: true`.
  *
  * The JSX of `planningBody` and `PLAN_SCRIPT` (server/course-mode.js).
  */
@@ -183,9 +185,13 @@ function DatesForm(props) {
   const ref = React.useRef(null);
   useOutside(ref, () => !pending.saving && onCancel());
   const [size, setSize] = React.useState({ w: 290, h: 200 });
+  // Measured after every render: the warning comes and goes with the dates.
   React.useLayoutEffect(() => {
-    if (ref.current) setSize({ w: ref.current.offsetWidth, h: ref.current.offsetHeight });
-  }, [brief, byDate, Boolean(pending.opens), Boolean(pending.due)]);
+    if (!ref.current) return;
+    const w = ref.current.offsetWidth;
+    const h = ref.current.offsetHeight;
+    if (w !== size.w || h !== size.h) setSize({ w, h });
+  });
   React.useEffect(() => {
     const first = ref.current && ref.current.querySelector(brief ? ".pf-save" : byDate ? ".pf-due" : ".pf-due select");
     if (first) first.focus();
@@ -197,17 +203,29 @@ function DatesForm(props) {
     ? "It needs a due date."
     : pending.opens && pending.opens > pending.due
       ? "It would open after it is due."
-      : frozen(orig.opens, pending.opens)
-        ? "Its opening would move into or out of a week already taught."
-        : frozen(orig.due, pending.due)
-          ? "Its due date would move into or out of a week already taught."
-          : "";
+      : "";
+  // A date leaving or entering a week already taught is allowed, once the
+  // professor has ticked that they know what it changes.
+  const [sure, setSure] = React.useState(false);
+  const risks = [];
+  for (const [what, was, now] of [["due date", orig.due, pending.due], ["opening", orig.opens, pending.opens]]) {
+    if (!frozen(was, now)) continue;
+    if (wasTaught(was)) {
+      risks.push(
+        "Its " + what + ", " + when(was) + ", is in week " + weekOf(was.slice(0, 10)) + ", already taught. Students may have been told that date.",
+      );
+    }
+    if (wasTaught(now)) risks.push("The new " + what + " is in week " + weekOf(now.slice(0, 10)) + ", already taught: it is in the past.");
+  }
+  const warned = !bad && risks.length > 0;
   const hint = (v, isOpens) => {
     if (!v) return { text: isOpens ? "no opening date" : "", off: false };
     const w = weekOf(v.slice(0, 10));
     return { text: w ? "week " + w + " · " + dayName(v.slice(0, 10)) : "outside the term", off: !w };
   };
-  const r = pending.to ? rowOf(pending.to) : null;
+  // The week it is due in now, not the one the form was opened on.
+  const dueWeek = pending.due ? weekOf(pending.due.slice(0, 10)) : null;
+  const r = dueWeek ? rowOf(dueWeek) : pending.to ? rowOf(pending.to) : null;
   const opensHint = hint(pending.opens, true);
   const dueHint = hint(pending.due, false);
   return (
@@ -260,9 +278,21 @@ function DatesForm(props) {
         </button>
       </div>
       {bad ? <p className="pf-error">{bad}</p> : null}
+      {warned ? (
+        <div className="pf-warn" role="alert">
+          {risks.map((text) => (
+            <p key={text}>{text}</p>
+          ))}
+          <p>The course page and Canvas keep the old date until you publish them again.</p>
+          <label>
+            <input type="checkbox" className="pf-sure" checked={sure} onChange={(e) => setSure(e.target.checked)} />
+            <span>I understand; move it anyway.</span>
+          </label>
+        </div>
+      ) : null}
       <div className="pf-actions">
-        <button type="button" className="primary pf-save" disabled={Boolean(bad) || pending.saving} onClick={onSave}>
-          {pending.saving ? "Saving…" : brief ? "Save" : "Save dates"}
+        <button type="button" className="primary pf-save" disabled={Boolean(bad) || (warned && !sure) || pending.saving} onClick={() => onSave(warned && sure)}>
+          {pending.saving ? "Saving…" : warned ? "Move anyway" : brief ? "Save" : "Save dates"}
         </button>
         <button type="button" className="chip pf-cancel" onClick={onCancel}>
           Cancel
@@ -889,11 +919,11 @@ export function Planning(props) {
     })
       .then((response) => response.json())
       .catch((error) => ({ error: String(error.message || error) }));
-  const saveDates = () => {
+  const saveDates = (taughtToo) => {
     const p = pending;
     const o = dates[p.id];
     setPending(Object.assign({}, p, { saving: true }));
-    post("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at }).then((result) => {
+    post("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at, taught: taughtToo === true }).then((result) => {
       if (result.error) {
         setDates((d) => {
           const next = Object.assign({}, d);
@@ -1062,15 +1092,24 @@ export function Planning(props) {
   const barOf = (s) => {
     const a = s.a;
     const href = a.viewable && a.url ? a.url : a.brief_url;
-    // Locked: results recorded, or due in a week already taught.
+    // Locked: results recorded. Due in a week already taught still moves,
+    // past a warning in the form.
     const record = recordOf(a.assessment_id) || a;
-    const locked = withResults.has(a.assessment_id) || taught(weekOf(record.due_on));
-    const why = withResults.has(a.assessment_id) ? "has results — its dates stay" : "due in a week already taught";
+    const locked = withResults.has(a.assessment_id);
+    const past = taught(weekOf(record.due_on));
     const movable = editable && !locked;
     const dueWords = "due " + shortDate(a.due_on) + " · " + (weightPct(a.weight) || "no weight");
     const tip =
       a.title + (a.opens_on ? " · opens " + shortDate(a.opens_on) : "") + " · due " + shortDate(a.due_on) +
-      (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
+      (!editable
+        ? ""
+        : locked
+          ? " — has results — its dates stay"
+          : past
+            ? " — due in a week already taught; it can still move, with a warning"
+            : taught(s.start)
+              ? " — opened in a week already taught; drag its due end"
+              : " — drag to another week");
     return { href, locked, movable, dueWords, tip };
   };
 

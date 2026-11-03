@@ -8529,6 +8529,9 @@ table.plan tr[data-taught] .wkn b{color:var(--muted)}
 .pf-week-pick input[type=time]{flex:0 0 auto}
 .pf-mode{all:unset;cursor:pointer;font-size:12px;color:var(--accent);text-decoration:underline dotted;text-underline-offset:2px;align-self:flex-start}
 .planform .pf-error{margin:0;color:var(--flag);font-size:12px}
+.planform .pf-warn{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--flag-line);border-radius:8px;background:var(--flag-tint);font-size:12px}
+.planform .pf-warn p{margin:0}
+.planform .pf-warn label{display:flex;gap:6px;align-items:center;font-weight:600;color:var(--flag)}
 .pf-actions{display:flex;gap:8px;align-items:center}
 .pf-actions .chip{cursor:pointer}
 .planform .primary[disabled]{opacity:.5;cursor:default}
@@ -9403,8 +9406,11 @@ function DatesForm(props) {
   useOutside(ref, () => !pending.saving && onCancel());
   const [size2, setSize] = React.useState({ w: 290, h: 200 });
   React.useLayoutEffect(() => {
-    if (ref.current) setSize({ w: ref.current.offsetWidth, h: ref.current.offsetHeight });
-  }, [brief, byDate, Boolean(pending.opens), Boolean(pending.due)]);
+    if (!ref.current) return;
+    const w = ref.current.offsetWidth;
+    const h2 = ref.current.offsetHeight;
+    if (w !== size2.w || h2 !== size2.h) setSize({ w, h: h2 });
+  });
   React.useEffect(() => {
     const first = ref.current && ref.current.querySelector(brief ? ".pf-save" : byDate ? ".pf-due" : ".pf-due select");
     if (first) first.focus();
@@ -9412,13 +9418,26 @@ function DatesForm(props) {
   const wasTaught = (v) => Boolean(taughtBefore && v && v.slice(0, 10) < taughtBefore);
   const frozen = (was, now) => was !== now && (wasTaught(was) || wasTaught(now));
   const orig = { opens: local(item.opens_at), due: local(item.due_at) };
-  const bad = !pending.due ? "It needs a due date." : pending.opens && pending.opens > pending.due ? "It would open after it is due." : frozen(orig.opens, pending.opens) ? "Its opening would move into or out of a week already taught." : frozen(orig.due, pending.due) ? "Its due date would move into or out of a week already taught." : "";
+  const bad = !pending.due ? "It needs a due date." : pending.opens && pending.opens > pending.due ? "It would open after it is due." : "";
+  const [sure, setSure] = React.useState(false);
+  const risks = [];
+  for (const [what, was, now] of [["due date", orig.due, pending.due], ["opening", orig.opens, pending.opens]]) {
+    if (!frozen(was, now)) continue;
+    if (wasTaught(was)) {
+      risks.push(
+        "Its " + what + ", " + when2(was) + ", is in week " + weekOf(was.slice(0, 10)) + ", already taught. Students may have been told that date."
+      );
+    }
+    if (wasTaught(now)) risks.push("The new " + what + " is in week " + weekOf(now.slice(0, 10)) + ", already taught: it is in the past.");
+  }
+  const warned = !bad && risks.length > 0;
   const hint = (v, isOpens) => {
     if (!v) return { text: isOpens ? "no opening date" : "", off: false };
     const w = weekOf(v.slice(0, 10));
     return { text: w ? "week " + w + " · " + dayName(v.slice(0, 10)) : "outside the term", off: !w };
   };
-  const r = pending.to ? rowOf(pending.to) : null;
+  const dueWeek = pending.due ? weekOf(pending.due.slice(0, 10)) : null;
+  const r = dueWeek ? rowOf(dueWeek) : pending.to ? rowOf(pending.to) : null;
   const opensHint = hint(pending.opens, true);
   const dueHint = hint(pending.due, false);
   return /* @__PURE__ */ h(
@@ -9441,7 +9460,8 @@ function DatesForm(props) {
     /* @__PURE__ */ h("p", { className: "pf-sum" }, (pending.opens ? "Opens " + when2(pending.opens) + " · " : "") + "due " + when2(pending.due)),
     /* @__PURE__ */ h("div", { className: "pf-fields" }, byDate ? /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("label", null, /* @__PURE__ */ h("span", null, "Opens"), /* @__PURE__ */ h("input", { type: "datetime-local", className: "pf-opens", value: pending.opens, onChange: (e) => onChange({ opens: e.target.value }) }), /* @__PURE__ */ h("small", { className: "pf-opens-wk" + (opensHint.off ? " off" : "") }, opensHint.text)), /* @__PURE__ */ h("label", null, /* @__PURE__ */ h("span", null, "Due"), /* @__PURE__ */ h("input", { type: "datetime-local", className: "pf-due", required: true, value: pending.due, onChange: (e) => onChange({ due: e.target.value }) }), /* @__PURE__ */ h("small", { className: "pf-due-wk" + (dueHint.off ? " off" : "") }, dueHint.text))) : /* @__PURE__ */ h(Fragment2, null, /* @__PURE__ */ h("div", { className: "pf-row" }, /* @__PURE__ */ h("span", null, "Opens"), /* @__PURE__ */ h(WeekWhen, { value: pending.opens, rows, weekOf, isOpens: true, className: "pf-opens", onChange: (v) => onChange({ opens: v }) })), /* @__PURE__ */ h("div", { className: "pf-row" }, /* @__PURE__ */ h("span", null, "Due"), /* @__PURE__ */ h(WeekWhen, { value: pending.due, rows, weekOf, className: "pf-due", onChange: (v) => onChange({ due: v }) }))), /* @__PURE__ */ h("button", { type: "button", className: "pf-mode", onClick: () => setByDate(!byDate) }, byDate ? "Pick by week instead" : "Pick a calendar date instead")),
     bad ? /* @__PURE__ */ h("p", { className: "pf-error" }, bad) : null,
-    /* @__PURE__ */ h("div", { className: "pf-actions" }, /* @__PURE__ */ h("button", { type: "button", className: "primary pf-save", disabled: Boolean(bad) || pending.saving, onClick: onSave }, pending.saving ? "Saving…" : brief ? "Save" : "Save dates"), /* @__PURE__ */ h("button", { type: "button", className: "chip pf-cancel", onClick: onCancel }, "Cancel")),
+    warned ? /* @__PURE__ */ h("div", { className: "pf-warn", role: "alert" }, risks.map((text) => /* @__PURE__ */ h("p", { key: text }, text)), /* @__PURE__ */ h("p", null, "The course page and Canvas keep the old date until you publish them again."), /* @__PURE__ */ h("label", null, /* @__PURE__ */ h("input", { type: "checkbox", className: "pf-sure", checked: sure, onChange: (e) => setSure(e.target.checked) }), /* @__PURE__ */ h("span", null, "I understand; move it anyway."))) : null,
+    /* @__PURE__ */ h("div", { className: "pf-actions" }, /* @__PURE__ */ h("button", { type: "button", className: "primary pf-save", disabled: Boolean(bad) || warned && !sure || pending.saving, onClick: () => onSave(warned && sure) }, pending.saving ? "Saving…" : warned ? "Move anyway" : brief ? "Save" : "Save dates"), /* @__PURE__ */ h("button", { type: "button", className: "chip pf-cancel", onClick: onCancel }, "Cancel")),
     /* @__PURE__ */ h("button", { type: "button", className: "pf-more", onClick: () => setBrief(false) }, "Change dates"),
     /* @__PURE__ */ h("small", { className: "pf-note" }, "Writes opens_at and due_at into its record. Canvas keeps its own copy until the definition is sent again.")
   );
@@ -9902,11 +9922,11 @@ function Planning(props) {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
   }).then((response) => response.json()).catch((error) => ({ error: String(error.message || error) }));
-  const saveDates = () => {
+  const saveDates = (taughtToo) => {
     const p = pending;
     const o = dates[p.id];
     setPending(Object.assign({}, p, { saving: true }));
-    post2("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at }).then((result) => {
+    post2("/api/plan/dates", { assessment: p.id, opens_at: o.opens_at || "", due_at: o.due_at, taught: taughtToo === true }).then((result) => {
       if (result.error) {
         setDates((d) => {
           const next = Object.assign({}, d);
@@ -10062,11 +10082,11 @@ function Planning(props) {
     const a = s.a;
     const href = a.viewable && a.url ? a.url : a.brief_url;
     const record = recordOf(a.assessment_id) || a;
-    const locked = withResults.has(a.assessment_id) || taught(weekOf(record.due_on));
-    const why = withResults.has(a.assessment_id) ? "has results — its dates stay" : "due in a week already taught";
+    const locked = withResults.has(a.assessment_id);
+    const past = taught(weekOf(record.due_on));
     const movable = editable && !locked;
     const dueWords = "due " + shortDate(a.due_on) + " · " + (weightPct(a.weight) || "no weight");
-    const tip = a.title + (a.opens_on ? " · opens " + shortDate(a.opens_on) : "") + " · due " + shortDate(a.due_on) + (!editable ? "" : locked ? " — " + why : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
+    const tip = a.title + (a.opens_on ? " · opens " + shortDate(a.opens_on) : "") + " · due " + shortDate(a.due_on) + (!editable ? "" : locked ? " — has results — its dates stay" : past ? " — due in a week already taught; it can still move, with a warning" : taught(s.start) ? " — opened in a week already taught; drag its due end" : " — drag to another week");
     return { href, locked, movable, dueWords, tip };
   };
   const target = pending ? pending.to : null;

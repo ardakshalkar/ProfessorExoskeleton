@@ -165,6 +165,9 @@ table.plan tr[data-taught] .wkn b{color:var(--muted)}
 .pf-week-pick input[type=time]{flex:0 0 auto}
 .pf-mode{all:unset;cursor:pointer;font-size:12px;color:var(--accent);text-decoration:underline dotted;text-underline-offset:2px;align-self:flex-start}
 .planform .pf-error{margin:0;color:var(--flag);font-size:12px}
+.planform .pf-warn{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--flag-line);border-radius:8px;background:var(--flag-tint);font-size:12px}
+.planform .pf-warn p{margin:0}
+.planform .pf-warn label{display:flex;gap:6px;align-items:center;font-weight:600;color:var(--flag)}
 .pf-actions{display:flex;gap:8px;align-items:center}
 .pf-actions .chip{cursor:pointer}
 .planform .primary[disabled]{opacity:.5;cursor:default}
