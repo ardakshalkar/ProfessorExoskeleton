@@ -172,7 +172,7 @@ export const writeCanvasSelection = (workspace, root, runId, selections) => {
   const target = ["extensions", LMS_EXTENSION, CANVAS_SECTIONS_KEY];
   let path;
   try {
-    path = editRunRecord(root, run, (node) => (cleaned.length ? node.setIn(target, cleaned) : clearIn(node, target)));
+    path = editRunRecord(root, run, (node) => (cleaned.length ? node.setIn(target, cleaned) : clearIn(node, target)), workspace.store);
   } catch (error) {
     return { error: String(error?.message ?? error) };
   }
@@ -267,7 +267,7 @@ export const recordAssessmentLinks = (workspace, root, runId, links) => {
   // subgroup is one the run has, whether an id is the number the API takes.
   // That belongs where the payload arrives, not in a module the CLI shares.
   try {
-    const recorded = writeAssessmentLinks(root, run.course_id, wanted);
+    const recorded = writeAssessmentLinks(root, run.course_id, wanted, workspace.store);
     return { written: recorded.count > 0, count: recorded.count, files: recorded.written };
   } catch (error) {
     // The shared writer throws; this route answers in-band, because its caller
@@ -296,7 +296,7 @@ export const writeRunLmsValue = (workspace, root, runId, key, value) => {
   const target = ["extensions", LMS_EXTENSION, key];
   let path;
   try {
-    path = editRunRecord(root, run, (node) => (cleaned ? node.setIn(target, cleaned) : clearIn(node, target)));
+    path = editRunRecord(root, run, (node) => (cleaned ? node.setIn(target, cleaned) : clearIn(node, target)), workspace.store);
   } catch (error) {
     return { error: String(error?.message ?? error) };
   }
@@ -372,7 +372,7 @@ export const writeCanvasCourses = (workspace, root, runId, mapping) => {
   const any = Object.keys(cleaned).length > 0;
   let path;
   try {
-    path = editRunRecord(root, run, (node) => (any ? node.setIn(target, cleaned) : clearIn(node, target)));
+    path = editRunRecord(root, run, (node) => (any ? node.setIn(target, cleaned) : clearIn(node, target)), workspace.store);
   } catch (error) {
     return { error: String(error?.message ?? error) };
   }

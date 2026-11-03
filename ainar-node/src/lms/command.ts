@@ -17,8 +17,9 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { decidedAt, upsertRecords, writeRecords, zoneOffsetMinutes } from "../records-write.ts";
+import { dirname, resolve } from "node:path";
+import { decidedAt, upsertRecords, zoneOffsetMinutes } from "../records-write.ts";
+import { type CourseStore, writeStore } from "../store/course.ts";
 import { ROSTER_ROLES, allRubrics, assessmentById, assessmentsOf, enrollmentsOf, runById } from "../bundle.ts";
 import { type CourseBundle } from "../bundle.ts";
 import { type GradeRow, gradeRows, gradebookPayload } from "../gradebook.ts";
@@ -63,8 +64,6 @@ import {
   willWrite,
 } from "./assignment.ts";
 import { type AssignmentLink, writeAssessmentLinks } from "./link.ts";
-import { COLLECTIONS } from "../loader.ts";
-import { editRecords, setRecordFields } from "../record-edit.ts";
 import {
   type CanvasExport,
   columnFor,
@@ -211,6 +210,8 @@ export interface Deps {
   directory?: RosterDirectory;
   /** Replaced in tests so an unfinished Canvas job does not cost ten seconds. */
   sleep?: (ms: number) => Promise<void>;
+  /** The store records are written to; the YAML files under the root when none. */
+  store?: CourseStore;
 }
 
 const quoteTab = (tab: string): string => `'${tab.replace(/'/g, "''")}'`;
@@ -1446,22 +1447,14 @@ const runImportSubmissions = async (
   // A submission is a fact about what Canvas holds, so there is nothing for a
   // person to accept: it is written as a record and carries no `approval`.
   const courseId = (bundle.course as any).course_id as string;
-  const courseDir = join(root, "courses", courseId);
   if (result.drafts.length) {
     const path = args.out
       ? upsertRecords(resolve(args.out), "submissions", result.drafts)
-      : writeRecords(courseDir, { submissions: result.drafts })[0]!;
+      : writeStore(root, deps.store).write(courseId, { submissions: result.drafts })[0]!;
     deps.out(`\nwrote ${path}`);
   }
   if (links.length) {
-    const { written } = setRecordFields({
-      root,
-      courseId,
-      patterns: COLLECTIONS.submissions,
-      idField: "submission_id",
-      collection: "submissions",
-      edits: new Map(links.map((link) => [linkless.get(link.student_id)!, { url: link.url }])),
-    });
+    const { written } = writeStore(root, deps.store).setFields(courseId, "submissions", new Map(links.map((link) => [linkless.get(link.student_id)!, { url: link.url }])));
     deps.out(`\nadded ${links.length} handed-in link(s) in ${written.join(", ")}`);
   }
   if (args.target === "canvas-api") {
@@ -1799,9 +1792,7 @@ const runAssignment = async (
     const value: AssignmentLink = single
       ? single
       : Object.fromEntries([...created].filter(([group]) => group !== ""));
-    const recorded = writeAssessmentLinks(root, run.course_id, {
-      [assessment.assessment_id]: value,
-    });
+    const recorded = writeAssessmentLinks(root, run.course_id, { [assessment.assessment_id]: value }, deps.store);
     for (const file of recorded.written) deps.out(`linked: ${file}`);
   }
   if (args.json) deps.out(JSON.stringify({ plans: result.plans }, null, 2));
@@ -2006,7 +1997,7 @@ const runLink = async (args: LmsArgs, bundle: CourseBundle, root: string, deps: 
     throw new Error(`Canvas course ${courseId} has no assignment ${id} this token can read: ${String((error as Error).message)}`);
   }
   const value: AssignmentLink = group === null ? id : Object.fromEntries([...canvasAssignments(assessment), [group, id]]);
-  const recorded = writeAssessmentLinks(root, run.course_id, { [assessment.assessment_id]: value });
+  const recorded = writeAssessmentLinks(root, run.course_id, { [assessment.assessment_id]: value }, deps.store);
   deps.out(
     `Canvas: ${host}\n${assessment.assessment_id} → ${group ?? "the run"} · course ${courseId} · ` +
       `assignment ${id} "${found.name ?? ""}"` + (found.points_possible != null ? ` (${found.points_possible} pts)` : ""),
@@ -2164,14 +2155,7 @@ const runGroups = async (args: LmsArgs, bundle: CourseBundle, root: string, deps
       value[component] = merged;
     }
   }
-  const recorded = editRecords({
-    root,
-    courseId: run.course_id,
-    patterns: COLLECTIONS.versions,
-    idField: "course_version_id",
-    collection: "versions",
-    edits: new Map([[run.course_version_id, (node: any) => node.setIn(["extensions", "lms", CANVAS_ASSIGNMENT_GROUPS_KEY], value)]]),
-  });
+  const recorded = writeStore(root, deps.store).edit(run.course_id, "versions", new Map([[run.course_version_id, (node: any) => node.setIn(["extensions", "lms", CANVAS_ASSIGNMENT_GROUPS_KEY], value)]]));
   for (const [component, byGroup] of writes) {
     for (const [group, id] of byGroup) deps.out(`linked ${component} → ${group || "the run"} group ${id}`);
   }

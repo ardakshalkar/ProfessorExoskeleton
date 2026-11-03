@@ -25,7 +25,7 @@ import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, relative, resolve, sep } from "node:path";
 import { documentRecord } from "./materials.ts";
-import { writeRecords } from "./records-write.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 
 /** One slide, as read out of a `.pptx`. */
 type ReadSlide = { readonly number: number; readonly runs: string[]; readonly notes: string };
@@ -124,6 +124,8 @@ export type ImportOptions = {
   readonly vocabulary: Map<string, string[]>;
   /** `courses/<COURSE>` — where the Document record is written. */
   readonly courseDir: string;
+  /** The store it is written to; the YAML files under `root` when none. */
+  readonly store?: CourseStore;
   readonly dryRun: boolean;
 };
 
@@ -255,6 +257,6 @@ export const importMaterial = (options: ImportOptions): ImportReport => {
 
   // Importing the same file again re-reads it; the record is replaced, and one
   // the professor already accepted stays accepted.
-  const written = writeRecords(options.courseDir, { documents: [fields] }, { keepApproval: true });
+  const written = writeStore(options.root, options.store).write(basename(options.courseDir), { documents: [fields] }, { keepApproval: true });
   return { lines, written };
 };

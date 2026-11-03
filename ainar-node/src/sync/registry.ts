@@ -12,9 +12,9 @@
 
 import { Document } from "yaml";
 import { loadSheetConfig, type SheetConfig } from "../grade-sheet.ts";
-import { COLLECTIONS } from "../loader.ts";
 import { Sync, type SyncSpec } from "../model/sync.ts";
-import { editRecords, type EditResult } from "../record-edit.ts";
+import type { EditResult } from "../record-edit.ts";
+import { type CourseStore, writeStore } from "../store/course.ts";
 import { CANVAS_COURSES_KEY, CANVAS_COURSE_KEY, LMS_EXTENSION, SHEET_ID_KEY } from "../lms/index.ts";
 
 export interface RunSync extends SyncSpec {
@@ -167,7 +167,14 @@ export const writtenForm = (sync: RunSync): Record<string, unknown> => {
  * `version.yaml`. Settings only: the older places they were read from are left
  * alone, and once a written sync covers them they stop being read.
  */
-export const writeSyncs = (root: string, courseId: string, runId: string, syncs: RunSync[]): EditResult => {
+export const writeSyncs = (
+  root: string,
+  courseId: string,
+  runId: string,
+  syncs: RunSync[],
+  /** The store the run is written to; the YAML files under `root` when none. */
+  store?: CourseStore,
+): EditResult => {
   const edits = new Map<string, (node: any) => void>();
   edits.set(runId, (node) => {
     const before = node.get("syncs");
@@ -176,12 +183,5 @@ export const writeSyncs = (root: string, courseId: string, runId: string, syncs:
     const merged = [...existing.filter((entry) => !replaced.has(String(entry.sync_id))), ...syncs.map(writtenForm)];
     node.set("syncs", new Document(merged).contents);
   });
-  return editRecords({
-    root,
-    courseId,
-    patterns: COLLECTIONS.versions,
-    idField: "course_version_id",
-    collection: "versions",
-    edits,
-  });
+  return writeStore(root, store).edit(courseId, "versions", edits);
 };

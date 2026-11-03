@@ -22,12 +22,12 @@
  */
 
 import { createHash } from "node:crypto";
-import { join } from "node:path";
 
 import { assessmentsOf, runById } from "@ainar/core/src/bundle.ts";
 import { readRecordingPlan, recordingsInbox } from "@ainar/core/src/recordings.ts";
-import { decidedAt, writeRecords } from "@ainar/core/src/records-write.ts";
+import { decidedAt } from "@ainar/core/src/records-write.ts";
 import { readPlan, scanPlace, submissionsDir } from "@ainar/core/src/scans.ts";
+import { writeStore } from "@ainar/core/src/store/course.ts";
 
 import { readSummary, runScans } from "./actions.js";
 import { defenceKey, pileKey, recordingsKey, recordsKey, startJob } from "./jobs.js";
@@ -136,7 +136,7 @@ export const logTo = (c, pile) => (type, job) => {
   try {
     const at = decidedAt(pile.timezone);
     const id = `EVENT-${job.id.toUpperCase()}-${type.toUpperCase()}`;
-    writeRecords(join(c.root, "courses", pile.courseId), {
+    writeStore(c.root, c.workspace?.store).write(pile.courseId, {
       events: [
         {
           event_id: id,

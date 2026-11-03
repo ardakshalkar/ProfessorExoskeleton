@@ -466,7 +466,7 @@ export const routes = [
       // and the desk waited on it.
       if (inPerson) {
         try {
-          const kept = recordInPersonSubmission(root, loaded.bundle, runId, assessmentId, studentId);
+          const kept = recordInPersonSubmission(root, loaded.bundle, runId, assessmentId, studentId, workspace.store);
           return sendJson(res, 200, { ok: true, output: `${kept.submission_id}: ${kept.created ? "in person, no link" : "already recorded"}` });
         } catch (error) {
           return sendJson(res, 200, { ok: false, error: String(error?.message ?? error) });

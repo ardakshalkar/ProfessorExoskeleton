@@ -726,3 +726,33 @@ CREATE POLICY course_bundle_staff_read
                AND staff.user_id = NULLIF(current_setting('ainar.user_id', true), '')::UUID
         )
     );
+
+-- A write through the PostgreSQL course store refreshes the read model in the
+-- same transaction as its rows. Only a run's instructor may: an assistant
+-- reads the course but does not rewrite it.
+DROP POLICY IF EXISTS course_bundle_instructor_write ON content.course_bundle_read_models;
+CREATE POLICY course_bundle_instructor_write
+    ON content.course_bundle_read_models
+    FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1
+              FROM academic.courses AS course
+              JOIN delivery.course_versions AS run ON run.course_id = course.id
+              JOIN delivery.run_staff AS staff ON staff.course_run_id = run.id
+             WHERE course.code = course_bundle_read_models.course_code
+               AND staff.role = 'instructor'
+               AND staff.user_id = NULLIF(current_setting('ainar.user_id', true), '')::UUID
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+              FROM academic.courses AS course
+              JOIN delivery.course_versions AS run ON run.course_id = course.id
+              JOIN delivery.run_staff AS staff ON staff.course_run_id = run.id
+             WHERE course.code = course_bundle_read_models.course_code
+               AND staff.role = 'instructor'
+               AND staff.user_id = NULLIF(current_setting('ainar.user_id', true), '')::UUID
+        )
+    );

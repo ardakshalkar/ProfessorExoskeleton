@@ -21,8 +21,7 @@ import { createHash } from "node:crypto";
 
 import { runById, type CourseBundle } from "./bundle.ts";
 import { policyBase, policyImpact, readProposal, stripped, type Proposal } from "./grading-policy.ts";
-import { COLLECTIONS } from "./loader.ts";
-import { editRecords } from "./record-edit.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 
 export interface ProposalEntry {
   id: string;
@@ -37,14 +36,6 @@ export interface ProposalEntry {
   summary: string[];
   proposal: { components: Record<string, unknown>[]; points: number | null; assignments: Proposal["assignments"] };
 }
-
-const where = (root: string, run: any) => ({
-  root,
-  courseId: run.course_id,
-  patterns: COLLECTIONS.versions,
-  idField: "course_version_id",
-  collection: "versions",
-});
 
 export const proposalsOf = (bundle: CourseBundle, runId: string): ProposalEntry[] => {
   const run = runById(bundle).get(runId) as any;
@@ -62,7 +53,13 @@ export const recordProposal = (
   bundle: CourseBundle,
   runId: string,
   raw: unknown,
-  { note = null, request = null, by = null, at = new Date().toISOString() }: { note?: string | null; request?: string | null; by?: string | null; at?: string } = {},
+  {
+    note = null,
+    request = null,
+    by = null,
+    at = new Date().toISOString(),
+    store,
+  }: { note?: string | null; request?: string | null; by?: string | null; at?: string; store?: CourseStore } = {},
 ): { entry: ProposalEntry; written: string[] } => {
   const run = runById(bundle).get(runId) as any;
   if (!run) throw new Error(`no course run '${runId}'`);
@@ -87,9 +84,10 @@ export const recordProposal = (
     summary: impact.summary,
     proposal: body,
   };
-  const result = editRecords({
-    ...where(root, run),
-    edits: new Map([
+  const result = writeStore(root, store).edit(
+    run.course_id,
+    "versions",
+    new Map([
       [
         runId,
         (node: any) => {
@@ -99,20 +97,28 @@ export const recordProposal = (
         },
       ],
     ]),
-  });
+  );
   return { entry, written: result.written };
 };
 
 /** Take one proposal back, or all of them (`id` null). */
-export const dropProposals = (root: string, bundle: CourseBundle, runId: string, id: string | null): { dropped: number; written: string[] } => {
+export const dropProposals = (
+  root: string,
+  bundle: CourseBundle,
+  runId: string,
+  id: string | null,
+  /** The store the run is written to; the YAML files under `root` when none. */
+  store?: CourseStore,
+): { dropped: number; written: string[] } => {
   const run = runById(bundle).get(runId) as any;
   if (!run) throw new Error(`no course run '${runId}'`);
   const before = proposalsOf(bundle, runId);
   const kept = id === null ? [] : before.filter((entry) => entry.id !== id);
   if (kept.length === before.length) return { dropped: 0, written: [] };
-  const result = editRecords({
-    ...where(root, run),
-    edits: new Map([
+  const result = writeStore(root, store).edit(
+    run.course_id,
+    "versions",
+    new Map([
       [
         runId,
         (node: any) => {
@@ -121,7 +127,7 @@ export const dropProposals = (root: string, bundle: CourseBundle, runId: string,
         },
       ],
     ]),
-  });
+  );
   return { dropped: before.length - kept.length, written: result.written };
 };
 

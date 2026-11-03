@@ -48,8 +48,8 @@
  * silently delete every one of them.
  */
 
-import { COLLECTIONS } from "../loader.ts";
-import { type EditResult, editRecords } from "../record-edit.ts";
+import type { EditResult } from "../record-edit.ts";
+import { type CourseStore, writeStore } from "../store/course.ts";
 import { CANVAS_ASSIGNMENTS_KEY, CANVAS_ASSIGNMENT_KEY, LMS_EXTENSION } from "./index.ts";
 
 /** One assessment's linkage: a single id, a subgroup mapping, or nothing. */
@@ -87,6 +87,8 @@ export const writeAssessmentLinks = (
   root: string,
   courseId: string,
   links: Map<string, AssignmentLink> | Record<string, AssignmentLink>,
+  /** The store the links are written to; the YAML files under `root` when none. */
+  store?: CourseStore,
 ): LinkResult => {
   const wanted = links instanceof Map ? links : new Map(Object.entries(links));
 
@@ -121,12 +123,5 @@ export const writeAssessmentLinks = (
     });
   }
 
-  return editRecords({
-    root,
-    courseId,
-    patterns: COLLECTIONS.assessments,
-    idField: "assessment_id",
-    collection: "assessments",
-    edits,
-  });
+  return writeStore(root, store).edit(courseId, "assessments", edits);
 };

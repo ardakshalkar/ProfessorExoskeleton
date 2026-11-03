@@ -31,8 +31,6 @@ import { fileURLToPath } from "node:url";
 import { approvedView } from "@ainar/core/src/approval.ts";
 import { assessmentsOf, runById } from "@ainar/core/src/bundle.ts";
 import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
-import { COLLECTIONS } from "@ainar/core/src/loader.ts";
-import { editRecords, setRecordFields } from "@ainar/core/src/record-edit.ts";
 import {
   currentProposal,
   fromPreset,
@@ -114,7 +112,7 @@ export const discardGradingProposal = (workspace, root, runId, body) => {
   const id = body?.all === true ? null : String(body?.id ?? "").trim();
   if (id !== null && !/^P-[0-9A-F]{8}$/.test(id)) return { error: "Not a proposal id." };
   try {
-    return { written: true, ...dropProposals(root, bundle, runId, id) };
+    return { written: true, ...dropProposals(root, bundle, runId, id, workspace.store) };
   } catch (error) {
     return { error: String(error?.message ?? error) };
   }
@@ -207,22 +205,16 @@ export const writeGradingPolicy = (workspace, root, runId, body) => {
     if (Object.keys(fields).length) sets.set(id, fields);
     if (gone.length) clears.set(id, gone);
   }
-  const where = {
-    root,
-    courseId: run.course_id,
-    patterns: COLLECTIONS.assessments,
-    idField: "assessment_id",
-    collection: "assessments",
-  };
   try {
-    const set = setRecordFields({ ...where, edits: sets });
+    const set = workspace.store.setFields(run.course_id, "assessments", sets);
     if (clears.size) {
-      editRecords({
-        ...where,
-        edits: new Map([...clears].map(([id, keys]) => [id, (node) => keys.forEach((key) => node.has(key) && node.delete(key))])),
-      });
+      workspace.store.edit(
+        run.course_id,
+        "assessments",
+        new Map([...clears].map(([id, keys]) => [id, (node) => keys.forEach((key) => node.has(key) && node.delete(key))])),
+      );
     }
-    const path = editRunRecord(root, run, policy);
+    const path = editRunRecord(root, run, policy, workspace.store);
     return { written: true, path, assessments: set.count + clears.size, summary: impact.summary };
   } catch (error) {
     return { error: String(error?.message ?? error) };
@@ -251,7 +243,7 @@ export const writeGradingLock = (workspace, root, runId, body) => {
       if (locking) node.setIn(["grading_scheme", "locked"], true);
       else node.deleteIn(["grading_scheme", "locked"]);
       pushHistory(node, document, entry);
-    });
+    }, workspace.store);
     return { written: true, path, locked: locking };
   } catch (error) {
     return { error: String(error?.message ?? error) };

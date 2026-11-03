@@ -11,7 +11,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 
 import { enrolledIn } from "../bundle.ts";
 import {
@@ -34,7 +34,8 @@ import {
 } from "../grade-sheet.ts";
 import { Ledger, type MarkChange } from "../lms/ledger.ts";
 import { SheetsClient, a1, columnLetter, loadCredentials, spreadsheetIdOf } from "../lms/sheets.ts";
-import { decidedAt, removeRecords, writeRecords } from "../records-write.ts";
+import { decidedAt } from "../records-write.ts";
+import { type CourseStore, writeStore } from "../store/course.ts";
 import { RosterStore, loadSalt, parseDelimited, sniffDelimiter } from "../roster.ts";
 import { LinkTable, anchorLinkKey } from "./links.ts";
 import type { MatchStep } from "./match.ts";
@@ -190,6 +191,8 @@ export const runMarksSync = async (options: {
   bundle: any;
   runId: string;
   root: string;
+  /** The course store the marks are written to; the YAML files under `root` when none. */
+  store?: CourseStore;
   sync: RunSync;
   rosterDirectory: string;
   from?: string | null;
@@ -288,10 +291,11 @@ export const runMarksSync = async (options: {
     return result;
   }
 
-  const courseDir = join(options.root, "courses", (bundle.course as { course_id: string }).course_id);
-  if (plan.remove.evaluations.length) removeRecords(courseDir, "evaluations", plan.remove.evaluations);
-  if (plan.remove.submissions.length) removeRecords(courseDir, "submissions", plan.remove.submissions);
-  writeRecords(courseDir, { submissions: plan.submissions as any[], evaluations: plan.evaluations as any[] });
+  const courseId = (bundle.course as { course_id: string }).course_id;
+  const records = writeStore(options.root, options.store);
+  if (plan.remove.evaluations.length) records.remove(courseId, "evaluations", plan.remove.evaluations);
+  if (plan.remove.submissions.length) records.remove(courseId, "submissions", plan.remove.submissions);
+  records.write(courseId, { submissions: plan.submissions as any[], evaluations: plan.evaluations as any[] });
   options.onWritten?.(plan.evaluations as any[]);
   const flagged = applyFlags(store, runId, plan.placed.map((entry) => entry.student), plan.flags);
   const githubs = applyGithubLogins(store, plan.githubs);
@@ -350,6 +354,8 @@ export const mapSheetColumn = (options: {
   bundle: any;
   runId: string;
   root: string;
+  /** The course store a written sync is saved to; the YAML files under `root` when none. */
+  store?: CourseStore;
   sync: RunSync;
   header: string;
   assessmentId: string;
@@ -379,7 +385,7 @@ export const mapSheetColumn = (options: {
   } else {
     const course = (bundle.course as { course_id: string }).course_id;
     const { implied: _implied, from: _from, ...spec } = sync;
-    const result = writeSyncs(options.root, course, runId, [{ ...spec, map: { ...(sync.map as object), columns } } as RunSync]);
+    const result = writeSyncs(options.root, course, runId, [{ ...spec, map: { ...(sync.map as object), columns } } as RunSync], options.store);
     wrote = result.written.join(", ");
   }
   const ledger = Ledger.load(runId, options.syncDirectory);

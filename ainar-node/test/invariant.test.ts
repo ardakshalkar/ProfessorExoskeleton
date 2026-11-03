@@ -158,7 +158,7 @@ test("MCP server: lists exactly the readers, and a call to approve is refused", 
  */
 const EVALUATION_WRITERS: Record<string, number> = { "bin/ainar.ts": 3, "src/sync/sheet-marks.ts": 1 };
 
-test("record writers: only the known commands hand evaluations to writeRecords", () => {
+test("record writers: only the known commands hand evaluations to writeRecords or a store", () => {
   const found: Record<string, number> = {};
   const files = [
     join(PACKAGE, "bin", "ainar.ts"),
@@ -169,7 +169,8 @@ test("record writers: only the known commands hand evaluations to writeRecords",
   for (const path of files) {
     const lines = readFileSync(path, "utf-8").split(/\r?\n/);
     lines.forEach((line, at) => {
-      if (!/\bwriteRecords\(/.test(line) || /^\s*(\*|\/\/)/.test(line) || /export const writeRecords/.test(line)) return;
+      // A write through a course store (`….write(courseId, …)`) is the same hand-over.
+      if (!/(\bwriteRecords|\.write)\(/.test(line) || /^\s*(\*|\/\/)/.test(line) || /export const writeRecords/.test(line)) return;
       // The call's first line, and the next when the object opens on this one.
       const call = line.trimEnd().endsWith("{") ? line + lines[at + 1] : line;
       if (!/\bevaluations\b/.test(call)) return;

@@ -34,8 +34,6 @@
  */
 
 import { activitiesOf, assessmentsOf, modulesOf, runById } from "@ainar/core/src/bundle.ts";
-import { COLLECTIONS } from "@ainar/core/src/loader.ts";
-import { editRecords, setRecordFields } from "@ainar/core/src/record-edit.ts";
 import { describeRecordImpact, recordImpact } from "@ainar/core/src/record-impact.ts";
 
 import { loadedRun } from "./workspace.js";
@@ -153,13 +151,6 @@ export const writeRecordFields = (workspace, root, runId, body) => {
   }
   if (!Object.keys(set).length && !cleared.length) return { written: false, kind: body.kind, id: recordId };
 
-  const where = {
-    root,
-    courseId: run.course_id,
-    patterns: COLLECTIONS[spec.collection],
-    idField: spec.idField,
-    collection: spec.collection,
-  };
   // One-line values as a text edit; the rest, and any the text edit refuses,
   // through the document.
   const lines = Object.fromEntries(Object.entries(set).filter(([, value]) => !value.includes("\n")));
@@ -167,15 +158,16 @@ export const writeRecordFields = (workspace, root, runId, body) => {
   try {
     if (Object.keys(lines).length) {
       try {
-        setRecordFields({ ...where, edits: new Map([[recordId, lines]]) });
+        workspace.store.setFields(run.course_id, spec.collection, new Map([[recordId, lines]]));
       } catch {
         Object.assign(blocks, lines);
       }
     }
     if (Object.keys(blocks).length || cleared.length) {
-      editRecords({
-        ...where,
-        edits: new Map([
+      workspace.store.edit(
+        run.course_id,
+        spec.collection,
+        new Map([
           [
             recordId,
             (node, document) => {
@@ -188,7 +180,7 @@ export const writeRecordFields = (workspace, root, runId, body) => {
             },
           ],
         ]),
-      });
+      );
     }
     const written = { written: true, kind: body.kind, id: recordId, fields: { ...set, ...Object.fromEntries(cleared.map((name) => [name, ""])) } };
     // Save + check: what the fields were, and what points at the item, for

@@ -37,9 +37,8 @@ import type { z } from "zod";
 import { allRubrics, assessmentsOf, itemsOf, runById, type CourseBundle } from "./bundle.ts";
 import { exportable, gradeRows } from "./gradebook.ts";
 import { roundHalfEven } from "./grading.ts";
-import { COLLECTIONS } from "./loader.ts";
 import { Setting } from "./model/common.ts";
-import { editRecords } from "./record-edit.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 
 export const STANDING_VERSION = "standing/2026.10.2";
 export type SettingName = z.infer<typeof Setting>;
@@ -114,6 +113,8 @@ export const settingOf = (assessment: any): SettingFound => {
  */
 export const setSetting = (options: {
   root: string;
+  /** The store this is written to; the YAML files under `root` when none. */
+  store?: CourseStore;
   bundle: CourseBundle;
   runId: string;
   assessmentIds: readonly string[];
@@ -129,13 +130,7 @@ export const setSetting = (options: {
   if (unknown.length) throw new Error(`not assessments of ${runId}: ${unknown.join(", ")}`);
   const changing = assessmentIds.filter((id) => ((own.get(id) as any).setting ?? null) !== setting);
   if (!changing.length) return [];
-  return editRecords({
-    root,
-    courseId: String((bundle.course as any).course_id),
-    patterns: COLLECTIONS.assessments,
-    idField: "assessment_id",
-    collection: "assessments",
-    edits: new Map(
+  return writeStore(root, options.store).edit(String((bundle.course as any).course_id), "assessments", new Map(
       changing.map((id) => [
         id,
         (node: any) => {
@@ -143,8 +138,7 @@ export const setSetting = (options: {
           else if (node.has("setting")) node.delete("setting");
         },
       ]),
-    ),
-  }).written;
+    )).written;
 };
 
 /** Every concept an assessment's items or rubric criteria name, sorted. */

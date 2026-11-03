@@ -56,7 +56,7 @@ export const routes = [
       if (setting !== "supervised" && setting !== "unsupervised") return sendJson(res, 200, { error: "supervised or unsupervised." });
       try {
         const { bundle } = loadedRun(workspace, runId);
-        return sendJson(res, 200, { ok: true, written: setSetting({ root, bundle, runId, assessmentIds: ids, setting }) });
+        return sendJson(res, 200, { ok: true, written: setSetting({ root, store: workspace.store, bundle, runId, assessmentIds: ids, setting }) });
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }

@@ -4,6 +4,7 @@ import { COLLECTION_NAMES, COLLECTION_SCHEMAS, OMIT_WHEN_EMPTY, type CourseBundl
 import { IssueList } from "../issues.ts";
 import type { LoadResult } from "../loader.ts";
 import { Course } from "../model/academic.ts";
+import { RUNTIME_TABLES, buildScript, deleteRuntime } from "../sqlgen.ts";
 import { LoadedCourseStore } from "./course.ts";
 
 export interface SqlQueryResult<Row> {
@@ -149,33 +150,94 @@ const parsePayload = (row: BundleRow): LoadResult => {
   return { bundle: { course: parsedCourse.data, ...data } as CourseBundle, issues };
 };
 
+/** Runs one flush's SQL as a single transaction. */
+export type Commit = (sql: string) => Promise<void>;
+
+/**
+ * The read models as a snapshot that takes writes.
+ *
+ * The engine is synchronous and a database is not, so a write lands in the
+ * snapshot at once — the next load reads it back, as it would from a file —
+ * and `flush` commits it. A flush writes each touched course whole, through
+ * the same `buildScript` that `ainar sql` emits: every statement an upsert,
+ * the relational rows first and the read model last, in one transaction, so
+ * the database never holds a read model its rows do not back. Removed runtime
+ * records are deleted by code before that, because the import never deletes
+ * student work on its own.
+ *
+ * A failed flush leaves the writes pending, so the next flush tries them again.
+ */
+export class PostgresCourseStore extends LoadedCourseStore {
+  private readonly commit: Commit;
+
+  constructor(
+    courses: Iterable<readonly [string, LoadResult]>,
+    commit: Commit,
+    options: { root?: string; label?: string } = {},
+  ) {
+    super(courses, options);
+    this.commit = commit;
+  }
+
+  override async flush(): Promise<void> {
+    const pending = this.pendingCourses();
+    if (!pending.length) return;
+    let sql = "";
+    for (const { bundle, removed } of pending) {
+      for (const [collection, codes] of removed) {
+        if (RUNTIME_TABLES[collection]) sql += deleteRuntime(collection, codes);
+      }
+      sql += buildScript(bundle as unknown as CourseBundle, { transaction: false }) + "\n";
+    }
+    await this.commit(sql);
+    this.settle(pending.map((entry) => entry.courseId));
+  }
+}
+
+const storeOptions = (options: { documentRoot?: string; label?: string }) => ({
+  root: options.documentRoot,
+  label: options.label ?? "PostgreSQL CourseBundle read model",
+});
+
 /**
  * Load the tenant-visible read models into the synchronous engine boundary.
  * Row-level security on the supplied SQL client decides which courses appear.
+ * A flush runs its script on the same client, wrapped in `BEGIN`/`COMMIT`.
  */
 export const loadPostgresCourseStore = async (
   client: SqlClient,
   options: { documentRoot?: string; label?: string } = {},
-): Promise<LoadedCourseStore> => {
+): Promise<PostgresCourseStore> => {
   const result = await client.query<BundleRow>(READ_BUNDLES_SQL);
-  return new LoadedCourseStore(
+  return new PostgresCourseStore(
     result.rows.map((row) => [row.course_code, parsePayload(row)] as const),
-    {
-      root: options.documentRoot,
-      label: options.label ?? "PostgreSQL CourseBundle read model",
+    async (sql) => {
+      await client.query(`BEGIN;\n${sql}\nCOMMIT;`);
     },
+    storeOptions(options),
   );
 };
 
 /**
  * Resolve an OAuth subject and establish a transaction-local PostgreSQL user.
  * RLS policies read `ainar.user_id`; SET LOCAL prevents identity leakage when
- * the pooled connection is returned and reused for another professor.
+ * the pooled connection is returned and reused for another professor. A flush
+ * opens a transaction of its own under the same identity, since the one the
+ * load ran in has committed.
  */
 export const loadPostgresCourseStoreForIdentity = async (
   pool: SqlPool,
   identity: OAuthIdentity,
   options: { documentRoot?: string; label?: string } = {},
-): Promise<LoadedCourseStore> => {
-  return withIdentityClient(pool, identity, (client) => loadPostgresCourseStore(client, options));
+): Promise<PostgresCourseStore> => {
+  const rows = await withIdentityClient(pool, identity, (client) => client.query<BundleRow>(READ_BUNDLES_SQL));
+  return new PostgresCourseStore(
+    rows.rows.map((row) => [row.course_code, parsePayload(row)] as const),
+    async (sql) => {
+      await withIdentityClient(pool, identity, async (client) => {
+        await client.query(sql);
+      });
+    },
+    storeOptions(options),
+  );
 };

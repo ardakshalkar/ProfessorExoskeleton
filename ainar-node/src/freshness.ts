@@ -57,7 +57,8 @@ import { createHash } from "node:crypto";
 import { readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import type { CourseBundle } from "./bundle.ts";
-import { type EditResult, setRecordFields } from "./record-edit.ts";
+import type { EditResult } from "./record-edit.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 
 /** Formats a material is authored in. */
 const SOURCE_FORMATS = new Set(["md", "markdown", "txt", "yaml", "yml", "py", "ipynb"]);
@@ -328,6 +329,8 @@ export const restamp = (
   root: string,
   courseId: string,
   found: Freshness,
+  /** The store the documents are written to; the YAML files under `root` when none. */
+  store?: CourseStore,
 ): EditResult & { deferred: string[] } => {
   const edits = new Map<string, Record<string, string | number>>();
   const defer = deferredSources(found);
@@ -344,18 +347,10 @@ export const restamp = (
     });
   }
 
-  // `setRecordFields`, not `editRecords`: these are three top-level scalars,
-  // and the line-level writer leaves every other byte of the professor's file
-  // exactly as it was. Its header has the measurement that settled it.
-  const written = setRecordFields({
-    root,
-    courseId,
-    // The loader's own patterns for documents, so this looks exactly where the
-    // record could have been read from.
-    patterns: ["documents.yaml", "documents/*.yaml", "samples/documents*.yaml"],
-    idField: "document_id",
-    collection: "documents",
-    edits,
-  });
+  // Fields set rather than records edited: these are three top-level scalars,
+  // and for a file the line-level writer (`setRecordFields`) leaves every other
+  // byte of the professor's file exactly as it was. Its header has the
+  // measurement that settled it.
+  const written = writeStore(root, store).setFields(courseId, "documents", edits);
   return { ...written, deferred: [...defer].sort() };
 };

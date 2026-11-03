@@ -43,7 +43,7 @@ import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { renderExam } from "../bin/render-exam.ts";
 import { localDate } from "./dates.ts";
 import { documentRecord } from "./materials.ts";
-import { writeRecords } from "./records-write.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 import { Workspace } from "./workspace.ts";
 
 export type PaperFormat = "docx" | "pdf";
@@ -165,6 +165,7 @@ const registerPapers = (options: {
   questions: number;
   marks: number;
   courseDir: string;
+  store?: CourseStore;
 }): { lines: string[]; written: string[]; pointAt: string | null } => {
   const { root, bundle, assessment, papers, baseId, courseDir } = options;
   const lines: string[] = [];
@@ -240,7 +241,7 @@ const registerPapers = (options: {
 
   if (documents.length === 0) return { lines, written: [], pointAt };
 
-  const written = writeRecords(courseDir, { documents }, { keepApproval: true });
+  const written = writeStore(root, options.store).write(basename(courseDir), { documents }, { keepApproval: true });
   return { lines, written, pointAt };
 };
 
@@ -250,6 +251,8 @@ export type PrintOptions = {
   root: string;
   /** How the root was found, for `Workspace`'s own messages. */
   rootSource?: "flag" | "cwd" | "env";
+  /** The course store to read and register through; the YAML files under `root` when none. */
+  store?: CourseStore;
   format?: PaperFormat | "both";
   answers?: AnswerLayout;
   /** Where to write; relative to the root. Default: the assessment's own folder. */
@@ -286,7 +289,7 @@ export const printPaper = async (options: PrintOptions): Promise<PrintReport> =>
   }
 
   const root = resolve(options.root);
-  const workspace = new Workspace(root, options.rootSource ?? "flag");
+  const workspace = options.store ? new Workspace(options.store) : new Workspace(root, options.rootSource ?? "flag");
   const bundle = workspace.findAssessment(assessmentId);
 
   const assessment = (bundle.assessments as any[]).find((row) => row.assessment_id === assessmentId);
@@ -434,6 +437,7 @@ export const printPaper = async (options: PrintOptions): Promise<PrintReport> =>
       questions: items.length,
       marks,
       courseDir: join(root, "courses", courseId),
+      store: workspace.store,
     });
     lines.push(...report.lines);
     for (const path of report.written) {

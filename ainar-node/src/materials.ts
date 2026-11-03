@@ -37,7 +37,7 @@ import { Document } from "./model/content.ts";
 import { officeAt, toPdf } from "./pdf.ts";
 import { recordFor } from "./slides/recorded.ts";
 import { renderDeck } from "./slides/render.ts";
-import { writeRecords } from "./records-write.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 
 /** Where a course declares what produces what. */
 export const MANIFEST = "materials.yaml";
@@ -195,6 +195,8 @@ export type BuildOptions = {
   readonly dryRun: boolean;
   /** `courses/<COURSE>` — where the Document records are written. */
   readonly courseDir: string;
+  /** The store they are written to; the YAML files under `root` when none. */
+  readonly store?: CourseStore;
   /**
    * The course, when the caller has it loaded: a rendered deck then gets the
    * same figure credits and second contract from the record that
@@ -422,7 +424,7 @@ export const buildMaterials = async (options: BuildOptions): Promise<BuildReport
     return { lines, written: [], documents: [], failed };
   }
 
-  const written = writeRecords(options.courseDir, { documents }, { keepApproval: true });
+  const written = writeStore(options.root, options.store).write(basename(options.courseDir), { documents }, { keepApproval: true });
   return {
     lines,
     written,

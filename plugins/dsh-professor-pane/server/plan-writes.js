@@ -24,9 +24,7 @@
  */
 
 import { activitiesOf, assessmentsOf, modulesOf, runById } from "@ainar/core/src/bundle.ts";
-import { COLLECTIONS } from "@ainar/core/src/loader.ts";
 import { setMissingWork } from "@ainar/core/src/missing-work.ts";
-import { editRecords, setRecordFields } from "@ainar/core/src/record-edit.ts";
 import { decidedAt } from "@ainar/core/src/records-write.ts";
 
 import { runScans } from "./actions.js";
@@ -135,22 +133,12 @@ export const writeAssessmentDates = (workspace, root, runId, body) => {
     }
   }
 
-  const where = {
-    root,
-    courseId: run.course_id,
-    patterns: COLLECTIONS.assessments,
-    idField: "assessment_id",
-    collection: "assessments",
-  };
   const fields = { due_at: due };
   if (opens) fields.opens_at = opens;
   try {
-    const result = setRecordFields({ ...where, edits: new Map([[assessmentId, fields]]) });
+    const result = workspace.store.setFields(run.course_id, "assessments", new Map([[assessmentId, fields]]));
     if (!opens && record.opens_at) {
-      editRecords({
-        ...where,
-        edits: new Map([[assessmentId, (node) => node.has("opens_at") && node.delete("opens_at")]]),
-      });
+      workspace.store.edit(run.course_id, "assessments", new Map([[assessmentId, (node) => node.has("opens_at") && node.delete("opens_at")]]));
     }
     return { written: result.count > 0, assessment: assessmentId, opens_at: opens, due_at: due };
   } catch (error) {
@@ -194,14 +182,7 @@ export const closeSubmissions = async (workspace, root, runId, body, now = new D
   const closes = normalised(local + offset);
 
   try {
-    setRecordFields({
-      root,
-      courseId: run.course_id,
-      patterns: COLLECTIONS.assessments,
-      idField: "assessment_id",
-      collection: "assessments",
-      edits: new Map([[assessmentId, { closes_at: closes }]]),
-    });
+    workspace.store.setFields(run.course_id, "assessments", new Map([[assessmentId, { closes_at: closes }]]));
   } catch (error) {
     return { error: String(error?.message ?? error) };
   }
@@ -241,6 +222,7 @@ export const setMissingWorkRule = (workspace, root, runId, body) => {
   try {
     const written = setMissingWork({
       root,
+      store: workspace.store,
       bundle,
       runId,
       assessmentId,
@@ -319,22 +301,8 @@ export const writeTopicMoves = (workspace, root, runId, body) => {
   }
 
   try {
-    const moved = setRecordFields({
-      root,
-      courseId: run.course_id,
-      patterns: COLLECTIONS.modules,
-      idField: "module_id",
-      collection: "modules",
-      edits: new Map([...weeks].map(([id, week]) => [id, { week }])),
-    });
-    const met = setRecordFields({
-      root,
-      courseId: run.course_id,
-      patterns: COLLECTIONS.activities,
-      idField: "activity_id",
-      collection: "activities",
-      edits: stamps,
-    });
+    const moved = workspace.store.setFields(run.course_id, "modules", new Map([...weeks].map(([id, week]) => [id, { week }])));
+    const met = workspace.store.setFields(run.course_id, "activities", stamps);
     return { written: true, modules: moved.count, meetings: met.count };
   } catch (error) {
     return { error: String(error?.message ?? error) };

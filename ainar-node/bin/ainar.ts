@@ -33,7 +33,7 @@
 
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, relative, resolve, sep } from "node:path";
 import { parse } from "yaml";
 import {
   allRubrics,
@@ -88,7 +88,7 @@ import { alignmentMarkdown, syllabusMarkdown } from "../src/report.ts";
 import { coverage, validate } from "../src/validate.ts";
 import { IssueList, describe } from "../src/issues.ts";
 import { AGENT_WRITABLE, approvedView, drafts as draftsIn, withRecords } from "../src/approval.ts";
-import { candidateFiles, editRecords, setRecordFields } from "../src/record-edit.ts";
+import { candidateFiles, setRecordFields } from "../src/record-edit.ts";
 import {
   dominantMisconception,
   emptyResult,
@@ -184,7 +184,7 @@ import {
   writeRecordingPlan,
 } from "../src/recordings.ts";
 import { importMaterial } from "../src/materials-import.ts";
-import { decidedAt, floatPaths, removeRecords, stampDocument, writeRecords } from "../src/records-write.ts";
+import { decidedAt, floatPaths, stampDocument } from "../src/records-write.ts";
 import { setCurve } from "../src/curve.ts";
 import { setMissingWork } from "../src/missing-work.ts";
 import { setSetting, settingOf, standingProfile, type SettingName } from "../src/standing.ts";
@@ -442,7 +442,7 @@ const deriveEvidence = (
   issues.extend(validate(withRecords(kept, { evidence: produced }), { root }));
   if (issues.errors.length) return { produced: [], refreshed: 0, errors: issues.errors.map(describe) };
   if (!dryRun) {
-    for (const path of writeRecords(courseDir, { evidence: produced as never[] })) {
+    for (const path of workspace.store.write(basename(courseDir), { evidence: produced as never[] })) {
       out(`wrote ${relative(root, path)}`);
     }
   }
@@ -1130,6 +1130,7 @@ const gradeSheet = async (step: string, runId: string | undefined): Promise<void
     bundle,
     runId,
     root,
+    store: workspace.store,
     sync: sheetSync,
     rosterDirectory: rosterDir(flag("roster-dir")),
     from: flag("from") ?? null,
@@ -1370,6 +1371,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         try {
           const written = setMissingWork({
             root,
+            store: workspace.store,
             bundle,
             runId,
             assessmentId,
@@ -1411,6 +1413,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             note: flag("note") ?? null,
             request: flag("request") ?? null,
             by: flag("by") ?? null,
+            store: workspace.store,
           });
           out(`proposal ${entry.id} recorded for ${runId}`);
           for (const line of entry.summary) out(`  - ${line}`);
@@ -1428,7 +1431,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           console.error("usage: grading discard RUN (ID | --all)");
           process.exit(2);
         }
-        const { dropped } = dropProposals(root, bundle, runId, id);
+        const { dropped } = dropProposals(root, bundle, runId, id, workspace.store);
         out(dropped ? `discarded ${dropped} proposal(s)` : "nothing to discard");
         break;
       }
@@ -1596,7 +1599,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         process.exit(2);
       }
       try {
-        const written = setSetting({ root, bundle, runId, assessmentIds: ids, setting: (setting ?? null) as SettingName | null });
+        const written = setSetting({ root, store: workspace.store, bundle, runId, assessmentIds: ids, setting: (setting ?? null) as SettingName | null });
         for (const path of written) out(`wrote ${relative(root, path)}`);
         const after = forRun(runId);
         for (const id of ids) {
@@ -1703,7 +1706,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         break;
       }
 
-      for (const path of writeRecords(courseDir, { capability_states: produced as never[] })) {
+      for (const path of workspace.store.write(basename(courseDir), { capability_states: produced as never[] })) {
         out(`wrote ${relative(root, path)}`);
       }
       out(`\n${produced.length} capability state(s) derived.`);
@@ -1810,7 +1813,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         },
         forRun(rest[1]!),
         root,
-        { out: (line) => out(line) },
+        { out: (line) => out(line), store: workspace.store },
       );
       if (code) process.exit(code);
       break;
@@ -1877,6 +1880,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         );
         const report = importMaterial({
           root,
+          store: workspace.store,
           courseVersionId: runId,
           file,
           documentId: as,
@@ -1901,6 +1905,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       const course = bundle.course.course_id;
       const report = await buildMaterials({
         root,
+        store: workspace.store,
         courseVersionId: runId,
         materialsDir: flag("materials") ?? join(root, "courses", course, "materials"),
         only: flag("only") ?? null,
@@ -2218,6 +2223,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           out("");
           const code = await runLms(assignmentArgs("assignment-plan", false), bundle, root, {
             out: (line: string) => out(line),
+            store: workspace.store,
           });
           if (code) process.exit(code);
         }
@@ -2269,6 +2275,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           }
           const report = await buildMaterials({
             root,
+            store: workspace.store,
             courseVersionId: runId,
             materialsDir,
             only: job.producer,
@@ -2296,7 +2303,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       // deck had a record still describing the text before the fix, and
       // nothing anywhere said so.
       if (!nothingChanged(settled)) {
-        const stamped = restamp(root, courseId, settled);
+        const stamped = restamp(root, courseId, settled, workspace.store);
         for (const line of describeFreshness(settled)) out(line);
         for (const path of stamped.written) {
           out(`re-stamped ${within(root, path)} — ${stamped.count} record(s)`);
@@ -2363,7 +2370,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             assignmentArgs("assignment-push", true, job.scope),
             published,
             root,
-            { out: (line: string) => out(line) },
+            { out: (line: string) => out(line), store: workspace.store },
           );
           if (code) return code;
           // Not recorded as a publication: `lms/ledger.ts` already writes an
@@ -2742,7 +2749,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           via,
         });
         if (result.evaluations.length) {
-          for (const path of writeRecords(courseDir, { evaluations: result.evaluations as never[] })) {
+          for (const path of workspace.store.write(basename(courseDir), { evaluations: result.evaluations as never[] })) {
             out(`wrote ${relative(root, path)}`);
           }
           recordDecisions((bundle.course as { course_id: string }).course_id, result.evaluations, "grade decide");
@@ -2807,7 +2814,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         if (!proposalId) throw new Error("--proposal names the proposal to use");
         const only = flag("item") ? flag("item")!.split(",").map((id) => id.trim()).filter(Boolean) : undefined;
         const result = chooseProposal({
-          root, bundle, board, groups, proposalId, itemIds: only,
+          root, store: workspace.store, bundle, board, groups, proposalId, itemIds: only,
           saveGroups: (saved) => writeGroups(place, saved),
           keepMarks: args.includes("--keep-marks"),
           accept: args.includes("--accept"),
@@ -2822,7 +2829,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
 
       if (sub === "accept-rubric") {
         out(
-          acceptRubric({ root, bundle, board })
+          acceptRubric({ root, store: workspace.store, bundle, board })
             ? `${assessmentId}: rubric accepted (approval: approved)`
             : `${assessmentId}: the rubric was already accepted`,
         );
@@ -2831,7 +2838,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
 
       if (sub === "points-only") {
         const items = (bundle.items as any[]).filter((item) => item.assessment_id === assessmentId);
-        for (const path of pointsOnlyRubric({ root, bundle, board, items })) out(`wrote ${relative(root, path)}`);
+        for (const path of pointsOnlyRubric({ root, store: workspace.store, bundle, board, items })) out(`wrote ${relative(root, path)}`);
         out(`${assessmentId}: one criterion per question, worth its marks — mark each answer by points`);
         break;
       }
@@ -2938,7 +2945,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             by: flag("by") ?? run?.instructors?.[0] ?? "",
             at: decidedAt(run?.timezone),
           };
-      const written = setCurve({ root, bundle, runId, assessmentId, settings });
+      const written = setCurve({ root, store: workspace.store, bundle, runId, assessmentId, settings });
       for (const path of written) out(`wrote ${relative(root, path)}`);
       out(
         !settings
@@ -2986,6 +2993,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         }
         const opened = openCase({
           root,
+          store: workspace.store,
           bundle,
           runId,
           studentId,
@@ -3008,6 +3016,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       }
       const decided = decideCase({
         root,
+        store: workspace.store,
         bundle,
         runId,
         caseId,
@@ -3588,8 +3597,8 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         }
         for (const { previous, student } of undo) {
           const undone = unplaceScan(place, previous, assessmentId!, records, now);
-          const taken = removeRecords(courseDir, "item_responses", undone.responses);
-          const papers = removeRecords(courseDir, "submissions", [undone.submission_id]);
+          const taken = workspace.store.remove(basename(courseDir), "item_responses", undone.responses);
+          const papers = workspace.store.remove(basename(courseDir), "submissions", [undone.submission_id]);
           out(`  unplaced  ${previous}: ${papers} submission, ${taken} answer(s) taken back; folder kept at ${undone.moved_to ?? "(none)"}`);
           if (student && undone.moved_to) carries.push({ from: undone.moved_to, student });
         }
@@ -3649,7 +3658,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           break;
         }
         if (result.submissions.length) {
-          for (const path of writeRecords(courseDir, { submissions: result.submissions as never[] })) {
+          for (const path of workspace.store.write(basename(courseDir), { submissions: result.submissions as never[] })) {
             out(`wrote ${relative(root, path)}`);
           }
         }
@@ -3691,7 +3700,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         break;
       }
       if (!result.responses.length) break;
-      for (const path of writeRecords(courseDir, { item_responses: result.responses as never[] })) {
+      for (const path of workspace.store.write(basename(courseDir), { item_responses: result.responses as never[] })) {
         out(`wrote ${relative(root, path)}`);
       }
       out(
@@ -3949,19 +3958,12 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             out(`${forkStudent} has no fork link for ${forkAssessment}`);
             break;
           }
-          editRecords({
-            root,
-            courseId,
-            patterns: COLLECTIONS.submissions,
-            idField: "submission_id",
-            collection: "submissions",
-            edits: new Map([[submission.submission_id, (node: any) => node.delete("url")]]),
-          });
+          workspace.store.edit(courseId, "submissions", new Map([[submission.submission_id, (node: any) => node.delete("url")]]));
           out(`${submission.submission_id}: fork link removed`);
           break;
         }
         if (inPerson && !given) {
-          const kept = recordInPersonSubmission(root, bundle, forkRun, forkAssessment, forkStudent);
+          const kept = recordInPersonSubmission(root, bundle, forkRun, forkAssessment, forkStudent, workspace.store);
           if (!kept.created) {
             out(`${kept.submission_id}: already recorded — the defence goes under it`);
             break;
@@ -3972,18 +3974,11 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         }
         const url = repoUrl(given!);
         if (submission) {
-          setRecordFields({
-            root,
-            courseId,
-            patterns: COLLECTIONS.submissions,
-            idField: "submission_id",
-            collection: "submissions",
-            edits: new Map([[submission.submission_id, { url }]]),
-          });
+          workspace.store.setFields(courseId, "submissions", new Map([[submission.submission_id, { url }]]));
           out(`${submission.submission_id}: fork ${url}`);
         } else {
           const id = pulledSubmissionId(forkStudent, forkAssessment);
-          for (const path of writeRecords(courseDir, {
+          for (const path of workspace.store.write(basename(courseDir), {
             submissions: [
               {
                 submission_id: id,
@@ -4045,19 +4040,13 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           });
           const courseDir = join(root, "courses", (bundle.course as any).course_id);
           if (checked.evaluations.length) {
-            for (const path of writeRecords(courseDir, { evaluations: checked.evaluations as never[] })) {
+            for (const path of workspace.store.write(basename(courseDir), { evaluations: checked.evaluations as never[] })) {
               out(`wrote ${relative(root, path)}`);
             }
             recordDecisions((bundle.course as any).course_id, checked.evaluations, "defence mark");
             // A record edited where it was written by hand keeps a key the new
             // one leaves out, so what `clear` took away is deleted by name.
-            editRecords({
-              root,
-              courseId: (bundle.course as any).course_id,
-              patterns: COLLECTIONS.evaluations,
-              idField: "evaluation_id",
-              collection: "evaluations",
-              edits: new Map(
+            workspace.store.edit((bundle.course as any).course_id, "evaluations", new Map(
                 checked.evaluations.map((evaluation: any) => [
                   evaluation.evaluation_id,
                   (node: any) => {
@@ -4075,9 +4064,9 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
                   },
                 ]),
               ),
-            });
+            );
           }
-          if (checked.removed.length) removeRecords(courseDir, "evaluations", checked.removed);
+          if (checked.removed.length) workspace.store.remove(basename(courseDir), "evaluations", checked.removed);
           for (const line of checked.said) out(`  ${line}`);
           if (checked.evaluations.length || checked.removed.length) {
             const evidence = deriveEvidence(forRun(markRun), markRun, { list: false });
@@ -4085,14 +4074,11 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           }
           break;
         }
-        const { written } = editRecords({
-          root,
-          courseId: (bundle.course as any).course_id,
-          patterns: COLLECTIONS.submissions,
-          idField: "submission_id",
-          collection: "submissions",
-          edits: new Map([[id, (node: any) => (outcome === "clear" ? node.delete("defence") : node.set("defence", outcome))]]),
-        });
+        const { written } = workspace.store.edit(
+          (bundle.course as any).course_id,
+          "submissions",
+          new Map([[id, (node: any) => (outcome === "clear" ? node.delete("defence") : node.set("defence", outcome))]]),
+        );
         out(
           outcome === "clear"
             ? `${id}: defence cleared`
@@ -4214,7 +4200,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           break;
         }
         const courseDir = join(root, "courses", (bundle.course as { course_id: string }).course_id);
-        const [written] = writeRecords(courseDir, { evaluations });
+        const [written] = workspace.store.write(basename(courseDir), { evaluations });
         out(`wrote ${evaluations.length} suggested evaluation(s), status: suggested: ${relative(root, written!)}`);
         for (const row of evaluations) {
           out(`  ${row.criterion_id}  ${row.ai_suggestion.score}  (${row.ai_suggestion.evidence.length} citation(s))  ${row.evaluation_id}`);
@@ -4405,6 +4391,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       const report = await printPaper({
         assessmentId,
         root,
+        store: workspace.store,
         rootSource: rootFlag ? "flag" : "cwd",
         format: (flag("format") ?? "both") as PaperFormat | "both",
         answers: (flag("answers") ?? "under-question") as AnswerLayout,
@@ -4571,7 +4558,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           },
         ];
       }
-      for (const path of writeRecords(courseDir, records as never)) out(`wrote ${relative(root, path)}`);
+      for (const path of workspace.store.write(basename(courseDir), records as never)) out(`wrote ${relative(root, path)}`);
       out(
         `\nEverything written is approval: draft.${existing ? "" : " The weight and the outcomes are yours to fill in."}\n` +
           `Next: \`ainar validate ${courseId}\`, then the scans — \`scans plan ${runId} --assessment ${assessmentId}\`.`,
@@ -5137,6 +5124,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         root,
         {
           out,
+          store: workspace.store,
           onWritten: (evaluations) =>
             recordDecisions((forRun(rest[1]!).course as { course_id: string }).course_id, evaluations, "sync run"),
         },
@@ -5539,6 +5527,9 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
       console.error(HELP);
       process.exit(1);
   }
+  // Whatever a command wrote is durable before the process ends — at once for
+  // YAML, here for a store that holds its writes until it is flushed.
+  await workspace.store.flush();
 } catch (error) {
   console.error(String((error as Error).message ?? error));
   process.exit(1);

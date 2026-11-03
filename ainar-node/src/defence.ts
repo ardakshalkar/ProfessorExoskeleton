@@ -47,7 +47,7 @@ import { promisify } from "node:util";
 import { parse, stringify } from "yaml";
 import { type CourseBundle, enrolledIn } from "./bundle.ts";
 import { pulledSubmissionId } from "./lms/pull.ts";
-import { writeRecords } from "./records-write.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 import { parseReply } from "./scan-read.ts";
 import { evaluationId } from "./grade-board.ts";
 import { type Range, type Segment, type Transcriber, type Transcript, labelSpeakers, studentWords } from "./transcribe.ts";
@@ -1399,6 +1399,8 @@ export const recordInPersonSubmission = (
   runId: string,
   assessmentId: string,
   studentId: string,
+  /** The store the submission is written to; the YAML files under `root` when none. */
+  store?: CourseStore,
 ): { submission_id: string; created: boolean; written: string[] } => {
   const assessment = (bundle.assessments as any[]).find(
     (entry) => entry.assessment_id === assessmentId && entry.course_version_id === runId,
@@ -1412,8 +1414,7 @@ export const recordInPersonSubmission = (
     .sort((a, b) => (b.attempt ?? 1) - (a.attempt ?? 1))[0];
   if (existing) return { submission_id: existing.submission_id, created: false, written: [] };
   const id = pulledSubmissionId(studentId, assessmentId);
-  const courseDir = join(root, "courses", (bundle.course as any).course_id as string);
-  const written = writeRecords(courseDir, {
+  const written = writeStore(root, store).write((bundle.course as any).course_id as string, {
     submissions: [
       {
         submission_id: id,

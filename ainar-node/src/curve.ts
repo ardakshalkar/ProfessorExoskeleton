@@ -12,9 +12,8 @@
  */
 
 import { assessmentsOf, enrolledIn, type CourseBundle } from "./bundle.ts";
-import { COLLECTIONS } from "./loader.ts";
 import { ScoreCurve } from "./model/assessment.ts";
-import { editRecords } from "./record-edit.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 
 export interface CurveSettings {
   anchor: number;
@@ -33,6 +32,8 @@ export interface CurveSettings {
  */
 export const setCurve = (options: {
   root: string;
+  /** The store this is written to; the YAML files under `root` when none. */
+  store?: CourseStore;
   bundle: CourseBundle;
   runId: string;
   assessmentId: string;
@@ -66,13 +67,7 @@ export const setCurve = (options: {
     return [];
   }
 
-  return editRecords({
-    root,
-    courseId: String((bundle.course as any).course_id),
-    patterns: COLLECTIONS.assessments,
-    idField: "assessment_id",
-    collection: "assessments",
-    edits: new Map([
+  return writeStore(root, options.store).edit(String((bundle.course as any).course_id), "assessments", new Map([
       [
         assessmentId,
         (node: any) => {
@@ -80,6 +75,5 @@ export const setCurve = (options: {
           else if (node.has("curve")) node.delete("curve");
         },
       ],
-    ]),
-  }).written;
+    ])).written;
 };

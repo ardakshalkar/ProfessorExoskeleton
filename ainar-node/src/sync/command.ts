@@ -26,6 +26,7 @@ import { Ledger } from "../lms/ledger.ts";
 import { RosterStore } from "../roster.ts";
 import { nameKey } from "../scans.ts";
 import { LinkTable, nameLinkKey } from "./links.ts";
+import type { CourseStore } from "../store/course.ts";
 import { type RunSync, findSync, syncsOf, writeSyncs, writtenForm } from "./registry.ts";
 import { mapSheetColumn, runMarksSync } from "./sheet-marks.ts";
 import { checkSheet } from "./sheet-watch.ts";
@@ -59,6 +60,8 @@ interface Deps {
   delegate?: (argv: string[]) => number;
   /** Hears the evaluations a marks sheet wrote (the CLI's decision ledger). */
   onWritten?: (evaluations: any[]) => void;
+  /** The course store records are written to; the YAML files under the root when none. */
+  store?: CourseStore;
 }
 
 const defaultDelegate = (argv: string[]): number => {
@@ -184,6 +187,7 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
           bundle,
           runId,
           root,
+          store: deps.store,
           sync,
           rosterDirectory: args.rosterDir,
           from: args.from,
@@ -375,7 +379,7 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
           out(`  would read "${header}" as ${assessmentId}`);
           continue;
         }
-        const { wrote, replaced } = mapSheetColumn({ bundle, runId, root, sync, header, assessmentId, syncDirectory: null });
+        const { wrote, replaced } = mapSheetColumn({ bundle, runId, root, store: deps.store, sync, header, assessmentId, syncDirectory: null });
         out(`  "${header}" → ${assessmentId}${replaced ? ` (was ${replaced})` : ""}   saved ${wrote}`);
       }
       if (!args.dryRun) out(`Run \`ainar sync plan ${runId} ${sync.sync_id}\` to see the marks it brings.`);
@@ -394,7 +398,7 @@ export const runSync = async (args: SyncArgs, bundle: any, root: string, deps: D
         return 0;
       }
       const course = (bundle.course as { course_id: string }).course_id;
-      const result = writeSyncs(root, course, runId, implied);
+      const result = writeSyncs(root, course, runId, implied, deps.store);
       out(
         `\nwrote ${implied.length} sync(s) into ${result.written.join(", ")}. The older settings they came from ` +
           "are left as they were and are no longer read for these.",

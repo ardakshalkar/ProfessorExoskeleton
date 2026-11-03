@@ -18,7 +18,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { assessmentsOf, enrolledIn, type CourseBundle } from "./bundle.ts";
 import { IntegrityCase } from "./model/assessment.ts";
-import { writeRecords } from "./records-write.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 
 export type IntegrityState = "open" | "cleared" | "upheld";
 export type IntegrityOutcome = "no_penalty" | "adjusted" | "zero" | "voided";
@@ -81,7 +81,7 @@ export const nextCaseId = (b: CourseBundle): string => {
   }
 };
 
-const courseDirOf = (root: string, b: CourseBundle): string => join(root, "courses", String((b.course as any).course_id));
+const courseIdOf = (b: CourseBundle): string => String((b.course as any).course_id);
 
 const checked = (record: Record<string, unknown>): Record<string, unknown> => {
   const parsed = IntegrityCase.safeParse(record);
@@ -98,6 +98,8 @@ const checked = (record: Record<string, unknown>): Record<string, unknown> => {
  */
 export const openCase = (options: {
   root: string;
+  /** The store the case is written to; the YAML files under `root` when none. */
+  store?: CourseStore;
   bundle: CourseBundle;
   runId: string;
   studentId: string;
@@ -139,7 +141,7 @@ export const openCase = (options: {
     opened_at: at,
     ...(options.note ? { note: options.note } : {}),
   });
-  return { caseId, written: writeRecords(courseDirOf(root, bundle), { integrity_cases: [record] }) };
+  return { caseId, written: writeStore(root, options.store).write(courseIdOf(bundle), { integrity_cases: [record] }) };
 };
 
 /**
@@ -148,6 +150,8 @@ export const openCase = (options: {
  */
 export const decideCase = (options: {
   root: string;
+  /** The store the case is written to; the YAML files under `root` when none. */
+  store?: CourseStore;
   bundle: CourseBundle;
   runId: string;
   caseId: string;
@@ -189,7 +193,7 @@ export const decideCase = (options: {
     },
   });
   if (record.note === null || record.note === undefined) delete record.note;
-  return { record, written: writeRecords(courseDirOf(root, bundle), { integrity_cases: [record] }) };
+  return { record, written: writeStore(root, options.store).write(courseIdOf(bundle), { integrity_cases: [record] }) };
 };
 
 /** How a case reads in one line, for the CLI and the pane — never for a student. */

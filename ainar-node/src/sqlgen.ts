@@ -354,8 +354,15 @@ const prune = (bundle: CourseBundle): string => {
   );
 };
 
-/** Emit the whole bundle as one transactional script. */
-export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {}): string => {
+/**
+ * Emit the whole bundle as one transactional script. `transaction: false`
+ * leaves out `BEGIN`/`COMMIT`, for a caller already inside a transaction of its
+ * own — the PostgreSQL store's flush, whose transaction holds the RLS identity.
+ */
+export const buildScript = (
+  bundle: CourseBundle,
+  { prune: doPrune = false, transaction = true } = {},
+): string => {
   const script = new Script();
   const course = bundle.course as any;
 
@@ -367,7 +374,7 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
       "-- running it twice leaves the database in the same state as running it once.\n" +
       "-- Apply the schema first:  psql -f ainar/sql/schema.sql\n",
   );
-  script.add("BEGIN;\n");
+  if (transaction) script.add("BEGIN;\n");
 
   // ------------------------------------------------------------------ content
   script.section("content.documents");
@@ -1000,8 +1007,33 @@ export const buildScript = (bundle: CourseBundle, { prune: doPrune = false } = {
     script.add(prune(bundle));
   }
 
-  script.add("\nCOMMIT;");
+  if (transaction) script.add("\nCOMMIT;");
   return script.render();
+};
+
+/**
+ * The runtime tables a removed record is deleted from, by its readable code.
+ * Only those `removeRecords` may take records out of and that are keyed by a
+ * `code`; the derived states are keyed by what they describe and have no
+ * delete path yet.
+ */
+export const RUNTIME_TABLES: Readonly<Record<string, string>> = {
+  submissions: "assessment.submissions",
+  item_responses: "assessment.item_responses",
+  evaluations: "assessment.evaluations",
+  evidence: "learning.evidence",
+  signals: "learning.signals",
+  interventions: "learning.interventions",
+  events: "learning.events",
+  action_items: "learning.action_items",
+};
+
+/** Delete removed runtime records — the one deletion `buildScript` never makes. */
+export const deleteRuntime = (collection: string, codes: Iterable<string>): string => {
+  const table = RUNTIME_TABLES[collection];
+  if (!table) throw new Error(`${collection} has no table records can be deleted from`);
+  const listed = [...codes].map((code) => literal(code));
+  return listed.length ? `DELETE FROM ${table} WHERE code IN (${listed.join(", ")});\n` : "";
 };
 
 /**

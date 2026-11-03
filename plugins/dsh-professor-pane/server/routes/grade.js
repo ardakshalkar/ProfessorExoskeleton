@@ -133,7 +133,7 @@ export const routes = [
             const at = decidedAt(run.timezone);
             if (body.action === "open") {
               if (!/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(String(body.student))) throw new Error("Not a pseudonym.");
-              const opened = openCase({ root, bundle, runId, studentId: String(body.student), assessmentIds: [assessmentId], note: note || null, by, at });
+              const opened = openCase({ root, store: workspace.store, bundle, runId, studentId: String(body.student), assessmentIds: [assessmentId], note: note || null, by, at });
               return sendJson(res, 200, { ok: true, output: `${opened.caseId} opened: the mark is held until it is decided` });
             }
             if (body.action === "decide") {
@@ -147,6 +147,7 @@ export const routes = [
               const before = casesOf(bundle, runId).find((entry) => entry.case_id === body.case)?.note ?? "";
               const decided = decideCase({
                 root,
+                store: workspace.store,
                 bundle,
                 runId,
                 caseId: String(body.case),

@@ -29,9 +29,8 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 import type { CourseBundle } from "./bundle.ts";
 import { criterionById, itemsOf } from "./bundle.ts";
-import { COLLECTIONS } from "./loader.ts";
-import { editRecords, setRecordFields } from "./record-edit.ts";
-import { recordFile, writeRecords } from "./records-write.ts";
+import { recordFile } from "./records-write.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 import { scanRef, scanSubmissionId, type ScanPlace } from "./scans.ts";
 
 // --------------------------------------------------------------------------
@@ -739,18 +738,11 @@ export const decideGrades = (options: {
  * Refused when there is nothing to accept — no criterion on a written question —
  * and a no-op when the assessment is already accepted.
  */
-export const acceptRubric = (options: { root: string; bundle: CourseBundle; board: Board }): boolean => {
+export const acceptRubric = (options: { root: string; store?: CourseStore; bundle: CourseBundle; board: Board }): boolean => {
   const { root, bundle, board } = options;
   if (board.rubric === "none") throw new Error(`${board.assessment.id} has no rubric on every written question yet`);
   if (board.rubric === "accepted") return false;
-  setRecordFields({
-    root,
-    courseId: String((bundle.course as any).course_id),
-    patterns: COLLECTIONS.assessments,
-    idField: "assessment_id",
-    collection: "assessments",
-    edits: new Map([[board.assessment.id, { approval: "approved" }]]),
-  });
+  writeStore(root, options.store).setFields(String((bundle.course as any).course_id), "assessments", new Map([[board.assessment.id, { approval: "approved" }]]));
   return true;
 };
 
@@ -771,6 +763,7 @@ const rawAssessment = (courseDir: string, assessmentId: string): any | null => {
  */
 const writeRubric = (options: {
   root: string;
+  store?: CourseStore;
   bundle: CourseBundle;
   assessmentId: string;
   rubric: any;
@@ -784,15 +777,9 @@ const writeRubric = (options: {
   const raw = rawAssessment(courseDir, assessmentId);
   if (raw) {
     const record = { ...raw, ...(approval ? { approval } : {}), rubric_id: rubric.rubric_id, rubric };
-    writeRecords(courseDir, { assessments: [record] }).forEach((path) => touched.add(path));
+    writeStore(root, options.store).write(courseId, { assessments: [record] }).forEach((path) => touched.add(path));
   } else {
-    editRecords({
-      root,
-      courseId,
-      patterns: COLLECTIONS.assessments,
-      idField: "assessment_id",
-      collection: "assessments",
-      edits: new Map([
+    writeStore(root, options.store).edit(courseId, "assessments", new Map([
         [
           assessmentId,
           (node: any) => {
@@ -801,20 +788,12 @@ const writeRubric = (options: {
             node.set("rubric", rubric);
           },
         ],
-      ]),
-    }).written.forEach((path) => touched.add(path));
+      ])).written.forEach((path) => touched.add(path));
   }
   const items = new Map((bundle.items as any[]).map((item) => [String(item.item_id), item]));
   const missing = [...criterionOf].filter(([itemId, criterionId]) => items.get(itemId)?.criterion_id !== criterionId);
   if (missing.length) {
-    setRecordFields({
-      root,
-      courseId,
-      patterns: COLLECTIONS.items,
-      idField: "item_id",
-      collection: "items",
-      edits: new Map(missing.map(([itemId, criterionId]) => [itemId, { criterion_id: criterionId }])),
-    }).written.forEach((path) => touched.add(path));
+    writeStore(root, options.store).setFields(courseId, "items", new Map(missing.map(([itemId, criterionId]) => [itemId, { criterion_id: criterionId }]))).written.forEach((path) => touched.add(path));
   }
   return [...touched];
 };
@@ -840,7 +819,13 @@ const criterionFor = (item: any, rubricId: string, levels: ProposedLevel[], titl
  * Only for an assessment with no rubric at all — one that has some is a
  * rubric to finish, not to replace.
  */
-export const pointsOnlyRubric = (options: { root: string; bundle: CourseBundle; board: Board; items: any[] }): string[] => {
+export const pointsOnlyRubric = (options: {
+  root: string;
+  store?: CourseStore;
+  bundle: CourseBundle;
+  board: Board;
+  items: any[];
+}): string[] => {
   const { root, bundle, board, items } = options;
   const assessment = (bundle.assessments as any[]).find((entry) => entry.assessment_id === board.assessment.id);
   if (assessment.rubric || assessment.rubric_id) {
@@ -851,6 +836,7 @@ export const pointsOnlyRubric = (options: { root: string; bundle: CourseBundle; 
   const rubricId = `RUBRIC-${short(board.assessment.id, "ASSESSMENT-")}`;
   return writeRubric({
     root,
+    store: options.store,
     bundle,
     assessmentId: board.assessment.id,
     rubric: {
@@ -877,6 +863,8 @@ export const pointsOnlyRubric = (options: { root: string; bundle: CourseBundle; 
  */
 export const chooseProposal = (options: {
   root: string;
+  /** The store the rubric is written to; the YAML files under `root` when none. */
+  store?: CourseStore;
   bundle: CourseBundle;
   board: Board;
   groups: GroupsFile;
@@ -939,6 +927,7 @@ export const chooseProposal = (options: {
   options.saveGroups?.(groups);
   const written = writeRubric({
     root,
+    store: options.store,
     bundle,
     assessmentId: board.assessment.id,
     rubric: {

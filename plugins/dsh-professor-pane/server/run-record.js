@@ -28,28 +28,21 @@
 
 import { relative, sep } from "node:path";
 
-import { COLLECTIONS } from "@ainar/core/src/loader.ts";
-import { editRecords } from "@ainar/core/src/record-edit.ts";
+import { writeStore } from "@ainar/core/src/store/course.ts";
 
 /**
- * Apply `edit(node, document)` to the run's record and write it.
+ * Apply `edit(node, document)` to the run's record and write it, through
+ * `store` — the workspace's — or the YAML files under `root` when none.
  *
  * @returns the record's path, relative to the workspace root.
  * @throws when the run cannot be located or the edit cannot be made safely —
  *   always before anything is written.
  */
-export const editRunRecord = (root, run, edit) => {
+export const editRunRecord = (root, run, edit, store) => {
   if (!run.course_id || !run.term) {
     throw new Error(`${run.course_version_id} carries no course_id and term, so its record cannot be located.`);
   }
-  const result = editRecords({
-    root,
-    courseId: run.course_id,
-    patterns: COLLECTIONS.versions,
-    idField: "course_version_id",
-    collection: "versions",
-    edits: new Map([[run.course_version_id, edit]]),
-  });
+  const result = writeStore(root, store).edit(run.course_id, "versions", new Map([[run.course_version_id, edit]]));
   const path = result.written[0];
   if (!path) throw new Error(`${run.course_version_id} was not written: no record of it was found under courses/${run.course_id}/.`);
   return relative(root, path).split(sep).join("/");

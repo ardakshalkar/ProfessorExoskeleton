@@ -19,14 +19,15 @@
  */
 
 import { assessmentsOf, runById, type CourseBundle } from "./bundle.ts";
-import { COLLECTIONS } from "./loader.ts";
 import { MissingWork } from "./model/common.ts";
-import { editRecords } from "./record-edit.ts";
+import { type CourseStore, writeStore } from "./store/course.ts";
 
 export type MissingWorkRule = "blank" | "zero";
 
 export const setMissingWork = (options: {
   root: string;
+  /** The store this is written to; the YAML files under `root` when none. */
+  store?: CourseStore;
   bundle: CourseBundle;
   runId: string;
   /** One assessment's own rule; absent, the run's. */
@@ -50,13 +51,7 @@ export const setMissingWork = (options: {
     const assessment = assessmentsOf(bundle, runId).find((entry: any) => entry.assessment_id === assessmentId) as any;
     if (!assessment) throw new Error(`${assessmentId} is not an assessment of ${runId}`);
     if ((assessment.missing_work ?? null) === rule) return [];
-    return editRecords({
-      root,
-      courseId,
-      patterns: COLLECTIONS.assessments,
-      idField: "assessment_id",
-      collection: "assessments",
-      edits: new Map([
+    return writeStore(root, options.store).edit(courseId, "assessments", new Map([
         [
           assessmentId,
           (node: any) => {
@@ -64,8 +59,7 @@ export const setMissingWork = (options: {
             else if (node.has("missing_work")) node.delete("missing_work");
           },
         ],
-      ]),
-    }).written;
+      ])).written;
   }
 
   const was = run.grading_scheme?.missing_work ?? null;
@@ -78,13 +72,7 @@ export const setMissingWork = (options: {
   };
   if (by) entry.by = by;
   if (note) entry.note = note;
-  return editRecords({
-    root,
-    courseId,
-    patterns: COLLECTIONS.versions,
-    idField: "course_version_id",
-    collection: "versions",
-    edits: new Map([
+  return writeStore(root, options.store).edit(courseId, "versions", new Map([
       [
         runId,
         (node: any, document: any) => {
@@ -95,6 +83,5 @@ export const setMissingWork = (options: {
           else node.setIn(["grading_scheme", "extensions", "history"], document.createNode([entry]));
         },
       ],
-    ]),
-  }).written;
+    ])).written;
 };
