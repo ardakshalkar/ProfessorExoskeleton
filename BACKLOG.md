@@ -2622,6 +2622,80 @@ is worth building.
 
 ---
 
+## E40 · Lectures posted to Telegram, found by the course itself — no `FUTURE.md` section yet
+
+> **Rank: unranked — a possible solution, not a decision.** Proposed
+> 2026-11-03. Before any of it is built, ask the professor whether they
+> really want it. It covers an edge case: lectures that went out on the
+> channel by hand and never came into the course. Adding them once (the
+> PDF into `materials/`, or the link as a resource's `url`, plus the
+> week's meeting) may be all that is ever needed. If the answer is yes,
+> ask the second question too: option A or option B below.
+>
+> **The problem.** Telegram is a target only today. The sync registry reads
+> `extensions.telegram` as `role: target`, `stream: announcement`. Nothing reads
+> the channel back, so a lecture posted there by hand is invisible to the
+> harness: Planning says "none yet", and the course page, lesson prep and
+> find-gaps cannot see it.
+>
+> **The limit that shapes it.** A bot cannot read a channel's history. As an
+> admin it gets new posts through `getUpdates`, which Telegram holds for only
+> 24 hours, and it can download files up to 20 MB.
+>
+> | | Posts from now on | Posts already in the channel |
+> |---|---|---|
+> | **A. Bot + one-time export** | The bot, polled | A Telegram Desktop export (JSON + files), dropped in the pane |
+> | **B. The professor's own login (MTProto)** | Reads all | Reads the whole history by itself |
+>
+> B finds everything without help. The cost is a stored session of the
+> professor's personal Telegram account, which can read every chat they have,
+> not only the channel. A needs only the bot the announcements already use.
+>
+> **Placing a find in a week, rules first.** If the file has the same hash as
+> an existing document, the find is only marked as posted. A caption or file
+> name that says "Week 9", "Lecture 9", "L09" or "MODULE-09" places it in that
+> week. A title that matches a topic places it there. The post date is the
+> weakest guess. A find whose signals disagree, or that has none, is held for
+> the professor; their "Ask" sends it to the session as one `/skill` turn (E39's
+> pattern).
+>
+> **Never writes to the channel.** It does not post, edit or delete
+> anything there. A post with text only is not a material and is skipped.
+
+- [ ] **TGR-0** Ask the professor: is this wanted at all, and is it A or B?
+      Write the answer here before anything below starts. `S` · depends: —
+- [ ] **TGR-1** The source sync: a second Telegram sync, `role: source`,
+      `stream: posts`, on the same `chat_id`, implied from
+      `extensions.telegram` like the target one and shown in
+      `ainar sync list`. `S` · depends: TGR-0
+- [ ] **TGR-2** The export importer: `ainar telegram import RUN FOLDER` reads a
+      Telegram Desktop export. It copies each PDF or PPTX to
+      `materials/<slug>/` and keeps each link, recording the post's id, date
+      and caption. A post seen before (same message id or file hash) is
+      skipped. The smallest useful step: it covers the past without a
+      background job. `M` · depends: TGR-1
+- [ ] **TGR-3** The placing rules above, as a deterministic function with a
+      golden set taken from the CSS-4007 channel. Its answer is a proposed week
+      with a reason, or *held*. `S` · depends: TGR-2
+- [ ] **TGR-4** The "Found in Telegram" tray in Teaching (and Today): one row
+      per find, with Accept, Change week and Ignore. Accept writes the
+      resource, its document and the meeting link as the professor's decision,
+      with `extensions.telegram: {chat, message_id, posted_at}`. Ignore is
+      remembered. `M` · depends: TGR-3
+- [ ] **TGR-5** Option A going forward: the bot polled through the E34 queue
+      often enough that no post outlives the 24 hours. A file over 20 MB comes
+      in as a name with a note to add it by hand. `M` · depends: TGR-4, E34
+- [ ] **TGR-6** Option B instead, only if TGR-0 chose it: a session of the
+      professor's own account, from an `api_id` they create, kept like the other
+      private credentials (E31). It reads the history and the new posts,
+      replacing TGR-2 and TGR-5. `L` · depends: TGR-4, E31
+- [ ] **TGR-7** The posted tick: an accepted resource that carries
+      `extensions.telegram` counts as published to Telegram, so the
+      publishing-lifecycle epic's tick is filled in without the professor
+      doing it by hand. `S` · depends: TGR-4
+
+---
+
 ## Suggested order
 
 Four decisions and five tasks are worth doing before anything else on this page.
@@ -2660,6 +2734,10 @@ better done in the Scans view alone. If it is: WF-2 → WF-3 (golden on Quiz 1)
 **The landing (E37):** HOME-14 first (an hour), then HOME-1 → HOME-2 → HOME-6
 and HOME-8 — each worth having if the rest never lands. HOME-4 grows into
 WF-6 rather than competing with it.
+
+**Ask before starting (E40):** TGR-0 first. The whole epic is a possible
+solution to an edge case, and the professor may prefer adding those lectures
+once by hand.
 
 **Deliberately not now:** INT-6, INT-7, INT-9, EVA-3, GRD-4, MAT-5, DEP-2.
 Each waits on a real user asking for it. If one is started anyway, the question
