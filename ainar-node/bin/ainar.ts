@@ -262,6 +262,7 @@ import { Ledger, type Publication } from "../src/lms/ledger.ts";
 import { describeImpact, impact } from "../src/impact.ts";
 import { describeRecordImpact, recordImpact } from "../src/record-impact.ts";
 import { Workspace } from "../src/workspace.ts";
+import { DATABASE_WORKSPACE_ENV, databaseFor, openCourseStore } from "../src/store/open.ts";
 import { decidesOrSends, refusal, sameInput, whoIsAsking } from "../src/press.ts";
 import { auditDecisions, decisionsDir, recordDecisions } from "../src/decision-ledger.ts";
 
@@ -365,7 +366,12 @@ const rest = positional.slice(1);
 // environment variable this CLI has never read.
 const rootFlag = flag("root");
 const root = resolve(rootFlag ?? process.cwd());
-const workspace = new Workspace(root, rootFlag ? "flag" : "cwd");
+// Its files, and — when this is the workspace connected to a database —
+// that database kept equal to them as each command flushes (src/store/open.ts).
+const workspace = new Workspace(
+  openCourseStore(root, { say: (line) => console.error(line) }),
+  rootFlag ? "flag" : "cwd",
+);
 // The profile (institution, timezone, grading shapes, marks) every command below reads.
 useWorkspaceProfile({ root });
 
@@ -2634,6 +2640,13 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
           for (const run of bundle.versions as any[]) workspace.runs.push(run.course_version_id);
         }
         for (const line of formatStatus(target, await readStatus(client), workspace)) out(line);
+        // Whether this workspace keeps the database current on its own, or only on `db push`.
+        const connected = databaseFor(root);
+        out(
+          connected
+            ? `connected  this workspace, as ${connected.role}: every write and every file change is sent`
+            : `connected  no — only \`ainar db push\` sends this workspace (set ${DATABASE_WORKSPACE_ENV} to its root to connect it)`,
+        );
       } finally {
         await client.end();
       }

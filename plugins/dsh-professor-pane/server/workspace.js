@@ -15,7 +15,7 @@ import { gradebookPayload } from "@ainar/core/src/gradebook.ts";
 import { inboxPayload } from "@ainar/core/src/inbox.ts";
 import { outlinePayload } from "@ainar/core/src/outline.ts";
 import { dashboardPayload } from "@ainar/core/src/progress.ts";
-import { YamlCourseStore } from "@ainar/core/src/store/course.ts";
+import { openCourseStore } from "@ainar/core/src/store/open.ts";
 import { callTool } from "@ainar/core/src/tools/index.ts";
 
 import { jobAreas } from "./jobs.js";
@@ -82,8 +82,11 @@ export const storeFor = (root) => {
   const found = STORES.get(root);
   if (found) return found;
   // Watching: the pane loads a course a dozen times a request, and a walk of
-  // its folder each time was most of Today (docs/PANE-SPEED.md, 4).
-  const made = new YamlCourseStore(root, { watch: true });
+  // its folder each time was most of Today (docs/PANE-SPEED.md, 4). When this
+  // is the workspace connected to a database, the store also keeps that
+  // database equal to the files — the pane's own writes and any file a skill
+  // or a hand changes (ainar-node/src/store/open.ts).
+  const made = openCourseStore(root, { watch: true, say: (line) => console.warn(`[database] ${line}`) });
   STORES.set(root, made);
   return made;
 };

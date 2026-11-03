@@ -1031,6 +1031,47 @@ export const RUNTIME_TABLES: Readonly<Record<string, string>> = {
   action_items: "learning.action_items",
 };
 
+/**
+ * Delete the runtime rows of this course that its bundle no longer holds.
+ *
+ * For a database that mirrors the files (store/mirror.ts), where the files are
+ * the authority over student work too: a submission taken out of
+ * `records/submissions.yaml`, by `removeRecords` or by hand, goes from the
+ * database as well. Scoped to the course's own runs, so another course's rows
+ * are never touched. `ainar sql` and `ainar db push` do not emit it — an import
+ * into a database that is the application's own must not delete student work
+ * because a file lacks it (`prune` above says the same for design content).
+ *
+ * `<> ALL` rather than `NOT IN`: an empty list is `'{}'`, under which every row
+ * goes, where `NOT IN (NULL)` would keep every row.
+ */
+export const pruneRuntime = (bundle: CourseBundle): string => {
+  const runs = (bundle.versions as any[]).map((version) => `'${rowId(version.course_version_id)}'::uuid`);
+  if (!runs.length) return "";
+  const inRuns = runs.join(", ");
+  const keep = (collection: string, field: string): string => {
+    const codes = ((bundle as any)[collection] as any[] | undefined ?? []).map((entry) => String(entry[field]));
+    return codes.length ? `ARRAY[${codes.map(quote).join(", ")}]::text[]` : "'{}'::text[]";
+  };
+  const assessments = `SELECT id FROM assessment.assessments WHERE course_run_id IN (${inRuns})`;
+  const submissions = `SELECT id FROM assessment.submissions WHERE assessment_id IN (${assessments})`;
+  return [
+    `DELETE FROM assessment.evaluations WHERE submission_id IN (${submissions}) AND code <> ALL (${keep("evaluations", "evaluation_id")});`,
+    `DELETE FROM assessment.item_responses WHERE submission_id IN (${submissions}) AND code <> ALL (${keep("item_responses", "response_id")});`,
+    `DELETE FROM assessment.submissions WHERE assessment_id IN (${assessments}) AND code <> ALL (${keep("submissions", "submission_id")});`,
+    ...[
+      ["evidence", "evidence_id"],
+      ["signals", "signal_id"],
+      ["interventions", "intervention_id"],
+      ["events", "event_id"],
+      ["action_items", "action_id"],
+    ].map(
+      ([collection, field]) =>
+        `DELETE FROM ${RUNTIME_TABLES[collection!]} WHERE course_run_id IN (${inRuns}) AND code <> ALL (${keep(collection!, field!)});`,
+    ),
+  ].join("\n") + "\n";
+};
+
 /** Delete removed runtime records — the one deletion `buildScript` never makes. */
 export const deleteRuntime = (collection: string, codes: Iterable<string>): string => {
   const table = RUNTIME_TABLES[collection];
