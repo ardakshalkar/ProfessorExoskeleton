@@ -85,6 +85,16 @@ file is edited there, field by field, so its comments survive. That is also how
 a change to an existing record works — a due date, a weight, a title: edit it
 where it is and say what you changed.
 
+**Ask when an assessment starts.** `opens_at` is the day students actually got
+the task, and only the professor knows it. When you write or rewrite an
+assessment that has no `opens_at`, ask for it before you finish — "When did (or
+will) HW5 open?" — and write exactly the answer, in the run's offset. Never
+derive it from the module's week, the other homeworks' pattern, the day you
+are working or the due date, and never call a date "preserved" that was not in
+the record before your edit. The same holds for `due_at`. On 2026-11-03 a
+rewrite of HW5 wrote `opens_at` 19 October, which nobody had said; the outline
+filed the homework under Week 8, and it had opened on 3 November.
+
 **The professor's own authoring.** `concepts`, `modules`, `outcomes` are the
 professor's description of what the course teaches, and nothing writes them on
 anybody's behalf. Edit the YAML in `courses/` only when asked, and say what you
