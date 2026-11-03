@@ -7,6 +7,7 @@
 
 import { type FSWatcher, readdirSync, statSync, watch } from "node:fs";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { Document } from "yaml";
 import { ID_FIELDS } from "../approval.ts";
 import { COLLECTION_SCHEMAS } from "../collections.ts";
@@ -234,23 +235,195 @@ export class YamlCourseStore implements CourseStore {
   }
 }
 
+/** One change made to a loaded course, kept so it can be made again onto a newer copy. */
+export type CourseOp =
+  | { kind: "write"; records: [string, Record_[]][]; options: WriteOptions }
+  | { kind: "remove"; collection: string; ids: string[] }
+  | { kind: "edit"; collection: string; edits: RecordEdits };
+
 /** What a loaded store holds that it has not flushed, per course. */
 export interface PendingCourse {
   courseId: string;
+  /** The course as it was loaded, before any of `ops` — what they were made against. */
+  base: Record<string, unknown>;
+  /** The course with `ops` made. */
   bundle: Record<string, unknown>;
+  ops: CourseOp[];
   /** Ids taken out since the last flush, by collection. */
   removed: Map<string, Set<string>>;
 }
 
 /**
+ * Somebody else changed a record this store also changed, after this store
+ * loaded the course. Nothing was written; `fresh` is the course as it now is.
+ */
+export class WriteConflictError extends Error {
+  readonly courseId: string;
+  /** `collection id` for each record both sides changed. */
+  readonly records: string[];
+  readonly fresh: Record<string, unknown>;
+
+  constructor(courseId: string, records: string[], fresh: Record<string, unknown>) {
+    super(
+      `${courseId} was changed by someone else while this was being written: ` +
+        `${records.join(", ")} changed on both sides. Nothing was written; ` +
+        "the course now reads as they left it, so make the change again.",
+    );
+    this.name = "WriteConflictError";
+    this.courseId = courseId;
+    this.records = records;
+    this.fresh = fresh;
+  }
+}
+
+const parsed = (collection: string, record: unknown): Record_ => {
+  const schema = (COLLECTION_SCHEMAS as Record<string, { safeParse: (value: unknown) => any }>)[collection];
+  if (!schema) throw new Error(`${collection} is not a collection of a course bundle`);
+  const result = schema.safeParse(record);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    throw new Error(
+      `${collection} record would not load: ${issue.path.join(".") || "(record)"}: ${issue.message}. ` +
+        "Nothing was written.",
+    );
+  }
+  return result.data as Record_;
+};
+
+const listOf = (bundle: Record<string, unknown>, collection: string): Record_[] =>
+  (bundle[collection] ?? []) as Record_[];
+
+/** Upsert into a bundle; every record is parsed before the bundle changes. Returns where each would live. */
+const applyWrite = (
+  bundle: Record<string, unknown>,
+  courseId: string,
+  records: [string, Record_[]][],
+  options: WriteOptions,
+): string[] => {
+  const next: Record<string, unknown[]> = {};
+  const locations = new Set<string>();
+  for (const [collection, items] of records) {
+    if (!items.length) continue;
+    const field = ID_FIELDS[collection];
+    const list = [...((next[collection] ?? listOf(bundle, collection)) as Record_[])];
+    for (const item of items) {
+      // Resolved first, so a record with no place is refused as the file store refuses it.
+      locations.add(`courses/${courseId}/${recordFile(collection, item, options)}`);
+      const identifier = field ? item[field] : undefined;
+      const at = identifier === undefined ? -1 : list.findIndex((entry) => entry?.[field!] === identifier);
+      let record = item;
+      if (at >= 0 && options.keepApproval) {
+        const previous = list[at]!.approval;
+        const { approval: _dropped, ...rest } = item;
+        record = previous === undefined ? rest : { ...rest, approval: previous };
+      }
+      const checked = parsed(collection, tidy(record));
+      if (at >= 0) list[at] = checked;
+      else list.push(checked);
+    }
+    next[collection] = list;
+  }
+  Object.assign(bundle, next);
+  return [...locations];
+};
+
+/** Take records out of a bundle by id; returns the ids that were there. */
+const applyRemove = (bundle: Record<string, unknown>, collection: string, ids: string[]): string[] => {
+  const field = ID_FIELDS[collection]!;
+  const wanted = new Set(ids);
+  const list = listOf(bundle, collection);
+  const gone = list.filter((entry) => wanted.has(entry?.[field] as string)).map((entry) => entry[field] as string);
+  if (gone.length) bundle[collection] = list.filter((entry) => !wanted.has(entry?.[field] as string));
+  return gone;
+};
+
+/** Edit records of a bundle through the `yaml` API; parsed before the bundle changes. */
+const applyEdit = (
+  bundle: Record<string, unknown>,
+  where: string,
+  collection: string,
+  edits: RecordEdits,
+): void => {
+  const field = ID_FIELDS[collection];
+  if (!field) throw new Error(`${collection} has no records that can be edited by id`);
+  const list = [...listOf(bundle, collection)];
+  const indexOf = (id: string) => list.findIndex((entry) => String(entry?.[field]) === id);
+  const missing = [...edits.keys()].filter((id) => indexOf(id) < 0);
+  if (missing.length) {
+    throw new Error(`No ${collection} record in ${where} holds ${missing.sort().join(", ")}. Nothing was written.`);
+  }
+  for (const [id, edit] of edits) {
+    const at = indexOf(id);
+    const document = new Document(list[at]);
+    edit(document.contents, document);
+    list[at] = parsed(collection, document.toJS());
+  }
+  bundle[collection] = list;
+};
+
+/** The records an op changes, as `collection id` — or `collection` alone for a list with no ids. */
+const touchedBy = (op: CourseOp): { collection: string; id: string | null }[] => {
+  if (op.kind === "write") {
+    return op.records.flatMap(([collection, items]) => {
+      const field = ID_FIELDS[collection];
+      return items.map((item) => ({ collection, id: field && item[field] !== undefined ? String(item[field]) : null }));
+    });
+  }
+  if (op.kind === "remove") return op.ids.map((id) => ({ collection: op.collection, id }));
+  return [...op.edits.keys()].map((id) => ({ collection: op.collection, id }));
+};
+
+/** One record of a bundle, or a whole id-less list; undefined when absent. */
+const recordIn = (bundle: Record<string, unknown>, collection: string, id: string | null): unknown => {
+  if (id === null) return bundle[collection];
+  const field = ID_FIELDS[collection]!;
+  return listOf(bundle, collection).find((entry) => String(entry?.[field]) === id);
+};
+
+/**
+ * Make a store's unflushed changes again onto a newer copy of the course.
+ *
+ * Every record the changes touch must read in `fresh` as it read in `base`,
+ * the copy they were made against: then nobody else changed it, and making
+ * the changes again gives what both sides meant. A record somebody else
+ * changed is a conflict, refused whole — an edit may have been computed from
+ * what it read, and a write replaces the record. Removing a record somebody
+ * else already removed is not a conflict; both meant it gone.
+ */
+export const rebase = (pending: PendingCourse, fresh: Record<string, unknown>): Record<string, unknown> => {
+  const conflicts = new Set<string>();
+  for (const op of pending.ops) {
+    for (const { collection, id } of touchedBy(op)) {
+      const theirs = recordIn(fresh, collection, id);
+      if (op.kind === "remove" && theirs === undefined) continue;
+      if (!isDeepStrictEqual(recordIn(pending.base, collection, id), theirs)) {
+        conflicts.add(id === null ? collection : `${collection} ${id}`);
+      }
+    }
+  }
+  if (conflicts.size) throw new WriteConflictError(pending.courseId, [...conflicts].sort(), fresh);
+
+  const bundle = structuredClone(fresh);
+  const where = pending.courseId;
+  for (const op of pending.ops) {
+    if (op.kind === "write") applyWrite(bundle, pending.courseId, op.records, op.options);
+    else if (op.kind === "remove") applyRemove(bundle, op.collection, op.ids);
+    else applyEdit(bundle, where, op.collection, op.edits);
+  }
+  return bundle;
+};
+
+/**
  * An already-loaded store, used by database snapshots and tests.
  *
  * Writes land in the snapshot, so a load after a write reads it back, and are
- * held there as pending until `flush`. Here flushing only forgets them; the
- * PostgreSQL store (store/postgres.ts) commits them first. Every record is
- * parsed against its collection's schema before the snapshot changes — what
- * the loader would refuse on the way in from a file is refused on the way in
- * here, and a refusal changes nothing.
+ * held there as pending until `flush` — with the copy they were made against
+ * and the changes themselves, so a store that commits them (store/postgres.ts)
+ * can make them again onto a newer copy someone else wrote in the meantime.
+ * Here flushing only forgets them. Every record is parsed against its
+ * collection's schema before the snapshot changes — what the loader would
+ * refuse on the way in from a file is refused on the way in here, and a
+ * refusal changes nothing.
  */
 export class LoadedCourseStore implements CourseStore {
   readonly root?: string;
@@ -281,32 +454,12 @@ export class LoadedCourseStore implements CourseStore {
 
   write(courseId: string, records: RecordsByCollection, options: WriteOptions = {}): string[] {
     const bundle = this.bundleOf(courseId);
-    const next: Record<string, unknown[]> = {};
-    const locations = new Set<string>();
-    for (const [collection, items] of entriesOf(records)) {
-      if (!items.length) continue;
-      const field = ID_FIELDS[collection];
-      const list = [...((next[collection] ?? bundle[collection] ?? []) as Record_[])];
-      for (const item of items) {
-        // Resolved first, so a record with no place is refused as the file store refuses it.
-        locations.add(`courses/${courseId}/${recordFile(collection, item, options)}`);
-        const identifier = field ? item[field] : undefined;
-        const at = identifier === undefined ? -1 : list.findIndex((entry) => entry?.[field!] === identifier);
-        let record = item;
-        if (at >= 0 && options.keepApproval) {
-          const previous = list[at]!.approval;
-          const { approval: _dropped, ...rest } = item;
-          record = previous === undefined ? rest : { ...rest, approval: previous };
-        }
-        const parsed = this.parsed(collection, tidy(record));
-        if (at >= 0) list[at] = parsed;
-        else list.push(parsed);
-      }
-      next[collection] = list;
-    }
-    Object.assign(bundle, next);
-    if (Object.keys(next).length) this.pending(courseId, bundle);
-    return [...locations];
+    const entries = entriesOf(records).filter(([, items]) => items.length);
+    if (!entries.length) return [];
+    const base = this.baseOf(courseId, bundle);
+    const locations = applyWrite(bundle, courseId, entries, options);
+    this.log(courseId, base, bundle, { kind: "write", records: structuredClone(entries), options: { ...options } });
+    return locations;
   }
 
   /** Only the ainar-written runtime collections, as `removeRecords` allows. */
@@ -317,18 +470,14 @@ export class LoadedCourseStore implements CourseStore {
       throw new Error(`${collection} is not a collection records can be removed from`);
     }
     const bundle = this.bundleOf(courseId);
-    const wanted = new Set(ids);
-    const list = (bundle[collection] ?? []) as Record_[];
-    const kept = list.filter((entry) => !wanted.has(entry?.[field] as string));
-    const removed = list.length - kept.length;
-    if (!removed) return 0;
-    const gone = list.filter((entry) => wanted.has(entry?.[field] as string)).map((entry) => entry[field] as string);
-    bundle[collection] = kept;
-    const pending = this.pending(courseId, bundle);
+    const base = this.baseOf(courseId, bundle);
+    const gone = applyRemove(bundle, collection, [...ids]);
+    if (!gone.length) return 0;
+    const pending = this.log(courseId, base, bundle, { kind: "remove", collection, ids: gone });
     const ledger = pending.removed.get(collection) ?? new Set<string>();
     for (const id of gone) ledger.add(id);
     pending.removed.set(collection, ledger);
-    return removed;
+    return gone.length;
   }
 
   /**
@@ -338,26 +487,10 @@ export class LoadedCourseStore implements CourseStore {
    */
   edit(courseId: string, collection: string, edits: RecordEdits): EditResult {
     if (!edits.size) return { written: [], count: 0 };
-    const field = ID_FIELDS[collection];
-    if (!field) throw new Error(`${collection} has no records that can be edited by id`);
     const bundle = this.bundleOf(courseId);
-    const list = [...((bundle[collection] ?? []) as Record_[])];
-    const indexOf = (id: string) => list.findIndex((entry) => String(entry?.[field]) === id);
-    const missing = [...edits.keys()].filter((id) => indexOf(id) < 0);
-    if (missing.length) {
-      throw new Error(
-        `No ${collection} record in ${this.label} for ${courseId} holds ` +
-          `${missing.sort().join(", ")}. Nothing was written.`,
-      );
-    }
-    for (const [id, edit] of edits) {
-      const at = indexOf(id);
-      const document = new Document(list[at]);
-      edit(document.contents, document);
-      list[at] = this.parsed(collection, document.toJS());
-    }
-    bundle[collection] = list;
-    this.pending(courseId, bundle);
+    const base = this.baseOf(courseId, bundle);
+    applyEdit(bundle, `${this.label} for ${courseId}`, collection, edits);
+    this.log(courseId, base, bundle, { kind: "edit", collection, edits: new Map(edits) });
     return { written: [`courses/${courseId}/${collection}`], count: edits.size };
   }
 
@@ -387,8 +520,14 @@ export class LoadedCourseStore implements CourseStore {
     return [...this.pendingByCourse.values()];
   }
 
-  protected settle(courseIds: Iterable<string>): void {
-    for (const courseId of courseIds) this.pendingByCourse.delete(courseId);
+  /**
+   * Take `bundle` as the course from now on — what a commit wrote, or what a
+   * conflict found — and forget what was pending for it.
+   */
+  protected adopt(courseId: string, bundle: Record<string, unknown>): void {
+    const loaded = this.courses.get(courseId);
+    this.courses.set(courseId, { bundle: bundle as any, issues: loaded?.issues ?? new IssueList() });
+    this.pendingByCourse.delete(courseId);
   }
 
   private bundleOf(courseId: string): Record<string, unknown> {
@@ -397,26 +536,18 @@ export class LoadedCourseStore implements CourseStore {
     return bundle as unknown as Record<string, unknown>;
   }
 
-  private parsed(collection: string, record: unknown): Record_ {
-    const schema = (COLLECTION_SCHEMAS as Record<string, { safeParse: (value: unknown) => any }>)[collection];
-    if (!schema) throw new Error(`${collection} is not a collection of a course bundle`);
-    const result = schema.safeParse(record);
-    if (!result.success) {
-      const issue = result.error.issues[0];
-      throw new Error(
-        `${collection} record would not load: ${issue.path.join(".") || "(record)"}: ${issue.message}. ` +
-          "Nothing was written.",
-      );
-    }
-    return result.data as Record_;
+  /** The copy pending changes are made against: taken before the first one. */
+  private baseOf(courseId: string, bundle: Record<string, unknown>): Record<string, unknown> {
+    return this.pendingByCourse.get(courseId)?.base ?? structuredClone(bundle);
   }
 
-  private pending(courseId: string, bundle: Record<string, unknown>): PendingCourse {
+  private log(courseId: string, base: Record<string, unknown>, bundle: Record<string, unknown>, op: CourseOp): PendingCourse {
     let entry = this.pendingByCourse.get(courseId);
     if (!entry) {
-      entry = { courseId, bundle, removed: new Map() };
+      entry = { courseId, base, bundle, ops: [], removed: new Map() };
       this.pendingByCourse.set(courseId, entry);
     }
+    entry.ops.push(op);
     return entry;
   }
 }

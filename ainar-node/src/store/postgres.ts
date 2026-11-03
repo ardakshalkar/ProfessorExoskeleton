@@ -5,7 +5,7 @@ import { IssueList } from "../issues.ts";
 import type { LoadResult } from "../loader.ts";
 import { Course } from "../model/academic.ts";
 import { RUNTIME_TABLES, buildScript, deleteRuntime } from "../sqlgen.ts";
-import { LoadedCourseStore } from "./course.ts";
+import { LoadedCourseStore, WriteConflictError, rebase } from "./course.ts";
 
 export interface SqlQueryResult<Row> {
   rows: Row[];
@@ -66,12 +66,28 @@ interface BundleRow extends Record<string, unknown> {
   course_code: string;
   format_version: string;
   payload: unknown;
+  /** Raised by the database on every write to the row; a bigint, so it arrives as text. */
+  revision?: unknown;
 }
 
 export const READ_BUNDLES_SQL = `
-SELECT course_code, format_version, payload
+SELECT course_code, format_version, payload, revision
   FROM content.course_bundle_read_models
  ORDER BY course_code
+`;
+
+/** One course's row, locked until the transaction ends: a second flusher waits here. */
+export const LOCK_BUNDLE_SQL = `
+SELECT course_code, format_version, payload, revision
+  FROM content.course_bundle_read_models
+ WHERE course_code = $1
+   FOR UPDATE
+`;
+
+export const REVISION_SQL = `
+SELECT revision
+  FROM content.course_bundle_read_models
+ WHERE course_code = $1
 `;
 
 export const RESOLVE_IDENTITY_SQL = `
@@ -150,8 +166,33 @@ const parsePayload = (row: BundleRow): LoadResult => {
   return { bundle: { course: parsedCourse.data, ...data } as CourseBundle, issues };
 };
 
-/** Runs one flush's SQL as a single transaction. */
-export type Commit = (sql: string) => Promise<void>;
+/** Runs `work` inside one transaction on one connection, committing only when it returns. */
+export type Transact = <Result>(work: (client: SqlClient) => Promise<Result>) => Promise<Result>;
+
+/**
+ * A transaction on `client`. A pool is asked for one connection first: its
+ * `query` may hand each statement to a different one, and a `BEGIN` on one
+ * connection does not hold the next statement on another.
+ */
+const transactOn = (client: SqlClient | SqlPool): Transact => async (work) => {
+  const connection = "connect" in client && typeof client.connect === "function" ? await client.connect() : null;
+  const on: SqlClient = connection ?? client;
+  try {
+    await on.query("BEGIN");
+    const result = await work(on);
+    await on.query("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      await on.query("ROLLBACK");
+    } catch {
+      // Preserve the original error.
+    }
+    throw error;
+  } finally {
+    connection?.release();
+  }
+};
 
 /**
  * The read models as a snapshot that takes writes.
@@ -165,32 +206,79 @@ export type Commit = (sql: string) => Promise<void>;
  * records are deleted by code before that, because the import never deletes
  * student work on its own.
  *
- * A failed flush leaves the writes pending, so the next flush tries them again.
+ * Two writers do not overwrite each other. Each course's row carries a
+ * revision the database raises on every write (schema.sql); the store
+ * remembers the one it loaded. A flush locks the row first, so a second
+ * flusher waits, and reads the revision under the lock. Unmoved, the store's
+ * copy is current and is written. Moved, somebody else wrote in between: the
+ * store's changes are made again onto their course (`rebase`), and written
+ * when none of the records it changed were changed by them too — otherwise
+ * the flush refuses with a `WriteConflictError`, writes nothing for that
+ * course, and the store takes their course as its own, so the next load reads
+ * what is really there.
+ *
+ * One transaction per course, so one course's conflict does not hold back
+ * another's changes. A flush that fails for any other reason — a lost
+ * connection — leaves the writes pending, so the next flush tries them again.
  */
 export class PostgresCourseStore extends LoadedCourseStore {
-  private readonly commit: Commit;
+  private readonly transact: Transact;
+  private readonly revisions: Map<string, string>;
 
   constructor(
     courses: Iterable<readonly [string, LoadResult]>,
-    commit: Commit,
+    revisions: Iterable<readonly [string, string]>,
+    transact: Transact,
     options: { root?: string; label?: string } = {},
   ) {
     super(courses, options);
-    this.commit = commit;
+    this.revisions = new Map(revisions);
+    this.transact = transact;
+  }
+
+  /** The revision of a course this store holds, as the database numbered it. */
+  revisionOf(courseId: string): string | undefined {
+    return this.revisions.get(courseId);
   }
 
   override async flush(): Promise<void> {
-    const pending = this.pendingCourses();
-    if (!pending.length) return;
-    let sql = "";
-    for (const { bundle, removed } of pending) {
-      for (const [collection, codes] of removed) {
-        if (RUNTIME_TABLES[collection]) sql += deleteRuntime(collection, codes);
+    for (const pending of this.pendingCourses()) {
+      const { courseId } = pending;
+      let committed: { bundle: Record<string, unknown>; revision: string };
+      try {
+        committed = await this.transact(async (client) => {
+          const locked = (await client.query<BundleRow>(LOCK_BUNDLE_SQL, [courseId])).rows[0];
+          if (!locked) throw new Error(`${courseId} is not in the database any more, or not to this professor; nothing was written.`);
+          let bundle = pending.bundle;
+          if (String(locked.revision) !== this.revisions.get(courseId)) {
+            const fresh = parsePayload(locked);
+            if (!fresh.bundle) {
+              throw new Error(`${courseId} in the database would not load: ${fresh.issues.errors[0]?.message ?? "unknown"}; nothing was written.`);
+            }
+            try {
+              bundle = rebase(pending, fresh.bundle as unknown as Record<string, unknown>);
+            } catch (error) {
+              if (error instanceof WriteConflictError) this.revisions.set(courseId, String(locked.revision));
+              throw error;
+            }
+          }
+          let sql = "";
+          for (const [collection, codes] of pending.removed) {
+            if (RUNTIME_TABLES[collection]) sql += deleteRuntime(collection, codes);
+          }
+          sql += buildScript(bundle as unknown as CourseBundle, { transaction: false });
+          await client.query(sql);
+          // Read back rather than assumed: the trigger numbers it.
+          const after = (await client.query<{ revision: unknown }>(REVISION_SQL, [courseId])).rows[0];
+          return { bundle, revision: String(after?.revision) };
+        });
+      } catch (error) {
+        if (error instanceof WriteConflictError) this.adopt(courseId, error.fresh);
+        throw error;
       }
-      sql += buildScript(bundle as unknown as CourseBundle, { transaction: false }) + "\n";
+      this.adopt(courseId, committed.bundle);
+      this.revisions.set(courseId, committed.revision);
     }
-    await this.commit(sql);
-    this.settle(pending.map((entry) => entry.courseId));
   }
 }
 
@@ -199,23 +287,26 @@ const storeOptions = (options: { documentRoot?: string; label?: string }) => ({
   label: options.label ?? "PostgreSQL CourseBundle read model",
 });
 
+const storeFrom = (rows: BundleRow[], transact: Transact, options: { documentRoot?: string; label?: string }) =>
+  new PostgresCourseStore(
+    rows.map((row) => [row.course_code, parsePayload(row)] as const),
+    rows.map((row) => [row.course_code, String(row.revision)] as const),
+    transact,
+    storeOptions(options),
+  );
+
 /**
  * Load the tenant-visible read models into the synchronous engine boundary.
  * Row-level security on the supplied SQL client decides which courses appear.
- * A flush runs its script on the same client, wrapped in `BEGIN`/`COMMIT`.
+ * A flush runs in a transaction on the same client — on one connection of it,
+ * when it is a pool.
  */
 export const loadPostgresCourseStore = async (
-  client: SqlClient,
+  client: SqlClient | SqlPool,
   options: { documentRoot?: string; label?: string } = {},
 ): Promise<PostgresCourseStore> => {
   const result = await client.query<BundleRow>(READ_BUNDLES_SQL);
-  return new PostgresCourseStore(
-    result.rows.map((row) => [row.course_code, parsePayload(row)] as const),
-    async (sql) => {
-      await client.query(`BEGIN;\n${sql}\nCOMMIT;`);
-    },
-    storeOptions(options),
-  );
+  return storeFrom(result.rows, transactOn(client), options);
 };
 
 /**
@@ -230,14 +321,6 @@ export const loadPostgresCourseStoreForIdentity = async (
   identity: OAuthIdentity,
   options: { documentRoot?: string; label?: string } = {},
 ): Promise<PostgresCourseStore> => {
-  const rows = await withIdentityClient(pool, identity, (client) => client.query<BundleRow>(READ_BUNDLES_SQL));
-  return new PostgresCourseStore(
-    rows.rows.map((row) => [row.course_code, parsePayload(row)] as const),
-    async (sql) => {
-      await withIdentityClient(pool, identity, async (client) => {
-        await client.query(sql);
-      });
-    },
-    storeOptions(options),
-  );
+  const result = await withIdentityClient(pool, identity, (client) => client.query<BundleRow>(READ_BUNDLES_SQL));
+  return storeFrom(result.rows, (work) => withIdentityClient(pool, identity, work), options);
 };

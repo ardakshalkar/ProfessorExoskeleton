@@ -707,6 +707,28 @@ CREATE TABLE IF NOT EXISTS content.course_bundle_read_models (
     CHECK (payload ->> 'format_version' = format_version)
 );
 
+-- Every write to a course's read model raises its revision — an import, a
+-- flush from the course store, a hand-run UPDATE alike, because a trigger does
+-- it rather than whoever writes. A store remembers the revision it loaded and
+-- locks the row before it writes: a revision that moved means somebody else
+-- wrote in between, and the store replays its own changes onto theirs, or
+-- refuses when both changed the same record, rather than overwriting them.
+-- Added 2026-11-03; a database loaded before then gains it here.
+ALTER TABLE content.course_bundle_read_models ADD COLUMN IF NOT EXISTS revision BIGINT NOT NULL DEFAULT 0;
+
+CREATE OR REPLACE FUNCTION content.bump_course_bundle_revision() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+BEGIN
+    NEW.revision := CASE WHEN TG_OP = 'INSERT' THEN 1 ELSE OLD.revision + 1 END;
+    RETURN NEW;
+END
+$$;
+
+DROP TRIGGER IF EXISTS course_bundle_revision ON content.course_bundle_read_models;
+CREATE TRIGGER course_bundle_revision
+    BEFORE INSERT OR UPDATE ON content.course_bundle_read_models
+    FOR EACH ROW EXECUTE FUNCTION content.bump_course_bundle_revision();
+
 -- The application connects with a non-owner database role. Its transaction
 -- sets `ainar.user_id` only after resolving a verified OAuth issuer/subject.
 -- Import/migration owners bypass RLS so they can refresh projections.
