@@ -179,6 +179,26 @@ test("every generated INSERT column exists in the DDL", () => {
  * every line it is allowed to affect, so a *second* kind of difference fails
  * even though the first is tolerated.
  */
+/**
+ * The second difference, and a fix rather than a limit: Python wrote an item
+ * model's `evidence_requirements`, `task_structure` and `answer_requirements`
+ * — JSONB columns — as `ARRAY[…]::text[]`, which PostgreSQL refuses. Nobody
+ * had run the script against a database since those columns were added; the
+ * first `ainar db push` of this course, on 2026-11-03, did. Ours writes them
+ * as JSON, so their line is rewritten the same way before it is compared: the
+ * first three arrays of an `item_models` row, never the fourth, which is the
+ * genuinely TEXT[] `allowed_item_types`.
+ */
+const ITEM_MODEL_JSON_LISTS = 3;
+const asJsonLists = (line: string): string => {
+  let seen = 0;
+  return line.replace(/ARRAY\[((?:'(?:[^']|'')*'(?:, )?)*)\]::text\[\]/g, (whole, inner: string) => {
+    if ((seen += 1) > ITEM_MODEL_JSON_LISTS) return whole;
+    const items = [...inner.matchAll(/'((?:[^']|'')*)'/g)].map((match) => JSON.stringify(match[1]!.replace(/''/g, "'")));
+    return `'[${items.join(", ")}]'`.replace(/(?<=.)'(?=.)/g, "''") + "::jsonb";
+  });
+};
+
 test("the script matches what the Python implementation emitted", () => {
   const fixture = readFileSync(join(ROOT, "golden", "CSS-4008", "import.sql"), "utf-8")
     .replace(/\r/g, "")
@@ -193,7 +213,8 @@ test("the script matches what the Python implementation emitted", () => {
   }
 
   for (const line of differing) {
-    const theirs = fixture[line - 1]!;
+    const raw = fixture[line - 1]!;
+    const theirs = fixture[line - 2]?.startsWith("INSERT INTO assessment.item_models ") ? asJsonLists(raw) : raw;
     const mine = ours[line - 1]!;
     assert.equal(
       theirs.replace(/"proportion": ([0-9]+)\.0/g, '"proportion": $1'),

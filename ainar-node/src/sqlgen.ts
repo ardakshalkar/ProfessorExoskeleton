@@ -714,11 +714,14 @@ export const buildScript = (
       outcome_id: ref(m.outcome_id),
       capability_id: ref(m.capability_id),
       cognitive_level: m.cognitive_level,
-      evidence_requirements: m.evidence_requirements,
-      task_structure: m.task_structure,
+      // JSONB lists of strings, not TEXT[]: `literal` renders a bare string
+      // list as an ARRAY, which PostgreSQL refuses for a jsonb column. The
+      // Python script had the same line and was never run against one.
+      evidence_requirements: json(m.evidence_requirements),
+      task_structure: json(m.task_structure),
       scenario_variables: m.scenario_variables,
       difficulty_features: m.difficulty_features,
-      answer_requirements: m.answer_requirements,
+      answer_requirements: json(m.answer_requirements),
       allowed_item_types: m.allowed_item_types,
       extensions: m.extensions,
     })),
