@@ -7,7 +7,7 @@ import { useCanvasWatch } from "./canvas-check.js";
 import { Message, useDark, useJson } from "./common.js";
 import { DefenceDesk } from "./defence-desk.js";
 import { Inspector } from "./inspector.js";
-import { pressWork } from "./jobs.js";
+import { followJob, pressWork } from "./jobs.js";
 import { SheetNotice } from "./marks.js";
 import { CourseMode, MaterialModal, materialUrl } from "./materials.js";
 import { carryPlace, deliverCarried, PLACE_EVENT, takePendingPlace } from "./navigator.js";
@@ -636,6 +636,28 @@ export function ProfessorPane(props) {
       if (data.kind === "homework-forks") {
         const run = currentRunRef.current;
         if (!run || !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+        // *Analyze forks* on Students · Forks: the commits as well, as a
+        // background job the navigator shows; the page redraws when it ends.
+        if (data.activity === true) {
+          pressWork(
+            scoped(
+              BASE + "/api/homework/forks?run=" + encodeURIComponent(run) +
+                "&assessment=" + encodeURIComponent(data.assessment) + "&activity=1",
+              props.sessionId,
+            ),
+            { method: "POST" },
+            props.sessionId,
+          )
+            .then((answer) => followJob(answer, props.sessionId))
+            .then((result) => {
+              if (result && !result.ok) {
+                window.alert(String(result.error || result.output || "the forks could not be analysed").trim().split("\n").slice(-2).join(" "));
+              }
+              write(["files", "defence"]);
+            })
+            .catch(() => write(["files", "defence"]));
+          return;
+        }
         fetch(
           scoped(
             BASE + "/api/homework/forks?run=" + encodeURIComponent(run) +
@@ -652,6 +674,31 @@ export function ProfessorPane(props) {
             write(["files", "defence"]);
           })
           .catch(() => write(["files", "defence"]));
+        return;
+      }
+      // *Match* (or ×) on Students · Forks: this account is this student's,
+      // kept in the roster store for every homework after this one.
+      if (data.kind === "fork-match") {
+        const run = currentRunRef.current;
+        if (!run || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.student))) return;
+        const clear = data.clear === true;
+        if (!clear && (typeof data.login !== "string" || !/^[A-Za-z0-9-]{1,39}$/.test(data.login))) return;
+        pressWork(
+          scoped(
+            BASE + "/api/homework/fork-match?run=" + encodeURIComponent(run) +
+              "&student=" + encodeURIComponent(data.student) +
+              (clear ? "&clear=1" : "&login=" + encodeURIComponent(data.login)),
+            props.sessionId,
+          ),
+          { method: "POST" },
+          props.sessionId,
+        )
+          .then((result) => {
+            if (!result.ok) window.alert(String(result.error || "the account was not saved"));
+            else if (result.note) window.alert(result.note);
+            write(["defence", "roster"]);
+          })
+          .catch(() => write(["defence", "roster"]));
         return;
       }
       if (data.kind === "defence-fork") {

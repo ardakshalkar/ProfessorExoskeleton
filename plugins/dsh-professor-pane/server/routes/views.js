@@ -13,6 +13,8 @@ import {
   slidesDocument,
 } from "../course-views.js";
 import { forksReader, keptDefenceReader } from "../defence-desk.js";
+import { forksDocument } from "../forks-view.js";
+import { forksKey, holderOf } from "../jobs.js";
 import { send, sendErrorPage } from "../http.js";
 import { withMaterialLinks } from "../materials.js";
 import { widgetDocument } from "../page.js";
@@ -110,6 +112,31 @@ export const routes = [
           keptDefenceReader(root, runId, version),
           forksReader(root, runId),
           (bundle) => scanStandings(bundle, runId, root, rosterDir(), version),
+        ),
+      );
+    },
+  },
+  // Students · Forks: one homework's forks for the class (server/forks-view.js).
+  // Names as the class list takes them: only when asked for, per request.
+  {
+    views: ["forks"],
+    handle(c) {
+      const { res, url, runId, workspace, root } = c;
+      if (!runId) return sendErrorPage(res, "No run chosen.");
+      const assessment = url.searchParams.get("assessment") ?? "";
+      return send(
+        res,
+        200,
+        "text/html; charset=utf-8",
+        forksDocument(
+          workspace,
+          root,
+          runId,
+          /^[A-Z0-9][A-Z0-9-]*$/.test(assessment) ? assessment : null,
+          url.searchParams.get("dark") === "1",
+          url.searchParams.get("names") === "1",
+          // An analysis running on the homework shown, so its button says so.
+          (assessmentId) => holderOf([forksKey(runId, assessmentId)]),
         ),
       );
     },

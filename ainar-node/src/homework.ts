@@ -71,6 +71,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { type Connection, hintFor, usable } from "./connections/index.ts";
 import { resolveVariable } from "./connections/store.ts";
+import { fetchGet, type GithubGet } from "./fork-activity.ts";
 import { describeLeak, isSafe, scan } from "./safety.ts";
 
 /** `owner/name`, the only shape GitHub and this take. */
@@ -228,6 +229,8 @@ export interface Github {
   tree(repo: string): Promise<Map<string, string> | null>;
   /** The repository's public forks, as GitHub lists them (`forks.ts`). */
   forks(repo: string): Promise<Record<string, any>[]>;
+  /** One read of the REST API, for the fork analysis (`fork-activity.ts`). */
+  get: GithubGet;
   createRepo(repo: string, checkout: string, visibility: Visibility): Promise<string>;
   cloneUrl(repo: string): string;
   gitEnv(): Record<string, string>;
@@ -245,7 +248,9 @@ const parseTree = (raw: string): Map<string, string> => {
 };
 
 /** The GitHub CLI, with whatever it is logged in as. */
-export const ghCli = (run: Runner = realRunner): Github => ({
+export const ghCli = (run: Runner = realRunner): Github => {
+  let ghToken: string | null | undefined;
+  return {
   mode: "gh",
   source: "the gh CLI's own login",
   owner: null,
@@ -265,6 +270,32 @@ export const ghCli = (run: Runner = realRunner): Github => ({
       .filter((line) => line.trim())
       .map((line) => JSON.parse(line));
   },
+  async get(path) {
+    // `gh`'s own token, asked once and held in memory (never in an argv), so
+    // the reads go out side by side: a `gh api` per read is a blocking spawn,
+    // a second each, and a class's forks would be read one at a time.
+    if (ghToken === undefined) {
+      try {
+        ghToken = run("gh", ["auth", "token"]).trim() || null;
+      } catch {
+        ghToken = null;
+      }
+    }
+    if (ghToken) return fetchGet(ghToken)(path);
+    // `gh api` prints the body and fails on any status but 2xx; the reason is
+    // in what it says, the status is not.
+    try {
+      return { status: 200, body: JSON.parse(run("gh", ["api", path.replace(/^\//, "")])) };
+    } catch (error) {
+      const said = String((error as Error)?.message ?? error);
+      return {
+        status: /HTTP 404/.test(said) ? 404 : 0,
+        body: null,
+        limited: /rate limit/i.test(said),
+        message: said.split("\n").find((line) => line.trim()) ?? "gh api failed",
+      };
+    }
+  },
   async createRepo(repo, checkout, visibility) {
     return run("gh", ["repo", "create", repo, `--${visibility}`, "--source", checkout, "--push"]);
   },
@@ -277,7 +308,8 @@ export const ghCli = (run: Runner = realRunner): Github => ({
   redact(text) {
     return text;
   },
-});
+  };
+};
 
 /**
  * Every page of `/repos/{repo}/forks`, through whatever `call` authenticates
@@ -335,6 +367,7 @@ export const tokenApi = (token: string, owner: string | null, source: string): G
     async forks(repo) {
       return pagedForks(repo, call);
     },
+    get: fetchGet(token),
     async createRepo(repo, _checkout, visibility) {
       const [repoOwner, name] = repo.split("/");
       // A repository under the token's own account is created on `/user/repos`;

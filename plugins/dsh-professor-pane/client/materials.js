@@ -82,7 +82,9 @@ function WidgetFrame(props) {
       // Only ever sent affirmatively, and only by the class list. Every
       // other view's URL is unchanged, so nothing else can start naming
       // people because a parameter leaked into a shared link.
-      (props.names ? "&names=1" : ""),
+      (props.names ? "&names=1" : "") +
+      // Students · Forks: which homework.
+      (props.assessment ? "&assessment=" + encodeURIComponent(props.assessment) : ""),
     props.sessionId,
   );
   const [doc, setDoc] = React.useState(null);
@@ -381,6 +383,12 @@ const COURSE_VIEWS = [
  * default. Each is a real view of the run, not a filter over one payload.
  */
 const VIEW_SUBS = {
+  // Forks: a homework's forks for the whole class — whose, and how many
+  // commits by week (server/forks-view.js).
+  students: [
+    { id: "list", label: "Class list" },
+    { id: "forks", label: "Forks" },
+  ],
   tasks: [{ id: "waiting", label: "Everything" }].concat(SUBVIEWS.tasks),
   materials: [
     { id: "assessments", label: "Assessments" },
@@ -452,6 +460,18 @@ export function CourseMode(props) {
     }
   }, [request ? request.n : null]);
   const taskSub = subOf("tasks");
+  // Students · Forks: the homework shown, chosen on the page itself (its
+  // frame has no address of its own to change); null is the page's pick.
+  const [forksOf, setForksOf] = React.useState(null);
+  React.useEffect(() => {
+    const onPick = (event) => {
+      const data = event.data;
+      if (!data || data.source !== "professor-pane" || data.kind !== "forks-pick") return;
+      if (/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) setForksOf(data.assessment);
+    };
+    window.addEventListener("message", onPick);
+    return () => window.removeEventListener("message", onPick);
+  }, []);
   // A door into the Concepts grid: a request for it that names a student, a
   // concept or a week (HOME-9). Numbered like the request, so the same door
   // pressed twice still lands.
@@ -790,6 +810,19 @@ export function CourseMode(props) {
         dark: props.dark,
         drafts: props.drafts,
         title: (VIEW_SUBS.materials.find((entry) => entry.id === sub) || { label: "Materials" }).label,
+      });
+    }
+    if (view === "students" && subOf("students") === "forks") {
+      return h(WidgetFrame, {
+        key: "forks|" + props.names + "|" + props.dark,
+        revision: everything,
+        view: "forks",
+        runId: props.runId,
+        sessionId: props.sessionId,
+        dark: props.dark,
+        names: props.names,
+        assessment: forksOf,
+        title: "Forks",
       });
     }
     if (view === "students") {

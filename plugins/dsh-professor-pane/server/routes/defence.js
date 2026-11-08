@@ -39,7 +39,9 @@ import {
 } from "../defence-desk.js";
 import { readBody, readBytes, send, sendJson } from "../http.js";
 import { studentScreenPage } from "../student-screen.js";
-import { loadedRun } from "../workspace.js";
+import { enrolledIn } from "@ainar/core/src/bundle.ts";
+import { matchAccount } from "../forks-view.js";
+import { loadedRun, rosterDir } from "../workspace.js";
 
 /**
  * The desk's refusal while a batch transcription holds this student's
@@ -498,9 +500,42 @@ export const routes = [
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }
+      // *Analyze forks* on the Forks page: the commits as well, one read per
+      // fork pushed since, so a job in the background (job-kinds.js).
+      if (url.searchParams.get("activity") === "1") {
+        const why = notFromThePane(req);
+        if (why) return sendJson(res, 200, { error: why, token: true });
+        if (!assessmentId) return sendJson(res, 200, { error: "An assessment id, please." });
+        return answerJob(res, startKind(c, "homework-forks", { assessmentId }));
+      }
       return runScans(["homework", "forks", runId, ...(assessmentId ? ["--assessment", assessmentId] : [])], root)
         .then((result) => sendJson(res, 200, result))
         .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+    },
+  },
+  // *Match* on the Forks page: this GitHub account is this student's, kept
+  // in the roster store as `ainar roster github` keeps it — for the student,
+  // not the homework, so the next homework's fork is theirs without asking.
+  // `clear=1` takes it back. In-process: one small file, read and written at
+  // once.
+  {
+    paths: ["/api/homework/fork-match"],
+    handle(c) {
+      const { req, res, url, runId, workspace } = c;
+      if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
+      const why = notFromThePane(req);
+      if (why) return sendJson(res, 200, { error: why, token: true });
+      const studentId = url.searchParams.get("student") ?? "";
+      if (!/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(studentId)) return sendJson(res, 200, { error: "A student id, please." });
+      try {
+        const { bundle } = loadedRun(workspace, runId);
+        if (!enrolledIn(bundle, runId).some((entry) => String(entry.student_id) === studentId)) {
+          return sendJson(res, 200, { error: `${studentId} is not enrolled in ${runId}.` });
+        }
+        return sendJson(res, 200, matchAccount(rosterDir(), studentId, url.searchParams.get("clear") === "1" ? null : url.searchParams.get("login") ?? ""));
+      } catch (error) {
+        return sendJson(res, 200, { error: String(error?.message ?? error) });
+      }
     },
   },
   {

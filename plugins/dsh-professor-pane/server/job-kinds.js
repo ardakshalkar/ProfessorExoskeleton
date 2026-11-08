@@ -30,7 +30,7 @@ import { readPlan, scanPlace, submissionsDir } from "@ainar/core/src/scans.ts";
 import { writeStore } from "@ainar/core/src/store/course.ts";
 
 import { readSummary, runScans } from "./actions.js";
-import { defenceKey, pileKey, recordingsKey, recordsKey, startJob } from "./jobs.js";
+import { defenceKey, forksKey, pileKey, recordingsKey, recordsKey, startJob } from "./jobs.js";
 import { loadedRun } from "./workspace.js";
 
 /** An assessment's title in a run, and the run's course: what jobs are named by and lock. */
@@ -258,6 +258,34 @@ export const KINDS = {
         progress: { unit: "transcribed", total: /^(\d+) recording\(s\),/, step: /^\s+STUDENT-[A-Z0-9-]+: / },
         work: (job) =>
           runScans(["defence", "batch", "transcribe", runId, "--assessment", assessmentId, "--confirm"], root, 1800000, null, job.say, job.adopt),
+      });
+    },
+  },
+  // *Analyze forks* on a homework: its forks listed again and each one pushed
+  // since compared against the starter (`homework forks --activity`). Writes
+  // only the homework's `forks.json` and `fork-activity.json` beside the
+  // submissions; a minute or two for a class, so in the background.
+  "homework-forks": {
+    check: (params) => ({ assessmentId: assessmentParam(params) }),
+    start: (c, params, resume) => {
+      const { assessmentId } = params;
+      const { runId, root } = c;
+      const pile = assessmentOf(c.workspace, runId, assessmentId);
+      return startJob({
+        root,
+        runId,
+        kind: "homework-forks",
+        label: `Analysing the forks of ${pile.title}`,
+        subject: assessmentId,
+        params,
+        resume,
+        log: logTo(c, pile),
+        keys: [forksKey(runId, assessmentId)],
+        background: true,
+        // "analysing N fork(s) of …", then a line per fork read.
+        progress: { unit: "read", total: /^analysing (\d+) fork/, step: /^\s+[^\s/]+\/\S+: / },
+        work: (job) =>
+          runScans(["homework", "forks", runId, "--assessment", assessmentId, "--activity"], root, 900000, null, job.say, job.adopt),
       });
     },
   },

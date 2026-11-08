@@ -24,7 +24,9 @@ export const ROUTES = {
   today: { view: "today" },
   weeks: { mode: true, parts: { planning: "planning", teaching: "teaching", evidence: "evidence", all: "term" } },
   waiting: { view: "tasks", parts: { everything: "waiting", ready: "ready", checklist: "checklist" } },
-  students: { view: "students" },
+  // `bare`: the first part is the place itself, so `#/students` stays the
+  // class list and only Forks is spelled out.
+  students: { view: "students", parts: { list: "list", forks: "forks" }, bare: true },
   gradebook: { view: "gradebook", parts: { marks: "marks", policy: "policy", changes: "changes" } },
   concepts: { view: "concepts" },
   materials: { view: "materials", parts: { assessments: "assessments", slides: "slides", exams: "exams", outline: "outline" } },
@@ -62,7 +64,7 @@ export const placeToHash = (place) => {
     if (!name) return "";
     const route = ROUTES[name];
     const part = route.parts ? partName(route, place.sub) || Object.keys(route.parts)[0] : null;
-    path = part ? name + "/" + part : name;
+    path = part && !(route.bare && part === Object.keys(route.parts)[0]) ? name + "/" + part : name;
   }
   const query = [];
   for (const key of KEYS) {
@@ -96,7 +98,7 @@ export const hashToPlace = (hash) => {
     if (!home) return null;
     place = Object.fromEntries(Object.entries(resolved).filter(([, value]) => value !== undefined));
     if (home.parts && !Object.values(home.parts).includes(place.sub)) place.sub = Object.values(home.parts)[0];
-    if (!home.parts) delete place.sub;
+    if (!home.parts || (home.bare && place.sub === Object.values(home.parts)[0])) delete place.sub;
   }
   for (const pair of String(search || "").split("&")) {
     const at = pair.indexOf("=");

@@ -70,11 +70,13 @@ test("job kinds: a grade decision or a Canvas push is never a kind, and asking f
   }
 });
 
-test("job kinds: every kind runs `scans` or `defence batch`, never `grade`, `lms`, `sync` or `publish`", () => {
+test("job kinds: every kind runs `scans`, `defence batch` or `homework forks`, never `grade`, `lms`, `sync` or `publish`", () => {
   const text = readFileSync(join(SERVER, "job-kinds.js"), "utf-8");
   const commands = [...text.matchAll(/(?:runScans\(\s*|const args = )\[\s*"([a-z-]+)"(?:,\s*"([a-z-]+)")?/g)].map((match) => match.slice(1).filter(Boolean).join(" "));
   assert.ok(commands.length >= 4, "the kinds' command lines were found");
-  for (const command of commands) assert.match(command, /^(scans|defence batch)\b/, `a kind runs ${command}`);
+  // `homework forks` reads GitHub and writes only beside the submissions;
+  // `homework publish` creates a repository students see, and is never a kind.
+  for (const command of commands) assert.match(command, /^(scans|defence batch|homework forks)$|^scans\b/, `a kind runs ${command}`);
   // `placing` builds its args with a ternary; it is scans either way.
   assert.match(text, /const args = \["scans", kind === "scans-assign" \? "assign" : "apply"/);
 });

@@ -13782,7 +13782,9 @@ var ROUTES = {
   today: { view: "today" },
   weeks: { mode: true, parts: { planning: "planning", teaching: "teaching", evidence: "evidence", all: "term" } },
   waiting: { view: "tasks", parts: { everything: "waiting", ready: "ready", checklist: "checklist" } },
-  students: { view: "students" },
+  // `bare`: the first part is the place itself, so `#/students` stays the
+  // class list and only Forks is spelled out.
+  students: { view: "students", parts: { list: "list", forks: "forks" }, bare: true },
   gradebook: { view: "gradebook", parts: { marks: "marks", policy: "policy", changes: "changes" } },
   concepts: { view: "concepts" },
   materials: { view: "materials", parts: { assessments: "assessments", slides: "slides", exams: "exams", outline: "outline" } },
@@ -13805,7 +13807,7 @@ var placeToHash = (place) => {
     if (!name) return "";
     const route = ROUTES[name];
     const part = route.parts ? partName(route, place.sub) || Object.keys(route.parts)[0] : null;
-    path = part ? name + "/" + part : name;
+    path = part && !(route.bare && part === Object.keys(route.parts)[0]) ? name + "/" + part : name;
   }
   const query = [];
   for (const key of KEYS) {
@@ -13830,7 +13832,7 @@ var hashToPlace = (hash) => {
     if (!home) return null;
     place = Object.fromEntries(Object.entries(resolved).filter(([, value]) => value !== void 0));
     if (home.parts && !Object.values(home.parts).includes(place.sub)) place.sub = Object.values(home.parts)[0];
-    if (!home.parts) delete place.sub;
+    if (!home.parts || home.bare && place.sub === Object.values(home.parts)[0]) delete place.sub;
   }
   for (const pair of String(search || "").split("&")) {
     const at = pair.indexOf("=");
@@ -13943,7 +13945,8 @@ function WidgetFrame(props) {
     (props.week ? "&week=" + encodeURIComponent(props.week) : "") + // Only ever sent affirmatively, and only by the class list. Every
     // other view's URL is unchanged, so nothing else can start naming
     // people because a parameter leaked into a shared link.
-    (props.names ? "&names=1" : ""),
+    (props.names ? "&names=1" : "") + // Students · Forks: which homework.
+    (props.assessment ? "&assessment=" + encodeURIComponent(props.assessment) : ""),
     props.sessionId
   );
   const [doc, setDoc] = React.useState(null);
@@ -14066,6 +14069,12 @@ var COURSE_VIEWS = [
   { id: "settings", label: "Course settings", hint: "Integrations — Canvas, the grade sheet, GitHub — and the preferences the skills assume" }
 ];
 var VIEW_SUBS = {
+  // Forks: a homework's forks for the whole class — whose, and how many
+  // commits by week (server/forks-view.js).
+  students: [
+    { id: "list", label: "Class list" },
+    { id: "forks", label: "Forks" }
+  ],
   tasks: [{ id: "waiting", label: "Everything" }].concat(SUBVIEWS.tasks),
   materials: [
     { id: "assessments", label: "Assessments" },
@@ -14123,6 +14132,16 @@ function CourseMode(props) {
     }
   }, [request ? request.n : null]);
   const taskSub = subOf("tasks");
+  const [forksOf, setForksOf] = React.useState(null);
+  React.useEffect(() => {
+    const onPick = (event) => {
+      const data = event.data;
+      if (!data || data.source !== "professor-pane" || data.kind !== "forks-pick") return;
+      if (/^[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) setForksOf(data.assessment);
+    };
+    window.addEventListener("message", onPick);
+    return () => window.removeEventListener("message", onPick);
+  }, []);
   const doorOf = (entry) => entry && entry.view === "concepts" && (entry.student || entry.concept || entry.week) ? { student: entry.student || null, concept: entry.concept || null, week: entry.week || null, n: entry.n } : null;
   const [conceptsFocus, setConceptsFocus] = React.useState(() => doorOf(request));
   const aimOf = (entry) => entry && (entry.focus || entry.kind) ? { view: entry.view || null, section: entry.focus || null, kind: entry.kind || null, assessment: entry.assessment || null, n: entry.n } : null;
@@ -14378,6 +14397,19 @@ function CourseMode(props) {
         dark: props.dark,
         drafts: props.drafts,
         title: (VIEW_SUBS.materials.find((entry) => entry.id === sub) || { label: "Materials" }).label
+      });
+    }
+    if (view === "students" && subOf("students") === "forks") {
+      return h(WidgetFrame, {
+        key: "forks|" + props.names + "|" + props.dark,
+        revision: everything,
+        view: "forks",
+        runId: props.runId,
+        sessionId: props.sessionId,
+        dark: props.dark,
+        names: props.names,
+        assessment: forksOf,
+        title: "Forks"
       });
     }
     if (view === "students") {
@@ -18562,6 +18594,22 @@ function ProfessorPane(props) {
       if (data.kind === "homework-forks") {
         const run2 = currentRunRef.current;
         if (!run2 || !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
+        if (data.activity === true) {
+          pressWork(
+            scoped(
+              BASE + "/api/homework/forks?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment) + "&activity=1",
+              props.sessionId
+            ),
+            { method: "POST" },
+            props.sessionId
+          ).then((answer) => followJob(answer, props.sessionId)).then((result) => {
+            if (result && !result.ok) {
+              window.alert(String(result.error || result.output || "the forks could not be analysed").trim().split("\n").slice(-2).join(" "));
+            }
+            write(["files", "defence"]);
+          }).catch(() => write(["files", "defence"]));
+          return;
+        }
         fetch(
           scoped(
             BASE + "/api/homework/forks?run=" + encodeURIComponent(run2) + "&assessment=" + encodeURIComponent(data.assessment),
@@ -18574,6 +18622,25 @@ function ProfessorPane(props) {
           }
           write(["files", "defence"]);
         }).catch(() => write(["files", "defence"]));
+        return;
+      }
+      if (data.kind === "fork-match") {
+        const run2 = currentRunRef.current;
+        if (!run2 || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.student))) return;
+        const clear = data.clear === true;
+        if (!clear && (typeof data.login !== "string" || !/^[A-Za-z0-9-]{1,39}$/.test(data.login))) return;
+        pressWork(
+          scoped(
+            BASE + "/api/homework/fork-match?run=" + encodeURIComponent(run2) + "&student=" + encodeURIComponent(data.student) + (clear ? "&clear=1" : "&login=" + encodeURIComponent(data.login)),
+            props.sessionId
+          ),
+          { method: "POST" },
+          props.sessionId
+        ).then((result) => {
+          if (!result.ok) window.alert(String(result.error || "the account was not saved"));
+          else if (result.note) window.alert(result.note);
+          write(["defence", "roster"]);
+        }).catch(() => write(["defence", "roster"]));
         return;
       }
       if (data.kind === "defence-fork") {

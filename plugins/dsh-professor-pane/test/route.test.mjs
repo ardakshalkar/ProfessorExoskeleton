@@ -16,7 +16,9 @@ test("every place and part survives the trip to a URL and back", () => {
       const place = route.mode ? { mode: part } : route.parts ? { view: route.view, sub: part } : { view: route.view };
       const hash = placeToHash(place);
       assert.ok(hash.startsWith("#/" + name), hash);
-      assert.deepEqual(hashToPlace(hash), place, hash);
+      // A bare place's first part is the place itself, and comes back as it.
+      const back = route.bare && part === parts[0] ? { view: route.view } : place;
+      assert.deepEqual(hashToPlace(hash), back, hash);
     }
   }
 });
@@ -26,6 +28,12 @@ test("the URL speaks the navigator's words", () => {
   assert.equal(placeToHash({ view: "syncs" }), "#/sync");
   assert.equal(placeToHash({ mode: "term" }), "#/weeks/all");
   assert.equal(placeToHash({ view: "gradebook" }), "#/gradebook/marks", "a place with parts names its default");
+  // …except Students, whose first part is the class list it always was.
+  assert.equal(placeToHash({ view: "students" }), "#/students");
+  assert.equal(placeToHash({ view: "students", sub: "list" }), "#/students");
+  assert.equal(placeToHash({ view: "students", sub: "forks" }), "#/students/forks");
+  assert.deepEqual(hashToPlace("#/students/forks"), { view: "students", sub: "forks" });
+  assert.deepEqual(hashToPlace("#/students"), { view: "students" });
   assert.equal(placeToHash(null), "");
   assert.equal(placeToHash({ view: "nowhere" }), "");
 });

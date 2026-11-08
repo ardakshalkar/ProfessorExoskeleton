@@ -172,6 +172,8 @@ export const recordsKey = (courseId, collection) => `records:${courseId}:${colle
 export const recordingsKey = (runId) => `recordings:${runId}`;
 export const defenceKey = (runId, assessmentId, studentId) => `defence:${runId}:${assessmentId}:${studentId}`;
 export const reportsKey = (runId, assessmentId) => `reports:${runId}:${assessmentId}`;
+/** A homework's `forks.json` and `fork-activity.json`. */
+export const forksKey = (runId, assessmentId) => `forks:${runId}:${assessmentId}`;
 
 /** The job holding any of these keys, or null. */
 export const holderOf = (keys) => {

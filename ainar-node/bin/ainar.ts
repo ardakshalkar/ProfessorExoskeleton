@@ -130,6 +130,7 @@ import {
   resolveAuth,
 } from "../src/homework.ts";
 import { forkChoices, forksPath, githubLogin, recordedLogins, toForks, writeForks } from "../src/forks.ts";
+import { activityPath, analyseForks, readActivity, writeActivity } from "../src/fork-activity.ts";
 import { archiveRun, migrateLayout } from "../src/layout.ts";
 import { organizeMaterials } from "../src/material-folders.ts";
 import { newCourse, newRun } from "../src/scaffold.ts";
@@ -666,9 +667,10 @@ const HELP = `ainar — the AINAR course model CLI
   new run COURSE_ID TERM --start YYYY-MM-DD --end YYYY-MM-DD
   homework publish ASSESSMENT [--repo owner/name] [--private] [--confirm]
                                            plan it; --confirm creates and pushes
-  homework forks RUN [--assessment A] [--json]
+  homework forks RUN [--assessment A] [--activity] [--json]
                                            look up the starter's public forks, so
-                                           a student's own fork can be chosen, not pasted
+                                           a student's own fork can be chosen, not pasted;
+                                           --activity also counts each fork's own commits
 
   Publishing. Each of these reads and prints a plan, and --confirm publishes.
   A record marked \`approval: draft\` is never published — the plan names it
@@ -5157,7 +5159,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         // the accounts students' links name (src/forks.ts). Reads GitHub,
         // records nothing in the course.
         const forksRun = rest[1];
-        if (!forksRun) throw new Error("usage: homework forks RUN [--assessment ASSESSMENT_ID] [--json]");
+        if (!forksRun) throw new Error("usage: homework forks RUN [--assessment ASSESSMENT_ID] [--activity] [--json]");
         const bundle = forRun(forksRun);
         const only = flag("assessment");
         const targets = (bundle.assessments as any[]).filter(
@@ -5204,7 +5206,38 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             (student) => !submissions.some((entry) => entry.assessment_id === assessment.assessment_id && entry.student_id === student),
           );
           const found = missing.filter((student) => forkChoices(cache, submissions, assessment.assessment_id, student, recorded).theirs).length;
-          summary.push({ assessment_id: assessment.assessment_id, repo, forks: forks.length, nothing_handed_in: missing.length, their_fork_found: found });
+          const line: Record<string, any> = { assessment_id: assessment.assessment_id, repo, forks: forks.length, nothing_handed_in: missing.length, their_fork_found: found };
+          if (args.includes("--activity")) {
+            // Each fork's own commits, compared against the starter: one read
+            // per fork that was pushed since the last analysis
+            // (src/fork-activity.ts). Sixty anonymous reads an hour cannot
+            // cover a class, so this one needs a login.
+            if (!auth.github) {
+              throw new Error(
+                "counting commits reads GitHub once per fork — more than the sixty reads an hour it allows without a login. " +
+                  (auth.refusal ?? "Set up a github connection, or `gh auth login`."),
+              );
+            }
+            const get = auth.github.get;
+            const starter = await get(`/repos/${repo}`);
+            if (starter.status !== 200) throw new Error(`GitHub would not read ${repo}: ${starter.message ?? starter.status}`);
+            const where = activityPath(base, forksRun, assessment.assessment_id);
+            const { report } = await analyseForks({
+              get,
+              template: repo,
+              baseBranch: String(starter.body?.default_branch ?? "main"),
+              forks,
+              previous: readActivity(where),
+              assessmentId: assessment.assessment_id,
+              save: (activity) => writeActivity(where, activity),
+              say: out,
+            });
+            line.activity = report;
+            if (report.left) {
+              out(`note: GitHub's hourly limit ran out with ${report.left} fork(s) not read; analyse again later and only those are read`);
+            }
+          }
+          summary.push(line);
         }
         if (args.includes("--json")) {
           out(JSON.stringify(summary, null, 2));
@@ -5216,6 +5249,12 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
             `${line.assessment_id} (${line.repo}): ${line.forks} public fork(s); ` +
               `${line.nothing_handed_in} student(s) handed nothing in, ${line.their_fork_found} of them with a fork under their own account`,
           );
+          if (line.activity) {
+            out(
+              `  commits: ${line.activity.read} fork(s) read, ${line.activity.skipped} unchanged, ` +
+                `${line.activity.failed} could not be read, ${line.activity.left} left for later`,
+            );
+          }
         }
         break;
       }
@@ -5223,7 +5262,7 @@ ${changes.length} change(s)${args.includes("--all") ? "" : "; --all also lists d
         console.error(
           "usage: homework publish ASSESSMENT_ID [--repo owner/name] [--auth gh|token] " +
             "[--private] [--confirm]\n" +
-            "       homework forks RUN [--assessment ASSESSMENT_ID] [--json]\n" +
+            "       homework forks RUN [--assessment ASSESSMENT_ID] [--activity] [--json]\n" +
             "       homework sheet RUN [--url URL] [--tab TAB] [--name-column H] [--flag-column H] [--github-column H]\n" +
             "                          [--column 'H=ASSESSMENT-ID']… [--mark 'WORD=FACTOR[:late]']… [--student 'NAME=STUDENT-ID']…\n" +
             "       homework sync RUN [--from export.csv] [--dry-run] [--json]",

@@ -92,6 +92,8 @@ navigation, on reload, and invisible to a second tab.
 | Defended / criterion mark | `POST /api/defence/mark` → `defence mark` | `records/submissions.yaml` or `records/evaluations.yaml` | none |
 | Fork link | `POST /api/defence/fork` → `defence fork` (in person: in-process) | `records/submissions.yaml` | none |
 | Find forks | `POST /api/homework/forks` → `homework forks` | beside the submissions | none |
+| Analyze forks (Students · Forks) | `POST /api/homework/forks?activity=1` → job `homework-forks` → `homework forks --activity` | `SUB/RUN/A/forks.json`, `fork-activity.json` | server: `forks:RUN:A` |
+| Match a fork | `POST /api/homework/fork-match` (in-process) | roster store (`people.json` `github`) | none; instant |
 | Grade decide | `POST /api/grade/decide` → `grade decide` | `records/evaluations.yaml`, then `records/evidence.yaml` | client `busy` per grading window |
 | Grade move / choose / accept / points-only | `POST /api/grade/*` | `groups.yaml`; assessment record (rubric); items | client `busy` |
 | Curve | `POST /api/grade/curve` → `curve` | assessment record | none |
@@ -167,6 +169,7 @@ releases them when its child exits.
 | `roster` | the roster store (machine-wide) |
 | `groups:RUN:A` | grading groups |
 | `reports:RUN:A` | the reports folder |
+| `forks:RUN:A` | a homework's `forks.json` and `fork-activity.json` |
 | `connections` | the connection registry and credentials |
 
 The long jobs, and what they take:

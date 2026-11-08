@@ -59,6 +59,9 @@ const fake = (tree: Map<string, string> | null): Github & { created: string[] } 
   async forks() {
     return [];
   },
+  async get() {
+    return { status: 404, body: null };
+  },
   async createRepo(repo, _checkout, visibility) {
     (this as any).created.push(`${repo}:${visibility}`);
     return `Created ${repo} (${visibility}).`;

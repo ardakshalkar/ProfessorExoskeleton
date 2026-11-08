@@ -41,6 +41,8 @@ export interface Fork {
   /** Last push, which says whether anything was done in it. */
   pushed_at: string | null;
   created_at: string | null;
+  /** The branch the student works on, as GitHub lists it. */
+  default_branch?: string | null;
 }
 
 export interface ForkCache {
@@ -78,6 +80,7 @@ export const toForks = (listed: Record<string, any>[]): Fork[] =>
       url: String(entry.html_url ?? `https://github.com/${entry.full_name}`),
       pushed_at: entry.pushed_at ?? null,
       created_at: entry.created_at ?? null,
+      default_branch: entry.default_branch ?? null,
     }))
     .sort((a, b) => a.owner.localeCompare(b.owner, undefined, { sensitivity: "base" }));
 
