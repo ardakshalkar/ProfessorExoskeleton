@@ -40,7 +40,7 @@ import {
 import { readBody, readBytes, send, sendJson } from "../http.js";
 import { studentScreenPage } from "../student-screen.js";
 import { enrolledIn } from "@ainar/core/src/bundle.ts";
-import { matchAccount } from "../forks-view.js";
+import { matchAccount, matchAccounts } from "../forks-view.js";
 import { loadedRun, rosterDir } from "../workspace.js";
 
 /**
@@ -520,18 +520,35 @@ export const routes = [
   // once.
   {
     paths: ["/api/homework/fork-match"],
+    // Batch pairs arrive in the body.
     handle(c) {
       const { req, res, url, runId, workspace } = c;
       if (req.method !== "POST") return sendJson(res, 200, { error: "This is a POST." });
       const why = notFromThePane(req);
       if (why) return sendJson(res, 200, { error: why, token: true });
+      const enrolledHere = () => {
+        const { bundle } = loadedRun(workspace, runId);
+        return new Set(enrolledIn(bundle, runId).map((entry) => String(entry.student_id)));
+      };
+      // Several at once (*Match all suggested*, or one press): `{ pairs:
+      // [{ student, login }] }` in the body, written in one save.
+      if (url.searchParams.get("student") === null) {
+        return readBody(req)
+          .then((text) => {
+            const body = JSON.parse(text || "{}");
+            const pairs = Array.isArray(body.pairs) ? body.pairs.slice(0, 500) : [];
+            if (!pairs.length) return sendJson(res, 200, { error: "Nothing to match." });
+            const enrolled = enrolledHere();
+            const outside = pairs.find((pair) => !enrolled.has(String(pair?.student ?? "")));
+            if (outside) return sendJson(res, 200, { error: `${outside.student} is not enrolled in ${runId}.` });
+            return sendJson(res, 200, matchAccounts(rosterDir(), pairs));
+          })
+          .catch((error) => sendJson(res, 200, { error: String(error?.message ?? error) }));
+      }
       const studentId = url.searchParams.get("student") ?? "";
       if (!/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(studentId)) return sendJson(res, 200, { error: "A student id, please." });
       try {
-        const { bundle } = loadedRun(workspace, runId);
-        if (!enrolledIn(bundle, runId).some((entry) => String(entry.student_id) === studentId)) {
-          return sendJson(res, 200, { error: `${studentId} is not enrolled in ${runId}.` });
-        }
+        if (!enrolledHere().has(studentId)) return sendJson(res, 200, { error: `${studentId} is not enrolled in ${runId}.` });
         return sendJson(res, 200, matchAccount(rosterDir(), studentId, url.searchParams.get("clear") === "1" ? null : url.searchParams.get("login") ?? ""));
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });

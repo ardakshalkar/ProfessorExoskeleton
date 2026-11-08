@@ -94,6 +94,21 @@ function WidgetFrame(props) {
   const loaded = React.useRef(null);
   // The HTML the frame is showing now.
   const shownHtml = React.useRef(null);
+  // Where the page was scrolled, as a page that reports it says
+  // (`frame-scroll`): a redraw of the same page comes back there rather than
+  // at the top. The frame has no origin of its own, so it has to tell us.
+  const frameRef = React.useRef(null);
+  const scrolled = React.useRef(0);
+  React.useEffect(() => {
+    const onScroll = (event) => {
+      const data = event.data;
+      if (!data || data.source !== "professor-pane" || data.kind !== "frame-scroll") return;
+      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (Number.isFinite(data.y)) scrolled.current = Math.max(0, Math.round(data.y));
+    };
+    window.addEventListener("message", onScroll);
+    return () => window.removeEventListener("message", onScroll);
+  }, []);
   React.useEffect(() => {
     let live = true;
     const same = loaded.current === url;
@@ -115,6 +130,7 @@ function WidgetFrame(props) {
         if (!same) {
           loaded.current = url;
           shownHtml.current = value.html;
+          scrolled.current = 0;
           setDoc(value);
           return;
         }
@@ -122,7 +138,14 @@ function WidgetFrame(props) {
         // blank in between — and not at all when nothing on it moved.
         if (value.html === shownHtml.current) return;
         shownHtml.current = value.html;
-        setDoc(value);
+        const y = scrolled.current;
+        setDoc(
+          y > 0
+            ? Object.assign({}, value, {
+                html: value.html + "<script>addEventListener('load',function(){scrollTo(0," + y + ")});</script>",
+              })
+            : value,
+        );
       })
       .catch((error) => {
         if (live) setDoc({ failed: String(error.message || error) });
@@ -139,6 +162,7 @@ function WidgetFrame(props) {
     null,
     doc.mode === "merged" ? h(DraftBanner, { issues: doc.issues }) : null,
     h("iframe", {
+      ref: frameRef,
       className: "pp-frame",
       srcDoc: doc.html,
       sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox",

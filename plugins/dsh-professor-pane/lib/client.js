@@ -13952,6 +13952,18 @@ function WidgetFrame(props) {
   const [doc, setDoc] = React.useState(null);
   const loaded = React.useRef(null);
   const shownHtml = React.useRef(null);
+  const frameRef = React.useRef(null);
+  const scrolled = React.useRef(0);
+  React.useEffect(() => {
+    const onScroll = (event) => {
+      const data = event.data;
+      if (!data || data.source !== "professor-pane" || data.kind !== "frame-scroll") return;
+      if (!frameRef.current || event.source !== frameRef.current.contentWindow) return;
+      if (Number.isFinite(data.y)) scrolled.current = Math.max(0, Math.round(data.y));
+    };
+    window.addEventListener("message", onScroll);
+    return () => window.removeEventListener("message", onScroll);
+  }, []);
   React.useEffect(() => {
     let live = true;
     const same = loaded.current === url;
@@ -13971,12 +13983,18 @@ function WidgetFrame(props) {
       if (!same) {
         loaded.current = url;
         shownHtml.current = value.html;
+        scrolled.current = 0;
         setDoc(value);
         return;
       }
       if (value.html === shownHtml.current) return;
       shownHtml.current = value.html;
-      setDoc(value);
+      const y = scrolled.current;
+      setDoc(
+        y > 0 ? Object.assign({}, value, {
+          html: value.html + "<script>addEventListener('load',function(){scrollTo(0," + y + ")});<\/script>"
+        }) : value
+      );
     }).catch((error) => {
       if (live) setDoc({ failed: String(error.message || error) });
     });
@@ -13991,6 +14009,7 @@ function WidgetFrame(props) {
     null,
     doc.mode === "merged" ? h(DraftBanner, { issues: doc.issues }) : null,
     h("iframe", {
+      ref: frameRef,
       className: "pp-frame",
       srcDoc: doc.html,
       sandbox: "allow-scripts allow-popups allow-popups-to-escape-sandbox",
@@ -18622,6 +18641,23 @@ function ProfessorPane(props) {
           }
           write(["files", "defence"]);
         }).catch(() => write(["files", "defence"]));
+        return;
+      }
+      if (data.kind === "fork-match" && Array.isArray(data.pairs)) {
+        const run2 = currentRunRef.current;
+        const frame = event.source;
+        const pairs = data.pairs.filter((pair) => pair && /^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(String(pair.student)) && /^[A-Za-z0-9-]{1,39}$/.test(String(pair.login))).slice(0, 500).map((pair) => ({ student: pair.student, login: pair.login }));
+        const reply = (answer) => {
+          if (frame && typeof frame.postMessage === "function") {
+            frame.postMessage(Object.assign({ source: "professor-pane", kind: "fork-matched", ticket: String(data.ticket || "") }, answer), "*");
+          }
+        };
+        if (!run2 || !pairs.length) return reply({ error: "Nothing to match." });
+        pressWork(
+          scoped(BASE + "/api/homework/fork-match?run=" + encodeURIComponent(run2), props.sessionId),
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pairs }) },
+          props.sessionId
+        ).then((result) => reply(result)).catch((error) => reply({ error: "the accounts were not saved: " + String(error) }));
         return;
       }
       if (data.kind === "fork-match") {

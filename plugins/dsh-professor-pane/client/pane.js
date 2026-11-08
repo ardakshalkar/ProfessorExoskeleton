@@ -678,6 +678,30 @@ export function ProfessorPane(props) {
       }
       // *Match* (or ×) on Students · Forks: this account is this student's,
       // kept in the roster store for every homework after this one.
+      if (data.kind === "fork-match" && Array.isArray(data.pairs)) {
+        // *Match* and *Match all suggested*: answered to the page that
+        // asked, which moves its rows itself — no redraw, so no jump.
+        const run = currentRunRef.current;
+        const frame = event.source;
+        const pairs = data.pairs
+          .filter((pair) => pair && /^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(String(pair.student)) && /^[A-Za-z0-9-]{1,39}$/.test(String(pair.login)))
+          .slice(0, 500)
+          .map((pair) => ({ student: pair.student, login: pair.login }));
+        const reply = (answer) => {
+          if (frame && typeof frame.postMessage === "function") {
+            frame.postMessage(Object.assign({ source: "professor-pane", kind: "fork-matched", ticket: String(data.ticket || "") }, answer), "*");
+          }
+        };
+        if (!run || !pairs.length) return reply({ error: "Nothing to match." });
+        pressWork(
+          scoped(BASE + "/api/homework/fork-match?run=" + encodeURIComponent(run), props.sessionId),
+          { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ pairs }) },
+          props.sessionId,
+        )
+          .then((result) => reply(result))
+          .catch((error) => reply({ error: "the accounts were not saved: " + String(error) }));
+        return;
+      }
       if (data.kind === "fork-match") {
         const run = currentRunRef.current;
         if (!run || !/^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.student))) return;

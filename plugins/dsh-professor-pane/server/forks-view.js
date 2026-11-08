@@ -67,6 +67,47 @@ export const matchAccount = (directory, studentId, login) => {
   };
 };
 
+/**
+ * Several accounts at once, in one save: `{ ok, matched: [{ student, login }],
+ * refused: [{ student, login, error }], note }`. Each pair is checked as
+ * `matchAccount` checks one; a refused pair does not stop the others.
+ */
+export const matchAccounts = (directory, pairs) => {
+  const store = RosterStore.load(directory);
+  const matched = [];
+  const refused = [];
+  for (const pair of pairs) {
+    const student = String(pair?.student ?? "");
+    const login = githubLogin(String(pair?.login ?? ""));
+    const person = /^STUDENT-[A-Z0-9][A-Z0-9-]*$/.test(student) ? store.whois(student) : null;
+    if (!person) refused.push({ student, login: pair?.login ?? null, error: `${student} is not in the local roster` });
+    else if (!login) refused.push({ student, login: pair?.login ?? null, error: `"${pair?.login}" is not a GitHub account` });
+    else {
+      person.github = login;
+      matched.push({ student, login });
+    }
+  }
+  if (matched.length) store.save();
+  // An account now recorded for two students is offered to neither.
+  const holders = new Map();
+  for (const [student, person] of Object.entries(store.people)) {
+    if (typeof person.github !== "string") continue;
+    const key = person.github.toLowerCase();
+    holders.set(key, [...(holders.get(key) ?? []), student]);
+  }
+  const doubled = matched.filter((pair) => (holders.get(pair.login.toLowerCase()) ?? []).length > 1);
+  return {
+    ok: matched.length > 0,
+    matched,
+    refused,
+    error: matched.length ? null : refused[0]?.error ?? "Nothing matched.",
+    note: doubled.length
+      ? doubled.map((pair) => `${pair.login} is now recorded for ${holders.get(pair.login.toLowerCase()).join(" and ")}`).join("; ") +
+        " — until one is corrected, its forks are offered to neither."
+      : null,
+  };
+};
+
 /** Cyrillic to Latin, enough to see "Аружан" in `aruzhan-dev`. */
 const LATIN = {
   а: "a", ә: "a", б: "b", в: "v", г: "g", ғ: "g", д: "d", е: "e", ё: "e", ж: "zh", з: "z", и: "i", й: "i", к: "k",
@@ -191,6 +232,30 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
   );
   const columns = weeks + 1 + (until ? 1 : 0);
 
+  // Quiet weeks fold together: a week where 95% of the analysed forks have
+  // nothing is noise in a strip, and a run of two or more of them becomes one
+  // narrow column with their sum, so a stray commit still shows. Decided per
+  // reading, since a commit can sit in different weeks by when it was seen
+  // and by its own date.
+  const analysedForks = all.filter(([, value]) => value.entry && !value.entry.error);
+  const groupsFor = (kind) => {
+    const quiet = (week) =>
+      analysedForks.filter(([, value]) => (value[kind]?.weeks[week] ?? 0) > 0).length <= analysedForks.length * 0.05;
+    const groups = [];
+    for (let week = 1; week <= weeks; week++) {
+      const last = groups[groups.length - 1];
+      if (quiet(week) && last && last.quiet && last.to === week - 1) last.to = week;
+      else groups.push({ from: week, to: week, quiet: quiet(week) });
+    }
+    return groups;
+  };
+  const groupsOf = {
+    seen: analysedForks.length ? groupsFor("seen") : Array.from({ length: weeks }, (_, i) => ({ from: i + 1, to: i + 1, quiet: false })),
+    claimed: analysedForks.length ? groupsFor("claimed") : Array.from({ length: weeks }, (_, i) => ({ from: i + 1, to: i + 1, quiet: false })),
+  };
+  const groupLabel = (group) =>
+    group.from === group.to ? "W" + group.from + (folded && group.to === weeks ? "+" : "") : "W" + group.from + "–" + group.to;
+
   const cell = (count, kind, label, late) => {
     const level = count === 0 ? 0 : Math.min(4, Math.ceil((count / most) * 4));
     return (
@@ -199,12 +264,21 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
     );
   };
   const cells = (counted, kind) =>
-    counted.weeks
-      .map((count, week) =>
-        cell(count, kind, week === 0 ? "before week 1" : "week " + week + (folded && week === weeks ? " and after" : ""), false),
-      )
-      .join("") + (until ? cell(counted.after, kind, "after the deadline", true) : "");
-  const noCells = '<td class="w seen"></td>'.repeat(columns) + '<td class="w claimed"></td>'.repeat(columns);
+    cell(counted.weeks[0], kind, "before week 1", false) +
+    groupsOf[kind]
+      .map((group) => {
+        let sum = 0;
+        for (let week = group.from; week <= group.to; week++) sum += counted.weeks[week] ?? 0;
+        const label =
+          group.from === group.to
+            ? "week " + group.from + (folded && group.to === weeks ? " and after" : "")
+            : "weeks " + group.from + "–" + group.to + " (quiet for nearly everyone)";
+        return cell(sum, kind + (group.from !== group.to ? " fold" : ""), label, false);
+      })
+      .join("") +
+    (until ? cell(counted.after, kind, "after the deadline", true) : "");
+  const blank = (kind) => '<td class="w ' + kind + '"></td>'.repeat(groupsOf[kind].length + 1 + (until ? 1 : 0));
+  const noCells = blank("seen") + blank("claimed");
 
   const flags = (fork, value) => {
     const out = [];
@@ -253,20 +327,43 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
     };
   };
 
-  const account = (fork) =>
-    '<a href="' + escapeAttribute(fork.url) + '" target="_blank" rel="noopener">' + escapeText(fork.owner) + "</a>";
+  // The name on the owner's GitHub profile, when an analysis asked for it.
+  const profileOf = (fork) => activity?.forks?.[fork.repo.toLowerCase()]?.owner_name ?? null;
+  // `beside` goes right after the login (the × that forgets it).
+  const account = (fork, beside = "") =>
+    '<a href="' + escapeAttribute(fork.url) + '" target="_blank" rel="noopener">' + escapeText(fork.owner) + "</a>" + beside +
+    (profileOf(fork) ? '<span class="pn">' + escapeText(profileOf(fork)) + "</span>" : "");
 
   // Students a loose fork might be given: those with neither a fork nor a
-  // recorded account. A suggestion is a login that looks like their name.
+  // recorded account. A suggestion is a login, or the profile's name, that
+  // looks like their name.
   const free = withoutFork.filter((student) => !recorded[student]);
   const tokensOf = new Map(free.map((student) => [student, nameTokens(people[student]?.name)]));
+  const likelyFor = (fork) => {
+    const profile = nameTokens(profileOf(fork));
+    return free.filter((student) => {
+      const mine = tokensOf.get(student);
+      return looksLike(fork.owner, mine) || profile.some((token) => mine.includes(token));
+    });
+  };
+  const likelyOf = new Map(loose.map((fork) => [fork.repo.toLowerCase(), likelyFor(fork)]));
+  // A suggestion sure enough for *Match all suggested*: one student for the
+  // fork, and that student suggested for no other fork.
+  const suggestedCount = new Map();
+  for (const likely of likelyOf.values()) for (const student of likely) suggestedCount.set(student, (suggestedCount.get(student) ?? 0) + 1);
+  const sureOf = (fork) => {
+    const likely = likelyOf.get(fork.repo.toLowerCase()) ?? [];
+    return likely.length === 1 && suggestedCount.get(likely[0]) === 1 ? likely[0] : null;
+  };
   const picker = (fork) => {
-    const likely = free.filter((student) => looksLike(fork.owner, tokensOf.get(student)));
+    const likely = likelyOf.get(fork.repo.toLowerCase()) ?? [];
     const rest = free.filter((student) => !likely.includes(student));
-    const option = (student) => '<option value="' + escapeAttribute(student) + '">' + escapeText(nameOf(student)) + "</option>";
+    const sure = sureOf(fork);
+    const option = (student) =>
+      '<option value="' + escapeAttribute(student) + '"' + (student === sure ? " selected" : "") + ">" + escapeText(nameOf(student)) + "</option>";
     return (
       '<select class="pick" aria-label="Whose fork is ' + escapeAttribute(fork.owner) + '">' +
-      (likely.length === 1 ? "" : '<option value="">Whose is it…</option>') +
+      '<option value="">Whose is it…</option>' +
       (likely.length ? '<optgroup label="Looks like their name">' + likely.map(option).join("") + "</optgroup>" : "") +
       (rest.length ? '<optgroup label="' + (likely.length ? "Everyone else" : "Without a fork") + '">' + rest.map(option).join("") + "</optgroup>" : "") +
       '</select> <button type="button" class="chip" data-match="' + escapeAttribute(fork.owner) + '">Match</button>'
@@ -275,10 +372,20 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
 
   const head =
     "<tr><th>Student</th><th>Account</th><th class=\"n\">Commits</th>" +
-    Array.from({ length: weeks + 1 }, (_, week) =>
-      '<th class="w">' + (week === 0 ? "pre" : "W" + week + (folded && week === weeks ? "+" : "")) + "</th>",
-    ).join("") +
-    (until ? '<th class="w" title="After the deadline, ' + escapeAttribute(day(until)) + '">late</th>' : "") +
+    ["seen", "claimed"]
+      .map(
+        (kind) =>
+          '<th class="w ' + kind + '">pre</th>' +
+          groupsOf[kind]
+            .map((group) =>
+              '<th class="w ' + kind + (group.from !== group.to ? " fold" : "") + '"' +
+              (group.from !== group.to ? ' title="Weeks ' + group.from + "–" + group.to + ': 95% or more of the forks have no commits"' : "") +
+              ">" + groupLabel(group) + "</th>",
+            )
+            .join("") +
+          (until ? '<th class="w ' + kind + '" title="After the deadline, ' + escapeAttribute(day(until)) + '">late</th>' : ""),
+      )
+      .join("") +
     "<th>Last push</th><th></th></tr>";
 
   const matchedRows = [...theirs.entries()]
@@ -290,7 +397,7 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
           escapeAttribute(nameOf(student)) + '">×</button>'
         : ' <span class="dim" title="Known from a link they handed in">link</span>';
       return (
-        "<tr><td>" + escapeText(nameOf(student)) + "</td><td>" + account(fork) + how + '</td><td class="n">' + c.total + "</td>" +
+        '<tr class="mine" data-student="' + escapeAttribute(student) + '"><td class="who">' + escapeText(nameOf(student)) + "</td><td>" + account(fork, how) + '</td><td class="n">' + c.total + "</td>" +
         c.weeks + "<td>" + c.push + '</td><td class="fl">' + c.flags + "</td></tr>"
       );
     })
@@ -306,7 +413,7 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
           ? picker(fork)
           : '<span class="dim">everyone has a fork</span>';
       return (
-        "<tr><td>" + shared + "</td><td>" + account(fork) + '</td><td class="n">' + c.total + "</td>" +
+        '<tr class="loose' + (sureOf(fork) ? " sug" : "") + '" data-login="' + escapeAttribute(fork.owner) + '"><td class="who">' + shared + "</td><td>" + account(fork) + '</td><td class="n">' + c.total + "</td>" +
         c.weeks + "<td>" + c.push + '</td><td class="fl">' + c.flags + "</td></tr>"
       );
     })
@@ -315,10 +422,12 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
   const missingList = withoutFork
     .sort((a, b) => nameOf(a).localeCompare(nameOf(b)))
     .map((student) =>
-      "<li>" + escapeText(nameOf(student)) +
+      '<li data-student="' + escapeAttribute(student) + '">' + escapeText(nameOf(student)) +
       (recorded[student] ? ' <span class="dim">— recorded account ' + escapeText(recorded[student]) + " has no fork of it</span>" : "") + "</li>",
     )
     .join("");
+
+  const sureTotal = loose.filter((fork) => !owners.has(fork.owner.toLowerCase()) && sureOf(fork)).length;
 
   const tabs =
     '<nav class="hw">' +
@@ -384,14 +493,16 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
           "It runs in the background; the page fills in when it ends.</p>"
         : "") +
     '<div class="wrap"><table class="grid by-seen"><thead>' + head + "</thead>" +
-    '<tbody><tr class="sec"><th colspan="' + (columns + 5) + '">Matched (' + theirs.size + ")</th></tr>" +
-    (matchedRows || '<tr><td colspan="' + (columns + 5) + '" class="dim">Nobody yet.</td></tr>') +
+    '<tbody><tr class="sec" id="sec-mine"><th colspan="' + (columns + 5) + '">Matched (<span data-count="mine">' + theirs.size + "</span>)</th></tr>" +
+    (matchedRows || '<tr class="nobody"><td colspan="' + (columns + 5) + '" class="dim">Nobody yet.</td></tr>') +
     (loose.length
-      ? '<tr class="sec"><th colspan="' + (columns + 5) + '">Forks nobody is matched to (' + loose.length + ")</th></tr>" + looseRows
+      ? '<tr class="sec"><th colspan="' + (columns + 5) + '">Forks nobody is matched to (<span data-count="loose">' + loose.length + "</span>)" +
+        ' <button type="button" class="chip sure" data-sure' + (sureTotal ? "" : " hidden") + ">Match " + sureTotal + " suggested</button>" +
+        "</th></tr>" + looseRows
       : "") +
     "</tbody></table></div>" +
     (withoutFork.length
-      ? "<section class=\"none\"><h2>No fork found (" + withoutFork.length + ")</h2><ul>" + missingList + "</ul></section>"
+      ? '<section class="none"><h2>No fork found (<span data-count="none">' + withoutFork.length + "</span>)</h2><ul>" + missingList + "</ul></section>"
       : "");
 
   const style =
@@ -420,6 +531,7 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
     ".w{width:26px;text-align:center!important;font-size:11px;font-variant-numeric:tabular-nums;padding:2px!important}" +
     "td.w{border:2px solid transparent!important;border-radius:4px}" +
     ".late{box-shadow:inset 0 0 0 2px #c0662b}" +
+    "th.fold{font-style:italic;white-space:nowrap}td.fold{background-image:repeating-linear-gradient(135deg,transparent 0 3px,rgba(127,127,127,.12) 3px 5px)}" +
     ".l0{background:rgba(127,127,127,.08)}.l1{background:#cfe8d6}.l2{background:#9fd0ad}.l3{background:#5fae78;color:#fff}.l4{background:#2f6f4f;color:#fff}" +
     ".by-seen .claimed,.by-claimed .seen{display:none}" +
     "a{color:var(--info)}" +
@@ -427,22 +539,60 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
     ".flag{display:inline-block;padding:0 6px;border-radius:4px;background:var(--warnbg);color:var(--warn);margin:1px 2px 1px 0}" +
     ".flag.bad{background:#fbe9e7;color:#a33}" +
     ".hist{display:inline-block;margin-left:4px}.hist summary{cursor:pointer;color:var(--dim)}.hist ol{margin:4px 0 0;padding-left:18px}" +
-    ".pick{font:inherit;font-size:12px;max-width:180px}" +
+    ".pick{font:inherit;font-size:12px;max-width:200px}" +
+    ".pn{display:block;font-size:11px;color:var(--dim)}" +
+    "tr.sug td.who select{outline:2px solid #9fd0ad;outline-offset:1px;border-radius:3px}" +
+    ".sure{margin-left:8px;text-transform:none;letter-spacing:0;font-weight:600;border-color:#2f6f4f;color:#2f6f4f}" +
+    "tr.just td{animation:just 1.6s ease-out}@keyframes just{from{background:#cfe8d6}to{background:transparent}}" +
     ".none ul{columns:3 180px;margin:6px 0 0;padding-left:18px}" +
     "</style>";
 
+  // Matching happens in place: the row moves to Matched once the pane says
+  // the account is saved, and nothing redraws, so the page does not jump.
+  // The scroll is reported up, so a redraw (an analysis ending, ×) comes
+  // back where it was (WidgetFrame in client/materials.js).
   const script =
     "<script>(function(){" +
     "function up(m){m.source='professor-pane';parent.postMessage(m,'*');}" +
+    "var q=null;addEventListener('scroll',function(){if(q)return;q=setTimeout(function(){q=null;up({kind:'frame-scroll',y:scrollY});},150);});" +
+    "function $$(s){return Array.prototype.slice.call(document.querySelectorAll(s));}" +
+    "function drop(n){if(n&&n.parentNode)n.parentNode.removeChild(n);}" +
+    "function sure(){return $$('tr.loose.sug').filter(function(r){var s=r.querySelector('select.pick');return s&&s.value;});}" +
+    "function counts(){var c={mine:$$('tr.mine').length,loose:$$('tr.loose').length,none:$$('.none li').length};" +
+    "$$('[data-count]').forEach(function(x){x.textContent=c[x.getAttribute('data-count')];});" +
+    "var n=sure().length,b=document.querySelector('[data-sure]');if(b){b.hidden=!n;b.disabled=false;b.textContent='Match '+n+' suggested';}" +
+    "if(c.mine)drop(document.querySelector('tr.nobody'));}" +
+    "function place(r,student){var s=r.querySelector('select.pick');var o=s&&s.querySelector('option[value=\"'+student+'\"]');" +
+    "var name=o?o.textContent:student;var who=r.querySelector('td.who');who.textContent=name;" +
+    "var x=document.createElement('button');x.type='button';x.className='lnk';x.setAttribute('data-unmatch',student);" +
+    "x.title='Forget this account for '+name;x.textContent='\\u00d7';var a=r.querySelector('td:nth-child(2) a');if(a)a.insertAdjacentElement('afterend',x);" +
+    "r.className='mine just';r.setAttribute('data-student',student);" +
+    "var mine=$$('tr.mine').filter(function(m){return m!==r;});var after=document.getElementById('sec-mine');" +
+    "for(var i=0;i<mine.length;i++){if(mine[i].querySelector('td.who').textContent.localeCompare(name)>0)break;after=mine[i];}" +
+    "after.parentNode.insertBefore(r,after.nextSibling);" +
+    "$$('select.pick option[value=\"'+student+'\"]').forEach(function(op){var sel=op.closest('select');var was=sel.value===student;drop(op);if(was)sel.value='';});" +
+    "$$('.none li[data-student=\"'+student+'\"]').forEach(drop);}" +
+    "var pending={},seq=0;" +
+    "function match(rows){var pairs=[],seen={},used=[];rows.forEach(function(r){var s=r.querySelector('select.pick');if(!s||!s.value||seen[s.value])return;" +
+    "seen[s.value]=1;used.push(r);pairs.push({student:s.value,login:r.getAttribute('data-login')});" +
+    "var b=r.querySelector('[data-match]');if(b){b.disabled=true;b.textContent='Saving\\u2026';}});" +
+    "if(!pairs.length)return false;var t='m'+(++seq);pending[t]=used;up({kind:'fork-match',pairs:pairs,ticket:t});return true;}" +
+    "addEventListener('message',function(e){var d=e.data;if(!d||d.source!=='professor-pane'||d.kind!=='fork-matched')return;" +
+    "var rows=pending[d.ticket]||[];delete pending[d.ticket];var done={};(d.matched||[]).forEach(function(p){done[p.login.toLowerCase()]=p.student;});" +
+    "rows.forEach(function(r){var st=done[r.getAttribute('data-login').toLowerCase()];if(st)place(r,st);" +
+    "else{var b=r.querySelector('[data-match]');if(b){b.disabled=false;b.textContent='Match';}}});" +
+    "counts();var said=[];if(d.error&&!(d.matched||[]).length)said.push(d.error);" +
+    "(d.refused||[]).forEach(function(p){said.push(p.error);});if(d.note)said.push(d.note);if(said.length)alert(said.join('\\n'));});" +
+    "document.addEventListener('change',function(e){if(e.target.matches&&e.target.matches('select.pick'))counts();});" +
     "document.addEventListener('click',function(e){var t=e.target;if(!t.closest)return;" +
     "var b=t.closest('[data-by]');if(b){var g=document.querySelector('.grid');if(g){g.className='grid by-'+b.getAttribute('data-by');}" +
     "document.querySelectorAll('[data-by]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});return;}" +
     "var p=t.closest('[data-pick]');if(p){up({kind:'forks-pick',assessment:p.getAttribute('data-pick')});return;}" +
-    "var a=t.closest('[data-analyze]');if(a){a.disabled=true;a.textContent='Analysing…';up({kind:'homework-forks',assessment:a.getAttribute('data-analyze'),activity:true});return;}" +
-    "var m=t.closest('[data-match]');if(m){var s=m.parentNode.querySelector('select.pick');if(!s||!s.value){if(s)s.focus();return;}" +
-    "m.disabled=true;m.textContent='Saving…';up({kind:'fork-match',student:s.value,login:m.getAttribute('data-match')});return;}" +
+    "var a=t.closest('[data-analyze]');if(a){a.disabled=true;a.textContent='Analysing\\u2026';up({kind:'homework-forks',assessment:a.getAttribute('data-analyze'),activity:true});return;}" +
+    "var all=t.closest('[data-sure]');if(all){if(match(sure()))all.disabled=true;return;}" +
+    "var m=t.closest('[data-match]');if(m){var r=m.closest('tr');if(!match([r])){var s=r.querySelector('select.pick');if(s)s.focus();}return;}" +
     "var u=t.closest('[data-unmatch]');if(u){u.disabled=true;up({kind:'fork-match',student:u.getAttribute('data-unmatch'),clear:true});return;}" +
-    "var q=t.closest('[data-ask]');if(q){up({kind:'ask',prompt:q.getAttribute('data-ask')});return;}" +
+    "var k=t.closest('[data-ask]');if(k){up({kind:'ask',prompt:k.getAttribute('data-ask')});return;}" +
     "});})();</script>";
 
   return documentPage(style + body + script, dark);

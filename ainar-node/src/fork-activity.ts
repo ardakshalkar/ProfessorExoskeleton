@@ -67,6 +67,12 @@ export interface ForkActivity {
   snapshots: ForkSnapshot[];
   /** Why the last read failed; the rest is what an earlier read found. */
   error?: string | null;
+  /**
+   * The name on the owner's GitHub profile — what the match suggests a
+   * student by, beside the login. Asked once per account; null when the
+   * profile has none, absent when not asked yet.
+   */
+  owner_name?: string | null;
 }
 
 export interface ActivityCache {
@@ -153,6 +159,7 @@ export const merged = (previous: ForkActivity | undefined, fork: Fork, read: Com
     commits,
     snapshots,
     error: null,
+    ...(previous && previous.owner_name !== undefined ? { owner_name: previous.owner_name } : {}),
   };
 };
 
@@ -168,6 +175,7 @@ export const failed = (previous: ForkActivity | undefined, fork: Fork, reason: s
   commits: previous?.commits ?? [],
   snapshots: previous?.snapshots ?? [],
   error: reason,
+  ...(previous && previous.owner_name !== undefined ? { owner_name: previous.owner_name } : {}),
 });
 
 /** A fork skipped because nothing was pushed since: only the check moves. */
@@ -301,6 +309,25 @@ export const analyseForks = async (options: {
     () => limited,
   );
   report.left = due.length - report.read - report.failed;
+  // The profile names nobody has asked for yet: once per account, ever, so
+  // a second analysis asks only for new forks' owners.
+  const unnamed = Object.values(cache.forks).filter((entry) => entry.owner_name === undefined && !entry.error);
+  await pooled(
+    unnamed,
+    limit,
+    async (entry) => {
+      const profile = await get(`/users/${encodeURIComponent(entry.owner)}`);
+      if (profile.limited) {
+        limited = true;
+        return;
+      }
+      if (profile.status === 200 || profile.status === 404) {
+        const name = typeof profile.body?.name === "string" ? profile.body.name.trim() : "";
+        entry.owner_name = name || null;
+      }
+    },
+    () => limited,
+  );
   if (!limited) cache.analysed_at = started;
   save(cache);
   return { cache, report };

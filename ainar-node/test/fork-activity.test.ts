@@ -129,7 +129,9 @@ test("an analysis reads only the forks that moved, and keeps a deleted fork's hi
   assert.deepEqual(first.report, { read: 2, skipped: 0, failed: 1, left: 0 });
   assert.equal(first.cache.forks["aliya/hw3"]!.ahead_by, 1);
   assert.match(first.cache.forks["gone/hw3"]!.error ?? "", /no such fork/);
-  assert.equal(asked.length, 3);
+  assert.equal(asked.filter((path) => path.includes("/compare/")).length, 3);
+  // The profile names, once each, for the forks that could be read.
+  assert.deepEqual(asked.filter((path) => path.startsWith("/users/")).sort(), ["/users/aliya", "/users/bolat"]);
 
   const again: string[] = [];
   const second = await analyseForks({
@@ -143,7 +145,7 @@ test("an analysis reads only the forks that moved, and keeps a deleted fork's hi
     save: () => {},
     now: () => "2026-10-15T00:00:00Z",
   });
-  assert.equal(again.length, 1);
+  assert.equal(again.length, 1, "one compare, and no profile asked twice");
   assert.match(again[0]!, /aliya/);
   assert.deepEqual(second.report, { read: 1, skipped: 1, failed: 0, left: 0 });
   assert.equal(second.cache.forks["aliya/hw3"]!.snapshots.length, 2);
@@ -165,4 +167,34 @@ test("a spent hourly limit stops the run and leaves the rest for later", async (
   });
   assert.equal(run.report.left, 3);
   assert.equal(run.cache.analysed_at, null);
+});
+
+test("a profile's name is kept with the fork and asked for once", async () => {
+  const get: GithubGet = async (path) =>
+    path.startsWith("/users/")
+      ? { status: 200, body: { name: " Аружан Абуова " } }
+      : { status: 200, body: { ahead_by: 0, total_commits: 0, commits: [] } };
+  const run = await analyseForks({
+    get,
+    template: "narxoz/hw3",
+    baseBranch: "main",
+    forks: [fork("aruzhan-png", null)],
+    previous: null,
+    assessmentId: "ASSESSMENT-HW3",
+    save: () => {},
+  });
+  assert.equal(run.cache.forks["aruzhan-png/hw3"]!.owner_name, "Аружан Абуова");
+  // Read again (pushed since): the name stays without a second ask.
+  const asked: string[] = [];
+  const again = await analyseForks({
+    get: async (path) => (asked.push(path), get(path)),
+    template: "narxoz/hw3",
+    baseBranch: "main",
+    forks: [fork("aruzhan-png", "2026-11-01T00:00:00Z")],
+    previous: run.cache,
+    assessmentId: "ASSESSMENT-HW3",
+    save: () => {},
+  });
+  assert.equal(again.cache.forks["aruzhan-png/hw3"]!.owner_name, "Аружан Абуова");
+  assert.ok(!asked.some((path) => path.startsWith("/users/")));
 });
