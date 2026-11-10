@@ -7,8 +7,8 @@
 //
 // The page is framed the way the pane frames it, and the frame's presses are
 // answered here: Match writes the roster store under AINAR_ROSTER_DIR — point
-// it at a copy — and the homework buttons switch the frame. Analyze is not
-// run here. `?assessment=ASSESSMENT-…` picks the homework, `?names=1` shows
+// it at a copy — and the homework buttons switch the frame. Fetch from
+// GitHub is not run here. `?assessment=ASSESSMENT-…` picks the homework, `?names=1` shows
 // names.
 
 import http from "node:http";

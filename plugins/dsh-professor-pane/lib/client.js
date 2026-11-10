@@ -18623,7 +18623,7 @@ function ProfessorPane(props) {
             props.sessionId
           ).then((answer) => followJob(answer, props.sessionId)).then((result) => {
             if (result && !result.ok) {
-              window.alert(String(result.error || result.output || "the forks could not be analysed").trim().split("\n").slice(-2).join(" "));
+              window.alert(String(result.error || result.output || "the forks could not be fetched from GitHub").trim().split("\n").slice(-2).join(" "));
             }
             write(["files", "defence"]);
           }).catch(() => write(["files", "defence"]));

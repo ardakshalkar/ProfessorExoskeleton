@@ -5,7 +5,7 @@
  * Reads only what is on disk: `forks.json` and `fork-activity.json` beside
  * the submissions (ainar-node/src/forks.ts, fork-activity.ts), the run's
  * submissions and the roster store's recorded accounts. Opening the page never
- * reaches GitHub; *Analyze forks* does, as a background job
+ * reaches GitHub; *Fetch from GitHub* does, as a background job
  * (`homework-forks`, server/job-kinds.js), and the page redraws when it ends.
  *
  * Who is whose is `studentsByLogin`, the same match the Students list uses: a
@@ -289,7 +289,7 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
     if (w && w.total) {
       if (w.late_dated) {
         out.push(
-          '<span class="flag" title="Dated before an analysis that did not have them yet: pushed late, or the date was changed">' +
+          '<span class="flag" title="Dated before a fetch that did not have them yet: pushed late, or the date was changed">' +
             w.late_dated + " dated earlier</span>",
         );
       }
@@ -445,10 +445,10 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
   const status =
     '<p class="status">' +
     (analysed
-      ? "Commits analysed " + escapeText(ago(analysed, now)) + " · "
+      ? "Fetched from GitHub " + escapeText(ago(analysed, now)) + " · "
       : looked
-        ? "Forks listed " + escapeText(ago(looked, now)) + ", commits not analysed yet · "
-        : "Not analysed yet · ") +
+        ? "Forks listed " + escapeText(ago(looked, now)) + ", commits not fetched yet · "
+        : "Not fetched from GitHub yet · ") +
     (listing ? listing.forks.length + " fork" + (listing.forks.length === 1 ? "" : "s") + " of " : "") +
     '<span class="id">' + escapeText(repo) + "</span></p>";
 
@@ -463,20 +463,21 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
 
   const toggle =
     '<span class="by" role="group" aria-label="Count weeks by">' +
-    '<button type="button" class="seg" data-by="seen" aria-pressed="true" title="When an analysis first found the commit on GitHub — this side\'s clock">When seen</button>' +
+    '<button type="button" class="seg" data-by="seen" aria-pressed="true" title="When a fetch first found the commit on GitHub — this side\'s clock">When seen</button>' +
     '<button type="button" class="seg" data-by="claimed" title="The date written in the commit, which the student\'s machine sets">Commit date</button>' +
     "</span>";
 
-  // While an analysis runs on this homework, the button says how far it is.
+  // While a fetch runs on this homework, the button says how far it is.
   const running = runningOn(id);
   const progress = running?.progress;
   const analyzeButton = running
     ? '<button type="button" class="go" disabled>' +
       (running.state === "waiting"
         ? "Waiting…"
-        : "Analysing…" + (progress && progress.total !== null ? " " + progress.done + " of " + progress.total : "")) +
+        : "Fetching…" + (progress && progress.total !== null ? " " + progress.done + " of " + progress.total : "")) +
       "</button>"
-    : '<button type="button" class="go" data-analyze="' + escapeAttribute(id) + '">Analyze forks</button>';
+    : '<button type="button" class="go" data-analyze="' + escapeAttribute(id) + '" ' +
+      'title="List this homework\'s forks again and count the commits pushed since. Reads GitHub; changes nothing there.">Fetch from GitHub</button>';
 
   const body =
     tabs +
@@ -486,10 +487,10 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
     "</div></header>" +
     (analysed && unverified
       ? '<p class="dim small">' + unverified + " commit" + (unverified === 1 ? " was" : "s were") +
-        " already there at the first analysis, so they are placed by their own date even under “When seen”. " +
-        "Analysing every week or so makes the rest certain.</p>"
+        " already there at the first fetch, so they are placed by their own date even under “When seen”. " +
+        "Fetching every week or so makes the rest certain.</p>"
       : !analysed
-        ? '<p class="dim small">Analyzing compares each fork with the starter — one GitHub read per fork, and only forks pushed since are read again. ' +
+        ? '<p class="dim small">Fetching lists the forks and compares each one with the starter — one GitHub read per fork, and only forks pushed since are read again. ' +
           "It runs in the background; the page fills in when it ends.</p>"
         : "") +
     '<div class="wrap"><table class="grid by-seen"><thead>' + head + "</thead>" +
@@ -588,7 +589,7 @@ export const forksDocument = (workspace, root, runId, assessmentId, dark, withNa
     "var b=t.closest('[data-by]');if(b){var g=document.querySelector('.grid');if(g){g.className='grid by-'+b.getAttribute('data-by');}" +
     "document.querySelectorAll('[data-by]').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});return;}" +
     "var p=t.closest('[data-pick]');if(p){up({kind:'forks-pick',assessment:p.getAttribute('data-pick')});return;}" +
-    "var a=t.closest('[data-analyze]');if(a){a.disabled=true;a.textContent='Analysing\\u2026';up({kind:'homework-forks',assessment:a.getAttribute('data-analyze'),activity:true});return;}" +
+    "var a=t.closest('[data-analyze]');if(a){a.disabled=true;a.textContent='Fetching\\u2026';up({kind:'homework-forks',assessment:a.getAttribute('data-analyze'),activity:true});return;}" +
     "var all=t.closest('[data-sure]');if(all){if(match(sure()))all.disabled=true;return;}" +
     "var m=t.closest('[data-match]');if(m){var r=m.closest('tr');if(!match([r])){var s=r.querySelector('select.pick');if(s)s.focus();}return;}" +
     "var u=t.closest('[data-unmatch]');if(u){u.disabled=true;up({kind:'fork-match',student:u.getAttribute('data-unmatch'),clear:true});return;}" +

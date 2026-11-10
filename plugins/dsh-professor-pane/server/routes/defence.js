@@ -500,7 +500,7 @@ export const routes = [
       } catch (error) {
         return sendJson(res, 200, { error: String(error?.message ?? error) });
       }
-      // *Analyze forks* on the Forks page: the commits as well, one read per
+      // *Fetch from GitHub* on the Forks page: the commits as well, one read per
       // fork pushed since, so a job in the background (job-kinds.js).
       if (url.searchParams.get("activity") === "1") {
         const why = notFromThePane(req);

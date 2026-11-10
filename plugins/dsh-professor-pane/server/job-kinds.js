@@ -261,7 +261,7 @@ export const KINDS = {
       });
     },
   },
-  // *Analyze forks* on a homework: its forks listed again and each one pushed
+  // *Fetch from GitHub* on a homework's forks: its forks listed again and each one pushed
   // since compared against the starter (`homework forks --activity`). Writes
   // only the homework's `forks.json` and `fork-activity.json` beside the
   // submissions; a minute or two for a class, so in the background.
@@ -275,7 +275,7 @@ export const KINDS = {
         root,
         runId,
         kind: "homework-forks",
-        label: `Analysing the forks of ${pile.title}`,
+        label: `Fetching the forks of ${pile.title}`,
         subject: assessmentId,
         params,
         resume,

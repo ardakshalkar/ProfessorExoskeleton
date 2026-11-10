@@ -636,7 +636,7 @@ export function ProfessorPane(props) {
       if (data.kind === "homework-forks") {
         const run = currentRunRef.current;
         if (!run || !/^ASSESSMENT-[A-Z0-9][A-Z0-9-]*$/.test(String(data.assessment))) return;
-        // *Analyze forks* on Students · Forks: the commits as well, as a
+        // *Fetch from GitHub* on Students · Forks: the commits as well, as a
         // background job the navigator shows; the page redraws when it ends.
         if (data.activity === true) {
           pressWork(
@@ -651,7 +651,7 @@ export function ProfessorPane(props) {
             .then((answer) => followJob(answer, props.sessionId))
             .then((result) => {
               if (result && !result.ok) {
-                window.alert(String(result.error || result.output || "the forks could not be analysed").trim().split("\n").slice(-2).join(" "));
+                window.alert(String(result.error || result.output || "the forks could not be fetched from GitHub").trim().split("\n").slice(-2).join(" "));
               }
               write(["files", "defence"]);
             })
