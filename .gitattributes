@@ -26,3 +26,9 @@ bin/deck-build text eol=lf
 bin/sample text eol=lf
 
 *.cmd text eol=crlf
+
+# PLG-3: the plugin bundle is a build output compared byte for byte in CI, so
+# it is stored and checked out with LF whatever core.autocrlf says.
+plugins/ainar-core/dist/** text eol=lf
+plugins/ainar-core/bin/ainar text eol=lf
+plugins/ainar-core/bin/ainar.cmd text eol=crlf

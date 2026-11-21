@@ -88,3 +88,16 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         working-directory: plugins/dsh-professor-pane
         run: npm test
+
+      # PLG-3: the committed plugin bundle is what the source builds to. Without
+      # this, plugins/ainar-core/dist becomes another stale copy (the trap
+      # ~/.claude/skills fell into). Linux only: the bundle is stored with LF
+      # (.gitattributes) and one platform is enough to prove it.
+      - name: plugin bundle is current
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && runner.os == 'Linux' }}
+        working-directory: ainar-node
+        run: |
+          npm run build:plugin
+          git status --porcelain -- ../plugins/ainar-core
+          git diff --exit-code -- ../plugins/ainar-core
+          test -z "$(git status --porcelain -- ../plugins/ainar-core)"

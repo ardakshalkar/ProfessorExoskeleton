@@ -2782,7 +2782,7 @@ is worth building.
       `vendor/ainar` and the default profile into `share/`. Add
       `bin/ainar` (sh) and `bin/ainar.cmd`, both of which run
       `node dist/ainar.mjs`. `M` · depends: PLG-0, PLG-1
-- [ ] **PLG-3** A CI check that the committed bundle matches the source:
+- [x] **PLG-3** (done 2026-11-21; Linux job in test.yml, bundle pinned to LF in .gitattributes) A CI check that the committed bundle matches the source:
       rebuild, then fail on any diff. Without it the plugin becomes another
       stale copy, the same trap as `~/.claude/skills`. `S` · depends: PLG-2
 - [ ] **PLG-4** `.mcp.json` in the plugin: the stdio server, with

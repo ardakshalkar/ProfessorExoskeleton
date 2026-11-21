@@ -5,6 +5,15 @@
   },
   "plugins": [
     {
+      "name": "ainar-core",
+      "source": "./plugins/ainar-core",
+      "description": "The AINAR course model: the `ainar` command and a read-only MCP server, bundled as plain JavaScript. Needs only Node 20 or newer.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Ardak Shalkarbayuly"
+      }
+    },
+    {
       "name": "professor-course-skills",
       "source": "./plugins/professor-course-skills",
       "description": "This host's own course-level skills: onboarding, concept maps, term planning, assessment design, gap analysis, grading, dashboards and reporting, written against the AINAR record layer.",
