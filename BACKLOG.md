@@ -2795,6 +2795,20 @@ is worth building.
       and make the DSH preset put the repository's `bin/` on PATH, so the
       professor's own workflow is unchanged. Then hand-sync
       `~/.claude/skills`. `M` · depends: PLG-4
+
+      **Held 2026-11-21; two problems found before any edit.**
+      (1) A different `ainar` (Python, `...\Python311\Scripts\ainar.exe`) is on
+      this machine's PATH, and the professor preset forbids plain `ainar` for
+      that reason (`agent.cordis.yml` lines 71–75). Plain `ainar` in the skills
+      calls the wrong program unless the preset puts the repo's `bin/` first
+      on PATH; whether the preset can set PATH is unchecked.
+      (2) `${user_config.workspace}` is substituted only inside an installed
+      plugin. In `~/.claude/skills` and DSH it would stay literal, so the
+      `--root` form breaks the professor's own workflow. Likely fix: plain
+      `ainar` with no `--root` (the CLI already takes the nearest folder
+      holding `courses/`; a plugin user opens Claude Code in it), plus the
+      PATH change. Also add `dependencies: [ainar-core]` to
+      `professor-course-skills`.
 - [ ] **PLG-6** Starting from nothing. `/onboard-course` checks for a missing
       or empty folder and runs `ainar new course`. It also checks for a missing
       `node` and says, in one line, how to install it, instead of failing on
