@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "ainar": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/dist/ainar-mcp.mjs"],
+      "env": { "AINAR_WORKSPACE": "${user_config.workspace}" }
+    }
+  }
+}

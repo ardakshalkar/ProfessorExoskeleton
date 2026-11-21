@@ -3,5 +3,13 @@
   "description": "The AINAR course model: the `ainar` command and a read-only MCP server, bundled as plain JavaScript. Needs only Node 20 or newer.",
   "version": "0.1.0",
   "license": "MIT",
-  "author": { "name": "Ardak Shalkarbayuly" }
+  "author": { "name": "Ardak Shalkarbayuly" },
+  "userConfig": {
+    "workspace": {
+      "type": "directory",
+      "title": "Folder for your courses",
+      "description": "The folder that holds (or will hold) your courses/ directory.",
+      "required": true
+    }
+  }
 }

@@ -2785,7 +2785,7 @@ is worth building.
 - [x] **PLG-3** (done 2026-11-21; Linux job in test.yml, bundle pinned to LF in .gitattributes) A CI check that the committed bundle matches the source:
       rebuild, then fail on any diff. Without it the plugin becomes another
       stale copy, the same trap as `~/.claude/skills`. `S` · depends: PLG-2
-- [ ] **PLG-4** `.mcp.json` in the plugin: the stdio server, with
+- [x] **PLG-4** (done 2026-11-21; not run through `claude plugin validate`, the CLI is not on this machine's PATH) `.mcp.json` in the plugin: the stdio server, with
       `AINAR_WORKSPACE=${user_config.workspace}`. Add `userConfig.workspace`
       (`directory`, required, title "Folder for your courses").
       `S` · depends: PLG-2
