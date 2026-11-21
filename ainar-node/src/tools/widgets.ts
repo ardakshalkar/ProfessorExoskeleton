@@ -26,6 +26,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { installPath } from "../install-root.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -72,6 +73,16 @@ const CANDIDATES = [
 ];
 
 const findAssets = (): string => {
+  // The install root first (checkout, or a plugin's share/); the relative
+  // candidates remain for the .mcpb and dsh bundles, which predate it.
+  const fromRoot = (() => {
+    try {
+      return installPath("vendor", "ainar", "mcp", "widget-assets");
+    } catch {
+      return undefined;
+    }
+  })();
+  if (fromRoot && existsSync(join(fromRoot, "manifest.json"))) return fromRoot;
   for (const candidate of CANDIDATES) {
     const path = resolve(HERE, candidate);
     if (existsSync(join(path, "manifest.json"))) return path;

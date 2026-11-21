@@ -32,14 +32,12 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { parse } from "yaml";
+import { installPath } from "./install-root.ts";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO = resolve(HERE, "..", "..");
-export const SYSTEM_DEFAULTS = join(REPO, "vendor", "datalayer", "preferences", "defaults.yaml");
-export const PROFILES_DIR = join(REPO, "profiles");
+export const SYSTEM_DEFAULTS = installPath("vendor", "datalayer", "preferences", "defaults.yaml");
+export const PROFILES_DIR = installPath("profiles");
 export const LEGACY_INSTITUTION = "narxoz";
 
 export type Scope = "system" | "institution" | "professor" | "course" | "run" | "task";

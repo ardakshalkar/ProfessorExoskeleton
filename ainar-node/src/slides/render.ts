@@ -38,6 +38,7 @@ import { CHAR_WIDTH, columnWidths, plain, tableRowHeights, textHeight, unescape,
 import { approvalRequired, creditForFigure, type DeckPlan, type FigureRecord } from "./plan.ts";
 import { describeDraft, generateMissing, missingVisuals, type MissingVisual } from "./draft.ts";
 import { timed, timedSync } from "./timing.ts";
+import { dependencyRoot } from "../install-root.ts";
 import { toPdf as convert } from "../pdf.ts";
 
 const require = createRequire(import.meta.url);
@@ -53,7 +54,7 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
  */
 export function loadDependency(name: string): any {
   const named = process.env.DECK_RENDERER_NODE_MODULES ?? process.env.PRES_NODE_MODULES;
-  const root = named ? resolve(named) : resolve(scriptDirectory, "..", "..", "node_modules");
+  const root = named ? resolve(named) : dependencyRoot();
   try {
     return require(join(root, name));
   } catch {

@@ -2773,7 +2773,7 @@ is worth building.
       document `plugin:skill`: the course versions are the ones
       `/grade-batch` in a course folder should reach, and a bare name that
       picks one at random is the failure a professor cannot diagnose.
-- [ ] **PLG-1** The `installRoot()` seam. The four places above resolve from
+- [x] **PLG-1** The `installRoot()` seam (done 2026-11-21; `npm run test` has 4 failures in paper printing that predate it, golden and validator pass). The four places above resolve from
       one function. It returns the repository in a checkout, or the bundle's
       `share/` folder in a plugin. `npm run check` stays green.
       `S` · depends: —

@@ -38,6 +38,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { parse } from "yaml";
+import { installRoot } from "./install-root.ts";
 
 /**
  * The file every templates directory carries. It is the menu the skill reads
@@ -237,7 +238,7 @@ export const get = (set: TemplateSet, templateId: string): Template => {
  * `src/templates.ts` → `ainar-node/` → the repository, which is the same
  * arithmetic `bin/golden-check.ts` does.
  */
-const INSTALLATION = resolve(import.meta.dirname, "..", "..");
+const INSTALLATION = installRoot();
 
 /**
  * Every directory a bare template id is looked for in, in order.
