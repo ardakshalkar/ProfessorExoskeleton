@@ -2694,6 +2694,108 @@ is worth building.
       publishing-lifecycle epic's tick is filled in without the professor
       doing it by hand. `S` · depends: TGR-4
 
+## E41 · The course skills from a fresh install — no `FUTURE.md` section yet
+
+> **Proposed 2026-11-10.** Today `/plugin install professor-course-skills`
+> gives a stranger 27 skills that mostly fail. The text says `bin/ainar …`
+> nearly 200 times, and that path exists only inside this checkout. Done means:
+> a professor with Claude Code and Node, and nothing else, installs one
+> plugin, picks a folder, runs `/onboard-course`, and every skill that does
+> not need the pane works.
+>
+> **What the plugin system gives us** (code.claude.com plugin docs, read
+> 2026-11-10):
+>
+> - **`bin/` goes on the PATH.** It is on the Bash tool's PATH while the
+>   plugin is enabled, so the skills can say plain `ainar`.
+> - **`${CLAUDE_PLUGIN_ROOT}` changes with each version; `${CLAUDE_PLUGIN_DATA}`
+>   survives updates.** Both are substituted in SKILL.md text, `.mcp.json` and
+>   hooks. Neither is in the environment of a Bash tool call.
+> - **`userConfig` asks the user at install.** Its types include `directory`
+>   and `sensitive` strings. Values reach skill text and MCP env as
+>   `${user_config.KEY}`.
+> - **Plugins can depend on other plugins** (`dependencies` in plugin.json).
+> - **Only the plugin's own folder is copied.** A path such as `../../ainar-node`
+>   is rejected, so the CLI must be inside the plugin.
+> - **npm dependencies install automatically, with limits:** a 60-second
+>   timeout, `--ignore-scripts`, and no native builds.
+>
+> **The shape.** Bundle `ainar-node` with esbuild into plain JavaScript and
+> commit it in the plugin. The installer then runs no npm, no
+> `--experimental-strip-types` and no TypeScript; Node ≥ 20 is the only
+> requirement. `pg`, `yaml`, `zod`, `jose`, `docx`, `pdf-lib` and the MCP SDK
+> are pure JavaScript and bundle cleanly. `sharp` (native) and `pptxgenjs` do
+> not, so deck rendering stays out of v1 (PLG-9).
+>
+> **What the code reads from outside `ainar-node/`.** These four places assume
+> the repository layout:
+>
+> - `src/profile.ts`: `REPO/vendor/datalayer/preferences/defaults.yaml` and
+>   `REPO/profiles/`
+> - `src/templates.ts`: `INSTALLATION`, which holds the skill templates
+> - `src/tools/widgets.ts`: `vendor/ainar/mcp/widget-assets`
+> - `src/slides/render.ts`: `node_modules`
+>
+> All of them become one `installRoot()` seam. Together they are under 0.5 MB.
+>
+> **Not in scope.** The pane, the DSH plugins, and claude.ai/Cowork (they
+> refuse plugins that have a top-level `bin/`; their route is the hosted MCP
+> server). The six standalone `professor-skills` plugins already work.
+
+- [ ] **PLG-0** Decide four things before code; write the answers here.
+      (a) One plugin, or an `ainar-core` plugin (CLI + MCP) that
+      `professor-course-skills` lists in `dependencies`. The split lets
+      the standalone plugins use the core later.
+      (b) Deck rendering in v1 or not.
+      (c) Where credentials live for a plugin user. Today the CLI reads
+      `$DSH_HOME/.credentials.yaml`, which does not exist for them.
+      (d) The skill-name clashes: `grade-batch`, `grade-submission` and
+      `publish-telegram` exist in both plugins. Either rename the
+      standalone ones or document `plugin:skill`. `S` · depends: —
+- [ ] **PLG-1** The `installRoot()` seam. The four places above resolve from
+      one function. It returns the repository in a checkout, or the bundle's
+      `share/` folder in a plugin. `npm run check` stays green.
+      `S` · depends: —
+- [ ] **PLG-2** `npm run build:plugin`. esbuild writes `ainar.mjs` and
+      `ainar-mcp.mjs` into `plugins/<core>/dist/` and copies `vendor/datalayer`,
+      `vendor/ainar` and the default profile into `share/`. Add
+      `bin/ainar` (sh) and `bin/ainar.cmd`, both of which run
+      `node dist/ainar.mjs`. `M` · depends: PLG-0, PLG-1
+- [ ] **PLG-3** A CI check that the committed bundle matches the source:
+      rebuild, then fail on any diff. Without it the plugin becomes another
+      stale copy, the same trap as `~/.claude/skills`. `S` · depends: PLG-2
+- [ ] **PLG-4** `.mcp.json` in the plugin: the stdio server, with
+      `AINAR_WORKSPACE=${user_config.workspace}`. Add `userConfig.workspace`
+      (`directory`, required, title "Folder for your courses").
+      `S` · depends: PLG-2
+- [ ] **PLG-5** Rewrite the skills' commands: `bin/ainar X` becomes
+      `ainar X --root "${user_config.workspace}"`, mechanically, in skills,
+      references and templates. Keep `bin/ainar` working in this checkout,
+      and make the DSH preset put the repository's `bin/` on PATH, so the
+      professor's own workflow is unchanged. Then hand-sync
+      `~/.claude/skills`. `M` · depends: PLG-4
+- [ ] **PLG-6** Starting from nothing. `/onboard-course` checks for a missing
+      or empty folder and runs `ainar new course`. It also checks for a missing
+      `node` and says, in one line, how to install it, instead of failing on
+      the first command. `S` · depends: PLG-5
+- [ ] **PLG-7** Skills that need the pane. In `defend-submission`,
+      `grading-proposal`, and the pane steps of `grade-scans`, `publish` and
+      `sync-roster`, say so up front and do the rest without it. Do not
+      pretend a button exists. `S` · depends: PLG-5
+- [ ] **PLG-8** A clean-machine test on Windows and Linux. Use a fresh
+      `HOME`, add the local marketplace, `claude plugin install … --config
+      workspace=<tmp>`, then run `ainar new course`, `ainar validate`, and
+      an MCP `tools/list` through the SDK client. Belongs with INS-1.
+      `M` · depends: PLG-6
+- [ ] **PLG-9** Deck rendering, only if PLG-0(b) said yes. A SessionStart
+      hook installs `sharp` and `pptxgenjs` into `${CLAUDE_PLUGIN_DATA}`, and
+      `NODE_PATH` points there. The documented example is POSIX, so a
+      PowerShell twin is needed. `M` · depends: PLG-8
+- [ ] **PLG-10** Version and release notes. Bump the plugin `version` in
+      `marketplace.json` with each bundle change, and write a README that
+      says what a fresh user gets and what needs this repository.
+      `S` · depends: PLG-8
+
 ---
 
 ## Suggested order
@@ -2738,6 +2840,10 @@ WF-6 rather than competing with it.
 **Ask before starting (E40):** TGR-0 first. The whole epic is a possible
 solution to an edge case, and the professor may prefer adding those lectures
 once by hand.
+
+**A plugin a stranger can install (E41):** PLG-0 first (four answers),
+then PLG-1 → PLG-2 → PLG-4 → PLG-5. That is the first point where a fresh
+install works. PLG-3 goes in with PLG-2, not after it.
 
 **Deliberately not now:** INT-6, INT-7, INT-9, EVA-3, GRD-4, MAT-5, DEP-2.
 Each waits on a real user asking for it. If one is started anyway, the question
