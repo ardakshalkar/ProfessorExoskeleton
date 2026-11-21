@@ -120,6 +120,9 @@ const withEnv = async (values: Record<string, string | undefined>, run: () => vo
   }
 };
 
+// The same folder spelled differently: on Windows case and backslashes do not matter, elsewhere only a trailing separator does.
+const respelled = (path: string): string => (process.platform === "win32" ? path.toUpperCase() + "\\" : path + "/");
+
 // An address nothing listens on: these tests never send, and must never reach a real database.
 const NOWHERE = "postgresql://nobody:secret@127.0.0.1:1/nowhere";
 
@@ -129,7 +132,7 @@ test("a workspace is connected only when it is the one named — DATABASE_URL al
     assert.equal(databaseFor(root), null);
     assert.ok(openCourseStore(root) instanceof YamlCourseStore, "an unnamed workspace runs on its files alone");
   });
-  await withEnv({ DATABASE_URL: NOWHERE, [DATABASE_WORKSPACE_ENV]: root.toUpperCase() + "\\", [DATABASE_ROLE_ENV]: undefined }, () => {
+  await withEnv({ DATABASE_URL: NOWHERE, [DATABASE_WORKSPACE_ENV]: respelled(root), [DATABASE_ROLE_ENV]: undefined }, () => {
     const connected = databaseFor(root);
     assert.equal(connected?.role, "mirror", "named — case and a trailing separator aside — and mirror by default");
     assert.equal(connected?.target, "postgresql://nobody@127.0.0.1:1/nowhere", "the target is said without its password");
