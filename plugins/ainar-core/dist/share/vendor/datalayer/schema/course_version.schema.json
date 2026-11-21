@@ -1,0 +1,530 @@
+{
+  "$defs": {
+    "GradingComponent": {
+      "additionalProperties": false,
+      "description": "One block of the final grade: Narxoz's ВСК1 at 30%, a \"Homework\" category at\n25%, a \"First half\" period. `weight` is its share of the WHOLE grade, the\nsame unit an assessment's `weight` is in, so a block's members add up to it\nand the top-level blocks add up to 1. `parent` nests a block inside another —\n\"ВСК1 = homework 10% + midterm 20%\" is three components, two of them with\n`parent: VSK1` — so any depth an institution uses is one list.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "component_id": {
+          "pattern": "^[A-Z][A-Z0-9-]{0,31}$",
+          "title": "Component Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "weight": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Weight",
+          "type": "number"
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9-]{0,31}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent"
+        },
+        "points": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What this block is out of in the LMS, when the institution counts it on\nits own scale: Narxoz's ВСК1 is out of 100 whatever its weight, so a quiz\nworth 6% of the course inside ВСК1's 30% is out of 20 there. Absent, the\nblock sets no scale and the one above it (or the scheme's) decides.",
+          "title": "Points"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "component_id",
+        "title",
+        "weight"
+      ],
+      "title": "GradingComponent",
+      "type": "object"
+    },
+    "GradingScheme": {
+      "additionalProperties": false,
+      "description": "How this run's final grade is divided, when the institution divides it.\nAbsent, the grade is the flat sum of assessment weights, as it always was.\n\n`points` is what the whole course is out of in the LMS — 100 when every\nassessment is out of its share of a hundred-point course. With no `points`\non the scheme or on any block above an assessment, the LMS gets the raw\nscore out of the assessment's own `maximum_score`.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/GradingComponent"
+          },
+          "title": "Components",
+          "type": "array",
+          "default": []
+        },
+        "points": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Points"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "locked": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The professor has frozen the policy. A writer that changes components, weights or which block an assessment counts in refuses while this is true; unlocking is its own recorded step.",
+          "title": "Locked"
+        },
+        "missing_work": {
+          "anyOf": [
+            {
+              "enum": [
+                "blank",
+                "zero"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What work not handed in gets once its due date has passed, for every assessment that does not say otherwise. Absent, blank: no score and nothing sent.",
+          "title": "Missing Work"
+        }
+      },
+      "title": "GradingScheme",
+      "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "planned",
+        "scheduled",
+        "running",
+        "completed",
+        "cancelled"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    },
+    "Sync": {
+      "additionalProperties": false,
+      "description": "One road between this run and a service outside it, described the same way\nfor every service: which way data goes (`role`), what moves (`stream`), how a\nrow on the far side is found to be one of our students (`match`), what to do\nwith a match that is not sure (`unsure`), how the receiving side is changed\n(`write`, `remove`) and who wins when both sides changed (`conflict`).\n\nIt holds neither names nor secrets: a connection NAME, a sheet id, a column\nmap. Which person a row is — a pin, an anchor, a Canvas user id — is a link,\nand links are private, outside the repository.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "sync_id": {
+          "pattern": "^[a-z][a-z0-9-]{0,39}$",
+          "title": "Sync Id",
+          "type": "string"
+        },
+        "service": {
+          "$ref": "#/$defs/SyncService"
+        },
+        "connection": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A connection's name in ~/.ainar/connections.json; absent, the service's default.",
+          "title": "Connection"
+        },
+        "role": {
+          "$ref": "#/$defs/SyncRole"
+        },
+        "stream": {
+          "$ref": "#/$defs/SyncStream"
+        },
+        "where": {
+          "additionalProperties": true,
+          "default": {},
+          "description": "Where on the far side: {sheet, tab}, {canvas_course}, {chat}, {repo}.",
+          "title": "Where",
+          "type": "object"
+        },
+        "match": {
+          "default": [],
+          "description": "How a row is found to be one of our students, tried in order.",
+          "items": {
+            "$ref": "#/$defs/SyncMatch"
+          },
+          "title": "Match",
+          "type": "array"
+        },
+        "unsure": {
+          "$ref": "#/$defs/SyncUnsure",
+          "default": "hold"
+        },
+        "write": {
+          "$ref": "#/$defs/SyncWrite",
+          "default": "upsert"
+        },
+        "remove": {
+          "$ref": "#/$defs/SyncRemove",
+          "default": "never"
+        },
+        "conflict": {
+          "$ref": "#/$defs/SyncConflict",
+          "default": "refuse"
+        },
+        "map": {
+          "additionalProperties": true,
+          "default": {},
+          "description": "What corresponds to what: columns, marks, rows.",
+          "title": "Map",
+          "type": "object"
+        },
+        "anchors": {
+          "default": false,
+          "description": "Leave an invisible, random tag on each matched row and column (Google Sheets developer metadata).",
+          "title": "Anchors",
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        }
+      },
+      "required": [
+        "sync_id",
+        "service",
+        "role",
+        "stream"
+      ],
+      "title": "Sync",
+      "type": "object"
+    },
+    "SyncConflict": {
+      "enum": [
+        "refuse",
+        "course-wins",
+        "remote-wins",
+        "fill-blanks"
+      ],
+      "title": "SyncConflict",
+      "type": "string"
+    },
+    "SyncMatch": {
+      "enum": [
+        "link",
+        "anchor",
+        "code",
+        "key:sis-id",
+        "key:login",
+        "key:email",
+        "key:number",
+        "name",
+        "name:one-word"
+      ],
+      "title": "SyncMatch",
+      "type": "string"
+    },
+    "SyncRemove": {
+      "enum": [
+        "never",
+        "own",
+        "mark-dropped"
+      ],
+      "title": "SyncRemove",
+      "type": "string"
+    },
+    "SyncRole": {
+      "enum": [
+        "source",
+        "target",
+        "both"
+      ],
+      "title": "SyncRole",
+      "type": "string"
+    },
+    "SyncService": {
+      "enum": [
+        "canvas",
+        "sheets",
+        "telegram",
+        "github",
+        "moodle",
+        "file"
+      ],
+      "title": "SyncService",
+      "type": "string"
+    },
+    "SyncStream": {
+      "enum": [
+        "roster",
+        "submissions",
+        "marks",
+        "grades",
+        "assignment",
+        "announcement",
+        "repo",
+        "page"
+      ],
+      "title": "SyncStream",
+      "type": "string"
+    },
+    "SyncUnsure": {
+      "enum": [
+        "hold",
+        "ask"
+      ],
+      "title": "SyncUnsure",
+      "type": "string"
+    },
+    "SyncWrite": {
+      "enum": [
+        "upsert",
+        "update-only",
+        "create-only",
+        "mirror",
+        "append"
+      ],
+      "title": "SyncWrite",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One offering of a course in one term — and the version approved for it.\n\nMerged from two records. `CourseVersion` held the approved definition and\n`CourseRun` held the semester, but the definition never varied and has since\nmoved to the `Course`. What is left is the semester plus the approval record,\nwhich is the part of versioning that was ever worth keeping.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "course_version_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Course Version Id",
+      "type": "string"
+    },
+    "course_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+      "title": "Course Id",
+      "type": "string"
+    },
+    "term": {
+      "pattern": "^[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Term",
+      "type": "string"
+    },
+    "start_date": {
+      "format": "date",
+      "title": "Start Date",
+      "type": "string"
+    },
+    "end_date": {
+      "format": "date",
+      "title": "End Date",
+      "type": "string"
+    },
+    "instructors": {
+      "items": {
+        "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Instructors",
+      "type": "array"
+    },
+    "assistants": {
+      "items": {
+        "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Assistants",
+      "type": "array"
+    },
+    "timezone": {
+      "default": "Asia/Almaty",
+      "description": "IANA timezone of the schedule.",
+      "title": "Timezone",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/RunStatus",
+      "default": "planned"
+    },
+    "lms_course_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Identifier in Canvas, Platonus or another LMS.",
+      "title": "Lms Course Id"
+    },
+    "section": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Section"
+    },
+    "expected_enrollment": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Enrollment"
+    },
+    "approved_by": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Who signed this offering off, e.g. 'academic-council'.",
+      "title": "Approved By"
+    },
+    "syllabus_document_id": {
+      "anyOf": [
+        {
+          "pattern": "^DOC-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Syllabus Document Id"
+    },
+    "notes": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What changed relative to the previous offering.",
+      "title": "Notes"
+    },
+    "grading_scheme": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GradingScheme"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The blocks the final grade is divided into — ВСК1/ВСК2/Final, categories, periods."
+    },
+    "syncs": {
+      "default": null,
+      "description": "Every road to a service outside the run, in one vocabulary. Absent, none is written down.",
+      "items": {
+        "$ref": "#/$defs/Sync"
+      },
+      "title": "Syncs",
+      "type": "array"
+    }
+  },
+  "required": [
+    "course_version_id",
+    "course_id",
+    "term",
+    "start_date",
+    "end_date"
+  ],
+  "title": "CourseVersion",
+  "type": "object"
+}

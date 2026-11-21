@@ -1,0 +1,122 @@
+{
+  "$defs": {
+    "EnrollmentRole": {
+      "enum": [
+        "student",
+        "auditor",
+        "instructor",
+        "teaching_assistant",
+        "observer"
+      ],
+      "title": "EnrollmentRole",
+      "type": "string"
+    },
+    "EnrollmentStatus": {
+      "enum": [
+        "active",
+        "dropped",
+        "completed",
+        "pending"
+      ],
+      "title": "EnrollmentStatus",
+      "type": "string"
+    },
+    "LmsPresence": {
+      "additionalProperties": false,
+      "description": "Whether the LMS course still lists this person, as the last roster sync found it. since is the day it was first seen: the day they went missing, or the day they came back. note is the sentence shown beside their name.",
+      "properties": {
+        "extensions": {
+          "additionalProperties": true,
+          "description": "Faculty- or department-specific fields outside the common core.",
+          "title": "Extensions",
+          "type": "object"
+        },
+        "in_course": {
+          "title": "In Course",
+          "type": "boolean"
+        },
+        "since": {
+          "format": "date",
+          "title": "Since",
+          "type": "string"
+        },
+        "note": {
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "in_course",
+        "since",
+        "note"
+      ],
+      "title": "LmsPresence",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Membership of a person in a course run.\n\nOfficial student records stay in the SIS; this only records membership.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "enrollment_id": {
+      "pattern": "^ENR-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Enrollment Id",
+      "type": "string"
+    },
+    "course_version_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}-[0-9]{4}-(?:FALL|SPRING|SUMMER|WINTER)$",
+      "title": "Course Version Id",
+      "type": "string"
+    },
+    "student_id": {
+      "pattern": "^STUDENT-[A-Z0-9][A-Z0-9-]*$",
+      "title": "Student Id",
+      "type": "string"
+    },
+    "role": {
+      "$ref": "#/$defs/EnrollmentRole",
+      "default": "student"
+    },
+    "status": {
+      "$ref": "#/$defs/EnrollmentStatus",
+      "default": "active"
+    },
+    "group": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Lab or seminar group label.",
+      "title": "Group"
+    },
+    "lms": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LmsPresence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the last roster sync found in the LMS course: missing since a day, or back on one."
+    }
+  },
+  "required": [
+    "enrollment_id",
+    "course_version_id",
+    "student_id"
+  ],
+  "title": "Enrollment",
+  "type": "object"
+}

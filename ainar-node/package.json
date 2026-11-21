@@ -10,6 +10,7 @@
     "check": "npm run test && npm run golden && npm run validator",
     "validator": "node --experimental-strip-types bin/validator-check.ts ../workspace",
     "ainar": "node --experimental-strip-types bin/ainar.ts",
+    "build:plugin": "node bin/build-plugin.mjs",
     "mcp:http": "node --experimental-strip-types bin/http-server.ts",
     "render-deck": "node --experimental-strip-types bin/render-deck.ts",
     "find-image": "node --experimental-strip-types bin/find-image.ts"
@@ -32,6 +33,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/pg": "^8.23.1",
+    "esbuild": "^0.28.2",
     "typescript": "^5.7.0"
   }
 }

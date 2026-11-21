@@ -1,0 +1,100 @@
+{
+  "$defs": {
+    "CognitiveLevel": {
+      "description": "Bloom-style cognitive level of a learning outcome.",
+      "enum": [
+        "remember",
+        "understand",
+        "apply",
+        "analyze",
+        "evaluate",
+        "create"
+      ],
+      "title": "CognitiveLevel",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "What a student should be able to demonstrate.\n\nThe outcome is the anchor of the central chain:\noutcome -> concept/capability -> activity -> criterion -> evidence.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "outcome_id": {
+      "pattern": "^LO-[0-9]{2,3}$",
+      "title": "Outcome Id",
+      "type": "string"
+    },
+    "course_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+      "title": "Course Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "level": {
+      "description": "Bloom-style levels. YAML may write 'apply-analyze' as shorthand.",
+      "items": {
+        "$ref": "#/$defs/CognitiveLevel"
+      },
+      "title": "Level",
+      "type": "array"
+    },
+    "weight": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Share of the course outcome set; weights should sum to 1.0.",
+      "title": "Weight"
+    },
+    "capabilities": {
+      "description": "Capabilities this outcome contributes to.",
+      "items": {
+        "pattern": "^CAP-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Capabilities",
+      "type": "array"
+    },
+    "concepts": {
+      "items": {
+        "pattern": "^CONCEPT-[A-Z0-9][A-Z0-9-]*$",
+        "type": "string"
+      },
+      "title": "Concepts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "outcome_id",
+    "course_id",
+    "title"
+  ],
+  "title": "LearningOutcome",
+  "type": "object"
+}

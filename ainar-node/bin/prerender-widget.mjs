@@ -93,7 +93,8 @@ export function prerender(html, label = 'document') {
 // --------------------------------------------------------------------------
 
 const invokedDirectly =
-  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1] &&
+  /prerender-widget\.mjs$/.test(process.argv[1]); // not when bundled into ainar.mjs
 
 if (invokedDirectly) {
   const [, , input, output] = process.argv;

@@ -1,0 +1,60 @@
+{
+  "additionalProperties": false,
+  "description": "A professor, assistant or other staff identity.\n\nStudents are referenced by their SIS identifier and are not duplicated\nhere; see ``Enrollment.student_id``.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "user_id": {
+      "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+      "title": "User Id",
+      "type": "string"
+    },
+    "display_name": {
+      "title": "Display Name",
+      "type": "string"
+    },
+    "email": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Email"
+    },
+    "role": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "e.g. 'professor', 'assistant'.",
+      "title": "Role"
+    },
+    "external_ids": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Identity in official systems, e.g. {'platonus': '...', 'canvas': '...'}.",
+      "title": "External Ids",
+      "type": "object"
+    }
+  },
+  "required": [
+    "user_id",
+    "display_name"
+  ],
+  "title": "User",
+  "type": "object"
+}

@@ -1,0 +1,32 @@
+Originally unpacked by `python -m exo setup` from ProfessorSkills/DataLayer,
+on 2026-09-04.
+
+That link is cut. This directory is source: edit it here. Nothing writes into
+it from outside this repository any more, and there is no setup step to re-run.
+
+See PROVENANCE.md at the repository root for where every tree came from.
+
+Fork, 2026-10-15 (MOD-1): schema/preference_profile.schema.json `scope` gains
+`institution` and `run`, matching the layers ainar-node/src/profile.ts resolves.
+
+Fork, 2026-10-22: schema/assessment.schema.json and course-bundle.schema.json
+gain `ScoreCurve` and `Assessment.curve`, matching ainar-node/src/model/assessment.ts
+(see schema/README.md).
+
+Fork, 2026-10-22: assessment.schema.json, course_version.schema.json and
+course-bundle.schema.json gain `missing_work` (blank | zero) on Assessment and
+GradingScheme, matching ainar-node/src/model/common.ts `MissingWork`.
+
+Fork, 2026-10-24 (STN-1): assessment.schema.json and course-bundle.schema.json
+gain `Assessment.setting` (supervised | unsupervised), matching
+ainar-node/src/model/common.ts `Setting`.
+
+Fork, 2026-10-26: assessment.schema.json and course-bundle.schema.json gain
+`Assessment.closes_at` (when hand-ins stop, Canvas's lock_at), matching
+ainar-node/src/model/assessment.ts.
+
+Fork, 2026-11-01 (PRV-1): `provenance` (the existing `Provenance` definition) on
+LearningActivity, Resource, Assessment, AssessmentItem, ItemModel,
+ItemResponse, Intervention and CourseEvent, in their own files and in
+course-bundle.schema.json, matching ainar-node/src/model/. Inserted as text,
+last among each entity's properties; no existing line changed.

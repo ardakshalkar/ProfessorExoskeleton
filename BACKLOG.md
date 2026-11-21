@@ -2777,7 +2777,7 @@ is worth building.
       one function. It returns the repository in a checkout, or the bundle's
       `share/` folder in a plugin. `npm run check` stays green.
       `S` · depends: —
-- [ ] **PLG-2** `npm run build:plugin`. esbuild writes `ainar.mjs` and
+- [x] **PLG-2** `npm run build:plugin` (done 2026-11-21; bundle in `plugins/ainar-core/`, `pg` stays external so the PostgreSQL mirror needs the checkout). esbuild writes `ainar.mjs` and
       `ainar-mcp.mjs` into `plugins/<core>/dist/` and copies `vendor/datalayer`,
       `vendor/ainar` and the default profile into `share/`. Add
       `bin/ainar` (sh) and `bin/ainar.cmd`, both of which run

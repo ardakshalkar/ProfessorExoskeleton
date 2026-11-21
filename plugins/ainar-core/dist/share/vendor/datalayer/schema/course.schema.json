@@ -1,0 +1,101 @@
+{
+  "$defs": {
+    "CourseStatus": {
+      "enum": [
+        "draft",
+        "active",
+        "retired"
+      ],
+      "title": "CourseStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Stable academic identity of a course, independent of any delivery.",
+  "properties": {
+    "extensions": {
+      "additionalProperties": true,
+      "description": "Faculty- or department-specific fields outside the common core.",
+      "title": "Extensions",
+      "type": "object"
+    },
+    "course_id": {
+      "pattern": "^[A-Z][A-Z0-9]{1,7}-[0-9]{3,5}$",
+      "title": "Course Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "credits": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Credits"
+    },
+    "department": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Department"
+    },
+    "language": {
+      "description": "ISO 639-1 codes of instruction languages.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Language",
+      "type": "array"
+    },
+    "status": {
+      "$ref": "#/$defs/CourseStatus",
+      "default": "active"
+    },
+    "owner": {
+      "anyOf": [
+        {
+          "pattern": "^USER-[A-Z0-9][A-Z0-9-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Accountable course owner.",
+      "title": "Owner"
+    }
+  },
+  "required": [
+    "course_id",
+    "title"
+  ],
+  "title": "Course",
+  "type": "object"
+}
