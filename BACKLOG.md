@@ -2752,6 +2752,27 @@ is worth building.
       (d) The skill-name clashes: `grade-batch`, `grade-submission` and
       `publish-telegram` exist in both plugins. Either rename the
       standalone ones or document `plugin:skill`. `S` · depends: —
+
+      **Proposed answers (drafted 2026-11-21, not yet accepted):**
+      (a) **Two plugins:** `ainar-core` (bundle, `bin/`, `.mcp.json`,
+      `userConfig.workspace`) and `professor-course-skills` with
+      `dependencies: [ainar-core]`. The skills then say plain `ainar`, and the
+      standalone plugins can use the core later without a rewrite. Cost: one
+      more marketplace entry, and two version numbers to keep in step.
+      (b) **No deck rendering in v1.** `sharp` is native and the install runs
+      with `--ignore-scripts`; every other skill works without it. PLG-9
+      stays open, and the deck skills say up front that they need the
+      checkout.
+      (c) **Keep `~/.dsh/.credentials.yaml`** (`connections/store.ts` already
+      falls back to it when `DSH_HOME` is unset), and have the CLI create it
+      on first use, mode 600. No `sensitive` `userConfig` in v1: those values
+      reach MCP env but not the Bash tool's `ainar` calls, so the CLI and the
+      MCP server would disagree. Revisit when E31 gives credentials a home.
+      (d) **Rename the three standalone skills** (`grade-batch`,
+      `grade-submission`, `publish-telegram`) to carry a `-solo` suffix, not
+      document `plugin:skill`: the course versions are the ones
+      `/grade-batch` in a course folder should reach, and a bare name that
+      picks one at random is the failure a professor cannot diagnose.
 - [ ] **PLG-1** The `installRoot()` seam. The four places above resolve from
       one function. It returns the repository in a checkout, or the bundle's
       `share/` folder in a plugin. `npm run check` stays green.
